@@ -44,9 +44,9 @@ jobs:
 
       - name: Create myhome.zip
         run: |
-          cd custom_components
-          zip -r ../myhome.zip myhome/
-          cd ..
+          cd custom_components/myhome
+          zip -r ../../myhome.zip .
+          cd ../..
           ls -la myhome.zip
 
       - name: Generate changelog
