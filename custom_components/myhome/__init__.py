@@ -64,7 +64,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     try:
         async with aiofiles.open(_config_file_path, mode="r") as yaml_file:
-            _validated_config = config_schema(yaml.safe_load(await yaml_file.read()))
+            yaml_content = await yaml_file.read()
+            parsed_yaml = yaml.safe_load(yaml_content)
+            # Handle empty or invalid YAML content
+            if parsed_yaml is None or not isinstance(parsed_yaml, dict):
+                LOGGER.info(f"Configuration file '{_config_file_path}' is empty or invalid, using empty configuration")
+                _validated_config = {}
+            else:
+                # Filter out 'service' key if present (not part of device config)
+                if 'service' in parsed_yaml:
+                    LOGGER.info("Filtering out 'service' key from configuration - not supported in device config")
+                    parsed_yaml = {k: v for k, v in parsed_yaml.items() if k != 'service'}
+                _validated_config = config_schema(parsed_yaml)
     except FileNotFoundError:
         LOGGER.info(f"Configuration file '{_config_file_path}' not found, creating empty configuration file")
         try:
@@ -77,10 +88,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             LOGGER.error(f"Failed to create configuration file '{_config_file_path}': {e}")
             return False
 
-    if entry.data[CONF_MAC] in _validated_config:
-        hass.data[DOMAIN][entry.data[CONF_MAC]] = _validated_config[
-            entry.data[CONF_MAC]
-        ]
+    # Check for config under "gateway" key first, then MAC address for backward compatibility
+    gateway_config = None
+    if "gateway" in _validated_config:
+        gateway_config = _validated_config["gateway"]
+    elif entry.data[CONF_MAC] in _validated_config:
+        gateway_config = _validated_config[entry.data[CONF_MAC]]
+    
+    if gateway_config:
+        hass.data[DOMAIN][entry.data[CONF_MAC]] = gateway_config
     else:
         # Initialize empty configuration for this gateway - will be populated via config flow
         LOGGER.info(f"Gateway {entry.data[CONF_MAC]} not found in configuration file, initializing with empty configuration")
@@ -156,6 +172,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     
     hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].listening_worker = (
         entry.async_create_background_task(
+            hass,
             hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].listening_loop(),
             name="myhome_listening_worker",
         )
@@ -163,6 +180,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     for i in range(_command_worker_count):
         hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].sending_workers.append(
             entry.async_create_background_task(
+                hass,
                 hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].sending_loop(i),
                 name=f"myhome_sending_worker_{i}",
             )

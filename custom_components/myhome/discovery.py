@@ -12,9 +12,12 @@ from homeassistant.helpers import device_registry as dr
 from OWNd.message import (
     OWNMessage,
     OWNLightingEvent,
+    OWNLightingCommand,
     OWNAutomationEvent,
+    OWNAutomationCommand,
     OWNEnergyEvent,
     OWNHeatingEvent,
+    OWNHeatingCommand,
     OWNDryContactEvent,
     OWNAuxEvent,
     OWNCENEvent,
@@ -63,9 +66,12 @@ class MyHOMEDeviceDiscoveryService:
         self._message_to_device_type = {
             # Map message types to device types following OpenHAB patterns
             "OWNLightingEvent": self._determine_lighting_device_type,
+            "OWNLightingCommand": self._determine_lighting_device_type,
             "OWNAutomationEvent": lambda msg: DEVICE_TYPE_BUS_AUTOMATION,
+            "OWNAutomationCommand": lambda msg: DEVICE_TYPE_BUS_AUTOMATION,
             "OWNEnergyEvent": lambda msg: DEVICE_TYPE_BUS_ENERGY_METER,
             "OWNHeatingEvent": self._determine_thermo_device_type,
+            "OWNHeatingCommand": self._determine_thermo_device_type,
             "OWNDryContactEvent": lambda msg: DEVICE_TYPE_BUS_DRY_CONTACT_IR,
             "OWNAuxEvent": lambda msg: DEVICE_TYPE_BUS_AUX,
             "OWNCENEvent": lambda msg: DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
@@ -84,6 +90,10 @@ class MyHOMEDeviceDiscoveryService:
         
         self._discovery_active = True
         self._discovered_devices.clear()
+        
+        # Log discovery status
+        self.logger.info("Discovery activated: %s", self._discovery_active)
+        self.logger.info("Discovery timeout: %s seconds", self._discovery_timeout)
         
         # Start discovery task with timeout
         self._discovery_task = asyncio.create_task(self._discovery_worker())
@@ -108,34 +118,148 @@ class MyHOMEDeviceDiscoveryService:
     
     def handle_discovery_message(self, message: OWNMessage) -> None:
         """Handle incoming messages for device discovery following OpenHAB patterns."""
+        self.logger.debug("Discovery message received: %s (type: %s, discovery_active: %s)", 
+                         message, type(message).__name__, self._discovery_active)
+        
         if not self._discovery_active:
+            self.logger.debug("Discovery not active, ignoring message")
             return
         
         try:
+            # Handle both event messages and status response messages
             device_info = self._extract_device_info(message)
+            self.logger.debug("Extracted device info: %s", device_info)
             if device_info:
                 device_id = device_info["unique_id"]
                 if device_id not in self._discovered_devices:
-                    self.logger.debug("Discovered new device: %s (%s)", 
-                                    device_info["name"], device_info["device_type"])
+                    self.logger.info("Discovered new device: %s (%s) at WHERE=%s", 
+                                    device_info["name"], device_info["device_type"], device_info["where"])
                     self._discovered_devices[device_id] = device_info
                     
                     # Immediately create discovery result following OpenHAB pattern
                     self._create_discovery_result(device_info)
+                else:
+                    self.logger.debug("Device %s already discovered, skipping", device_id)
+            else:
+                # If we can't extract device info, log the message for debugging
+                self.logger.debug("Could not extract device info from message: %s", message)
+                # Try to handle as raw response string for discovery commands
+                if hasattr(message, '__str__'):
+                    message_str = str(message)
+                    if message_str.startswith('*') and message_str.endswith('##'):
+                        self.logger.debug("Processing message as potential command response: %s", message_str)
+                        self.handle_command_response(message_str)
         
         except Exception as e:
             self.logger.error("Error handling discovery message %s: %s", message, e)
     
+    def handle_command_response(self, response_string: str) -> None:
+        """Handle command response strings for discovery."""
+        if not self._discovery_active:
+            return
+            
+        try:
+            self.logger.debug("Processing command response for discovery: %s", response_string)
+            
+            # Parse the response string manually
+            # Format: *WHO*WHAT*WHERE##
+            if response_string.startswith('*') and response_string.endswith('##'):
+                parts = response_string[1:-2].split('*')
+                if len(parts) >= 3:
+                    who, what, where = parts[0], parts[1], parts[2]
+                    
+                    # Create a synthetic device info based on the response
+                    device_info = self._create_device_info_from_response(who, what, where)
+                    if device_info:
+                        device_id = device_info["unique_id"]
+                        if device_id not in self._discovered_devices:
+                            self.logger.debug("Discovered device from command response: %s", device_info["name"])
+                            self._discovered_devices[device_id] = device_info
+                            self._create_discovery_result(device_info)
+                            
+        except Exception as e:
+            self.logger.error("Error processing command response %s: %s", response_string, e)
+    
+    def _create_device_info_from_response(self, who: str, what: str, where: str) -> Optional[Dict[str, Any]]:
+        """Create device info from command response parts."""
+        try:
+            # Map WHO to device type and platform
+            # For lighting (WHO=1), only consider it a dimmer if it reports actual dimming levels (2-10, excluding 8)
+            # WHAT values for lighting:
+            # 0 = OFF
+            # 1 = ON
+            # 2-10 = Dimming levels (20%-100%)
+            # 8 = Often indicates "temporized ON" or special state, not a dimming level
+            is_dimmer = who == "1" and what in ["2", "3", "4", "5", "6", "7", "9", "10"]
+            
+            who_to_device_type = {
+                "1": ("bus_dimmer" if is_dimmer else "bus_on_off_switch", "light"),
+                "2": ("bus_automation", "cover"),
+                "4": ("bus_thermo_zone", "climate"),
+                "18": ("bus_energy_meter", "sensor"),
+                "9": ("bus_aux", "switch"),
+                "25": ("bus_cen_scenario_control", "button"),
+            }
+            
+            self.logger.debug("Device type detection for WHO=%s WHAT=%s WHERE=%s: is_dimmer=%s", 
+                            who, what, where, is_dimmer)
+            
+            if who not in who_to_device_type:
+                return None
+                
+            device_type, platform = who_to_device_type[who]
+            
+            # Create device info
+            device_info = {
+                "unique_id": f"{self.config_entry.data['mac']}-{where}",
+                "name": f"MyHOME {device_type.replace('_', ' ').title()} {where}",
+                "device_type": device_type,
+                "where": where,
+                "platform": platform,
+                "category": self.device_factory.get_device_category(device_type),
+                "properties": {
+                    "ownId": f"{who}*{where}",
+                    "where": where,
+                    "discovered_at": datetime.now().isoformat(),
+                    "response_who": who,
+                    "response_what": what,
+                }
+            }
+            
+            return device_info
+            
+        except Exception as e:
+            self.logger.error("Error creating device info from response WHO=%s WHAT=%s WHERE=%s: %s", who, what, where, e)
+            return None
+    
     def _extract_device_info(self, message: OWNMessage) -> Optional[Dict[str, Any]]:
         """Extract device information from message following OpenHAB patterns."""
         message_type = type(message).__name__
+        self.logger.debug("Extracting device info from message type: %s", message_type)
         
         if message_type not in self._message_to_device_type:
+            self.logger.debug("Message type %s not in supported types: %s", 
+                            message_type, list(self._message_to_device_type.keys()))
             return None
         
-        # Get device WHERE address
-        where = getattr(message, 'where', None) or getattr(message, 'entity', None)
+        # Get device WHERE address - try multiple attributes
+        where = None
+        for attr in ['where', 'entity', 'object', 'address']:
+            if hasattr(message, attr):
+                where = getattr(message, attr, None)
+                if where:
+                    break
+        
+        self.logger.debug("Found WHERE address: %s from message: %s", where, message)
         if not where:
+            self.logger.debug("No WHERE address found in message")
+            return None
+        
+        # Convert WHERE to string and clean it up
+        where = str(where)
+        if where.startswith('#'):
+            # Skip group addresses during discovery for now
+            self.logger.debug("Skipping group address: %s", where)
             return None
         
         # Determine device type using OpenHAB-style mapping
@@ -158,6 +282,7 @@ class MyHOMEDeviceDiscoveryService:
                 "where": where,
                 "discovered_at": datetime.now().isoformat(),
                 "message_type": message_type,
+                "message_str": str(message),
             }
         }
         
@@ -166,7 +291,7 @@ class MyHOMEDeviceDiscoveryService:
         
         return device_info
     
-    def _determine_lighting_device_type(self, message: OWNLightingEvent) -> str:
+    def _determine_lighting_device_type(self, message) -> str:
         """Determine lighting device type following OpenHAB patterns."""
         # Check if it's a dimmer based on brightness information
         if hasattr(message, 'brightness') and message.brightness is not None:
@@ -176,7 +301,7 @@ class MyHOMEDeviceDiscoveryService:
         else:
             return DEVICE_TYPE_BUS_ON_OFF_SWITCH
     
-    def _determine_thermo_device_type(self, message: OWNHeatingEvent) -> str:
+    def _determine_thermo_device_type(self, message) -> str:
         """Determine thermoregulation device type following OpenHAB patterns."""
         # Check message properties to determine if it's a zone or sensor
         if hasattr(message, 'temperature') and message.temperature is not None:
@@ -262,25 +387,55 @@ class MyHOMEDeviceDiscoveryService:
             "*#1*0##",   # Request all lighting device status (WHO=1)
             "*#2*0##",   # Request all automation device status (WHO=2)
             "*#4*0##",   # Request all thermoregulation device status (WHO=4)
-            "*#18*0##",  # Request all energy management device status (WHO=18)
+            "*#18*0##",  # Request all energy management device status (WHO=18) - May not be supported by all gateways
             "*#25*0##",  # Request all CEN/dry contact device status (WHO=25)
-            "*#9*0##",   # Request all auxiliary device status (WHO=9)
+            "*#9*0##",   # Request all auxiliary device status (WHO=9) - May not be supported by all gateways
         ]
         
         from OWNd.message import OWNCommand
         
-        for command in discovery_commands:
+        self.logger.info("Sending %d discovery commands...", len(discovery_commands))
+        
+        successful_commands = 0
+        failed_commands = []
+        
+        for i, command in enumerate(discovery_commands, 1):
             try:
                 if self._discovery_active:
-                    self.logger.debug("Sending discovery command: %s", command)
+                    self.logger.info("Sending discovery command %d/%d: %s", i, len(discovery_commands), command)
                     # Send command through gateway
                     own_command = OWNCommand.parse(command)
                     if own_command and own_command.is_valid:
                         await self.gateway_handler.send_status_request(own_command)
+                        self.logger.debug("Command %s queued successfully", command)
+                        successful_commands += 1
+                    else:
+                        self.logger.warning("Failed to parse command: %s", command)
+                        failed_commands.append((command, "Invalid command format"))
                     # Small delay between commands
                     await asyncio.sleep(0.5)
+                else:
+                    self.logger.warning("Discovery deactivated during command sending")
+                    break
             except Exception as e:
                 self.logger.error("Error sending discovery command %s: %s", command, e)
+                failed_commands.append((command, str(e)))
+        
+        self.logger.info("Discovery commands sent. Successful: %d, Failed: %d", 
+                        successful_commands, len(failed_commands))
+        
+        if failed_commands:
+            self.logger.warning("Failed commands (this is normal if gateway doesn't support these subsystems):")
+            for cmd, error in failed_commands:
+                who = cmd.split('*')[1] if '*' in cmd else '?'
+                subsystem_name = {
+                    "18": "Energy Management (WHO=18)",
+                    "9": "Auxiliary (WHO=9)",
+                    "25": "CEN/Dry Contact (WHO=25)"
+                }.get(who, f"WHO={who}")
+                self.logger.warning("  %s - %s (Command: %s)", subsystem_name, error, cmd)
+        
+        self.logger.info("Waiting for device responses...")
     
     @callback
     def _complete_discovery(self) -> None:

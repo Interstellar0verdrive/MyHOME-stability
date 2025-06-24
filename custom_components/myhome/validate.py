@@ -430,7 +430,12 @@ gateway_schema = Schema(
         Optional(BINARY_SENSOR): binary_sensor_schema,
         Optional(SENSOR): sensor_schema,
         Optional(CLIMATE): climate_schema,
-    }
+    },
+    extra=True,  # Allow extra keys to be ignored
 )
 
-config_schema = MyHomeConfigSchema({Required(str): gateway_schema})
+config_schema = MyHomeConfigSchema({
+    Required("gateway"): gateway_schema,
+    # Also allow MAC address format for backward compatibility
+    Optional(str): gateway_schema,
+}, extra=True)

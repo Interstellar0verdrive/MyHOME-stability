@@ -78,21 +78,75 @@ The integration supports two configuration methods:
 
 #### Method 1: Auto-Discovery (Recommended)
 
-Use the built-in auto-discovery to find and configure devices automatically:
+Use the built-in auto-discovery to find and configure devices automatically.
+
+**Important:** Auto-discovery is activated via Home Assistant services, NOT via YAML configuration.
+
+**Step 1: Prepare Configuration File**
+
+Create an empty or basic `/config/myhome.yaml` file:
 
 ```yaml
-# Start discovery via Home Assistant service
+# MyHOME Configuration
+# Add your gateway configurations here
+# (discovered devices will be automatically added)
+```
+
+**Step 2: Start Discovery**
+
+Use Home Assistant **Developer Tools → Services** to call:
+
+```yaml
 service: myhome.start_discovery
 data:
-  gateway: "00:03:50:XX:XX:XX"  # Optional: specify gateway MAC
+  gateway: "00:03:50:XX:XX:XX"  # Your gateway MAC address
+```
+
+**OR** create an automation to start discovery:
+
+```yaml
+automation:
+  - alias: "Start MyHOME Discovery"
+    trigger:
+      platform: homeassistant
+      event: start
+    action:
+      service: myhome.start_discovery
+      data:
+        gateway: "00:03:50:XX:XX:XX"
 ```
 
 **Discovery Process:**
-1. Call the `myhome.start_discovery` service
-2. The integration scans for devices automatically
-3. Found devices appear in the **Devices & Services** page
-4. Click **"Configure"** on discovered devices to add them
-5. Adjust suggested configurations as needed
+1. Call the `myhome.start_discovery` service with your gateway MAC
+2. The integration sends discovery commands to scan for devices (`*#1*0##`, `*#2*0##`, etc.)
+3. Device responses come back as events and are processed by the discovery service
+4. Discovered devices are automatically added to `/config/myhome.yaml`
+5. The integration reloads and new entities appear in Home Assistant
+6. Check logs for discovery progress and any issues
+
+**Common Discovery Issues:**
+
+❌ **Wrong**: Putting service calls in YAML config:
+```yaml
+# DON'T DO THIS - This goes in myhome.yaml config file
+service: myhome.start_discovery
+data:
+  mac: '00:03:50:XX:XX:XX'
+```
+
+✅ **Correct**: Call service through Home Assistant:
+```yaml
+# Use Developer Tools → Services or automation
+service: myhome.start_discovery  
+data:
+  gateway: '00:03:50:XX:XX:XX'
+```
+
+**Discovery Warning Messages:**
+- `"Could not send message *#18*0##"` - Energy management subsystem not available
+- `"Could not send message *#9*0##"` - Auxiliary subsystem not available
+- These warnings are **normal** if your gateway doesn't support these subsystems
+- Discovery will still find devices from supported subsystems (lighting, automation, etc.)
 
 #### Method 2: Manual Configuration (YAML)
 
@@ -323,10 +377,55 @@ automation:
 
 #### Device Discovery Issues
 
-1. **Start discovery manually**: Use the `myhome.start_discovery` service
-2. **Check OpenWebNet addresses**: Verify device WHERE addresses are correct
-3. **Monitor gateway communication**: Enable debug logging
-4. **Restart integration**: Reload the integration from Devices & Services
+**"Discovery not active" in logs:**
+- Ensure you're calling the service correctly: `service: myhome.start_discovery` with `gateway: "MAC_ADDRESS"`
+- Don't put service calls in the YAML config file - use Developer Tools → Services
+- Check that the gateway MAC address is correct
+- Verify the service call shows `discovery_active: True` in debug logs
+
+**No devices found during discovery:**
+1. **Enable debug logging** to see discovery messages:
+   ```yaml
+   logger:
+     logs:
+       custom_components.myhome.discovery: debug
+       custom_components.myhome.gateway: debug
+       custom_components.myhome.config_flow_discovery: debug
+   ```
+2. **Check discovery status** - Look for logs like:
+   - `"Starting MyHOME device discovery on gateway..."`
+   - `"Sending discovery command 1/6: *#1*0##"`
+   - `"Discovery message received: *1*8*11##"`
+   - `"Discovered new device: MyHOME Bus Dimmer 11 at WHERE=11"`
+   - `"Starting device configuration suggestion for MyHOME Bus Dimmer 11"`
+   - `"Starting config file write process for device MyHOME Bus Dimmer 11"`
+   - `"Successfully added device MyHOME Bus Dimmer 11 to configuration file"`
+3. **Verify device responses** - Look for incoming messages after discovery commands
+4. **Check gateway communication** - Ensure devices are responding to status requests
+5. **Manual device test** - Try controlling devices through other MyHOME apps first
+
+**Incorrect device type detection:**
+- **Dimmer vs Switch**: Discovery determines device type based on status responses
+  - Devices reporting dimming levels (WHAT=2-10, excluding 8) are detected as dimmers
+  - Devices reporting only ON/OFF states (WHAT=0,1,8) are detected as switches
+  - If a dimmer is incorrectly detected as a switch, manually edit the config and set `dimmable: true`
+- **Special states**: WHAT=8 often indicates "temporized ON" or other special states, not dimming capability
+
+**Devices discovered but not added:**
+1. **Check `/config/myhome.yaml`** - devices should be automatically added
+2. **Verify file permissions** - ensure Home Assistant can write to the config file
+3. **Monitor config file writing** - Look for debug logs like:
+   - `"Starting config file write process for device..."`
+   - `"Reading existing config file..."`
+   - `"Writing updated config to file..."`
+   - `"Config file write completed successfully"`
+   - `"Config file size after write: XXX bytes"`
+4. **Check for config write errors** - Look for error logs like:
+   - `"Error writing to config file"`
+   - `"Failed to add device to config file"`
+   - `"Error in config file write process"`
+5. **Monitor integration reload** - check logs for config reload errors
+6. **Restart integration** manually if auto-reload fails
 
 #### Configuration Issues
 

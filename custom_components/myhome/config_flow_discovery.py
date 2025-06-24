@@ -131,20 +131,139 @@ class MyHOMEDiscoveryConfigFlow:
     ) -> None:
         """Suggest device configuration to user following OpenHAB patterns."""
         try:
-            # Create a suggested configuration entry for the user to approve
+            self.logger.debug("Starting device configuration suggestion for %s", device_info["name"])
+            self.logger.debug("Device info for suggestion: %s", device_info)
+            
+            # Generate suggested configuration
+            suggested_config = self._generate_suggested_config(device_info)
+            self.logger.debug("Generated suggested config: %s", suggested_config)
+            
+            # Auto-add device to configuration for now (can be made optional later)
+            try:
+                self.logger.debug("Attempting to add device to config file...")
+                await self._add_device_to_config(device_info, suggested_config, discovery_data)
+                self.logger.info("Auto-added discovered device %s to configuration", device_info["name"])
+            except Exception as config_error:
+                self.logger.error("Failed to add device to config file: %s", config_error)
+                self.logger.debug("Config error details - device: %s, config: %s", device_info["name"], suggested_config)
+                # Continue with other processing even if config write fails
+            
+            # Also fire event for UI to handle if needed
             config_data = {
                 "device_info": device_info,
                 "discovery_data": discovery_data,
-                "suggested_config": self._generate_suggested_config(device_info)
+                "suggested_config": suggested_config
             }
-            
-            # Fire event for UI to handle
+            self.logger.debug("Firing device suggestion event with data: %s", config_data)
             self.hass.bus.async_fire(f"{DOMAIN}_device_suggestion", config_data)
-            
-            self.logger.debug("Suggested configuration for device %s", device_info["name"])
+            self.logger.debug("Device suggestion event fired successfully")
             
         except Exception as e:
-            self.logger.error("Error suggesting device configuration: %s", e)
+            self.logger.error("Error suggesting device configuration for %s: %s", device_info.get("name", "unknown"), e)
+            self.logger.debug("Full error context - device_info: %s, discovery_data: %s", device_info, discovery_data)
+    
+    async def _add_device_to_config(
+        self, 
+        device_info: Dict[str, Any], 
+        suggested_config: Dict[str, Any],
+        discovery_data: Dict[str, Any]
+    ) -> None:
+        """Add discovered device to YAML configuration."""
+        try:
+            import yaml
+            import aiofiles
+            import os
+            
+            gateway_mac = discovery_data["gateway_mac"]
+            platform = device_info["platform"]
+            where = device_info["where"]
+            
+            # Use device WHERE as config key, make it unique
+            device_key = f"discovered_{where}"
+            
+            config_file_path = "/config/myhome.yaml"
+            
+            self.logger.debug("Starting config file write process for device %s", device_info["name"])
+            self.logger.debug("Config file path: %s", config_file_path)
+            self.logger.debug("Gateway MAC: %s, Platform: %s, WHERE: %s", gateway_mac, platform, where)
+            self.logger.debug("Device key: %s", device_key)
+            self.logger.debug("Suggested config: %s", suggested_config)
+            
+            # Read existing config
+            try:
+                self.logger.debug("Reading existing config file...")
+                async with aiofiles.open(config_file_path, mode="r") as yaml_file:
+                    content = await yaml_file.read()
+                    self.logger.debug("Config file content length: %d chars", len(content))
+                    config = yaml.safe_load(content) or {}
+                    self.logger.debug("Parsed existing config: %s", config)
+            except FileNotFoundError:
+                self.logger.info("Config file not found, creating new config structure")
+                config = {}
+            except Exception as e:
+                self.logger.error("Error reading config file: %s", e)
+                raise
+            
+            # Initialize gateway config if needed (use "gateway" as key instead of MAC)
+            if "gateway" not in config:
+                self.logger.debug("Initializing gateway config structure")
+                config["gateway"] = {"mac": gateway_mac}
+            else:
+                self.logger.debug("Gateway config exists: %s", config["gateway"])
+            
+            # Initialize platform if needed  
+            if platform not in config["gateway"]:
+                self.logger.debug("Initializing platform %s in gateway config", platform)
+                config["gateway"][platform] = {}
+            else:
+                self.logger.debug("Platform %s exists with %d devices", platform, len(config["gateway"][platform]))
+            
+            # Check if device already exists
+            if device_key in config["gateway"][platform]:
+                self.logger.warning("Device %s already exists in config, overwriting", device_key)
+            else:
+                self.logger.debug("Adding new device %s to platform %s", device_key, platform)
+            
+            # Add device config
+            config["gateway"][platform][device_key] = suggested_config
+            
+            self.logger.debug("Device added to config structure")
+            self.logger.debug("Updated platform config: %s", config["gateway"][platform])
+            self.logger.debug("Full config structure keys: %s", list(config.keys()))
+            
+            # Write back to file
+            try:
+                self.logger.debug("Writing updated config to file...")
+                async with aiofiles.open(config_file_path, mode="w") as yaml_file:
+                    yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+                    self.logger.debug("Generated YAML content length: %d chars", len(yaml_content))
+                    await yaml_file.write(yaml_content)
+                    self.logger.debug("Config file write completed successfully")
+                
+                self.logger.info("Successfully added device %s to configuration file at %s", device_info["name"], config_file_path)
+                
+                # Log file stats for verification
+                try:
+                    file_stat = os.stat(config_file_path)
+                    self.logger.debug("Config file size after write: %d bytes", file_stat.st_size)
+                except Exception as stat_error:
+                    self.logger.debug("Could not get file stats: %s", stat_error)
+                
+            except Exception as write_error:
+                self.logger.error("Error writing to config file: %s", write_error)
+                raise
+            
+            # Trigger config reload by reloading the integration
+            self.logger.info("Config file updated, integration will reload automatically on next restart")
+            self.logger.debug("To reload immediately, restart the MyHOME integration or Home Assistant")
+            # Note: Don't force reload here as it can cause race conditions during discovery
+            # The integration will pick up changes on next restart or manual reload
+            
+        except Exception as e:
+            self.logger.error("Error in config file write process for device %s: %s", device_info["name"], e)
+            self.logger.debug("Device info: %s", device_info)
+            self.logger.debug("Suggested config: %s", suggested_config)
+            self.logger.debug("Discovery data: %s", discovery_data)
     
     def _generate_suggested_config(self, device_info: Dict[str, Any]) -> Dict[str, Any]:
         """Generate suggested configuration following OpenHAB patterns."""
@@ -153,22 +272,27 @@ class MyHOMEDiscoveryConfigFlow:
         where = device_info["where"]
         name = device_info["name"]
         
-        # Base configuration
+        self.logger.debug("Generating config for device type: %s, platform: %s, where: %s, name: %s", 
+                         device_type, platform, where, name)
+        
+        # Base configuration - only include valid schema fields
         suggested_config = {
             "where": where,
             "name": name,
-            "device_type": device_type,
-            "platform": platform,
         }
+        
+        self.logger.debug("Base suggested_config: %s", suggested_config)
         
         # Add device-specific configuration following OpenHAB patterns
         if device_type in ["bus_dimmer", "bus_on_off_switch"]:
+            self.logger.debug("Configuring lighting device: %s", device_type)
             suggested_config.update({
                 "dimmable": device_type == "bus_dimmer",
                 "icon": "mdi:lightbulb" if device_type == "bus_dimmer" else "mdi:light-switch"
             })
         
         elif device_type == "bus_automation":
+            self.logger.debug("Configuring automation device")
             suggested_config.update({
                 "device_class": "shutter",
                 "icon": "mdi:window-shutter",
@@ -176,6 +300,7 @@ class MyHOMEDiscoveryConfigFlow:
             })
         
         elif device_type == "bus_energy_meter":
+            self.logger.debug("Configuring energy meter device")
             suggested_config.update({
                 "device_class": "energy",
                 "unit_of_measurement": "W",
@@ -184,6 +309,7 @@ class MyHOMEDiscoveryConfigFlow:
             })
         
         elif device_type in ["bus_thermo_zone", "bus_thermo_sensor"]:
+            self.logger.debug("Configuring thermo device: %s", device_type)
             suggested_config.update({
                 "device_class": "temperature",
                 "unit_of_measurement": "°C",
@@ -192,6 +318,7 @@ class MyHOMEDiscoveryConfigFlow:
             })
         
         elif device_type in ["bus_cen_scenario_control", "bus_cenplus_scenario_control"]:
+            self.logger.debug("Configuring scenario control device: %s", device_type)
             suggested_config.update({
                 "device_class": "button",
                 "icon": "mdi:gesture-tap-button",
@@ -199,23 +326,30 @@ class MyHOMEDiscoveryConfigFlow:
             })
         
         elif device_type == "bus_dry_contact_ir":
+            self.logger.debug("Configuring dry contact device")
             suggested_config.update({
                 "device_class": "motion",
                 "icon": "mdi:motion-sensor"
             })
         
         elif device_type == "bus_aux":
+            self.logger.debug("Configuring auxiliary device")
             suggested_config.update({
                 "device_class": "switch",
                 "icon": "mdi:electric-switch"
             })
         
         elif device_type in ["bus_alarm_system", "bus_alarm_zone"]:
+            self.logger.debug("Configuring alarm device: %s", device_type)
             suggested_config.update({
                 "device_class": "safety",
                 "icon": "mdi:shield-home"
             })
         
+        else:
+            self.logger.warning("Unknown device type %s, using basic configuration", device_type)
+        
+        self.logger.debug("Final suggested_config for %s: %s", device_type, suggested_config)
         return suggested_config
 
 
