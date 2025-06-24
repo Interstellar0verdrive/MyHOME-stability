@@ -5,15 +5,7 @@ import re
 import os
 from typing import Dict, Optional
 
-from voluptuous import (
-    Schema,
-    Required,
-    Coerce,
-    All,
-    In,
-    Range,
-    IsFile,
-)
+import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -67,7 +59,7 @@ class MACAddress:
         return ":".join(["%s" % (self.mac[i : i + 2]) for i in range(0, 12, 2)])
 
 
-class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
+class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a MyHome config flow."""
 
     VERSION = 1
@@ -76,7 +68,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return MyhomeOptionsFlowHandler(config_entry)
+        return MyHomeOptionsFlowHandler(config_entry)
 
     def __init__(self):
         """Initialize the MyHome flow."""
@@ -118,9 +110,9 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=Schema(
+            data_schema=vol.Schema(
                 {
-                    Required("serial"): In(
+                    vol.Required("serial"): vol.In(
                         {
                             **{gateway["serialNumber"]: f"{gateway['modelName']} Gateway ({gateway['address']})" for gateway in local_gateways},
                             "00:00:00:00:00:00": "Custom",
@@ -164,15 +156,15 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="custom",
-            data_schema=Schema(
+            data_schema=vol.Schema(
                 {
-                    Required("address", description={"suggested_value": address_suggestion}): str,
-                    Required("port", description={"suggested_value": port_suggestion}): int,
-                    Required(
+                    vol.Required("address", description={"suggested_value": address_suggestion}): str,
+                    vol.Required("port", description={"suggested_value": port_suggestion}): int,
+                    vol.Required(
                         "serialNumber",
                         description={"suggested_value": serial_number_suggestion},
                     ): str,
-                    Required(
+                    vol.Required(
                         "modelName",
                         description={"suggested_value": model_name_suggestion},
                     ): str,
@@ -286,9 +278,9 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="port",
-            data_schema=Schema(
+            data_schema=vol.Schema(
                 {
-                    Required(CONF_PORT, description={"suggested_value": 20000}): int,
+                    vol.Required(CONF_PORT, description={"suggested_value": 20000}): int,
                 }
             ),
             description_placeholders={
@@ -316,12 +308,12 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="password",
-            data_schema=Schema(
+            data_schema=vol.Schema(
                 {
-                    Required(
+                    vol.Required(
                         CONF_OWN_PASSWORD,
                         description={"suggested_value": _suggested_password},
-                    ): Coerce(str),
+                    ): vol.Coerce(str),
                 }
             ),
             description_placeholders={
@@ -368,7 +360,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         return await self.async_step_test_connection()
 
 
-class MyhomeOptionsFlowHandler(OptionsFlow):
+class MyHomeOptionsFlowHandler(OptionsFlow):
     """Handle MyHome options."""
 
     def __init__(self, config_entry):
@@ -418,25 +410,25 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=Schema(
+            data_schema=vol.Schema(
                 {
-                    Required(
+                    vol.Required(
                         CONF_ADDRESS,
                         description={"suggested_value": self.data[CONF_HOST]},
                     ): str,
-                    Required(
+                    vol.Required(
                         CONF_OWN_PASSWORD,
                         description={"suggested_value": self.data[CONF_PASSWORD]},
                     ): str,
-                    Required(
+                    vol.Required(
                         CONF_FILE_PATH,
                         description={"suggested_value": self.options[CONF_FILE_PATH]},
-                    ): Coerce(str),
-                    Required(
+                    ): vol.Coerce(str),
+                    vol.Required(
                         CONF_WORKER_COUNT,
                         description={"suggested_value": self.options[CONF_WORKER_COUNT]},
-                    ): All(Coerce(int), Range(min=1, max=10)),
-                    Required(
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
+                    vol.Required(
                         CONF_GENERATE_EVENTS,
                         description={"suggested_value": self.options[CONF_GENERATE_EVENTS]},
                     ): bool,
