@@ -184,13 +184,15 @@ class MyHOMEDeviceDiscoveryService:
         """Create device info from command response parts."""
         try:
             # Map WHO to device type and platform
-            # For lighting (WHO=1), only consider it a dimmer if it reports actual dimming levels (2-10, excluding 8)
+            # For lighting (WHO=1), be conservative about dimmer detection
             # WHAT values for lighting:
             # 0 = OFF
             # 1 = ON
-            # 2-10 = Dimming levels (20%-100%)
+            # 2-10 = Potentially dimming levels (20%-100%)
             # 8 = Often indicates "temporized ON" or special state, not a dimming level
-            is_dimmer = who == "1" and what in ["2", "3", "4", "5", "6", "7", "9", "10"]
+            # Note: Just because a device responds with a dimming WHAT value doesn't mean it's actually a dimmer
+            # Some on/off switches may respond with these values. Default to on/off switch to be safe.
+            is_dimmer = False  # Default to on/off switch for safer device identification
             
             who_to_device_type = {
                 "1": ("bus_dimmer" if is_dimmer else "bus_on_off_switch", "light"),
@@ -293,12 +295,16 @@ class MyHOMEDeviceDiscoveryService:
     
     def _determine_lighting_device_type(self, message) -> str:
         """Determine lighting device type following OpenHAB patterns."""
-        # Check if it's a dimmer based on brightness information
-        if hasattr(message, 'brightness') and message.brightness is not None:
+        # Be conservative about dimmer detection - require explicit brightness information
+        # Check if it's a dimmer based on actual brightness capabilities
+        if hasattr(message, 'brightness') and message.brightness is not None and message.brightness > 0:
+            # Only consider it a dimmer if it has actual brightness level (not just 0/1)
             return DEVICE_TYPE_BUS_DIMMER
         elif hasattr(message, 'brightness_preset') and message.brightness_preset:
+            # Has brightness preset capability
             return DEVICE_TYPE_BUS_DIMMER
         else:
+            # Default to on/off switch - user can manually configure as dimmer if needed
             return DEVICE_TYPE_BUS_ON_OFF_SWITCH
     
     def _determine_thermo_device_type(self, message) -> str:
@@ -315,11 +321,17 @@ class MyHOMEDeviceDiscoveryService:
         
         # Add message-specific properties
         if isinstance(message, OWNLightingEvent):
-            if hasattr(message, 'brightness') and message.brightness is not None:
+            if hasattr(message, 'brightness') and message.brightness is not None and message.brightness > 0:
                 properties["brightness"] = message.brightness
                 properties["dimmable"] = True
+                properties["detection_confidence"] = "high"
+            elif hasattr(message, 'brightness_preset') and message.brightness_preset:
+                properties["dimmable"] = True
+                properties["detection_confidence"] = "medium"
             else:
                 properties["dimmable"] = False
+                properties["detection_confidence"] = "high"
+                properties["note"] = "Detected as on/off switch. If this device supports dimming, manually configure dimmable: true"
                 
         elif isinstance(message, OWNAutomationEvent):
             properties["shutter_type"] = "standard"
