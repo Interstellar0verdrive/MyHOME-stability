@@ -1,14 +1,14 @@
 {
   "domain": "myhome",
-  "name": "MyHOME",
+  "name": "MyHOME-enhanced",
   "codeowners": [
-    "@anotherjulien"
+    "@artmakh"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/anotherjulien/MyHOME",
+  "documentation": "https://github.com/artmakh/MyHOME",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/anotherjulien/MyHOME/issues",
+  "issue_tracker": "https://github.com/artmakh/MyHOME/issues",
   "requirements": [
     "OWNd==0.7.48"
   ],
