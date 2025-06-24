@@ -19,7 +19,7 @@ from homeassistant.const import (
     CONF_ENTITIES,
     CONF_NAME,
     CONF_MAC,
-    LIGHT_LUX,
+    UnitOfIlluminance,
     UnitOfPower,
     UnitOfEnergy,
     UnitOfTemperature,
@@ -547,7 +547,7 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
         self._attr_unique_id = (
             f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
         )
-        self._attr_native_unit_of_measurement = LIGHT_LUX
+        self._attr_native_unit_of_measurement = UnitOfIlluminance.LUX
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_value = None
         self._attr_extra_state_attributes = {

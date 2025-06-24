@@ -5,7 +5,6 @@ import re
 import os
 from typing import Dict, Optional
 
-import async_timeout
 from voluptuous import (
     Schema,
     Required,
@@ -16,7 +15,6 @@ from voluptuous import (
     IsFile,
 )
 from homeassistant.config_entries import (
-    CONN_CLASS_LOCAL_PUSH,
     ConfigEntry,
     ConfigFlow,
     OptionsFlow,
@@ -73,7 +71,6 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     """Handle a MyHome config flow."""
 
     VERSION = 1
-    CONNECTION_CLASS = CONN_CLASS_LOCAL_PUSH
 
     @staticmethod
     @callback
@@ -104,7 +101,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             return await self.async_step_test_connection()
 
         try:
-            with async_timeout.timeout(5):
+            async with asyncio.timeout(5):
                 local_gateways = await find_gateways()
         except asyncio.TimeoutError:
             return self.async_abort(reason="discovery_timeout")

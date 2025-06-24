@@ -1,6 +1,6 @@
 """Code to handle a MyHome Gateway."""
 import asyncio
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 
 from homeassistant.const import (
     CONF_ENTITIES,
@@ -61,12 +61,16 @@ from .const import (
     CONF_LONG_RELEASE,
     DOMAIN,
     LOGGER,
+    THING_STATE_REQ_TIMEOUT_SEC,
+    ALL_DEVICE_SUPPORTED_TYPES,
+    DEVICE_TYPE_TO_PLATFORM,
 )
 from .myhome_device import MyHOMEEntity
 from .button import (
     DisableCommandButtonEntity,
     EnableCommandButtonEntity,
 )
+from .device_factory import MyHOMEDeviceFactory
 
 
 class MyHOMEGatewayHandler:
@@ -98,6 +102,12 @@ class MyHOMEGatewayHandler:
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
         self.send_buffer = asyncio.Queue()
+        
+        # Initialize device factory following OpenHAB pattern
+        self.device_factory = MyHOMEDeviceFactory(hass, config_entry)
+        
+        # Initialize discovery service following OpenHAB pattern
+        self.discovery_service = None
 
     @property
     def mac(self) -> str:
@@ -129,6 +139,48 @@ class MyHOMEGatewayHandler:
 
     async def test(self) -> Dict:
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
+    
+    def supports_device_type(self, device_type: str) -> bool:
+        """Check if device type is supported by this gateway."""
+        return self.device_factory.supports_device_type(device_type)
+    
+    def get_device_category(self, device_type: str) -> str:
+        """Get device category following OpenHAB patterns."""
+        return self.device_factory.get_device_category(device_type)
+    
+    def organize_devices_by_category(self, devices_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Organize devices by category following OpenHAB patterns."""
+        return self.device_factory.organize_devices_by_category(devices_config)
+    
+    def validate_device_config(self, device_type: str, device_config: Dict[str, Any]) -> bool:
+        """Validate device configuration."""
+        return self.device_factory.validate_device_config(device_type, device_config)
+    
+    def initialize_discovery_service(self):
+        """Initialize the discovery service following OpenHAB patterns."""
+        if self.discovery_service is None:
+            from .discovery import MyHOMEDeviceDiscoveryService
+            self.discovery_service = MyHOMEDeviceDiscoveryService(
+                self.hass, self.config_entry, self
+            )
+            LOGGER.debug("%s Discovery service initialized", self.log_id)
+    
+    async def start_device_discovery(self) -> None:
+        """Start device discovery following OpenHAB patterns."""
+        if self.discovery_service:
+            await self.discovery_service.start_discovery()
+        else:
+            LOGGER.warning("%s Discovery service not initialized", self.log_id)
+    
+    async def stop_device_discovery(self) -> None:
+        """Stop device discovery following OpenHAB patterns."""
+        if self.discovery_service:
+            await self.discovery_service.stop_discovery()
+    
+    def handle_discovery_message(self, message) -> None:
+        """Handle message for discovery following OpenHAB patterns."""
+        if self.discovery_service:
+            self.discovery_service.handle_discovery_message(message)
 
     async def listening_loop(self):
         self._terminate_listener = False
@@ -157,17 +209,22 @@ class MyHOMEGatewayHandler:
                     self.log_id,
                     message,
                 )
-            elif isinstance(message, OWNEnergyEvent):
-                if SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS] and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR]:
-                    for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES]:
-                        if isinstance(
-                            self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity],
-                            MyHOMEEntity,
-                        ):
-                            self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity].handle_event(message)
-                else:
-                    continue
-            elif (
+            else:
+                # Handle message for discovery following OpenHAB patterns
+                self.handle_discovery_message(message)
+                
+                # Continue with existing message processing
+                if isinstance(message, OWNEnergyEvent):
+                    if SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS] and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR]:
+                        for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES]:
+                            if isinstance(
+                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity],
+                                MyHOMEEntity,
+                            ):
+                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][message.entity][CONF_ENTITIES][_entity].handle_event(message)
+                    else:
+                        continue
+                elif (
                 isinstance(message, OWNLightingEvent)
                 or isinstance(message, OWNAutomationEvent)
                 or isinstance(message, OWNDryContactEvent)

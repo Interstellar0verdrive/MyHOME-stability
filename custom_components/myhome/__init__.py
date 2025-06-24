@@ -1,4 +1,4 @@
-""" MyHOME integration. """
+""" MyHOME integration enhanced with OpenHAB-style patterns. """
 
 import aiofiles
 import yaml
@@ -23,9 +23,13 @@ from .const import (
     CONF_GENERATE_EVENTS,
     DOMAIN,
     LOGGER,
+    ALL_DEVICE_SUPPORTED_TYPES,
+    DEVICE_TYPE_TO_PLATFORM,
 )
 from .validate import config_schema, format_mac
 from .gateway import MyHOMEGatewayHandler
+from .device_factory import MyHOMEDeviceFactory
+from .config_flow_discovery import async_setup_discovery
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor"]
@@ -99,7 +103,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             tests_results["Message"] == "password_error"
             or tests_results["Message"] == "password_required"
         ):
-            hass.async_create_task(
+            entry.async_create_task(
                 hass.config_entries.flow.async_init(
                     DOMAIN,
                     context={"source": SOURCE_REAUTH},
@@ -134,15 +138,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         entry, hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys()
     )
 
+    # Setup discovery config flow following OpenHAB patterns
+    async_setup_discovery(hass)
+    
+    # Initialize discovery service following OpenHAB patterns
+    hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].initialize_discovery_service()
+    
     hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].listening_worker = (
-        hass.loop.create_task(
-            hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].listening_loop()
+        entry.async_create_background_task(
+            hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].listening_loop(),
+            name="myhome_listening_worker",
         )
     )
     for i in range(_command_worker_count):
         hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].sending_workers.append(
-            hass.loop.create_task(
-                hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].sending_loop(i)
+            entry.async_create_background_task(
+                hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].sending_loop(i),
+                name=f"myhome_sending_worker_{i}",
             )
         )
 
@@ -268,6 +280,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     hass.services.async_register(DOMAIN, "send_message", handle_send_message)
 
+    # Register discovery service following OpenHAB patterns
+    async def handle_start_discovery(call):
+        gateway = call.data.get(ATTR_GATEWAY, None)
+        if gateway is None:
+            gateway = list(hass.data[DOMAIN].keys())[0]
+        else:
+            mac = format_mac(gateway)
+            if mac is None:
+                LOGGER.error("Invalid gateway mac `%s`, could not start discovery.", gateway)
+                return False
+            else:
+                gateway = mac
+        
+        if gateway in hass.data[DOMAIN]:
+            await hass.data[DOMAIN][gateway][CONF_ENTITY].start_device_discovery()
+            LOGGER.info("Started device discovery on gateway %s", gateway)
+        else:
+            LOGGER.error("Gateway `%s` not found, could not start discovery.", gateway)
+            return False
+
+    hass.services.async_register(DOMAIN, "start_discovery", handle_start_discovery)
+
+    async def handle_stop_discovery(call):
+        gateway = call.data.get(ATTR_GATEWAY, None)
+        if gateway is None:
+            gateway = list(hass.data[DOMAIN].keys())[0]
+        else:
+            mac = format_mac(gateway)
+            if mac is None:
+                LOGGER.error("Invalid gateway mac `%s`, could not stop discovery.", gateway)
+                return False
+            else:
+                gateway = mac
+        
+        if gateway in hass.data[DOMAIN]:
+            await hass.data[DOMAIN][gateway][CONF_ENTITY].stop_device_discovery()
+            LOGGER.info("Stopped device discovery on gateway %s", gateway)
+        else:
+            LOGGER.error("Gateway `%s` not found, could not stop discovery.", gateway)
+            return False
+
+    hass.services.async_register(DOMAIN, "stop_discovery", handle_stop_discovery)
+
     return True
 
 
@@ -276,11 +331,14 @@ async def async_unload_entry(hass, entry):
 
     LOGGER.info("Unloading MyHome entry.")
 
-    for platform in hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys():
-        await hass.config_entries.async_forward_entry_unload(entry, platform)
+    await hass.config_entries.async_unload_platforms(
+        entry, hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys()
+    )
 
     hass.services.async_remove(DOMAIN, "sync_time")
     hass.services.async_remove(DOMAIN, "send_message")
+    hass.services.async_remove(DOMAIN, "start_discovery")
+    hass.services.async_remove(DOMAIN, "stop_discovery")
 
     gateway_handler = hass.data[DOMAIN][entry.data[CONF_MAC]].pop(CONF_ENTITY)
     del hass.data[DOMAIN][entry.data[CONF_MAC]]
