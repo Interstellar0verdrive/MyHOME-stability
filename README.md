@@ -137,7 +137,7 @@ data:
 ✅ **Correct**: Call service through Home Assistant:
 ```yaml
 # Use Developer Tools → Services or automation
-service: myhome.start_discovery  
+service: myhome.start_discovery
 data:
   gateway: '00:03:50:XX:XX:XX'
 ```
@@ -157,7 +157,7 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
 ```yaml
 # Gateway MAC address (from integration setup)
 "00:03:50:XX:XX:XX":
-  
+
   # Lighting devices
   light:
     living_room_main:
@@ -165,13 +165,13 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
       name: "Living Room Main Light"
       dimmable: true
       icon: "mdi:ceiling-light"
-    
+
     kitchen_spots:
       where: "25"
       name: "Kitchen Spot Lights"
       dimmable: false
       icon: "mdi:lightbulb-group"
-  
+
   # Covers/Shutters
   cover:
     bedroom_shutter:
@@ -181,12 +181,12 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
       inverted: false
       advanced: true
       shutter_run: 20
-    
+
     living_room_blinds:
       where: "41"
       name: "Living Room Blinds"
       device_class: "blind"
-  
+
   # Climate devices
   climate:
     living_room_thermo:
@@ -196,12 +196,12 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
       cool: true
       fan: false
       standalone: false
-    
+
     bedroom_sensor:
       where: "2"
       name: "Bedroom Temperature"
       standalone: true
-  
+
   # Energy monitoring
   sensor:
     main_power:
@@ -210,7 +210,7 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
       device_class: "power"
       unit_of_measurement: "W"
       refresh_period: 30
-  
+
   # Scenario buttons
   button:
     scene_controller:
@@ -219,7 +219,7 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
       buttons: "1,2,3,4"
       short_press: "pushbutton_short_press"
       long_press: "pushbutton_long_press"
-  
+
   # Binary sensors
   binary_sensor:
     front_door:
@@ -227,7 +227,7 @@ For advanced users or custom configurations, create a `myhome.yaml` file:
       name: "Front Door Contact"
       device_class: "door"
       inverted: false
-  
+
   # Switches
   switch:
     garden_pump:
@@ -341,7 +341,7 @@ The integration fires several events for automation:
 ### Device Events
 
 - `myhome_cenplus_event`: CEN+ button events
-- `myhome_cen_event`: CEN button events  
+- `myhome_cen_event`: CEN button events
 - `myhome_general_light_event`: General lighting commands
 - `myhome_area_light_event`: Area lighting commands
 - `myhome_group_light_event`: Group lighting commands
@@ -503,7 +503,7 @@ Support multiple gateways by adding each gateway's MAC address:
       where: "15"
       name: "Kitchen Light"
 
-# Second gateway  
+# Second gateway
 "00:03:50:DD:EE:FF":
   cover:
     garage_door:
@@ -523,7 +523,7 @@ Customize device appearance and behavior:
       name: "Accent Lighting"
       dimmable: true
       icon: "mdi:led-strip-variant"
-      
+
   binary_sensor:
     window_sensor:
       where: "301"
@@ -566,7 +566,7 @@ Contributions are welcome! Please:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
