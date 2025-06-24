@@ -225,13 +225,13 @@ class MyHOMEGatewayHandler:
                     else:
                         continue
                 elif (
-                isinstance(message, OWNLightingEvent)
-                or isinstance(message, OWNAutomationEvent)
-                or isinstance(message, OWNDryContactEvent)
-                or isinstance(message, OWNAuxEvent)
-                or isinstance(message, OWNHeatingEvent)
-            ):
-                if not message.is_translation:
+                    isinstance(message, OWNLightingEvent)
+                    or isinstance(message, OWNAutomationEvent)
+                    or isinstance(message, OWNDryContactEvent)
+                    or isinstance(message, OWNAuxEvent)
+                    or isinstance(message, OWNHeatingEvent)
+                ):
+                    if not message.is_translation:
                     is_event = False
                     if isinstance(message, OWNLightingEvent):
                         if message.is_general:
