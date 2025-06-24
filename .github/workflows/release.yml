@@ -1,0 +1,132 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+      name:
+        description: 'Release name (optional)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Validate tag format
+        run: |
+          if [[ ! "${{ github.event.inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
+            echo "Error: Tag must follow semantic versioning format (e.g., v1.0.0, v1.0.0-beta.1)"
+            exit 1
+          fi
+          
+      - name: Check if tag already exists
+        run: |
+          if git rev-parse "${{ github.event.inputs.tag }}" >/dev/null 2>&1; then
+            echo "Error: Tag ${{ github.event.inputs.tag }} already exists"
+            exit 1
+          fi
+          
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ github.event.inputs.tag }}"
+          git push origin "${{ github.event.inputs.tag }}"
+          
+      - name: Create myhome.zip
+        run: |
+          cd custom_components
+          zip -r ../myhome.zip myhome/
+          cd ..
+          ls -la myhome.zip
+          
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          # Generate changelog
+          if [ -z "$PREV_TAG" ]; then
+            echo "changelog=Initial release" >> $GITHUB_OUTPUT
+          else
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "## Changes since $PREV_TAG" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.name || github.event.inputs.tag }}
+          body: |
+            # MyHOME Integration Release ${{ github.event.inputs.tag }}
+            
+            ## Installation
+            
+            ### HACS (Recommended)
+            1. Add this repository as a custom repository in HACS
+            2. Install the MyHOME integration
+            3. Restart Home Assistant
+            
+            ### Manual Installation
+            1. Download `myhome.zip` from the assets below
+            2. Extract the contents to your `custom_components` directory
+            3. Restart Home Assistant
+            
+            ## Changelog
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ---
+            
+            🚀 **Installation Path**: `custom_components/myhome/`
+            
+            📋 **Requirements**: Home Assistant 2024.3.0+
+            
+            🔧 **Dependencies**: OWNd==0.7.48
+          files: |
+            myhome.zip
+          prerelease: ${{ github.event.inputs.prerelease }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Update manifest version
+        if: success()
+        run: |
+          # Extract version number without 'v' prefix
+          VERSION="${{ github.event.inputs.tag }}"
+          VERSION="${VERSION#v}"
+          
+          # Update manifest.json
+          sed -i 's/"version": "[^"]*"/"version": "'$VERSION'"/' custom_components/myhome/manifest.json
+          
+          # Check if version was updated
+          if git diff --quiet custom_components/myhome/manifest.json; then
+            echo "Warning: manifest.json was not updated"
+          else
+            echo "Updated manifest.json version to $VERSION"
+            git add custom_components/myhome/manifest.json
+            git commit -m "Update manifest version to $VERSION"
+            git push origin main
+          fi

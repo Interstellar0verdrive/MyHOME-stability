@@ -66,15 +66,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         async with aiofiles.open(_config_file_path, mode="r") as yaml_file:
             _validated_config = config_schema(yaml.safe_load(await yaml_file.read()))
     except FileNotFoundError:
-        LOGGER.error(f"Configartion file '{_config_file_path}' is not present!")
-        return False
+        LOGGER.info(f"Configuration file '{_config_file_path}' not found, creating empty configuration file")
+        try:
+            # Create an empty YAML configuration file
+            async with aiofiles.open(_config_file_path, mode="w") as yaml_file:
+                await yaml_file.write("# MyHOME Configuration\n# Add your gateway configurations here\n")
+            # Initialize with empty config that will be populated via config flow
+            _validated_config = {}
+        except (OSError, PermissionError) as e:
+            LOGGER.error(f"Failed to create configuration file '{_config_file_path}': {e}")
+            return False
 
     if entry.data[CONF_MAC] in _validated_config:
         hass.data[DOMAIN][entry.data[CONF_MAC]] = _validated_config[
             entry.data[CONF_MAC]
         ]
     else:
-        return False
+        # Initialize empty configuration for this gateway - will be populated via config flow
+        LOGGER.info(f"Gateway {entry.data[CONF_MAC]} not found in configuration file, initializing with empty configuration")
+        hass.data[DOMAIN][entry.data[CONF_MAC]] = {CONF_PLATFORMS: {}}
 
     # Migrating the config entry's unique_id if it was not formated to the recommended hass standard
     if entry.unique_id != dr.format_mac(entry.unique_id):
