@@ -122,5 +122,5 @@ jobs:
             echo "Updated manifest.json version to $VERSION"
             git add custom_components/myhome/manifest.json
             git commit -m "Update manifest version to $VERSION"
-            git push origin main
+            git push origin master
           fi
