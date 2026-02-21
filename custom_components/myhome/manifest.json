@@ -2,13 +2,13 @@
   "domain": "myhome",
   "name": "MyHOME-stability-next",
   "codeowners": [
-    "@artmakh"
+    "@Interstellar0verdrive"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/artmakh/MyHOME",
+  "documentation": "https://github.com/Interstellar0verdrive/MyHOME-stability-next",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/artmakh/MyHOME/issues",
+  "issue_tracker": "https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues",
   "requirements": [
     "OWNd==0.7.48"
   ],
