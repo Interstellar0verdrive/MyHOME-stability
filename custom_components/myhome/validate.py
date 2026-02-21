@@ -298,7 +298,8 @@ light_schema = MyHomeDeviceSchema(
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
-    }
+    },
+    extra=True,
 )
 
 switch_schema = MyHomeDeviceSchema(
@@ -322,7 +323,8 @@ switch_schema = MyHomeDeviceSchema(
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
-    }
+    },
+    extra=True,
 )
 
 cover_schema = MyHomeDeviceSchema(
@@ -339,7 +341,8 @@ cover_schema = MyHomeDeviceSchema(
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
-    }
+    },
+    extra=True,
 )
 
 binary_sensor_schema = MyHomeDeviceSchema(
@@ -381,7 +384,8 @@ binary_sensor_schema = MyHomeDeviceSchema(
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
-    }
+    },
+    extra=True,
 )
 
 sensor_schema = MyHomeSensorSchema(
@@ -401,7 +405,8 @@ sensor_schema = MyHomeSensorSchema(
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
-    }
+    },
+    extra=True,
 )
 
 climate_schema = MyHomeDeviceSchema(
@@ -418,7 +423,8 @@ climate_schema = MyHomeDeviceSchema(
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
-    }
+    },
+    extra=True,
 )
 
 gateway_schema = Schema(
