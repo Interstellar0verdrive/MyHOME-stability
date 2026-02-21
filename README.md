@@ -6,6 +6,13 @@
 > - Status: **experimental / best-effort** (not an officially maintained integration)
 > - Target: Home Assistant users who want a more resilient MyHOME integration, even if some features are still work-in-progress
 > - Upstream references: `artmakh/MyHOME` and `anotherjulien/MyHOME`
+>
+> **Stability-focused changes in this fork:**
+> - Event session watchdog (timeout + reconnect with exponential backoff)
+> - Command session reconnect & re-queue on reset
+> - Config validation fixes (accepts documented parameters; supports `device_class` for sensors)
+> - Home Assistant compatibility fixes (removed deprecated `UnitOfIlluminance` → uses `LIGHT_LUX`)
+> - Reduced polling aggressiveness (increased `scan_interval` for `binary_sensor` and `sensor`)
 
 
 A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home automation systems, enhanced with OpenHAB-inspired patterns for better device management and auto-discovery.
@@ -20,6 +27,12 @@ A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home autom
 - **Factory Pattern**: Organized device handlers for each category
 - **Real-Time Communication**: Async OpenWebNet protocol implementation
 - **Modern Home Assistant Integration**: Follows current HA patterns and standards
+- **Stability Improvements (this fork)**:
+  - Event session watchdog (timeout + reconnect/backoff)
+  - Command session reconnect & re-queue
+  - Config validation fixes (accepts documented parameters; `device_class` for sensors)
+  - Home Assistant compatibility fixes (uses `LIGHT_LUX`)
+  - Reduced polling aggressiveness for sensors/binary_sensors
 
 ## Supported Devices
 
@@ -80,174 +93,58 @@ If your gateway isn't auto-discovered:
    - **Password**: Gateway password (if required)
    - **Name**: Friendly name for the gateway
 
-### Device Configuration
+### Device Configuration (YAML)
 
-The integration supports two configuration methods:
+This fork supports **two configuration styles** for devices:
 
-#### Method 1: Auto-Discovery (Recommended)
+- **Recommended: "discovery-generated" style** (consistent with auto-discovery):
+  ```yaml
+  gateway:
+    mac: "00:03:50:XX:XX:XX"
+    light:
+      living_room_main:
+        where: "15"
+        name: "Living Room Main Light"
+  ```
+- **Alternate: "MAC-as-root-key" style** (legacy/manual):
+  ```yaml
+  "00:03:50:XX:XX:XX":
+    light:
+      living_room_main:
+        where: "15"
+        name: "Living Room Main Light"
+  ```
 
-Use the built-in auto-discovery to find and configure devices automatically.
+Both styles are supported for backward compatibility, but **using the discovery-generated `gateway:` structure is recommended** for consistency with auto-discovery and future updates.
 
-**Important:** Auto-discovery is activated via Home Assistant services, NOT via YAML configuration.
+**Minimal examples:**
 
-**Step 1: Prepare Configuration File**
-
-Create an empty or basic `/config/myhome.yaml` file:
-
+**1. Discovery-generated style (recommended):**
 ```yaml
-# MyHOME Configuration
-# Add your gateway configurations here
-# (discovered devices will be automatically added)
-```
-
-**Step 2: Start Discovery**
-
-Use Home Assistant **Developer Tools → Services** to call:
-
-```yaml
-service: myhome.start_discovery
-data:
-  gateway: "00:03:50:XX:XX:XX"  # Your gateway MAC address
-```
-
-**OR** create an automation to start discovery:
-
-```yaml
-automation:
-  - alias: "Start MyHOME Discovery"
-    trigger:
-      platform: homeassistant
-      event: start
-    action:
-      service: myhome.start_discovery
-      data:
-        gateway: "00:03:50:XX:XX:XX"
-```
-
-**Discovery Process:**
-1. Call the `myhome.start_discovery` service with your gateway MAC
-2. The integration sends discovery commands to scan for devices (`*#1*0##`, `*#2*0##`, etc.)
-3. Device responses come back as events and are processed by the discovery service
-4. Discovered devices are automatically added to `/config/myhome.yaml`
-5. The integration reloads and new entities appear in Home Assistant
-6. Check logs for discovery progress and any issues
-
-**Common Discovery Issues:**
-
-❌ **Wrong**: Putting service calls in YAML config:
-```yaml
-# DON'T DO THIS - This goes in myhome.yaml config file
-service: myhome.start_discovery
-data:
-  mac: '00:03:50:XX:XX:XX'
-```
-
-✅ **Correct**: Call service through Home Assistant:
-```yaml
-# Use Developer Tools → Services or automation
-service: myhome.start_discovery
-data:
-  gateway: '00:03:50:XX:XX:XX'
-```
-
-**Discovery Warning Messages:**
-- `"Could not send message *#18*0##"` - Energy management subsystem not available
-- `"Could not send message *#9*0##"` - Auxiliary subsystem not available
-- These warnings are **normal** if your gateway doesn't support these subsystems
-- Discovery will still find devices from supported subsystems (lighting, automation, etc.)
-
-#### Method 2: Manual Configuration (YAML)
-
-For advanced users or custom configurations, create a `myhome.yaml` file:
-
-**File Location:** `/config/myhome.yaml`
-
-```yaml
-# Gateway MAC address (from integration setup)
-"00:03:50:XX:XX:XX":
-
-  # Lighting devices
+gateway:
+  mac: "00:03:50:AA:BB:CC"
   light:
-    living_room_main:
+    kitchen_light:
       where: "15"
-      name: "Living Room Main Light"
-      dimmable: true
-      icon: "mdi:ceiling-light"
-
-    kitchen_spots:
-      where: "25"
-      name: "Kitchen Spot Lights"
-      dimmable: false
-      icon: "mdi:lightbulb-group"
-
-  # Covers/Shutters
-  cover:
-    bedroom_shutter:
-      where: "32"
-      name: "Bedroom Shutter"
-      device_class: "shutter"
-      inverted: false
-      advanced: true
-      shutter_run: 20
-
-    living_room_blinds:
-      where: "41"
-      name: "Living Room Blinds"
-      device_class: "blind"
-
-  # Climate devices
-  climate:
-    living_room_thermo:
-      where: "1"
-      name: "Living Room Thermostat"
-      heat: true
-      cool: true
-      fan: false
-      standalone: false
-
-    bedroom_sensor:
-      where: "2"
-      name: "Bedroom Temperature"
-      standalone: true
-
-  # Energy monitoring
-  sensor:
-    main_power:
-      where: "51"
-      name: "Main Power Meter"
-      device_class: "power"
-      unit_of_measurement: "W"
-      refresh_period: 30
-
-  # Scenario buttons
-  button:
-    scene_controller:
-      where: "25"
-      name: "Scene Controller"
-      buttons: "1,2,3,4"
-      short_press: "pushbutton_short_press"
-      long_press: "pushbutton_long_press"
-
-  # Binary sensors
-  binary_sensor:
-    front_door:
-      where: "399"
-      name: "Front Door Contact"
-      device_class: "door"
-      inverted: false
-
-  # Switches
-  switch:
-    garden_pump:
-      where: "35"
-      name: "Garden Pump"
-      device_class: "switch"
-      icon: "mdi:water-pump"
+      name: "Kitchen Light"
 ```
+
+**2. MAC-as-root-key style (also supported):**
+```yaml
+"00:03:50:AA:BB:CC":
+  light:
+    kitchen_light:
+      where: "15"
+      name: "Kitchen Light"
+```
+
+For more complex setups, add other device types (e.g. `cover`, `sensor`, `binary_sensor`, etc.) under the same structure.
 
 ## Device Configuration Parameters
 
 ### Common Parameters
+
+> **Note:** This fork supports the `device_class` parameter (as well as `icon`, `shutter_run`, `refresh_period`, `unit_of_measurement`), and for sensors, `device_class` is mapped internally to the schema key used by this fork.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -454,6 +351,8 @@ logger:
     OWNd: debug
 ```
 
+> **Note:** Frequent "Command session connection reset" messages may be normal depending on gateway behavior and polling/services. For day-to-day use, keep `custom_components.myhome` at `info` level; use `debug` only when troubleshooting.
+
 ### Configuration Validation
 
 The integration validates configurations and reports issues in the logs. Common validation errors:
@@ -558,7 +457,7 @@ Configure power meters with specific refresh rates:
 
 ## Support
 
-- **GitHub Issues**: [Report bugs and feature requests](https://github.com/anotherjulien/MyHOME/issues)
+- **GitHub Issues**: [Report bugs and feature requests](https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues)
 - **Wiki**: [Detailed documentation and examples](https://github.com/anotherjulien/MyHOME/wiki)
 - **Community Forum**: [Home Assistant Community](https://community.home-assistant.io/)
 
@@ -612,3 +511,11 @@ This fork adds the following enhancements to the original integration:
 - **Extensible Design**: Easy to add support for new device types
 
 While maintaining full compatibility with existing configurations, these enhancements make the integration more robust, user-friendly, and easier to maintain.
+
+### Stability-focused changes (this fork)
+
+- **Added:** Event listener watchdog (timeout + reconnect/backoff)
+- **Added:** Command session reconnect + retry queue
+- **Fixed:** Config validation accepting documented parameters; sensor `device_class` accepted
+- **Fixed:** HA constant import compatibility (`UnitOfIlluminance` → `LIGHT_LUX`)
+- **Changed:** Increased `scan_interval` defaults for sensors/binary_sensors to reduce load
