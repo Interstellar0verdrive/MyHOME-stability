@@ -1,4 +1,12 @@
+
 # MyHOME Integration for Home Assistant
+
+> **Repo note (stability-focused fork):** This repository is a personal fork primarily aimed at improving runtime stability (connection handling, timeouts/reconnects, less noisy logging) and keeping the integration usable over time. It is based on the enhanced fork by **artmakh** and still builds on the original project by **anotherjulien**.
+>
+> - Status: **experimental / best-effort** (not an officially maintained integration)
+> - Target: Home Assistant users who want a more resilient MyHOME integration, even if some features are still work-in-progress
+> - Upstream references: `artmakh/MyHOME` and `anotherjulien/MyHOME`
+
 
 A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home automation systems, enhanced with OpenHAB-inspired patterns for better device management and auto-discovery.
 
