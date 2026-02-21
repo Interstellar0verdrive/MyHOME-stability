@@ -245,6 +245,12 @@ class MyHomeSensorSchema(Schema):
 
         for device in data:
             data[device][CONF_ENTITIES] = {}
+            # Backward-compatibility: some configs/auto-discovery may use `device_class`.
+            # Internally this integration expects the key defined by CONF_DEVICE_CLASS (currently `class`).
+            if "device_class" in data[device] and CONF_DEVICE_CLASS not in data[device]:
+                data[device][CONF_DEVICE_CLASS] = data[device]["device_class"]
+            if CONF_DEVICE_CLASS not in data[device]:
+                raise Invalid("missing required sensor class (use 'class' or 'device_class')")
             if CONF_DEVICE_CLASS in data[device]:
                 if data[device][CONF_DEVICE_CLASS] in [
                     SensorDeviceClass.POWER,
@@ -394,7 +400,15 @@ sensor_schema = MyHomeSensorSchema(
             Optional(CONF_WHO): In(["1", "4", "18"]),
             Required(CONF_WHERE): All(Coerce(str), SpecialWhere()),
             Required(CONF_NAME): str,
-            Required(CONF_DEVICE_CLASS): In(
+            Optional(CONF_DEVICE_CLASS): In(
+                [
+                    SensorDeviceClass.TEMPERATURE,
+                    SensorDeviceClass.POWER,
+                    SensorDeviceClass.ENERGY,
+                    SensorDeviceClass.ILLUMINANCE,
+                ]
+            ),
+            Optional("device_class"): In(
                 [
                     SensorDeviceClass.TEMPERATURE,
                     SensorDeviceClass.POWER,
