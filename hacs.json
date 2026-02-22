@@ -2,7 +2,7 @@
   "name": "MyHome-stability-next",
   "content_in_root": false,
   "render_readme": true,
-  "zip_release": true,
+  "zip_release": false,
   "country": [
     "GB",
     "FR",
