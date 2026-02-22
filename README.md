@@ -144,7 +144,7 @@ For more complex setups, add other device types (e.g. `cover`, `sensor`, `binary
 
 ### Common Parameters
 
-> **Note:** This fork supports the `device_class` parameter (as well as `icon`, `shutter_run`, `refresh_period`, `unit_of_measurement`), and for sensors, `device_class` is mapped internally to the schema key used by this fork.
+> **Note:** This fork supports the `device_class` parameter (as well as `icon`, `shutter_run`, `refresh_period`, `unit_of_measurement`) and adds stability-focused filtering options for power sensors. For sensors, `device_class` is mapped internally to the schema key used by this fork.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -152,6 +152,7 @@ For more complex setups, add other device types (e.g. `cover`, `sensor`, `binary
 | `name` | string | Yes | Display name in Home Assistant |
 | `icon` | string | No | Material Design icon |
 | `device_class` | string | No | Home Assistant device class |
+| `energy` / `sensor_defaults` | mapping | No | Gateway-level defaults for power sensor filtering (`min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`). See *Energy Reporting Filtering*. |
 
 ### Lighting-Specific Parameters
 
@@ -181,8 +182,12 @@ For more complex setups, add other device types (e.g. `cover`, `sensor`, `binary
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `refresh_period` | integer | 30 | Update interval in seconds |
-| `unit_of_measurement` | string | - | Measurement unit |
+| `device_class` | string | - | Home Assistant device class (e.g. `power`, `energy`, `current`, `voltage`) |
+| `unit_of_measurement` | string | - | Measurement unit (e.g. `W`, `kWh`) |
+| `refresh_period` | integer | 30 | **Alias** for `min_interval_sec` (see *Energy Reporting Filtering*). It does **not** poll; it rate-limits accepted push updates. |
+| `min_delta_w` | integer | 5 | Minimum absolute delta (in W) vs last processed value required to accept an update. |
+| `min_interval_sec` | number | 1 | Minimum seconds since last processed value required to accept an update. |
+| `suppress_log_interval_sec` | number | 60 | When debug logging is enabled, suppressed events are aggregated and logged at most once per this interval. |
 
 ---
 
@@ -197,6 +202,9 @@ An incoming power value update is **processed** if **either** condition is true:
 
 Otherwise the event is suppressed. When debug logging is enabled, suppressed events are **aggregated** and logged periodically (instead of printing every single fluctuation).
 
+> **Compatibility note (`refresh_period`)**  
+> The upstream `artmakh` fork documents a `refresh_period` key for sensors. In this stability-focused fork, `refresh_period` is supported as an **alias** for `min_interval_sec` (gateway-level default or per-sensor). This is a rate-limit for **incoming push events** (no polling). If both are set, `min_interval_sec` takes precedence.
+
 #### Global defaults (gateway-level)
 
 You can define default filtering values that apply to all power sensors under the gateway. Both keys below are supported and behave the same:
@@ -206,8 +214,8 @@ gateway:
   mac: "00:03:50:AA:BB:CC"
 
   energy:
-    min_delta_w: 25
-    min_interval_sec: 5
+    min_delta_w: 25            # process if delta >= 25 W
+    min_interval_sec: 5        # OR if last processed value is older than 5 seconds
     suppress_log_interval_sec: 60
 ```
 
@@ -246,6 +254,7 @@ gateway:
       # Override filtering for this sensor
       min_delta_w: 50
       min_interval_sec: 10
+      # refresh_period: 10      # equivalent alias (optional)
       suppress_log_interval_sec: 120
 ```
 
@@ -525,7 +534,7 @@ Configure power meters with specific refresh rates:
       name: "Total Power Consumption"
       device_class: "power"
       unit_of_measurement: "W"
-      refresh_period: 10  # Update every 10 seconds
+      refresh_period: 10  # Alias for min_interval_sec (rate-limit push updates; no polling)
       icon: "mdi:flash"
 ```
 

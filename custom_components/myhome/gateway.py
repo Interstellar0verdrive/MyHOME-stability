@@ -205,6 +205,11 @@ class MyHOMEGatewayHandler:
                 min_interval_sec = global_energy_cfg.get(
                     "min_interval_sec", global_energy_cfg.get("energy_min_interval_sec", None)
                 )
+                if min_interval_sec is None:
+                    # artmakh-style alias at global level
+                    min_interval_sec = global_energy_cfg.get(
+                        "refresh_period", global_energy_cfg.get("refresh_period_sec", None)
+                    )
                 suppress_log_interval = global_energy_cfg.get(
                     "suppress_log_interval_sec",
                     global_energy_cfg.get("energy_suppress_log_interval_sec", None),
@@ -401,10 +406,22 @@ class MyHOMEGatewayHandler:
             min_delta_w = sensor_cfg.get("energy_min_delta_w", min_delta_w)
             min_interval_sec = sensor_cfg.get("energy_min_interval_sec", min_interval_sec)
             info_log_interval_sec = sensor_cfg.get("energy_info_log_interval_sec", info_log_interval_sec)
+
             # Short keys
             min_delta_w = sensor_cfg.get("min_delta_w", min_delta_w)
             min_interval_sec = sensor_cfg.get("min_interval_sec", min_interval_sec)
             info_log_interval_sec = sensor_cfg.get("info_log_interval_sec", info_log_interval_sec)
+
+            # Backward/compat alias (artmakh-style): `refresh_period` behaves like a minimum update interval
+            # for high-frequency energy/power events.
+            # Only apply this alias if the user did NOT explicitly set min_interval_sec.
+            has_explicit_min_interval = (
+                "min_interval_sec" in sensor_cfg or "energy_min_interval_sec" in sensor_cfg
+            )
+            if not has_explicit_min_interval:
+                refresh_period = sensor_cfg.get("refresh_period", sensor_cfg.get("refresh_period_sec", None))
+                if refresh_period is not None:
+                    min_interval_sec = refresh_period
 
         try:
             min_delta_w = int(min_delta_w)
