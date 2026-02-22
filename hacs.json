@@ -2,12 +2,6 @@
   "name": "MyHome",
   "content_in_root": false,
   "render_readme": true,
-  "zip_release": false,
-  "country": [
-    "GB",
-    "FR",
-    "NL",
-    "IT"
-  ],
+  "country": ["GB", "FR", "NL", "IT"],
   "homeassistant": "2024.3.0"
 }
