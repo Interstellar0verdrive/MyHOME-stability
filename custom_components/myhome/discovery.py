@@ -62,7 +62,7 @@ class MyHOMEDeviceDiscoveryService:
         self._discovery_timeout = 60  # seconds
         self._discovery_task: Optional[asyncio.Task] = None
         
-        # Device type mapping from messages
+        # Device type mapping from messages 
         self._message_to_device_type = {
             # Map message types to device types following OpenHAB patterns
             "OWNLightingEvent": self._determine_lighting_device_type,
