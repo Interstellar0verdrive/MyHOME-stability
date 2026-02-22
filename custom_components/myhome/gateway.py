@@ -95,10 +95,23 @@ class _DemoteChattyInfoToDebugFilter(logging.Filter):
         except Exception:
             return True
 
-        # Only touch INFO records from our integration logger.
-        if record.levelno == logging.INFO and any(s in msg for s in _ENERGY_INFO_DEMOTE_SUBSTRINGS):
-            record.levelno = logging.DEBUG
-            record.levelname = "DEBUG"
+        # OWNd can emit high-frequency power telemetry logs like:
+        # "Sensor X is reporting an active power draw of Y W."
+        # We want these available when explicitly debugging OWNd, but they are
+        # too chatty even at DEBUG once you enable debug logs.
+        #
+        # Strategy:
+        # - If they come in at INFO, demote them to DEBUG (so normal INFO logs stay clean).
+        # - If they come in already at DEBUG, drop them entirely (we already have our own
+        #   aggregated suppression logs and the raw stream is not actionable).
+        if any(s in msg for s in _ENERGY_INFO_DEMOTE_SUBSTRINGS):
+            if record.levelno == logging.INFO:
+                record.levelno = logging.DEBUG
+                record.levelname = "DEBUG"
+                return True
+            if record.levelno == logging.DEBUG:
+                return False
+
         return True
 
 
