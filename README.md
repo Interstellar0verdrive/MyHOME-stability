@@ -1,5 +1,5 @@
 
-# MyHOME Integration for Home Assistant
+# MyHOME Integration for Home Assistant (WIP!)
 
 > **Repo note (stability-focused fork):** This repository is a personal fork primarily aimed at improving runtime stability (connection handling, timeouts/reconnects, less noisy logging) and keeping the integration usable over time. It is based on the enhanced fork by **artmakh** and still builds on the original project by **anotherjulien**.
 >
