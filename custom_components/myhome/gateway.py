@@ -96,8 +96,8 @@ class MyHOMEGatewayHandler:
         self.config_entry = config_entry
         self.generate_events = generate_events
         self.gateway = OWNGateway(build_info)
-        self._terminate_listener = False
-        self._terminate_sender = False
+        self._stop_event_listener = False
+        self._stop_command_workers = False
         self.is_connected = False
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
@@ -111,6 +111,8 @@ class MyHOMEGatewayHandler:
         # Tuning notes:
         # - Set `energy_min_delta_w` to 0 to disable delta-based suppression.
         # - Set `energy_min_interval_sec` to 0 to disable rate limiting.
+        # You can override these per sensor in YAML under `gateway: -> sensor: -> <sensor_key>:`
+        # using `energy_min_delta_w` and `energy_min_interval_sec`.
         self.energy_min_delta_w: int = 5
         self.energy_min_interval_sec: float = 1.0
         self._last_energy_watts: Dict[str, int] = {}
@@ -210,23 +212,62 @@ class MyHOMEGatewayHandler:
                     return None
         return None
 
+    def _energy_filter_settings_for(self, entity: str) -> tuple[int, float]:
+        """Return (min_delta_w, min_interval_sec) for a given energy sensor entity.
+
+        Allows per-sensor overrides in the loaded YAML config.
+        """
+        try:
+            sensor_cfg = (
+                self.hass.data.get(DOMAIN, {})
+                .get(self.mac, {})
+                .get(CONF_PLATFORMS, {})
+                .get(SENSOR, {})
+                .get(entity, {})
+            )
+        except Exception:
+            sensor_cfg = {}
+
+        min_delta_w = sensor_cfg.get("energy_min_delta_w", self.energy_min_delta_w)
+        min_interval_sec = sensor_cfg.get(
+            "energy_min_interval_sec", self.energy_min_interval_sec
+        )
+
+        # Backward/alternate names (if you prefer shorter keys)
+        min_delta_w = sensor_cfg.get("min_delta_w", min_delta_w)
+        min_interval_sec = sensor_cfg.get("min_interval_sec", min_interval_sec)
+
+        try:
+            min_delta_w = int(min_delta_w)
+        except Exception:
+            min_delta_w = self.energy_min_delta_w
+
+        try:
+            min_interval_sec = float(min_interval_sec)
+        except Exception:
+            min_interval_sec = self.energy_min_interval_sec
+
+        return min_delta_w, min_interval_sec
+
     def _should_process_energy_event(self, entity: str, watts: int) -> bool:
         """Return True if an energy event should be dispatched to entities.
 
         We suppress small deltas that arrive too frequently to reduce noise.
         Uses the event loop's monotonic clock (get_running_loop().time()).
         """
-        now = asyncio.get_running_loop().time()
+        now = asyncio.get_running_loop().time()  # monotonic clock; safe vs wall-clock jumps
+
+        min_delta_w, min_interval_sec = self._energy_filter_settings_for(entity)
 
         last_ts = self._last_energy_ts.get(entity)
-        if last_ts is not None and self.energy_min_interval_sec > 0:
-            if (now - last_ts) < self.energy_min_interval_sec:
+        if last_ts is not None and min_interval_sec > 0:
+            if (now - last_ts) < min_interval_sec:
                 # Too soon since the last accepted sample.
                 return False
 
         last_w = self._last_energy_watts.get(entity)
-        if last_w is not None and self.energy_min_delta_w > 0:
-            if abs(watts - last_w) < self.energy_min_delta_w:
+        if last_w is not None and min_delta_w > 0:
+            if abs(watts - last_w) < min_delta_w:
                 # Delta is too small to be meaningful.
                 return False
 
@@ -243,7 +284,7 @@ class MyHOMEGatewayHandler:
 
         Note: `self.is_connected` reflects the *event session* connectivity.
         """
-        self._terminate_listener = False
+        self._stop_event_listener = False
 
         LOGGER.debug("%s Creating listening worker.", self.log_id)
         LOGGER.info("%s Listening loop started.", self.log_id)
@@ -252,7 +293,7 @@ class MyHOMEGatewayHandler:
         max_backoff = 60
         _event_session: Optional[OWNEventSession] = None
 
-        while not self._terminate_listener:
+        while not self._stop_event_listener:
             try:
                 if _event_session is None:
                     _event_session = OWNEventSession(gateway=self.gateway, logger=LOGGER)
@@ -300,11 +341,14 @@ class MyHOMEGatewayHandler:
                 if isinstance(message, OWNEnergyEvent):
                     watts = self._extract_energy_watts(message)
                     if watts is not None and not self._should_process_energy_event(message.entity, watts):
+                        min_delta_w, min_interval_sec = self._energy_filter_settings_for(message.entity)
                         LOGGER.debug(
-                            "%s Suppressing energy event for sensor %s (%s W) due to delta/interval filter.",
+                            "%s Suppressing energy event for sensor %s (%s W) due to delta/interval filter (min_delta_w=%s, min_interval_sec=%s).",
                             self.log_id,
                             message.entity,
                             watts,
+                            min_delta_w,
+                            min_interval_sec,
                         )
                         continue
                     if (
@@ -536,7 +580,7 @@ class MyHOMEGatewayHandler:
 
         The gateway may reset the command socket; we reconnect on errors.
         """
-        self._terminate_sender = False
+        self._stop_command_workers = False
 
         LOGGER.debug("%s Creating sending worker %s", self.log_id, worker_id)
 
@@ -544,7 +588,7 @@ class MyHOMEGatewayHandler:
         max_backoff = 60
         _command_session: Optional[OWNCommandSession] = None
 
-        while not self._terminate_sender:
+        while not self._stop_command_workers:
             task = await self.send_buffer.get()
             try:
                 if _command_session is None:
@@ -609,8 +653,8 @@ class MyHOMEGatewayHandler:
 
     async def close_listener(self) -> bool:
         LOGGER.info("%s Closing gateway workers", self.log_id)
-        self._terminate_sender = True
-        self._terminate_listener = True
+        self._stop_command_workers = True
+        self._stop_event_listener = True
         return True
 
     async def send(self, message: OWNCommand):
