@@ -494,6 +494,30 @@ class MyHOMEGatewayHandler:
             min_interval_sec,
         )
 
+    def _energy_sensor_display_name(self, entity: str) -> str:
+        """Best-effort human friendly name for an energy sensor.
+
+        We try to resolve the name from the integration YAML/platform config first.
+        If not available, we fall back to the raw OpenWebNet entity id (e.g. `18-51`).
+        """
+        try:
+            cfg = (
+                self.hass.data.get(DOMAIN, {})
+                .get(self.mac, {})
+                .get(CONF_PLATFORMS, {})
+                .get(SENSOR, {})
+                .get(entity, {})
+            ) or {}
+            if isinstance(cfg, dict):
+                # Common keys used in our YAML/config schema
+                for k in ("name", "friendly_name", "title", "label"):
+                    v = cfg.get(k)
+                    if isinstance(v, str) and v.strip():
+                        return v.strip()
+        except Exception:
+            pass
+        return entity
+
     def _maybe_log_energy_update_info(self, entity: str, watts: int) -> None:
         """Emit an INFO log for accepted energy updates, rate-limited per entity.
 
@@ -530,12 +554,24 @@ class MyHOMEGatewayHandler:
         self._last_energy_info_log_ts[entity] = now
         self._last_energy_info_log_watts[entity] = watts
 
+        display_name = self._energy_sensor_display_name(entity)
+
         LOGGER.info(
             "%s Power sensor %s updated: %s W.",
             self.log_id,
-            entity,
+            display_name,
             watts,
         )
+
+        # Keep the raw entity id available at DEBUG for troubleshooting.
+        if display_name != entity:
+            LOGGER.debug(
+                "%s Power sensor %s (entity=%s) updated: %s W.",
+                self.log_id,
+                display_name,
+                entity,
+                watts,
+            )
 
     async def listening_loop(self):
         """Listen for gateway events and dispatch them to entities.
