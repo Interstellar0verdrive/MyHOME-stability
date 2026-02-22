@@ -176,12 +176,86 @@ For more complex setups, add other device types (e.g. `cover`, `sensor`, `binary
 | `fan` | boolean | false | Fan support |
 | `standalone` | boolean | true | Standalone thermostat |
 
+
 ### Sensor-Specific Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `refresh_period` | integer | 30 | Update interval in seconds |
 | `unit_of_measurement` | string | - | Measurement unit |
+
+---
+
+### Energy Reporting Filtering (Power / Energy Sensors)
+
+Power sensors can generate very frequent updates due to normal consumption fluctuations. To reduce unnecessary state churn and noisy logs, this fork supports a configurable **delta / interval filter** for energy events.
+
+An incoming power value update is **processed** if **either** condition is true:
+
+- The absolute change vs. the last processed value is **>= `min_delta_w`**
+- The time since the last processed value is **>= `min_interval_sec`**
+
+Otherwise the event is suppressed. When debug logging is enabled, suppressed events are **aggregated** and logged periodically (instead of printing every single fluctuation).
+
+#### Global defaults (gateway-level)
+
+You can define default filtering values that apply to all power sensors under the gateway. Both keys below are supported and behave the same:
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+
+  energy:
+    min_delta_w: 25
+    min_interval_sec: 5
+    suppress_log_interval_sec: 60
+```
+
+Alternatively:
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+
+  sensor_defaults:
+    min_delta_w: 25
+    min_interval_sec: 5
+    suppress_log_interval_sec: 60
+```
+
+If not specified, the integration defaults are:
+
+- `min_delta_w: 5`
+- `min_interval_sec: 1`
+- `suppress_log_interval_sec: 60`
+
+#### Per-sensor override
+
+Each power sensor can override the global defaults:
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+
+  sensor:
+    house_main_power:
+      where: "51"
+      name: "House Main Power"
+      class: power
+
+      # Override filtering for this sensor
+      min_delta_w: 50
+      min_interval_sec: 10
+      suppress_log_interval_sec: 120
+```
+
+Override precedence:
+
+1. Per-sensor configuration
+2. Gateway-level defaults (`energy` or `sensor_defaults`)
+3. Integration built-in defaults
+
+---
 
 ### Button-Specific Parameters
 
