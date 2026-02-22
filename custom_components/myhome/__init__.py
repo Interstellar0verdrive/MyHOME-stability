@@ -180,9 +180,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         sw_version=hass.data[DOMAIN][mac][CONF_ENTITY].firmware,
     )
 
-    await hass.config_entries.async_forward_entry_setups(
-        entry, hass.data[DOMAIN][mac][CONF_PLATFORMS].keys()
-    )
+    # Only forward supported HA platforms. Ignore YAML keys that are not platforms (e.g. sensor_defaults).
+    configured_platforms = list(hass.data[DOMAIN][mac].get(CONF_PLATFORMS, {}).keys())
+
+    supported_platforms = [p for p in configured_platforms if p in PLATFORMS]
+    ignored_platforms = [p for p in configured_platforms if p not in PLATFORMS]
+
+    if ignored_platforms:
+        LOGGER.warning(
+            "Ignoring unknown platform keys in YAML: %s. Only these platforms are supported: %s",
+            ignored_platforms,
+            PLATFORMS,
+        )
+
+    await hass.config_entries.async_forward_entry_setups(entry, supported_platforms)
 
     # Setup discovery config flow following OpenHAB patterns
     async_setup_discovery(hass)
@@ -355,9 +366,11 @@ async def async_unload_entry(hass, entry):
 
     LOGGER.info("Unloading MyHome entry.")
 
-    await hass.config_entries.async_unload_platforms(
-        entry, hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys()
-    )
+    mac = entry.data[CONF_MAC]
+    configured_platforms = list(hass.data[DOMAIN].get(mac, {}).get(CONF_PLATFORMS, {}).keys())
+    supported_platforms = [p for p in configured_platforms if p in PLATFORMS]
+
+    await hass.config_entries.async_unload_platforms(entry, supported_platforms)
 
     hass.services.async_remove(DOMAIN, "sync_time")
     hass.services.async_remove(DOMAIN, "send_message")

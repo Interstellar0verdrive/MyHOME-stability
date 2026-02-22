@@ -179,9 +179,20 @@ class MyHomeConfigSchema(Schema):
         for gateway in data:
             _rekeyed_data[data[gateway][CONF_MAC]] = {}
             _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS] = {}
-            for platform in data[gateway]:
-                if platform != CONF_MAC:
-                    _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][platform] = data[gateway][platform]
+            # Only copy Home Assistant platform sections into CONF_PLATFORMS.
+            # Keep other gateway-level configuration keys (e.g. sensor_defaults) outside of CONF_PLATFORMS
+            # so HA won't try to import them as platforms.
+            _supported_platforms = {LIGHT, SWITCH, COVER, BINARY_SENSOR, SENSOR, CLIMATE}
+
+            for key in data[gateway]:
+                if key == CONF_MAC:
+                    continue
+
+                if key in _supported_platforms:
+                    _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][key] = data[gateway][key]
+                else:
+                    # Preserve non-platform keys at the gateway root
+                    _rekeyed_data[data[gateway][CONF_MAC]][key] = data[gateway][key]
 
             if (
                 (LIGHT in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS])
