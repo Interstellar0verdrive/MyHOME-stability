@@ -500,16 +500,31 @@ class MyHOMEGatewayHandler:
         self._energy_suppress_count[entity] = 0
         self._last_energy_suppress_log_ts[entity] = now
 
-        LOGGER.debug(
-            "%s Suppressing energy event(s) for sensor %s (latest=%s W). Suppressed %s events in the last ~%ss (min_delta_w=%s, min_interval_sec=%s).",
-            self.log_id,
-            entity,
-            watts,
-            count,
-            int(interval) if interval else 0,
-            min_delta_w,
-            min_interval_sec,
-        )
+        display_name = self._energy_sensor_display_name(entity)
+
+        if display_name != entity:
+            LOGGER.debug(
+                "%s Suppressing energy event(s) for power sensor %s (entity=%s, latest=%s W). Suppressed %s events in the last ~%ss (min_delta_w=%s, min_interval_sec=%s).",
+                self.log_id,
+                display_name,
+                entity,
+                watts,
+                count,
+                int(interval) if interval else 0,
+                min_delta_w,
+                min_interval_sec,
+            )
+        else:
+            LOGGER.debug(
+                "%s Suppressing energy event(s) for power sensor %s (latest=%s W). Suppressed %s events in the last ~%ss (min_delta_w=%s, min_interval_sec=%s).",
+                self.log_id,
+                entity,
+                watts,
+                count,
+                int(interval) if interval else 0,
+                min_delta_w,
+                min_interval_sec,
+            )
 
     def _energy_sensor_display_name(self, entity: str) -> str:
         """Best-effort human friendly name for an energy sensor.
