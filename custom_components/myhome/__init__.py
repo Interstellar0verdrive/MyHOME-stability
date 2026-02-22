@@ -36,8 +36,7 @@ from .device_factory import MyHOMEDeviceFactory
 from .config_flow_discovery import async_setup_discovery
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor"]
-
+PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "button"]
 
 async def async_setup(hass, config):
     """Set up the MyHOME component."""
