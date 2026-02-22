@@ -168,18 +168,72 @@ class MyHOMEGatewayHandler:
         # how often we dispatch high-frequency sensor events.
         #
         # Tuning notes:
-        # - Set `energy_min_delta_w` to 0 to disable delta-based suppression.
-        # - Set `energy_min_interval_sec` to 0 to disable rate limiting.
-        # You can override these per sensor in YAML under `gateway: -> sensor: -> <sensor_key>:`
-        # using `energy_min_delta_w` and `energy_min_interval_sec`.
+        # - Set `min_delta_w` / `energy_min_delta_w` to 0 to disable delta-based suppression.
+        # - Set `min_interval_sec` / `energy_min_interval_sec` to 0 to disable rate limiting.
+        #
+        # Precedence:
+        # 1) Per-sensor overrides in YAML
+        # 2) Global defaults in YAML
+        # 3) Code defaults (5W / 1s)
+        #
+        # Global defaults can be provided under either:
+        # - gateway: energy: { min_delta_w: 25, min_interval_sec: 5 }
+        # - gateway: sensor_defaults: { min_delta_w: 25, min_interval_sec: 5 }
+
+        # --- Global defaults (loaded once at init) ---
         self.energy_min_delta_w: int = 5
         self.energy_min_interval_sec: float = 1.0
+        self.energy_suppress_log_interval_sec: float = 60.0
+
+        # Read global defaults from YAML (best-effort; never fail startup)
+        try:
+            gw_cfg = (
+                self.hass.data.get(DOMAIN, {})
+                .get(self.mac, {})
+            )
+            global_energy_cfg = {}
+            if isinstance(gw_cfg, dict):
+                # Accept both keys for convenience/backward compatibility
+                global_energy_cfg = gw_cfg.get("energy", {}) or gw_cfg.get("sensor_defaults", {}) or {}
+
+            if isinstance(global_energy_cfg, dict):
+                # Support both verbose and short key names
+                min_delta_w = global_energy_cfg.get("min_delta_w", global_energy_cfg.get("energy_min_delta_w", None))
+                min_interval_sec = global_energy_cfg.get(
+                    "min_interval_sec", global_energy_cfg.get("energy_min_interval_sec", None)
+                )
+                suppress_log_interval = global_energy_cfg.get(
+                    "suppress_log_interval_sec",
+                    global_energy_cfg.get("energy_suppress_log_interval_sec", None),
+                )
+
+                if min_delta_w is not None:
+                    try:
+                        self.energy_min_delta_w = int(min_delta_w)
+                    except Exception:
+                        pass
+
+                if min_interval_sec is not None:
+                    try:
+                        self.energy_min_interval_sec = float(min_interval_sec)
+                    except Exception:
+                        pass
+
+                if suppress_log_interval is not None:
+                    try:
+                        self.energy_suppress_log_interval_sec = float(suppress_log_interval)
+                    except Exception:
+                        pass
+        except Exception:
+            # Never break startup due to config parsing.
+            pass
+
+        # --- Per-sensor bookkeeping ---
         self._last_energy_watts: Dict[str, int] = {}
         self._last_energy_ts: Dict[str, float] = {}
         # Rate-limit suppression logs (otherwise DEBUG can still be noisy).
         # We keep a per-entity counter and only emit a suppression summary once
         # every `energy_suppress_log_interval_sec` seconds.
-        self.energy_suppress_log_interval_sec: float = 60.0
         self._last_energy_suppress_log_ts: Dict[str, float] = {}
         self._energy_suppress_count: Dict[str, int] = {}
         
@@ -280,8 +334,25 @@ class MyHOMEGatewayHandler:
     def _energy_filter_settings_for(self, entity: str) -> tuple[int, float]:
         """Return (min_delta_w, min_interval_sec) for a given energy sensor entity.
 
-        Allows per-sensor overrides in the loaded YAML config.
+        Precedence:
+        1) Per-sensor overrides in YAML
+        2) Global defaults in YAML
+        3) Code defaults (already loaded into self.*)
+
+        Per-sensor overrides can live either:
+        - In the built platform config structure (preferred / current behavior)
+        - Directly under `gateway: sensor:` in YAML (fallback)
+
+        Global defaults can be provided under:
+        - `gateway: energy:` or `gateway: sensor_defaults:`
         """
+
+        # Start from global/code defaults already loaded into self.*
+        min_delta_w: Any = self.energy_min_delta_w
+        min_interval_sec: Any = self.energy_min_interval_sec
+
+        # 1) Try the built platform config structure (current behavior)
+        sensor_cfg: Dict[str, Any] = {}
         try:
             sensor_cfg = (
                 self.hass.data.get(DOMAIN, {})
@@ -289,18 +360,33 @@ class MyHOMEGatewayHandler:
                 .get(CONF_PLATFORMS, {})
                 .get(SENSOR, {})
                 .get(entity, {})
-            )
+            ) or {}
         except Exception:
             sensor_cfg = {}
 
-        min_delta_w = sensor_cfg.get("energy_min_delta_w", self.energy_min_delta_w)
-        min_interval_sec = sensor_cfg.get(
-            "energy_min_interval_sec", self.energy_min_interval_sec
-        )
+        # 2) Fallback: allow per-sensor settings directly under YAML `gateway: sensor:`
+        if not sensor_cfg:
+            try:
+                gw_cfg = (
+                    self.hass.data.get(DOMAIN, {})
+                    .get(self.mac, {})
+                )
+                if isinstance(gw_cfg, dict):
+                    direct_sensor_cfg = gw_cfg.get("sensor", {}) or {}
+                    if isinstance(direct_sensor_cfg, dict):
+                        sensor_cfg = direct_sensor_cfg.get(entity, {}) or {}
+            except Exception:
+                sensor_cfg = {}
 
-        # Backward/alternate names (if you prefer shorter keys)
-        min_delta_w = sensor_cfg.get("min_delta_w", min_delta_w)
-        min_interval_sec = sensor_cfg.get("min_interval_sec", min_interval_sec)
+        # Apply per-sensor overrides if present
+        if isinstance(sensor_cfg, dict) and sensor_cfg:
+            # Verbose keys
+            min_delta_w = sensor_cfg.get("energy_min_delta_w", min_delta_w)
+            min_interval_sec = sensor_cfg.get("energy_min_interval_sec", min_interval_sec)
+
+            # Short keys
+            min_delta_w = sensor_cfg.get("min_delta_w", min_delta_w)
+            min_interval_sec = sensor_cfg.get("min_interval_sec", min_interval_sec)
 
         try:
             min_delta_w = int(min_delta_w)

@@ -418,10 +418,22 @@ sensor_schema = MyHomeSensorSchema(
             ),
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
+            # Per-sensor override keys for energy reporting
+            Optional("min_delta_w"): All(Coerce(int), lambda v: v if v >= 0 else Invalid("min_delta_w must be >= 0")),
+            Optional("min_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("min_interval_sec must be >= 0")),
+            Optional("suppress_log_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("suppress_log_interval_sec must be >= 0")),
         }
     },
     extra=True,
 )
+# Energy/sensor defaults schemas for gateway-level overrides
+energy_defaults_schema = Schema({
+    Optional("min_delta_w"): All(Coerce(int), lambda v: v if v >= 0 else Invalid("min_delta_w must be >= 0")),
+    Optional("min_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("min_interval_sec must be >= 0")),
+    Optional("suppress_log_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("suppress_log_interval_sec must be >= 0")),
+}, extra=True)
+
+sensor_defaults_schema = energy_defaults_schema
 
 climate_schema = MyHomeDeviceSchema(
     {
@@ -450,6 +462,8 @@ gateway_schema = Schema(
         Optional(BINARY_SENSOR): binary_sensor_schema,
         Optional(SENSOR): sensor_schema,
         Optional(CLIMATE): climate_schema,
+        Optional("energy"): energy_defaults_schema,
+        Optional("sensor_defaults"): sensor_defaults_schema,
     },
     extra=True,  # Allow extra keys to be ignored
 )
