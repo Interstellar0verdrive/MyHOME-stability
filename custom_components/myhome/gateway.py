@@ -102,6 +102,19 @@ class MyHOMEGatewayHandler:
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
         self.send_buffer = asyncio.Queue()
+
+        # Energy events can be very chatty (e.g., power meters reporting every second).
+        # To keep logs and state churn under control, we optionally suppress *small* deltas
+        # that arrive too frequently. This does NOT affect command/control; it only reduces
+        # how often we dispatch high-frequency sensor events.
+        #
+        # Tuning notes:
+        # - Set `energy_min_delta_w` to 0 to disable delta-based suppression.
+        # - Set `energy_min_interval_sec` to 0 to disable rate limiting.
+        self.energy_min_delta_w: int = 5
+        self.energy_min_interval_sec: float = 1.0
+        self._last_energy_watts: Dict[str, int] = {}
+        self._last_energy_ts: Dict[str, float] = {}
         
         # Initialize device factory following OpenHAB pattern
         self.device_factory = MyHOMEDeviceFactory(hass, config_entry)
@@ -182,6 +195,45 @@ class MyHOMEGatewayHandler:
         if self.discovery_service:
             self.discovery_service.handle_discovery_message(message)
 
+    def _extract_energy_watts(self, message: OWNEnergyEvent) -> Optional[int]:
+        """Best-effort extraction of active power in watts from an OWNEnergyEvent.
+
+        OWNd has changed attribute names across versions; we probe common ones.
+        If we cannot extract a numeric watt value, return None and do not suppress.
+        """
+        for attr in ("watt", "watts", "power", "active_power", "value"):
+            val = getattr(message, attr, None)
+            if isinstance(val, (int, float)):
+                try:
+                    return int(val)
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def _should_process_energy_event(self, entity: str, watts: int) -> bool:
+        """Return True if an energy event should be dispatched to entities.
+
+        We suppress small deltas that arrive too frequently to reduce noise.
+        Uses the event loop's monotonic clock (get_running_loop().time()).
+        """
+        now = asyncio.get_running_loop().time()
+
+        last_ts = self._last_energy_ts.get(entity)
+        if last_ts is not None and self.energy_min_interval_sec > 0:
+            if (now - last_ts) < self.energy_min_interval_sec:
+                # Too soon since the last accepted sample.
+                return False
+
+        last_w = self._last_energy_watts.get(entity)
+        if last_w is not None and self.energy_min_delta_w > 0:
+            if abs(watts - last_w) < self.energy_min_delta_w:
+                # Delta is too small to be meaningful.
+                return False
+
+        self._last_energy_ts[entity] = now
+        self._last_energy_watts[entity] = watts
+        return True
+
     async def listening_loop(self):
         """Listen for gateway events and dispatch them to entities.
 
@@ -246,6 +298,15 @@ class MyHOMEGatewayHandler:
 
                 # Continue with existing message processing
                 if isinstance(message, OWNEnergyEvent):
+                    watts = self._extract_energy_watts(message)
+                    if watts is not None and not self._should_process_energy_event(message.entity, watts):
+                        LOGGER.debug(
+                            "%s Suppressing energy event for sensor %s (%s W) due to delta/interval filter.",
+                            self.log_id,
+                            message.entity,
+                            watts,
+                        )
+                        continue
                     if (
                         SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]
                         and message.entity
@@ -430,10 +491,12 @@ class MyHOMEGatewayHandler:
                     continue
 
                 if isinstance(message, OWNGatewayEvent) or isinstance(message, OWNGatewayCommand):
-                    LOGGER.info("%s %s", self.log_id, message.human_readable_log)
+                    # Can be quite chatty on some gateways; keep at DEBUG by default.
+                    LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
                     continue
 
-                LOGGER.info("%s Unsupported message type: `%s`", self.log_id, message)
+                # Unknown/unsupported messages are useful for troubleshooting but too noisy at INFO.
+                LOGGER.debug("%s Unsupported message type: `%s`", self.log_id, message)
 
             except asyncio.CancelledError:
                 break
