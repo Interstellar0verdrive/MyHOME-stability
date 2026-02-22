@@ -1,5 +1,6 @@
 """Code to handle a MyHome Gateway."""
 import asyncio
+import logging
 from typing import Dict, List, Optional, Any
 
 from homeassistant.const import (
@@ -73,6 +74,49 @@ from .button import (
 from .device_factory import MyHOMEDeviceFactory
 
 
+# --- Logging helpers ---------------------------------------------------------
+# OWNd uses the logger we pass in (LOGGER) and may emit some high-frequency
+# telemetry at INFO level (notably energy/power meter updates). Those messages
+# are useful for debugging but too noisy for normal operation.
+#
+# We install a filter that *demotes* selected chatty INFO records to DEBUG.
+# This preserves the ability to troubleshoot by enabling DEBUG logging without
+# spamming the default INFO log.
+
+_ENERGY_INFO_DEMOTE_SUBSTRINGS = (
+    "is reporting an active power draw",
+)
+
+
+class _DemoteChattyInfoToDebugFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+
+        # Only touch INFO records from our integration logger.
+        if record.levelno == logging.INFO and any(s in msg for s in _ENERGY_INFO_DEMOTE_SUBSTRINGS):
+            record.levelno = logging.DEBUG
+            record.levelname = "DEBUG"
+        return True
+
+
+_LOG_FILTER_INSTALLED = False
+
+
+def _ensure_log_filter_installed() -> None:
+    global _LOG_FILTER_INSTALLED
+    if _LOG_FILTER_INSTALLED:
+        return
+    try:
+        LOGGER.addFilter(_DemoteChattyInfoToDebugFilter())
+        _LOG_FILTER_INSTALLED = True
+    except Exception:
+        # Never fail the integration because of logging.
+        _LOG_FILTER_INSTALLED = True
+
+
 class MyHOMEGatewayHandler:
     """Manages a single MyHOME Gateway."""
 
@@ -96,6 +140,8 @@ class MyHOMEGatewayHandler:
         self.config_entry = config_entry
         self.generate_events = generate_events
         self.gateway = OWNGateway(build_info)
+        # Install log demotion filter once per process.
+        _ensure_log_filter_installed()
         self._stop_event_listener = False
         self._stop_command_workers = False
         self.is_connected = False
