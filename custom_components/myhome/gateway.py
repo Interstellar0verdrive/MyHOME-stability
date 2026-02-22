@@ -190,11 +190,9 @@ class MyHOMEGatewayHandler:
 
         # Read global defaults from YAML (best-effort; never fail startup)
         try:
-            gw_cfg = (
-                self.hass.data.get(DOMAIN, {})
-                .get(self.mac, {})
-            )
-            global_energy_cfg = {}
+            gw_cfg = self._gw_cfg()
+            global_energy_cfg: Dict[str, Any] = {}
+
             if isinstance(gw_cfg, dict):
                 # Accept both keys for convenience/backward compatibility
                 global_energy_cfg = gw_cfg.get("energy", {}) or gw_cfg.get("sensor_defaults", {}) or {}
@@ -210,6 +208,7 @@ class MyHOMEGatewayHandler:
                     min_interval_sec = global_energy_cfg.get(
                         "refresh_period", global_energy_cfg.get("refresh_period_sec", None)
                     )
+
                 suppress_log_interval = global_energy_cfg.get(
                     "suppress_log_interval_sec",
                     global_energy_cfg.get("energy_suppress_log_interval_sec", None),
@@ -256,7 +255,11 @@ class MyHOMEGatewayHandler:
         self._energy_suppress_count: Dict[str, int] = {}
         # INFO log rate-limiting for accepted updates
         self._last_energy_info_log_ts: Dict[str, float] = {}
-        self._last_energy_info_log_watts: Dict[str, int] = {}
+
+        # Cache resolved per-sensor settings / names to avoid repeated lookups on chatty streams.
+        # These are safe because YAML config does not change at runtime unless HA is restarted/reloaded.
+        self._energy_settings_cache: Dict[str, tuple[int, float, float]] = {}
+        self._energy_display_name_cache: Dict[str, str] = {}
         
         # Initialize device factory following OpenHAB pattern
         self.device_factory = MyHOMEDeviceFactory(hass, config_entry)
@@ -337,6 +340,29 @@ class MyHOMEGatewayHandler:
         if self.discovery_service:
             self.discovery_service.handle_discovery_message(message)
 
+    # --- Internal config helpers --------------------------------------------
+    def _gw_cfg(self) -> Dict[str, Any]:
+        """Return the gateway config dict stored in hass.data for this MAC."""
+        return (self.hass.data.get(DOMAIN, {}).get(self.mac, {})) or {}
+
+    def _platform_cfg(self, platform: str) -> Dict[str, Any]:
+        """Return the platform config dict stored in hass.data for this MAC."""
+        return (self._gw_cfg().get(CONF_PLATFORMS, {}).get(platform, {})) or {}
+
+    def _energy_sensor_cfg(self, entity: str) -> Dict[str, Any]:
+        """Return per-sensor config dict for an energy sensor (best-effort)."""
+        # Preferred/current behavior: config built under CONF_PLATFORMS
+        cfg = (self._platform_cfg(SENSOR).get(entity, {}) or {})
+        if cfg:
+            return cfg
+
+        # Fallback: allow per-sensor settings directly under YAML `gateway: sensor:`
+        direct = (self._gw_cfg().get("sensor", {}) or {})
+        if isinstance(direct, dict):
+            return (direct.get(entity, {}) or {})
+
+        return {}
+
     def _extract_energy_watts(self, message: OWNEnergyEvent) -> Optional[int]:
         """Best-effort extraction of active power in watts from an OWNEnergyEvent.
 
@@ -368,37 +394,16 @@ class MyHOMEGatewayHandler:
         - `gateway: energy:` or `gateway: sensor_defaults:`
         """
 
+        cached = self._energy_settings_cache.get(entity)
+        if cached is not None:
+            return cached
+
         # Start from global/code defaults already loaded into self.*
         min_delta_w: Any = self.energy_min_delta_w
         min_interval_sec: Any = self.energy_min_interval_sec
         info_log_interval_sec: Any = self.energy_info_log_interval_sec
 
-        # 1) Try the built platform config structure (current behavior)
-        sensor_cfg: Dict[str, Any] = {}
-        try:
-            sensor_cfg = (
-                self.hass.data.get(DOMAIN, {})
-                .get(self.mac, {})
-                .get(CONF_PLATFORMS, {})
-                .get(SENSOR, {})
-                .get(entity, {})
-            ) or {}
-        except Exception:
-            sensor_cfg = {}
-
-        # 2) Fallback: allow per-sensor settings directly under YAML `gateway: sensor:`
-        if not sensor_cfg:
-            try:
-                gw_cfg = (
-                    self.hass.data.get(DOMAIN, {})
-                    .get(self.mac, {})
-                )
-                if isinstance(gw_cfg, dict):
-                    direct_sensor_cfg = gw_cfg.get("sensor", {}) or {}
-                    if isinstance(direct_sensor_cfg, dict):
-                        sensor_cfg = direct_sensor_cfg.get(entity, {}) or {}
-            except Exception:
-                sensor_cfg = {}
+        sensor_cfg = self._energy_sensor_cfg(entity)
 
         # Apply per-sensor overrides if present
         if isinstance(sensor_cfg, dict) and sensor_cfg:
@@ -438,7 +443,8 @@ class MyHOMEGatewayHandler:
         except Exception:
             info_log_interval_sec = self.energy_info_log_interval_sec
 
-        return min_delta_w, min_interval_sec, info_log_interval_sec
+        self._energy_settings_cache[entity] = (min_delta_w, min_interval_sec, info_log_interval_sec)
+        return self._energy_settings_cache[entity]
 
     def _should_process_energy_event(self, entity: str, watts: int) -> bool:
         """Return True if an energy event should be dispatched to entities.
@@ -532,22 +538,23 @@ class MyHOMEGatewayHandler:
         We try to resolve the name from the integration YAML/platform config first.
         If not available, we fall back to the raw OpenWebNet entity id (e.g. `18-51`).
         """
+        cached = self._energy_display_name_cache.get(entity)
+        if cached is not None:
+            return cached
+
         try:
-            cfg = (
-                self.hass.data.get(DOMAIN, {})
-                .get(self.mac, {})
-                .get(CONF_PLATFORMS, {})
-                .get(SENSOR, {})
-                .get(entity, {})
-            ) or {}
+            cfg = self._energy_sensor_cfg(entity)
             if isinstance(cfg, dict):
                 # Common keys used in our YAML/config schema
                 for k in ("name", "friendly_name", "title", "label"):
                     v = cfg.get(k)
                     if isinstance(v, str) and v.strip():
-                        return v.strip()
+                        self._energy_display_name_cache[entity] = v.strip()
+                        return self._energy_display_name_cache[entity]
         except Exception:
             pass
+
+        self._energy_display_name_cache[entity] = entity
         return entity
 
     def _maybe_log_energy_update_info(self, entity: str, watts: int) -> None:
@@ -578,13 +585,12 @@ class MyHOMEGatewayHandler:
             return
 
         last_ts = self._last_energy_info_log_ts.get(entity)
-        last_w = self._last_energy_info_log_watts.get(entity)
+        # last_w = self._last_energy_info_log_watts.get(entity)
 
         if last_ts is not None and (now - last_ts) < interval:
             return
 
         self._last_energy_info_log_ts[entity] = now
-        self._last_energy_info_log_watts[entity] = watts
 
         display_name = self._energy_sensor_display_name(entity)
 
@@ -604,6 +610,33 @@ class MyHOMEGatewayHandler:
                 entity,
                 watts,
             )
+
+    def _dispatch_energy_event(self, message: OWNEnergyEvent) -> None:
+        """Dispatch an accepted energy event to registered entities (no filtering here)."""
+        sensor_platform = self._platform_cfg(SENSOR)
+        if message.entity not in sensor_platform:
+            return
+
+        entities_cfg = sensor_platform[message.entity].get(CONF_ENTITIES, {})
+        for _entity in entities_cfg:
+            obj = entities_cfg.get(_entity)
+            if isinstance(obj, MyHOMEEntity):
+                obj.handle_event(message)
+
+    def _handle_energy_event(self, message: OWNEnergyEvent) -> bool:
+        """Handle an OWNEnergyEvent. Returns True if handled and caller should continue."""
+        watts = self._extract_energy_watts(message)
+
+        if watts is not None and not self._should_process_energy_event(message.entity, watts):
+            min_delta_w, min_interval_sec, _ = self._energy_filter_settings_for(message.entity)
+            self._log_energy_suppression(message.entity, watts, min_delta_w, min_interval_sec)
+            return True
+
+        if watts is not None:
+            self._maybe_log_energy_update_info(message.entity, watts)
+
+        self._dispatch_energy_event(message)
+        return True
 
     async def listening_loop(self):
         """Listen for gateway events and dispatch them to entities.
@@ -669,31 +702,8 @@ class MyHOMEGatewayHandler:
 
                 # Continue with existing message processing
                 if isinstance(message, OWNEnergyEvent):
-                    watts = self._extract_energy_watts(message)
-                    if watts is not None and not self._should_process_energy_event(message.entity, watts):
-                        min_delta_w, min_interval_sec, _ = self._energy_filter_settings_for(message.entity)
-                        self._log_energy_suppression(message.entity, watts, min_delta_w, min_interval_sec)
+                    if self._handle_energy_event(message):
                         continue
-                    if watts is not None:
-                        self._maybe_log_energy_update_info(message.entity, watts)
-                    if (
-                        SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]
-                        and message.entity
-                        in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR]
-                    ):
-                        for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][
-                            message.entity
-                        ][CONF_ENTITIES]:
-                            if isinstance(
-                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][
-                                    message.entity
-                                ][CONF_ENTITIES][_entity],
-                                MyHOMEEntity,
-                            ):
-                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][SENSOR][
-                                    message.entity
-                                ][CONF_ENTITIES][_entity].handle_event(message)
-                    continue
 
                 if (
                     isinstance(message, OWNLightingEvent)
