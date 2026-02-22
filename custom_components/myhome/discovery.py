@@ -118,12 +118,16 @@ class MyHOMEDeviceDiscoveryService:
     
     def handle_discovery_message(self, message: OWNMessage) -> None:
         """Handle incoming messages for device discovery following OpenHAB patterns."""
-        self.logger.debug("Discovery message received: %s (type: %s, discovery_active: %s)", 
-                         message, type(message).__name__, self._discovery_active)
-        
+        # Do not emit logs when discovery is disabled; discovery hooks are invoked for every
+        # inbound gateway message, and energy sensors can be very chatty.
         if not self._discovery_active:
-            self.logger.debug("Discovery not active, ignoring message")
             return
+
+        self.logger.debug(
+            "Discovery message received: %s (type: %s)",
+            message,
+            type(message).__name__,
+        )
         
         try:
             # Handle both event messages and status response messages
