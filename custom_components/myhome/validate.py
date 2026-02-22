@@ -256,6 +256,17 @@ class MyHomeSensorSchema(Schema):
 
         for device in data:
             data[device][CONF_ENTITIES] = {}
+            # Backward-compatibility: older configs may use energy_* names for the throttling/anti-noise settings.
+            # Normalize them to the canonical keys used by the integration.
+            if "energy_min_delta_w" in data[device] and "min_delta_w" not in data[device]:
+                data[device]["min_delta_w"] = data[device]["energy_min_delta_w"]
+            if "energy_min_interval_sec" in data[device] and "min_interval_sec" not in data[device]:
+                data[device]["min_interval_sec"] = data[device]["energy_min_interval_sec"]
+            if (
+                "energy_suppress_log_interval_sec" in data[device]
+                and "suppress_log_interval_sec" not in data[device]
+            ):
+                data[device]["suppress_log_interval_sec"] = data[device]["energy_suppress_log_interval_sec"]
             # Backward-compatibility: some configs/auto-discovery may use `device_class`.
             # Internally this integration expects the key defined by CONF_DEVICE_CLASS (currently `class`).
             if "device_class" in data[device] and CONF_DEVICE_CLASS not in data[device]:
@@ -429,10 +440,14 @@ sensor_schema = MyHomeSensorSchema(
             ),
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
-            # Per-sensor override keys for energy reporting
+            # Per-sensor override keys for energy reporting (canonical keys)
             Optional("min_delta_w"): All(Coerce(int), lambda v: v if v >= 0 else Invalid("min_delta_w must be >= 0")),
             Optional("min_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("min_interval_sec must be >= 0")),
             Optional("suppress_log_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("suppress_log_interval_sec must be >= 0")),
+            # Backward-compatibility aliases (legacy keys)
+            Optional("energy_min_delta_w"): All(Coerce(int), lambda v: v if v >= 0 else Invalid("energy_min_delta_w must be >= 0")),
+            Optional("energy_min_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("energy_min_interval_sec must be >= 0")),
+            Optional("energy_suppress_log_interval_sec"): All(Coerce(float), lambda v: v if v >= 0 else Invalid("energy_suppress_log_interval_sec must be >= 0")),
         }
     },
     extra=True,
