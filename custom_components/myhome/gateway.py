@@ -117,6 +117,12 @@ class MyHOMEGatewayHandler:
         self.energy_min_interval_sec: float = 1.0
         self._last_energy_watts: Dict[str, int] = {}
         self._last_energy_ts: Dict[str, float] = {}
+        # Rate-limit suppression logs (otherwise DEBUG can still be noisy).
+        # We keep a per-entity counter and only emit a suppression summary once
+        # every `energy_suppress_log_interval_sec` seconds.
+        self.energy_suppress_log_interval_sec: float = 60.0
+        self._last_energy_suppress_log_ts: Dict[str, float] = {}
+        self._energy_suppress_count: Dict[str, int] = {}
         
         # Initialize device factory following OpenHAB pattern
         self.device_factory = MyHOMEDeviceFactory(hass, config_entry)
@@ -260,20 +266,65 @@ class MyHOMEGatewayHandler:
         min_delta_w, min_interval_sec = self._energy_filter_settings_for(entity)
 
         last_ts = self._last_energy_ts.get(entity)
+        last_w = self._last_energy_watts.get(entity)
+
+        # If delta is large enough, accept immediately even if it arrives "too soon".
+        # This avoids missing meaningful spikes while still suppressing jitter.
+        if last_w is not None and min_delta_w > 0:
+            try:
+                if abs(watts - last_w) >= min_delta_w:
+                    self._last_energy_ts[entity] = now
+                    self._last_energy_watts[entity] = watts
+                    return True
+            except Exception:
+                # Fall back to the interval check below.
+                pass
+
+        # Rate-limit: if the last accepted sample is too recent, suppress.
         if last_ts is not None and min_interval_sec > 0:
             if (now - last_ts) < min_interval_sec:
-                # Too soon since the last accepted sample.
                 return False
 
-        last_w = self._last_energy_watts.get(entity)
+        # Delta filter: if the change is still too small, suppress.
         if last_w is not None and min_delta_w > 0:
             if abs(watts - last_w) < min_delta_w:
-                # Delta is too small to be meaningful.
                 return False
 
         self._last_energy_ts[entity] = now
         self._last_energy_watts[entity] = watts
         return True
+
+    def _log_energy_suppression(
+        self,
+        entity: str,
+        watts: int,
+        min_delta_w: int,
+        min_interval_sec: float,
+    ) -> None:
+        """Rate-limited DEBUG log for suppressed energy events."""
+        now = asyncio.get_running_loop().time()
+
+        self._energy_suppress_count[entity] = self._energy_suppress_count.get(entity, 0) + 1
+
+        interval = getattr(self, "energy_suppress_log_interval_sec", 60.0)
+        last_log = self._last_energy_suppress_log_ts.get(entity)
+        if last_log is not None and interval > 0 and (now - last_log) < interval:
+            return
+
+        count = self._energy_suppress_count.get(entity, 0)
+        self._energy_suppress_count[entity] = 0
+        self._last_energy_suppress_log_ts[entity] = now
+
+        LOGGER.debug(
+            "%s Suppressing energy event(s) for sensor %s (latest=%s W). Suppressed %s events in the last ~%ss (min_delta_w=%s, min_interval_sec=%s).",
+            self.log_id,
+            entity,
+            watts,
+            count,
+            int(interval) if interval else 0,
+            min_delta_w,
+            min_interval_sec,
+        )
 
     async def listening_loop(self):
         """Listen for gateway events and dispatch them to entities.
@@ -342,14 +393,7 @@ class MyHOMEGatewayHandler:
                     watts = self._extract_energy_watts(message)
                     if watts is not None and not self._should_process_energy_event(message.entity, watts):
                         min_delta_w, min_interval_sec = self._energy_filter_settings_for(message.entity)
-                        LOGGER.debug(
-                            "%s Suppressing energy event for sensor %s (%s W) due to delta/interval filter (min_delta_w=%s, min_interval_sec=%s).",
-                            self.log_id,
-                            message.entity,
-                            watts,
-                            min_delta_w,
-                            min_interval_sec,
-                        )
+                        self._log_energy_suppression(message.entity, watts, min_delta_w, min_interval_sec)
                         continue
                     if (
                         SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]
