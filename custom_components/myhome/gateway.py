@@ -184,6 +184,9 @@ class MyHOMEGatewayHandler:
         self.energy_min_delta_w: int = 5
         self.energy_min_interval_sec: float = 1.0
         self.energy_suppress_log_interval_sec: float = 60.0
+        # INFO log cadence for accepted energy updates (to have a useful heartbeat at INFO level).
+        # Set to 0 to disable INFO logging of accepted updates.
+        self.energy_info_log_interval_sec: float = 30.0
 
         # Read global defaults from YAML (best-effort; never fail startup)
         try:
@@ -206,6 +209,10 @@ class MyHOMEGatewayHandler:
                     "suppress_log_interval_sec",
                     global_energy_cfg.get("energy_suppress_log_interval_sec", None),
                 )
+                info_log_interval = global_energy_cfg.get(
+                    "info_log_interval_sec",
+                    global_energy_cfg.get("energy_info_log_interval_sec", None),
+                )
 
                 if min_delta_w is not None:
                     try:
@@ -224,6 +231,12 @@ class MyHOMEGatewayHandler:
                         self.energy_suppress_log_interval_sec = float(suppress_log_interval)
                     except Exception:
                         pass
+
+                if info_log_interval is not None:
+                    try:
+                        self.energy_info_log_interval_sec = float(info_log_interval)
+                    except Exception:
+                        pass
         except Exception:
             # Never break startup due to config parsing.
             pass
@@ -236,6 +249,9 @@ class MyHOMEGatewayHandler:
         # every `energy_suppress_log_interval_sec` seconds.
         self._last_energy_suppress_log_ts: Dict[str, float] = {}
         self._energy_suppress_count: Dict[str, int] = {}
+        # INFO log rate-limiting for accepted updates
+        self._last_energy_info_log_ts: Dict[str, float] = {}
+        self._last_energy_info_log_watts: Dict[str, int] = {}
         
         # Initialize device factory following OpenHAB pattern
         self.device_factory = MyHOMEDeviceFactory(hass, config_entry)
@@ -331,8 +347,8 @@ class MyHOMEGatewayHandler:
                     return None
         return None
 
-    def _energy_filter_settings_for(self, entity: str) -> tuple[int, float]:
-        """Return (min_delta_w, min_interval_sec) for a given energy sensor entity.
+    def _energy_filter_settings_for(self, entity: str) -> tuple[int, float, float]:
+        """Return (min_delta_w, min_interval_sec, info_log_interval_sec) for a given energy sensor entity.
 
         Precedence:
         1) Per-sensor overrides in YAML
@@ -350,6 +366,7 @@ class MyHOMEGatewayHandler:
         # Start from global/code defaults already loaded into self.*
         min_delta_w: Any = self.energy_min_delta_w
         min_interval_sec: Any = self.energy_min_interval_sec
+        info_log_interval_sec: Any = self.energy_info_log_interval_sec
 
         # 1) Try the built platform config structure (current behavior)
         sensor_cfg: Dict[str, Any] = {}
@@ -383,10 +400,11 @@ class MyHOMEGatewayHandler:
             # Verbose keys
             min_delta_w = sensor_cfg.get("energy_min_delta_w", min_delta_w)
             min_interval_sec = sensor_cfg.get("energy_min_interval_sec", min_interval_sec)
-
+            info_log_interval_sec = sensor_cfg.get("energy_info_log_interval_sec", info_log_interval_sec)
             # Short keys
             min_delta_w = sensor_cfg.get("min_delta_w", min_delta_w)
             min_interval_sec = sensor_cfg.get("min_interval_sec", min_interval_sec)
+            info_log_interval_sec = sensor_cfg.get("info_log_interval_sec", info_log_interval_sec)
 
         try:
             min_delta_w = int(min_delta_w)
@@ -398,7 +416,12 @@ class MyHOMEGatewayHandler:
         except Exception:
             min_interval_sec = self.energy_min_interval_sec
 
-        return min_delta_w, min_interval_sec
+        try:
+            info_log_interval_sec = float(info_log_interval_sec)
+        except Exception:
+            info_log_interval_sec = self.energy_info_log_interval_sec
+
+        return min_delta_w, min_interval_sec, info_log_interval_sec
 
     def _should_process_energy_event(self, entity: str, watts: int) -> bool:
         """Return True if an energy event should be dispatched to entities.
@@ -408,7 +431,7 @@ class MyHOMEGatewayHandler:
         """
         now = asyncio.get_running_loop().time()  # monotonic clock; safe vs wall-clock jumps
 
-        min_delta_w, min_interval_sec = self._energy_filter_settings_for(entity)
+        min_delta_w, min_interval_sec, _ = self._energy_filter_settings_for(entity)
 
         last_ts = self._last_energy_ts.get(entity)
         last_w = self._last_energy_watts.get(entity)
@@ -469,6 +492,49 @@ class MyHOMEGatewayHandler:
             int(interval) if interval else 0,
             min_delta_w,
             min_interval_sec,
+        )
+
+    def _maybe_log_energy_update_info(self, entity: str, watts: int) -> None:
+        """Emit an INFO log for accepted energy updates, rate-limited per entity.
+
+        This compensates for the OWNd telemetry line being demoted to DEBUG.
+        """
+        try:
+            interval = float(getattr(self, "energy_info_log_interval_sec", 30.0))
+        except Exception:
+            interval = 30.0
+
+        # Disabled
+        if interval <= 0:
+            return
+
+        now = asyncio.get_running_loop().time()
+
+        # Allow per-sensor override
+        try:
+            _, _, sensor_interval = self._energy_filter_settings_for(entity)
+            if sensor_interval is not None:
+                interval = float(sensor_interval)
+        except Exception:
+            pass
+
+        if interval <= 0:
+            return
+
+        last_ts = self._last_energy_info_log_ts.get(entity)
+        last_w = self._last_energy_info_log_watts.get(entity)
+
+        if last_ts is not None and (now - last_ts) < interval:
+            return
+
+        self._last_energy_info_log_ts[entity] = now
+        self._last_energy_info_log_watts[entity] = watts
+
+        LOGGER.info(
+            "%s Power sensor %s updated: %s W.",
+            self.log_id,
+            entity,
+            watts,
         )
 
     async def listening_loop(self):
@@ -537,9 +603,11 @@ class MyHOMEGatewayHandler:
                 if isinstance(message, OWNEnergyEvent):
                     watts = self._extract_energy_watts(message)
                     if watts is not None and not self._should_process_energy_event(message.entity, watts):
-                        min_delta_w, min_interval_sec = self._energy_filter_settings_for(message.entity)
+                        min_delta_w, min_interval_sec, _ = self._energy_filter_settings_for(message.entity)
                         self._log_energy_suppression(message.entity, watts, min_delta_w, min_interval_sec)
                         continue
+                    if watts is not None:
+                        self._maybe_log_energy_update_info(message.entity, watts)
                     if (
                         SENSOR in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]
                         and message.entity
