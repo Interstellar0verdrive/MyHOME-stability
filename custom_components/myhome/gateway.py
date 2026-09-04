@@ -1,139 +1,199 @@
-"""Code to handle a MyHome Gateway."""
+"""MyHOME gateway handler: connection, command and event layer (Contract B).
+
+One :class:`MyHOMEGatewayHandler` per gateway owns
+
+- the EVENT (monitor) session: :meth:`listening_loop` keeps it alive with TCP
+  keepalive plus an idle watchdog (no frame for ``idle_timeout`` -> probe through
+  the command session -> still nothing on the monitor -> reconnect), verifies every
+  ``connect`` result, reconnects with exponential backoff (1..60 s) and never hot
+  loops; a password rejection sets ``auth_failed``, stops the loops and starts the
+  reauth flow;
+- the COMMAND session(s): :meth:`sending_loop` drains a bounded queue with a TTL,
+  sends each command under a timeout, retries ONCE in place with a fresh session and
+  then drops the command with a rate-limited WARNING - never "silently done";
+- the dispatcher: every reply frame (monitor or command session) goes through
+  :meth:`_dispatch_message`; every call into an entity is isolated with
+  ``try``/``except`` so an entity bug never tears a session down;
+- availability: ``is_connected`` is True only while the event session is verified
+  alive and every transition is published on ``SIGNAL_GATEWAY_CONNECTION``.
+
+The public surface consumed by ``__init__.py`` and the platforms (``mac``,
+``unique_id``, ``name``, ``is_connected``, ``device_id``, ``auth_failed``,
+``send``, ``send_status_request``, ``listening_loop``, ``sending_loop``,
+``close_listener``, ``test``, the discovery hooks) is unchanged in shape.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any
+import time
+from dataclasses import dataclass
+from typing import Any
 
+from OWNd.connection import OWNGateway, OWNSession
+from OWNd.message import (
+    MESSAGE_TYPE_ACTIVE_POWER,
+    OWNAutomationCommand,
+    OWNAutomationEvent,
+    OWNAuxEvent,
+    OWNCENEvent,
+    OWNCENPlusEvent,
+    OWNCommand,
+    OWNDryContactEvent,
+    OWNEnergyCommand,
+    OWNEnergyEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+    OWNMessage,
+)
+
+from homeassistant.components.button import DOMAIN as BUTTON
+from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.light import DOMAIN as LIGHT
+from homeassistant.components.sensor import DOMAIN as SENSOR
+from homeassistant.components.switch import DOMAIN as SWITCH
 from homeassistant.const import (
     CONF_ENTITIES,
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PASSWORD,
-    CONF_NAME,
-    CONF_MAC,
     CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
 )
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.switch import (
-    SwitchDeviceClass,
-    DOMAIN as SWITCH,
-)
-from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.cover import DOMAIN as COVER
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    DOMAIN as BINARY_SENSOR,
-)
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    DOMAIN as SENSOR,
-)
-from homeassistant.components.climate import DOMAIN as CLIMATE
-
-from OWNd.connection import OWNSession, OWNEventSession, OWNCommandSession, OWNGateway
-from OWNd.message import (
-    OWNMessage,
-    OWNLightingEvent,
-    OWNLightingCommand,
-    OWNEnergyEvent,
-    OWNAutomationEvent,
-    OWNDryContactEvent,
-    OWNAuxEvent,
-    OWNHeatingEvent,
-    OWNHeatingCommand,
-    OWNCENPlusEvent,
-    OWNCENEvent,
-    OWNGatewayEvent,
-    OWNGatewayCommand,
-    OWNCommand,
-)
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_FIRMWARE,
-    CONF_SSDP_LOCATION,
-    CONF_SSDP_ST,
+    CONF_BUS_INTERFACE,
     CONF_DEVICE_TYPE,
-    CONF_MANUFACTURER,
-    CONF_MANUFACTURER_URL,
-    CONF_UDN,
-    CONF_SHORT_PRESS,
-    CONF_SHORT_RELEASE,
+    CONF_FIRMWARE,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
+    CONF_MIN_DELTA_W,
+    CONF_MIN_INTERVAL_SEC,
+    CONF_PLATFORMS,
+    CONF_SHORT_PRESS,
+    CONF_SHORT_RELEASE,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_SUPPRESS_LOG_INTERVAL_SEC,
+    CONF_UDN,
+    CONF_WHERE,
+    CONF_ZONE,
     DOMAIN,
     LOGGER,
-    THING_STATE_REQ_TIMEOUT_SEC,
-    ALL_DEVICE_SUPPORTED_TYPES,
-    DEVICE_TYPE_TO_PLATFORM,
+    SIGNAL_GATEWAY_CONNECTION,
 )
 from .myhome_device import MyHOMEEntity
-from .button import (
-    DisableCommandButtonEntity,
-    EnableCommandButtonEntity,
-)
-from .device_factory import MyHOMEDeviceFactory
-
-
-# --- Logging helpers ---------------------------------------------------------
-# OWNd uses the logger we pass in (LOGGER) and may emit some high-frequency
-# telemetry at INFO level (notably energy/power meter updates). Those messages
-# are useful for debugging but too noisy for normal operation.
-#
-# We install a filter that *demotes* selected chatty INFO records to DEBUG.
-# This preserves the ability to troubleshoot by enabling DEBUG logging without
-# spamming the default INFO log.
-
-_ENERGY_INFO_DEMOTE_SUBSTRINGS = (
-    "is reporting an active power draw",
+from .own_session import (
+    AuthenticationError,
+    CommandResult,
+    OWNCommandChannel,
+    OWNEventChannel,
+    SessionError,
 )
 
+# --------------------------------------------------------------------------- tuning
+# Command path (Contract B).
+COMMAND_TIMEOUT_SEC = 10.0  # write + wait for ACK/NACK
+CONNECT_TIMEOUT_SEC = 10.0  # TCP connect + negotiation, one attempt
+COMMAND_QUEUE_MAXSIZE = 200
+COMMAND_TTL_SEC = 60.0  # commands older than this are dropped when dequeued
+COMMAND_SESSION_IDLE_SEC = 60.0  # close an unused command session (gateway session limit)
+# Event path.
+IDLE_TIMEOUT_SEC = 300.0  # no monitor frame for this long -> probe
+PROBE_WINDOW_SEC = 30.0  # probe sent, still nothing on the monitor -> reconnect
+READ_POLL_SEC = 30.0  # wake-up cadence of the listening loop (watchdog granularity)
+INITIAL_BACKOFF_SEC = 1.0
+MAX_BACKOFF_SEC = 60.0
+# Logging.
+LOG_RATE_LIMIT_SEC = 60.0
+RECONNECT_LOG_RATE_LIMIT_SEC = 300.0
 
-class _DemoteChattyInfoToDebugFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            msg = record.getMessage()
-        except Exception:
-            return True
+# Energy throttle code defaults (validate.py normally supplies every key).
+DEFAULT_MIN_DELTA_W = 5
+DEFAULT_MIN_INTERVAL_SEC = 1.0
+DEFAULT_SUPPRESS_LOG_INTERVAL_SEC = 60.0
+DEFAULT_INFO_LOG_INTERVAL_SEC = 0.0  # 0 = the INFO heartbeat is off (chatter stays at DEBUG)
+CONF_SENSOR_DEFAULTS = "sensor_defaults"  # gateway-level block merged by validate.py
+CONF_INFO_LOG_INTERVAL_SEC = "info_log_interval_sec"
 
-        # OWNd can emit high-frequency power telemetry logs like:
-        # "Sensor X is reporting an active power draw of Y W."
-        # We want these available when explicitly debugging OWNd, but they are
-        # too chatty even at DEBUG once you enable debug logs.
-        #
-        # Strategy:
-        # - If they come in at INFO, demote them to DEBUG (so normal INFO logs stay clean).
-        # - If they come in already at DEBUG, drop them entirely (we already have our own
-        #   aggregated suppression logs and the raw stream is not actionable).
-        if any(s in msg for s in _ENERGY_INFO_DEMOTE_SUBSTRINGS):
-            if record.levelno == logging.INFO:
-                record.levelno = logging.DEBUG
-                record.levelname = "DEBUG"
-                return True
-            if record.levelno == logging.DEBUG:
-                return False
+# CEN+ event values added by gw-14 (the existing names in const.py are unchanged).
+EVENT_LONG_PRESS_REPEAT = "pushbutton_long_press_repeat"
+EVENT_ROTATE_CW_SLOW = "rotate_cw_slow"
+EVENT_ROTATE_CW_FAST = "rotate_cw_fast"
+EVENT_ROTATE_CCW_SLOW = "rotate_ccw_slow"
+EVENT_ROTATE_CCW_FAST = "rotate_ccw_fast"
 
-        return True
+_TRANSPORT_ERRORS = (SessionError, OSError, EOFError, TimeoutError)
+_ENTITY_EVENT_TYPES = (OWNLightingEvent, OWNAutomationEvent, OWNDryContactEvent, OWNAuxEvent, OWNHeatingEvent)
 
 
-_LOG_FILTER_INSTALLED = False
+@dataclass(slots=True)
+class _QueuedCommand:
+    message: OWNCommand
+    is_status_request: bool
+    enqueued_at: float
 
 
-def _ensure_log_filter_installed() -> None:
-    global _LOG_FILTER_INSTALLED
-    if _LOG_FILTER_INSTALLED:
-        return
+@dataclass(slots=True, frozen=True)
+class _EnergySettings:
+    min_delta_w: int
+    min_interval_sec: float
+    suppress_log_interval_sec: float
+    info_log_interval_sec: float
+
+
+class _LogThrottle:
+    """Per-key rate limiter for repeated log lines (counts what it suppressed)."""
+
+    def __init__(self) -> None:
+        self._last: dict[str, float] = {}
+        self._suppressed: dict[str, int] = {}
+
+    def check(self, key: str, interval: float, now: float) -> tuple[bool, int]:
+        """Return (log it?, number of suppressed lines since the last emitted one)."""
+        last = self._last.get(key)
+        if last is not None and interval > 0 and now - last < interval:
+            self._suppressed[key] = self._suppressed.get(key, 0) + 1
+            return False, 0
+        self._last[key] = now
+        return True, self._suppressed.pop(key, 0)
+
+    def reset(self, key: str) -> None:
+        self._last.pop(key, None)
+        self._suppressed.pop(key, None)
+
+
+def _safe_is_on(message: OWNLightingEvent | OWNAutomationEvent) -> bool | None:
+    """``OWNLightingEvent.is_on`` raises TypeError on dimension replies without a
+    state (timer / PIR / illuminance frames, plat-03): report "unknown" instead."""
     try:
-        LOGGER.addFilter(_DemoteChattyInfoToDebugFilter())
-        _LOG_FILTER_INSTALLED = True
-    except Exception:
-        # Never fail the integration because of logging.
-        _LOG_FILTER_INSTALLED = True
+        return bool(message.is_on)
+    except TypeError:
+        return None
+
+
+def _automation_event_name(message: OWNAutomationEvent) -> str:
+    if message.is_opening and not message.is_closing:
+        return "open"
+    if message.is_closing and not message.is_opening:
+        return "close"
+    return "stop"
 
 
 class MyHOMEGatewayHandler:
     """Manages a single MyHOME Gateway."""
 
-    def __init__(self, hass, config_entry, generate_events=False):
+    def __init__(self, hass, config_entry, generate_events: bool = False) -> None:
         build_info = {
             "address": config_entry.data[CONF_HOST],
             "port": config_entry.data[CONF_PORT],
@@ -153,120 +213,47 @@ class MyHOMEGatewayHandler:
         self.config_entry = config_entry
         self.generate_events = generate_events
         self.gateway = OWNGateway(build_info)
-        # Install log demotion filter once per process.
-        _ensure_log_filter_installed()
+
+        # Contract B public state.
+        self.device_id: str | None = None  # set by __init__.py after creating the gateway device
+        self.auth_failed: bool = False
+        self.is_connected: bool = False
+        self.listening_worker: asyncio.Task | None = None
+        self.sending_workers: list[asyncio.Task] = []
+        self.send_buffer: asyncio.Queue[_QueuedCommand] = asyncio.Queue(maxsize=COMMAND_QUEUE_MAXSIZE)
+
+        # Loop control.
+        self._closed = False
         self._stop_event_listener = False
         self._stop_command_workers = False
-        self.is_connected = False
-        self.listening_worker: asyncio.tasks.Task = None
-        self.sending_workers: List[asyncio.tasks.Task] = []
-        self.send_buffer = asyncio.Queue()
+        self._event_session: OWNEventChannel | None = None
+        self._command_sessions: dict[int, OWNCommandChannel] = {}
+        self._last_rx: float = 0.0
+        self._probe_sent_at: float | None = None
 
-        # Energy events can be very chatty (e.g., power meters reporting every second).
-        # To keep logs and state churn under control, we optionally suppress *small* deltas
-        # that arrive too frequently. This does NOT affect command/control; it only reduces
-        # how often we dispatch high-frequency sensor events.
-        #
-        # Tuning notes:
-        # - Set `min_delta_w` / `energy_min_delta_w` to 0 to disable delta-based suppression.
-        # - Set `min_interval_sec` / `energy_min_interval_sec` to 0 to disable rate limiting.
-        #
-        # Precedence:
-        # 1) Per-sensor overrides in YAML
-        # 2) Global defaults in YAML
-        # 3) Code defaults (5W / 1s)
-        #
-        # Global defaults can be provided under either:
-        # - gateway: energy: { min_delta_w: 25, min_interval_sec: 5 }
-        # - gateway: sensor_defaults: { min_delta_w: 25, min_interval_sec: 5 }
+        # Timing knobs (instance attributes so tests can shrink them).
+        self.command_timeout = COMMAND_TIMEOUT_SEC
+        self.connect_timeout = CONNECT_TIMEOUT_SEC
+        self.command_ttl = COMMAND_TTL_SEC
+        self.command_session_idle = COMMAND_SESSION_IDLE_SEC
+        self.idle_timeout = IDLE_TIMEOUT_SEC
+        self.probe_window = PROBE_WINDOW_SEC
+        self.read_poll_interval = READ_POLL_SEC
+        self.initial_backoff = INITIAL_BACKOFF_SEC
+        self.max_backoff = MAX_BACKOFF_SEC
 
-        # --- Global defaults (loaded once at init) ---
-        self.energy_min_delta_w: int = 5
-        self.energy_min_interval_sec: float = 1.0
-        self.energy_suppress_log_interval_sec: float = 60.0
-        # INFO log cadence for accepted energy updates (to have a useful heartbeat at INFO level).
-        # Set to 0 to disable INFO logging of accepted updates.
-        self.energy_info_log_interval_sec: float = 30.0
+        # Energy throttle bookkeeping (instant active power only, gw-06 / sc-02 / sc-03).
+        self._energy_settings_cache: dict[str, _EnergySettings] = {}
+        self._last_energy_watts: dict[str, int] = {}
+        self._last_energy_ts: dict[str, float] = {}
+        self._energy_suppress_count: dict[str, int] = {}
+        self._last_energy_suppress_log_ts: dict[str, float] = {}
+        self._last_energy_info_log_ts: dict[str, float] = {}
 
-        # Read global defaults from YAML (best-effort; never fail startup)
-        try:
-            gw_cfg = self._gw_cfg()
-            global_energy_cfg: Dict[str, Any] = {}
-
-            if isinstance(gw_cfg, dict):
-                # Accept both keys for convenience/backward compatibility
-                global_energy_cfg = gw_cfg.get("energy", {}) or gw_cfg.get("sensor_defaults", {}) or {}
-
-            if isinstance(global_energy_cfg, dict):
-                # Support both verbose and short key names
-                min_delta_w = global_energy_cfg.get("min_delta_w", global_energy_cfg.get("energy_min_delta_w", None))
-                min_interval_sec = global_energy_cfg.get(
-                    "min_interval_sec", global_energy_cfg.get("energy_min_interval_sec", None)
-                )
-                if min_interval_sec is None:
-                    # artmakh-style alias at global level
-                    min_interval_sec = global_energy_cfg.get(
-                        "refresh_period", global_energy_cfg.get("refresh_period_sec", None)
-                    )
-
-                suppress_log_interval = global_energy_cfg.get(
-                    "suppress_log_interval_sec",
-                    global_energy_cfg.get("energy_suppress_log_interval_sec", None),
-                )
-                info_log_interval = global_energy_cfg.get(
-                    "info_log_interval_sec",
-                    global_energy_cfg.get("energy_info_log_interval_sec", None),
-                )
-
-                if min_delta_w is not None:
-                    try:
-                        self.energy_min_delta_w = int(min_delta_w)
-                    except Exception:
-                        pass
-
-                if min_interval_sec is not None:
-                    try:
-                        self.energy_min_interval_sec = float(min_interval_sec)
-                    except Exception:
-                        pass
-
-                if suppress_log_interval is not None:
-                    try:
-                        self.energy_suppress_log_interval_sec = float(suppress_log_interval)
-                    except Exception:
-                        pass
-
-                if info_log_interval is not None:
-                    try:
-                        self.energy_info_log_interval_sec = float(info_log_interval)
-                    except Exception:
-                        pass
-        except Exception:
-            # Never break startup due to config parsing.
-            pass
-
-        # --- Per-sensor bookkeeping ---
-        self._last_energy_watts: Dict[str, int] = {}
-        self._last_energy_ts: Dict[str, float] = {}
-        # Rate-limit suppression logs (otherwise DEBUG can still be noisy).
-        # We keep a per-entity counter and only emit a suppression summary once
-        # every `energy_suppress_log_interval_sec` seconds.
-        self._last_energy_suppress_log_ts: Dict[str, float] = {}
-        self._energy_suppress_count: Dict[str, int] = {}
-        # INFO log rate-limiting for accepted updates
-        self._last_energy_info_log_ts: Dict[str, float] = {}
-
-        # Cache resolved per-sensor settings / names to avoid repeated lookups on chatty streams.
-        # These are safe because YAML config does not change at runtime unless HA is restarted/reloaded.
-        self._energy_settings_cache: Dict[str, tuple[int, float, float]] = {}
-        self._energy_display_name_cache: Dict[str, str] = {}
-        
-        # Initialize device factory following OpenHAB pattern
-        self.device_factory = MyHOMEDeviceFactory(hass, config_entry)
-        
-        # Initialize discovery service following OpenHAB pattern
+        self._throttle = _LogThrottle()
         self.discovery_service = None
 
+    # ------------------------------------------------------------------ properties
     @property
     def mac(self) -> str:
         return self.gateway.serial
@@ -295,715 +282,731 @@ class MyHOMEGatewayHandler:
     def firmware(self) -> str:
         return self.gateway.firmware
 
-    async def test(self) -> Dict:
+    async def test(self) -> dict | None:
+        """Connection test used by setup / config flow (OWNd semantics: may return None)."""
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
-    
-    def supports_device_type(self, device_type: str) -> bool:
-        """Check if device type is supported by this gateway."""
-        return self.device_factory.supports_device_type(device_type)
-    
-    def get_device_category(self, device_type: str) -> str:
-        """Get device category following OpenHAB patterns."""
-        return self.device_factory.get_device_category(device_type)
-    
-    def organize_devices_by_category(self, devices_config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-        """Organize devices by category following OpenHAB patterns."""
-        return self.device_factory.organize_devices_by_category(devices_config)
-    
-    def validate_device_config(self, device_type: str, device_config: Dict[str, Any]) -> bool:
-        """Validate device configuration."""
-        return self.device_factory.validate_device_config(device_type, device_config)
-    
-    def initialize_discovery_service(self):
-        """Initialize the discovery service following OpenHAB patterns."""
+
+    # ------------------------------------------------------------------ discovery hooks
+    def initialize_discovery_service(self) -> None:
+        """Create the discovery service (lazy import: discovery.py imports this module)."""
         if self.discovery_service is None:
             from .discovery import MyHOMEDeviceDiscoveryService
-            self.discovery_service = MyHOMEDeviceDiscoveryService(
-                self.hass, self.config_entry, self
-            )
+
+            self.discovery_service = MyHOMEDeviceDiscoveryService(self.hass, self.config_entry, self)
             LOGGER.debug("%s Discovery service initialized", self.log_id)
-    
+
     async def start_device_discovery(self) -> None:
-        """Start device discovery following OpenHAB patterns."""
         if self.discovery_service:
             await self.discovery_service.start_discovery()
         else:
             LOGGER.warning("%s Discovery service not initialized", self.log_id)
-    
+
     async def stop_device_discovery(self) -> None:
-        """Stop device discovery following OpenHAB patterns."""
         if self.discovery_service:
             await self.discovery_service.stop_discovery()
-    
-    def handle_discovery_message(self, message) -> None:
-        """Handle message for discovery following OpenHAB patterns."""
+
+    def handle_discovery_message(self, message: OWNMessage) -> None:
         if self.discovery_service:
             self.discovery_service.handle_discovery_message(message)
 
-    # --- Internal config helpers --------------------------------------------
-    def _gw_cfg(self) -> Dict[str, Any]:
-        """Return the gateway config dict stored in hass.data for this MAC."""
-        return (self.hass.data.get(DOMAIN, {}).get(self.mac, {})) or {}
+    # ------------------------------------------------------------------ helpers
+    @staticmethod
+    def _now() -> float:
+        return time.monotonic()
 
-    def _platform_cfg(self, platform: str) -> Dict[str, Any]:
-        """Return the platform config dict stored in hass.data for this MAC."""
-        return (self._gw_cfg().get(CONF_PLATFORMS, {}).get(platform, {})) or {}
+    def _gw_cfg(self) -> dict[str, Any]:
+        """The validated gateway config in hass.data (empty after unload)."""
+        data = self.hass.data.get(DOMAIN) if isinstance(self.hass.data, dict) else None
+        cfg = (data or {}).get(self.mac)
+        return cfg if isinstance(cfg, dict) else {}
 
-    def _energy_sensor_cfg(self, entity: str) -> Dict[str, Any]:
-        """Return per-sensor config dict for an energy sensor (best-effort)."""
-        # Preferred/current behavior: config built under CONF_PLATFORMS
-        cfg = (self._platform_cfg(SENSOR).get(entity, {}) or {})
-        if cfg:
-            return cfg
+    def _platform_cfg(self, platform: str) -> dict[str, Any]:
+        platforms = self._gw_cfg().get(CONF_PLATFORMS)
+        cfg = (platforms or {}).get(platform)
+        return cfg if isinstance(cfg, dict) else {}
 
-        # Fallback: allow per-sensor settings directly under YAML `gateway: sensor:`
-        direct = (self._gw_cfg().get("sensor", {}) or {})
-        if isinstance(direct, dict):
-            return (direct.get(entity, {}) or {})
-
-        return {}
-
-    def _extract_energy_watts(self, message: OWNEnergyEvent) -> Optional[int]:
-        """Best-effort extraction of active power in watts from an OWNEnergyEvent.
-
-        OWNd has changed attribute names across versions; we probe common ones.
-        If we cannot extract a numeric watt value, return None and do not suppress.
-        """
-        for attr in ("watt", "watts", "power", "active_power", "value"):
-            val = getattr(message, attr, None)
-            if isinstance(val, (int, float)):
-                try:
-                    return int(val)
-                except (TypeError, ValueError):
-                    return None
-        return None
-
-    def _energy_filter_settings_for(self, entity: str) -> tuple[int, float, float]:
-        """Return (min_delta_w, min_interval_sec, info_log_interval_sec) for a given energy sensor entity.
-
-        Precedence:
-        1) Per-sensor overrides in YAML
-        2) Global defaults in YAML
-        3) Code defaults (already loaded into self.*)
-
-        Per-sensor overrides can live either:
-        - In the built platform config structure (preferred / current behavior)
-        - Directly under `gateway: sensor:` in YAML (fallback)
-
-        Global defaults can be provided under:
-        - `gateway: energy:` or `gateway: sensor_defaults:`
-        """
-
-        cached = self._energy_settings_cache.get(entity)
-        if cached is not None:
-            return cached
-
-        # Start from global/code defaults already loaded into self.*
-        min_delta_w: Any = self.energy_min_delta_w
-        min_interval_sec: Any = self.energy_min_interval_sec
-        info_log_interval_sec: Any = self.energy_info_log_interval_sec
-
-        sensor_cfg = self._energy_sensor_cfg(entity)
-
-        # Apply per-sensor overrides if present
-        if isinstance(sensor_cfg, dict) and sensor_cfg:
-            # Verbose keys
-            min_delta_w = sensor_cfg.get("energy_min_delta_w", min_delta_w)
-            min_interval_sec = sensor_cfg.get("energy_min_interval_sec", min_interval_sec)
-            info_log_interval_sec = sensor_cfg.get("energy_info_log_interval_sec", info_log_interval_sec)
-
-            # Short keys
-            min_delta_w = sensor_cfg.get("min_delta_w", min_delta_w)
-            min_interval_sec = sensor_cfg.get("min_interval_sec", min_interval_sec)
-            info_log_interval_sec = sensor_cfg.get("info_log_interval_sec", info_log_interval_sec)
-
-            # Backward/compat alias (artmakh-style): `refresh_period` behaves like a minimum update interval
-            # for high-frequency energy/power events.
-            # Only apply this alias if the user did NOT explicitly set min_interval_sec.
-            has_explicit_min_interval = (
-                "min_interval_sec" in sensor_cfg or "energy_min_interval_sec" in sensor_cfg
-            )
-            if not has_explicit_min_interval:
-                refresh_period = sensor_cfg.get("refresh_period", sensor_cfg.get("refresh_period_sec", None))
-                if refresh_period is not None:
-                    min_interval_sec = refresh_period
-
-        try:
-            min_delta_w = int(min_delta_w)
-        except Exception:
-            min_delta_w = self.energy_min_delta_w
-
-        try:
-            min_interval_sec = float(min_interval_sec)
-        except Exception:
-            min_interval_sec = self.energy_min_interval_sec
-
-        try:
-            info_log_interval_sec = float(info_log_interval_sec)
-        except Exception:
-            info_log_interval_sec = self.energy_info_log_interval_sec
-
-        self._energy_settings_cache[entity] = (min_delta_w, min_interval_sec, info_log_interval_sec)
-        return self._energy_settings_cache[entity]
-
-    def _should_process_energy_event(self, entity: str, watts: int) -> bool:
-        """Return True if an energy event should be dispatched to entities.
-
-        We suppress small deltas that arrive too frequently to reduce noise.
-        Uses the event loop's monotonic clock (get_running_loop().time()).
-        """
-        now = asyncio.get_running_loop().time()  # monotonic clock; safe vs wall-clock jumps
-
-        min_delta_w, min_interval_sec, _ = self._energy_filter_settings_for(entity)
-
-        last_ts = self._last_energy_ts.get(entity)
-        last_w = self._last_energy_watts.get(entity)
-
-        # If delta is large enough, accept immediately even if it arrives "too soon".
-        # This avoids missing meaningful spikes while still suppressing jitter.
-        if last_w is not None and min_delta_w > 0:
-            try:
-                if abs(watts - last_w) >= min_delta_w:
-                    self._last_energy_ts[entity] = now
-                    self._last_energy_watts[entity] = watts
-                    return True
-            except Exception:
-                # Fall back to the interval check below.
-                pass
-
-        # Rate-limit: if the last accepted sample is too recent, suppress.
-        if last_ts is not None and min_interval_sec > 0:
-            if (now - last_ts) < min_interval_sec:
-                return False
-
-        # Delta filter: if the change is still too small, suppress.
-        if last_w is not None and min_delta_w > 0:
-            if abs(watts - last_w) < min_delta_w:
-                return False
-
-        self._last_energy_ts[entity] = now
-        self._last_energy_watts[entity] = watts
-        return True
-
-    def _log_energy_suppression(
+    def _log_limited(
         self,
-        entity: str,
-        watts: int,
-        min_delta_w: int,
-        min_interval_sec: float,
+        level: int,
+        key: str,
+        msg: str,
+        *args: Any,
+        interval: float = LOG_RATE_LIMIT_SEC,
+        exc_info: bool = False,
     ) -> None:
-        """Rate-limited DEBUG log for suppressed energy events."""
-        now = asyncio.get_running_loop().time()
-
-        self._energy_suppress_count[entity] = self._energy_suppress_count.get(entity, 0) + 1
-
-        interval = getattr(self, "energy_suppress_log_interval_sec", 60.0)
-        last_log = self._last_energy_suppress_log_ts.get(entity)
-        if last_log is not None and interval > 0 and (now - last_log) < interval:
+        """Log ``msg`` at ``level`` at most once per ``interval`` seconds per ``key``."""
+        emit, suppressed = self._throttle.check(key, interval, self._now())
+        if not emit:
             return
+        if suppressed:
+            msg = f"{msg} ({suppressed} similar message(s) suppressed)"
+        LOGGER.log(level, msg, *args, exc_info=exc_info)
 
-        count = self._energy_suppress_count.get(entity, 0)
-        self._energy_suppress_count[entity] = 0
-        self._last_energy_suppress_log_ts[entity] = now
-
-        display_name = self._energy_sensor_display_name(entity)
-
-        if display_name != entity:
-            LOGGER.debug(
-                "%s Suppressing energy event(s) for power sensor %s (entity=%s, latest=%s W). Suppressed %s events in the last ~%ss (min_delta_w=%s, min_interval_sec=%s).",
-                self.log_id,
-                display_name,
-                entity,
-                watts,
-                count,
-                int(interval) if interval else 0,
-                min_delta_w,
-                min_interval_sec,
-            )
-        else:
-            LOGGER.debug(
-                "%s Suppressing energy event(s) for power sensor %s (latest=%s W). Suppressed %s events in the last ~%ss (min_delta_w=%s, min_interval_sec=%s).",
-                self.log_id,
-                entity,
-                watts,
-                count,
-                int(interval) if interval else 0,
-                min_delta_w,
-                min_interval_sec,
-            )
-
-    def _energy_sensor_display_name(self, entity: str) -> str:
-        """Best-effort human friendly name for an energy sensor.
-
-        We try to resolve the name from the integration YAML/platform config first.
-        If not available, we fall back to the raw OpenWebNet entity id (e.g. `18-51`).
-        """
-        cached = self._energy_display_name_cache.get(entity)
-        if cached is not None:
-            return cached
-
+    def _set_connected(self, connected: bool) -> None:
+        """Update ``is_connected`` and publish every transition (Contract B, gw-10)."""
+        if connected == self.is_connected:
+            return
+        self.is_connected = connected
+        LOGGER.info("%s Gateway is %s", self.log_id, "connected" if connected else "disconnected")
         try:
-            cfg = self._energy_sensor_cfg(entity)
-            if isinstance(cfg, dict):
-                # Common keys used in our YAML/config schema
-                for k in ("name", "friendly_name", "title", "label"):
-                    v = cfg.get(k)
-                    if isinstance(v, str) and v.strip():
-                        self._energy_display_name_cache[entity] = v.strip()
-                        return self._energy_display_name_cache[entity]
-        except Exception:
-            pass
+            async_dispatcher_send(self.hass, SIGNAL_GATEWAY_CONNECTION.format(mac=self.mac), connected)
+        except Exception:  # noqa: BLE001 - never let a subscriber break the session loop
+            LOGGER.exception("%s Error while publishing the connection state", self.log_id)
 
-        self._energy_display_name_cache[entity] = entity
-        return entity
-
-    def _maybe_log_energy_update_info(self, entity: str, watts: int) -> None:
-        """Emit an INFO log for accepted energy updates, rate-limited per entity.
-
-        This compensates for the OWNd telemetry line being demoted to DEBUG.
-        """
+    async def _close_session(self, session: OWNEventChannel | OWNCommandChannel | None) -> None:
+        if session is None:
+            return
         try:
-            interval = float(getattr(self, "energy_info_log_interval_sec", 30.0))
-        except Exception:
-            interval = 30.0
+            await session.close()
+        except Exception:  # noqa: BLE001 - closing must never raise
+            LOGGER.debug("%s Error while closing a session", self.log_id, exc_info=True)
 
-        # Disabled
-        if interval <= 0:
+    def _handle_auth_failure(self, err: AuthenticationError, session_type: str) -> None:
+        """Password rejected at runtime: stop everything and ask for reauth (gw-05)."""
+        self._stop_event_listener = True
+        self._stop_command_workers = True
+        self._set_connected(False)
+        if self.auth_failed:
             return
-
-        now = asyncio.get_running_loop().time()
-
-        # Allow per-sensor override
-        try:
-            _, _, sensor_interval = self._energy_filter_settings_for(entity)
-            if sensor_interval is not None:
-                interval = float(sensor_interval)
-        except Exception:
-            pass
-
-        if interval <= 0:
-            return
-
-        last_ts = self._last_energy_info_log_ts.get(entity)
-        # last_w = self._last_energy_info_log_watts.get(entity)
-
-        if last_ts is not None and (now - last_ts) < interval:
-            return
-
-        self._last_energy_info_log_ts[entity] = now
-
-        display_name = self._energy_sensor_display_name(entity)
-
-        LOGGER.info(
-            "%s Power sensor %s updated: %s W.",
+        self.auth_failed = True
+        LOGGER.error(
+            "%s The gateway rejected the password on the %s session (%s): reconfigure the integration",
             self.log_id,
-            display_name,
-            watts,
+            session_type,
+            err.reason,
         )
+        try:
+            self.config_entry.async_start_reauth(self.hass)
+        except Exception:  # noqa: BLE001 - reauth is best effort (e.g. entry being unloaded)
+            LOGGER.debug("%s Could not start the reauth flow", self.log_id, exc_info=True)
 
-        # Keep the raw entity id available at DEBUG for troubleshooting.
-        if display_name != entity:
-            LOGGER.debug(
-                "%s Power sensor %s (entity=%s) updated: %s W.",
-                self.log_id,
-                display_name,
-                entity,
-                watts,
+    # ------------------------------------------------------------------ command API
+    async def send(self, message: OWNCommand) -> bool:
+        """Queue a command; False (and a rate-limited WARNING) if it cannot be queued."""
+        return self._enqueue(message, is_status_request=False)
+
+    async def send_status_request(self, message: OWNCommand) -> bool:
+        """Queue a status request (logged at DEBUG only); same semantics as ``send``."""
+        return self._enqueue(message, is_status_request=True)
+
+    def _enqueue(self, message: OWNCommand, *, is_status_request: bool) -> bool:
+        if self._closed or self._stop_command_workers:
+            self._log_limited(
+                logging.WARNING, "queue-closed", "%s Cannot send `%s`: the gateway handler is closed", self.log_id, message
             )
-
-    def _dispatch_energy_event(self, message: OWNEnergyEvent) -> None:
-        """Dispatch an accepted energy event to registered entities (no filtering here)."""
-        sensor_platform = self._platform_cfg(SENSOR)
-        if message.entity not in sensor_platform:
-            return
-
-        entities_cfg = sensor_platform[message.entity].get(CONF_ENTITIES, {})
-        for _entity in entities_cfg:
-            obj = entities_cfg.get(_entity)
-            if isinstance(obj, MyHOMEEntity):
-                obj.handle_event(message)
-
-    def _handle_energy_event(self, message: OWNEnergyEvent) -> bool:
-        """Handle an OWNEnergyEvent. Returns True if handled and caller should continue."""
-        watts = self._extract_energy_watts(message)
-
-        if watts is not None and not self._should_process_energy_event(message.entity, watts):
-            min_delta_w, min_interval_sec, _ = self._energy_filter_settings_for(message.entity)
-            self._log_energy_suppression(message.entity, watts, min_delta_w, min_interval_sec)
-            return True
-
-        if watts is not None:
-            self._maybe_log_energy_update_info(message.entity, watts)
-
-        self._dispatch_energy_event(message)
+            return False
+        try:
+            self.send_buffer.put_nowait(_QueuedCommand(message, is_status_request, self._now()))
+        except asyncio.QueueFull:
+            self._log_limited(
+                logging.WARNING,
+                "queue-full",
+                "%s Command queue full (%d pending): dropping `%s` - is the gateway reachable?",
+                self.log_id,
+                self.send_buffer.maxsize,
+                message,
+            )
+            return False
+        LOGGER.debug("%s Queued `%s`", self.log_id, message)
         return True
 
-    async def listening_loop(self):
-        """Listen for gateway events and dispatch them to entities.
-
-        This loop is designed to be resilient: the gateway can half-open/reset sockets.
-        We use a timeout to avoid hanging forever on awaits, and we reconnect with
-        exponential backoff on errors.
-
-        Note: `self.is_connected` reflects the *event session* connectivity.
-        """
-        self._stop_event_listener = False
-
-        LOGGER.debug("%s Creating listening worker.", self.log_id)
-        LOGGER.info("%s Listening loop started.", self.log_id)
-
-        backoff = 1
-        max_backoff = 60
-        _event_session: Optional[OWNEventSession] = None
-
-        while not self._stop_event_listener:
+    def _drain_queue(self) -> list[_QueuedCommand]:
+        dropped: list[_QueuedCommand] = []
+        while True:
             try:
-                if _event_session is None:
-                    _event_session = OWNEventSession(gateway=self.gateway, logger=LOGGER)
-                    await _event_session.connect()
-                    self.is_connected = True
-                    backoff = 1
-                    LOGGER.info("%s Event session established successfully.", self.log_id)
+                dropped.append(self.send_buffer.get_nowait())
+            except asyncio.QueueEmpty:
+                return dropped
+            self.send_buffer.task_done()
 
-                # Avoid an infinite await when the gateway resets / half-opens the socket.
-                # We wake up periodically to check termination flags and to allow reconnect logic.
+    # ------------------------------------------------------------------ sending loop
+    async def sending_loop(self, worker_id: int) -> None:
+        """Deliver queued commands on a command session (Contract B command path)."""
+        if self._closed:
+            return
+        LOGGER.debug("%s Sending worker %s started", self.log_id, worker_id)
+        session: OWNCommandChannel | None = None
+        backoff = self.initial_backoff
+        try:
+            while not self._stop_command_workers:
                 try:
-                    message = await asyncio.wait_for(_event_session.get_next(), timeout=30)
-                except asyncio.TimeoutError:
-                    LOGGER.debug(
-                        "%s Listening loop timeout waiting for events (30s).",
-                        self.log_id,
-                    )
+                    item = await asyncio.wait_for(self.send_buffer.get(), timeout=self.command_session_idle)
+                except TimeoutError:
+                    # Nothing to send for a while: give the session back to the
+                    # gateway (MyHOMEServer1 has a small concurrent-session limit).
+                    if session is not None:
+                        LOGGER.debug("%s Closing idle command session (worker %s)", self.log_id, worker_id)
+                        await self._close_session(session)
+                        session = None
+                        self._command_sessions.pop(worker_id, None)
                     continue
 
-                LOGGER.debug("%s Message received: `%s`", self.log_id, message)
-
-                if self.generate_events:
-                    if isinstance(message, OWNMessage):
-                        _event_content = {"gateway": str(self.gateway.host)}
-                        _event_content.update(message.event_content)
-                        self.hass.bus.async_fire("myhome_message_event", _event_content)
-                    else:
-                        self.hass.bus.async_fire(
-                            "myhome_message_event",
-                            {"gateway": str(self.gateway.host), "message": str(message)},
-                        )
-
-                if not isinstance(message, OWNMessage):
-                    LOGGER.warning(
-                        "%s Data received is not a message: `%s`",
-                        self.log_id,
-                        message,
-                    )
-                    continue
-
-                # Handle message for discovery following OpenHAB patterns
-                self.handle_discovery_message(message)
-
-                # Continue with existing message processing
-                if isinstance(message, OWNEnergyEvent):
-                    if self._handle_energy_event(message):
-                        continue
-
-                if (
-                    isinstance(message, OWNLightingEvent)
-                    or isinstance(message, OWNAutomationEvent)
-                    or isinstance(message, OWNDryContactEvent)
-                    or isinstance(message, OWNAuxEvent)
-                    or isinstance(message, OWNHeatingEvent)
-                ):
-                    if message.is_translation:
-                        LOGGER.debug(
-                            "%s Ignoring translation message `%s`",
+                try:
+                    age = self._now() - item.enqueued_at
+                    if age > self.command_ttl:
+                        self._log_limited(
+                            logging.WARNING,
+                            "cmd-expired",
+                            "%s Dropping `%s`: queued %.0f s ago (gateway unreachable?)",
                             self.log_id,
-                            message,
+                            item.message,
+                            age,
                         )
                         continue
 
-                    is_event = False
+                    session, delivered = await self._deliver(session, worker_id, item)
+                    if delivered:
+                        backoff = self.initial_backoff
+                    elif not self._stop_command_workers:
+                        await asyncio.sleep(backoff)
+                        backoff = min(backoff * 2, self.max_backoff)
+                finally:
+                    self.send_buffer.task_done()
+        finally:
+            await self._close_session(session)
+            self._command_sessions.pop(worker_id, None)
+            LOGGER.debug("%s Sending worker %s stopped", self.log_id, worker_id)
 
-                    if isinstance(message, OWNLightingEvent):
-                        if message.is_general:
-                            is_event = True
-                            event = "on" if message.is_on else "off"
-                            self.hass.bus.async_fire(
-                                "myhome_general_light_event",
-                                {"message": str(message), "event": event},
-                            )
-                            await asyncio.sleep(0.1)
-                            await self.send_status_request(OWNLightingCommand.status("0"))
-                        elif message.is_area:
-                            is_event = True
-                            event = "on" if message.is_on else "off"
-                            self.hass.bus.async_fire(
-                                "myhome_area_light_event",
-                                {"message": str(message), "area": message.area, "event": event},
-                            )
-                            await asyncio.sleep(0.1)
-                            await self.send_status_request(
-                                OWNLightingCommand.status(message.area)
-                            )
-                        elif message.is_group:
-                            is_event = True
-                            event = "on" if message.is_on else "off"
-                            self.hass.bus.async_fire(
-                                "myhome_group_light_event",
-                                {"message": str(message), "group": message.group, "event": event},
-                            )
+    async def _deliver(
+        self, session: OWNCommandChannel | None, worker_id: int, item: _QueuedCommand
+    ) -> tuple[OWNCommandChannel | None, bool]:
+        """Send one command: retry ONCE in place with a fresh session, then drop it.
 
-                    elif isinstance(message, OWNAutomationEvent):
-                        if message.is_general:
-                            is_event = True
-                            if message.is_opening and not message.is_closing:
-                                event = "open"
-                            elif message.is_closing and not message.is_opening:
-                                event = "close"
-                            else:
-                                event = "stop"
-                            self.hass.bus.async_fire(
-                                "myhome_general_automation_event",
-                                {"message": str(message), "event": event},
-                            )
-                        elif message.is_area:
-                            is_event = True
-                            if message.is_opening and not message.is_closing:
-                                event = "open"
-                            elif message.is_closing and not message.is_opening:
-                                event = "close"
-                            else:
-                                event = "stop"
-                            self.hass.bus.async_fire(
-                                "myhome_area_automation_event",
-                                {"message": str(message), "area": message.area, "event": event},
-                            )
-                        elif message.is_group:
-                            is_event = True
-                            if message.is_opening and not message.is_closing:
-                                event = "open"
-                            elif message.is_closing and not message.is_opening:
-                                event = "close"
-                            else:
-                                event = "stop"
-                            self.hass.bus.async_fire(
-                                "myhome_group_automation_event",
-                                {"message": str(message), "group": message.group, "event": event},
-                            )
-
-                    if not is_event:
-                        if isinstance(message, OWNLightingEvent) and message.brightness_preset:
-                            if isinstance(
-                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][
-                                    message.entity
-                                ][CONF_ENTITIES][LIGHT],
-                                MyHOMEEntity,
-                            ):
-                                await self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][
-                                    message.entity
-                                ][CONF_ENTITIES][LIGHT].async_update()
-                        else:
-                            for _platform in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
-                                if (
-                                    _platform != BUTTON
-                                    and message.entity
-                                    in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform]
-                                ):
-                                    for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][
-                                        _platform
-                                    ][message.entity][CONF_ENTITIES]:
-                                        _obj = self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][
-                                            _platform
-                                        ][message.entity][CONF_ENTITIES][_entity]
-                                        if (
-                                            isinstance(_obj, MyHOMEEntity)
-                                            and not isinstance(_obj, DisableCommandButtonEntity)
-                                            and not isinstance(_obj, EnableCommandButtonEntity)
-                                        ):
-                                            _obj.handle_event(message)
-                    continue
-
-                if (
-                    isinstance(message, OWNHeatingCommand)
-                    and message.dimension is not None
-                    and message.dimension == 14
-                ):
-                    where = message.where[1:] if message.where.startswith("#") else message.where
+        Returns the (possibly new) session and whether the gateway answered
+        (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
+        stale command is never replayed later.
+        """
+        for attempt in (1, 2):
+            try:
+                if session is None:
+                    session = OWNCommandChannel(self.gateway, LOGGER)
+                    await session.open(self.connect_timeout)
+                    self._command_sessions[worker_id] = session
+                    LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
+                result = await session.send_command(item.message, self.command_timeout)
+            except AuthenticationError as err:
+                await self._close_session(session)
+                self._command_sessions.pop(worker_id, None)
+                self._handle_auth_failure(err, "command")
+                return None, False
+            except _TRANSPORT_ERRORS as err:
+                await self._close_session(session)
+                session = None
+                self._command_sessions.pop(worker_id, None)
+                if attempt == 1:
                     LOGGER.debug(
-                        "%s Received heating command, sending query to zone %s",
+                        "%s Sending `%s` failed (%s: %s); retrying once with a fresh session",
                         self.log_id,
-                        where,
+                        item.message,
+                        type(err).__name__,
+                        err,
                     )
-                    await self.send_status_request(OWNHeatingCommand.status(where))
                     continue
-
-                if isinstance(message, OWNCENPlusEvent):
-                    if message.is_short_pressed:
-                        event = CONF_SHORT_PRESS
-                    elif message.is_held or message.is_still_held:
-                        event = CONF_LONG_PRESS
-                    elif message.is_released:
-                        event = CONF_LONG_RELEASE
-                    else:
-                        event = None
-                    self.hass.bus.async_fire(
-                        "myhome_cenplus_event",
-                        {"object": int(message.object), "pushbutton": int(message.push_button), "event": event},
-                    )
-                    LOGGER.info("%s %s", self.log_id, message.human_readable_log)
-                    continue
-
-                if isinstance(message, OWNCENEvent):
-                    if message.is_pressed:
-                        event = CONF_SHORT_PRESS
-                    elif message.is_released_after_short_press:
-                        event = CONF_SHORT_RELEASE
-                    elif message.is_held:
-                        event = CONF_LONG_PRESS
-                    elif message.is_released_after_long_press:
-                        event = CONF_LONG_RELEASE
-                    else:
-                        event = None
-                    self.hass.bus.async_fire(
-                        "myhome_cen_event",
-                        {"object": int(message.object), "pushbutton": int(message.push_button), "event": event},
-                    )
-                    LOGGER.info("%s %s", self.log_id, message.human_readable_log)
-                    continue
-
-                if isinstance(message, OWNGatewayEvent) or isinstance(message, OWNGatewayCommand):
-                    # Can be quite chatty on some gateways; keep at DEBUG by default.
-                    LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
-                    continue
-
-                # Unknown/unsupported messages are useful for troubleshooting but too noisy at INFO.
-                LOGGER.debug("%s Unsupported message type: `%s`", self.log_id, message)
-
-            except asyncio.CancelledError:
-                break
-            except Exception as err:
-                LOGGER.warning(
-                    "%s Event listener error (%s). Reconnecting in %ss",
+                self._log_limited(
+                    logging.WARNING,
+                    "cmd-dropped",
+                    "%s Command `%s` dropped after two attempts: %s: %s",
                     self.log_id,
+                    item.message,
                     type(err).__name__,
-                    backoff,
+                    err,
+                )
+                return None, False
+            await self._on_command_result(item, result)
+            return session, True
+        return session, False  # pragma: no cover - loop always returns
+
+    async def _on_command_result(self, item: _QueuedCommand, result: CommandResult) -> None:
+        """Log the outcome and dispatch every reply frame like a monitor event (sc-01, gw-13)."""
+        if result.acknowledged:
+            LOGGER.debug("%s `%s` acknowledged (%d reply frame(s))", self.log_id, item.message, len(result.replies))
+        else:
+            self._log_limited(
+                logging.WARNING,
+                f"nack-{item.message}",
+                "%s The gateway refused `%s` (NACK)",
+                self.log_id,
+                item.message,
+            )
+        for reply in result.replies:
+            LOGGER.debug("%s Reply: `%s`", self.log_id, reply)
+            await self._dispatch_message(reply, from_monitor=False)
+
+    # ------------------------------------------------------------------ listening loop
+    async def listening_loop(self) -> None:
+        """Keep the event session alive and dispatch its frames (Contract B event path)."""
+        if self._closed:
+            return
+        LOGGER.info("%s Listening loop started", self.log_id)
+        session: OWNEventChannel | None = None
+        backoff = self.initial_backoff
+        try:
+            while not self._stop_event_listener:
+                try:
+                    if session is None:
+                        session = OWNEventChannel(self.gateway, LOGGER)
+                        await session.open(self.connect_timeout)
+                        self._event_session = session
+                        self._last_rx = self._now()
+                        self._probe_sent_at = None
+                        # NOTE: the backoff is reset only once the session proves
+                        # alive (a frame, or a full poll interval without failure):
+                        # "connect then fail at once" must keep slowing down.
+                        LOGGER.info("%s Event session established", self.log_id)
+                        self._set_connected(True)
+
+                    try:
+                        message = await asyncio.wait_for(session.get_next(), timeout=self.read_poll_interval)
+                    except TimeoutError:
+                        # Nothing in read_poll_interval: the session survived, run
+                        # the idle watchdog. Only the raw read sits inside wait_for,
+                        # so a cancel here is safe (OWNd's own reconnect sleeps are
+                        # never involved, gw-16).
+                        backoff = self.initial_backoff
+                        self._throttle.reset("event-lost")
+                        await self._check_idle()
+                        continue
+
+                    if message is None:
+                        # Only a plain OWNd session returns None (it swallowed an
+                        # error): treat it as a broken connection, never spin (gw-04).
+                        raise SessionError("event session returned no data")
+
+                    self._last_rx = self._now()
+                    self._probe_sent_at = None
+                    backoff = self.initial_backoff
+                    self._throttle.reset("event-lost")
+                    if not isinstance(message, OWNMessage):
+                        LOGGER.debug("%s Ignoring unparsable frame `%s`", self.log_id, message)
+                        self._fire_raw_message_event(message)
+                        continue
+                    LOGGER.debug("%s Event: `%s`", self.log_id, message)
+                    await self._dispatch_message(message, from_monitor=True)
+
+                except AuthenticationError as err:
+                    await self._close_session(session)
+                    session = None
+                    self._event_session = None
+                    self._handle_auth_failure(err, "event")
+                    break
+                except _TRANSPORT_ERRORS as err:
+                    self._set_connected(False)
+                    await self._close_session(session)
+                    session = None
+                    self._event_session = None
+                    if self._stop_event_listener:
+                        break
+                    self._log_limited(
+                        logging.WARNING,
+                        "event-lost",
+                        "%s Event session lost (%s: %s); reconnecting in %.0f s",
+                        self.log_id,
+                        type(err).__name__,
+                        err,
+                        backoff,
+                        interval=RECONNECT_LOG_RATE_LIMIT_SEC,
+                    )
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, self.max_backoff)
+                except Exception:  # noqa: BLE001 - a bug in this loop must not kill the task
+                    self._set_connected(False)
+                    await self._close_session(session)
+                    session = None
+                    self._event_session = None
+                    if self._stop_event_listener:
+                        break
+                    LOGGER.exception("%s Unexpected error in the listening loop; reconnecting in %.0f s", self.log_id, backoff)
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, self.max_backoff)
+        finally:
+            self._set_connected(False)
+            await self._close_session(session)
+            self._event_session = None
+            LOGGER.info("%s Listening loop stopped", self.log_id)
+
+    async def _check_idle(self) -> None:
+        """Idle watchdog (gw-03): probe after ``idle_timeout``, reconnect if the
+        probe produces nothing on the monitor within ``probe_window``."""
+        now = self._now()
+        idle = now - self._last_rx
+        if idle < self.idle_timeout:
+            return
+        if self._probe_sent_at is None:
+            probe = self._probe_command()
+            LOGGER.debug("%s No event for %.0f s: probing the bus with `%s`", self.log_id, idle, probe)
+            self._probe_sent_at = now
+            await self.send_status_request(probe)
+            return
+        if now - self._probe_sent_at >= self.probe_window:
+            raise SessionError(f"no event for {idle:.0f} s and the probe went unanswered")
+
+    def _probe_command(self) -> OWNCommand:
+        """A harmless status request whose reply shows up on the monitor session.
+
+        Prefer a point-to-point actuator of the configuration; fall back to an
+        energy meter, a thermo zone and finally the general lighting status.
+        """
+        for platform, factory in ((LIGHT, OWNLightingCommand.status), (SWITCH, OWNLightingCommand.status), (COVER, OWNAutomationCommand.status)):
+            for device in self._platform_cfg(platform).values():
+                where = str(device.get(CONF_WHERE) or "")
+                if where.isdigit() and len(where) in (2, 4) and where != "00":
+                    interface = device.get(CONF_BUS_INTERFACE)
+                    return factory(f"{where}#4#{interface}" if interface else where)
+        for device in self._platform_cfg(SENSOR).values():
+            where = str(device.get(CONF_WHERE) or "")
+            if str(device.get("who")) == "18" and where:
+                return OWNEnergyCommand.get_total_consumption(where)
+        for device in self._platform_cfg(CLIMATE).values():
+            zone = device.get(CONF_ZONE)
+            if zone:
+                return OWNHeatingCommand.get_temperature(str(zone))
+        return OWNLightingCommand.status("0")
+
+    # ------------------------------------------------------------------ dispatcher
+    def _fire_raw_message_event(self, text: str) -> None:
+        if self.generate_events:
+            self.hass.bus.async_fire("myhome_message_event", {"gateway": str(self.gateway.host), "message": str(text)})
+
+    async def _dispatch_message(self, message: OWNMessage, *, from_monitor: bool) -> None:
+        """Route one parsed frame; never raises (gw-08).
+
+        ``from_monitor`` frames also feed ``myhome_message_event`` (when enabled);
+        replies read on the command session only reach discovery and the entities.
+        """
+        try:
+            if self.generate_events and from_monitor:
+                try:
+                    content = {"gateway": str(self.gateway.host)}
+                    content.update(message.event_content)
+                    self.hass.bus.async_fire("myhome_message_event", content)
+                except Exception:  # noqa: BLE001 - OWNd event_content can choke on odd frames
+                    LOGGER.debug("%s Could not build event content for `%s`", self.log_id, message, exc_info=True)
+
+            try:
+                self.handle_discovery_message(message)
+            except Exception:  # noqa: BLE001
+                self._log_limited(logging.WARNING, "discovery", "%s Discovery failed on `%s`", self.log_id, message, exc_info=True)
+
+            if isinstance(message, OWNEnergyEvent):
+                self._handle_energy_event(message)
+                return
+
+            if isinstance(message, _ENTITY_EVENT_TYPES):
+                if message.is_translation:
+                    LOGGER.debug("%s Ignoring translation message `%s`", self.log_id, message)
+                    return
+                if isinstance(message, OWNLightingEvent) and await self._handle_lighting_scope(message):
+                    return
+                if isinstance(message, OWNAutomationEvent) and self._handle_automation_scope(message):
+                    return
+                if isinstance(message, OWNLightingEvent) and message.brightness_preset:
+                    await self._refresh_light(message.entity)
+                    return
+                self._dispatch_to_entities(message)
+                return
+
+            if isinstance(message, OWNHeatingCommand) and message.dimension is not None and int(message.dimension) == 14:
+                where = message.where[1:] if str(message.where).startswith("#") else message.where
+                LOGGER.debug("%s Heating command seen, requesting status of zone %s", self.log_id, where)
+                await self.send_status_request(OWNHeatingCommand.status(where))
+                return
+
+            if isinstance(message, OWNCENPlusEvent):
+                self._fire_cenplus_event(message)
+                return
+
+            if isinstance(message, OWNCENEvent):
+                self._fire_cen_event(message)
+                return
+
+            if isinstance(message, (OWNGatewayEvent, OWNGatewayCommand)):
+                LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
+                return
+
+            LOGGER.debug("%s Unsupported message `%s`", self.log_id, message)
+        except Exception:  # noqa: BLE001 - dispatch errors must never reach the session loops
+            self._log_limited(
+                logging.ERROR, "dispatch", "%s Error while dispatching `%s`", self.log_id, message, exc_info=True
+            )
+
+    async def _handle_lighting_scope(self, message: OWNLightingEvent) -> bool:
+        """General / area / group lighting frames: fire the bus event and re-request
+        the affected states (no sleep in the receive path, gw-18)."""
+        state = _safe_is_on(message)
+        event = "on" if state else "off"
+        if message.is_general:
+            self.hass.bus.async_fire("myhome_general_light_event", {"message": str(message), "event": event})
+            await self.send_status_request(OWNLightingCommand.status("0"))
+            return True
+        if message.is_area:
+            self.hass.bus.async_fire(
+                "myhome_area_light_event", {"message": str(message), "area": message.area, "event": event}
+            )
+            await self.send_status_request(OWNLightingCommand.status(message.area))
+            return True
+        if message.is_group:
+            self.hass.bus.async_fire(
+                "myhome_group_light_event", {"message": str(message), "group": message.group, "event": event}
+            )
+            return True
+        return False
+
+    def _handle_automation_scope(self, message: OWNAutomationEvent) -> bool:
+        if message.is_general:
+            self.hass.bus.async_fire(
+                "myhome_general_automation_event", {"message": str(message), "event": _automation_event_name(message)}
+            )
+            return True
+        if message.is_area:
+            self.hass.bus.async_fire(
+                "myhome_area_automation_event",
+                {"message": str(message), "area": message.area, "event": _automation_event_name(message)},
+            )
+            return True
+        if message.is_group:
+            self.hass.bus.async_fire(
+                "myhome_group_automation_event",
+                {"message": str(message), "group": message.group, "event": _automation_event_name(message)},
+            )
+            return True
+        return False
+
+    def _entities_for(self, entity_key: str) -> list[MyHOMEEntity]:
+        """Registered entity objects for a ``who-where`` key, buttons excluded (plat-09)."""
+        found: list[MyHOMEEntity] = []
+        platforms = self._gw_cfg().get(CONF_PLATFORMS) or {}
+        for platform, devices in platforms.items():
+            if platform == BUTTON or not isinstance(devices, dict):
+                continue
+            device = devices.get(entity_key)
+            if not isinstance(device, dict):
+                continue
+            entities = device.get(CONF_ENTITIES) or {}
+            found.extend(obj for obj in list(entities.values()) if isinstance(obj, MyHOMEEntity))
+        return found
+
+    def _dispatch_to_entities(self, message: OWNMessage) -> None:
+        entities = self._entities_for(message.entity)
+        if not entities:
+            LOGGER.debug("%s No entity configured for `%s` (%s)", self.log_id, message, message.entity)
+            return
+        for obj in entities:
+            try:
+                obj.handle_event(message)
+            except Exception:  # noqa: BLE001 - an entity bug must not affect the session (gw-08)
+                self._log_limited(
+                    logging.ERROR,
+                    f"entity-{obj.unique_id}",
+                    "%s %s failed to handle `%s`",
+                    self.log_id,
+                    obj.unique_id,
+                    message,
                     exc_info=True,
                 )
-                self.is_connected = False
 
-                try:
-                    if _event_session is not None:
-                        await _event_session.close()
-                except Exception:
-                    pass
-
-                _event_session = None
-
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, max_backoff)
-
-        # Clean shutdown
+    async def _refresh_light(self, entity_key: str) -> None:
+        """A dimmer reached a preset level: ask the light entity for its real brightness (plat-02)."""
+        device = self._platform_cfg(LIGHT).get(entity_key)
+        obj = (device.get(CONF_ENTITIES) or {}).get(LIGHT) if isinstance(device, dict) else None
+        if not isinstance(obj, MyHOMEEntity):
+            LOGGER.debug("%s Preset level for %s, which is not a configured light", self.log_id, entity_key)
+            return
         try:
-            if _event_session is not None:
-                await _event_session.close()
-        except Exception:
-            pass
+            await obj.async_update()
+        except Exception:  # noqa: BLE001
+            self._log_limited(
+                logging.ERROR, f"entity-{obj.unique_id}", "%s %s failed to refresh", self.log_id, obj.unique_id, exc_info=True
+            )
 
-        self.is_connected = False
-        LOGGER.debug("%s Destroying listening worker.", self.log_id)
+    def _fire_cenplus_event(self, message: OWNCENPlusEvent) -> None:
+        """CEN+ contract: ``myhome_cenplus_event`` {object, pushbutton, event} (gw-14)."""
+        if message.is_short_pressed:
+            event = CONF_SHORT_PRESS
+        elif message.is_held:
+            event = CONF_LONG_PRESS
+        elif message.is_still_held:
+            event = EVENT_LONG_PRESS_REPEAT
+        elif message.is_released:
+            event = CONF_LONG_RELEASE
+        elif message.is_slowly_turned_cw:
+            event = EVENT_ROTATE_CW_SLOW
+        elif message.is_quickly_turned_cw:
+            event = EVENT_ROTATE_CW_FAST
+        elif message.is_slowly_turned_ccw:
+            event = EVENT_ROTATE_CCW_SLOW
+        elif message.is_quickly_turned_ccw:
+            event = EVENT_ROTATE_CCW_FAST
+        else:
+            LOGGER.debug("%s Ignoring unknown CEN+ frame `%s`", self.log_id, message)
+            return
+        self.hass.bus.async_fire(
+            "myhome_cenplus_event",
+            {"object": int(message.object), "pushbutton": int(message.push_button), "event": event},
+        )
+        LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
 
-    async def sending_loop(self, worker_id: int):
-        """Send commands to the gateway using the command session.
+    def _fire_cen_event(self, message: OWNCENEvent) -> None:
+        if message.is_pressed:
+            event = CONF_SHORT_PRESS
+        elif message.is_released_after_short_press:
+            event = CONF_SHORT_RELEASE
+        elif message.is_held:
+            event = CONF_LONG_PRESS
+        elif message.is_released_after_long_press:
+            event = CONF_LONG_RELEASE
+        else:
+            LOGGER.debug("%s Ignoring unknown CEN frame `%s`", self.log_id, message)
+            return
+        self.hass.bus.async_fire(
+            "myhome_cen_event",
+            {"object": int(message.object), "pushbutton": int(message.push_button), "event": event},
+        )
+        LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
 
-        The gateway may reset the command socket; we reconnect on errors.
-        """
-        self._stop_command_workers = False
+    # ------------------------------------------------------------------ energy throttle
+    def _energy_settings_for(self, entity_key: str) -> _EnergySettings:
+        """Per-sensor throttle settings: sensor dict (canonical keys, already merged
+        with ``sensor_defaults`` by validate.py) -> gateway ``sensor_defaults`` -> code defaults."""
+        cached = self._energy_settings_cache.get(entity_key)
+        if cached is not None:
+            return cached
+        defaults = self._gw_cfg().get(CONF_SENSOR_DEFAULTS)
+        defaults = defaults if isinstance(defaults, dict) else {}
+        sensor_cfg = self._platform_cfg(SENSOR).get(entity_key)
+        sensor_cfg = sensor_cfg if isinstance(sensor_cfg, dict) else {}
 
-        LOGGER.debug("%s Creating sending worker %s", self.log_id, worker_id)
-
-        backoff = 1
-        max_backoff = 60
-        _command_session: Optional[OWNCommandSession] = None
-
-        while not self._stop_command_workers:
-            task = await self.send_buffer.get()
+        def _value(key: str, fallback: float, cast: type) -> Any:
+            raw = sensor_cfg.get(key, defaults.get(key, fallback))
             try:
-                if _command_session is None:
-                    _command_session = OWNCommandSession(gateway=self.gateway, logger=LOGGER)
-                    await _command_session.connect()
-                    backoff = 1
-                    LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
+                return cast(raw)
+            except (TypeError, ValueError):
+                return cast(fallback)
 
-                LOGGER.debug(
-                    "%s Message `%s` was successfully unqueued by worker %s.",
-                    self.log_id,
-                    task["message"],
-                    worker_id,
-                )
+        settings = _EnergySettings(
+            min_delta_w=_value(CONF_MIN_DELTA_W, DEFAULT_MIN_DELTA_W, int),
+            min_interval_sec=_value(CONF_MIN_INTERVAL_SEC, DEFAULT_MIN_INTERVAL_SEC, float),
+            suppress_log_interval_sec=_value(CONF_SUPPRESS_LOG_INTERVAL_SEC, DEFAULT_SUPPRESS_LOG_INTERVAL_SEC, float),
+            info_log_interval_sec=_value(CONF_INFO_LOG_INTERVAL_SEC, DEFAULT_INFO_LOG_INTERVAL_SEC, float),
+        )
+        # Cache only once the config is actually there (the first frame can arrive
+        # before hass.data is populated in unit tests).
+        if sensor_cfg:
+            self._energy_settings_cache[entity_key] = settings
+        return settings
 
-                await _command_session.send(
-                    message=task["message"],
-                    is_status_request=task["is_status_request"],
-                )
+    def _should_process_active_power(self, entity_key: str, watts: int) -> bool:
+        """Contract B: process if |dW| >= min_delta_w OR elapsed >= min_interval_sec.
 
-                self.send_buffer.task_done()
+        Either threshold at 0 accepts everything; the first sample always passes.
+        """
+        settings = self._energy_settings_for(entity_key)
+        now = self._now()
+        last_w = self._last_energy_watts.get(entity_key)
+        last_ts = self._last_energy_ts.get(entity_key)
+        accept = (
+            last_w is None
+            or last_ts is None
+            or abs(watts - last_w) >= settings.min_delta_w
+            or now - last_ts >= settings.min_interval_sec
+        )
+        if accept:
+            self._last_energy_watts[entity_key] = watts
+            self._last_energy_ts[entity_key] = now
+        return accept
 
-            except asyncio.CancelledError:
-                # Put the task back if we are being cancelled mid-send.
-                try:
-                    await self.send_buffer.put(task)
-                except Exception:
-                    pass
-                raise
+    def _sensor_display_name(self, entity_key: str) -> str:
+        cfg = self._platform_cfg(SENSOR).get(entity_key)
+        name = cfg.get(CONF_NAME) if isinstance(cfg, dict) else None
+        return str(name).strip() if isinstance(name, str) and name.strip() else entity_key
 
-            except Exception as err:
-                # Re-queue the task to retry after reconnect.
-                LOGGER.debug(
-                    "%s Command session connection reset, retrying... (%s)",
-                    self.log_id,
-                    type(err).__name__,
-                )
+    def _log_energy_suppression(self, entity_key: str, watts: int, settings: _EnergySettings) -> None:
+        """Rate-limited DEBUG summary of suppressed instant-power frames."""
+        now = self._now()
+        self._energy_suppress_count[entity_key] = self._energy_suppress_count.get(entity_key, 0) + 1
+        last = self._last_energy_suppress_log_ts.get(entity_key)
+        interval = settings.suppress_log_interval_sec
+        if last is not None and interval > 0 and now - last < interval:
+            return
+        count = self._energy_suppress_count.pop(entity_key, 0)
+        self._last_energy_suppress_log_ts[entity_key] = now
+        LOGGER.debug(
+            "%s Suppressed %d instant power frame(s) for %s (%s) in the last ~%.0f s (latest %s W, min_delta_w=%s, min_interval_sec=%s)",
+            self.log_id,
+            count,
+            self._sensor_display_name(entity_key),
+            entity_key,
+            interval,
+            watts,
+            settings.min_delta_w,
+            settings.min_interval_sec,
+        )
 
-                try:
-                    await self.send_buffer.put(task)
-                except Exception:
-                    pass
+    def _maybe_log_energy_update_info(self, entity_key: str, watts: int, settings: _EnergySettings) -> None:
+        """Optional INFO heartbeat for accepted instant power samples (``info_log_interval_sec`` > 0)."""
+        interval = settings.info_log_interval_sec
+        if interval <= 0:
+            return
+        now = self._now()
+        last = self._last_energy_info_log_ts.get(entity_key)
+        if last is not None and now - last < interval:
+            return
+        self._last_energy_info_log_ts[entity_key] = now
+        LOGGER.info("%s Power sensor %s: %s W", self.log_id, self._sensor_display_name(entity_key), watts)
 
-                try:
-                    if _command_session is not None:
-                        await _command_session.close()
-                except Exception:
-                    pass
+    def _handle_energy_event(self, message: OWNEnergyEvent) -> None:
+        """Throttle ONLY instant active power (dimension 113); every other WHO=18
+        frame (totaliser, daily, monthly...) is dispatched unfiltered (gw-06)."""
+        if message.message_type == MESSAGE_TYPE_ACTIVE_POWER:
+            watts = int(message.active_power)
+            settings = self._energy_settings_for(message.entity)
+            if not self._should_process_active_power(message.entity, watts):
+                self._log_energy_suppression(message.entity, watts, settings)
+                return
+            self._maybe_log_energy_update_info(message.entity, watts, settings)
+        self._dispatch_to_entities(message)
 
-                _command_session = None
-
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, max_backoff)
-
-        try:
-            if _command_session is not None:
-                await _command_session.close()
-        except Exception:
-            pass
-
-        LOGGER.debug("%s Destroying sending worker %s", self.log_id, worker_id)
-
+    # ------------------------------------------------------------------ shutdown
     async def close_listener(self) -> bool:
-        LOGGER.info("%s Closing gateway workers", self.log_id)
-        self._stop_command_workers = True
+        """Stop the loops, close both sessions, drop the queue, publish offline.
+
+        Idempotent: ``__init__.py`` calls it explicitly on unload and again through
+        ``entry.async_on_unload``.  Safe to call from inside one of the loop tasks.
+        """
+        first_call = not self._closed
+        self._closed = True
         self._stop_event_listener = True
+        self._stop_command_workers = True
+        if first_call:
+            LOGGER.info("%s Closing gateway sessions", self.log_id)
+
+        current = asyncio.current_task()
+        tasks = [
+            task
+            for task in (self.listening_worker, *self.sending_workers)
+            if task is not None and task is not current and not task.done()
+        ]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self.listening_worker = None
+        self.sending_workers = []
+
+        # The loops close their own sessions in ``finally``; close anything left over
+        # (a loop that was never started or is the current task).
+        sessions = [self._event_session, *self._command_sessions.values()]
+        self._event_session = None
+        self._command_sessions = {}
+        for session in sessions:
+            await self._close_session(session)
+
+        dropped = self._drain_queue()
+        if dropped:
+            LOGGER.warning(
+                "%s %d queued command(s) discarded on shutdown: %s",
+                self.log_id,
+                len(dropped),
+                ", ".join(str(item.message) for item in dropped[:10]) + (" ..." if len(dropped) > 10 else ""),
+            )
+        self._set_connected(False)
         return True
-
-    async def send(self, message: OWNCommand):
-        await self.send_buffer.put({"message": message, "is_status_request": False})
-        LOGGER.debug(
-            "%s Message `%s` was successfully queued.",
-            self.log_id,
-            message,
-        )
-
-    async def send_status_request(self, message: OWNCommand):
-        await self.send_buffer.put({"message": message, "is_status_request": True})
-        LOGGER.debug(
-            "%s Message `%s` was successfully queued.",
-            self.log_id,
-            message,
-        )

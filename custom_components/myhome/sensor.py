@@ -1,31 +1,50 @@
-"""Support for MyHome sensors (power/energy, temperature, illuminance)."""
+"""Support for MyHOME sensors (instant power, energy totalisers, temperature, illuminance).
 
-from datetime import timedelta
+Contract C (entity base) and Contract E (instant-power keep-alive) apply here:
 
-from voluptuous import (
-    Optional,
-    Coerce,
-    All,
-    Range,
-)
+* no entity is polled by Home Assistant (``should_poll`` is False in the base class);
+  everything that needs a periodic bus request drives its own timer with the HA time
+  helpers and cancels it through ``async_on_remove``;
+* the power sensor arms ``*#18*<where>*#1200#1*<minutes>##`` when it is added and again
+  on every gateway (re)connection, and re-arms itself a few minutes before the meter
+  would stop streaming (Contract E, finding sc-04);
+* the energy totalisers request their value at add time, periodically and at the local
+  day/month boundary, and survive a restart through ``RestoreSensor`` (sc-11, sc-18);
+* names come from the entity translation keys, never from the device name (sc-05).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from typing import Any
+
+import voluptuous as vol
 
 from homeassistant.components.sensor import DOMAIN as PLATFORM
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_ENTITIES,
-    CONF_NAME,
     CONF_MAC,
+    CONF_NAME,
     LIGHT_LUX,
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
 )
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import (
+    async_track_time_change,
+    async_track_time_interval,
+)
+
 from OWNd.message import (
     MESSAGE_TYPE_ACTIVE_POWER,
     MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
@@ -43,184 +62,199 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
+    ATTR_DURATION,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
+    CONF_ENTITIES,
+    CONF_ENTITY,
+    CONF_ENTITY_NAME,
+    CONF_KEEPALIVE_MINUTES,
     CONF_MANUFACTURER,
+    CONF_PLATFORMS,
     CONF_WHERE,
     CONF_WHO,
     DOMAIN,
     LOGGER,
+    SERVICE_START_SENDING_INSTANT_POWER,
+    SIGNAL_GATEWAY_CONNECTION,
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
 
-# Home Assistant calls async_update() for polling entities (those with _attr_should_poll = True)
-# at this interval. 60s is quite aggressive and can keep the gateway command session under
-# constant churn (and trigger frequent reconnects on some gateways). Use a calmer interval.
-SCAN_INTERVAL = timedelta(seconds=300)  # 5 minutes - originally 60s, but some gateways disconnect if polled too frequently
+# Keys of the sub-entity slots pre-seeded by validate.py in ``device[CONF_ENTITIES]``.
+POWER_SLOT = f"{SensorDeviceClass.POWER}"
+DAILY_ENERGY_SLOT = f"daily-{SensorDeviceClass.ENERGY}"
+MONTHLY_ENERGY_SLOT = f"monthly-{SensorDeviceClass.ENERGY}"
+TOTAL_ENERGY_SLOT = f"total-{SensorDeviceClass.ENERGY}"
 
-SERVICE_SEND_INSTANT_POWER = "start_sending_instant_power"
+# How often the energy totalisers are re-requested (the gateway never pushes them
+# spontaneously).  Daily/monthly are additionally refreshed right after midnight.
+ENERGY_REFRESH_INTERVAL = timedelta(minutes=5)
+# Temperature probes and illuminance sensors do get pushed values, but a slow poll
+# keeps them from going stale forever (sc-15).
+ENVIRONMENT_REFRESH_INTERVAL = timedelta(minutes=5)
 
-ATTR_DURATION = "duration"
-ATTR_DATE = "date"
-ATTR_MONTH = "month"
-ATTR_DAY = "day"
+# Instant power keep-alive (Contract E).  The meter accepts 1..255 minutes; we re-arm
+# KEEPALIVE_MARGIN_MINUTES before expiry so the stream never has a hole.
+KEEPALIVE_MARGIN_MINUTES = 5
+FALLBACK_KEEPALIVE_MINUTES = 125
+MAX_KEEPALIVE_MINUTES = 255
+
+SERVICE_SEND_INSTANT_POWER = SERVICE_START_SENDING_INSTANT_POWER
+
+INSTANT_POWER_SERVICE_SCHEMA = {
+    vol.Optional(ATTR_DURATION): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_KEEPALIVE_MINUTES)),
+}
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Create the sensor entities of one gateway."""
+    gateway_data = hass.data[DOMAIN][config_entry.data[CONF_MAC]]
+    configured_sensors: dict[str, dict[str, Any]] = gateway_data[CONF_PLATFORMS].get(PLATFORM, {})
+    if not configured_sensors:
+        return
 
-    _sensors = []
-    _configured_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
-    _power_devices_configured = False
+    gateway: MyHOMEGatewayHandler = gateway_data[CONF_ENTITY]
+    sensors: list[MyHOMEEntity] = []
+    power_devices_configured = False
 
-    for _sensor in _configured_sensors.keys():
-        if (
-            _configured_sensors[_sensor][CONF_DEVICE_CLASS] == SensorDeviceClass.POWER
-            or _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-            == SensorDeviceClass.ENERGY
-        ):
-            _required_entities = list(
-                _configured_sensors[_sensor][CONF_ENTITIES].keys()
-            )
+    for device_id, device in configured_sensors.items():
+        sensor_class = device[CONF_DEVICE_CLASS]
+        common = {
+            "hass": hass,
+            "device_id": device_id,
+            "who": device[CONF_WHO],
+            "where": device[CONF_WHERE],
+            "name": device[CONF_NAME],
+            "manufacturer": device[CONF_MANUFACTURER],
+            "model": device[CONF_DEVICE_MODEL],
+            "gateway": gateway,
+        }
 
-            if (
-                _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-                == SensorDeviceClass.POWER
-            ):
-                _power_devices_configured = True
-
-                ent_reg = er.async_get(hass)
-                existing_entity_id = ent_reg.async_get_entity_id(
-                    "sensor", DOMAIN, _sensor
-                )
-                if existing_entity_id is not None:
-                    LOGGER.warning(
-                        "Sensor %s: %s will be migrated to %s-%s",
-                        _sensor,
-                        existing_entity_id,
-                        _sensor,
-                        SensorDeviceClass.POWER,
-                    )
-                    ent_reg.async_update_entity(
-                        entity_id=existing_entity_id,
-                        new_unique_id=f"{_sensor}-{SensorDeviceClass.POWER}",
-                    )
-
-                _sensors.append(
+        if sensor_class in (SensorDeviceClass.POWER, SensorDeviceClass.ENERGY):
+            slots = list(device[CONF_ENTITIES].keys())
+            if sensor_class == SensorDeviceClass.POWER:
+                power_devices_configured = True
+                sensors.append(
                     MyHOMEPowerSensor(
-                        hass=hass,
-                        device_id=_sensor,
-                        who=_configured_sensors[_sensor][CONF_WHO],
-                        where=_configured_sensors[_sensor][CONF_WHERE],
-                        name=_configured_sensors[_sensor][CONF_NAME],
-                        device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
-                        manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                        model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                        gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-                            CONF_ENTITY
-                        ],
+                        keepalive_minutes=int(device.get(CONF_KEEPALIVE_MINUTES, FALLBACK_KEEPALIVE_MINUTES)),
+                        **common,
                     )
                 )
-                _required_entities.remove(SensorDeviceClass.POWER)
+                if POWER_SLOT in slots:
+                    slots.remove(POWER_SLOT)
+            for slot in slots:
+                sensors.append(MyHOMEEnergySensor(entity_specific_id=slot, **common))
 
-            for entity_specific_id in _required_entities:
-                _sensors.append(
-                    MyHOMEEnergySensor(
-                        hass=hass,
-                        device_id=_sensor,
-                        who=_configured_sensors[_sensor][CONF_WHO],
-                        where=_configured_sensors[_sensor][CONF_WHERE],
-                        name=_configured_sensors[_sensor][CONF_NAME],
-                        entity_specific_id=entity_specific_id,
-                        device_class=SensorDeviceClass.ENERGY,
-                        manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                        model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                        gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-                            CONF_ENTITY
-                        ],
-                    )
-                )
-
-        elif (
-            _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-            == SensorDeviceClass.TEMPERATURE
-        ):
-            _sensors.append(
-                MyHOMETemperatureSensor(
-                    hass=hass,
-                    device_id=_sensor,
-                    who=_configured_sensors[_sensor][CONF_WHO],
-                    where=_configured_sensors[_sensor][CONF_WHERE],
-                    name=_configured_sensors[_sensor][CONF_NAME],
-                    device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
-                    manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-                )
+        elif sensor_class == SensorDeviceClass.TEMPERATURE:
+            sensors.append(
+                MyHOMETemperatureSensor(entity_name=device.get(CONF_ENTITY_NAME), **common)
             )
 
-        elif (
-            _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-            == SensorDeviceClass.ILLUMINANCE
-        ):
-            _sensors.append(
-                MyHOMEIlluminanceSensor(
-                    hass=hass,
-                    device_id=_sensor,
-                    who=_configured_sensors[_sensor][CONF_WHO],
-                    where=_configured_sensors[_sensor][CONF_WHERE],
-                    name=_configured_sensors[_sensor][CONF_NAME],
-                    device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
-                    manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-                )
+        elif sensor_class == SensorDeviceClass.ILLUMINANCE:
+            sensors.append(
+                MyHOMEIlluminanceSensor(entity_name=device.get(CONF_ENTITY_NAME), **common)
             )
 
-    if _power_devices_configured:
-        platform = entity_platform.current_platform.get()
-
-        platform.async_register_entity_service(
+    if power_devices_configured:
+        entity_platform.async_get_current_platform().async_register_entity_service(
             SERVICE_SEND_INSTANT_POWER,
-            {Optional(ATTR_DURATION): All(Coerce(int), Range(min=1, max=255))},
+            INSTANT_POWER_SERVICE_SCHEMA,
             "start_sending_instant_power",
         )
 
-    async_add_entities(_sensors)
+    async_add_entities(sensors)
 
 
-async def async_unload_entry(hass, config_entry):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+class _MyHOMESensorEntity(MyHOMEEntity):
+    """Shared plumbing for every MyHOME sensor entity.
 
-    _configured_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
+    A single MyHOME device (an F520 meter, for instance) hosts several entities, so
+    each of them claims its own slot in ``hass.data[...][CONF_ENTITIES]`` instead of
+    the generic platform slot used by the base class for one-entity devices.
+    """
 
-    for _sensor in _configured_sensors.keys():
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
-            _sensor
-        ]
+    _slot: str = PLATFORM
+
+    def _use_translated_name(self) -> None:
+        """Let ``_attr_translation_key`` name the entity (Contract C, sc-05).
+
+        The base class sets ``_attr_name = None`` (main entity of a device); an
+        explicitly set ``_attr_name`` always wins over the translation key in HA, so
+        secondary entities have to drop it.
+        """
+        try:
+            del self._attr_name
+        except AttributeError:  # pragma: no cover - defensive
+            pass
+
+    @callback
+    def _async_claim_slot(self) -> None:
+        """Move our registration from the platform slot to the entity-specific one."""
+        entities = self._entities_registry()
+        if entities is None:
+            return
+        if entities.get(PLATFORM) is self:
+            del entities[PLATFORM]
+        entities[self._slot] = self
+
+    async def async_added_to_hass(self) -> None:
+        """Register, subscribe to the connection signal and send the first request."""
+        # Contract C: the base subscribes the availability signal, registers the entity
+        # and calls async_update() once.
+        await super().async_added_to_hass()
+        self._async_claim_slot()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_GATEWAY_CONNECTION.format(mac=self._gateway_handler.mac),
+                self._async_gateway_connection_changed,
+            )
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister from our slot."""
+        entities = self._entities_registry()
+        if entities is not None and entities.get(self._slot) is self:
+            del entities[self._slot]
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _async_gateway_connection_changed(self, connected: bool) -> None:
+        """Re-issue our bus request as soon as the gateway session is back up."""
+        if connected:
+            self.hass.async_create_task(self.async_update())
+
+    @callback
+    def _async_periodic_refresh(self, now: datetime) -> None:
+        """Timer callback: re-issue the bus request."""
+        self.hass.async_create_task(self.async_update())
 
 
-class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
+class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
+    """Instant power reported by a WHO=18 meter."""
+
+    _attr_translation_key = "power"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _slot = POWER_SLOT
+
     def __init__(
         self,
-        hass,
+        hass: HomeAssistant,
         name: str,
         device_id: str,
         who: str,
         where: str,
-        device_class: str,
         manufacturer: str,
-        model: str,
+        model: str | None,
         gateway: MyHOMEGatewayHandler,
+        keepalive_minutes: int = FALLBACK_KEEPALIVE_MINUTES,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -233,80 +267,77 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
             model=model,
             gateway=gateway,
         )
-
-        self._entity_specific_name = "Power"
-        self._attr_name = f"{name} {self._entity_specific_name}"
-
-        self._attr_device_class = device_class
-        self._attr_unique_id = (
-            f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
-        )
-        self._attr_native_unit_of_measurement = UnitOfPower.WATT
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-
+        self._use_translated_name()
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{POWER_SLOT}"
         self._attr_native_value = None
-        self._attr_extra_state_attributes = {
-            "Sensor": f"({self._where[0]}){self._where[1:]}"
-        }
+        self._keepalive_minutes = max(0, min(int(keepalive_minutes), MAX_KEEPALIVE_MINUTES))
 
-    async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-            self._platform
-        ][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
-        await self.async_update()
+    async def async_added_to_hass(self) -> None:
+        """Arm the instant power stream and schedule the re-arm (Contract E)."""
+        await super().async_added_to_hass()  # -> async_update() -> first arm
+        if self._keepalive_minutes > 0:
+            interval = timedelta(minutes=max(1, self._keepalive_minutes - KEEPALIVE_MARGIN_MINUTES))
+            self.async_on_remove(
+                async_track_time_interval(self.hass, self._async_periodic_refresh, interval)
+            )
 
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if (
-            self._attr_device_class
-            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]
-        ):
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES][self._attr_device_class]
+    async def async_update(self) -> None:
+        """(Re)arm the instant power stream; also used by ``homeassistant.update_entity``."""
+        if self._keepalive_minutes <= 0:
+            return
+        await self.start_sending_instant_power(self._keepalive_minutes)
 
-    async def async_update(self):
-        """Update the entity.
+    async def start_sending_instant_power(self, duration: int | None = None) -> None:
+        """Ask the meter to stream instant power for ``duration`` minutes (1-255).
 
-        Only used by the generic entity update service.
+        ``duration`` defaults to the configured ``keepalive_minutes`` (sc-04: the
+        service schema made it optional while the method required it).
         """
-        # await self.start_sending_instant_power(255)
-
-    def handle_event(self, message: OWNEnergyEvent):
-        """Handle an event message."""
-        if message.message_type not in [MESSAGE_TYPE_ACTIVE_POWER]:
-            return True
-
-        LOGGER.info(
-            "%s %s",
+        minutes = duration or self._keepalive_minutes or FALLBACK_KEEPALIVE_MINUTES
+        minutes = max(1, min(int(minutes), MAX_KEEPALIVE_MINUTES))
+        LOGGER.debug(
+            "%s Arming instant power on %s for %s minutes.",
             self._gateway_handler.log_id,
-            message.human_readable_log,
+            self._where,
+            minutes,
         )
-        self._attr_native_value = message.active_power
-        self.async_schedule_update_ha_state()
-
-    async def start_sending_instant_power(self, duration):
-        """Request automatic instant power."""
         await self._gateway_handler.send(
-            OWNEnergyCommand.start_sending_instant_power(self._where, duration)
+            OWNEnergyCommand.start_sending_instant_power(self._where, minutes)
         )
 
+    def handle_event(self, message: OWNEnergyEvent) -> None:
+        """Handle an instant power frame."""
+        if message.message_type != MESSAGE_TYPE_ACTIVE_POWER:
+            return
+        LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
+        self._attr_native_value = message.active_power
+        self.async_write_ha_state()
 
-class MyHOMEEnergySensor(MyHOMEEntity, SensorEntity):
+
+class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
+    """Daily / monthly / total energy totaliser of a WHO=18 meter."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    # slot -> (translation key, OWNd message type, enabled by default)
+    _SLOTS: dict[str, tuple[str, str, bool]] = {
+        DAILY_ENERGY_SLOT: ("energy_today", MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION, False),
+        MONTHLY_ENERGY_SLOT: ("energy_month", MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION, False),
+        TOTAL_ENERGY_SLOT: ("energy_total", MESSAGE_TYPE_ENERGY_TOTALIZER, True),
+    }
+
     def __init__(
         self,
-        hass,
+        hass: HomeAssistant,
         name: str,
         device_id: str,
         who: str,
         where: str,
         entity_specific_id: str,
-        device_class: str,
         manufacturer: str,
-        model: str,
+        model: str | None,
         gateway: MyHOMEGatewayHandler,
     ) -> None:
         super().__init__(
@@ -320,122 +351,97 @@ class MyHOMEEnergySensor(MyHOMEEntity, SensorEntity):
             model=model,
             gateway=gateway,
         )
-
+        self._slot = entity_specific_id
         self._entity_specific_id = entity_specific_id
-        if self._entity_specific_id == "daily-energy":
-            self._entity_specific_name = "Energy (today)"
-            self._attr_entity_registry_enabled_default = False
-        elif self._entity_specific_id == "monthly-energy":
-            self._entity_specific_name = "Energy (current month)"
-            self._attr_entity_registry_enabled_default = False
-        elif self._entity_specific_id == "total-energy":
-            self._entity_specific_name = "Energy"
-            self._attr_entity_registry_enabled_default = True
-        self._attr_name = f"{name} {self._entity_specific_name}"
-
-        self._attr_unique_id = (
-            f"{gateway.mac}-{self._device_id}-{self._entity_specific_id}"
-        )
-        self._attr_device_class = device_class
-        self._attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_should_poll = True
+        translation_key, message_type, enabled_default = self._SLOTS[entity_specific_id]
+        self._message_type = message_type
+        self._attr_translation_key = translation_key
+        self._attr_entity_registry_enabled_default = enabled_default
+        self._use_translated_name()
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{entity_specific_id}"
         self._attr_native_value = None
-        self._attr_extra_state_attributes = {
-            "Sensor": f"({self._where[0]}){self._where[1:]}"
-        }
 
-    async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-            self._platform
-        ][self._device_id][CONF_ENTITIES][self._entity_specific_id] = self
-        await self.async_update()
+    async def async_added_to_hass(self) -> None:
+        """Restore the last value and schedule the periodic/boundary refreshes."""
+        await super().async_added_to_hass()  # -> async_update() -> first request
 
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if (
-            self._entity_specific_id
-            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]
-        ):
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES][self._entity_specific_id]
+        # sc-11: without RestoreSensor every restart left a hole (and, with
+        # TOTAL_INCREASING, a spurious meter reset) until the first reply arrived.
+        if self._attr_native_value is None:
+            last_data = await self.async_get_last_sensor_data()
+            if last_data is not None and last_data.native_value is not None:
+                self._attr_native_value = last_data.native_value
 
-    async def async_update(self):
-        """Update the entity.
-
-        Only used by the generic entity update service.
-        """
-        if self._entity_specific_id == "total-energy":
-            await self._gateway_handler.send_status_request(
-                OWNEnergyCommand.get_total_consumption(self._where)
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self._async_periodic_refresh, ENERGY_REFRESH_INTERVAL
             )
-        elif self._entity_specific_id == "monthly-energy":
-            await self._gateway_handler.send_status_request(
-                OWNEnergyCommand.get_partial_monthly_consumption(self._where)
-            )
-        elif self._entity_specific_id == "daily-energy":
-            await self._gateway_handler.send_status_request(
-                OWNEnergyCommand.get_partial_daily_consumption(self._where)
+        )
+        if self._entity_specific_id != TOTAL_ENERGY_SLOT:
+            # Daily/monthly counters reset at local midnight: ask again right after it
+            # so the new period starts from a fresh value (timezone aware helper).
+            self.async_on_remove(
+                async_track_time_change(
+                    self.hass, self._async_periodic_refresh, hour=0, minute=0, second=10
+                )
             )
 
-    def handle_event(self, message: OWNEnergyEvent):
-        """Handle an event message."""
-        if message.message_type not in [
-            MESSAGE_TYPE_ENERGY_TOTALIZER,
-            MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
-            MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
-        ]:
-            return True
+    async def async_update(self) -> None:
+        """Request our totaliser value from the meter."""
+        if self._entity_specific_id == TOTAL_ENERGY_SLOT:
+            command = OWNEnergyCommand.get_total_consumption(self._where)
+        elif self._entity_specific_id == MONTHLY_ENERGY_SLOT:
+            command = OWNEnergyCommand.get_partial_monthly_consumption(self._where)
+        else:
+            command = OWNEnergyCommand.get_partial_daily_consumption(self._where)
+        await self._gateway_handler.send_status_request(command)
 
-        if (
-            self._entity_specific_id == "total-energy"
-            and message.message_type == MESSAGE_TYPE_ENERGY_TOTALIZER
-        ):
-            LOGGER.info(
-                "%s %s",
+    def _value_of(self, message: OWNEnergyEvent) -> float | int | None:
+        """Consumption carried by ``message`` for this entity."""
+        if self._message_type == MESSAGE_TYPE_ENERGY_TOTALIZER:
+            return message.total_consumption
+        if self._message_type == MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION:
+            return message.current_month_partial_consumption
+        return message.current_day_partial_consumption
+
+    def handle_event(self, message: OWNEnergyEvent) -> None:
+        """Handle a totaliser frame addressed to this entity (sc-18)."""
+        if message.message_type != self._message_type:
+            # The frame belongs to a sibling entity of the same meter.
+            return
+        value = self._value_of(message)
+        if value is None or value < 0:
+            LOGGER.debug(
+                "%s Ignoring implausible energy value %s for %s.",
                 self._gateway_handler.log_id,
-                message.human_readable_log,
+                value,
+                self._attr_unique_id,
             )
-            self._attr_native_value = message.total_consumption
-        elif (
-            self._entity_specific_id == "monthly-energy"
-            and message.message_type == MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION
-        ):
-            LOGGER.info(
-                "%s %s",
-                self._gateway_handler.log_id,
-                message.human_readable_log,
-            )
-            self._attr_native_value = message.current_month_partial_consumption
-        elif (
-            self._entity_specific_id == "daily-energy"
-            and message.message_type == MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION
-        ):
-            LOGGER.info(
-                "%s %s",
-                self._gateway_handler.log_id,
-                message.human_readable_log,
-            )
-            self._attr_native_value = message.current_day_partial_consumption
-        self.async_schedule_update_ha_state()
+            return
+        LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
+        self._attr_native_value = value
+        self.async_write_ha_state()
 
 
-class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
+class MyHOMETemperatureSensor(_MyHOMESensorEntity, SensorEntity):
+    """WHO=4 temperature probe."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _slot = f"{SensorDeviceClass.TEMPERATURE}"
+
     def __init__(
         self,
-        hass,
+        hass: HomeAssistant,
         name: str,
         device_id: str,
         who: str,
         where: str,
-        device_class: str,
         manufacturer: str,
-        model: str,
+        model: str | None,
         gateway: MyHOMEGatewayHandler,
+        entity_name: str | None = None,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -448,88 +454,60 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
             model=model,
             gateway=gateway,
         )
-
-        self._entity_specific_name = "Temperature"
-        self._attr_name = f"{name} {self._entity_specific_name}"
-
-        self._attr_device_class = device_class
-        self._attr_unique_id = (
-            f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
-        )
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_should_poll = True
+        # Only entity of its device: it takes the device name (Contract C) unless the
+        # configuration gives it an explicit entity name.
+        if entity_name:
+            self._attr_name = entity_name
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._slot}"
         self._attr_native_value = None
-        self._attr_extra_state_attributes = {
-            "Sensor": f"({self._where[0]}){self._where[1:]}"
-        }
 
-    async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-            self._platform
-        ][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
-        await self.async_update()
+    async def async_added_to_hass(self) -> None:
+        """Schedule the slow refresh (Contract C forbids should_poll)."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self._async_periodic_refresh, ENVIRONMENT_REFRESH_INTERVAL
+            )
+        )
 
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if (
-            self._attr_device_class
-            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]
-        ):
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES][self._attr_device_class]
-
-    async def async_update(self):
-        """Update the entity.
-
-        Only used by the generic entity update service.
-        """
+    async def async_update(self) -> None:
+        """Request the probe temperature."""
         await self._gateway_handler.send_status_request(
             OWNHeatingCommand.get_temperature(self._where)
         )
 
-    def handle_event(self, message: OWNHeatingEvent):
-        """Handle an event message."""
-        if message.message_type not in [
-            MESSAGE_TYPE_MAIN_TEMPERATURE,
-            MESSAGE_TYPE_SECONDARY_TEMPERATURE,
-        ]:
-            return True
-
+    def handle_event(self, message: OWNHeatingEvent) -> None:
+        """Handle a temperature frame."""
         if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:
-            LOGGER.info(
-                "%s %s",
-                self._gateway_handler.log_id,
-                message.human_readable_log,
-            )
-            self._attr_native_value = message.main_temperature
-            self.async_schedule_update_ha_state()
+            value = message.main_temperature
         elif message.message_type == MESSAGE_TYPE_SECONDARY_TEMPERATURE:
-            LOGGER.info(
-                "%s %s",
-                self._gateway_handler.log_id,
-                message.human_readable_log,
-            )
-            self._attr_native_value = message.secondary_temperature[1]
-            self.async_schedule_update_ha_state()
+            value = message.secondary_temperature[1]
+        else:
+            return
+        LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
+        self._attr_native_value = value
+        self.async_write_ha_state()
 
 
-class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
+class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
+    """WHO=1 illuminance sensor."""
+
+    _attr_device_class = SensorDeviceClass.ILLUMINANCE
+    _attr_native_unit_of_measurement = LIGHT_LUX
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _slot = f"{SensorDeviceClass.ILLUMINANCE}"
+
     def __init__(
         self,
-        hass,
+        hass: HomeAssistant,
         name: str,
         device_id: str,
         who: str,
         where: str,
-        device_class: str,
         manufacturer: str,
-        model: str,
+        model: str | None,
         gateway: MyHOMEGatewayHandler,
+        entity_name: str | None = None,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -542,59 +520,37 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
             model=model,
             gateway=gateway,
         )
-
-        self._entity_specific_name = "Illuminance"
-        self._attr_name = f"{name} {self._entity_specific_name}"
-
-        self._attr_device_class = device_class
-        self._attr_unique_id = (
-            f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
-        )
-        self._attr_native_unit_of_measurement = LIGHT_LUX
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        if entity_name:
+            self._attr_name = entity_name
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._slot}"
         self._attr_native_value = None
-        self._attr_extra_state_attributes = {
-            "A": where[: len(where) // 2],
-            "PL": where[len(where) // 2 :],
-        }
+        # A/PL is meaningful for a WHO=1 point-to-point WHERE (sc-17: the same split
+        # was applied to WHO=18/WHO=4 wheres, where it means nothing).
+        if len(where) in (2, 4) and where.isdigit():
+            self._attr_extra_state_attributes = {
+                "A": where[: len(where) // 2],
+                "PL": where[len(where) // 2 :],
+            }
 
-    async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-            self._platform
-        ][self._device_id][CONF_ENTITIES][self._attr_device_class] = self
-        await self.async_update()
+    async def async_added_to_hass(self) -> None:
+        """Schedule the slow refresh (sc-15: the sensor was requested only once)."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self._async_periodic_refresh, ENVIRONMENT_REFRESH_INTERVAL
+            )
+        )
 
-    async def async_will_remove_from_hass(self):
-        """When entity is removed from hass."""
-        if (
-            self._attr_device_class
-            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]
-        ):
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES][self._attr_device_class]
-
-    async def async_update(self):
-        """Update the entity.
-
-        Only used by the generic entity update service.
-        """
+    async def async_update(self) -> None:
+        """Request the illuminance value."""
         await self._gateway_handler.send_status_request(
             OWNLightingCommand.get_illuminance(self._where)
         )
 
-    def handle_event(self, message: OWNLightingEvent):
-        """Handle an event message."""
-        if message.message_type not in [MESSAGE_TYPE_ILLUMINANCE]:
-            return True
-
-        LOGGER.info(
-            "%s %s",
-            self._gateway_handler.log_id,
-            message.human_readable_log,
-        )
+    def handle_event(self, message: OWNLightingEvent) -> None:
+        """Handle an illuminance frame."""
+        if message.message_type != MESSAGE_TYPE_ILLUMINANCE:
+            return
+        LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
         self._attr_native_value = message.illuminance
-        self.async_schedule_update_ha_state()
+        self.async_write_ha_state()
