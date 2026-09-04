@@ -479,15 +479,21 @@ climate_schema = MyHomeDeviceSchema(
     extra=True,
 )
 
+# The device schemas are Schema subclasses whose overridden __call__ performs
+# post-processing (rekeying to "who-where" and injecting default keys such as
+# entities/icon_on/entity_name/model). Home Assistant Core 2026.9 replaced
+# voluptuous with probatio, whose compatibility layer compiles nested Schema
+# instances directly and never invokes the subclass __call__. Wrapping them in
+# plain callables forces __call__ to run on both engines.
 gateway_schema = Schema(
     {
         Required(CONF_MAC): MacAddress(),
-        Optional(LIGHT): light_schema,
-        Optional(SWITCH): switch_schema,
-        Optional(COVER): cover_schema,
-        Optional(BINARY_SENSOR): binary_sensor_schema,
-        Optional(SENSOR): sensor_schema,
-        Optional(CLIMATE): climate_schema,
+        Optional(LIGHT): lambda v: light_schema(v),
+        Optional(SWITCH): lambda v: switch_schema(v),
+        Optional(COVER): lambda v: cover_schema(v),
+        Optional(BINARY_SENSOR): lambda v: binary_sensor_schema(v),
+        Optional(SENSOR): lambda v: sensor_schema(v),
+        Optional(CLIMATE): lambda v: climate_schema(v),
         Optional("energy"): energy_defaults_schema,
         Optional("sensor_defaults"): sensor_defaults_schema,
     },
