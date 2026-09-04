@@ -4,14 +4,25 @@
     "flow_title": "Serveur MyHome {name} ({host})",
     "step": {
       "user": {
-        "title": "Choisisez votre serveur \"MyHome\"",
+        "title": "Choisissez votre serveur \"MyHome\"",
+        "description": "Les serveurs trouvés sur le réseau sont listés ci-dessous. Choisissez \"Custom\" pour saisir les informations de connexion manuellement.",
         "data": {
-          "host": "Adresse IP"
+          "serial": "Serveur"
+        }
+      },
+      "custom": {
+        "title": "Ajout manuel d'un serveur",
+        "description": "Remplissez les informations de votre serveur",
+        "data": {
+          "address": "Adresse IP ou nom d'hôte",
+          "port": "Port",
+          "serialNumber": "Adresse MAC",
+          "modelName": "Type de serveur"
         }
       },
       "port": {
         "title": "Port du serveur",
-        "description": "Entrez le port utilier pour les communications OpenWebNet avec le serveur {name} {host}",
+        "description": "Entrez le port utilisé pour les communications OpenWebNet avec le serveur {name} {host}",
         "data": {
           "port": "Port"
         }
@@ -23,94 +34,154 @@
           "password": "Mot de passe"
         }
       },
-      "custom": {
-        "title": "Ajout manuel d'un serveur",
-        "description": "Remplissez les informations de votre serveur",
+      "reauth_confirm": {
+        "title": "Nouvelle authentification du serveur",
+        "description": "Le serveur {name} {host} a refusé le mot de passe enregistré. Entrez le mot de passe OpenWebNet actuel.",
         "data": {
-          "address": "Adresse IP",
-          "port": "Port",
-          "serialNumber": "Adresse MAC",
-          "modelName": "Type de serveur"
+          "password": "Mot de passe"
         }
+      },
+      "ssdp_confirm": {
+        "title": "Serveur MyHome découvert",
+        "description": "Voulez-vous configurer le serveur {name} à l'adresse {host} (MAC {mac}) ?"
       }
     },
     "error": {
       "invalid_port": "Port invalide",
-      "invalid_ip": "Adresse IP invalide",
+      "invalid_host": "Adresse IP ou nom d'hôte invalide",
       "invalid_mac": "Adresse MAC invalide",
-      "invalid_password": "Mot de passe invalide",
-      "password_retry": "Le serveur refuse la négociation, attendez 60s avant de réessayer.",
-      "password_error": "Mot de passe invalide"
+      "password_error": "Mot de passe invalide",
+      "password_retry": "Le serveur refuse la négociation, attendez 60 s avant de réessayer.",
+      "password_numeric": "Ce serveur utilise l'algorithme OPEN historique et exige un mot de passe numérique.",
+      "cannot_connect": "Connexion au serveur impossible, vérifiez l'adresse et le port.",
+      "gateway_vanished": "Le serveur sélectionné ne répond plus, sélectionnez-le à nouveau ou utilisez \"Custom\"."
     },
     "abort": {
-      "discover_timeout": "Impossible de découvrir des serveurs MyHome",
-      "no_gateways": "Aucun serveur MyHome découvert",
-      "all_configured": "Tous les serveurs MyHome sont déjà configurés",
-      "unknown": "Une erreur inconnue s'est produite",
       "cannot_connect": "Connexion au serveur impossible",
+      "negotiation_refused": "Le serveur a refusé la négociation de session",
+      "negotiation_error": "Le serveur a répondu par une erreur pendant la négociation de session",
+      "negotiation_failed": "La négociation de session avec le serveur a échoué",
+      "no_serial": "Le serveur découvert n'a pas annoncé de numéro de série (adresse MAC)",
+      "unknown": "Une erreur inconnue s'est produite",
       "already_configured": "Ce serveur est déjà configuré",
-      "already_in_progress": "Le flux de configuration pour le pont est déjà en cours",
+      "already_in_progress": "La configuration de ce serveur est déjà en cours",
       "reauth_successful": "Changement de mot de passe réussi"
     }
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
         "title": "Options MyHome",
-        "description": "Parametres système avancés",
+        "description": "Paramètres de connexion et avancés. L'intégration est rechargée à l'enregistrement.",
         "data": {
-          "address": "Adresse IP",
+          "address": "Adresse IP ou nom d'hôte",
+          "port": "Port",
           "password": "Mot de passe",
           "config_file_path": "Chemin du fichier de configuration",
-          "command_worker_count": "Nombre de session de commande simultanées",
+          "command_worker_count": "Nombre de sessions de commande simultanées",
           "generate_events": "Générer des événements dans Home Assistant pour chaque message reçu"
         }
       }
     },
     "error": {
-      "invalid_ip": "Adresse IP invalide",
-      "invalid_worker_count": "Workers must be between 1 and 10",
-      "invalid_config_path": "Fichier de configuration inexistant à ce chemin",
-      "invalid_password": "Mot de passe invalide",
-      "password_error": "Mot de passe invalide"
+      "invalid_host": "Adresse IP ou nom d'hôte invalide",
+      "invalid_port": "Port invalide",
+      "invalid_config_path": "Fichier de configuration inexistant à ce chemin"
+    }
+  },
+  "entity": {
+    "button": {
+      "lock": {
+        "name": "Verrouiller"
+      },
+      "unlock": {
+        "name": "Déverrouiller"
+      }
+    },
+    "sensor": {
+      "power": {
+        "name": "Puissance"
+      },
+      "energy_today": {
+        "name": "Énergie aujourd'hui"
+      },
+      "energy_month": {
+        "name": "Énergie ce mois"
+      },
+      "energy_total": {
+        "name": "Énergie"
+      }
+    }
+  },
+  "exceptions": {
+    "gateway_required": {
+      "message": "Précisez le serveur : {count} serveurs sont chargés."
+    },
+    "invalid_gateway": {
+      "message": "{gateway} n'est pas une adresse MAC valide."
+    },
+    "gateway_not_found": {
+      "message": "Aucun serveur chargé avec l'adresse MAC {gateway}."
+    },
+    "invalid_message": {
+      "message": "{message} n'est pas une commande OpenWebNet valide."
+    },
+    "send_failed": {
+      "message": "Le serveur n'a pas accepté la commande {message} (file fermée ou pleine)."
     }
   },
   "services": {
     "sync_time": {
       "name": "Synchroniser l'heure",
-      "description": "Synchroniser l'heure du serveur MyHome avec l'heure locale de Home Assistant.",
+      "description": "Synchronise l'horloge du serveur avec l'heure locale de Home Assistant.",
       "fields": {
         "gateway": {
           "name": "Serveur",
-          "description": "L'adresse MAC du serveur, telle que présente dans la configuration."
+          "description": "Adresse MAC du serveur. Facultatif si un seul serveur est configuré."
         }
       }
     },
     "send_message": {
       "name": "Envoyer un message",
-      "description": "Envoyer un message OpenWebNet arbitraire (mais valide) au serveur.",
+      "description": "Envoie un message OpenWebNet arbitraire (mais valide) au serveur.",
       "fields": {
         "gateway": {
           "name": "Serveur",
-          "description": "L'adresse MAC du serveur, telle que présente dans la configuration."
+          "description": "Adresse MAC du serveur. Facultatif si un seul serveur est configuré."
         },
         "message": {
           "name": "Message",
-          "description": "Message OpenWebNet valide."
+          "description": "Message OpenWebNet valide, par ex. *1*1*11##."
         }
       }
     },
     "start_sending_instant_power": {
       "name": "Commencer à envoyer la puissance instantanée",
-      "description": "Recevoir des mises à jour automatiques de la puissance instantanée d'un capteur.",
+      "description": "Demande au compteur des capteurs de puissance ciblés d'envoyer la puissance instantanée.",
       "fields": {
-        "entity_id": {
-          "name": "Entitée",
-          "description": "Nom(s) des entitées qui vont commencer à envoyer automatiquement la puissance instantanée."
-        },
         "duration": {
           "name": "Durée",
-          "description": "Pendant combien de temps la puissance instantanée va-t-elle être automatiquement envoyée."
+          "description": "Pendant combien de minutes (1-255) la puissance instantanée est envoyée. Par défaut : keepalive_minutes du capteur."
+        }
+      }
+    },
+    "start_discovery": {
+      "name": "Démarrer la découverte d'appareils",
+      "description": "Écoute le bus pendant 60 secondes et écrit des suggestions YAML pour les appareils inconnus dans myhome_discovered.yaml.",
+      "fields": {
+        "gateway": {
+          "name": "Serveur",
+          "description": "Adresse MAC du serveur. Facultatif si un seul serveur est configuré."
+        }
+      }
+    },
+    "stop_discovery": {
+      "name": "Arrêter la découverte d'appareils",
+      "description": "Arrête une découverte en cours et écrit les suggestions collectées.",
+      "fields": {
+        "gateway": {
+          "name": "Serveur",
+          "description": "Adresse MAC du serveur. Facultatif si un seul serveur est configuré."
         }
       }
     }

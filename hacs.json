@@ -3,5 +3,5 @@
   "content_in_root": false,
   "render_readme": true,
   "country": ["GB", "FR", "NL", "IT"],
-  "homeassistant": "2024.3.0"
+  "homeassistant": "2026.8.0"
 }
