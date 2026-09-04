@@ -5,49 +5,64 @@
     "step": {
       "user": {
         "title": "Scegli il tuo gateway \"MyHome\"",
+        "description": "Qui sotto i gateway trovati in rete. Scegli \"Custom\" per inserire i dati di connessione manualmente.",
         "data": {
-          "host": "Indirizzo Ip"
-        }
-      },
-      "port": {
-        "title": "Porta del Gateway",
-        "description": "Inserisci la porta utilizzata per la comunicazione OpenWebNet con il gateway {name} {host}",
-        "data": {
-          "port": "Porta"
-        }
-      },
-      "password": {
-        "title": "Porta del Gateway",
-        "description": "Inserisci la password OpenWebNet per il gateway {name} {host}",
-        "data": {
-          "password": "Password"
+          "serial": "Gateway"
         }
       },
       "custom": {
         "title": "Inserimento manuale gateway",
         "description": "Compila con le impostazioni del tuo gateway",
         "data": {
-          "address": "Indirizzo IP",
+          "address": "Indirizzo IP o hostname",
           "port": "Porta",
           "serialNumber": "Indirizzo MAC",
           "modelName": "Tipo di gateway"
         }
+      },
+      "port": {
+        "title": "Porta del gateway",
+        "description": "Inserisci la porta utilizzata per la comunicazione OpenWebNet con il gateway {name} {host}",
+        "data": {
+          "port": "Porta"
+        }
+      },
+      "password": {
+        "title": "Password del gateway",
+        "description": "Inserisci la password OpenWebNet per il gateway {name} {host}",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nuova autenticazione del gateway",
+        "description": "Il gateway {name} {host} ha rifiutato la password salvata. Inserisci la password OpenWebNet attuale.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "ssdp_confirm": {
+        "title": "Gateway MyHome trovato",
+        "description": "Vuoi configurare il gateway {name} all'indirizzo {host} (MAC {mac})?"
       }
     },
     "error": {
       "invalid_port": "Porta non valida",
-      "invalid_ip": "Indirizzo IP non valido",
+      "invalid_host": "Indirizzo IP o hostname non valido",
       "invalid_mac": "Indirizzo MAC non valido",
-      "invalid_password": "Password non valida",
-      "password_retry": "Il gateway non ha accettato la password, aspetta 60s prima di riprovare.",
-      "password_error": "Password non valida"
+      "password_error": "Password non valida",
+      "password_retry": "Il gateway non ha accettato la password, aspetta 60 s prima di riprovare.",
+      "password_numeric": "Questo gateway usa l'algoritmo OPEN legacy e richiede una password numerica.",
+      "cannot_connect": "Impossibile connettersi al gateway, controlla indirizzo e porta.",
+      "gateway_vanished": "Il gateway selezionato non risponde più, selezionalo di nuovo o usa \"Custom\"."
     },
     "abort": {
-      "discover_timeout": "Impossibile trovare il gateway MyHome",
-      "no_gateways": "Nessun gateway MyHome trovato",
-      "all_configured": "Tutti i gateway MyHome sono già configurati",
-      "unknown": "Si è verificato un errore sconosciuto",
       "cannot_connect": "Impossibile connettersi al gateway",
+      "negotiation_refused": "Il gateway ha rifiutato la negoziazione della sessione",
+      "negotiation_error": "Il gateway ha risposto con un errore durante la negoziazione della sessione",
+      "negotiation_failed": "La negoziazione della sessione con il gateway è fallita",
+      "no_serial": "Il gateway trovato non ha annunciato un numero di serie (indirizzo MAC)",
+      "unknown": "Si è verificato un errore sconosciuto",
       "already_configured": "Questo gateway è già configurato",
       "already_in_progress": "La configurazione di questo gateway è già in corso",
       "reauth_successful": "Nuova password accettata"
@@ -55,11 +70,12 @@
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
         "title": "Opzioni MyHome",
-        "description": "Impostazioni di sistema avanzate",
+        "description": "Impostazioni di connessione e avanzate. L'integrazione viene ricaricata al salvataggio.",
         "data": {
-          "address": "Indirizzo IP",
+          "address": "Indirizzo IP o hostname",
+          "port": "Porta",
           "password": "Password",
           "config_file_path": "Percorso del file di configurazione",
           "command_worker_count": "Numero di sessioni di comando simultanee",
@@ -68,49 +84,104 @@
       }
     },
     "error": {
-      "invalid_ip": "Indirizzo IP non valido",
-      "invalid_worker_count": "I workers devono essere compresi tra 1 e 10",
-      "invalid_config_path": "Il file di configurazione non esiste in questo percorso",
-      "invalid_password": "Password non valida",
-      "password_error": "Errore password"
+      "invalid_host": "Indirizzo IP o hostname non valido",
+      "invalid_port": "Porta non valida",
+      "invalid_config_path": "Il file di configurazione non esiste in questo percorso"
+    }
+  },
+  "entity": {
+    "button": {
+      "lock": {
+        "name": "Blocca"
+      },
+      "unlock": {
+        "name": "Sblocca"
+      }
+    },
+    "sensor": {
+      "power": {
+        "name": "Potenza"
+      },
+      "energy_today": {
+        "name": "Energia oggi"
+      },
+      "energy_month": {
+        "name": "Energia mese corrente"
+      },
+      "energy_total": {
+        "name": "Energia"
+      }
+    }
+  },
+  "exceptions": {
+    "gateway_required": {
+      "message": "Specifica il gateway: ci sono {count} gateway caricati."
+    },
+    "invalid_gateway": {
+      "message": "{gateway} non è un indirizzo MAC valido."
+    },
+    "gateway_not_found": {
+      "message": "Nessun gateway caricato con indirizzo MAC {gateway}."
+    },
+    "invalid_message": {
+      "message": "{message} non è un comando OpenWebNet valido."
+    },
+    "send_failed": {
+      "message": "Il gateway non ha accettato il comando {message} (coda chiusa o piena)."
     }
   },
   "services": {
     "sync_time": {
-      "name": "Syncronize time",
-      "description": "Syncronize gateway's time to HA local time.",
+      "name": "Sincronizza l'ora",
+      "description": "Sincronizza l'orologio del gateway con l'ora locale di Home Assistant.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "The gateway's MAC address, as present in the config."
+          "description": "Indirizzo MAC del gateway. Facoltativo se è configurato un solo gateway."
         }
       }
     },
     "send_message": {
-      "name": "Send message",
-      "description": "Send an arbitrary (but valid) OpenWebNet message to the gateway.",
+      "name": "Invia messaggio",
+      "description": "Invia un messaggio OpenWebNet arbitrario (ma valido) al gateway.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "The gateway's MAC address, as present in the config."
+          "description": "Indirizzo MAC del gateway. Facoltativo se è configurato un solo gateway."
         },
         "message": {
-          "name": "Message",
-          "description": "Valid OpenWebNet message."
+          "name": "Messaggio",
+          "description": "Messaggio OpenWebNet valido, es. *1*1*11##."
         }
       }
     },
     "start_sending_instant_power": {
-      "name": "Start sending instant power",
-      "description": "Get automatic instant power draw updates for a sensor.",
+      "name": "Avvia invio potenza istantanea",
+      "description": "Chiede al misuratore dei sensori di potenza selezionati di inviare gli aggiornamenti di potenza istantanea.",
       "fields": {
-        "entity_id": {
-          "name": "Entity",
-          "description": "Name(s) of entities that will start sending instant power information."
-        },
         "duration": {
-          "name": "Duration",
-          "description": "For how long the instant power information will be sent."
+          "name": "Durata",
+          "description": "Per quanti minuti (1-255) vengono inviati gli aggiornamenti. Predefinito: keepalive_minutes del sensore."
+        }
+      }
+    },
+    "start_discovery": {
+      "name": "Avvia ricerca dispositivi",
+      "description": "Ascolta il bus per 60 secondi e scrive i suggerimenti YAML per i dispositivi sconosciuti in myhome_discovered.yaml.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "Indirizzo MAC del gateway. Facoltativo se è configurato un solo gateway."
+        }
+      }
+    },
+    "stop_discovery": {
+      "name": "Ferma ricerca dispositivi",
+      "description": "Ferma una ricerca in corso e scrive i suggerimenti raccolti finora.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "Indirizzo MAC del gateway. Facoltativo se è configurato un solo gateway."
         }
       }
     }

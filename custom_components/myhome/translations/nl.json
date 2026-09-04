@@ -5,112 +5,183 @@
     "step": {
       "user": {
         "title": "Kies uw \"MyHome\" gateway",
+        "description": "Hieronder staan de gateways die op het netwerk gevonden zijn. Kies \"Custom\" om de verbindingsgegevens handmatig in te voeren.",
         "data": {
-          "host": "IP adres"
+          "serial": "Gateway"
+        }
+      },
+      "custom": {
+        "title": "Handmatige gateway-invoer",
+        "description": "Vul de gegevens van uw gateway in",
+        "data": {
+          "address": "IP-adres of hostnaam",
+          "port": "Poort",
+          "serialNumber": "MAC-adres",
+          "modelName": "Apparaattype"
         }
       },
       "port": {
-        "title": "Poortnummer van de gateway.",
-        "description": "Geef het poortnummer op voor de OpenWebNet communicatie met de {name} gateway {host}",
+        "title": "Poortnummer van de gateway",
+        "description": "Geef het poortnummer op voor de OpenWebNet-communicatie met de {name} gateway {host}",
         "data": {
           "port": "Poort"
         }
       },
       "password": {
-        "title": "Wachtwoord van de gateway.",
-        "description": "Geeft het OpenWebNet wachtwoord op voor de {name} gateway {host}",
+        "title": "Wachtwoord van de gateway",
+        "description": "Geef het OpenWebNet-wachtwoord op voor de {name} gateway {host}",
         "data": {
           "password": "Wachtwoord"
         }
       },
-      "custom": {
-        "title": "Manuele gateway informatie",
-        "description": "Vul de informatie in voor uw gateway",
+      "reauth_confirm": {
+        "title": "Gateway opnieuw verifiëren",
+        "description": "De {name} gateway {host} heeft het opgeslagen wachtwoord geweigerd. Voer het huidige OpenWebNet-wachtwoord in.",
         "data": {
-          "address": "IP address",
-          "port": "Port",
-          "serialNumber": "MAC address",
-          "modelName": "Device type"
+          "password": "Wachtwoord"
         }
+      },
+      "ssdp_confirm": {
+        "title": "MyHome gateway gevonden",
+        "description": "Wilt u de {name} gateway op {host} (MAC {mac}) instellen?"
       }
     },
     "error": {
       "invalid_port": "Ongeldig poortnummer",
-      "invalid_ip": "Ongeldig IP address",
-      "invalid_mac": "Ongeldig MAC address",
-      "invalid_password": "Ongeldig wachtwoord",
-      "password_retry": "Gateway refusing password negotiation, wait 60s before retrying.",
-      "password_error": "Ongeldig wachtwoord"
+      "invalid_host": "Ongeldig IP-adres of hostnaam",
+      "invalid_mac": "Ongeldig MAC-adres",
+      "password_error": "Ongeldig wachtwoord",
+      "password_retry": "De gateway weigert de wachtwoordonderhandeling, wacht 60 s voordat u het opnieuw probeert.",
+      "password_numeric": "Deze gateway gebruikt het oude OPEN-algoritme en vereist een numeriek wachtwoord.",
+      "cannot_connect": "Kan geen verbinding maken met de gateway, controleer adres en poort.",
+      "gateway_vanished": "De geselecteerde gateway antwoordt niet meer, kies hem opnieuw of gebruik \"Custom\"."
     },
     "abort": {
-      "discover_timeout": "Geen MyHome gateway gevonden",
-      "no_gateways": "Geen MyHome gateway gevonden",
-      "all_configured": "Alle MyHome gateway’s zijn reeds geconfigureerd",
-      "unknown": "Er is een onbekende fout opgetreden",
       "cannot_connect": "Kan niet verbinden met de gateway",
+      "negotiation_refused": "De gateway heeft de sessieonderhandeling geweigerd",
+      "negotiation_error": "De gateway antwoordde met een fout tijdens de sessieonderhandeling",
+      "negotiation_failed": "De sessieonderhandeling met de gateway is mislukt",
+      "no_serial": "De gevonden gateway heeft geen serienummer (MAC-adres) aangekondigd",
+      "unknown": "Er is een onbekende fout opgetreden",
       "already_configured": "Deze gateway is reeds geconfigureerd",
       "already_in_progress": "De configuratie van deze gateway is reeds begonnen",
-      "reauth_successful": "Paswoord is gewijzigd"
+      "reauth_successful": "Wachtwoord is gewijzigd"
     }
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
         "title": "MyHome opties",
-        "description": "Gevorderde systeem settings",
+        "description": "Verbindings- en geavanceerde instellingen. De integratie wordt herladen bij het opslaan.",
         "data": {
-          "address": "IP address",
+          "address": "IP-adres of hostnaam",
+          "port": "Poort",
           "password": "Wachtwoord",
-          "config_file_path": "Path onfiguratie bestand",
-          "command_worker_count": "Aantal open command sessies",
+          "config_file_path": "Pad van het configuratiebestand",
+          "command_worker_count": "Aantal gelijktijdige commandosessies",
           "generate_events": "Genereer gebeurtenissen in Home Assistant voor elk ontvangen bericht"
         }
       }
     },
     "error": {
-      "invalid_ip": "Ongeldig IP address",
-      "invalid_worker_count": "Aantal workers moet tussen 1 and 10 zijn",
-      "invalid_config_path": "Ongeldig path voor configuratie bestand",
-      "invalid_password": "Ongeldig password",
-      "password_error": "Ongeldig password"
+      "invalid_host": "Ongeldig IP-adres of hostnaam",
+      "invalid_port": "Ongeldig poortnummer",
+      "invalid_config_path": "Het configuratiebestand bestaat niet op dit pad"
+    }
+  },
+  "entity": {
+    "button": {
+      "lock": {
+        "name": "Vergrendelen"
+      },
+      "unlock": {
+        "name": "Ontgrendelen"
+      }
+    },
+    "sensor": {
+      "power": {
+        "name": "Vermogen"
+      },
+      "energy_today": {
+        "name": "Energie vandaag"
+      },
+      "energy_month": {
+        "name": "Energie deze maand"
+      },
+      "energy_total": {
+        "name": "Energie"
+      }
+    }
+  },
+  "exceptions": {
+    "gateway_required": {
+      "message": "Geef de gateway op: er zijn {count} gateways geladen."
+    },
+    "invalid_gateway": {
+      "message": "{gateway} is geen geldig MAC-adres."
+    },
+    "gateway_not_found": {
+      "message": "Geen geladen gateway met MAC-adres {gateway}."
+    },
+    "invalid_message": {
+      "message": "{message} is geen geldig OpenWebNet-commando."
+    },
+    "send_failed": {
+      "message": "De gateway heeft het commando {message} niet aanvaard (wachtrij gesloten of vol)."
     }
   },
   "services": {
     "sync_time": {
-      "name": "Syncronize time",
-      "description": "Syncronize gateway's time to HA local time.",
+      "name": "Tijd synchroniseren",
+      "description": "Synchroniseert de klok van de gateway met de lokale tijd van Home Assistant.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "The gateway's MAC address, as present in the config."
+          "description": "MAC-adres van de gateway. Optioneel als er maar één gateway geconfigureerd is."
         }
       }
     },
     "send_message": {
-      "name": "Send message",
-      "description": "Send an arbitrary (but valid) OpenWebNet message to the gateway.",
+      "name": "Bericht verzenden",
+      "description": "Verzendt een willekeurig (maar geldig) OpenWebNet-bericht naar de gateway.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "The gateway's MAC address, as present in the config."
+          "description": "MAC-adres van de gateway. Optioneel als er maar één gateway geconfigureerd is."
         },
         "message": {
-          "name": "Message",
-          "description": "Valid OpenWebNet message."
+          "name": "Bericht",
+          "description": "Geldig OpenWebNet-bericht, bv. *1*1*11##."
         }
       }
     },
     "start_sending_instant_power": {
-      "name": "Start sending instant power",
-      "description": "Get automatic instant power draw updates for a sensor.",
+      "name": "Start verzenden momentaan vermogen",
+      "description": "Vraagt de energiemeter van de gekozen vermogenssensoren om het momentane vermogen te verzenden.",
       "fields": {
-        "entity_id": {
-          "name": "Entity",
-          "description": "Name(s) of entities that will start sending instant power information."
-        },
         "duration": {
-          "name": "Duration",
-          "description": "For how long the instant power information will be sent."
+          "name": "Duur",
+          "description": "Hoeveel minuten (1-255) het momentane vermogen verzonden wordt. Standaard: keepalive_minutes van de sensor."
+        }
+      }
+    },
+    "start_discovery": {
+      "name": "Apparaatdetectie starten",
+      "description": "Luistert 60 seconden naar de bus en schrijft YAML-suggesties voor onbekende apparaten naar myhome_discovered.yaml.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "MAC-adres van de gateway. Optioneel als er maar één gateway geconfigureerd is."
+        }
+      }
+    },
+    "stop_discovery": {
+      "name": "Apparaatdetectie stoppen",
+      "description": "Stopt een lopende detectie en schrijft de tot nu toe verzamelde suggesties.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "MAC-adres van de gateway. Optioneel als er maar één gateway geconfigureerd is."
         }
       }
     }

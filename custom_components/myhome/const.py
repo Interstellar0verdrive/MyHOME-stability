@@ -5,15 +5,40 @@ from typing import Dict, Set
 LOGGER = logging.getLogger(__package__)
 DOMAIN = "myhome"
 
+# hass.data keys.
+#   hass.data[DOMAIN][<mac>] keeps the per-gateway layout consumed by the platforms
+#   (CONF_PLATFORMS -> platform -> device key -> device config, CONF_ENTITY -> handler).
+#   Nothing else may live under hass.data[DOMAIN] (see core-03 / cf-05).
+
+# Dispatcher signal fired by the gateway handler on every is_connected transition.
+# Consumers subscribe with SIGNAL_GATEWAY_CONNECTION.format(mac=<mac>).
+SIGNAL_GATEWAY_CONNECTION = "myhome_gateway_connection_{mac}"
+
+# Default file names (relative to the HA configuration directory).
+DEFAULT_CONFIG_FILE = "myhome.yaml"
+DISCOVERED_CONFIG_FILE = "myhome_discovered.yaml"
+
+# Config entry version (bumped when entry.data needs a migration).
+CONFIG_ENTRY_VERSION = 2
+CONFIG_ENTRY_MINOR_VERSION = 1
+
+# Service names
+SERVICE_SYNC_TIME = "sync_time"
+SERVICE_SEND_MESSAGE = "send_message"
+SERVICE_START_DISCOVERY = "start_discovery"
+SERVICE_STOP_DISCOVERY = "stop_discovery"
+SERVICE_START_SENDING_INSTANT_POWER = "start_sending_instant_power"
+
 # Request timeout constants
 THING_STATE_REQ_TIMEOUT_SEC = 5
+GATEWAY_TEST_TIMEOUT_SEC = 20
 
 # Event attributes
 ATTR_GATEWAY = "gateway"
 ATTR_MESSAGE = "message"
+ATTR_DURATION = "duration"
 
 # Configuration constants
-CONF = "config"
 CONF_ENTITY = "entity"
 CONF_ENTITIES = "entities"
 CONF_ENTITY_NAME = "entity_name"
@@ -33,7 +58,6 @@ CONF_UDN = "UDN"
 CONF_WORKER_COUNT = "command_worker_count"
 CONF_FILE_PATH = "config_file_path"
 CONF_GENERATE_EVENTS = "generate_events"
-CONF_PARENT_ID = "parent_id"
 CONF_WHO = "who"
 CONF_WHERE = "where"
 CONF_BUS_INTERFACE = "interface"
@@ -43,6 +67,9 @@ CONF_GATEWAY = "gateway"
 CONF_DEVICE_CLASS = "class"
 CONF_INVERTED = "inverted"
 CONF_ADVANCED_SHUTTER = "advanced"
+CONF_SHUTTER_RUN = "shutter_run"
+CONF_LOCK_BUTTONS = "lock_buttons"
+CONF_SOURCE_PLATFORM = "source_platform"
 CONF_HEATING_SUPPORT = "heat"
 CONF_COOLING_SUPPORT = "cool"
 CONF_FAN_SUPPORT = "fan"
@@ -52,8 +79,16 @@ CONF_SHORT_PRESS = "pushbutton_short_press"
 CONF_SHORT_RELEASE = "pushbutton_short_release"
 CONF_LONG_PRESS = "pushbutton_long_press"
 CONF_LONG_RELEASE = "pushbutton_long_release"
+# Energy sensor tuning keys (Contract A / E)
+CONF_MIN_DELTA_W = "min_delta_w"
+CONF_MIN_INTERVAL_SEC = "min_interval_sec"
+CONF_SUPPRESS_LOG_INTERVAL_SEC = "suppress_log_interval_sec"
+CONF_KEEPALIVE_MINUTES = "keepalive_minutes"
 
-# Device type constants (following OpenHAB pattern)
+# Default manufacturer for BTicino/Legrand gateways and devices
+DEFAULT_MANUFACTURER = "BTicino S.p.A."
+
+# Device type constants (used by discovery.py to classify bus traffic)
 DEVICE_TYPE_GENERIC = "generic_device"
 DEVICE_TYPE_BUS_ON_OFF_SWITCH = "bus_on_off_switch"
 DEVICE_TYPE_BUS_DIMMER = "bus_dimmer"
@@ -71,7 +106,9 @@ DEVICE_TYPE_BUS_ALARM_SYSTEM = "bus_alarm_system"
 DEVICE_TYPE_BUS_ALARM_ZONE = "bus_alarm_zone"
 DEVICE_TYPE_BUS_AUX = "bus_aux"
 
-# Supported device type sets (following OpenHAB pattern)
+# Supported device type sets.
+# NOTE: only device_factory.py / device_handler.py (F3, slated for removal) still
+# reference these sets; drop them together with those modules.
 GENERIC_SUPPORTED_DEVICE_TYPES: Set[str] = {DEVICE_TYPE_GENERIC}
 
 LIGHTING_SUPPORTED_DEVICE_TYPES: Set[str] = {
@@ -140,38 +177,8 @@ DEVICE_TYPE_TO_PLATFORM: Dict[str, str] = {
     DEVICE_TYPE_GENERIC: "sensor"
 }
 
-# Channel constants (following OpenHAB pattern)
-CHANNEL_SWITCH = "switch"
-CHANNEL_SWITCH_01 = "switch_01"
-CHANNEL_SWITCH_02 = "switch_02"
-CHANNEL_BRIGHTNESS = "brightness"
-CHANNEL_SHUTTER = "shutter"
-CHANNEL_TEMPERATURE = "temperature"
-CHANNEL_FUNCTION = "function"
-CHANNEL_TEMP_SETPOINT = "setpointTemperature"
-CHANNEL_TEMP_TARGET = "targetTemperature"
-CHANNEL_MODE = "mode"
-CHANNEL_FAN_SPEED = "speedFanCoil"
-CHANNEL_POWER = "power"
-CHANNEL_ENERGY_TOTALIZER_DAY = "energyToday"
-CHANNEL_ENERGY_TOTALIZER_MONTH = "energyThisMonth"
-CHANNEL_SCENARIO_BUTTON = "button#"
-CHANNEL_DRY_CONTACT_IR = "sensor"
-CHANNEL_SCENARIO = "scenario"
-CHANNEL_AUX = "aux"
-CHANNEL_ALARM_SYSTEM_STATE = "state"
-CHANNEL_ALARM_SYSTEM_ARMED = "armed"
-CHANNEL_ALARM_ZONE_STATE = "state"
-CHANNEL_ALARM_ZONE_ALARM = "alarm"
-
-# Config properties (following OpenHAB pattern)
+# Legacy OpenHAB-port property names, still imported by device_handler.py (F3).
 CONFIG_PROPERTY_WHERE = "where"
-CONFIG_PROPERTY_SHUTTER_RUN = "shutterRun"
-CONFIG_PROPERTY_SCENARIO_BUTTONS = "buttons"
-CONFIG_PROPERTY_STANDALONE = "standAlone"
-CONFIG_PROPERTY_REFRESH_PERIOD = "energyRefreshPeriod"
-
-# Properties
 PROPERTY_OWNID = "ownId"
 PROPERTY_FIRMWARE_VERSION = "firmwareVersion"
 PROPERTY_MODEL = "model"

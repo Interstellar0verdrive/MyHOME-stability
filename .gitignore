@@ -136,3 +136,4 @@ dmypy.json
 
 #Pylint
 .pylintrc
+.audit-2026-09/

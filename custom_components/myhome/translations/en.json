@@ -5,8 +5,19 @@
     "step": {
       "user": {
         "title": "Pick your \"MyHome\" gateway",
+        "description": "Gateways found on the network are listed below. Choose \"Custom\" to enter the connection details manually.",
         "data": {
-          "host": "IP address"
+          "serial": "Gateway"
+        }
+      },
+      "custom": {
+        "title": "Manual gateway entry",
+        "description": "Fill out the information for your gateway",
+        "data": {
+          "address": "IP address or hostname",
+          "port": "Port",
+          "serialNumber": "MAC address",
+          "modelName": "Device type"
         }
       },
       "port": {
@@ -23,31 +34,35 @@
           "password": "Password"
         }
       },
-      "custom": {
-        "title": "Manual gateway entry",
-        "description": "Fill out the information for your gateway",
+      "reauth_confirm": {
+        "title": "Re-authenticate the gateway",
+        "description": "The {name} gateway {host} rejected the stored password. Enter the current OpenWebNet password.",
         "data": {
-          "address": "IP address",
-          "port": "Port",
-          "serialNumber": "MAC address",
-          "modelName": "Device type"
+          "password": "Password"
         }
+      },
+      "ssdp_confirm": {
+        "title": "Discovered MyHome gateway",
+        "description": "Do you want to set up the {name} gateway at {host} (MAC {mac})?"
       }
     },
     "error": {
       "invalid_port": "Invalid port",
-      "invalid_ip": "Invalid IP address",
+      "invalid_host": "Invalid IP address or hostname",
       "invalid_mac": "Invalid MAC address",
-      "invalid_password": "Invalid password",
+      "password_error": "Invalid password",
       "password_retry": "Gateway refusing password negotiation, wait 60s before retrying.",
-      "password_error": "Invalid password"
+      "password_numeric": "This gateway uses the legacy OPEN algorithm and requires a numeric password.",
+      "cannot_connect": "Cannot connect to the gateway, check the address and the port.",
+      "gateway_vanished": "The selected gateway is no longer answering, pick it again or use \"Custom\"."
     },
     "abort": {
-      "discover_timeout": "Unable to discover MyHome gateways",
-      "no_gateways": "No MyHome gateways discovered",
-      "all_configured": "All MyHome gateways are already configured",
-      "unknown": "An unknown error occured",
       "cannot_connect": "Cannot connect to the gateway",
+      "negotiation_refused": "The gateway refused the session negotiation",
+      "negotiation_error": "The gateway answered with an error during the session negotiation",
+      "negotiation_failed": "The session negotiation with the gateway failed",
+      "no_serial": "The discovered gateway did not announce a serial number (MAC address)",
+      "unknown": "An unknown error occurred",
       "already_configured": "This gateway is already configured",
       "already_in_progress": "The configuration of this gateway is already in progress",
       "reauth_successful": "Password change successful"
@@ -55,11 +70,12 @@
   },
   "options": {
     "step": {
-      "user": {
+      "init": {
         "title": "MyHome options",
-        "description": "Advanced system settings",
+        "description": "Connection and advanced settings. The integration is reloaded when you save.",
         "data": {
-          "address": "IP address",
+          "address": "IP address or hostname",
+          "port": "Port",
           "password": "Password",
           "config_file_path": "Configuration file path",
           "command_worker_count": "Number of concurrent command sessions",
@@ -68,49 +84,104 @@
       }
     },
     "error": {
-      "invalid_ip": "Invalid IP address",
-      "invalid_worker_count": "Workers must be between 1 and 10",
-      "invalid_config_path": "Configuration file does not exist at this path",
-      "invalid_password": "Invalid password",
-      "password_error": "Invalid password"
+      "invalid_host": "Invalid IP address or hostname",
+      "invalid_port": "Invalid port",
+      "invalid_config_path": "Configuration file does not exist at this path"
+    }
+  },
+  "entity": {
+    "button": {
+      "lock": {
+        "name": "Lock"
+      },
+      "unlock": {
+        "name": "Unlock"
+      }
+    },
+    "sensor": {
+      "power": {
+        "name": "Power"
+      },
+      "energy_today": {
+        "name": "Energy today"
+      },
+      "energy_month": {
+        "name": "Energy this month"
+      },
+      "energy_total": {
+        "name": "Energy"
+      }
+    }
+  },
+  "exceptions": {
+    "gateway_required": {
+      "message": "Specify the gateway: {count} gateways are loaded."
+    },
+    "invalid_gateway": {
+      "message": "{gateway} is not a valid MAC address."
+    },
+    "gateway_not_found": {
+      "message": "No loaded gateway with MAC address {gateway}."
+    },
+    "invalid_message": {
+      "message": "{message} is not a valid OpenWebNet command."
+    },
+    "send_failed": {
+      "message": "The gateway did not accept the command {message} (queue closed or full)."
     }
   },
   "services": {
     "sync_time": {
-      "name": "Syncronize time",
-      "description": "Syncronize gateway's time to HA local time.",
+      "name": "Synchronize time",
+      "description": "Synchronizes the gateway clock with the Home Assistant local time.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "The gateway's MAC address, as present in the config."
+          "description": "MAC address of the gateway. Optional when only one gateway is configured."
         }
       }
     },
     "send_message": {
       "name": "Send message",
-      "description": "Send an arbitrary (but valid) OpenWebNet message to the gateway.",
+      "description": "Sends an arbitrary (but valid) OpenWebNet message to the gateway.",
       "fields": {
         "gateway": {
           "name": "Gateway",
-          "description": "The gateway's MAC address, as present in the config."
+          "description": "MAC address of the gateway. Optional when only one gateway is configured."
         },
         "message": {
           "name": "Message",
-          "description": "Valid OpenWebNet message."
+          "description": "Valid OpenWebNet message, e.g. *1*1*11##."
         }
       }
     },
     "start_sending_instant_power": {
       "name": "Start sending instant power",
-      "description": "Get automatic instant power draw updates for a sensor.",
+      "description": "Asks the energy meter of the targeted power sensors to send instant power updates.",
       "fields": {
-        "entity_id": {
-          "name": "Entity",
-          "description": "Name(s) of entities that will start sending instant power information."
-        },
         "duration": {
           "name": "Duration",
-          "description": "For how long the instant power information will be sent."
+          "description": "For how many minutes (1-255) the instant power updates are sent. Defaults to the sensor's keepalive_minutes."
+        }
+      }
+    },
+    "start_discovery": {
+      "name": "Start device discovery",
+      "description": "Listens to the bus for 60 seconds and writes YAML suggestions for unknown devices to myhome_discovered.yaml.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "MAC address of the gateway. Optional when only one gateway is configured."
+        }
+      }
+    },
+    "stop_discovery": {
+      "name": "Stop device discovery",
+      "description": "Stops a running device discovery and writes the suggestions collected so far.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "MAC address of the gateway. Optional when only one gateway is configured."
         }
       }
     }

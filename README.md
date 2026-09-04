@@ -10,7 +10,7 @@
 > **Stability-focused changes in this fork:**
 > - Event session watchdog (timeout + reconnect with exponential backoff)
 > - Command session reconnect & re-queue on reset
-> - Config validation fixes (accepts documented parameters; supports `device_class` for sensors)
+> - Config validation rewritten: duplicate WHERE detection, `device_class` alias on every platform, legacy MAC-root and multi-gateway formats, typo warnings
 > - Home Assistant compatibility fixes (removed deprecated `UnitOfIlluminance` → uses `LIGHT_LUX`)
 > - Reduced polling aggressiveness (increased `scan_interval` for `binary_sensor` and `sensor`)
 
@@ -30,7 +30,7 @@ A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home autom
 - **Stability Improvements (this fork)**:
   - Event session watchdog (timeout + reconnect/backoff)
   - Command session reconnect & re-queue
-  - Config validation fixes (accepts documented parameters; `device_class` for sensors)
+  - Config validation rewritten (duplicate WHERE detection, `class`/`device_class` alias, legacy/multi-gateway roots, typo warnings)
   - Home Assistant compatibility fixes (uses `LIGHT_LUX`)
   - Reduced polling aggressiveness for sensors/binary_sensors
 
@@ -95,182 +95,143 @@ If your gateway isn't auto-discovered:
 
 ### Device Configuration (YAML)
 
-This fork supports **two configuration styles** for devices:
+Devices are declared in `myhome.yaml` (in your Home Assistant config folder, or the path set in the integration options). The file is validated when the integration loads; a validation error is shown in **Settings → Devices & Services** with the offending key path, and the integration does not start until it is fixed.
 
-- **Recommended: "discovery-generated" style** (consistent with auto-discovery):
+Two root styles are accepted, and they can be mixed (one entry per gateway):
+
+- **`gateway:` block** (the style written by auto-discovery, recommended):
   ```yaml
   gateway:
-    mac: "00:03:50:XX:XX:XX"
+    mac: "00:03:50:AA:BB:CC"
     light:
-      living_room_main:
+      kitchen_light:
         where: "15"
-        name: "Living Room Main Light"
+        name: "Kitchen Light"
   ```
-- **Alternate: "MAC-as-root-key" style** (legacy/manual):
+- **MAC address as root key** (legacy, and the way to configure several gateways):
   ```yaml
-  "00:03:50:XX:XX:XX":
+  "00:03:50:AA:BB:CC":
     light:
-      living_room_main:
+      kitchen_light:
         where: "15"
-        name: "Living Room Main Light"
+        name: "Kitchen Light"
   ```
+  An inner `mac:` is optional here; if present it must match the root key. Any MAC notation is accepted (`00:03:50:aa:bb:cc`, `00-03-50-AA-BB-CC`, `000350AABBCC`).
 
-Both styles are supported for backward compatibility, but **using the discovery-generated `gateway:` structure is recommended** for consistency with auto-discovery and future updates.
+Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_sensor`, `sensor`, `climate`) maps a **YAML key of your choice** (used only in error messages) to a device. Sections may be left empty.
 
-**Minimal examples:**
+Rules worth knowing:
 
-**1. Discovery-generated style (recommended):**
-```yaml
-gateway:
-  mac: "00:03:50:AA:BB:CC"
-  light:
-    kitchen_light:
-      where: "15"
-      name: "Kitchen Light"
-```
-
-**2. MAC-as-root-key style (also supported):**
-```yaml
-"00:03:50:AA:BB:CC":
-  light:
-    kitchen_light:
-      where: "15"
-      name: "Kitchen Light"
-```
-
-For more complex setups, add other device types (e.g. `cover`, `sensor`, `binary_sensor`, etc.) under the same structure.
+- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads unquoted numbers with leading zeros as decimal/octal integers and the address is lost; the validator rejects ambiguous values with a message telling you to quote them.
+- **Each WHO/WHERE may appear only once per gateway**, across all platforms (a duplicate `where` used to silently drop one of the two devices). The error names both YAML keys. The only tolerated overlap is a `climate` zone plus a `sensor` of class `temperature` on the same zone.
+- **Unknown keys do not break the configuration**: they are kept and reported once at WARNING level with a "did you mean" hint (e.g. `dimable` → `dimmable`). Check the log after editing the file.
+- `device_class` is accepted as an alias of `class` on every platform (they must not both be given with different values).
 
 ## Device Configuration Parameters
 
-### Common Parameters
+### Common Parameters (all platforms)
 
-> **Note:** This fork supports the `device_class` parameter (as well as `icon`, `shutter_run`, `refresh_period`, `unit_of_measurement`) and adds stability-focused filtering options for power sensors. For sensors, `device_class` is mapped internally to the schema key used by this fork.
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `where` | string | Yes | – | OpenWebNet WHERE address (see the platform notes for the accepted forms). Climate uses `zone` instead. |
+| `name` | string | Yes | – | Device name in Home Assistant (optional for climate). |
+| `entity_name` | string | No | device name | Name of the main entity when it must differ from the device name. |
+| `icon` | string | No | – | Icon of the main entity (`mdi:...` or any registered icon set). |
+| `icon_on` | string | No | – | Icon used while the entity is on (light, switch). |
+| `manufacturer` | string | No | `BTicino S.p.A.` | Cosmetic, shown in the device page. |
+| `model` | string | No | – | Cosmetic, shown in the device page. |
+| `who` | string | No | per platform | OpenWebNet WHO; only needed for sensors/binary sensors that support several. |
+| `interface` | string | No | – | Local bus interface (`"01"`..`"15"`) for devices behind a bus interface (light, switch, cover, sensors). |
+| `class` / `device_class` | string | No | per platform | Home Assistant device class (see the platform tables). |
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `where` | string | Yes | OpenWebNet WHERE address |
-| `name` | string | Yes | Display name in Home Assistant |
-| `icon` | string | No | Material Design icon |
-| `device_class` | string | No | Home Assistant device class |
-| `energy` / `sensor_defaults` | mapping | No | Gateway-level defaults for power sensor filtering (`min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`). See *Energy Reporting Filtering*. |
+Accepted actuator WHERE forms (light, switch, cover): General `"0"`, Area `"00"`, `"1"`..`"10"`, Group `"#1"`..`"#255"`, Point-to-Point 2 digits (`"15"`, A=1 PL=5) or 4 digits (`"0115"`, A=01 PL=15). Sensors, binary sensors and climate accept any string of digits (energy meters are usually `"51"`..`"5N"`, thermo zones `"1"`..`"99"`).
 
-### Lighting-Specific Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `dimmable` | boolean | false | Enable dimming functionality |
-
-### Cover-Specific Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `inverted` | boolean | false | Invert open/close commands |
-| `advanced` | boolean | false | Enable advanced shutter control |
-| `shutter_run` | integer | 20 | Run time in seconds |
-
-### Climate-Specific Parameters
+### Light
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `heat` | boolean | true | Heating support |
-| `cool` | boolean | false | Cooling support |
-| `fan` | boolean | false | Fan support |
-| `standalone` | boolean | true | Standalone thermostat |
+| `dimmable` | boolean | `false` | Enable brightness control. |
+| `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
 
-
-### Sensor-Specific Parameters
+### Switch
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `device_class` | string | - | Home Assistant device class (e.g. `power`, `energy`, `current`, `voltage`) |
-| `unit_of_measurement` | string | - | Measurement unit (e.g. `W`, `kWh`) |
-| `refresh_period` | integer | 30 | **Alias** for `min_interval_sec` (see *Energy Reporting Filtering*). It does **not** poll; it rate-limits accepted push updates. |
-| `min_delta_w` | integer | 5 | Minimum absolute delta (in W) vs last processed value required to accept an update. |
-| `min_interval_sec` | number | 1 | Minimum seconds since last processed value required to accept an update. |
-| `suppress_log_interval_sec` | number | 60 | When debug logging is enabled, suppressed events are aggregated and logged at most once per this interval. |
+| `class` | `switch` \| `outlet` | `switch` | Device class. |
+| `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
 
----
+### Cover
 
-### Energy Reporting Filtering (Power / Energy Sensors)
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds. Basic actuators use it to estimate the position (0 = closed, 100 = open), derive open/closed and support *set position* by timed stop. |
+| `inverted` | boolean | `false` | Swap the up/down semantics (position 0 becomes open). |
+| `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). |
+| `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
 
-Power sensors can generate very frequent updates due to normal consumption fluctuations. To reduce unnecessary state churn and noisy logs, this fork supports a configurable **delta / interval filter** for energy events.
+### Binary sensor
 
-An incoming power value update is **processed** if **either** condition is true:
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `who` | `"25"` \| `"1"` \| `"9"` | `"25"` | `25` dry contact / alarm zone, `1` motion sensor (lighting bus), `9` auxiliary. |
+| `class` | binary sensor device class | by WHO | Default `opening` for WHO 25, `motion` for WHO 1, none for WHO 9. |
+| `inverted` | boolean | `false` | Invert the reported state. |
 
-- The absolute change vs. the last processed value is **>= `min_delta_w`**
-- The time since the last processed value is **>= `min_interval_sec`**
+### Climate
 
-Otherwise the event is suppressed. When debug logging is enabled, suppressed events are **aggregated** and logged periodically (instead of printing every single fluctuation).
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. |
+| `name` | string | `Zone N` / `Central unit` | Optional. |
+| `heat` | boolean | `true` | Heating support. |
+| `cool` | boolean | `false` | Cooling support. |
+| `fan` | boolean | `false` | Fan support. |
+| `standalone` | boolean | `false` | Standalone thermostat (no central unit). |
+| `central` | boolean | `false` | Zone driven through the central unit (`#0#N` addressing). |
 
-> **Compatibility note (`refresh_period`)**  
-> The upstream `artmakh` fork documents a `refresh_period` key for sensors. In this stability-focused fork, `refresh_period` is supported as an **alias** for `min_interval_sec` (gateway-level default or per-sensor). This is a rate-limit for **incoming push events** (no polling). If both are set, `min_interval_sec` takes precedence.
+### Sensor
 
-#### Global defaults (gateway-level)
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power`/`energy` are WHO 18 meters (`power` also creates the daily/monthly/total energy entities), `temperature` WHO 4 (WHERE = zone), `illuminance` WHO 1. |
+| `who` | string | from `class` | Only needed to override the WHO implied by the class (must match). |
+| `keepalive_minutes` | integer 0-255 | `125` | Power meters only: the integration asks the meter to push instant power for this many minutes and renews the request by itself. `0` disables the automatic keep-alive. |
+| `min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`, `info_log_interval_sec` | number | see below | Per-sensor overrides of the power filtering defaults. |
+| `refresh_period` | number | – | Alias of `min_interval_sec` (upstream name). |
 
-You can define default filtering values that apply to all power sensors under the gateway. Both keys below are supported and behave the same:
+Units are fixed by the class (W, Wh, °C, lx).
 
-```yaml
-gateway:
-  mac: "00:03:50:AA:BB:CC"
+### Energy Reporting Filtering (Power Sensors)
 
-  energy:
-    min_delta_w: 25            # process if delta >= 25 W
-    min_interval_sec: 5        # OR if last processed value is older than 5 seconds
-    suppress_log_interval_sec: 60
-```
+Power meters push a value at every fluctuation. An instant-power update is **processed** if **either** the absolute change vs. the last processed value is **>= `min_delta_w`** or the time since the last processed value is **>= `min_interval_sec`**; otherwise it is dropped (totalisers and daily/monthly energy values are never filtered). When debug logging is enabled, dropped updates are aggregated and logged at most once per `suppress_log_interval_sec`.
 
-Alternatively:
+Defaults apply per gateway under `sensor_defaults:` (alias `energy:`; if both are present they are merged key by key and `sensor_defaults` wins) and can be overridden per sensor:
 
 ```yaml
 gateway:
   mac: "00:03:50:AA:BB:CC"
 
   sensor_defaults:
-    min_delta_w: 25
-    min_interval_sec: 5
+    min_delta_w: 25              # process if |delta| >= 25 W ...
+    min_interval_sec: 5          # ... or if the last processed value is older than 5 s
     suppress_log_interval_sec: 60
-```
-
-If not specified, the integration defaults are:
-
-- `min_delta_w: 5`
-- `min_interval_sec: 1`
-- `suppress_log_interval_sec: 60`
-
-#### Per-sensor override
-
-Each power sensor can override the global defaults:
-
-```yaml
-gateway:
-  mac: "00:03:50:AA:BB:CC"
+    keepalive_minutes: 125       # 0 disables the automatic instant-power keep-alive
 
   sensor:
     house_main_power:
       where: "51"
       name: "House Main Power"
       class: power
-
-      # Override filtering for this sensor
-      min_delta_w: 50
-      min_interval_sec: 10
-      # refresh_period: 10      # equivalent alias (optional)
-      suppress_log_interval_sec: 120
+      min_delta_w: 50            # per-sensor override
+      # refresh_period: 10       # alias of min_interval_sec
 ```
 
-Override precedence:
+Built-in defaults: `min_delta_w: 5`, `min_interval_sec: 1`, `suppress_log_interval_sec: 60`, `keepalive_minutes: 125`. Precedence: per-sensor key → `sensor_defaults`/`energy` → built-in. Legacy `energy_*` spellings of these keys are still accepted.
 
-1. Per-sensor configuration
-2. Gateway-level defaults (`energy` or `sensor_defaults`)
-3. Integration built-in defaults
+### Lock/Unlock buttons
 
----
-
-### Button-Specific Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `buttons` | string | "1,2,3,4" | Available button numbers |
+Lights, switches and covers with `lock_buttons: true` get two configuration buttons (**Lock** / **Unlock**) that disable/enable the actuator on the bus (`*14*...`). They are only generated for Point-to-Point WHEREs: locking a General or Area WHERE would disable every actuator of the plant. Buttons are off by default; existing installations that relied on the automatically generated buttons must opt in per device.
 
 ## Services
 
@@ -438,12 +399,14 @@ logger:
 
 ### Configuration Validation
 
-The integration validates configurations and reports issues in the logs. Common validation errors:
+`myhome.yaml` is validated on every (re)load. Errors block the setup and are shown in the integration card with the key path (`gateway.cover.<key>.where`); warnings only appear in the log. Typical messages:
 
-- **Missing required fields**: `where` and `name` are mandatory
-- **Invalid WHERE addresses**: Must be valid OpenWebNet addresses
-- **Duplicate devices**: Same WHERE address used multiple times
-- **Invalid device types**: Unsupported device type specified
+- **`required key not provided`**: `where` and `name` are mandatory (climate: `zone`/`name` optional).
+- **`Invalid <WHERE>`** / **`quote it`**: the address is not a valid OpenWebNet WHERE, or an unquoted number lost its leading zero.
+- **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named).
+- **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
+- **`gateway 'x' needs a 'mac'`** / **`configured twice`**: every root entry needs a MAC (as `mac:` or as the root key) and each MAC may appear once.
+- **`unknown key 'dimable' in light.x is ignored (did you mean 'dimmable'?)`** (WARNING): a typo or an unsupported key; the device is still created without it.
 
 ## Migration from v0.8 and Earlier
 
@@ -483,7 +446,7 @@ myhome:
 
 ### Multiple Gateways
 
-Support multiple gateways by adding each gateway's MAC address:
+Use the MAC address of each gateway as the root key (a `gateway:` block may coexist with MAC root keys; every MAC must be unique):
 
 ```yaml
 # First gateway
@@ -499,43 +462,58 @@ Support multiple gateways by adding each gateway's MAC address:
     garage_door:
       where: "25"
       name: "Garage Door"
+      class: garage
 ```
+
+Each gateway also needs its own config entry (discovered or manual) with the same MAC.
 
 ### Custom Icons and Device Classes
 
-Customize device appearance and behavior:
-
 ```yaml
-"00:03:50:XX:XX:XX":
+gateway:
+  mac: "00:03:50:AA:BB:CC"
   light:
     accent_lighting:
       where: "45"
       name: "Accent Lighting"
       dimmable: true
       icon: "mdi:led-strip-variant"
+      icon_on: "mdi:led-strip-variant"
+
+  cover:
+    living_room_shutter:
+      where: "81"
+      name: "Living Room Shutter"
+      class: shutter
+      shutter_run: 30
+      icon: "mdi:window-shutter"
+      lock_buttons: true
 
   binary_sensor:
     window_sensor:
       where: "301"
       name: "Living Room Window"
-      device_class: "window"
+      class: window          # `device_class: window` is accepted too
       icon: "mdi:window-open"
 ```
 
 ### Energy Monitoring Configuration
 
-Configure power meters with specific refresh rates:
-
 ```yaml
-"00:03:50:XX:XX:XX":
+gateway:
+  mac: "00:03:50:AA:BB:CC"
   sensor:
     total_power:
       where: "51"
       name: "Total Power Consumption"
-      device_class: "power"
-      unit_of_measurement: "W"
-      refresh_period: 10  # Alias for min_interval_sec (rate-limit push updates; no polling)
+      class: power           # creates Power + Energy today/month/total entities
+      min_interval_sec: 10   # rate-limit push updates (no polling)
+      keepalive_minutes: 125 # automatic instant-power keep-alive
       icon: "mdi:flash"
+    zone_temperature:
+      where: "1"             # thermo zone 1
+      name: "Living Room Temperature"
+      class: temperature
 ```
 
 ## Support
