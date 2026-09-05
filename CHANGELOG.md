@@ -3,6 +3,15 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-09-05
+
+### Fixed
+
+- Time-based cover position was lost on every config-entry reload (and on a
+  restart while the gateway was down): the entity is already `unavailable` when
+  Home Assistant snapshots it for restoration, so the position is now persisted
+  through `extra_restore_state_data` instead of the state attributes.
+
 ## [0.2.0] - 2026-09-05
 
 A stability-focused rewrite of the gateway session handling, the YAML validator and

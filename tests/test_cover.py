@@ -213,6 +213,24 @@ async def test_position_restored_after_restart(hass: HomeAssistant, tmp_path) ->
         assert state.state == CoverState.OPEN
 
 
+async def test_position_survives_entry_reload(hass: HomeAssistant, tmp_path) -> None:
+    """Reloading the config entry keeps the estimated position.
+
+    On unload the gateway connection is closed before the entities are removed, so
+    HA snapshots them as ``unavailable`` without attributes; the position must
+    therefore travel through ``extra_restore_state_data``.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 42}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (entry, _commands):
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 42
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        state = hass.states.get(ENTITY)
+        assert state.attributes.get(ATTR_CURRENT_POSITION) == 42
+        assert state.state == CoverState.OPEN
+
+
 async def test_advanced_cover_uses_real_positions(hass: HomeAssistant, tmp_path) -> None:
     """Advanced actuators report a real position (dimension 10, 0 = closed)."""
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
