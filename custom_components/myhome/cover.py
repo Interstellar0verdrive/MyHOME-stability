@@ -31,7 +31,7 @@ from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoredExtraData, RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from OWNd.message import (
@@ -285,20 +285,37 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self.async_write_ha_state()
 
     # ------------------------------------------------------------------ lifecycle
+    @property
+    def extra_restore_state_data(self) -> ExtraStoredData | None:
+        """Persist the estimated position independently of the entity state.
+
+        When the config entry is unloaded the gateway connection is closed first,
+        so the entity is already ``unavailable`` (no attributes) by the time Home
+        Assistant snapshots its state for restoration. Extra data survives that.
+        """
+        if self._advanced:
+            return None
+        return RestoredExtraData({"position": self.current_cover_position})
+
     async def async_added_to_hass(self) -> None:
         """Register, request the status and restore the last known position."""
         await super().async_added_to_hass()
         if self._advanced or self._attr_current_cover_position is not None:
             return
-        last_state = await self.async_get_last_state()
-        if last_state is None:
-            return
-        position = last_state.attributes.get(ATTR_CURRENT_POSITION)
+        position: int | None = None
+        extra_data = await self.async_get_last_extra_data()
+        if extra_data is not None:
+            position = extra_data.as_dict().get("position")
         if position is None:
-            if last_state.state == CoverState.CLOSED:
-                position = 0
-            elif last_state.state == CoverState.OPEN:
-                position = 100
+            last_state = await self.async_get_last_state()
+            if last_state is None:
+                return
+            position = last_state.attributes.get(ATTR_CURRENT_POSITION)
+            if position is None:
+                if last_state.state == CoverState.CLOSED:
+                    position = 0
+                elif last_state.state == CoverState.OPEN:
+                    position = 100
         if position is not None:
             self._attr_current_cover_position = int(position)
             self._attr_is_closed = self._attr_current_cover_position == 0

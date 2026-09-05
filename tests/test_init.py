@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import voluptuous as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
