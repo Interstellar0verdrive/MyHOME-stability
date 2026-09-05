@@ -665,6 +665,6 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete, versioned list. Summary as of
 session with per-command timeout, single retry and a bounded/TTL queue; entity
 availability tied to the real gateway connection; a rewritten config validator
 (duplicate WHERE detection, `device_class` alias, legacy/multi-gateway roots,
-typo warnings); working energy sensors with a built-in instant-power keep-alive;
+typo warnings); a built-in instant-power keep-alive and energy totals that reach the sensors when the gateway provides them;
 time-based cover position; opt-in Lock/Unlock buttons; and closed Home Assistant
 deprecations.
