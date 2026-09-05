@@ -48,28 +48,30 @@ async def test_switches_created(hass: HomeAssistant, tmp_path) -> None:
         assert {item.unique_id for item in entries} == expected_unique_ids(
             MAC, {SWITCH: platforms[SWITCH]}
         ) - GATEWAY_DIAG_UNIQUE_IDS
+        # 0.3.1: the unique_id keeps the interface ZERO PADDED even though the bus
+        # form is unpadded - existing entities must not be renamed.
         assert {item.unique_id for item in entries} == {f"{MAC}-1-23#4#01", f"{MAC}-1-31"}
 
         outlet = hass.states.get("switch.presa_bus")
         assert outlet.attributes[ATTR_DEVICE_CLASS] == SwitchDeviceClass.OUTLET
-        assert outlet.attributes["Int"] == "01"
+        assert outlet.attributes["Int"] == "1"
         assert hass.states.get("switch.rele_test").attributes[ATTR_DEVICE_CLASS] == SwitchDeviceClass.SWITCH
 
 
 async def test_status_request_uses_bus_interface(hass: HomeAssistant, tmp_path) -> None:
     """plat-05: the status request must carry `#4#<interface>`."""
     async with setup_myhome(hass, tmp_path, SWITCH_YAML, clear_commands=False) as (_entry, commands):
-        assert "*#1*23#4#01##" in commands.status_frames
+        assert "*#1*23#4#1##" in commands.status_frames
         assert "*#1*31##" in commands.status_frames
 
 
 async def test_turn_on_off(hass: HomeAssistant, tmp_path) -> None:
     async with setup_myhome(hass, tmp_path, SWITCH_YAML) as (_entry, commands):
         await hass.services.async_call(SWITCH, "turn_on", {ATTR_ENTITY_ID: "switch.presa_bus"}, blocking=True)
-        assert commands.sent_frames == ["*1*1*23#4#01##"]
+        assert commands.sent_frames == ["*1*1*23#4#1##"]
         commands.clear()
         await hass.services.async_call(SWITCH, "turn_off", {ATTR_ENTITY_ID: "switch.presa_bus"}, blocking=True)
-        assert commands.sent_frames == ["*1*0*23#4#01##"]
+        assert commands.sent_frames == ["*1*0*23#4#1##"]
 
 
 async def test_handle_event_and_is_on_guard(hass: HomeAssistant, tmp_path) -> None:

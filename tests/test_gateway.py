@@ -23,6 +23,7 @@ import pytest
 from OWNd.message import OWNCommand, OWNLightingCommand, OWNMessage
 
 from homeassistant.components.button import DOMAIN as BUTTON
+from homeassistant.components.climate import DOMAIN as CLIMATE
 from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import DOMAIN as SENSOR
 
@@ -54,6 +55,8 @@ from custom_components.myhome.gateway import (
     SESSION_STATE_DISCONNECTED,
     GatewayStats,
     MyHOMEGatewayHandler,
+    _entity_key_candidates,
+    _message_entity_key,
     _QueuedCommand,
 )
 from custom_components.myhome.myhome_device import MyHOMEEntity
@@ -524,6 +527,67 @@ async def test_heating_command_on_monitor_requests_zone_status() -> None:
     handler = make_handler()
     await handler._dispatch_message(frame("*#4*#1*#14*0215*3##"), from_monitor=True)  # noqa: SLF001
     assert queued(handler) == ["*#4*1##"]
+
+
+# ------------------------------------------------------- bus interface (0.3.1 / 5.1-5.2)
+def test_entity_key_candidates_cover_both_interface_spellings() -> None:
+    """Config keys pad the F422 interface (unique_id stability), the bus does not."""
+    assert _entity_key_candidates("1-11") == ("1-11",)
+    assert _entity_key_candidates("4-#0") == ("4-#0",)
+    assert _entity_key_candidates("1-11#4#3") == ("1-11#4#3", "1-11#4#03")
+    assert _entity_key_candidates("1-11#4#03") == ("1-11#4#03", "1-11#4#3")
+    assert _entity_key_candidates("1-0115#4#15") == ("1-0115#4#15",)
+
+
+async def test_bus_interface_frames_reach_the_bus_entity_only() -> None:
+    """5.1/5.2: on OWNd 0.7.48 `message.interface` was always None, so `*1*1*11#4#3##`
+    drove the main-bus entity `1-11`.  With 0.7.49 it must reach the entity configured
+    behind the interface - written padded or unpadded - and never `1-11`."""
+    handler = make_handler()
+    main = register(handler, LIGHT, "1-11")
+    behind_bus = register(handler, LIGHT, "1-11#4#03")
+    with fake_channels() as (event, _, _):
+        async with running(handler, sending=False):
+            await wait_until(lambda: handler.is_connected)
+            channel = event.instances[0]
+            channel.feed("*1*1*11#4#3##")  # unpadded, as the F422 writes it
+            channel.feed("*1*0*11#4#03##")  # padded, as our device keys spell it
+            channel.feed("*1*1*11##")  # main bus, same WHERE
+            await wait_until(lambda: main.events)
+    assert behind_bus.events == ["*1*1*11#4#3##", "*1*0*11#4#03##"]
+    assert main.events == ["*1*1*11##"]
+
+
+async def test_unpadded_config_key_also_resolves_padded_frames() -> None:
+    """The tolerance works in both directions (a hand-written `1-11#4#3` device key)."""
+    handler = make_handler()
+    behind_bus = register(handler, LIGHT, "1-11#4#3")
+    await handler._dispatch_message(frame("*1*1*11#4#03##"), from_monitor=True)  # noqa: SLF001
+    await handler._dispatch_message(frame("*1*0*11#4#3##"), from_monitor=True)  # noqa: SLF001
+    assert behind_bus.events == ["*1*1*11#4#03##", "*1*0*11#4#3##"]
+
+
+# --------------------------------------------------- central heating unit (0.3.1 / 5.4)
+def test_message_entity_key_routes_zone_0_to_the_central_unit() -> None:
+    assert _message_entity_key(frame("*#4*0#1*20*1##")) == "4-#0"
+    assert _message_entity_key(frame("*#4*1*0*0215##")) == "4-1"
+    assert _message_entity_key(frame("*1*1*11##")) == "1-11"
+
+
+async def test_central_unit_actuator_never_drives_zone_1() -> None:
+    """5.4: OWNd rewrites `zone 0` to the first WHERE parameter, so `*#4*0#1*20*1##`
+    (the central unit's actuator 1) reports entity `4-1` and de-synced zone 1
+    (Jacopo Jannone, via michnovka)."""
+    handler = make_handler()
+    zone1 = register(handler, CLIMATE, "4-1")
+    central = register(handler, CLIMATE, "4-#0")
+    await handler._dispatch_message(frame("*#4*0#1*20*1##"), from_monitor=True)  # noqa: SLF001
+    assert central.events == ["*#4*0#1*20*1##"]
+    assert zone1.events == []
+    # A real zone frame is untouched.
+    await handler._dispatch_message(frame("*#4*1*0*0215##"), from_monitor=True)  # noqa: SLF001
+    assert zone1.events == ["*#4*1*0*0215##"]
+    assert len(central.events) == 1
 
 
 # --------------------------------------------------------------------------- CEN+

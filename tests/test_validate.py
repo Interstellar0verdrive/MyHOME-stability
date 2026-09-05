@@ -309,6 +309,50 @@ def test_sensor_requires_class_and_matching_who():
 
 
 # --------------------------------------------------------------------------------------
+# Bus interface normalisation (0.3.1, forks review 5.2 - carferrer)
+# --------------------------------------------------------------------------------------
+@pytest.mark.parametrize("given", [3, "3", "03"])
+def test_bus_interface_is_stored_unpadded(given):
+    """`interface` is accepted as an int or as 1-2 digits and stored as the bus writes
+    it (`3`), so `_full_where` matches what OWNd 0.7.49 parses out of the frame."""
+    out = check(gw(light={"a": {"where": "11", "interface": given, "name": "A"}}))
+    device = platforms(out)["light"]["1-11#4#03"]
+    assert device["interface"] == "3"
+
+
+def test_bus_interface_device_key_stays_zero_padded():
+    """The device key is the tail of every unique_id: unpadding it would rename the
+    entities of every user behind an F422, so the padding survives here only."""
+    out = check(gw(light={"a": {"where": "0115", "interface": 1, "name": "A"}}))
+    assert set(platforms(out)["light"]) == {"1-0115#4#01"}
+    out = check(gw(switch={"s": {"where": "23", "interface": "15", "name": "S"}}))
+    assert set(platforms(out)["switch"]) == {"1-23#4#15"}
+    out = check(gw(switch={"s": {"where": "23", "interface": 0, "name": "S"}}))
+    assert set(platforms(out)["switch"]) == {"1-23#4#00"}
+
+
+@pytest.mark.parametrize("given", [16, "16", "003", -1, "abc", "", True, 1.0])
+def test_invalid_bus_interface_is_rejected(given):
+    with pytest.raises(Invalid, match="Bus Interface"):
+        check(gw(light={"a": {"where": "11", "interface": given, "name": "A"}}))
+
+
+def test_normalise_bus_interface_helper():
+    from custom_components.myhome import const
+
+    assert const.normalise_bus_interface(3) == "3"
+    assert const.normalise_bus_interface("03") == "3"
+    assert const.normalise_bus_interface("15") == "15"
+    assert const.normalise_bus_interface(0) == "0"
+    assert const.normalise_bus_interface(None) is None
+    assert const.normalise_bus_interface(True) is None
+    assert const.normalise_bus_interface("16") is None
+    assert const.bus_full_where("11", "03") == "11#4#3"
+    assert const.bus_full_where("11", 3) == "11#4#3"
+    assert const.bus_full_where("11", None) == "11"
+
+
+# --------------------------------------------------------------------------------------
 # Duplicate detection (val-01)
 # --------------------------------------------------------------------------------------
 def test_duplicate_within_platform():

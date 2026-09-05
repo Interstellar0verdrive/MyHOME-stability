@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections import deque
 from collections.abc import Mapping
@@ -115,6 +116,7 @@ from .const import (
     LOGGER,
     SIGNAL_GATEWAY_CONNECTION,
     SIGNAL_GATEWAY_STATS,
+    bus_full_where,
 )
 from .myhome_device import MyHOMEEntity
 from .own_session import (
@@ -270,6 +272,45 @@ def _automation_event_name(message: OWNAutomationEvent) -> str:
     if message.is_closing and not message.is_opening:
         return "close"
     return "stop"
+
+
+# ``<who>-<where>#4#<interface>`` with the interface written as 1 or 2 digits.
+_INTERFACE_KEY_RE = re.compile(r"^(?P<base>.+)#4#(?P<interface>\d{1,2})$")
+
+
+def _entity_key_candidates(entity_key: str) -> tuple[str, ...]:
+    """The key itself, then its bus-interface variants, in lookup order.
+
+    Configuration keys keep the F422 interface zero padded (``1-11#4#03``) because
+    that string is also the tail of every entity ``unique_id`` and renaming it would
+    orphan the history of every user behind a local bus (see
+    ``validate.device_key``).  OWNd 0.7.49 reports the interface exactly as the bus
+    wrote it, which is normally unpadded (``1-11#4#3``).  Trying the int-normalised
+    variants makes both spellings resolve, whichever side they come from.
+    """
+    match = _INTERFACE_KEY_RE.match(entity_key)
+    if match is None:
+        return (entity_key,)
+    base, interface = match.group("base"), int(match.group("interface"))
+    # dict.fromkeys keeps the order and drops the duplicate when the key is already
+    # in one of the two canonical spellings.
+    return tuple(dict.fromkeys((entity_key, f"{base}#4#{interface:02d}", f"{base}#4#{interface}")))
+
+
+def _message_entity_key(message: OWNMessage) -> str:
+    """Configuration key of the entity a frame belongs to.
+
+    Identical to ``message.entity`` except for the central heating unit: OWNd
+    rewrites a ``zone 0`` frame to the zone found in the first WHERE parameter
+    (``OWNHeatingEvent.__init__``), so ``*#4*0#1*20*1##`` — the central unit's
+    actuator 1 — reports ``4-1`` and would drive zone 1's climate entity with the
+    central unit's state.  WHERE ``0`` means the central unit, whose key is ``4-#0``
+    (guard contributed by Jacopo Jannone via michnovka; OWNd stays untouched, its
+    private ``_zone`` is never mutated).
+    """
+    if isinstance(message, OWNHeatingEvent) and str(message.where) == "0":
+        return f"{message.who}-#0"
+    return str(message.entity)
 
 
 class MyHOMEGatewayHandler:
@@ -951,8 +992,7 @@ class MyHOMEGatewayHandler:
             for device in self._platform_cfg(platform).values():
                 where = str(device.get(CONF_WHERE) or "")
                 if where.isdigit() and len(where) in (2, 4) and where != "00":
-                    interface = device.get(CONF_BUS_INTERFACE)
-                    return factory(f"{where}#4#{interface}" if interface else where)
+                    return factory(bus_full_where(where, device.get(CONF_BUS_INTERFACE)))
         for device in self._platform_cfg(SENSOR).values():
             where = str(device.get(CONF_WHERE) or "")
             if str(device.get("who")) == "18" and where:
@@ -1001,7 +1041,7 @@ class MyHOMEGatewayHandler:
                 if isinstance(message, OWNAutomationEvent) and self._handle_automation_scope(message):
                     return
                 if isinstance(message, OWNLightingEvent) and message.brightness_preset:
-                    await self._refresh_light(message.entity)
+                    await self._refresh_light(_message_entity_key(message))
                     return
                 self._dispatch_to_entities(message)
                 return
@@ -1075,11 +1115,12 @@ class MyHOMEGatewayHandler:
     def _entities_for(self, entity_key: str) -> list[MyHOMEEntity]:
         """Registered entity objects for a ``who-where`` key, buttons excluded (plat-09)."""
         found: list[MyHOMEEntity] = []
+        candidates = _entity_key_candidates(entity_key)
         platforms = self._gw_cfg().get(CONF_PLATFORMS) or {}
         for platform, devices in platforms.items():
             if platform == BUTTON or not isinstance(devices, dict):
                 continue
-            device = devices.get(entity_key)
+            device = next((devices[key] for key in candidates if key in devices), None)
             if not isinstance(device, dict):
                 continue
             entities = device.get(CONF_ENTITIES) or {}
@@ -1087,9 +1128,10 @@ class MyHOMEGatewayHandler:
         return found
 
     def _dispatch_to_entities(self, message: OWNMessage) -> None:
-        entities = self._entities_for(message.entity)
+        entity_key = _message_entity_key(message)
+        entities = self._entities_for(entity_key)
         if not entities:
-            LOGGER.debug("%s No entity configured for `%s` (%s)", self.log_id, message, message.entity)
+            LOGGER.debug("%s No entity configured for `%s` (%s)", self.log_id, message, entity_key)
             return
         for obj in entities:
             try:
@@ -1107,7 +1149,8 @@ class MyHOMEGatewayHandler:
 
     async def _refresh_light(self, entity_key: str) -> None:
         """A dimmer reached a preset level: ask the light entity for its real brightness (plat-02)."""
-        device = self._platform_cfg(LIGHT).get(entity_key)
+        lights = self._platform_cfg(LIGHT)
+        device = next((lights[key] for key in _entity_key_candidates(entity_key) if key in lights), None)
         obj = (device.get(CONF_ENTITIES) or {}).get(LIGHT) if isinstance(device, dict) else None
         if not isinstance(obj, MyHOMEEntity):
             LOGGER.debug("%s Preset level for %s, which is not a configured light", self.log_id, entity_key)

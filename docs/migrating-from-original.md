@@ -9,7 +9,7 @@ The authoritative list of what changed is
 checklist.
 
 The domain is still `myhome`, the configuration file is still `myhome.yaml`, and
-the OpenWebNet library is still `OWNd` (pinned to 0.7.48). This fork is a
+the OpenWebNet library is still `OWNd` (pinned to 0.7.49 since 0.3.1). This fork is a
 continuation, not a rewrite of the configuration surface.
 
 ## Before you start

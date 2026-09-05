@@ -576,7 +576,11 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
     async def handle_sync_time(call: ServiceCall) -> None:
         handler = _async_resolve_handler(hass, call)
-        await _async_send_or_raise(handler, OWNGatewayCommand.set_datetime_to_now(hass.config.time_zone))
+        # OWNd's set_datetime_to_now() calls pytz.timezone(), which reads the tz
+        # database from disk: building the command in the event loop trips Home
+        # Assistant's blocking-call detector (0.3.1, reported by sxpert).
+        command = await hass.async_add_executor_job(OWNGatewayCommand.set_datetime_to_now, hass.config.time_zone)
+        await _async_send_or_raise(handler, command)
 
     async def handle_send_message(call: ServiceCall) -> None:
         handler = _async_resolve_handler(hass, call)

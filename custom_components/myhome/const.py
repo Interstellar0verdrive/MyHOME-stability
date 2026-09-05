@@ -186,6 +186,38 @@ DEFAULT_PROBE_WINDOW_SEC = 30
 DEFAULT_COMMAND_TIMEOUT_SEC = 10
 DEFAULT_QUEUE_TTL_SEC = 60
 
+
+# --------------------------------------------------------------------------------------
+# F422 local bus interface (`<where>#4#<interface>`)
+#
+# The canonical form is the UNPADDED decimal string, because that is what the bus puts
+# in the frame and therefore what OWNd 0.7.49 returns from `OWNMessage.interface`
+# (0.7.48 compared an int WHO against strings and always returned None, which hid the
+# mismatch).  Zero padding survives in ONE place only: `validate.device_key`, which is
+# also the tail of every entity `unique_id`.
+# --------------------------------------------------------------------------------------
+def normalise_bus_interface(value: object) -> str | None:
+    """Return the canonical unpadded interface string, or ``None`` when unusable.
+
+    ``3``, ``"3"`` and ``"03"`` all normalise to ``"3"``.  Out-of-range and malformed
+    values give ``None``; callers that need an error raise it themselves
+    (``validate.BusInterface``).
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value) if 0 <= value <= 15 else None
+    if isinstance(value, str) and value.isdigit() and len(value) <= 2 and int(value) <= 15:
+        return str(int(value))
+    return None
+
+
+def bus_full_where(where: str, interface: object) -> str:
+    """WHERE as it must appear on the bus: ``11`` or ``11#4#3`` (never ``11#4#03``)."""
+    normalised = normalise_bus_interface(interface)
+    return f"{where}#4#{normalised}" if normalised is not None else str(where)
+
+
 # Repairs issue ids (issue_registry), all prefixed with the entry id by the caller.
 ISSUE_YAML_INVALID = "yaml_invalid"
 ISSUE_UNKNOWN_KEYS = "unknown_keys"

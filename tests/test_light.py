@@ -100,7 +100,8 @@ async def test_status_request_on_add_uses_full_where(hass: HomeAssistant, tmp_pa
     async with setup_myhome(hass, tmp_path, DIMMER_YAML, clear_commands=False) as (_entry, commands):
         # A dimmer is asked for its brightness, a relay for its on/off state.
         assert "*#1*11*1##" in commands.status_frames
-        assert "*#1*23#4#01##" in commands.status_frames
+        # 0.3.1: the interface goes on the bus unpadded, as OWNd 0.7.49 parses it back.
+        assert "*#1*23#4#1##" in commands.status_frames
 
 
 async def test_turn_on_off_and_brightness(hass: HomeAssistant, tmp_path) -> None:
@@ -132,7 +133,7 @@ async def test_turn_on_off_and_brightness(hass: HomeAssistant, tmp_path) -> None
 
         commands.clear()
         await hass.services.async_call(LIGHT, "turn_on", {ATTR_ENTITY_ID: "light.relay_bus"}, blocking=True)
-        assert commands.sent_frames == ["*1*1*23#4#01##"]
+        assert commands.sent_frames == ["*1*1*23#4#1##"]
 
 
 async def test_supported_features(hass: HomeAssistant, tmp_path) -> None:
@@ -145,7 +146,7 @@ async def test_supported_features(hass: HomeAssistant, tmp_path) -> None:
         relay = hass.states.get("light.relay_bus")
         assert relay.attributes[ATTR_SUPPORTED_COLOR_MODES] == [ColorMode.ONOFF]
         assert relay.attributes[ATTR_SUPPORTED_FEATURES] == LightEntityFeature.FLASH
-        assert relay.attributes["Int"] == "01"
+        assert relay.attributes["Int"] == "1"
 
 
 async def test_handle_event_updates_state(hass: HomeAssistant, tmp_path) -> None:

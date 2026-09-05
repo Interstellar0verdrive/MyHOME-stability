@@ -4,8 +4,8 @@ How the integration works inside. This page is for contributors, and for anyone
 who wants to check the claims in the README against the code rather than take
 them on trust.
 
-Everything below is from `custom_components/myhome/*.py` at version 0.3.0 and
-`OWNd` 0.7.48.
+Everything below is from `custom_components/myhome/*.py` at version 0.3.1 and
+`OWNd` 0.7.49.
 
 ## Module map
 
@@ -55,6 +55,12 @@ The device keys are `"{who}-{where}"`, `"{who}-{where}#4#{interface}"` behind a
 bus interface, and `"{who}-{zone}"` for climate. Entities register themselves in
 their device's `entities` dict on `async_added_to_hass` and remove themselves on
 `async_will_remove_from_hass`.
+
+The bus interface is **zero padded in the device key only** (`1-11#4#03`), because
+that key is also the tail of every entity `unique_id`. The `interface` value in the
+device config — and therefore every frame the integration sends — is the unpadded
+bus form (`11#4#3`). The dispatcher normalises incoming keys
+(`gateway._entity_key_candidates`) so both spellings resolve to the same entity.
 
 ## Config entry lifecycle
 
@@ -307,6 +313,21 @@ Two isolation rules make a bug in one entity harmless to the session:
 `_entities_for()` deliberately skips the `button` platform: the Lock/Unlock buttons
 share the device key of the actuator they belong to, and they have no state to
 update.
+
+### Two corrections applied to `OWNd`'s entity key
+
+`OWNd` is pinned and never modified; both fixes live in
+`gateway._message_entity_key()` / `_entity_key_candidates()` and never touch its
+private attributes.
+
+- **Central heating unit (0.3.1).** `OWNHeatingEvent.__init__` rewrites a `zone 0`
+  frame to the zone found in the first WHERE parameter, so `*#4*0#1*20*1##` — the
+  central unit's actuator 1 — reports entity `4-1` and used to drive **zone 1's**
+  climate entity with the central unit's state. A frame whose `where` is `"0"` is
+  routed to the central-unit key `4-#0` instead.
+- **Bus interface padding (0.3.1).** Device keys pad the interface (`1-11#4#03`),
+  the bus does not (`1-11#4#3`). Lookups try the key as received and both
+  int-normalised spellings, so either side may be written either way.
 
 ## The instant-power throttle
 
