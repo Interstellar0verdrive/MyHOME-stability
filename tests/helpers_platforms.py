@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager, contextmanager
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -16,6 +18,7 @@ from unittest.mock import patch
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from OWNd.message import OWNEvent, OWNMessage
@@ -25,7 +28,9 @@ from custom_components.myhome.const import (
     CONF_ENTITY,
     CONF_PLATFORMS,
     DOMAIN,
+    GATEWAY_DIAG_SUFFIXES,
     SIGNAL_GATEWAY_CONNECTION,
+    SIGNAL_GATEWAY_STATS,
 )
 
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
@@ -125,3 +130,39 @@ async def feed_event(hass: HomeAssistant, entity, frame: str) -> None:
     assert message is not None, frame
     entity.handle_event(message)
     await hass.async_block_till_done()
+
+
+# --------------------------------------------------------------- gateway diagnostics
+# Unique ids of the five diagnostic entities of the gateway device (0.3.0, plan G1-B).
+GATEWAY_DIAG_UNIQUE_IDS = {f"{MAC}-{suffix}" for suffix in GATEWAY_DIAG_SUFFIXES}
+
+
+@dataclass(frozen=True)
+class FakeGatewayStats:
+    """Stand-in for ``gateway.GatewayStats`` (same field names, A1 owns the real one).
+
+    The entities only read attributes off the published snapshot, so the tests can
+    dispatch this dataclass without depending on the gateway implementation.
+    """
+
+    connected: bool = False
+    last_frame_at: datetime | None = None
+    frames_rx: int = 0
+    reconnects: int = 0
+    commands_sent: int = 0
+    commands_dropped: int = 0
+    queue_length: int = 0
+    session_state: str = "disconnected"
+
+
+async def dispatch_stats(hass: HomeAssistant, **fields: Any) -> FakeGatewayStats:
+    """Publish a stats snapshot the way the gateway handler does."""
+    stats = FakeGatewayStats(**fields)
+    async_dispatcher_send(hass, SIGNAL_GATEWAY_STATS.format(mac=MAC), stats)
+    await hass.async_block_till_done()
+    return stats
+
+
+def diagnostic_entity_id(hass: HomeAssistant, domain: str, suffix: str) -> str | None:
+    """Entity id of one gateway diagnostic entity (its name comes from a translation)."""
+    return er.async_get(hass).async_get_entity_id(domain, DOMAIN, f"{MAC}-{suffix}")

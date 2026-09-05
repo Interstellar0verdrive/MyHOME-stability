@@ -11,7 +11,9 @@ from datetime import timedelta
 
 from OWNd.message import OWNEnergyEvent, OWNHeatingEvent, OWNLightingEvent
 
+from homeassistant.components.sensor import DOMAIN as SENSOR, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import STATE_UNAVAILABLE, EntityCategory
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -25,14 +27,25 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import (
+    CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_ENTITIES,
     CONF_ENTITY,
+    CONF_KEEPALIVE_MINUTES,
     CONF_PLATFORMS,
     DOMAIN,
+    GATEWAY_DIAG_COMMANDS_DROPPED,
+    GATEWAY_DIAG_LAST_FRAME,
+    GATEWAY_DIAG_QUEUE_LENGTH,
+    GATEWAY_DIAG_RECONNECTS,
     SIGNAL_GATEWAY_CONNECTION,
+)
+from custom_components.myhome.sensor import (
+    CONF_KEEPALIVE_MINUTES_DEFAULTED,
+    keepalive_minutes_for,
 )
 
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
+from .helpers_platforms import diagnostic_entity_id, dispatch_stats
 
 # The user's real configuration: three WHO=18 meters (one with a per-sensor override),
 # plus a thermo probe and an illuminance sensor to cover the other two sensor classes.
@@ -77,6 +90,33 @@ gateway:
       where: '51'
       name: Casa Generale
       device_class: power
+"""
+
+# Only a light: the four gateway diagnostic sensors must be created anyway (G1-B).
+NO_SENSOR_YAML = f"""
+gateway:
+  mac: {MAC}
+  light:
+    luce_test:
+      where: '11'
+      name: Luce Test
+"""
+
+# One meter without `keepalive_minutes` (validate.py injects the built-in 125, so the
+# `default_keepalive_minutes` option wins) and one that sets it explicitly (YAML wins).
+KEEPALIVE_OPTION_YAML = f"""
+gateway:
+  mac: {MAC}
+  sensor:
+    casa_generale:
+      where: '51'
+      name: Casa Generale
+      device_class: power
+    cucina:
+      where: '52'
+      name: Cucina
+      device_class: power
+      keepalive_minutes: 60
 """
 
 POWER_ENTITY = "sensor.casa_generale_power"
@@ -403,3 +443,139 @@ async def test_unload_removes_entities_from_the_registry_dict(hass: HomeAssistan
     import custom_components.myhome.sensor as sensor_module
 
     assert not hasattr(sensor_module, "async_unload_entry")
+
+
+# ----------------------------------------------------- keep-alive default option
+def test_keepalive_minutes_for_option_precedence(tmp_path) -> None:
+    """The option only replaces a keep-alive the user did not write herself."""
+    entry = make_entry(tmp_path / "myhome.yaml", options={CONF_DEFAULT_KEEPALIVE_MINUTES: 30})
+    plain = make_entry(tmp_path / "myhome.yaml")
+
+    # validate.py marks the injected default -> the option wins whatever the value.
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125, CONF_KEEPALIVE_MINUTES_DEFAULTED: True}, entry) == 30
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 60, CONF_KEEPALIVE_MINUTES_DEFAULTED: True}, entry) == 30
+    # Explicitly marked as user-provided -> YAML wins.
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 60, CONF_KEEPALIVE_MINUTES_DEFAULTED: False}, entry) == 60
+    # No marker: a value equal to the built-in default counts as "not chosen".
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, entry) == 30
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 60}, entry) == 60
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 0}, entry) == 0
+    # Without the option nothing changes at all.
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, plain) == 125
+
+
+async def test_default_keepalive_option_is_used(hass: HomeAssistant, tmp_path) -> None:
+    """G1-D: `default_keepalive_minutes` replaces the injected default, not a YAML value."""
+    entry = make_entry(
+        write_yaml(tmp_path, KEEPALIVE_OPTION_YAML),
+        options={CONF_DEFAULT_KEEPALIVE_MINUTES: 30},
+    )
+    with mock_gateway():
+        await _setup(hass, entry, connect=False)
+        armed = [f for f in _drain(hass) if "#1200#1" in f]
+        assert armed == ["*#18*51*#1200#1*30##", "*#18*52*#1200#1*60##"]
+
+        # The re-arm interval follows the effective value (30 - 5 = 25 minutes).
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=26))
+        await hass.async_block_till_done()
+        assert "*#18*51*#1200#1*30##" in _drain(hass)
+
+
+# --------------------------------------------------- temperature / illuminance (E)
+async def test_environment_sensors_requested_on_reconnect(hass: HomeAssistant, tmp_path) -> None:
+    """G1-E: temperature and illuminance are re-requested on every connection signal."""
+    entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry, connect=False)
+        _drain(hass)
+
+        _connect(hass)
+        await hass.async_block_till_done()
+        reconnected = _drain(hass)
+        assert "*#4*2*0##" in reconnected
+        assert "*#1*31*6##" in reconnected
+
+        # A disconnection asks for nothing.
+        _connect(hass, False)
+        await hass.async_block_till_done()
+        idle = _drain(hass)
+        assert "*#4*2*0##" not in idle
+        assert "*#1*31*6##" not in idle
+
+
+# ------------------------------------------------------------- gateway diagnostics
+async def test_gateway_diagnostic_sensors(hass: HomeAssistant, tmp_path) -> None:
+    """G1-B: four diagnostic sensors on the gateway device, fed by the stats signal."""
+    entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        registry = er.async_get(hass)
+
+        expected_flags = {
+            GATEWAY_DIAG_LAST_FRAME: (None, True),
+            GATEWAY_DIAG_RECONNECTS: ("total_increasing", False),
+            GATEWAY_DIAG_COMMANDS_DROPPED: ("total_increasing", False),
+            GATEWAY_DIAG_QUEUE_LENGTH: ("measurement", False),
+        }
+        for suffix, (_state_class, enabled) in expected_flags.items():
+            entity_id = diagnostic_entity_id(hass, SENSOR, suffix)
+            assert entity_id is not None, suffix
+            registry_entry = registry.async_get(entity_id)
+            assert registry_entry.unique_id == f"{MAC}-{suffix}"
+            assert registry_entry.entity_category is EntityCategory.DIAGNOSTIC
+            assert (registry_entry.disabled_by is None) is enabled, suffix
+
+        last_frame_id = diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_LAST_FRAME)
+        assert registry.async_get(last_frame_id).original_device_class is SensorDeviceClass.TIMESTAMP
+
+        # The three counters are disabled by default; enable them and check the states.
+        await _enable_disabled_entities(hass, entry)
+        # Home Assistant renders a timestamp state with second precision.
+        stamp = dt_util.utcnow().replace(microsecond=0)
+        await dispatch_stats(
+            hass,
+            connected=True,
+            last_frame_at=stamp,
+            frames_rx=12,
+            reconnects=3,
+            commands_dropped=2,
+            queue_length=7,
+            session_state="connected",
+        )
+
+        assert hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_LAST_FRAME)).state == stamp.isoformat()
+        assert hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_RECONNECTS)).state == "3"
+        assert hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_COMMANDS_DROPPED)).state == "2"
+        assert hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_QUEUE_LENGTH)).state == "7"
+
+        queue_state = hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_QUEUE_LENGTH))
+        assert queue_state.attributes["state_class"] == "measurement"
+
+
+async def test_gateway_diagnostic_sensors_stay_available(hass: HomeAssistant, tmp_path) -> None:
+    """They report the outage, so they must not become `unavailable` during one."""
+    entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+
+        _connect(hass, False)
+        await hass.async_block_till_done()
+        stamp = dt_util.utcnow().replace(microsecond=0)
+        await dispatch_stats(hass, connected=False, last_frame_at=stamp, session_state="disconnected")
+
+        # The bus entities are unavailable, the diagnostic ones still report a value.
+        assert hass.states.get(POWER_ENTITY).state == STATE_UNAVAILABLE
+        last_frame = hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_LAST_FRAME))
+        assert last_frame.state == stamp.isoformat()
+
+
+async def test_gateway_diagnostic_sensors_without_sensors(hass: HomeAssistant, tmp_path) -> None:
+    """They exist even when the configuration declares no sensor at all."""
+    entry = make_entry(write_yaml(tmp_path, NO_SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity_id = diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_LAST_FRAME)
+        assert entity_id is not None
+        stamp = dt_util.utcnow().replace(microsecond=0)
+        await dispatch_stats(hass, connected=True, last_frame_at=stamp, session_state="connected")
+        assert hass.states.get(entity_id).state == stamp.isoformat()

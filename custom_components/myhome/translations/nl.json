@@ -79,7 +79,19 @@
           "password": "Wachtwoord",
           "config_file_path": "Pad van het configuratiebestand",
           "command_worker_count": "Aantal gelijktijdige commandosessies",
-          "generate_events": "Genereer gebeurtenissen in Home Assistant voor elk ontvangen bericht"
+          "generate_events": "Genereer gebeurtenissen in Home Assistant voor elk ontvangen bericht",
+          "idle_watchdog_sec": "Inactiviteitsbewaking",
+          "probe_window_sec": "Sondeervenster",
+          "command_timeout_sec": "Time-out van een commando",
+          "queue_ttl_sec": "Levensduur van de commandowachtrij",
+          "default_keepalive_minutes": "Standaard keep-alive voor momentaan vermogen"
+        },
+        "data_description": {
+          "idle_watchdog_sec": "Zolang er geen frame op de monitorsessie binnenkomt: er wordt een onschuldige sonde via de commandosessie verstuurd. Standaard 300 s (60-3600).",
+          "probe_window_sec": "De sonde is verstuurd en er kwam nog steeds niets op de monitorsessie binnen: opnieuw verbinden. Standaard 30 s (5-300).",
+          "command_timeout_sec": "Hoe lang één commando mag duren om verstuurd en bevestigd te worden, voordat het eenmaal opnieuw wordt geprobeerd en daarna verworpen. Standaard 10 s (2-60).",
+          "queue_ttl_sec": "Commando's die na deze tijd nog in de wachtrij staan worden verworpen in plaats van te laat verstuurd. Standaard 60 s (10-600).",
+          "default_keepalive_minutes": "Keep-alive die aan de energiemeters wordt gevraagd wanneer een sensor keepalive_minutes niet instelt in myhome.yaml. 0 schakelt het uit. Standaard 125 min (0-255)."
         }
       }
     },
@@ -87,6 +99,20 @@
       "invalid_host": "Ongeldig IP-adres of hostnaam",
       "invalid_port": "Ongeldig poortnummer",
       "invalid_config_path": "Het configuratiebestand bestaat niet op dit pad"
+    }
+  },
+  "issues": {
+    "yaml_invalid": {
+      "title": "Het MyHOME-configuratiebestand is ongeldig",
+      "description": "De integratie kon `{path}` niet laden:\n\n```\n{message}\n```\n\nHerstel het bestand en herlaad de MyHOME-integratie. Zolang het bestand ongeldig is wordt er geen apparaat aangemaakt."
+    },
+    "unknown_keys": {
+      "title": "Onbekende sleutels in het MyHOME-configuratiebestand",
+      "description": "`{path}` bevat {count} sleutel(s) die de integratie niet kent; ze worden genegeerd:\n\n{keys}\n\nVerwijder of corrigeer ze en herlaad de integratie. U kunt deze melding negeren als de sleutels bedoeld zijn."
+    },
+    "no_devices_for_gateway": {
+      "title": "Geen apparaten geconfigureerd voor deze MyHOME-gateway",
+      "description": "Gateway `{mac}` heeft geen sectie in `{path}` (gateways gevonden in het bestand: {others}), dus er is geen apparaat aangemaakt.\n\nVoeg een sectie voor deze gateway toe, of controleer of het MAC-adres klopt, en herlaad daarna de integratie."
     }
   },
   "entity": {
@@ -110,6 +136,23 @@
       },
       "energy_total": {
         "name": "Energie"
+      },
+      "gateway_last_frame": {
+        "name": "Laatste frame"
+      },
+      "gateway_reconnects": {
+        "name": "Herverbindingen"
+      },
+      "gateway_commands_dropped": {
+        "name": "Verworpen commando's"
+      },
+      "gateway_queue_length": {
+        "name": "Wachtrij commando's"
+      }
+    },
+    "binary_sensor": {
+      "gateway_connected": {
+        "name": "Verbonden"
       }
     }
   },

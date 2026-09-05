@@ -15,12 +15,16 @@ One :class:`MyHOMEGatewayHandler` per gateway owns
   :meth:`_dispatch_message`; every call into an entity is isolated with
   ``try``/``except`` so an entity bug never tears a session down;
 - availability: ``is_connected`` is True only while the event session is verified
-  alive and every transition is published on ``SIGNAL_GATEWAY_CONNECTION``.
+  alive and every transition is published on ``SIGNAL_GATEWAY_CONNECTION``;
+- observability (0.3.0): a :class:`GatewayStats` snapshot (``handler.stats``)
+  published on ``SIGNAL_GATEWAY_STATS`` and a ring buffer of the last 50 frames
+  (``handler.recent_frames``) for the diagnostics download.
 
-The public surface consumed by ``__init__.py`` and the platforms (``mac``,
-``unique_id``, ``name``, ``is_connected``, ``device_id``, ``auth_failed``,
-``send``, ``send_status_request``, ``listening_loop``, ``sending_loop``,
-``close_listener``, ``test``, the discovery hooks) is unchanged in shape.
+The public surface consumed by ``__init__.py``, ``diagnostics.py`` and the
+platforms (``mac``, ``unique_id``, ``name``, ``is_connected``, ``device_id``,
+``auth_failed``, ``stats``, ``recent_frames``, ``session_parameters``, ``send``,
+``send_status_request``, ``listening_loop``, ``sending_loop``, ``close_listener``,
+``test``, the discovery hooks) is unchanged in shape.
 """
 
 from __future__ import annotations
@@ -28,7 +32,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
+from collections import deque
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from OWNd.connection import OWNGateway, OWNSession
@@ -68,11 +75,14 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BUS_INTERFACE,
+    CONF_COMMAND_TIMEOUT_SEC,
     CONF_DEVICE_TYPE,
     CONF_FIRMWARE,
+    CONF_IDLE_WATCHDOG_SEC,
     CONF_INFO_LOG_INTERVAL_SEC,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
@@ -81,6 +91,8 @@ from .const import (
     CONF_MIN_DELTA_W,
     CONF_MIN_INTERVAL_SEC,
     CONF_PLATFORMS,
+    CONF_PROBE_WINDOW_SEC,
+    CONF_QUEUE_TTL_SEC,
     CONF_SENSOR_DEFAULTS,
     CONF_SHORT_PRESS,
     CONF_SHORT_RELEASE,
@@ -90,6 +102,10 @@ from .const import (
     CONF_UDN,
     CONF_WHERE,
     CONF_ZONE,
+    DEFAULT_COMMAND_TIMEOUT_SEC,
+    DEFAULT_IDLE_WATCHDOG_SEC,
+    DEFAULT_PROBE_WINDOW_SEC,
+    DEFAULT_QUEUE_TTL_SEC,
     DOMAIN,
     EVENT_LONG_PRESS_REPEAT,
     EVENT_ROTATE_CCW_FAST,
@@ -98,6 +114,7 @@ from .const import (
     EVENT_ROTATE_CW_SLOW,
     LOGGER,
     SIGNAL_GATEWAY_CONNECTION,
+    SIGNAL_GATEWAY_STATS,
 )
 from .myhome_device import MyHOMEEntity
 from .own_session import (
@@ -110,20 +127,43 @@ from .own_session import (
 
 # --------------------------------------------------------------------------- tuning
 # Command path (Contract B).
-COMMAND_TIMEOUT_SEC = 10.0  # write + wait for ACK/NACK
+COMMAND_TIMEOUT_SEC = float(DEFAULT_COMMAND_TIMEOUT_SEC)  # write + wait for ACK/NACK
 CONNECT_TIMEOUT_SEC = 10.0  # TCP connect + negotiation, one attempt
 COMMAND_QUEUE_MAXSIZE = 200
-COMMAND_TTL_SEC = 60.0  # commands older than this are dropped when dequeued
+COMMAND_TTL_SEC = float(DEFAULT_QUEUE_TTL_SEC)  # commands older than this are dropped when dequeued
 COMMAND_SESSION_IDLE_SEC = 60.0  # close an unused command session (gateway session limit)
 # Event path.
-IDLE_TIMEOUT_SEC = 300.0  # no monitor frame for this long -> probe
-PROBE_WINDOW_SEC = 30.0  # probe sent, still nothing on the monitor -> reconnect
+IDLE_TIMEOUT_SEC = float(DEFAULT_IDLE_WATCHDOG_SEC)  # no monitor frame for this long -> probe
+PROBE_WINDOW_SEC = float(DEFAULT_PROBE_WINDOW_SEC)  # probe sent, still nothing on the monitor -> reconnect
 READ_POLL_SEC = 30.0  # wake-up cadence of the listening loop (watchdog granularity)
 INITIAL_BACKOFF_SEC = 1.0
 MAX_BACKOFF_SEC = 60.0
 # Logging.
 LOG_RATE_LIMIT_SEC = 60.0
 RECONNECT_LOG_RATE_LIMIT_SEC = 300.0
+
+# Observability (0.3.0).
+STATS_PUBLISH_INTERVAL_SEC = 1.0  # SIGNAL_GATEWAY_STATS is throttled to <= 1/s
+RECENT_FRAMES_MAXLEN = 50  # ring buffer shown in the diagnostics download
+
+# Guardrails for the user-facing options: (minimum, maximum) in seconds.  A value
+# outside the range is clamped (WARNING) and a non-numeric one falls back to the
+# default, so a hand-edited entry can never disable the watchdog or the TTL.
+IDLE_WATCHDOG_RANGE = (30.0, 3600.0)
+PROBE_WINDOW_RANGE = (5.0, 600.0)
+COMMAND_TIMEOUT_RANGE = (2.0, 60.0)
+QUEUE_TTL_RANGE = (5.0, 3600.0)
+
+# ``GatewayStats.session_state`` values (event session).
+SESSION_STATE_DISCONNECTED = "disconnected"
+SESSION_STATE_CONNECTING = "connecting"
+SESSION_STATE_CONNECTED = "connected"
+SESSION_STATE_AUTH_FAILED = "auth_failed"
+
+# ``FrameRecord.direction`` values.
+FRAME_MONITOR = "monitor"  # pushed by the gateway on the event session
+FRAME_REPLY = "reply"  # read on a command session before the ACK/NACK
+FRAME_COMMAND = "command"  # written by us on a command session
 
 # Energy throttle code defaults (validate.py normally supplies every key).
 DEFAULT_MIN_DELTA_W = 5
@@ -135,11 +175,55 @@ _TRANSPORT_ERRORS = (SessionError, OSError, EOFError, TimeoutError)
 _ENTITY_EVENT_TYPES = (OWNLightingEvent, OWNAutomationEvent, OWNDryContactEvent, OWNAuxEvent, OWNHeatingEvent)
 
 
+@dataclass(slots=True, frozen=True)
+class GatewayStats:
+    """Immutable health snapshot of one gateway handler (0.3.0 contract).
+
+    ``handler.stats`` always holds the latest one; the same object is published on
+    ``SIGNAL_GATEWAY_STATS.format(mac=...)`` (throttled to at most once per second,
+    immediately on connect / disconnect / auth failure / dropped command) and is
+    consumed by the gateway diagnostic entities and by ``diagnostics.py``.
+
+    ``frames_rx`` / ``last_frame_at`` count every frame *received* from the gateway
+    (monitor frames and command-session replies alike): both prove the bus is alive.
+    ``commands_sent`` counts the commands the gateway answered (ACK or NACK);
+    ``commands_dropped`` counts the ones that never made it (queue full or closed,
+    TTL expired, two failed attempts, discarded on shutdown).
+    """
+
+    connected: bool = False
+    last_frame_at: datetime | None = None
+    frames_rx: int = 0
+    reconnects: int = 0
+    commands_sent: int = 0
+    commands_dropped: int = 0
+    queue_length: int = 0
+    session_state: str = SESSION_STATE_DISCONNECTED
+
+
+@dataclass(slots=True, frozen=True)
+class FrameRecord:
+    """One entry of the ``recent_frames`` ring buffer (diagnostics only)."""
+
+    direction: str  # FRAME_MONITOR | FRAME_REPLY | FRAME_COMMAND
+    frame: str
+    at: datetime  # UTC
+
+    def as_dict(self) -> dict[str, str]:
+        """JSON-serialisable form for the diagnostics download."""
+        return {"at": self.at.isoformat(), "direction": self.direction, "frame": self.frame}
+
+
 @dataclass(slots=True)
 class _QueuedCommand:
     message: OWNCommand
     is_status_request: bool
     enqueued_at: float
+    frame: str = field(default="")
+
+    def __post_init__(self) -> None:
+        if not self.frame:
+            self.frame = str(self.message)
 
 
 @dataclass(slots=True, frozen=True)
@@ -189,7 +273,36 @@ def _automation_event_name(message: OWNAutomationEvent) -> str:
 
 
 class MyHOMEGatewayHandler:
-    """Manages a single MyHOME Gateway."""
+    """Manages a single MyHOME Gateway.
+
+    Tunables (read once at handler creation from ``config_entry.options``; the
+    options flow reloads the entry, so a change always rebuilds the handler):
+
+    ===================== ================================ ======= ==============
+    option                attribute                        default range (s)
+    ===================== ================================ ======= ==============
+    ``idle_watchdog_sec``  ``idle_timeout``                 300     30 .. 3600
+    ``probe_window_sec``   ``probe_window``                 30      5 .. 600
+    ``command_timeout_sec`` ``command_timeout``             10      2 .. 60
+    ``queue_ttl_sec``      ``command_ttl``                  60      5 .. 3600
+    ===================== ================================ ======= ==============
+
+    - ``idle_watchdog_sec``: silence on the monitor session for this long triggers
+      a harmless status request through the command session;
+    - ``probe_window_sec``: if that probe produces nothing on the monitor within
+      this window the event session is closed and reconnected with backoff;
+    - ``command_timeout_sec``: how long one command may take to be written and
+      acknowledged (NACK included) before the session is considered broken;
+    - ``queue_ttl_sec``: commands still queued after this long are dropped instead
+      of being replayed against a gateway that has moved on.
+
+    A non-numeric value falls back to the default and an out-of-range one is
+    clamped, both with a WARNING: the watchdog can never be switched off by a
+    hand-edited entry.  The remaining knobs (``connect_timeout``,
+    ``command_session_idle``, ``read_poll_interval``, ``initial_backoff``,
+    ``max_backoff``, ``stats_publish_interval``) stay code constants and are only
+    shrunk by the tests.
+    """
 
     def __init__(self, hass, config_entry, generate_events: bool = False) -> None:
         build_info = {
@@ -229,16 +342,32 @@ class MyHOMEGatewayHandler:
         self._last_rx: float = 0.0
         self._probe_sent_at: float | None = None
 
-        # Timing knobs (instance attributes so tests can shrink them).
-        self.command_timeout = COMMAND_TIMEOUT_SEC
+        # Timing knobs: the four user-facing ones come from the entry options,
+        # the rest are code constants (instance attributes so tests can shrink them).
+        options = self._entry_options()
+        self.command_timeout = self._option(options, CONF_COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_RANGE)
+        self.command_ttl = self._option(options, CONF_QUEUE_TTL_SEC, COMMAND_TTL_SEC, QUEUE_TTL_RANGE)
+        self.idle_timeout = self._option(options, CONF_IDLE_WATCHDOG_SEC, IDLE_TIMEOUT_SEC, IDLE_WATCHDOG_RANGE)
+        self.probe_window = self._option(options, CONF_PROBE_WINDOW_SEC, PROBE_WINDOW_SEC, PROBE_WINDOW_RANGE)
         self.connect_timeout = CONNECT_TIMEOUT_SEC
-        self.command_ttl = COMMAND_TTL_SEC
         self.command_session_idle = COMMAND_SESSION_IDLE_SEC
-        self.idle_timeout = IDLE_TIMEOUT_SEC
-        self.probe_window = PROBE_WINDOW_SEC
         self.read_poll_interval = READ_POLL_SEC
         self.initial_backoff = INITIAL_BACKOFF_SEC
         self.max_backoff = MAX_BACKOFF_SEC
+        self.stats_publish_interval = STATS_PUBLISH_INTERVAL_SEC
+
+        # Observability (0.3.0): counters + the published snapshot + the ring buffer.
+        self.recent_frames: deque[FrameRecord] = deque(maxlen=RECENT_FRAMES_MAXLEN)
+        self._frames_rx = 0
+        self._last_frame_at: datetime | None = None
+        self._reconnects = 0
+        self._commands_sent = 0
+        self._commands_dropped = 0
+        self._session_state = SESSION_STATE_DISCONNECTED
+        self._event_sessions_opened = 0
+        self._last_stats_publish: float | None = None
+        self._stats_timer: asyncio.TimerHandle | None = None
+        self.stats: GatewayStats = self._snapshot()
 
         # Energy throttle bookkeeping (instant active power only, gw-06 / sc-02 / sc-03).
         self._energy_settings_cache: dict[str, _EnergySettings] = {}
@@ -280,6 +409,20 @@ class MyHOMEGatewayHandler:
     def firmware(self) -> str:
         return self.gateway.firmware
 
+    @property
+    def session_parameters(self) -> dict[str, float]:
+        """The timing knobs actually in effect (diagnostics download, G1-A)."""
+        return {
+            CONF_IDLE_WATCHDOG_SEC: self.idle_timeout,
+            CONF_PROBE_WINDOW_SEC: self.probe_window,
+            CONF_COMMAND_TIMEOUT_SEC: self.command_timeout,
+            CONF_QUEUE_TTL_SEC: self.command_ttl,
+            "connect_timeout_sec": self.connect_timeout,
+            "command_session_idle_sec": self.command_session_idle,
+            "read_poll_interval_sec": self.read_poll_interval,
+            "queue_maxsize": float(self.send_buffer.maxsize),
+        }
+
     async def test(self) -> dict | None:
         """Connection test used by setup / config flow (OWNd semantics: may return None)."""
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
@@ -306,6 +449,36 @@ class MyHOMEGatewayHandler:
     def handle_discovery_message(self, message: OWNMessage) -> None:
         if self.discovery_service:
             self.discovery_service.handle_discovery_message(message)
+
+    # ------------------------------------------------------------------ options
+    def _entry_options(self) -> Mapping[str, Any]:
+        """``config_entry.options`` as a mapping (empty for a mock or a bare entry)."""
+        options = getattr(self.config_entry, "options", None)
+        return options if isinstance(options, Mapping) else {}
+
+    def _option(self, options: Mapping[str, Any], key: str, default: float, bounds: tuple[float, float]) -> float:
+        """One numeric option, defaulted when unusable and clamped to ``bounds``."""
+        raw = options.get(key)
+        if raw is None:
+            return float(default)
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            LOGGER.warning("%s Option `%s` is not a number (%r): using %s s", self.log_id, key, raw, default)
+            return float(default)
+        minimum, maximum = bounds
+        clamped = min(max(value, minimum), maximum)
+        if clamped != value:
+            LOGGER.warning(
+                "%s Option `%s` = %s s is out of range (%s..%s): using %s s",
+                self.log_id,
+                key,
+                value,
+                minimum,
+                maximum,
+                clamped,
+            )
+        return clamped
 
     # ------------------------------------------------------------------ helpers
     @staticmethod
@@ -340,16 +513,100 @@ class MyHOMEGatewayHandler:
             msg = f"{msg} ({suppressed} similar message(s) suppressed)"
         LOGGER.log(level, msg, *args, exc_info=exc_info)
 
-    def _set_connected(self, connected: bool) -> None:
+    def _set_connected(self, connected: bool, *, session_state: str | None = None) -> None:
         """Update ``is_connected`` and publish every transition (Contract B, gw-10)."""
-        if connected == self.is_connected:
-            return
+        if session_state is not None:
+            state = session_state
+        elif connected:
+            state = SESSION_STATE_CONNECTED
+        else:
+            # A rejected password outlives the loop teardown that follows it: the
+            # entry stays in reauth until the user fixes it (never "disconnected").
+            state = SESSION_STATE_AUTH_FAILED if self.auth_failed else SESSION_STATE_DISCONNECTED
+        changed = connected != self.is_connected
+        state_changed = state != self._session_state
         self.is_connected = connected
-        LOGGER.info("%s Gateway is %s", self.log_id, "connected" if connected else "disconnected")
+        self._session_state = state
+        if changed:
+            LOGGER.info("%s Gateway is %s", self.log_id, "connected" if connected else "disconnected")
+            try:
+                async_dispatcher_send(self.hass, SIGNAL_GATEWAY_CONNECTION.format(mac=self.mac), connected)
+            except Exception:  # noqa: BLE001 - never let a subscriber break the session loop
+                LOGGER.exception("%s Error while publishing the connection state", self.log_id)
+        # Connection lifecycle: the stats consumers must see it without waiting.
+        self._refresh_stats(publish=changed or state_changed, immediate=True)
+
+    def _set_session_state(self, state: str) -> None:
+        """Move the event session to ``state`` (``is_connected`` untouched)."""
+        if state == self._session_state:
+            return
+        self._session_state = state
+        self._refresh_stats(publish=True, immediate=True)
+
+    # ------------------------------------------------------------------ stats (0.3.0)
+    def _snapshot(self) -> GatewayStats:
+        return GatewayStats(
+            connected=self.is_connected,
+            last_frame_at=self._last_frame_at,
+            frames_rx=self._frames_rx,
+            reconnects=self._reconnects,
+            commands_sent=self._commands_sent,
+            commands_dropped=self._commands_dropped,
+            queue_length=self.send_buffer.qsize(),
+            session_state=self._session_state,
+        )
+
+    def _refresh_stats(self, *, publish: bool = False, immediate: bool = False) -> None:
+        """Rebuild ``self.stats`` and optionally publish it on the stats signal."""
+        self.stats = self._snapshot()
+        if publish:
+            self._publish_stats(immediate=immediate)
+
+    def _publish_stats(self, *, immediate: bool = False) -> None:
+        """Send the current snapshot, at most once per ``stats_publish_interval``.
+
+        A suppressed publish is not lost: a timer flushes the newest snapshot when
+        the window closes, so a consumer never waits more than the interval.
+        """
+        now = self._now()
+        last = self._last_stats_publish
+        if not immediate and last is not None and now - last < self.stats_publish_interval:
+            self._schedule_stats_flush(self.stats_publish_interval - (now - last))
+            return
+        self._cancel_stats_flush()
+        self._last_stats_publish = now
         try:
-            async_dispatcher_send(self.hass, SIGNAL_GATEWAY_CONNECTION.format(mac=self.mac), connected)
-        except Exception:  # noqa: BLE001 - never let a subscriber break the session loop
-            LOGGER.exception("%s Error while publishing the connection state", self.log_id)
+            async_dispatcher_send(self.hass, SIGNAL_GATEWAY_STATS.format(mac=self.mac), self.stats)
+        except Exception:  # noqa: BLE001 - a diagnostic subscriber must not break a session loop
+            LOGGER.exception("%s Error while publishing the gateway stats", self.log_id)
+
+    def _schedule_stats_flush(self, delay: float) -> None:
+        if self._stats_timer is not None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - only outside the event loop
+            return
+        self._stats_timer = loop.call_later(max(0.0, delay), self._flush_stats)
+
+    def _flush_stats(self) -> None:
+        self._stats_timer = None
+        if self._closed:
+            return
+        self._refresh_stats(publish=True, immediate=True)
+
+    def _cancel_stats_flush(self) -> None:
+        timer, self._stats_timer = self._stats_timer, None
+        if timer is not None:
+            timer.cancel()
+
+    def _record_frame(self, direction: str, frame: Any) -> None:
+        """Append to the ring buffer; received frames also move the rx counters."""
+        now = dt_util.utcnow()
+        self.recent_frames.append(FrameRecord(direction, str(frame), now))
+        if direction != FRAME_COMMAND:
+            self._frames_rx += 1
+            self._last_frame_at = now
 
     async def _close_session(self, session: OWNEventChannel | OWNCommandChannel | None) -> None:
         if session is None:
@@ -363,7 +620,7 @@ class MyHOMEGatewayHandler:
         """Password rejected at runtime: stop everything and ask for reauth (gw-05)."""
         self._stop_event_listener = True
         self._stop_command_workers = True
-        self._set_connected(False)
+        self._set_connected(False, session_state=SESSION_STATE_AUTH_FAILED)
         if self.auth_failed:
             return
         self.auth_failed = True
@@ -384,17 +641,44 @@ class MyHOMEGatewayHandler:
         return self._enqueue(message, is_status_request=False)
 
     async def send_status_request(self, message: OWNCommand) -> bool:
-        """Queue a status request (logged at DEBUG only); same semantics as ``send``."""
+        """Queue a status request (logged at DEBUG only); same semantics as ``send``.
+
+        An identical status frame already waiting in the queue is *coalesced*: the
+        request is reported as accepted without queueing a second copy.  Asking the
+        same WHERE twice in a row can only produce the same answer, and several
+        code paths (general/area lighting events, the idle probe, entities re-arming
+        on the connection signal) legitimately race to ask for it.
+        """
+        frame = str(message)
+        if self._has_pending_status(frame):
+            LOGGER.debug("%s Coalescing status request `%s`: an identical one is already queued", self.log_id, frame)
+            return True
         return self._enqueue(message, is_status_request=True)
+
+    def _has_pending_status(self, frame: str) -> bool:
+        """True when an identical status request is still waiting in the queue.
+
+        The queue is the single source of truth: a separate counter would go out
+        of sync as soon as anything drained the queue outside ``sending_loop``.
+        At most ``COMMAND_QUEUE_MAXSIZE`` string comparisons, only for status
+        requests, so the command path is untouched.
+        """
+        return any(
+            isinstance(item, _QueuedCommand) and item.is_status_request and item.frame == frame
+            for item in tuple(getattr(self.send_buffer, "_queue", ()))
+        )
 
     def _enqueue(self, message: OWNCommand, *, is_status_request: bool) -> bool:
         if self._closed or self._stop_command_workers:
             self._log_limited(
                 logging.WARNING, "queue-closed", "%s Cannot send `%s`: the gateway handler is closed", self.log_id, message
             )
+            self._commands_dropped += 1
+            self._refresh_stats(publish=True, immediate=True)
             return False
+        item = _QueuedCommand(message, is_status_request, self._now())
         try:
-            self.send_buffer.put_nowait(_QueuedCommand(message, is_status_request, self._now()))
+            self.send_buffer.put_nowait(item)
         except asyncio.QueueFull:
             self._log_limited(
                 logging.WARNING,
@@ -404,8 +688,13 @@ class MyHOMEGatewayHandler:
                 self.send_buffer.maxsize,
                 message,
             )
+            self._commands_dropped += 1
+            self._refresh_stats(publish=True, immediate=True)
             return False
         LOGGER.debug("%s Queued `%s`", self.log_id, message)
+        # The queue length alone is not worth a dispatch: the snapshot stays fresh
+        # and is published by the next frame / command / lifecycle event.
+        self._refresh_stats()
         return True
 
     def _drain_queue(self) -> list[_QueuedCommand]:
@@ -450,6 +739,8 @@ class MyHOMEGatewayHandler:
                             item.message,
                             age,
                         )
+                        self._commands_dropped += 1
+                        self._refresh_stats(publish=True, immediate=True)
                         continue
 
                     session, delivered = await self._deliver(session, worker_id, item)
@@ -481,6 +772,7 @@ class MyHOMEGatewayHandler:
                     await session.open(self.connect_timeout)
                     self._command_sessions[worker_id] = session
                     LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
+                self._record_frame(FRAME_COMMAND, item.frame)
                 result = await session.send_command(item.message, self.command_timeout)
             except AuthenticationError as err:
                 await self._close_session(session)
@@ -509,6 +801,8 @@ class MyHOMEGatewayHandler:
                     type(err).__name__,
                     err,
                 )
+                self._commands_dropped += 1
+                self._refresh_stats(publish=True, immediate=True)
                 return None, False
             await self._on_command_result(item, result)
             return session, True
@@ -526,9 +820,12 @@ class MyHOMEGatewayHandler:
                 self.log_id,
                 item.message,
             )
+        self._commands_sent += 1
         for reply in result.replies:
             LOGGER.debug("%s Reply: `%s`", self.log_id, reply)
+            self._record_frame(FRAME_REPLY, reply)
             await self._dispatch_message(reply, from_monitor=False)
+        self._refresh_stats(publish=True)
 
     # ------------------------------------------------------------------ listening loop
     async def listening_loop(self) -> None:
@@ -542,11 +839,15 @@ class MyHOMEGatewayHandler:
             while not self._stop_event_listener:
                 try:
                     if session is None:
+                        self._set_session_state(SESSION_STATE_CONNECTING)
                         session = OWNEventChannel(self.gateway, LOGGER)
                         await session.open(self.connect_timeout)
                         self._event_session = session
                         self._last_rx = self._now()
                         self._probe_sent_at = None
+                        if self._event_sessions_opened:
+                            self._reconnects += 1
+                        self._event_sessions_opened += 1
                         # NOTE: the backoff is reset only once the session proves
                         # alive (a frame, or a full poll interval without failure):
                         # "connect then fail at once" must keep slowing down.
@@ -574,6 +875,8 @@ class MyHOMEGatewayHandler:
                     self._probe_sent_at = None
                     backoff = self.initial_backoff
                     self._throttle.reset("event-lost")
+                    self._record_frame(FRAME_MONITOR, message)
+                    self._refresh_stats(publish=True)
                     if not isinstance(message, OWNMessage):
                         LOGGER.debug("%s Ignoring unparsable frame `%s`", self.log_id, message)
                         self._fire_raw_message_event(message)
@@ -1000,6 +1303,7 @@ class MyHOMEGatewayHandler:
 
         dropped = self._drain_queue()
         if dropped:
+            self._commands_dropped += len(dropped)
             LOGGER.warning(
                 "%s %d queued command(s) discarded on shutdown: %s",
                 self.log_id,
@@ -1007,4 +1311,7 @@ class MyHOMEGatewayHandler:
                 ", ".join(str(item.message) for item in dropped[:10]) + (" ..." if len(dropped) > 10 else ""),
             )
         self._set_connected(False)
+        # Final snapshot (queue drained) and no timer left behind.
+        self._refresh_stats(publish=True, immediate=True)
+        self._cancel_stats_flush()
         return True

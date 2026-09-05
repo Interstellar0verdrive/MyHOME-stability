@@ -79,7 +79,19 @@
           "password": "Mot de passe",
           "config_file_path": "Chemin du fichier de configuration",
           "command_worker_count": "Nombre de sessions de commande simultanées",
-          "generate_events": "Générer des événements dans Home Assistant pour chaque message reçu"
+          "generate_events": "Générer des événements dans Home Assistant pour chaque message reçu",
+          "idle_watchdog_sec": "Surveillance d'inactivité",
+          "probe_window_sec": "Fenêtre de sondage",
+          "command_timeout_sec": "Délai d'expiration d'une commande",
+          "queue_ttl_sec": "Durée de vie de la file de commandes",
+          "default_keepalive_minutes": "Maintien de la puissance instantanée par défaut"
+        },
+        "data_description": {
+          "idle_watchdog_sec": "Aucune trame reçue sur la session de monitorage pendant cette durée : une sonde inoffensive est envoyée via la session de commande. Par défaut 300 s (60-3600).",
+          "probe_window_sec": "La sonde a été envoyée et rien n'est arrivé sur la session de monitorage : reconnexion. Par défaut 30 s (5-300).",
+          "command_timeout_sec": "Durée maximale d'écriture et d'acquittement d'une commande avant un unique réessai puis son abandon. Par défaut 10 s (2-60).",
+          "queue_ttl_sec": "Les commandes encore en file après cette durée sont abandonnées au lieu d'être envoyées en retard. Par défaut 60 s (10-600).",
+          "default_keepalive_minutes": "Maintien demandé aux compteurs d'énergie quand un capteur ne définit pas keepalive_minutes dans myhome.yaml. 0 le désactive. Par défaut 125 min (0-255)."
         }
       }
     },
@@ -87,6 +99,20 @@
       "invalid_host": "Adresse IP ou nom d'hôte invalide",
       "invalid_port": "Port invalide",
       "invalid_config_path": "Fichier de configuration inexistant à ce chemin"
+    }
+  },
+  "issues": {
+    "yaml_invalid": {
+      "title": "Le fichier de configuration MyHOME est invalide",
+      "description": "L'intégration n'a pas pu charger `{path}` :\n\n```\n{message}\n```\n\nCorrigez le fichier puis rechargez l'intégration MyHOME. Aucun appareil n'est créé tant que le fichier n'est pas valide."
+    },
+    "unknown_keys": {
+      "title": "Clés inconnues dans le fichier de configuration MyHOME",
+      "description": "`{path}` contient {count} clé(s) que l'intégration ne connaît pas ; elles sont ignorées :\n\n{keys}\n\nSupprimez-les ou corrigez-les, puis rechargez l'intégration. Vous pouvez ignorer cet avertissement si ces clés sont volontaires."
+    },
+    "no_devices_for_gateway": {
+      "title": "Aucun appareil configuré pour cette passerelle MyHOME",
+      "description": "La passerelle `{mac}` n'a aucune section dans `{path}` (passerelles trouvées dans le fichier : {others}), aucun appareil n'a donc été créé.\n\nAjoutez une section pour cette passerelle, ou vérifiez que l'adresse MAC correspond, puis rechargez l'intégration."
     }
   },
   "entity": {
@@ -110,6 +136,23 @@
       },
       "energy_total": {
         "name": "Énergie"
+      },
+      "gateway_last_frame": {
+        "name": "Dernière trame"
+      },
+      "gateway_reconnects": {
+        "name": "Reconnexions"
+      },
+      "gateway_commands_dropped": {
+        "name": "Commandes abandonnées"
+      },
+      "gateway_queue_length": {
+        "name": "Commandes en attente"
+      }
+    },
+    "binary_sensor": {
+      "gateway_connected": {
+        "name": "Connectée"
       }
     }
   },

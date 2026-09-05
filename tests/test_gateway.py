@@ -28,19 +28,31 @@ from homeassistant.components.sensor import DOMAIN as SENSOR
 
 from custom_components.myhome import gateway as gateway_module
 from custom_components.myhome.const import (
+    CONF_COMMAND_TIMEOUT_SEC,
     CONF_ENTITIES,
     CONF_ENTITY,
+    CONF_IDLE_WATCHDOG_SEC,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
     CONF_PLATFORMS,
+    CONF_PROBE_WINDOW_SEC,
+    CONF_QUEUE_TTL_SEC,
     CONF_SHORT_PRESS,
     DOMAIN,
     LOGGER,
     SIGNAL_GATEWAY_CONNECTION,
+    SIGNAL_GATEWAY_STATS,
 )
 from custom_components.myhome.gateway import (
     EVENT_LONG_PRESS_REPEAT,
     EVENT_ROTATE_CW_SLOW,
+    FRAME_COMMAND,
+    FRAME_MONITOR,
+    FRAME_REPLY,
+    SESSION_STATE_AUTH_FAILED,
+    SESSION_STATE_CONNECTED,
+    SESSION_STATE_DISCONNECTED,
+    GatewayStats,
     MyHOMEGatewayHandler,
     _QueuedCommand,
 )
@@ -57,6 +69,7 @@ from custom_components.myhome.own_session import (
 from .helpers_core import ENTRY_DATA_V2, MAC
 
 SIGNAL = SIGNAL_GATEWAY_CONNECTION.format(mac=MAC)
+STATS_SIGNAL = SIGNAL_GATEWAY_STATS.format(mac=MAC)
 LOGGER_NAME = LOGGER.name
 
 
@@ -180,8 +193,11 @@ def make_handler(
     platforms: dict[str, dict[str, dict[str, Any]]] | None = None,
     sensor_defaults: dict[str, Any] | None = None,
     generate_events: bool = False,
+    options: dict[str, Any] | None = None,
+    fast: bool = True,
 ) -> MyHOMEGatewayHandler:
-    """Handler on a MagicMock hass with fast timings."""
+    """Handler on a MagicMock hass with fast timings (``fast=False`` keeps the
+    values the entry options produced)."""
     hass = MagicMock()
     gateway_cfg: dict[str, Any] = {CONF_PLATFORMS: platforms or {}}
     if sensor_defaults:
@@ -190,17 +206,19 @@ def make_handler(
     hass.bus = MagicMock()
     entry = MagicMock()
     entry.data = dict(ENTRY_DATA_V2)
+    entry.options = dict(options or {})
     entry.async_start_reauth = MagicMock()
     handler = MyHOMEGatewayHandler(hass, entry, generate_events=generate_events)
     hass.data[DOMAIN][MAC][CONF_ENTITY] = handler
-    handler.initial_backoff = 0.01
-    handler.max_backoff = 0.05
-    handler.read_poll_interval = 0.03
-    handler.idle_timeout = 0.12
-    handler.probe_window = 0.1
-    handler.command_session_idle = 0.2
-    handler.command_timeout = 0.2
-    handler.connect_timeout = 0.2
+    if fast:
+        handler.initial_backoff = 0.01
+        handler.max_backoff = 0.05
+        handler.read_poll_interval = 0.03
+        handler.idle_timeout = 0.12
+        handler.probe_window = 0.1
+        handler.command_session_idle = 0.2
+        handler.command_timeout = 0.2
+        handler.connect_timeout = 0.2
     return handler
 
 
@@ -231,6 +249,15 @@ def fired(hass: MagicMock, event_type: str) -> list[dict[str, Any]]:
 
 def queued(handler: MyHOMEGatewayHandler) -> list[str]:
     return [str(item.message) for item in list(handler.send_buffer._queue)]  # noqa: SLF001
+
+
+def connection_calls(dispatch: MagicMock) -> list[bool]:
+    """Availability payloads only (the handler also publishes stats snapshots)."""
+    return [call.args[2] for call in dispatch.call_args_list if call.args[1] == SIGNAL]
+
+
+def stats_calls(dispatch: MagicMock) -> list[GatewayStats]:
+    return [call.args[2] for call in dispatch.call_args_list if call.args[1] == STATS_SIGNAL]
 
 
 # --------------------------------------------------------------------------- command path
@@ -376,8 +403,7 @@ async def test_none_from_get_next_reconnects_with_backoff_no_hot_loop() -> None:
     # 0.02 + 0.04 + 0.08 + 0.08 ... -> a handful of attempts in 0.3 s, not thousands.
     assert 2 <= count <= 8
     assert all(channel.closed for channel in event.instances)
-    assert dispatch.call_args_list[0].args == (handler.hass, SIGNAL, True)
-    assert dispatch.call_args_list[1].args == (handler.hass, SIGNAL, False)
+    assert connection_calls(dispatch)[:2] == [True, False]
 
 
 async def test_transport_error_reconnects_and_signals_availability() -> None:
@@ -390,8 +416,9 @@ async def test_transport_error_reconnects_and_signals_availability() -> None:
             await wait_until(lambda: len(event.instances) == 2 and handler.is_connected)
             event.instances[1].feed("*1*1*11##")
             await asyncio.sleep(0.05)
-    assert [call.args[2] for call in dispatch.call_args_list] == [True, False, True, False]
-    assert all(call.args[:2] == (handler.hass, SIGNAL) for call in dispatch.call_args_list)
+    assert connection_calls(dispatch) == [True, False, True, False]
+    assert all(call.args[1] in (SIGNAL, STATS_SIGNAL) for call in dispatch.call_args_list)
+    assert all(call.args[0] is handler.hass for call in dispatch.call_args_list)
     assert handler.is_connected is False
 
 
@@ -427,7 +454,8 @@ async def test_event_auth_failure_stops_loop_and_starts_reauth() -> None:
     assert handler.auth_failed is True
     assert len(event.instances) == 1
     handler.config_entry.async_start_reauth.assert_called_once_with(handler.hass)
-    assert not any(call.args[2] for call in dispatch.call_args_list)
+    assert not any(connection_calls(dispatch))
+    assert stats_calls(dispatch)[-1].session_state == SESSION_STATE_AUTH_FAILED
 
 
 async def test_dispatch_errors_never_tear_down_the_session(caplog: pytest.LogCaptureFixture) -> None:
@@ -559,6 +587,148 @@ async def test_throttle_reads_per_sensor_and_gateway_defaults() -> None:
     assert all(handler._should_process_active_power("18-53", w) for w in (100, 100, 100))  # noqa: SLF001
 
 
+# --------------------------------------------------------------------------- stats / options / dedupe (0.3.0)
+async def test_stats_snapshot_follows_frames_commands_and_reconnects() -> None:
+    """The published snapshot mirrors what the sessions actually did."""
+    handler = make_handler()
+    register(handler, LIGHT, "1-11")
+    assert handler.stats == GatewayStats()  # nothing happened yet
+    with fake_channels() as (event, _, dispatch):
+        async with running(handler):
+            await wait_until(lambda: handler.is_connected)
+            assert handler.stats.connected is True
+            assert handler.stats.session_state == SESSION_STATE_CONNECTED
+            assert stats_calls(dispatch)[-1].session_state == SESSION_STATE_CONNECTED
+
+            event.instances[0].feed("*1*1*11##")
+            await wait_until(lambda: handler.stats.frames_rx == 1)
+            assert handler.stats.last_frame_at is not None
+            assert handler.stats.last_frame_at.tzinfo is not None  # UTC aware
+
+            assert await handler.send(OWNLightingCommand.switch_on("11"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            await wait_until(lambda: handler.stats.commands_sent == 1)
+
+            event.instances[0].feed(ConnectionResetError("rst"))
+            await wait_until(lambda: handler.stats.reconnects == 1, timeout=3)
+    assert handler.stats.connected is False
+    assert handler.stats.session_state == SESSION_STATE_DISCONNECTED
+    assert handler.stats.queue_length == 0
+    assert stats_calls(dispatch)[-1] == handler.stats  # the last publish is the final snapshot
+
+
+async def test_stats_counts_dropped_commands() -> None:
+    handler = make_handler()
+    handler.send_buffer = asyncio.Queue(maxsize=1)
+    with fake_channels() as (_, _, dispatch):
+        assert await handler.send(OWNLightingCommand.switch_on("11")) is True
+        assert await handler.send(OWNLightingCommand.switch_on("12")) is False  # queue full
+        assert handler.stats.commands_dropped == 1
+        assert handler.stats.queue_length == 1
+        await handler.close_listener()  # the queued command is discarded too
+        assert await handler.send(OWNLightingCommand.switch_on("13")) is False  # closed
+    assert handler.stats.commands_dropped == 3
+    assert handler.stats.queue_length == 0
+    assert stats_calls(dispatch)[-1].commands_dropped == 3
+
+
+async def test_stats_signal_is_throttled_but_never_stale() -> None:
+    """At most one publish per interval; the newest snapshot is flushed after it."""
+    handler = make_handler()
+    handler.stats_publish_interval = 0.2
+    with fake_channels() as (event, _, dispatch):
+        async with running(handler, sending=False):
+            await wait_until(lambda: handler.is_connected)
+            before = len(stats_calls(dispatch))
+            for _ in range(10):
+                event.instances[0].feed("*1*1*11##")
+            await wait_until(lambda: handler.stats.frames_rx == 10)
+            assert len(stats_calls(dispatch)) - before <= 1  # ten frames, one window
+            # ... and the suppressed publish is not lost: it lands within the interval.
+            await wait_until(lambda: stats_calls(dispatch)[-1].frames_rx == 10, timeout=2)
+    assert handler._stats_timer is None  # noqa: SLF001 - no timer left behind
+
+
+async def test_options_configure_the_timing_knobs(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING, logger=LOGGER_NAME)
+    defaults = make_handler(fast=False)
+    assert (defaults.idle_timeout, defaults.probe_window, defaults.command_timeout, defaults.command_ttl) == (
+        300.0,
+        30.0,
+        10.0,
+        60.0,
+    )
+    tuned = make_handler(
+        fast=False,
+        options={
+            CONF_IDLE_WATCHDOG_SEC: 120,
+            CONF_PROBE_WINDOW_SEC: 15,
+            CONF_COMMAND_TIMEOUT_SEC: 25,
+            CONF_QUEUE_TTL_SEC: 90,
+        },
+    )
+    assert (tuned.idle_timeout, tuned.probe_window, tuned.command_timeout, tuned.command_ttl) == (120.0, 15.0, 25.0, 90.0)
+    assert tuned.session_parameters[CONF_IDLE_WATCHDOG_SEC] == 120.0
+    assert tuned.session_parameters[CONF_QUEUE_TTL_SEC] == 90.0
+    assert not caplog.records
+
+    # Defensive: an out-of-range value is clamped, a non-numeric one falls back.
+    guarded = make_handler(fast=False, options={CONF_IDLE_WATCHDOG_SEC: 1, CONF_COMMAND_TIMEOUT_SEC: "soon"})
+    assert guarded.idle_timeout == 30.0  # the watchdog can never be switched off
+    assert guarded.command_timeout == 10.0
+    assert any("out of range" in record.message for record in caplog.records)
+    assert any("is not a number" in record.message for record in caplog.records)
+
+
+async def test_identical_pending_status_requests_are_coalesced(caplog: pytest.LogCaptureFixture) -> None:
+    """G1-E: the same status frame is never queued twice while one is pending."""
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+    handler = make_handler()
+    assert await handler.send_status_request(OWNLightingCommand.status("0")) is True
+    assert await handler.send_status_request(OWNLightingCommand.status("0")) is True  # coalesced
+    assert await handler.send_status_request(OWNLightingCommand.status("11")) is True  # other WHERE
+    assert await handler.send(OWNLightingCommand.switch_on("11")) is True
+    assert await handler.send(OWNLightingCommand.switch_on("11")) is True  # commands are never coalesced
+    assert queued(handler) == ["*#1*0##", "*#1*11##", "*1*1*11##", "*1*1*11##"]
+    assert any("Coalescing status request" in record.message for record in caplog.records)
+
+    # Once delivered, the same status request can be queued again.
+    with fake_channels() as (_, command, _):
+        async with running(handler, listening=False):
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            assert await handler.send_status_request(OWNLightingCommand.status("0")) is True
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert command.instances[0].sent.count("*#1*0##") == 2
+
+
+async def test_recent_frames_ring_buffer() -> None:
+    """The last 50 frames (both directions) are kept for the diagnostics download."""
+    handler = make_handler()
+    register(handler, LIGHT, "1-11")
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        channel.responder = lambda message: CommandResult(True, [frame("*1*1*11##")])
+
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (event, _, _):
+        async with running(handler):
+            await wait_until(lambda: handler.is_connected)
+            event.instances[0].feed("*1*1*12##")
+            await wait_until(lambda: handler.recent_frames)
+            assert await handler.send(OWNLightingCommand.switch_on("11"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            await wait_until(lambda: len(handler.recent_frames) >= 3)
+    assert [record.direction for record in handler.recent_frames][:3] == [FRAME_MONITOR, FRAME_COMMAND, FRAME_REPLY]
+    assert [record.frame for record in handler.recent_frames][:3] == ["*1*1*12##", "*1*1*11##", "*1*1*11##"]
+    assert all(record.at.tzinfo is not None for record in handler.recent_frames)
+    first = handler.recent_frames[0]
+    assert first.as_dict() == {"at": first.at.isoformat(), "direction": FRAME_MONITOR, "frame": "*1*1*12##"}
+    # Bounded: only the newest 50 survive.
+    for index in range(60):
+        handler._record_frame(FRAME_MONITOR, f"*1*1*{index}##")  # noqa: SLF001
+    assert len(handler.recent_frames) == 50
+    assert handler.recent_frames[0].frame == "*1*1*10##"
+
+
 # --------------------------------------------------------------------------- shutdown
 async def test_close_listener_is_idempotent_and_drains(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
@@ -576,7 +746,7 @@ async def test_close_listener_is_idempotent_and_drains(caplog: pytest.LogCapture
     assert event.instances[0].closed
     assert handler.send_buffer.qsize() == 0
     assert handler.is_connected is False
-    assert [call.args[2] for call in dispatch.call_args_list] == [True, False]
+    assert connection_calls(dispatch) == [True, False]
     assert sum("Closing gateway sessions" in record.message for record in caplog.records) == 1
     assert any("2 queued command(s) discarded" in record.message for record in caplog.records)
 

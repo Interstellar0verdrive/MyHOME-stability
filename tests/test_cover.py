@@ -32,6 +32,7 @@ from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
 
 from .helpers_core import MAC
 from .helpers_platforms import (
+    GATEWAY_DIAG_UNIQUE_IDS,
     device_config,
     entity_object,
     feed_event,
@@ -95,7 +96,9 @@ async def test_real_config_creates_every_cover(hass: HomeAssistant, tmp_path) ->
         # One entity per configured cover, no duplicate WHERE swallowed silently.
         assert len(entries) == len(platforms[COVER])
         assert len(entries) >= 12
-        assert {item.unique_id for item in entries} == expected_unique_ids(MAC, {COVER: platforms[COVER]})
+        assert {item.unique_id for item in entries} == expected_unique_ids(
+            MAC, {COVER: platforms[COVER]}
+        ) - GATEWAY_DIAG_UNIQUE_IDS
 
         state = hass.states.get("cover.tapparella_cucina_1")
         assert state.attributes[ATTR_DEVICE_CLASS] == CoverDeviceClass.SHUTTER

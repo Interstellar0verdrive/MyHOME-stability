@@ -49,6 +49,7 @@ from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
     entity_registry as er,
+    issue_registry as ir,
 )
 from homeassistant.helpers.typing import ConfigType
 
@@ -74,7 +75,11 @@ from .const import (
     DEFAULT_CONFIG_FILE,
     DEFAULT_MANUFACTURER,
     DOMAIN,
+    GATEWAY_DIAG_SUFFIXES,
     GATEWAY_TEST_TIMEOUT_SEC,
+    ISSUE_NO_DEVICES_FOR_GATEWAY,
+    ISSUE_UNKNOWN_KEYS,
+    ISSUE_YAML_INVALID,
     LOGGER,
     SERVICE_SEND_MESSAGE,
     SERVICE_START_DISCOVERY,
@@ -82,7 +87,7 @@ from .const import (
     SERVICE_SYNC_TIME,
 )
 from .gateway import MyHOMEGatewayHandler
-from .validate import config_schema, format_mac
+from .validate import collect_unknown_keys, config_schema, format_mac
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -155,14 +160,91 @@ def _create_empty_config_file(path: str) -> None:
         )
 
 
-async def _async_load_gateway_config(hass: HomeAssistant, path: str, mac: str) -> dict[str, Any]:
+# --------------------------------------------------------------------------- repairs
+def issue_id(entry: ConfigEntry, issue: str) -> str:
+    """Issue registry id of ``issue`` for ``entry`` (one gateway may fail alone)."""
+    return f"{entry.entry_id}_{issue}"
+
+
+@callback
+def _async_raise_issue(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    issue: str,
+    placeholders: dict[str, str],
+    *,
+    severity: ir.IssueSeverity,
+    is_persistent: bool = False,
+) -> None:
+    """Create (or refresh) a repair issue for this config entry.
+
+    ``is_persistent`` marks an issue the user must not simply dismiss (it survives a
+    restart and comes back until the cause is fixed); the dismissable warnings are
+    re-created on every load anyway.
+    """
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id(entry, issue),
+        is_fixable=False,
+        is_persistent=is_persistent,
+        severity=severity,
+        translation_key=issue,
+        translation_placeholders=placeholders,
+    )
+
+
+@callback
+def _async_clear_issue(hass: HomeAssistant, entry: ConfigEntry, issue: str) -> None:
+    """Delete a repair issue once its cause is gone (no-op when it does not exist)."""
+    ir.async_delete_issue(hass, DOMAIN, issue_id(entry, issue))
+
+
+@callback
+def _async_report_unknown_keys(
+    hass: HomeAssistant, entry: ConfigEntry, path: str, unknown: list[tuple[str, str, str | None]]
+) -> None:
+    """Raise/clear ISSUE_UNKNOWN_KEYS from what validate.py collected."""
+    if not unknown:
+        _async_clear_issue(hass, entry, ISSUE_UNKNOWN_KEYS)
+        return
+    # De-duplicate on (path, key): the same key may be reported by nested schemas.
+    seen: dict[tuple[str, str], str | None] = {}
+    for key_path, key, hint in unknown:
+        seen.setdefault((key_path, key), hint)
+    lines = sorted(
+        f"{key_path}.{key}" + (f" (did you mean '{hint}'?)" if hint else "") for (key_path, key), hint in seen.items()
+    )
+    _async_raise_issue(
+        hass,
+        entry,
+        ISSUE_UNKNOWN_KEYS,
+        {"path": path, "count": str(len(lines)), "keys": "\n".join(f"- {line}" for line in lines)},
+        severity=ir.IssueSeverity.WARNING,
+    )
+
+
+async def _async_load_gateway_config(hass: HomeAssistant, entry: ConfigEntry, path: str, mac: str) -> dict[str, Any]:
     """Load, validate and return the Contract A config of gateway ``mac``.
 
     Raises ``ConfigEntryError`` with a human readable message on YAML or schema
-    errors (shown on the integrations page, core-08).  A missing file is created
-    empty (WARNING) and an empty/absent gateway section yields zero devices with a
-    WARNING, never a crash.
+    errors (shown on the integrations page, core-08) and, since 0.3.0, raises the
+    matching repair issue; every issue is cleared again as soon as a later load no
+    longer hits its cause.  A missing file is created empty (WARNING) and an
+    empty/absent gateway section yields zero devices with a WARNING, never a crash.
     """
+
+    def _fail(message: str) -> ConfigEntryError:
+        _async_raise_issue(
+            hass,
+            entry,
+            ISSUE_YAML_INVALID,
+            {"path": path, "message": message},
+            severity=ir.IssueSeverity.ERROR,
+            is_persistent=True,
+        )
+        return ConfigEntryError(f"{path}: {message}")
+
     try:
         parsed = await hass.async_add_executor_job(_read_yaml_file, path)
     except FileNotFoundError:
@@ -173,22 +255,27 @@ async def _async_load_gateway_config(hass: HomeAssistant, path: str, mac: str) -
         try:
             await hass.async_add_executor_job(_create_empty_config_file, path)
         except OSError as err:
-            raise ConfigEntryError(f"Cannot create configuration file {path}: {err}") from err
+            raise _fail(f"cannot create the configuration file ({err})") from err
         parsed = None
     except OSError as err:
-        raise ConfigEntryError(f"Cannot read configuration file {path}: {err}") from err
+        raise _fail(f"cannot read the configuration file ({err})") from err
     except yaml.YAMLError as err:
-        raise ConfigEntryError(f"{path} is not valid YAML: {err}") from err
+        raise _fail(f"the file is not valid YAML ({err})") from err
 
     if parsed is None:
         parsed = {}
     if not isinstance(parsed, dict):
-        raise ConfigEntryError(f"{path}: the file must contain a mapping (gateway: ...), found {type(parsed).__name__}")
+        raise _fail(f"the file must contain a mapping (gateway: ...), found {type(parsed).__name__}")
 
     try:
-        validated = config_schema(parsed)
+        with collect_unknown_keys() as unknown_keys:
+            validated = config_schema(parsed)
     except vol.Invalid as err:
-        raise ConfigEntryError(f"{path}: {err}") from err
+        raise _fail(str(err)) from err
+
+    # The file parsed and validated: any previous "broken configuration" repair is stale.
+    _async_clear_issue(hass, entry, ISSUE_YAML_INVALID)
+    _async_report_unknown_keys(hass, entry, path, unknown_keys)
 
     gateway_config = validated.get(mac)
     if gateway_config is None:
@@ -199,7 +286,16 @@ async def _async_load_gateway_config(hass: HomeAssistant, path: str, mac: str) -
             path,
             others,
         )
+        _async_raise_issue(
+            hass,
+            entry,
+            ISSUE_NO_DEVICES_FOR_GATEWAY,
+            {"mac": mac, "path": path, "others": others},
+            severity=ir.IssueSeverity.WARNING,
+        )
         gateway_config = {CONF_PLATFORMS: {}}
+    else:
+        _async_clear_issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY)
     gateway_config.setdefault(CONF_PLATFORMS, {})
     return gateway_config
 
@@ -214,8 +310,10 @@ def expected_unique_ids(mac: str, platforms: Mapping[str, Mapping[str, Mapping[s
     - sensor: power/energy -> one id per pre-seeded ``entities`` slot
       (``-power``, ``-daily-energy``, ``-monthly-energy``, ``-total-energy``);
       temperature / illuminance -> ``{mac}-{device_key}-{class}``.
+    - the five gateway diagnostic entities (0.3.0), which exist for every gateway
+      and have no YAML counterpart: ``{mac}-{suffix}`` for GATEWAY_DIAG_SUFFIXES.
     """
-    expected: set[str] = set()
+    expected: set[str] = {f"{mac}-{suffix}" for suffix in GATEWAY_DIAG_SUFFIXES}
     for platform, devices in platforms.items():
         for device_key, device in devices.items():
             base = f"{mac}-{device_key}"
@@ -328,7 +426,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     generate_events = bool(entry.options.get(CONF_GENERATE_EVENTS, False))
     worker_count = max(1, int(entry.options.get(CONF_WORKER_COUNT, 1)))
 
-    gateway_config = await _async_load_gateway_config(hass, config_file_path, mac)
+    gateway_config = await _async_load_gateway_config(hass, entry, config_file_path, mac)
     # Fresh per-gateway dict: never merge into leftovers of a previous setup.
     hass.data[DOMAIN][mac] = gateway_config
 
@@ -418,6 +516,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not still_loaded:
         _async_unregister_services(hass)
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop the repair issues of a gateway that is being removed."""
+    for issue in (ISSUE_YAML_INVALID, ISSUE_UNKNOWN_KEYS, ISSUE_NO_DEVICES_FOR_GATEWAY):
+        _async_clear_issue(hass, entry, issue)
 
 
 async def async_remove_config_entry_device(hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry) -> bool:

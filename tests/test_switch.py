@@ -17,7 +17,7 @@ from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
 
 from .helpers_core import MAC
-from .helpers_platforms import entity_object, feed_event, set_connected, setup_myhome
+from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, entity_object, feed_event, set_connected, setup_myhome
 
 SWITCH_YAML = f"""
 gateway:
@@ -45,7 +45,9 @@ async def test_switches_created(hass: HomeAssistant, tmp_path) -> None:
         ]
         assert len(entries) == 2
         platforms = hass.data[DOMAIN][MAC][CONF_PLATFORMS]
-        assert {item.unique_id for item in entries} == expected_unique_ids(MAC, {SWITCH: platforms[SWITCH]})
+        assert {item.unique_id for item in entries} == expected_unique_ids(
+            MAC, {SWITCH: platforms[SWITCH]}
+        ) - GATEWAY_DIAG_UNIQUE_IDS
         assert {item.unique_id for item in entries} == {f"{MAC}-1-23#4#01", f"{MAC}-1-31"}
 
         outlet = hass.states.get("switch.presa_bus")

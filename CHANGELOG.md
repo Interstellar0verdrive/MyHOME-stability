@@ -3,6 +3,49 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-09-05
+
+Robustness and observability. Everything in this release is **additive**: with the
+default options nothing changes in how the integration talks to your gateway, and no
+entity_id, unique_id or event contract is touched.
+
+### Added
+
+- **Diagnostics download.** *Settings → Devices & services → MyHOME → ⋮ → Download
+  diagnostics* (also available per device) produces a JSON file for bug reports: the
+  config entry with the password removed and the MAC/host/UDN partially masked, the
+  tunables in effect, a summary of the validated `myhome.yaml` (per platform: device
+  count and `who-where` keys, never your device names), the gateway statistics and
+  the last 50 bus frames. Session-negotiation frames are replaced by a marker so a
+  password hash can never end up in a public issue. See
+  [Troubleshooting](docs/troubleshooting.md#diagnostics-download).
+- **Gateway diagnostic entities** on the gateway device: a `connectivity` binary
+  sensor and a "last frame" timestamp sensor (both enabled by default), plus
+  reconnect, dropped-command and queue-length counters (disabled by default — enable
+  them from the entity settings when you are chasing a problem).
+- **Repairs.** The integration now raises a Home Assistant repair issue, in all four
+  languages, when `myhome.yaml` cannot be loaded (with the file path and the exact
+  validation message), when it contains keys the integration does not know (listed,
+  with a "did you mean" hint, dismissable), and when the gateway's MAC address has no
+  section in the file. Each issue disappears on its own as soon as a later load no
+  longer hits it.
+- **Tunable session options** in *Configure*, pre-filled with the values 0.2.x used
+  internally, so leaving them alone changes nothing: idle watchdog (300 s), probe
+  window (30 s), command timeout (10 s), command queue TTL (60 s) and the default
+  instant-power keep-alive (125 min, used when a sensor does not set
+  `keepalive_minutes` in `myhome.yaml`). See
+  [Configuration → Options](docs/configuration.md#options).
+
+### Changed
+
+- Identical status requests that are already waiting in the command queue are
+  coalesced instead of being sent twice, so a reconnect no longer floods the gateway
+  with duplicate `*#…##` frames.
+- Motion binary sensors keep their state across a reload or restart (the off-delay is
+  restored with them), like covers already did in 0.2.1.
+- Temperature and illuminance sensors ask for a fresh value when the gateway
+  reconnects, instead of waiting for the next spontaneous frame.
+
 ## [0.2.1] - 2026-09-05
 
 ### Fixed

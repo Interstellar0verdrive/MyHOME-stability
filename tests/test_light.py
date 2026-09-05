@@ -26,6 +26,7 @@ from custom_components.myhome.light import (
 
 from .helpers_core import MAC
 from .helpers_platforms import (
+    GATEWAY_DIAG_UNIQUE_IDS,
     entity_object,
     feed_event,
     real_config_yaml,
@@ -81,7 +82,9 @@ async def test_real_config_creates_every_light(hass: HomeAssistant, tmp_path) ->
         assert len(entries) == 20
 
         platforms = hass.data[DOMAIN][MAC][CONF_PLATFORMS]
-        assert {entry.unique_id for entry in entries} == expected_unique_ids(MAC, {LIGHT: platforms[LIGHT]})
+        assert {entry.unique_id for entry in entries} == expected_unique_ids(
+            MAC, {LIGHT: platforms[LIGHT]}
+        ) - GATEWAY_DIAG_UNIQUE_IDS
 
         state = hass.states.get("light.luce_cucina_centrale")
         assert state is not None

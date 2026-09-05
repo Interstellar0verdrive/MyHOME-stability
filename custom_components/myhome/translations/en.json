@@ -79,7 +79,19 @@
           "password": "Password",
           "config_file_path": "Configuration file path",
           "command_worker_count": "Number of concurrent command sessions",
-          "generate_events": "Generate events in Home Assistant for each message received"
+          "generate_events": "Generate events in Home Assistant for each message received",
+          "idle_watchdog_sec": "Idle watchdog",
+          "probe_window_sec": "Probe window",
+          "command_timeout_sec": "Command timeout",
+          "queue_ttl_sec": "Command queue TTL",
+          "default_keepalive_minutes": "Default instant-power keep-alive"
+        },
+        "data_description": {
+          "idle_watchdog_sec": "No frame received on the monitor session for this long: a harmless probe is sent through the command session. Default 300 s (60-3600).",
+          "probe_window_sec": "The probe was sent and still nothing arrived on the monitor session: reconnect. Default 30 s (5-300).",
+          "command_timeout_sec": "How long a single command may take to be written and acknowledged before it is retried once and then dropped. Default 10 s (2-60).",
+          "queue_ttl_sec": "Commands still queued after this long are dropped instead of being sent late. Default 60 s (10-600).",
+          "default_keepalive_minutes": "Keep-alive requested from the energy meters when a sensor does not set keepalive_minutes in myhome.yaml. 0 disables it. Default 125 min (0-255)."
         }
       }
     },
@@ -87,6 +99,20 @@
       "invalid_host": "Invalid IP address or hostname",
       "invalid_port": "Invalid port",
       "invalid_config_path": "Configuration file does not exist at this path"
+    }
+  },
+  "issues": {
+    "yaml_invalid": {
+      "title": "MyHOME configuration file is invalid",
+      "description": "The integration could not load `{path}`:\n\n```\n{message}\n```\n\nFix the file and reload the MyHOME integration. No device is created until the file is valid."
+    },
+    "unknown_keys": {
+      "title": "Unknown keys in the MyHOME configuration file",
+      "description": "`{path}` contains {count} key(s) the integration does not know; they are ignored:\n\n{keys}\n\nRemove or correct them, then reload the integration. You can dismiss this notice if the keys are intentional."
+    },
+    "no_devices_for_gateway": {
+      "title": "No devices configured for this MyHOME gateway",
+      "description": "Gateway `{mac}` has no section in `{path}` (gateways found in the file: {others}), so no device was created.\n\nAdd a section for this gateway, or check that the MAC address matches, then reload the integration."
     }
   },
   "entity": {
@@ -110,6 +136,23 @@
       },
       "energy_total": {
         "name": "Energy"
+      },
+      "gateway_last_frame": {
+        "name": "Last frame"
+      },
+      "gateway_reconnects": {
+        "name": "Reconnections"
+      },
+      "gateway_commands_dropped": {
+        "name": "Commands dropped"
+      },
+      "gateway_queue_length": {
+        "name": "Command queue length"
+      }
+    },
+    "binary_sensor": {
+      "gateway_connected": {
+        "name": "Connected"
       }
     }
   },

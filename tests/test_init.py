@@ -8,12 +8,21 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 
-from custom_components.myhome import normalise_entry_data
-from custom_components.myhome.const import CONF_ENTITY, CONF_FILE_PATH, DOMAIN
+from custom_components.myhome import expected_unique_ids, issue_id, normalise_entry_data
+from custom_components.myhome.const import (
+    CONF_ENTITY,
+    CONF_FILE_PATH,
+    DOMAIN,
+    GATEWAY_DIAG_SUFFIXES,
+    ISSUE_NO_DEVICES_FOR_GATEWAY,
+    ISSUE_UNKNOWN_KEYS,
+    ISSUE_YAML_INVALID,
+)
 
 from .helpers_core import (
+    BASIC_YAML,
     ENTRY_DATA_V2,
     LEGACY_ENTRY_DATA_V1,
     MAC,
@@ -26,6 +35,10 @@ from .helpers_platforms import REAL_CONFIG_PATH
 from .test_gateway import FakeOWNServer, wait_until
 
 SERVICES = ("sync_time", "send_message", "start_discovery", "stop_discovery")
+
+# The five diagnostic entities of the gateway device exist for every gateway, with or
+# without devices in myhome.yaml (0.3.0, G1-B).
+GATEWAY_DIAG_IDS = {f"{MAC}-{suffix}" for suffix in GATEWAY_DIAG_SUFFIXES}
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> bool:
@@ -173,7 +186,9 @@ async def test_missing_file_is_created(hass: HomeAssistant, tmp_path, caplog) ->
     assert entry.state is ConfigEntryState.LOADED
     assert path.is_file()
     assert "not found" in caplog.text
-    assert not er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    # No device from the file, but the gateway diagnostic entities are still there.
+    entries = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    assert {entity.unique_id for entity in entries} == GATEWAY_DIAG_IDS
 
 
 async def test_registry_pruning_keeps_user_disabled_entities(hass: HomeAssistant, tmp_path) -> None:
@@ -201,6 +216,9 @@ async def test_registry_pruning_keeps_user_disabled_entities(hass: HomeAssistant
     assert kept.disabled_by is er.RegistryEntryDisabler.USER
     assert device_registry.async_get(stale_device.id) is None
     assert device_registry.async_get_device_by_identifier((DOMAIN, MAC), entry.entry_id) is not None
+    # The gateway diagnostic entities have no YAML counterpart: pruning must keep them.
+    kept_ids = {entity.unique_id for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id)}
+    assert GATEWAY_DIAG_IDS <= kept_ids
 
 
 async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
@@ -283,6 +301,102 @@ class pytest_default_path:  # noqa: N801 - tiny context helper
     def __exit__(self, *exc):
         self.hass.config.config_dir = self._old
         return False
+
+
+# --------------------------------------------------------------------------- repairs (0.3.0)
+def _issue(hass: HomeAssistant, entry: MockConfigEntry, issue: str):
+    return ir.async_get(hass).async_get_issue(DOMAIN, issue_id(entry, issue))
+
+
+def test_expected_unique_ids_always_contain_the_gateway_diagnostics() -> None:
+    """G1-B: the five diagnostic ids must never be pruned, even with an empty config."""
+    assert expected_unique_ids(MAC, {}) == GATEWAY_DIAG_IDS
+    with_light = expected_unique_ids(MAC, {"light": {"1-11": {}}})
+    assert with_light == GATEWAY_DIAG_IDS | {f"{MAC}-1-11"}
+
+
+async def test_repair_invalid_yaml_created_then_cleared(hass: HomeAssistant, tmp_path) -> None:
+    """G1-C: a broken file raises an error issue; fixing it and reloading clears it."""
+    path = write_yaml(tmp_path, "gateway: [1, 2]\n")
+    entry = make_entry(path)
+    with mock_gateway():
+        assert not await _setup(hass, entry)
+
+    issue = _issue(hass, entry, ISSUE_YAML_INVALID)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    assert issue.is_fixable is False
+    assert issue.translation_placeholders["path"] == str(path)
+    assert "mapping" in issue.translation_placeholders["message"]
+
+    path.write_text(BASIC_YAML, encoding="utf-8")
+    with mock_gateway():
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert _issue(hass, entry, ISSUE_YAML_INVALID) is None
+
+
+async def test_repair_unknown_keys_created_then_cleared(hass: HomeAssistant, tmp_path) -> None:
+    """G1-C: unknown keys are collected by validate.py and listed in a warning issue."""
+    bad = f"""
+gateway:
+  mac: {MAC}
+  light:
+    luce_test:
+      where: '11'
+      name: Luce Test
+      dimable: true
+"""
+    path = write_yaml(tmp_path, bad)
+    entry = make_entry(path)
+    with mock_gateway():
+        assert await _setup(hass, entry)
+
+    issue = _issue(hass, entry, ISSUE_UNKNOWN_KEYS)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.WARNING
+    assert issue.translation_placeholders["count"] == "1"
+    assert "dimable" in issue.translation_placeholders["keys"]
+    assert "dimmable" in issue.translation_placeholders["keys"]  # difflib hint
+
+    path.write_text(BASIC_YAML, encoding="utf-8")
+    with mock_gateway():
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert _issue(hass, entry, ISSUE_UNKNOWN_KEYS) is None
+
+
+async def test_repair_no_devices_for_gateway_created_then_cleared(hass: HomeAssistant, tmp_path) -> None:
+    """G1-C: the gateway MAC is absent from the file -> warning issue, no crash."""
+    path = write_yaml(tmp_path)
+    entry = make_entry(path, mac=MAC2)
+    with mock_gateway():
+        assert await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+
+    issue = _issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.WARNING
+    assert issue.translation_placeholders["mac"] == MAC2
+    assert MAC in issue.translation_placeholders["others"]
+
+    path.write_text(BASIC_YAML.replace(MAC, MAC2), encoding="utf-8")
+    with mock_gateway():
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert _issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY) is None
+
+
+async def test_repairs_removed_with_the_entry(hass: HomeAssistant, tmp_path) -> None:
+    """Removing the gateway must not leave its repair issues behind."""
+    entry = make_entry(write_yaml(tmp_path), mac=MAC2)
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        assert _issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY) is not None
+        assert await hass.config_entries.async_remove(entry.entry_id)
+        await hass.async_block_till_done()
+    assert _issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY) is None
 
 
 # --------------------------------------------------------------------------- end to end

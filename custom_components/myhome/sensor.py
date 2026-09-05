@@ -10,7 +10,10 @@ Contract C (entity base) and Contract E (instant-power keep-alive) apply here:
   would stop streaming (Contract E, finding sc-04);
 * the energy totalisers request their value at add time, periodically and at the local
   day/month boundary, and survive a restart through ``RestoreSensor`` (sc-11, sc-18);
-* names come from the entity translation keys, never from the device name (sc-05).
+* names come from the entity translation keys, never from the device name (sc-05);
+* four diagnostic sensors describe the gateway connection itself (0.3.0, plan G1-B):
+  they hang on the gateway device, are fed by the ``SIGNAL_GATEWAY_STATS`` snapshots
+  and exist even when the configuration declares no sensor at all.
 """
 
 from __future__ import annotations
@@ -38,6 +41,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_time_change,
@@ -62,6 +66,7 @@ from OWNd.message import (
 
 from .const import (
     ATTR_DURATION,
+    CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
     CONF_ENTITIES,
@@ -74,11 +79,19 @@ from .const import (
     CONF_WHO,
     DEFAULT_KEEPALIVE_MINUTES,
     DOMAIN,
+    GATEWAY_DIAG_COMMANDS_DROPPED,
+    GATEWAY_DIAG_LAST_FRAME,
+    GATEWAY_DIAG_QUEUE_LENGTH,
+    GATEWAY_DIAG_RECONNECTS,
     LOGGER,
     SERVICE_START_SENDING_INSTANT_POWER,
 )
 from .gateway import MyHOMEGatewayHandler
-from .myhome_device import MyHOMEEntity, address_attributes
+from .myhome_device import (
+    MyHOMEEntity,
+    MyHOMEGatewayDiagnosticEntity,
+    address_attributes,
+)
 
 # Keys of the sub-entity slots pre-seeded by validate.py in ``device[CONF_ENTITIES]``.
 POWER_SLOT = f"{SensorDeviceClass.POWER}"
@@ -100,9 +113,34 @@ MAX_KEEPALIVE_MINUTES = 255
 
 SERVICE_SEND_INSTANT_POWER = SERVICE_START_SENDING_INSTANT_POWER
 
+# Marker validate.py may add to a sensor config to say that `keepalive_minutes` was
+# not written by the user but injected as the built-in default; when it is there (or
+# when the value still equals the built-in default) the `default_keepalive_minutes`
+# option of the config entry wins.  YAML values chosen by the user always win.
+CONF_KEEPALIVE_MINUTES_DEFAULTED = "keepalive_minutes_default"
+
 INSTANT_POWER_SERVICE_SCHEMA = {
     vol.Optional(ATTR_DURATION): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_KEEPALIVE_MINUTES)),
 }
+
+
+def keepalive_minutes_for(device: dict[str, Any], config_entry: ConfigEntry) -> int:
+    """Keep-alive of one power sensor: YAML first, then the config entry option.
+
+    The YAML value always wins when the user actually wrote one.  validate.py injects
+    the built-in default (``DEFAULT_KEEPALIVE_MINUTES``) into every sensor, so a
+    "defaulted" value is recognised either by the ``keepalive_minutes_default`` marker
+    (when validate.py sets it) or by the value being exactly the built-in default.
+    In that case the ``default_keepalive_minutes`` option of the gateway takes over.
+    """
+    configured = int(device.get(CONF_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES))
+    option = config_entry.options.get(CONF_DEFAULT_KEEPALIVE_MINUTES)
+    if option is None:
+        return configured
+    defaulted = device.get(CONF_KEEPALIVE_MINUTES_DEFAULTED)
+    if defaulted is None:
+        defaulted = configured == DEFAULT_KEEPALIVE_MINUTES
+    return int(option) if defaulted else configured
 
 
 async def async_setup_entry(
@@ -110,14 +148,22 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the sensor entities of one gateway."""
-    gateway_data = hass.data[DOMAIN][config_entry.data[CONF_MAC]]
-    configured_sensors: dict[str, dict[str, Any]] = gateway_data[CONF_PLATFORMS].get(PLATFORM, {})
-    if not configured_sensors:
-        return
+    """Create the sensor entities of one gateway.
 
+    The four gateway diagnostic sensors (0.3.0, plan G1-B) exist for every gateway,
+    including one without a single configured sensor, so they are built before the
+    configured devices are looked at.
+    """
+    gateway_data = hass.data[DOMAIN][config_entry.data[CONF_MAC]]
     gateway: MyHOMEGatewayHandler = gateway_data[CONF_ENTITY]
-    sensors: list[MyHOMEEntity] = []
+    sensors: list[Entity] = [
+        MyHOMEGatewayLastFrameSensor(gateway),
+        MyHOMEGatewayReconnectsSensor(gateway),
+        MyHOMEGatewayCommandsDroppedSensor(gateway),
+        MyHOMEGatewayQueueLengthSensor(gateway),
+    ]
+
+    configured_sensors: dict[str, dict[str, Any]] = gateway_data[CONF_PLATFORMS].get(PLATFORM, {})
     power_devices_configured = False
 
     for device_id, device in configured_sensors.items():
@@ -139,7 +185,7 @@ async def async_setup_entry(
                 power_devices_configured = True
                 sensors.append(
                     MyHOMEPowerSensor(
-                        keepalive_minutes=int(device.get(CONF_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES)),
+                        keepalive_minutes=keepalive_minutes_for(device, config_entry),
                         **common,
                     )
                 )
@@ -516,3 +562,67 @@ class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
         LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
         self._attr_native_value = message.illuminance
         self.async_write_ha_state()
+
+
+# --------------------------------------------------------------------------- gateway
+class _MyHOMEGatewayDiagnosticSensor(MyHOMEGatewayDiagnosticEntity, SensorEntity):
+    """A diagnostic sensor of the gateway device (0.3.0, plan G1-B)."""
+
+
+class MyHOMEGatewayLastFrameSensor(_MyHOMEGatewayDiagnosticSensor):
+    """When the gateway last sent us a frame (a timestamp needs no polling)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, gateway: MyHOMEGatewayHandler) -> None:
+        super().__init__(gateway, GATEWAY_DIAG_LAST_FRAME, "gateway_last_frame")
+        self._attr_native_value: datetime | None = None
+
+    @callback
+    def _apply_stats(self, stats: Any) -> None:
+        self._attr_native_value = stats.last_frame_at
+
+
+class MyHOMEGatewayReconnectsSensor(_MyHOMEGatewayDiagnosticSensor):
+    """How many times the event session had to be re-established."""
+
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, gateway: MyHOMEGatewayHandler) -> None:
+        super().__init__(gateway, GATEWAY_DIAG_RECONNECTS, "gateway_reconnects")
+        self._attr_native_value: int | None = None
+
+    @callback
+    def _apply_stats(self, stats: Any) -> None:
+        self._attr_native_value = stats.reconnects
+
+
+class MyHOMEGatewayCommandsDroppedSensor(_MyHOMEGatewayDiagnosticSensor):
+    """Commands that never reached the gateway (queue full/closed, TTL, failures)."""
+
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, gateway: MyHOMEGatewayHandler) -> None:
+        super().__init__(gateway, GATEWAY_DIAG_COMMANDS_DROPPED, "gateway_commands_dropped")
+        self._attr_native_value: int | None = None
+
+    @callback
+    def _apply_stats(self, stats: Any) -> None:
+        self._attr_native_value = stats.commands_dropped
+
+
+class MyHOMEGatewayQueueLengthSensor(_MyHOMEGatewayDiagnosticSensor):
+    """Commands waiting in the sending queue right now."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, gateway: MyHOMEGatewayHandler) -> None:
+        super().__init__(gateway, GATEWAY_DIAG_QUEUE_LENGTH, "gateway_queue_length")
+        self._attr_native_value: int | None = None
+
+    @callback
+    def _apply_stats(self, stats: Any) -> None:
+        self._attr_native_value = stats.queue_length

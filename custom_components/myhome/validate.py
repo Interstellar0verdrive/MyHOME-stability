@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import difflib
 import re
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
+from contextlib import contextmanager
 
 from voluptuous import (
     ALLOW_EXTRA,
@@ -134,29 +135,54 @@ LOCK_BUTTON_PLATFORMS: tuple[str, ...] = (LIGHT, SWITCH, COVER)
 # --------------------------------------------------------------------------------------
 _WARNED_UNKNOWN_KEYS: set[tuple[str, ...]] = set()
 
+# Active collectors (see ``collect_unknown_keys``).  A list of lists so nesting and
+# concurrent config entry loads never steal each other's entries.
+_UNKNOWN_KEY_COLLECTORS: list[list[tuple[str, str, str | None]]] = []
+
+
+@contextmanager
+def collect_unknown_keys() -> Iterator[list[tuple[str, str, str | None]]]:
+    """Collect the unknown keys reported while the context is active (0.3.0 repairs).
+
+    Yields the list that ``warn_unknown_keys`` appends ``(path, key, hint)`` tuples to.
+    Purely additive: the logging behaviour is unchanged, and unlike the WARNING (which
+    is emitted once per key path per Home Assistant run) the collector sees every key
+    of every validation run, so a reload can re-raise the repair issue.
+    """
+    collected: list[tuple[str, str, str | None]] = []
+    _UNKNOWN_KEY_COLLECTORS.append(collected)
+    try:
+        yield collected
+    finally:
+        _UNKNOWN_KEY_COLLECTORS.remove(collected)
+
 
 def warn_unknown_keys(path: Sequence[object], data: Mapping, known_keys: Iterable[object]) -> None:
     """Log (once per key path, WARNING) every key of ``data`` that is not in ``known_keys``.
 
     Unknown keys are kept in the configuration for backward compatibility; this only
     tells the user that the key is ignored and suggests the closest known key.  Never
-    raises.
+    raises.  Every unknown key is also handed to the active ``collect_unknown_keys``
+    collectors, before the once-per-run log de-duplication.
     """
     known = sorted({str(k) for k in known_keys})
     known_set = set(known)
+    path_text = ".".join(str(p) for p in path) or "<root>"
     for key in data:
         key_text = str(key)
         if key_text in known_set:
             continue
+        hint = difflib.get_close_matches(key_text, known, n=1, cutoff=0.6)
+        for collector in _UNKNOWN_KEY_COLLECTORS:
+            collector.append((path_text, key_text, hint[0] if hint else None))
         marker = (*(str(p) for p in path), key_text)
         if marker in _WARNED_UNKNOWN_KEYS:
             continue
         _WARNED_UNKNOWN_KEYS.add(marker)
-        hint = difflib.get_close_matches(key_text, known, n=1, cutoff=0.6)
         LOGGER.warning(
             "myhome.yaml: unknown key '%s' in %s is ignored%s",
             key_text,
-            ".".join(str(p) for p in path) or "<root>",
+            path_text,
             f" (did you mean '{hint[0]}'?)" if hint else "",
         )
 
