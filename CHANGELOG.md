@@ -3,6 +3,52 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - unreleased
+
+One feature, covers only. Nothing is renamed, no `entity_id`, `unique_id` or event
+contract changes, and a `myhome.yaml` written for 0.3.x keeps behaving exactly as it
+did: the new model is opt-in through a single key.
+
+### Added
+
+- **Two-phase travel model for basic covers (`slat_time`).** On most roller shutters
+  the motor run is not all lift: from fully closed the first seconds only tilt the
+  slats ("lamelle") open while the curtain stays on the floor, and when closing the
+  motor keeps running for the same few seconds *after* the curtain has touched the
+  floor, to close them again. The linear 0-100 estimate therefore reported "5 %" with
+  the curtain still on the floor, and *set position 50 %* from closed ended around
+  55-60 %. Declaring `slat_time` (seconds, default `0` = previous behaviour) splits
+  every run into a **slat phase** and a **curtain phase**:
+  - `current_position` now describes the curtain only — `0` = curtain on the floor
+    whatever the slats do, `100` = fully open;
+  - `current_tilt_position` describes the slats — `0` = closed, `100` = open — and the
+    cover is `closed` only when both are `0`;
+  - the tilt services (`cover.open_cover_tilt`, `cover.close_cover_tilt`,
+    `cover.set_cover_tilt_position`, `cover.stop_cover_tilt`) appear on covers with a
+    `slat_time`, which makes "closed with the slats open" a single service call; above
+    the floor the slats are always open, so tilt commands are ignored there;
+  - `cover.set_cover_position` computes the run through both phases (from closed,
+    5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds), and movements
+    started from a physical keypad are tracked through the same model.
+
+  See
+  [Configuration → The two-phase travel model](docs/configuration.md#the-two-phase-travel-model-slat_time)
+  and [Recipes → Covers](docs/recipes.md#covers).
+- **Separate `opening_time` and `closing_time` for basic covers.** Both default to
+  `shutter_run`, which stays the one value most installations need; set them when the
+  motor is measurably slower in one direction. *The idea of separate up/down travel
+  times comes from [andrea-parisi/MyHOME](https://github.com/andrea-parisi/MyHOME).*
+- Basic covers expose `Slat time`, `Opening time` and `Closing time` as extra state
+  attributes when those keys are in use, next to the existing `Shutter run`.
+
+### Changed
+
+- `cover.set_cover_position` with a target of `0` or `100` now runs the cover into its
+  end stop instead of stopping it with a timer at the computed moment. The end stop is
+  what re-calibrates a time-based estimate, and the stop command was redundant there.
+- The estimated **tilt** is persisted next to the position, so "closed with the slats
+  open" survives a restart or a reload.
+
 ## [0.3.1] - 2026-09-05
 
 Hotfix release. Four bugs, no new features, no configuration change required. No

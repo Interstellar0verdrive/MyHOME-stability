@@ -99,8 +99,12 @@ from .const import (
     CONF_KEEPALIVE_MINUTES,
     CONF_SENSOR_DEFAULTS,
     DEFAULT_KEEPALIVE_MINUTES,
+    CONF_SLAT_TIME,
+    CONF_OPENING_TIME,
+    CONF_CLOSING_TIME,
     DEFAULT_MANUFACTURER,
     DEFAULT_SHUTTER_RUN,
+    DEFAULT_SLAT_TIME,
     normalise_bus_interface,
 )
 
@@ -529,6 +533,12 @@ COVER_FIELDS: dict = {
     Optional(CONF_BUS_INTERFACE): BusInterface(),
     Optional(CONF_ADVANCED_SHUTTER, default=False): Boolean(),
     Optional(CONF_SHUTTER_RUN, default=DEFAULT_SHUTTER_RUN): All(Coerce(float), Range(min=1)),
+    # Two-phase travel (0.4.0).  No schema default for the two directions: they fall
+    # back to ``shutter_run`` in _finalize_cover, so ``shutter_run`` stays the one
+    # value most installations need.
+    Optional(CONF_SLAT_TIME, default=DEFAULT_SLAT_TIME): All(Coerce(float), Range(min=0)),
+    Optional(CONF_OPENING_TIME): All(Coerce(float), Range(min=1)),
+    Optional(CONF_CLOSING_TIME): All(Coerce(float), Range(min=1)),
     Optional(CONF_INVERTED, default=False): Boolean(),
     # Default (shutter) applied by _finalize_cover, after the ``device_class`` alias is folded.
     Optional(CONF_DEVICE_CLASS): _device_class(CoverDeviceClass, _COVER_CLASSES),
@@ -612,7 +622,29 @@ def _finalize_switch(device: MutableMapping, yaml_key: str) -> None:
 
 
 def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
+    """Apply the default class and the two-phase travel times (0.4.0).
+
+    ``opening_time`` / ``closing_time`` default to ``shutter_run`` (so a symmetric
+    cover keeps needing one value only) and ``slat_time`` must leave at least one
+    second of curtain travel in **both** directions, otherwise the position estimate
+    would be meaningless.
+    """
     device.setdefault(CONF_DEVICE_CLASS, CoverDeviceClass.SHUTTER)
+    shutter_run = device[CONF_SHUTTER_RUN]
+    device.setdefault(CONF_OPENING_TIME, shutter_run)
+    device.setdefault(CONF_CLOSING_TIME, shutter_run)
+    slat_time = device[CONF_SLAT_TIME]
+    if slat_time <= 0:
+        # Two-phase model disabled: nothing to cross-check (0.3.x behaviour).
+        return
+    shortest = min(device[CONF_OPENING_TIME], device[CONF_CLOSING_TIME])
+    if slat_time >= shortest - 1:
+        raise Invalid(
+            f"cover '{yaml_key}': slat_time={slat_time} must be smaller than "
+            f"{shortest - 1} (the shortest of opening_time={device[CONF_OPENING_TIME]} / "
+            f"closing_time={device[CONF_CLOSING_TIME]} minus one second of curtain travel)",
+            path=[yaml_key, CONF_SLAT_TIME],
+        )
 
 
 def _finalize_binary_sensor(device: MutableMapping, yaml_key: str) -> None:

@@ -66,6 +66,12 @@ CONF_DEVICE_CLASS = "class"
 CONF_INVERTED = "inverted"
 CONF_ADVANCED_SHUTTER = "advanced"
 CONF_SHUTTER_RUN = "shutter_run"
+# Two-phase travel model (0.4.0): the first/last seconds of the run only open/close
+# the slats ("lamelle"), the rest lifts the curtain.  ``opening_time``/``closing_time``
+# allow an asymmetric run; both default to ``shutter_run``.
+CONF_SLAT_TIME = "slat_time"
+CONF_OPENING_TIME = "opening_time"
+CONF_CLOSING_TIME = "closing_time"
 CONF_LOCK_BUTTONS = "lock_buttons"
 CONF_SOURCE_PLATFORM = "source_platform"
 CONF_HEATING_SUPPORT = "heat"
@@ -95,6 +101,7 @@ CONF_KEEPALIVE_MINUTES = "keepalive_minutes"
 # Defaults shared by the validator and the platforms.
 DEFAULT_MANUFACTURER = "BTicino S.p.A."
 DEFAULT_SHUTTER_RUN = 20.0  # seconds, full travel of a basic cover (Contract F)
+DEFAULT_SLAT_TIME = 0.0  # seconds of slat-only travel; 0 disables the two-phase model
 DEFAULT_KEEPALIVE_MINUTES = 125  # instant power keep-alive (Contract E; 0 = disabled)
 
 # Device type constants (used by discovery.py to classify bus traffic)

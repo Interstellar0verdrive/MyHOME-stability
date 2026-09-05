@@ -12,7 +12,9 @@ from pytest_homeassistant_custom_component.common import (
 
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
     ATTR_POSITION,
+    ATTR_TILT_POSITION,
     DOMAIN as COVER,
     CoverDeviceClass,
     CoverEntityFeature,
@@ -73,11 +75,50 @@ gateway:
       advanced: true
 """
 
+# Two-phase travel (0.4.0): 3 s of slats, 27 s of curtain, in both directions.
+SLAT_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_slats:
+      where: '85'
+      name: Cover Slats
+      shutter_run: 30
+      slat_time: 3
+"""
+
+# Same slat phase, but the motor is slower going up than coming down.
+ASYMMETRIC_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_asymmetric:
+      where: '86'
+      name: Cover Asymmetric
+      shutter_run: 30
+      slat_time: 3
+      opening_time: 32
+      closing_time: 28
+"""
+
 ENTITY = "cover.cover_test"
+SLAT_ENTITY = "cover.cover_slats"
+ASYM_ENTITY = "cover.cover_asymmetric"
+
+
+def _closed(entity_id: str = SLAT_ENTITY) -> State:
+    """Restored state of a fully closed shutter: curtain down, slats closed."""
+    return State(entity_id, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0, ATTR_CURRENT_TILT_POSITION: 0})
 
 
 async def _advance(hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float) -> None:
-    """Move the (frozen) clock forward and let the scheduled callbacks run."""
+    """Move the (frozen) clock forward and let the scheduled callbacks run.
+
+    ``async_fire_time_changed`` bumps the mocked time by up to 0.5 s (it has to, for
+    ``async_track_time_interval``'s random offset), so a timer fires as soon as the
+    frozen clock is within half a second of its deadline: every "not fired yet"
+    assertion below keeps a margin larger than that.
+    """
     freezer.tick(timedelta(seconds=seconds))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
@@ -280,3 +321,254 @@ async def test_availability_follows_connection_signal(hass: HomeAssistant, tmp_p
         assert hass.states.get(ENTITY).state == "unavailable"
         await set_connected(hass, True)
         assert hass.states.get(ENTITY).state != "unavailable"
+
+
+# --------------------------------------------------------------------------------------
+# Two-phase travel model: slat_time / opening_time / closing_time (0.4.0)
+# --------------------------------------------------------------------------------------
+async def test_slat_cover_advertises_tilt(hass: HomeAssistant, tmp_path) -> None:
+    """`slat_time` adds the tilt feature set and the extra attributes."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state == CoverState.CLOSED
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 0
+        assert state.attributes["Shutter run"] == 30.0
+        assert state.attributes["Slat time"] == 3.0
+        # Symmetric run: the per-direction attributes stay out of the way.
+        assert "Opening time" not in state.attributes
+        assert "Closing time" not in state.attributes
+        assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+            | CoverEntityFeature.OPEN_TILT
+            | CoverEntityFeature.CLOSE_TILT
+            | CoverEntityFeature.SET_TILT_POSITION
+            | CoverEntityFeature.STOP_TILT
+        )
+
+
+async def test_without_slat_time_nothing_changes(hass: HomeAssistant, tmp_path) -> None:
+    """`slat_time: 0` (the default) keeps the plain 0.3.x linear model."""
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.CLOSED
+        assert ATTR_CURRENT_TILT_POSITION not in state.attributes
+        assert "Slat time" not in state.attributes
+        assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
+            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP | CoverEntityFeature.SET_POSITION
+        )
+
+
+async def test_set_position_5_from_closed_runs_through_the_slat_phase(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The ventilation gap: 3 s of slats + 5 % of the 27 s curtain run = 4.35 s."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_POSITION: 5}, blocking=True
+        )
+        assert commands.sent_frames == ["*2*1*85##"]
+
+        # 2 s in: still inside the slat phase, the curtain has not moved yet.
+        await _advance(hass, freezer, 2)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 67
+        assert state.state == CoverState.OPENING
+
+        await _advance(hass, freezer, 1.7)  # 3.7 s: not there yet
+        assert commands.sent_frames == ["*2*1*85##"]
+
+        await _advance(hass, freezer, 0.7)  # 4.4 s > 3 + 0.05 * 27 = 4.35 s
+        assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 5
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+        assert state.state == CoverState.OPEN
+
+
+async def test_set_position_50_from_closed(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+    """Half open costs 3 + 13.5 s, not 15 s: the slat phase does not lift the curtain."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+        await _advance(hass, freezer, 15.9)
+        assert commands.sent_frames == ["*2*1*85##"]
+
+        await _advance(hass, freezer, 0.7)  # 16.6 s > 3 + 13.5 = 16.5 s
+        assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 50
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+
+
+async def test_close_from_half_open_ends_with_the_slats_closed(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`close_cover` runs to the end stop: 13.5 s of curtain, then 3 s of slats."""
+    mock_restore_cache(
+        hass,
+        (State(SLAT_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 50, ATTR_CURRENT_TILT_POSITION: 100}),),
+    )
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        assert commands.sent_frames == ["*2*2*85##"]
+
+        # 15.5 s: the curtain is down (13.5 s) but the slats are still closing.
+        await _advance(hass, freezer, 15.5)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 33
+        assert state.state == CoverState.CLOSING
+
+        await _advance(hass, freezer, 1.5)  # 17 s > 13.5 + 3
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
+        # The actuator reaches its own end stop: no stop command from us.
+        assert commands.sent_frames == ["*2*2*85##"]
+
+
+async def test_open_and_close_tilt_from_closed(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+    """"Closed with the slats open": run up for `slat_time`, then stop."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(COVER, "open_cover_tilt", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        assert commands.sent_frames == ["*2*1*85##"]
+
+        await _advance(hass, freezer, 2.4)
+        assert commands.sent_frames == ["*2*1*85##"]
+        assert hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_TILT_POSITION] == 80
+
+        await _advance(hass, freezer, 0.7)  # 3.1 s > slat_time
+        assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+        # Curtain on the floor but slats open: not "closed".
+        assert state.state == CoverState.OPEN
+
+        commands.clear()
+        await hass.services.async_call(COVER, "close_cover_tilt", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        assert commands.sent_frames == ["*2*2*85##"]
+        await _advance(hass, freezer, 3.5)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
+        # Closing the slats runs into the end stop: still no stop command.
+        assert commands.sent_frames == ["*2*2*85##"]
+
+
+async def test_set_tilt_position_is_proportional(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+    """`set_cover_tilt_position` splits the slat phase proportionally."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40}, blocking=True
+        )
+        await _advance(hass, freezer, 0.6)  # 40 % of 3 s = 1.2 s
+        assert commands.sent_frames == ["*2*1*85##"]
+        await _advance(hass, freezer, 0.7)
+        assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 40
+
+
+async def test_tilt_is_a_noop_while_the_curtain_is_up(hass: HomeAssistant, tmp_path) -> None:
+    """Above the floor the slats are always open: tilt commands do nothing."""
+    mock_restore_cache(
+        hass,
+        (State(SLAT_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 50, ATTR_CURRENT_TILT_POSITION: 100}),),
+    )
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        assert hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_TILT_POSITION] == 100
+        for service, data in (
+            ("open_cover_tilt", {}),
+            ("close_cover_tilt", {}),
+            ("set_cover_tilt_position", {ATTR_TILT_POSITION: 20}),
+        ):
+            await hass.services.async_call(
+                COVER, service, {ATTR_ENTITY_ID: SLAT_ENTITY, **data}, blocking=True
+            )
+        assert commands.sent_frames == []
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 50
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+
+
+async def test_keypad_movement_uses_the_same_model(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+    """A physical up press from closed only opens the slats for the first 3 s."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        cover = entity_object(hass, COVER, "2-85")
+        await feed_event(hass, cover, "*2*1*85##")
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        await _advance(hass, freezer, 2)
+        await feed_event(hass, cover, "*2*0*85##")
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 67
+        assert state.state == CoverState.OPEN
+
+
+async def test_asymmetric_opening_and_closing_times(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`opening_time` / `closing_time` are used per direction (andrea-parisi/MyHOME)."""
+    mock_restore_cache(hass, (_closed(ASYM_ENTITY),))
+    async with setup_myhome(hass, tmp_path, ASYMMETRIC_YAML) as (_entry, commands):
+        state = hass.states.get(ASYM_ENTITY)
+        assert state.attributes["Opening time"] == 32.0
+        assert state.attributes["Closing time"] == 28.0
+
+        # Up: 3 s of slats + 50 % of (32 - 3) = 17.5 s.
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ASYM_ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+        await _advance(hass, freezer, 16.9)
+        assert commands.sent_frames == ["*2*1*86##"]
+        await _advance(hass, freezer, 0.7)
+        assert commands.sent_frames == ["*2*1*86##", "*2*0*86##"]
+        assert hass.states.get(ASYM_ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+
+        # Down: 50 % of (28 - 3) = 12.5 s of curtain, then 3 s of slats.
+        commands.clear()
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ASYM_ENTITY}, blocking=True)
+        await _advance(hass, freezer, 12)
+        assert hass.states.get(ASYM_ENTITY).attributes[ATTR_CURRENT_POSITION] == 2
+        await _advance(hass, freezer, 4)  # 16 s > 12.5 + 3
+        state = hass.states.get(ASYM_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
+
+
+async def test_tilt_survives_entry_reload(hass: HomeAssistant, tmp_path) -> None:
+    """"Closed with the slats open" is restored across a reload, tilt included."""
+    mock_restore_cache(
+        hass,
+        (State(SLAT_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 0, ATTR_CURRENT_TILT_POSITION: 60}),),
+    )
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (entry, _commands):
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 60
+        assert state.state == CoverState.OPEN
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes.get(ATTR_CURRENT_POSITION) == 0
+        assert state.attributes.get(ATTR_CURRENT_TILT_POSITION) == 60
+        assert state.state == CoverState.OPEN

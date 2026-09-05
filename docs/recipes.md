@@ -228,12 +228,99 @@ gateway:
 ```
 
 Defaults and limits, from the validator: `shutter_run` defaults to `20` seconds
-and must be at least `1`; `advanced` and `inverted` default to `false`; `class`
-defaults to `shutter`.
+and must be at least `1`; `slat_time` defaults to `0` (two-phase model off) and
+must leave at least one second of curtain travel in both directions;
+`opening_time` and `closing_time` default to `shutter_run`; `advanced` and
+`inverted` default to `false`; `class` defaults to `shutter`.
 
 Such covers are marked `assumed_state`, which is why the dashboard card shows
 separate up/stop/down buttons rather than a toggle. While the cover moves, the
 estimated position is pushed to Home Assistant once per second.
+
+### Slats and curtain: `slat_time`
+
+On a real roller shutter the first seconds of an upward run only tilt the slats
+("lamelle") open, without lifting anything, and a downward run keeps going for the
+same few seconds after the curtain has touched the floor. Declare those seconds as
+`slat_time` and the position stops lying:
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+  cover:
+    living_room_shutter:
+      where: "81"
+      name: "Living Room Shutter"
+      shutter_run: 30
+      slat_time: 3         # 3 s of slats + 27 s of curtain, each way
+```
+
+`current_position` then counts the **curtain** only (0 = on the floor, 100 = up) and
+`current_tilt_position` the **slats** (0 = closed, 100 = open); the entity is
+`closed` only when both are 0. The full model, and how to measure the two numbers,
+is in
+[Configuration → The two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
+
+If the motor is measurably slower in one direction, replace `shutter_run` with
+`opening_time` and `closing_time` (`shutter_run` stays the fallback for both):
+
+```yaml
+      bedroom_shutter:
+        where: "82"
+        name: "Bedroom Shutter"
+        slat_time: 3
+        opening_time: 32
+        closing_time: 28
+```
+
+### Closed, with the slats open
+
+The classic night position: curtain all the way down, slats open for a bit of air
+and light. It needs `slat_time` (the tilt services only exist with it) and is a
+single service call — the cover runs up for `slat_time` seconds and stops.
+
+```yaml
+script:
+  shutters_night_ventilation:
+    sequence:
+      # From any position: down to the end stop first (slats closed) …
+      - action: cover.close_cover
+        target:
+          entity_id: cover.living_room_shutter
+      - wait_template: "{{ is_state('cover.living_room_shutter', 'closed') }}"
+        timeout: "00:01:00"
+      # … then open just the slats.
+      - action: cover.open_cover_tilt
+        target:
+          entity_id: cover.living_room_shutter
+```
+
+The entity ends up `open` with `current_position: 0` and
+`current_tilt_position: 100` — that is the point: the curtain is down, the slats
+are not. `cover.close_cover_tilt` puts it back to fully closed, and
+`cover.set_cover_tilt_position` picks anything in between (`50` = half of
+`slat_time`).
+
+### Ventilation gap
+
+A few centimetres of actual gap, with the slats open, is a curtain position rather
+than a tilt:
+
+```yaml
+script:
+  shutters_ventilation_gap:
+    sequence:
+      - action: cover.set_cover_position
+        target:
+          entity_id: cover.living_room_shutter
+        data:
+          position: 5
+```
+
+With `shutter_run: 30` and `slat_time: 3` that runs the motor for
+`3 + 0.05 × 27 = 4.35` seconds: three to open the slats, then a little over one to
+lift the curtain. Without `slat_time` the same call would run 1.5 s and leave the
+curtain on the floor.
 
 ### `set_cover_position`
 
@@ -241,7 +328,11 @@ estimated position is pushed to Home Assistant once per second.
 
 - **advanced**: the position is sent to the actuator directly.
 - **basic**: the cover is started in the right direction and stopped by a timer
-  after `|target − current| / 100 × shutter_run` seconds.
+  after the run computed through both phases of the model. Without `slat_time` that
+  is the plain `|target − current| / 100 × shutter_run` seconds; with it, the slat
+  phase is added whenever the curtain leaves (or reaches) the floor.
+- **basic, target `0` or `100`**: the cover is run into its end stop instead of being
+  stopped by a timer, which re-calibrates the estimate for free.
 
 ```yaml
 script:
@@ -280,11 +371,14 @@ incoming frames, so both directions stay consistent.
 2. Close the cover fully (`cover.close_cover`), wait for it to stop moving on its
    own, then open it fully with a stopwatch running.
 3. Set `shutter_run` to the measured seconds, save, reload.
-4. Check `set_cover_position` at 50 %: if the cover consistently overshoots,
+4. On the same upward run, note when the **bottom edge leaves the floor**: those
+   seconds are `slat_time`.
+5. Check `set_cover_position` at 50 %: if the cover consistently overshoots,
    `shutter_run` is too large; if it stops short, too small.
 
-The value is exposed on the entity as the `Shutter run` attribute for basic
-covers, so you can confirm what is actually loaded.
+The values are exposed on the entity as the `Shutter run` attribute for basic
+covers (plus `Slat time`, `Opening time` and `Closing time` when in use), so you
+can confirm what is actually loaded.
 
 ### "Movement started / movement finished" automation
 

@@ -127,6 +127,16 @@ copy-paste automations.
 
 ## What's new / Upgrading
 
+**0.4.0** adds a **two-phase travel model for basic covers**. On most roller shutters
+the first seconds of a run only open the slats ("lamelle") and the last seconds only
+close them, which is why a plain time-based position reports "5 %" with the curtain
+still on the floor. Set `slat_time` (plus `opening_time` / `closing_time` when the
+motor is slower one way) and the position describes the curtain while the new tilt
+controls describe the slats — so "closed with the slats open" is one service call.
+The key is opt-in: without it, covers behave exactly as in 0.3.x. See
+[Configuration → Cover](docs/configuration.md#cover) and
+[CHANGELOG.md](CHANGELOG.md).
+
 **0.3.1** is a hotfix release. It upgrades the OpenWebNet library to `OWNd` 0.7.49
 and, with it, **fixes devices behind an F422 local bus interface**, which received
 no state updates at all before (their frames were applied to a main-bus device with
@@ -169,7 +179,9 @@ upgrade is the opt-in Lock/Unlock buttons, above.
 
 - **Lights**: ON/OFF and dimmable actuators, area/group/general addresses, bus interfaces
 - **Covers**: shutters and blinds with a time-based position estimate (`shutter_run`),
-  `set_cover_position`, `inverted` wiring, and real positions on advanced actuators
+  a two-phase slats/curtain model with tilt control (`slat_time`, `opening_time`,
+  `closing_time`), `set_cover_position`, `inverted` wiring, and real positions on
+  advanced actuators
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
 - **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy

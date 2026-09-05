@@ -204,12 +204,92 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds. Basic actuators use it to estimate the position (0 = closed, 100 = open), derive open/closed and support *set position* by timed stop. |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (0 = closed, 100 = open), derive open/closed and support *set position* by timed stop. |
+| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. |
+| `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. |
+| `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. |
 | `inverted` | boolean | `false` | Swap the up/down semantics (position 0 becomes open). |
 | `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). |
 | `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
 
-See [Recipes → Covers](recipes.md#covers) for tuning `shutter_run`, `set_cover_position` behaviour and `inverted` wiring.
+`slat_time` must leave at least one second of curtain travel in both directions
+(`slat_time < min(opening_time, closing_time) - 1`), otherwise the configuration is
+rejected with the name of the offending cover.
+
+### The two-phase travel model (`slat_time`)
+
+On most roller shutters the motor run is not all lift. Starting from fully closed,
+the first seconds only tilt the slats open while the curtain stays on the floor; and
+when closing, the motor keeps running for the same few seconds *after* the curtain
+has touched the floor, to close them again. A single linear 0-100 model therefore
+reports "5 %" while the curtain is still on the floor, and *set position 50 %* from
+closed ends up around 55-60 %.
+
+With `slat_time` set, the integration splits every run in two phases:
+
+| Phase | Duration | Reported as |
+|-------|----------|-------------|
+| Slats ("lamelle") | `slat_time` | `current_tilt_position` — 0 = slats closed, 100 = slats open |
+| Curtain | `opening_time - slat_time` (up) / `closing_time - slat_time` (down) | `current_position` — 0 = curtain on the floor, 100 = fully open |
+
+Consequences, all of them deliberate:
+
+- `current_position: 0` means **the curtain rests on the floor**, whatever the slats
+  are doing. The entity is `closed` only when the curtain is down **and** the slats
+  are closed (`current_tilt_position: 0`); with the curtain down and the slats open
+  it is `open`.
+- Above the floor the slats are necessarily open, so `current_tilt_position` is
+  pinned to `100` and the tilt services are ignored (with a DEBUG log line).
+- The tilt services (`cover.open_cover_tilt`, `cover.close_cover_tilt`,
+  `cover.set_cover_tilt_position`, `cover.stop_cover_tilt`) are only offered when
+  `slat_time` is greater than `0`.
+- `cover.set_cover_position` computes the run through **both** phases: from fully
+  closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
+- `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
+  what re-calibrates the estimate; `set_cover_position` with `0` or `100` does the
+  same instead of stopping by timer.
+- Movements started from a physical keypad (or by a scenario) are tracked through the
+  very same model, from the `opening` / `closing` / `stopped` frames on the bus.
+- `slat_time: 0` (the default) is exactly the 0.3.x linear behaviour, tilt included:
+  no tilt feature, no extra attribute.
+
+### Calibrating a cover
+
+1. Close the cover completely (`cover.close_cover`) and let it stop by itself.
+2. Start a stopwatch, command `cover.open_cover` and note two moments:
+   - the instant the **bottom edge leaves the floor** → that is `slat_time`
+     (typically 2-4 s);
+   - the instant the cover **stops at the top** → that is `shutter_run` (the full
+     upward run).
+3. Time the way back down (`cover.close_cover`, until the motor stops by itself). If
+   it differs from the upward run by more than a second or so, set `opening_time` and
+   `closing_time` instead of a single `shutter_run`; otherwise `shutter_run` alone is
+   enough.
+4. Reload the integration and check `set_cover_position: 50`: consistent overshoot
+   means the times are too large, stopping short means too small.
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+  cover:
+    living_room_shutter:
+      where: "81"
+      name: "Living Room Shutter"
+      shutter_run: 30      # full run, both directions
+      slat_time: 3         # the first/last 3 s only move the slats
+    bedroom_shutter:
+      where: "82"
+      name: "Bedroom Shutter"
+      slat_time: 3
+      opening_time: 32     # this motor is slower going up
+      closing_time: 28
+```
+
+The loaded values are exposed on basic covers as the `Shutter run` attribute, plus
+`Slat time`, `Opening time` and `Closing time` when they are actually in use.
+
+See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
+`set_cover_position` behaviour, "closed with the slats open" and `inverted` wiring.
 
 ## Binary sensor
 

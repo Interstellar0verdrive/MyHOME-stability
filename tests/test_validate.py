@@ -200,6 +200,74 @@ def test_negative_ranges_raise():
 
 
 # --------------------------------------------------------------------------------------
+# Cover two-phase travel: slat_time / opening_time / closing_time (0.4.0)
+# --------------------------------------------------------------------------------------
+def test_cover_travel_times_default_to_shutter_run():
+    """``opening_time`` / ``closing_time`` fall back to ``shutter_run``, per direction."""
+    out = check(
+        gw(
+            cover={
+                "sym": {"where": "81", "name": "Sym", "shutter_run": 30, "slat_time": 3},
+                "asym": {
+                    "where": "82",
+                    "name": "Asym",
+                    "shutter_run": 30,
+                    "slat_time": 3,
+                    "opening_time": 32,
+                    "closing_time": 28,
+                },
+                "up_only": {"where": "83", "name": "Up", "shutter_run": 30, "opening_time": 34},
+            }
+        )
+    )
+    plat = platforms(out)
+    sym = plat["cover"]["2-81"]
+    assert sym["slat_time"] == 3.0 and sym["opening_time"] == 30.0 and sym["closing_time"] == 30.0
+    asym = plat["cover"]["2-82"]
+    assert asym["opening_time"] == 32.0 and asym["closing_time"] == 28.0
+    assert isinstance(asym["opening_time"], float)
+    up_only = plat["cover"]["2-83"]
+    assert up_only["opening_time"] == 34.0 and up_only["closing_time"] == 30.0
+
+
+def test_cover_slat_time_must_leave_curtain_travel():
+    """``slat_time`` must be smaller than the shortest run minus one second."""
+    # 3 < 30 - 1: fine.  27 is not smaller than 28 - 1 = 27.
+    check(gw(cover={"c": {"where": "81", "name": "C", "shutter_run": 30, "slat_time": 3}}))
+    with pytest.raises(Invalid, match="slat_time"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "shutter_run": 28, "slat_time": 27}}))
+    with pytest.raises(Invalid, match="slat_time"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "shutter_run": 30, "slat_time": 40}}))
+    # The check looks at the *shortest* of the two directions.
+    with pytest.raises(Invalid, match="closing_time=10"):
+        check(
+            gw(
+                cover={
+                    "c": {
+                        "where": "81",
+                        "name": "C",
+                        "shutter_run": 30,
+                        "opening_time": 30,
+                        "closing_time": 10,
+                        "slat_time": 12,
+                    }
+                }
+            )
+        )
+    with pytest.raises(Invalid, match="at least 0"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "slat_time": -1}}))
+    with pytest.raises(Invalid, match="at least 1"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "opening_time": 0}}))
+
+
+def test_cover_slat_time_error_names_the_device():
+    with pytest.raises(Invalid) as err:
+        check(gw(cover={"shutter": {"where": "81", "name": "T", "shutter_run": 5, "slat_time": 4}}))
+    assert err.value.path == ["gateway", "cover", "shutter", "slat_time"]
+
+
+
+# --------------------------------------------------------------------------------------
 # device_class alias and per-platform defaults (val-02, val-08, val-12)
 # --------------------------------------------------------------------------------------
 COMMON_KEYS = {"who", "where", "name", "entity_name", "icon", "icon_on", "manufacturer", "model", "entities"}
@@ -232,6 +300,9 @@ def test_defaults_per_platform():
     assert cover["advanced"] is False and cover["inverted"] is False
     assert cover["shutter_run"] == 20.0 and isinstance(cover["shutter_run"], float)
     assert cover["class"] == validate.CoverDeviceClass.SHUTTER
+    # 0.4.0 two-phase travel: off by default, both directions follow ``shutter_run``.
+    assert cover["slat_time"] == 0.0 and isinstance(cover["slat_time"], float)
+    assert cover["opening_time"] == 20.0 and cover["closing_time"] == 20.0
 
     binary = plat["binary_sensor"]["25-301"]
     assert COMMON_KEYS <= set(binary)
