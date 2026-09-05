@@ -498,3 +498,15 @@ async def test_end_to_end_with_fake_gateway(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
         assert entry.state is ConfigEntryState.NOT_LOADED
         await wait_until(lambda: not server.monitor_writers)
+
+async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant, tmp_path) -> None:
+    """A CEN+ virtual press (WHERE starting with '#') is a valid frame even if OWNd's typed parser crashes on it."""
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        before = handler.send_buffer.qsize()
+        await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2##"}, blocking=True)
+        assert handler.send_buffer.qsize() == before + 1
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2"}, blocking=True)

@@ -11,6 +11,13 @@ Home Assistant devices with UI-selectable triggers. Nothing is renamed and no
 `mac` key on the CEN/CEN+ bus events). A `myhome.yaml` written for 0.3.x keeps behaving
 exactly as it did: both features are opt-in through new keys.
 
+### Fixed
+
+- `myhome.send_message` crashed with an internal error on frames that OWNd's typed
+  parser does not model, such as a CEN+ virtual press (`*25*21#1*#2##`, WHERE starting
+  with `#`). Well-formed frames are now sent as generic commands; malformed ones
+  raise a proper validation error. Found while testing the scenario controls.
+
 ### Added
 
 - **CEN / CEN+ scenario controls as devices, with device triggers and an event

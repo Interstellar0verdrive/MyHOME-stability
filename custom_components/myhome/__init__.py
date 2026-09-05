@@ -20,6 +20,7 @@ Contract D (see .audit-2026-09/CONTRACTS.md):
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -393,6 +394,31 @@ async def _async_cancel_workers(handler: MyHOMEGatewayHandler) -> None:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+_OWN_FRAME_RE = re.compile(r"^\*#?\d+(\*[^*]*)*##$")
+
+
+def _parse_raw_command(raw: str) -> OWNCommand | None:
+    """Turn a user-supplied OpenWebNet frame into an OWNCommand.
+
+    ``OWNCommand.parse`` builds a typed command and raises on frames it does not
+    model (e.g. a CEN+ virtual press ``*25*21#1*#2##``, whose WHERE starts with
+    ``#``). Those frames are perfectly valid on the bus, so fall back to a generic
+    command when the frame has the OpenWebNet shape.
+    """
+    if not isinstance(raw, str) or not _OWN_FRAME_RE.match(raw):
+        return None
+    try:
+        parsed = OWNCommand.parse(raw)
+    except Exception:  # noqa: BLE001 - OWNd raises assorted errors on unknown shapes
+        parsed = None
+    if isinstance(parsed, OWNCommand):
+        return parsed
+    try:
+        return OWNCommand(raw)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # --------------------------------------------------------------------------- setup
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration (config entries only; YAML is rejected by CONFIG_SCHEMA)."""
@@ -590,7 +616,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def handle_send_message(call: ServiceCall) -> None:
         handler = _async_resolve_handler(hass, call)
         raw = call.data[ATTR_MESSAGE]
-        message = OWNCommand.parse(raw)
+        message = _parse_raw_command(raw)
         if message is None or not message.is_valid:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="invalid_message", translation_placeholders={"message": str(raw)}
