@@ -572,3 +572,51 @@ async def test_tilt_survives_entry_reload(hass: HomeAssistant, tmp_path) -> None
         assert state.attributes.get(ATTR_CURRENT_POSITION) == 0
         assert state.attributes.get(ATTR_CURRENT_TILT_POSITION) == 60
         assert state.state == CoverState.OPEN
+
+async def test_set_position_survives_the_gateway_stop_echo(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """MyHOMEServer1 echoes "stopped" then "opening" right after our command.
+
+    Seen live on 2026-09-05: the echo cancelled the timed target and the shutter
+    ran fully open. The stop echo must be ignored, the opening echo must not
+    restart the estimate, and the timed stop must still be sent.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_POSITION: 5}, blocking=True
+        )
+        assert commands.sent_frames == ["*2*1*85##"]
+        cover = entity_object(hass, COVER, "2-85")
+        await _advance(hass, freezer, 0.1)
+        await feed_event(hass, cover, "*2*0*85##")  # gateway stop echo
+        await _advance(hass, freezer, 0.4)
+        await feed_event(hass, cover, "*2*1*85##")  # gateway opening echo
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        await _advance(hass, freezer, 3.2)  # 3.7 s: not there yet
+        assert commands.sent_frames == ["*2*1*85##"]
+        await _advance(hass, freezer, 0.7)  # 4.4 s > 4.35 s
+        assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
+        await feed_event(hass, cover, "*2*0*85##")  # echo of our own stop
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 5
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+        assert state.state == CoverState.OPEN
+
+
+async def test_keypad_stop_is_not_mistaken_for_an_echo(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A keypad press (bus event, not our command) followed by a real stop is honoured."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, _commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await feed_event(hass, cover, "*2*1*85##")
+        await _advance(hass, freezer, 1.0)
+        await feed_event(hass, cover, "*2*0*85##")
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state == CoverState.OPEN
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert 0 < state.attributes[ATTR_CURRENT_TILT_POSITION] < 100

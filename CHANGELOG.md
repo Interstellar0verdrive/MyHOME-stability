@@ -13,6 +13,12 @@ exactly as it did: both features are opt-in through new keys.
 
 ### Fixed
 
+- Timed cover targets (`set_cover_position`, tilt) were cancelled by the gateway:
+  MyHOMEServer1 answers a movement command with a "stopped" frame immediately
+  followed by the "opening"/"closing" one, and that stop was taken as the end of
+  the run, so the shutter ran to the end stop. The stop echo arriving within 1.5 s
+  of our own command is now ignored; real stops (keypad) are still honoured.
+  Found live on the first calibrated shutter.
 - `myhome.send_message` crashed with an internal error on frames that OWNd's typed
   parser does not model, such as a CEN+ virtual press (`*25*21#1*#2##`, WHERE starting
   with `#`). Well-formed frames are now sent as generic commands; malformed ones

@@ -85,6 +85,8 @@ from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity, address_attributes
 
 # How often the estimated position is pushed to Home Assistant while the cover moves.
+# A "stopped" frame this soon after our own movement command is the gateway's echo.
+STOP_ECHO_WINDOW_SEC = 1.5
 POSITION_TICK = timedelta(seconds=1)
 
 OPENING = "opening"
@@ -235,6 +237,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._move_start_tilt: int | None = None
         # Set only when *we* have to stop the cover (`set_cover_position`, tilt).
         self._target_position: int | None = None
+        # When we sent the movement command ourselves: the gateway echoes a
+        # "stopped" frame right before the "opening"/"closing" one, which must
+        # not cancel a timed target (see handle_event).
+        self._own_command_at: datetime | None = None
         # Where the estimate settles when the pending timer fires.
         self._end_position: int | None = None
         self._end_tilt: int | None = None
@@ -371,8 +377,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         direction: str,
         target_position: int | None = None,
         target_tilt: int | None = None,
+        own_command: bool = False,
     ) -> None:
         """Start (or restart) the time-based estimate in `direction`.
+
+        `own_command` marks movements we commanded (as opposed to keypad
+        presses seen on the bus) so the gateway's stop echo can be ignored.
 
         `target_position` is set only when the movement must be stopped by us
         (`set_cover_position`, `set_cover_tilt_position`); otherwise the actuator
@@ -393,6 +403,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._move_started_at = dt_util.utcnow()
         self._moving = direction
         self._target_position = target_position
+        self._own_command_at = dt_util.utcnow() if own_command else None
 
         if target_position is None:
             # Free run to the end stop: fully open (slats open) or fully closed.
@@ -507,13 +518,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover, all the way to the upper end stop."""
         if await self._gateway_handler.send(self._direction_command(OPENING)(self._full_where)) and not self._advanced:
-            self._start_movement(OPENING)
+            self._start_movement(OPENING, own_command=True)
             self.async_write_ha_state()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover, all the way to the lower end stop (slats included)."""
         if await self._gateway_handler.send(self._direction_command(CLOSING)(self._full_where)) and not self._advanced:
-            self._start_movement(CLOSING)
+            self._start_movement(CLOSING, own_command=True)
             self.async_write_ha_state()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
@@ -564,7 +575,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         direction = OPENING if position > current else CLOSING
         if await self._gateway_handler.send(self._direction_command(direction)(self._full_where)):
             # Above the floor the slats are always open.
-            self._start_movement(direction, target_position=position, target_tilt=100)
+            self._start_movement(direction, target_position=position, target_tilt=100, own_command=True)
             self.async_write_ha_state()
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
@@ -610,7 +621,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             return
         direction = OPENING if target_tilt > tilt else CLOSING
         if await self._gateway_handler.send(self._direction_command(direction)(self._full_where)):
-            self._start_movement(direction, target_position=0, target_tilt=target_tilt)
+            self._start_movement(direction, target_position=0, target_tilt=target_tilt, own_command=True)
             self.async_write_ha_state()
 
     # ------------------------------------------------------------------ events
@@ -638,6 +649,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 if self._moving != CLOSING:
                     self._start_movement(CLOSING)
             elif opening is False and closing is False:
+                if self._moving is not None and self._own_command_at is not None:
+                    # MyHOMEServer1 answers a movement command with a "stopped"
+                    # frame immediately followed by the "opening"/"closing" one;
+                    # that stop is an echo, not the end of the run.
+                    elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
+                    if elapsed < STOP_ECHO_WINDOW_SEC:
+                        LOGGER.debug("%s Ignoring the gateway stop echo %.2fs after our command", self._gateway_handler.log_id, elapsed)
+                        return
                 # "Stopped": freeze wherever the estimate got to.
                 self._finish_movement(*self._estimate())
         except Exception:  # pragma: no cover - defensive, keeps the session alive
