@@ -154,3 +154,39 @@ DEVICE_TYPE_TO_PLATFORM: dict[str, str] = {
     DEVICE_TYPE_BUS_AUX: "switch",
     DEVICE_TYPE_GENERIC: "sensor"
 }
+
+# --- 0.3.0 shared contract (observability + tunables) --------------------------
+# Handler statistics: gateway.py publishes a fresh GatewayStats snapshot with
+# async_dispatcher_send(hass, SIGNAL_GATEWAY_STATS.format(mac=<mac>), stats)
+# at most once per second and on every reconnect/drop event.
+SIGNAL_GATEWAY_STATS = "myhome_gateway_stats_{mac}"
+
+# Diagnostic entities attached to the gateway device (unique_id = f"{mac}-{suffix}").
+GATEWAY_DIAG_CONNECTED = "gateway-connected"
+GATEWAY_DIAG_LAST_FRAME = "gateway-last-frame"
+GATEWAY_DIAG_RECONNECTS = "gateway-reconnects"
+GATEWAY_DIAG_COMMANDS_DROPPED = "gateway-commands-dropped"
+GATEWAY_DIAG_QUEUE_LENGTH = "gateway-queue-length"
+GATEWAY_DIAG_SUFFIXES = (
+    GATEWAY_DIAG_CONNECTED,
+    GATEWAY_DIAG_LAST_FRAME,
+    GATEWAY_DIAG_RECONNECTS,
+    GATEWAY_DIAG_COMMANDS_DROPPED,
+    GATEWAY_DIAG_QUEUE_LENGTH,
+)
+
+# Options (entry.options) with their defaults = the values hard-coded in 0.2.x.
+CONF_IDLE_WATCHDOG_SEC = "idle_watchdog_sec"
+CONF_PROBE_WINDOW_SEC = "probe_window_sec"
+CONF_COMMAND_TIMEOUT_SEC = "command_timeout_sec"
+CONF_QUEUE_TTL_SEC = "queue_ttl_sec"
+CONF_DEFAULT_KEEPALIVE_MINUTES = "default_keepalive_minutes"
+DEFAULT_IDLE_WATCHDOG_SEC = 300
+DEFAULT_PROBE_WINDOW_SEC = 30
+DEFAULT_COMMAND_TIMEOUT_SEC = 10
+DEFAULT_QUEUE_TTL_SEC = 60
+
+# Repairs issue ids (issue_registry), all prefixed with the entry id by the caller.
+ISSUE_YAML_INVALID = "yaml_invalid"
+ISSUE_UNKNOWN_KEYS = "unknown_keys"
+ISSUE_NO_DEVICES_FOR_GATEWAY = "no_devices_for_gateway"
