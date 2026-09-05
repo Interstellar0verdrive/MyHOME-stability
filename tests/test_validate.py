@@ -491,6 +491,165 @@ def test_no_button_platform_without_lock_buttons():
 
 
 # --------------------------------------------------------------------------------------
+# CEN / CEN+ scenario controls (0.4.0)
+# --------------------------------------------------------------------------------------
+def _events(out: dict) -> dict:
+    """The ``event`` platform section produced by a ``scenario_control:`` block."""
+    return platforms(out)["event"]
+
+
+def test_scenario_control_defaults_cen_plus():
+    """cen_plus is the default protocol; the address becomes who/where/object."""
+    out = check(gw(scenario_control={"keypad": {"object": 25, "name": "Keypad"}}))
+    devices = _events(out)
+    assert list(devices) == ["cenplus-25"]
+    device = devices["cenplus-25"]
+    assert device["protocol"] == "cen_plus"
+    assert device["object"] == 25
+    assert device["where"] == "25"
+    assert device["who"] == "25"
+    assert device["buttons"] == [1, 2, 3, 4]
+    assert device["name"] == "Keypad"
+    assert device["entity_name"] is None
+    assert device["manufacturer"] == "BTicino S.p.A."
+    assert device["model"] == "CEN+ scenario control"
+    assert device["entities"] == {}
+
+
+def test_scenario_control_cen_uses_where():
+    out = check(
+        gw(
+            scenario_control={
+                "ingresso": {
+                    "protocol": "cen",
+                    "where": "051",
+                    "name": "Ingresso",
+                    "buttons": [0, 1, 2],
+                    "model": "HD4652",
+                    "entity_name": "Keypad",
+                }
+            }
+        )
+    )
+    # The bus writes the address unpadded, so '051' keys as cen-51.
+    device = _events(out)["cen-51"]
+    assert device["protocol"] == "cen"
+    assert device["who"] == "15"
+    assert device["object"] == 51
+    assert device["where"] == "51"
+    assert device["buttons"] == [0, 1, 2]
+    assert device["model"] == "HD4652"
+    assert device["entity_name"] == "Keypad"
+
+
+@pytest.mark.parametrize(
+    ("device", "path_tail"),
+    [
+        ({"name": "X"}, "object"),                                   # cen_plus without object
+        ({"protocol": "cen", "name": "X"}, "where"),                 # cen without where
+        ({"protocol": "cen", "object": 5, "name": "X"}, "object"),   # cen addressed by object
+        ({"object": 5, "where": "51", "name": "X"}, "where"),        # cen_plus addressed by where
+    ],
+)
+def test_scenario_control_address_must_match_protocol(device, path_tail):
+    with pytest.raises(Invalid) as err:
+        check(gw(scenario_control={"kp": device}))
+    assert str(err.value.path[-1]) == path_tail
+
+
+@pytest.mark.parametrize("object_id", [0, 2048, -1])
+def test_scenario_control_object_out_of_range(object_id):
+    with pytest.raises(Invalid):
+        check(gw(scenario_control={"kp": {"object": object_id, "name": "X"}}))
+
+
+@pytest.mark.parametrize("protocol", ["cenplus", "CEN", "", 1])
+def test_scenario_control_unknown_protocol(protocol):
+    with pytest.raises(Invalid):
+        check(gw(scenario_control={"kp": {"protocol": protocol, "object": 3, "name": "X"}}))
+
+
+@pytest.mark.parametrize(
+    ("protocol", "extra", "buttons"),
+    [
+        ("cen_plus", {"object": 3}, [0]),    # CEN+ buttons are 1-32
+        ("cen_plus", {"object": 3}, [33]),
+        ("cen", {"where": "51"}, [32]),      # CEN buttons are 0-31
+        ("cen", {"where": "51"}, [-1]),
+    ],
+)
+def test_scenario_control_button_range_per_protocol(protocol, extra, buttons):
+    with pytest.raises(Invalid) as err:
+        check(gw(scenario_control={"kp": {"protocol": protocol, "name": "X", "buttons": buttons, **extra}}))
+    assert "buttons" in str(err.value)
+
+
+@pytest.mark.parametrize("buttons", [[1, 1], [], ["a"], [None], [True]])
+def test_scenario_control_invalid_button_list(buttons):
+    with pytest.raises(Invalid):
+        check(gw(scenario_control={"kp": {"object": 3, "name": "X", "buttons": buttons}}))
+
+
+def test_scenario_control_buttons_accept_strings_and_scalar():
+    out = check(gw(scenario_control={"kp": {"object": 3, "name": "X", "buttons": ["1", 2]}}))
+    assert _events(out)["cenplus-3"]["buttons"] == [1, 2]
+    out = check(gw(scenario_control={"kp": {"object": 3, "name": "X", "buttons": 7}}))
+    assert _events(out)["cenplus-3"]["buttons"] == [7]
+
+
+def test_scenario_control_name_is_required():
+    with pytest.raises(Invalid):
+        check(gw(scenario_control={"kp": {"object": 3}}))
+
+
+def test_scenario_control_duplicate_address():
+    with pytest.raises(Invalid) as err:
+        check(
+            gw(
+                scenario_control={
+                    "kp": {"object": 25, "name": "A"},
+                    "kp_again": {"object": 25, "name": "B"},
+                }
+            )
+        )
+    assert "cenplus-25" in str(err.value)
+
+
+def test_scenario_control_cen_and_cen_plus_same_number_coexist():
+    """cen-5 and cenplus-5 are different devices: no collision."""
+    out = check(
+        gw(
+            scenario_control={
+                "plus": {"object": 5, "name": "Plus"},
+                "classic": {"protocol": "cen", "where": "5", "name": "Classic"},
+            }
+        )
+    )
+    assert set(_events(out)) == {"cenplus-5", "cen-5"}
+
+
+def test_scenario_control_unknown_key_warns_with_the_yaml_section_name(caplog):
+    validate.reset_unknown_key_warnings()
+    with caplog.at_level(logging.WARNING):
+        out = check(gw(scenario_control={"kp": {"object": 3, "name": "X", "buttonz": [1]}}))
+    assert "buttonz" in caplog.text
+    assert "scenario_control.kp" in caplog.text
+    assert "did you mean 'buttons'?" in caplog.text
+    # Unknown keys are never fatal and are kept.
+    assert _events(out)["cenplus-3"]["buttonz"] == [1]
+
+
+def test_no_event_platform_without_scenario_controls():
+    out = check(gw(light={"a": {"where": "11", "name": "A"}}))
+    assert "event" not in platforms(out)
+
+
+def test_empty_scenario_control_section_is_accepted():
+    out = check(gw(scenario_control=None))
+    assert platforms(out)["event"] == {}
+
+
+# --------------------------------------------------------------------------------------
 # Sensor defaults merge and keep-alive (val-13, Contract E)
 # --------------------------------------------------------------------------------------
 def test_sensor_defaults_merge_and_overrides():
@@ -678,6 +837,8 @@ _ENGINE_CASES = [
     {"gateway": {"mac": MAC, "energy": {"min_delta_w": -5}}},
     {"gateway": {"mac": MAC, "cover": {"c": {"where": "81", "name": "C", "class": "shutter", "device_class": "blind"}}}},
     {"gateway": {"mac": MAC}, MAC: {}},
+    {"gateway": {"mac": MAC, "scenario_control": {"kp": {"object": 25, "name": "K"}, "cen": {"protocol": "cen", "where": "51", "name": "C", "buttons": [0, 1]}}}},
+    {"gateway": {"mac": MAC, "scenario_control": {"kp": {"protocol": "cen", "object": 25, "name": "K"}}}},
 ]
 
 

@@ -115,6 +115,54 @@
       "description": "Il gateway `{mac}` non ha una sezione in `{path}` (gateway trovati nel file: {others}), quindi non è stato creato alcun dispositivo.\n\nAggiungere una sezione per questo gateway, oppure verificare che l'indirizzo MAC corrisponda, poi ricaricare l'integrazione."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "pushbutton_short_press": "{subtype} premuto",
+      "pushbutton_short_release": "{subtype} rilasciato dopo una pressione breve",
+      "pushbutton_long_press": "{subtype} tenuto premuto",
+      "pushbutton_long_press_repeat": "{subtype} ancora tenuto premuto",
+      "pushbutton_long_release": "{subtype} rilasciato dopo una pressione lunga",
+      "rotate_cw_slow": "{subtype} ruotato lentamente in senso orario",
+      "rotate_cw_fast": "{subtype} ruotato rapidamente in senso orario",
+      "rotate_ccw_slow": "{subtype} ruotato lentamente in senso antiorario",
+      "rotate_ccw_fast": "{subtype} ruotato rapidamente in senso antiorario"
+    },
+    "trigger_subtype": {
+      "button_0": "Pulsante 0",
+      "button_1": "Pulsante 1",
+      "button_2": "Pulsante 2",
+      "button_3": "Pulsante 3",
+      "button_4": "Pulsante 4",
+      "button_5": "Pulsante 5",
+      "button_6": "Pulsante 6",
+      "button_7": "Pulsante 7",
+      "button_8": "Pulsante 8",
+      "button_9": "Pulsante 9",
+      "button_10": "Pulsante 10",
+      "button_11": "Pulsante 11",
+      "button_12": "Pulsante 12",
+      "button_13": "Pulsante 13",
+      "button_14": "Pulsante 14",
+      "button_15": "Pulsante 15",
+      "button_16": "Pulsante 16",
+      "button_17": "Pulsante 17",
+      "button_18": "Pulsante 18",
+      "button_19": "Pulsante 19",
+      "button_20": "Pulsante 20",
+      "button_21": "Pulsante 21",
+      "button_22": "Pulsante 22",
+      "button_23": "Pulsante 23",
+      "button_24": "Pulsante 24",
+      "button_25": "Pulsante 25",
+      "button_26": "Pulsante 26",
+      "button_27": "Pulsante 27",
+      "button_28": "Pulsante 28",
+      "button_29": "Pulsante 29",
+      "button_30": "Pulsante 30",
+      "button_31": "Pulsante 31",
+      "button_32": "Pulsante 32"
+    }
+  },
   "entity": {
     "button": {
       "lock": {
@@ -153,6 +201,11 @@
     "binary_sensor": {
       "gateway_connected": {
         "name": "Connesso"
+      }
+    },
+    "event": {
+      "scenario_control": {
+        "name": "Comando scenari"
       }
     }
   },

@@ -63,6 +63,7 @@ from OWNd.message import (
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.climate import DOMAIN as CLIMATE
 from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import DOMAIN as SENSOR
 from homeassistant.components.switch import DOMAIN as SWITCH
@@ -79,6 +80,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ATTR_MAC,
     CONF_BUS_INTERFACE,
     CONF_COMMAND_TIMEOUT_SEC,
     CONF_DEVICE_TYPE,
@@ -108,15 +110,20 @@ from .const import (
     DEFAULT_PROBE_WINDOW_SEC,
     DEFAULT_QUEUE_TTL_SEC,
     DOMAIN,
+    EVENT_CEN,
+    EVENT_CENPLUS,
     EVENT_LONG_PRESS_REPEAT,
     EVENT_ROTATE_CCW_FAST,
     EVENT_ROTATE_CCW_SLOW,
     EVENT_ROTATE_CW_FAST,
     EVENT_ROTATE_CW_SLOW,
     LOGGER,
+    PROTOCOL_CEN,
+    PROTOCOL_CEN_PLUS,
     SIGNAL_GATEWAY_CONNECTION,
     SIGNAL_GATEWAY_STATS,
     bus_full_where,
+    scenario_control_key,
 )
 from .myhome_device import MyHOMEEntity
 from .own_session import (
@@ -1183,10 +1190,15 @@ class MyHOMEGatewayHandler:
         else:
             LOGGER.debug("%s Ignoring unknown CEN+ frame `%s`", self.log_id, message)
             return
+        object_id = int(message.object)
+        pushbutton = int(message.push_button)
+        # ``mac`` (0.4.0) is additive: it disambiguates two gateways that can produce the
+        # same object/pushbutton pair, and is what the device triggers match on.
         self.hass.bus.async_fire(
-            "myhome_cenplus_event",
-            {"object": int(message.object), "pushbutton": int(message.push_button), "event": event},
+            EVENT_CENPLUS,
+            {"object": object_id, "pushbutton": pushbutton, "event": event, ATTR_MAC: self.mac},
         )
+        self._dispatch_scenario_event(PROTOCOL_CEN_PLUS, object_id, event, pushbutton)
         LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
 
     def _fire_cen_event(self, message: OWNCENEvent) -> None:
@@ -1201,11 +1213,44 @@ class MyHOMEGatewayHandler:
         else:
             LOGGER.debug("%s Ignoring unknown CEN frame `%s`", self.log_id, message)
             return
+        object_id = int(message.object)
+        pushbutton = int(message.push_button)
         self.hass.bus.async_fire(
-            "myhome_cen_event",
-            {"object": int(message.object), "pushbutton": int(message.push_button), "event": event},
+            EVENT_CEN,
+            {"object": object_id, "pushbutton": pushbutton, "event": event, ATTR_MAC: self.mac},
         )
+        self._dispatch_scenario_event(PROTOCOL_CEN, object_id, event, pushbutton)
         LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
+
+    def _dispatch_scenario_event(self, protocol: str, object_id: int, event: str, pushbutton: int) -> None:
+        """Push a CEN/CEN+ press into the event entity of that control, if declared.
+
+        Controls that are not in ``myhome.yaml`` own no entity and are silently skipped:
+        the bus event above is their whole contract (0.3.x behaviour).
+        """
+        key = scenario_control_key(protocol, object_id)
+        device = self._platform_cfg(EVENT).get(key)
+        if not isinstance(device, dict):
+            LOGGER.debug(
+                "%s %s control %s is not declared in myhome.yaml (bus event only)", self.log_id, protocol, key
+            )
+            return
+        obj = (device.get(CONF_ENTITIES) or {}).get(EVENT)
+        if obj is None:
+            return
+        try:
+            obj.handle_scenario_event(event, pushbutton)
+        except Exception:  # noqa: BLE001 - an entity bug must not affect the session (gw-08)
+            self._log_limited(
+                logging.ERROR,
+                f"entity-{key}",
+                "%s %s failed to handle scenario event `%s` on button %s",
+                self.log_id,
+                key,
+                event,
+                pushbutton,
+                exc_info=True,
+            )
 
     # ------------------------------------------------------------------ energy throttle
     def _energy_settings_for(self, entity_key: str) -> _EnergySettings:

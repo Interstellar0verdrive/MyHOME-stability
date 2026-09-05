@@ -63,6 +63,7 @@ from homeassistant.components.sensor import (
     DOMAIN as SENSOR,
 )
 from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.const import CONF_NAME, CONF_MAC
 
 from .const import (
@@ -106,6 +107,19 @@ from .const import (
     DEFAULT_SHUTTER_RUN,
     DEFAULT_SLAT_TIME,
     normalise_bus_interface,
+    # CEN / CEN+ scenario controls (0.4.0)
+    CONF_BUTTONS,
+    CONF_OBJECT,
+    CONF_PROTOCOL,
+    CONF_SCENARIO_CONTROL,
+    DEFAULT_SCENARIO_BUTTONS,
+    PROTOCOL_CEN_PLUS,
+    SCENARIO_CONTROL_BUTTON_RANGE,
+    SCENARIO_CONTROL_MODELS,
+    SCENARIO_CONTROL_WHO,
+    SCENARIO_OBJECT_RANGE,
+    SCENARIO_PROTOCOLS,
+    scenario_control_key,
 )
 
 # --------------------------------------------------------------------------------------
@@ -135,6 +149,9 @@ _FILTER_ALIASES: dict[str, tuple[str, ...]] = {
 
 DEVICE_PLATFORMS: tuple[str, ...] = (LIGHT, SWITCH, COVER, BINARY_SENSOR, SENSOR, CLIMATE)
 LOCK_BUTTON_PLATFORMS: tuple[str, ...] = (LIGHT, SWITCH, COVER)
+# ``scenario_control:`` in YAML produces devices of the HA ``event`` platform; the
+# section is validated separately because its device key is not ``who-where``.
+SCENARIO_SECTION = CONF_SCENARIO_CONTROL
 
 
 # --------------------------------------------------------------------------------------
@@ -385,6 +402,37 @@ class BusInterface:
         return f"BusInterface(msg={self.msg!r})"
 
 
+class ButtonList:
+    """List of pushbutton numbers of a CEN/CEN+ scenario control.
+
+    Accepts a list of ints (or digit strings) and normalises it to ``list[int]``; a
+    bare int is accepted as a one-button list.  The per-protocol range (CEN+ 1-32,
+    CEN 0-31) is checked by ``_finalize_scenario_control``, which knows the protocol.
+    """
+
+    def __init__(self, msg: str | None = None) -> None:
+        self.msg = msg
+
+    def __call__(self, v: object) -> list[int]:
+        values = v if isinstance(v, (list, tuple)) else [v]
+        if not values:
+            raise Invalid(self.msg or "buttons must list at least one pushbutton number")
+        buttons: list[int] = []
+        for item in values:
+            if isinstance(item, bool) or not isinstance(item, (int, str)):
+                raise Invalid(self.msg or f"Invalid pushbutton {item!r}, it must be a number")
+            if isinstance(item, str) and not item.strip().isdigit():
+                raise Invalid(self.msg or f"Invalid pushbutton {item!r}, it must be a number")
+            number = int(item)
+            if number in buttons:
+                raise Invalid(self.msg or f"pushbutton {number} is listed twice in 'buttons'")
+            buttons.append(number)
+        return buttons
+
+    def __repr__(self) -> str:
+        return f"ButtonList(msg={self.msg!r})"
+
+
 class Zone:
     """Thermoregulation zone: ``#0`` (central unit), ``1``..``99`` or ``#0#<zone>``."""
 
@@ -581,6 +629,17 @@ CLIMATE_FIELDS: dict = {
     Optional(CONF_CENTRAL, default=False): Boolean(),
 }
 
+# CEN / CEN+ scenario controls (0.4.0).  ``object`` is required for ``cen_plus`` and
+# ``where`` for ``cen``; both are optional here because the requirement depends on the
+# ``protocol`` value, which _finalize_scenario_control enforces with a readable message.
+SCENARIO_CONTROL_FIELDS: dict = {
+    **_COMMON_FIELDS,
+    Optional(CONF_PROTOCOL, default=PROTOCOL_CEN_PLUS): In(list(SCENARIO_PROTOCOLS)),
+    Optional(CONF_OBJECT): All(Coerce(int), Range(min=SCENARIO_OBJECT_RANGE[0], max=SCENARIO_OBJECT_RANGE[1])),
+    Optional(CONF_WHERE): SENSOR_WHERE,
+    Optional(CONF_BUTTONS, default=list(DEFAULT_SCENARIO_BUTTONS)): ButtonList(),
+}
+
 ENERGY_DEFAULTS_FIELDS: dict = dict(_SENSOR_FILTER_FIELDS)
 
 PLATFORM_FIELDS: dict[str, dict] = {
@@ -590,6 +649,7 @@ PLATFORM_FIELDS: dict[str, dict] = {
     BINARY_SENSOR: BINARY_SENSOR_FIELDS,
     SENSOR: SENSOR_FIELDS,
     CLIMATE: CLIMATE_FIELDS,
+    EVENT: SCENARIO_CONTROL_FIELDS,
 }
 
 
@@ -702,12 +762,73 @@ def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
                 break
 
 
+def _finalize_scenario_control(device: MutableMapping, yaml_key: str) -> None:
+    """Resolve the address of a CEN/CEN+ control and check its button numbers.
+
+    ``cen_plus`` is addressed by ``object`` (1-2047), ``cen`` by ``where``; the other
+    key is refused rather than silently ignored.  Both forms end up carrying the same
+    three keys so that the platform, the gateway dispatcher and the device triggers
+    can index them without knowing the protocol:
+
+    - ``who``    -> "25" (CEN+) or "15" (CEN), for the base entity;
+    - ``where``  -> the address as the bus writes it (unpadded decimal string);
+    - ``object`` -> the same address as the ``int`` the bus events carry.
+    """
+    protocol = device[CONF_PROTOCOL]
+    address = device.get(CONF_OBJECT)
+    where = device.get(CONF_WHERE)
+    if protocol == PROTOCOL_CEN_PLUS:
+        if where is not None:
+            raise Invalid(
+                f"scenario_control '{yaml_key}': a CEN+ control is addressed by 'object' "
+                f"(1-2047), not by 'where'",
+                path=[yaml_key, CONF_WHERE],
+            )
+        if address is None:
+            raise Invalid(
+                f"scenario_control '{yaml_key}' is missing the required 'object' "
+                f"(the CEN+ object number, 1-2047)",
+                path=[yaml_key, CONF_OBJECT],
+            )
+    else:
+        if address is not None:
+            raise Invalid(
+                f"scenario_control '{yaml_key}': a CEN control is addressed by 'where', not by 'object'",
+                path=[yaml_key, CONF_OBJECT],
+            )
+        if where is None:
+            raise Invalid(
+                f"scenario_control '{yaml_key}' is missing the required 'where' (the CEN address)",
+                path=[yaml_key, CONF_WHERE],
+            )
+        # The bus writes the address unpadded; normalising here keeps the device key,
+        # the registry identifier and the dispatcher lookup on one single spelling.
+        address = int(where)
+
+    device[CONF_OBJECT] = int(address)
+    device[CONF_WHERE] = str(int(address))
+    device[CONF_WHO] = SCENARIO_CONTROL_WHO[protocol]
+    device.setdefault(CONF_DEVICE_MODEL, None)
+    if device[CONF_DEVICE_MODEL] is None:
+        device[CONF_DEVICE_MODEL] = SCENARIO_CONTROL_MODELS[protocol]
+
+    low, high = SCENARIO_CONTROL_BUTTON_RANGE[protocol]
+    for button in device[CONF_BUTTONS]:
+        if not low <= button <= high:
+            raise Invalid(
+                f"scenario_control '{yaml_key}': pushbutton {button} is out of range for "
+                f"protocol {protocol} ({low}-{high})",
+                path=[yaml_key, CONF_BUTTONS],
+            )
+
+
 _PLATFORM_FINALIZERS = {
     SWITCH: _finalize_switch,
     COVER: _finalize_cover,
     BINARY_SENSOR: _finalize_binary_sensor,
     CLIMATE: _finalize_climate,
     SENSOR: _finalize_sensor,
+    EVENT: _finalize_scenario_control,
 }
 
 
@@ -720,8 +841,11 @@ class MyHomeDeviceSchema(Schema):
     because it needs the whole gateway.
     """
 
-    def __init__(self, platform: str, fields: Mapping) -> None:
+    def __init__(self, platform: str, fields: Mapping, section: str | None = None) -> None:
         self.platform = platform
+        # YAML section name, when it differs from the HA platform (``scenario_control:``
+        # produces devices of the ``event`` platform); used in the messages only.
+        self.section = section or platform
         self.known_keys = _known_keys(fields)
         # Outer mapping: keys must be strings (PREVENT_EXTRA rejects e.g. an unquoted int
         # device key); inner mapping: unknown keys are kept and reported by
@@ -732,7 +856,7 @@ class MyHomeDeviceSchema(Schema):
         data = super().__call__(data)
         finalize = _PLATFORM_FINALIZERS.get(self.platform)
         for yaml_key, device in data.items():
-            warn_unknown_keys((self.platform, yaml_key), device, self.known_keys)
+            warn_unknown_keys((self.section, yaml_key), device, self.known_keys)
             _resolve_class_alias(device, yaml_key)
             _inject_common_defaults(device)
             if finalize is not None:
@@ -746,6 +870,7 @@ cover_schema = MyHomeDeviceSchema(COVER, COVER_FIELDS)
 binary_sensor_schema = MyHomeDeviceSchema(BINARY_SENSOR, BINARY_SENSOR_FIELDS)
 sensor_schema = MyHomeDeviceSchema(SENSOR, SENSOR_FIELDS)
 climate_schema = MyHomeDeviceSchema(CLIMATE, CLIMATE_FIELDS)
+scenario_control_schema = MyHomeDeviceSchema(EVENT, SCENARIO_CONTROL_FIELDS, section=SCENARIO_SECTION)
 
 PLATFORM_SCHEMAS: dict[str, MyHomeDeviceSchema] = {
     LIGHT: light_schema,
@@ -754,6 +879,7 @@ PLATFORM_SCHEMAS: dict[str, MyHomeDeviceSchema] = {
     BINARY_SENSOR: binary_sensor_schema,
     SENSOR: sensor_schema,
     CLIMATE: climate_schema,
+    EVENT: scenario_control_schema,
 }
 
 # Gateway-level defaults for the power/energy filter (``sensor_defaults``, alias ``energy``).
@@ -782,12 +908,19 @@ gateway_schema = Schema(
         Optional(BINARY_SENSOR): _section(binary_sensor_schema),
         Optional(SENSOR): _section(sensor_schema),
         Optional(CLIMATE): _section(climate_schema),
+        Optional(SCENARIO_SECTION): _section(scenario_control_schema),
         Optional(CONF_ENERGY_DEFAULTS): _section(energy_defaults_schema),
         Optional(CONF_SENSOR_DEFAULTS): _section(sensor_defaults_schema),
     },
     extra=ALLOW_EXTRA,  # unknown gateway-level keys are kept and reported, never fatal
 )
-_GATEWAY_KNOWN_KEYS = {CONF_MAC, *DEVICE_PLATFORMS, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS}
+_GATEWAY_KNOWN_KEYS = {
+    CONF_MAC,
+    *DEVICE_PLATFORMS,
+    SCENARIO_SECTION,
+    CONF_ENERGY_DEFAULTS,
+    CONF_SENSOR_DEFAULTS,
+}
 
 
 # --------------------------------------------------------------------------------------
@@ -917,6 +1050,27 @@ class MyHomeConfigSchema(Schema):
                     rekeyed[key] = device
                 platforms[platform] = rekeyed
 
+            # CEN / CEN+ scenario controls (0.4.0): keyed ``cenplus-<object>`` /
+            # ``cen-<where>`` instead of ``who-where``, because they are addressed by
+            # object number and never share a device with an actuator.  They join the
+            # same ``origins_of_key`` map so a duplicate is reported like any other.
+            scenario_section = gateway.get(SCENARIO_SECTION)
+            if scenario_section is not None:
+                rekeyed = {}
+                for yaml_key, device in scenario_section.items():
+                    key = scenario_control_key(device[CONF_PROTOCOL], device[CONF_OBJECT])
+                    for other_platform, other_key in origins_of_key.get(key, ()):
+                        raise Invalid(
+                            f"Duplicate scenario control '{device[CONF_WHERE]}' "
+                            f"(protocol {device[CONF_PROTOCOL]}): {SCENARIO_SECTION} '{yaml_key}' "
+                            f"collides with {other_platform} '{other_key}' (both map to device "
+                            f"'{key}'). Each CEN/CEN+ address may appear only once per gateway.",
+                            path=[root_key, SCENARIO_SECTION, yaml_key],
+                        )
+                    origins_of_key.setdefault(key, []).append((SCENARIO_SECTION, yaml_key))
+                    rekeyed[key] = device
+                platforms[EVENT] = rekeyed
+
             # Lock/Unlock buttons (val-10 / plat-08 / plat-09): only on request
             # (``lock_buttons: true``) and only for Point-to-Point WHEREs, because
             # ``*14*0*0##`` on a General/Area WHERE disables every actuator of the plant.
@@ -934,7 +1088,7 @@ class MyHomeConfigSchema(Schema):
             # Keep the remaining (non-platform) gateway-level keys for backward
             # compatibility; __init__.py merges them into hass.data[DOMAIN][mac].
             for key, value in gateway.items():
-                if key in (CONF_MAC, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS) or key in DEVICE_PLATFORMS:
+                if key in (CONF_MAC, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS, SCENARIO_SECTION) or key in DEVICE_PLATFORMS:
                     continue
                 entry[key] = value
 

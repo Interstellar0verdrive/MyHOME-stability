@@ -27,6 +27,8 @@ Everything below is from `custom_components/myhome/*.py` at version 0.3.1 and
 | `sensor.py` | Instant power (with the keep-alive), the three energy totalisers, temperature, illuminance; the `start_sending_instant_power` entity service. |
 | `binary_sensor.py` | WHO 25 dry contacts, WHO 9 auxiliary channels, WHO 1 motion sensors (with timeout). |
 | `button.py` | The opt-in WHO 14 Lock/Unlock buttons. |
+| `event.py` | WHO 15 / WHO 25 CEN and CEN+ scenario controls: one stateless `EventEntity` per declared keypad, fed by the gateway dispatcher. |
+| `device_trigger.py` | The device-automation platform: per-button, per-event-name triggers for those keypads, delegated to Home Assistant's own event trigger. |
 | `services.yaml`, `manifest.json`, `translations/{en,fr,it,nl}.json` | Service schemas for the UI, integration metadata and SSDP matchers, translated strings. |
 
 ## `hass.data` layout
@@ -419,7 +421,8 @@ the Home Assistant test plugin requires).
 | `test_gateway.py` | The handler against fake channels *and* against a real loopback OpenWebNet server: queue bounds, TTL, retry-once, drop, idle watchdog, auth failure, dispatcher isolation, the energy throttle, idempotent shutdown. |
 | `test_init.py` | Setup and unload, entry migration, `ConfigEntryNotReady` / `ConfigEntryAuthFailed` paths, registry pruning that preserves user-disabled entities, service validation, two-gateway resolution — and the end-to-end test. |
 | `test_config_flow.py` | Picker, manual entry, SSDP, port, password, reauth, options. |
-| `test_light.py`, `test_switch.py`, `test_cover.py`, `test_climate.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py` | Per-platform behaviour. |
+| `test_light.py`, `test_switch.py`, `test_cover.py`, `test_climate.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`, `test_event.py` | Per-platform behaviour. |
+| `test_device_trigger.py` | What the automation editor is offered per protocol, an attached trigger firing on a real bus frame, and the shipped blueprints against Home Assistant's blueprint schema. |
 
 ### The fake OpenWebNet server
 

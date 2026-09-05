@@ -115,6 +115,54 @@
       "description": "Gateway `{mac}` has no section in `{path}` (gateways found in the file: {others}), so no device was created.\n\nAdd a section for this gateway, or check that the MAC address matches, then reload the integration."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "pushbutton_short_press": "{subtype} pressed",
+      "pushbutton_short_release": "{subtype} released after a short press",
+      "pushbutton_long_press": "{subtype} held down",
+      "pushbutton_long_press_repeat": "{subtype} still held down",
+      "pushbutton_long_release": "{subtype} released after being held",
+      "rotate_cw_slow": "{subtype} turned slowly clockwise",
+      "rotate_cw_fast": "{subtype} turned quickly clockwise",
+      "rotate_ccw_slow": "{subtype} turned slowly counter-clockwise",
+      "rotate_ccw_fast": "{subtype} turned quickly counter-clockwise"
+    },
+    "trigger_subtype": {
+      "button_0": "Button 0",
+      "button_1": "Button 1",
+      "button_2": "Button 2",
+      "button_3": "Button 3",
+      "button_4": "Button 4",
+      "button_5": "Button 5",
+      "button_6": "Button 6",
+      "button_7": "Button 7",
+      "button_8": "Button 8",
+      "button_9": "Button 9",
+      "button_10": "Button 10",
+      "button_11": "Button 11",
+      "button_12": "Button 12",
+      "button_13": "Button 13",
+      "button_14": "Button 14",
+      "button_15": "Button 15",
+      "button_16": "Button 16",
+      "button_17": "Button 17",
+      "button_18": "Button 18",
+      "button_19": "Button 19",
+      "button_20": "Button 20",
+      "button_21": "Button 21",
+      "button_22": "Button 22",
+      "button_23": "Button 23",
+      "button_24": "Button 24",
+      "button_25": "Button 25",
+      "button_26": "Button 26",
+      "button_27": "Button 27",
+      "button_28": "Button 28",
+      "button_29": "Button 29",
+      "button_30": "Button 30",
+      "button_31": "Button 31",
+      "button_32": "Button 32"
+    }
+  },
   "entity": {
     "button": {
       "lock": {
@@ -153,6 +201,11 @@
     "binary_sensor": {
       "gateway_connected": {
         "name": "Connected"
+      }
+    },
+    "event": {
+      "scenario_control": {
+        "name": "Scenario control"
       }
     }
   },

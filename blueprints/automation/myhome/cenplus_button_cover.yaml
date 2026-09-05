@@ -1,0 +1,131 @@
+blueprint:
+  name: MyHOME CEN+ buttons - cover
+  description: >-
+    Two buttons of a MyHOME CEN+ scenario control drive one cover: holding the
+    "up" button opens it, holding the "down" button closes it, and a short press
+    on either button stops it.
+
+
+    This is the behaviour of a physical shutter rocker, so it fits a keypad whose
+    two buttons are already labelled up/down. The control must be declared under
+    `scenario_control:` in `myhome.yaml` so that it exists as a device.
+  domain: automation
+  homeassistant:
+    min_version: 2026.8.0
+  source_url: https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/blueprints/automation/myhome/cenplus_button_cover.yaml
+  input:
+    scenario_control:
+      name: Scenario control
+      description: The CEN+ keypad the two buttons belong to.
+      selector:
+        device:
+          filter:
+            - integration: myhome
+    button_up:
+      name: Up button
+      description: Hold this button to open the cover.
+      default: button_1
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Button 1
+              value: button_1
+            - label: Button 2
+              value: button_2
+            - label: Button 3
+              value: button_3
+            - label: Button 4
+              value: button_4
+            - label: Button 5
+              value: button_5
+            - label: Button 6
+              value: button_6
+            - label: Button 7
+              value: button_7
+            - label: Button 8
+              value: button_8
+    button_down:
+      name: Down button
+      description: Hold this button to close the cover.
+      default: button_2
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Button 1
+              value: button_1
+            - label: Button 2
+              value: button_2
+            - label: Button 3
+              value: button_3
+            - label: Button 4
+              value: button_4
+            - label: Button 5
+              value: button_5
+            - label: Button 6
+              value: button_6
+            - label: Button 7
+              value: button_7
+            - label: Button 8
+              value: button_8
+    target_cover:
+      name: Cover
+      description: The cover to control.
+      selector:
+        entity:
+          filter:
+            - domain: cover
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: device
+    id: open
+    domain: myhome
+    device_id: !input scenario_control
+    type: pushbutton_long_press
+    subtype: !input button_up
+  - trigger: device
+    id: close
+    domain: myhome
+    device_id: !input scenario_control
+    type: pushbutton_long_press
+    subtype: !input button_down
+  - trigger: device
+    id: stop
+    domain: myhome
+    device_id: !input scenario_control
+    type: pushbutton_short_press
+    subtype: !input button_up
+  - trigger: device
+    id: stop
+    domain: myhome
+    device_id: !input scenario_control
+    type: pushbutton_short_press
+    subtype: !input button_down
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: open
+        sequence:
+          - action: cover.open_cover
+            target:
+              entity_id: !input target_cover
+      - conditions:
+          - condition: trigger
+            id: close
+        sequence:
+          - action: cover.close_cover
+            target:
+              entity_id: !input target_cover
+      - conditions:
+          - condition: trigger
+            id: stop
+        sequence:
+          - action: cover.stop_cover
+            target:
+              entity_id: !input target_cover

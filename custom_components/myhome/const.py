@@ -89,6 +89,93 @@ EVENT_ROTATE_CW_SLOW = "rotate_cw_slow"
 EVENT_ROTATE_CW_FAST = "rotate_cw_fast"
 EVENT_ROTATE_CCW_SLOW = "rotate_ccw_slow"
 EVENT_ROTATE_CCW_FAST = "rotate_ccw_fast"
+# --------------------------------------------------------------------------------------
+# CEN / CEN+ scenario controls (0.4.0)
+#
+# A wall keypad carries no state, so a scenario control is declared in ``myhome.yaml``
+# under ``scenario_control:`` and becomes ONE device on the gateway carrying ONE
+# ``event`` entity (HA platform ``event``).  The device exists so that its buttons can
+# be picked from the automation UI through ``device_trigger.py``; the entity makes the
+# last press visible in the state machine and in history.
+#
+# Controls that are NOT declared keep firing the bus events only (backward compatible).
+# --------------------------------------------------------------------------------------
+CONF_SCENARIO_CONTROL = "scenario_control"  # YAML block name and translation key
+CONF_PROTOCOL = "protocol"
+CONF_OBJECT = "object"
+CONF_BUTTONS = "buttons"
+ATTR_PUSHBUTTON = "pushbutton"
+ATTR_MAC = "mac"
+ATTR_EVENT = "event"
+
+PROTOCOL_CEN_PLUS = "cen_plus"
+PROTOCOL_CEN = "cen"
+SCENARIO_PROTOCOLS: tuple[str, ...] = (PROTOCOL_CEN_PLUS, PROTOCOL_CEN)
+
+# WHO of each protocol (OWNd: 15 -> OWNCENEvent, 25 -> OWNCENPlusEvent).
+WHO_CEN = "15"
+WHO_CEN_PLUS = "25"
+SCENARIO_CONTROL_WHO: dict[str, str] = {PROTOCOL_CEN_PLUS: WHO_CEN_PLUS, PROTOCOL_CEN: WHO_CEN}
+
+# Bus event fired for each protocol (unchanged contract, see docs/services-and-events.md).
+EVENT_CENPLUS = "myhome_cenplus_event"
+EVENT_CEN = "myhome_cen_event"
+SCENARIO_CONTROL_BUS_EVENT: dict[str, str] = {PROTOCOL_CEN_PLUS: EVENT_CENPLUS, PROTOCOL_CEN: EVENT_CEN}
+
+# Event names each protocol can produce, in the order gateway.py maps them.  These are
+# the ``event_types`` of the event entity AND the ``type`` of every device trigger, so
+# adding one here means adding a ``device_automation.trigger_type`` translation.
+SCENARIO_CONTROL_EVENT_TYPES: dict[str, tuple[str, ...]] = {
+    PROTOCOL_CEN_PLUS: (
+        CONF_SHORT_PRESS,
+        CONF_LONG_PRESS,
+        EVENT_LONG_PRESS_REPEAT,
+        CONF_LONG_RELEASE,
+        EVENT_ROTATE_CW_SLOW,
+        EVENT_ROTATE_CW_FAST,
+        EVENT_ROTATE_CCW_SLOW,
+        EVENT_ROTATE_CCW_FAST,
+    ),
+    # CEN has no "still held" repeat and no rotary, but it does report the release
+    # after a short press as its own frame.
+    PROTOCOL_CEN: (
+        CONF_SHORT_PRESS,
+        CONF_SHORT_RELEASE,
+        CONF_LONG_PRESS,
+        CONF_LONG_RELEASE,
+    ),
+}
+
+# Button numbering differs: CEN+ pushbuttons are 1-32, CEN pushbuttons are 0-31.
+SCENARIO_CONTROL_BUTTON_RANGE: dict[str, tuple[int, int]] = {
+    PROTOCOL_CEN_PLUS: (1, 32),
+    PROTOCOL_CEN: (0, 31),
+}
+DEFAULT_SCENARIO_BUTTONS: tuple[int, ...] = (1, 2, 3, 4)
+# CEN+ object numbers are 1-2047 (WHERE ``#0`` + object).
+SCENARIO_OBJECT_RANGE: tuple[int, int] = (1, 2047)
+
+SCENARIO_CONTROL_MODELS: dict[str, str] = {
+    PROTOCOL_CEN_PLUS: "CEN+ scenario control",
+    PROTOCOL_CEN: "CEN scenario control",
+}
+
+# Device-trigger subtypes: one per button ("button_3"), so the automation UI shows two
+# dropdowns (what happened / which button) instead of one flat list.
+SCENARIO_SUBTYPE_PREFIX = "button_"
+
+
+def scenario_control_key(protocol: str, address: object) -> str:
+    """Device key of a scenario control: ``cenplus-<object>`` / ``cen-<where>``.
+
+    Used as the key in ``hass.data[...][CONF_PLATFORMS]["event"]``, as the tail of the
+    device registry identifier (``{mac}-{key}``) and of the entity ``unique_id``
+    (``{mac}-{key}-event``); ``device_trigger.py`` parses it back out of the identifier.
+    """
+    prefix = "cenplus" if protocol == PROTOCOL_CEN_PLUS else "cen"
+    return f"{prefix}-{address}"
+
+
 # Energy sensor tuning keys (Contract A / E); ``sensor_defaults`` is the gateway-level
 # block validate.py merges into every power/energy sensor.
 CONF_SENSOR_DEFAULTS = "sensor_defaults"

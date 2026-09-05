@@ -1,0 +1,89 @@
+blueprint:
+  name: MyHOME CEN+ button - light
+  description: >-
+    One button of a MyHOME CEN+ scenario control drives one light: a short press
+    toggles it, holding the button turns it off.
+
+
+    The control must be declared under `scenario_control:` in `myhome.yaml` (see
+    the MyHOME-stability configuration reference) so that it exists as a device and
+    its buttons appear in the picker below. Only buttons 1-8 are offered here;
+    higher buttons are reachable with a plain event trigger on
+    `myhome_cenplus_event`.
+  domain: automation
+  homeassistant:
+    min_version: 2026.8.0
+  source_url: https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/blueprints/automation/myhome/cenplus_button_light.yaml
+  input:
+    scenario_control:
+      name: Scenario control
+      description: The CEN+ keypad the button belongs to.
+      selector:
+        device:
+          filter:
+            - integration: myhome
+    button:
+      name: Button
+      description: Which pushbutton of that keypad.
+      default: button_1
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Button 1
+              value: button_1
+            - label: Button 2
+              value: button_2
+            - label: Button 3
+              value: button_3
+            - label: Button 4
+              value: button_4
+            - label: Button 5
+              value: button_5
+            - label: Button 6
+              value: button_6
+            - label: Button 7
+              value: button_7
+            - label: Button 8
+              value: button_8
+    target_light:
+      name: Light
+      description: The light (or light group) to control.
+      selector:
+        entity:
+          filter:
+            - domain: light
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: device
+    id: short_press
+    domain: myhome
+    device_id: !input scenario_control
+    type: pushbutton_short_press
+    subtype: !input button
+  - trigger: device
+    id: long_press
+    domain: myhome
+    device_id: !input scenario_control
+    type: pushbutton_long_press
+    subtype: !input button
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: short_press
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input target_light
+      - conditions:
+          - condition: trigger
+            id: long_press
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input target_light

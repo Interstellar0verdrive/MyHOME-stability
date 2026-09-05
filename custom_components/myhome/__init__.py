@@ -32,6 +32,7 @@ from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.climate import DOMAIN as CLIMATE
 from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import DOMAIN as SENSOR, SensorDeviceClass
 from homeassistant.components.switch import DOMAIN as SWITCH
@@ -94,7 +95,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 # Every platform is always forwarded: each platform module returns early when the
 # validated config has no devices for it.  This keeps unload symmetric and
 # independent from hass.data.
-PLATFORMS: list[str] = [LIGHT, SWITCH, COVER, CLIMATE, BINARY_SENSOR, SENSOR, BUTTON]
+PLATFORMS: list[str] = [LIGHT, SWITCH, COVER, CLIMATE, BINARY_SENSOR, SENSOR, BUTTON, EVENT]
 
 # OWNd test_connection() messages that mean "the password is wrong/missing".
 _AUTH_FAILURE_MESSAGES = ("password_error", "password_required", "password_retry")
@@ -310,6 +311,8 @@ def expected_unique_ids(mac: str, platforms: Mapping[str, Mapping[str, Mapping[s
     - sensor: power/energy -> one id per pre-seeded ``entities`` slot
       (``-power``, ``-daily-energy``, ``-monthly-energy``, ``-total-energy``);
       temperature / illuminance -> ``{mac}-{device_key}-{class}``.
+    - event (CEN/CEN+ scenario controls, 0.4.0): ``{mac}-{device_key}-event``, where
+      the device key is ``cenplus-{object}`` / ``cen-{where}``.
     - the five gateway diagnostic entities (0.3.0), which exist for every gateway
       and have no YAML counterpart: ``{mac}-{suffix}`` for GATEWAY_DIAG_SUFFIXES.
     """
@@ -322,6 +325,8 @@ def expected_unique_ids(mac: str, platforms: Mapping[str, Mapping[str, Mapping[s
             elif platform == BUTTON:
                 expected.add(f"{base}-disable")
                 expected.add(f"{base}-enable")
+            elif platform == EVENT:
+                expected.add(f"{base}-event")
             elif platform == BINARY_SENSOR:
                 expected.add(f"{base}-{device.get(CONF_DEVICE_CLASS)}")
             elif platform == SENSOR:

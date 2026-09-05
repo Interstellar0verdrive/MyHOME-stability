@@ -5,11 +5,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.4.0] - unreleased
 
-One feature, covers only. Nothing is renamed, no `entity_id`, `unique_id` or event
-contract changes, and a `myhome.yaml` written for 0.3.x keeps behaving exactly as it
-did: the new model is opt-in through a single key.
+Two features: a two-phase travel model for covers, and CEN/CEN+ scenario controls as
+Home Assistant devices with UI-selectable triggers. Nothing is renamed and no
+`entity_id` or `unique_id` changes; the one event-contract change is additive (a new
+`mac` key on the CEN/CEN+ bus events). A `myhome.yaml` written for 0.3.x keeps behaving
+exactly as it did: both features are opt-in through new keys.
 
 ### Added
+
+- **CEN / CEN+ scenario controls as devices, with device triggers and an event
+  entity.** A wall keypad has no state, so until now its presses existed only as
+  `myhome_cenplus_event` / `myhome_cen_event` bus events, usable from YAML and
+  invisible everywhere else. Declaring the control under the new `scenario_control:`
+  block in `myhome.yaml` now creates a **device** on the gateway carrying one
+  **event entity** (`event.<name>_scenario_control`, state = timestamp of the last
+  press, attributes `event_type`, `pushbutton`, `protocol`, `object`/`where`) and a
+  set of **device triggers**, so "Button 2 held down on Living Room Keypad" can be
+  picked in the automation editor instead of hand-written event triggers. Both CEN+
+  (`object`, buttons 1-32, including the long-press repeat and the four rotary
+  events) and CEN (`where`, buttons 0-31) are supported; `buttons` decides which
+  combinations the picker offers, never what reaches the bus. Controls that are *not*
+  declared keep firing the bus events and create nothing, exactly as in 0.3.x.
+
+  *The device-trigger module is ported from
+  [fedem95/MyHOME](https://github.com/fedem95/MyHOME) by fedem95
+  (AGPL-3.0) — the base-schema extension, the type/subtype
+  split and the delegation to Home Assistant's own event trigger are theirs; the
+  concept was also explored by [mantovanellimatteo/MyHOME](https://github.com/mantovanellimatteo/MyHOME).
+  The event-entity model is ported from [adrael/MyHOME](https://github.com/adrael/MyHOME)
+  by raphael (AGPL-3.0), whose `event.py` implements the same
+  shape for a doorbell.*
+
+  See [Configuration → Scenario control](docs/configuration.md#scenario-control-cen--cen)
+  and [Recipes → Device triggers and blueprints](docs/recipes.md#device-triggers-and-blueprints).
+- **`mac` in the `myhome_cenplus_event` / `myhome_cen_event` payloads.** Additive: the
+  existing `object`, `pushbutton` and `event` keys are untouched, so automations
+  written before 0.4.0 keep matching. It carries the normalised MAC of the gateway
+  that saw the frame, so a multi-gateway plant can tell two controls with the same
+  object number apart — which is what the device triggers filter on.
+  *Suggested by fedem95, whose fork adds the same key.*
+- **Two automation blueprints**, in `blueprints/automation/myhome/`:
+  `cenplus_button_light.yaml` (short press toggles a light, long press turns it off)
+  and `cenplus_button_cover.yaml` (hold up/down to open/close a cover, short press to
+  stop). HACS does not install blueprints, so they are imported by URL — see
+  [Recipes → Importing the blueprints](docs/recipes.md#importing-the-blueprints).
 
 - **Two-phase travel model for basic covers (`slat_time`).** On most roller shutters
   the motor run is not all lift: from fully closed the first seconds only tilt the

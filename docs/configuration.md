@@ -22,6 +22,7 @@ of this schema.
 - [Binary sensor](#binary-sensor)
 - [Climate](#climate)
 - [Sensor](#sensor)
+- [Scenario control (CEN / CEN+)](#scenario-control-cen--cen)
 - [Lock/Unlock buttons](#lockunlock-buttons)
 - [Multiple gateways](#multiple-gateways)
 - [Custom icons and device classes](#custom-icons-and-device-classes)
@@ -135,7 +136,7 @@ Two root styles are accepted, and they can be mixed (one entry per gateway):
   ```
   An inner `mac:` is optional here; if present it must match the root key. Any MAC notation is accepted (`00:03:50:aa:bb:cc`, `00-03-50-AA-BB-CC`, `000350AABBCC`).
 
-Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_sensor`, `sensor`, `climate`) maps a **YAML key of your choice** (used only in error messages) to a device. Sections may be left empty.
+Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_sensor`, `sensor`, `climate`, `scenario_control`) maps a **YAML key of your choice** (used only in error messages) to a device. Sections may be left empty.
 
 Rules worth knowing:
 
@@ -324,6 +325,68 @@ See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
 Units are fixed by the class (W, Wh, °C, lx). Energy filtering, totals and
 `keepalive_minutes` are covered in full in [Energy monitoring](energy.md).
 
+## Scenario control (CEN / CEN+)
+
+A CEN or CEN+ scenario control is a wall keypad: it commands the bus directly and
+never reports a state, so Home Assistant only ever learns that a button *was*
+pressed. Its presses have always been on the Home Assistant event bus as
+`myhome_cenplus_event` / `myhome_cen_event` (see
+[Services and events](services-and-events.md#cen-keypad-events)) and nothing about
+that changed. Declaring the control under `scenario_control:` adds two things on
+top, since **0.4.0**:
+
+- a **device** with one **event entity**, so the last press is visible in the state
+  machine and in history (`event.<name>_scenario_control`);
+- **device triggers**, so "Button 2 held down on Keypad Soggiorno" can be picked
+  from the automation editor instead of hand-written event triggers.
+
+Controls you do not declare keep working exactly as before, firing the bus events
+and creating no entity.
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+  scenario_control:
+    keypad_living_room:
+      object: 25              # CEN+ object number
+      name: "Living Room Keypad"
+      buttons: [1, 2, 3, 4]
+
+    keypad_hall:
+      protocol: cen
+      where: "51"             # CEN address
+      name: "Hall Keypad"
+      buttons: [1, 2]
+```
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | string | Yes | – | Device name in Home Assistant. |
+| `protocol` | `cen_plus` \| `cen` | No | `cen_plus` | Which of the two protocols the control speaks. |
+| `object` | integer 1-2047 | Yes for `cen_plus` | – | CEN+ object number (the WHERE without its leading digit, i.e. the number the bus event reports as `object`). Not allowed for `cen`. |
+| `where` | string of digits | Yes for `cen` | – | CEN address, as it appears in the `*15*…*<where>##` frame. Not allowed for `cen_plus`. |
+| `buttons` | list of integers | No | `[1, 2, 3, 4]` | Which pushbuttons the automation editor should offer. CEN+ buttons are `1`-`32`, CEN buttons are `0`-`31`. |
+| `entity_name`, `manufacturer`, `model` | string | No | see below | The common cosmetic keys; `model` defaults to `CEN+ scenario control` / `CEN scenario control`. |
+
+Notes:
+
+- `buttons` is **not a filter**: a press on a button you did not list still fires
+  the bus event and still updates the event entity. It only decides which
+  combinations the trigger picker shows, so a 4-button keypad does not produce a
+  32-entry dropdown.
+- The device key is `cenplus-<object>` / `cen-<where>`, so a CEN control and a CEN+
+  control may carry the same number without colliding. Declaring the same address
+  twice is a validation error, as for any other platform.
+- A CEN address is normalised to its unpadded form (`"051"` and `"51"` are the same
+  control), because that is how the bus writes it.
+- The event entity's `event_types` are exactly the event names of the protocol —
+  see the [event tables](services-and-events.md#cen-keypad-events). CEN+ adds the
+  long-press repeat and the four rotary events; CEN has the release after a short
+  press instead.
+
+See [Recipes → CEN+ keypads](recipes.md#cen-keypads) for automations, blueprints
+and the device-trigger UI.
+
 ## Lock/Unlock buttons
 
 Lights, switches and covers with `lock_buttons: true` get two configuration buttons (**Lock** / **Unlock**) that disable/enable the actuator on the bus (`*14*...`). They are only generated for Point-to-Point WHEREs: locking a General or Area WHERE would disable every actuator of the plant. Buttons are off by default; existing installations that relied on the automatically generated buttons must opt in per device.
@@ -391,6 +454,8 @@ gateway:
 - **`Invalid <WHERE>`** / **`quote it`**: the address is not a valid OpenWebNet WHERE, or an unquoted number lost its leading zero.
 - **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named).
 - **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
+- **`scenario_control 'x' is missing the required 'object'`** / **`a CEN control is addressed by 'where', not by 'object'`**: a CEN+ control needs `object`, a CEN control needs `where`; never both.
+- **`scenario_control 'x': pushbutton N is out of range for protocol …`**: CEN+ buttons are 1-32, CEN buttons are 0-31.
 - **`gateway 'x' needs a 'mac'`** / **`configured twice`**: every root entry needs a MAC (as `mac:` or as the root key) and each MAC may appear once.
 - **`unknown key 'dimable' in light.x is ignored (did you mean 'dimmable'?)`** (WARNING): a typo or an unsupported key; the device is still created without it.
 

@@ -127,6 +127,16 @@ copy-paste automations.
 
 ## What's new / Upgrading
 
+**0.4.0** also makes **CEN / CEN+ scenario controls first-class**. Declare a keypad
+under the new `scenario_control:` block and it becomes a device with an event entity
+(the last press is finally visible in the state machine and in history) and with
+**device triggers**, so "Button 2 held down on Living Room Keypad" is a dropdown in
+the automation editor rather than a hand-written event trigger. Two blueprints ship
+with the repository. Undeclared controls keep firing `myhome_cenplus_event` /
+`myhome_cen_event` and nothing else; those events gained a `mac` key (additive) so
+multi-gateway plants can tell identical object numbers apart. See
+[Configuration → Scenario control](docs/configuration.md#scenario-control-cen--cen).
+
 **0.4.0** adds a **two-phase travel model for basic covers**. On most roller shutters
 the first seconds of a run only open the slats ("lamelle") and the last seconds only
 close them, which is why a plain time-based position reports "5 %" with the curtain
@@ -188,8 +198,11 @@ upgrade is the opt-in Lock/Unlock buttons, above.
   (when the gateway answers), temperature and illuminance
 - **Binary sensors**: dry contacts, alarm zones, motion sensors (with timeout)
 - **Buttons** (opt-in): Lock/Unlock of a single actuator (`lock_buttons: true`)
-- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`) and raw bus frames
-  (`myhome_message_event`) for automations
+- **Scenario controls** (CEN / CEN+): declared keypads become devices with an event
+  entity and UI-selectable **device triggers** (`scenario_control:`), plus two
+  automation blueprints
+- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`, `myhome_cen_event`)
+  and raw bus frames (`myhome_message_event`) for automations
 - **Services**: send raw OpenWebNet messages, sync the gateway clock, start/stop
   discovery, request instant power
 - **Discovery**: devices seen on the bus but not yet configured are written as
@@ -248,6 +261,8 @@ make your changes, add tests if applicable, and submit a pull request. See
 
 - **[anotherjulien/MyHOME](https://github.com/anotherjulien/MyHOME)** and **[OWNd](https://github.com/anotherjulien/OWNd)**: the original integration and the OpenWebNet library it runs on — the foundation of everything in this repository. Thank you.
 - **[artmakh/MyHOME](https://github.com/artmakh/MyHOME)**: the intermediate fork this repository started from
+- **[fedem95/MyHOME](https://github.com/fedem95/MyHOME)** (fedem95): the structure of the CEN/CEN+ `device_trigger.py` and the `mac` key on the keypad events (0.4.0)
+- **[adrael/MyHOME](https://github.com/adrael/MyHOME)** (raphael): the `EventEntity` model the scenario-control event entities follow (0.4.0)
 - **OpenHAB OpenWebNet binding**: reference for the discovery device-type mapping
 - **Home Assistant Community**: Continuous feedback and support
 - **BTicino/Legrand**: MyHOME protocol and documentation

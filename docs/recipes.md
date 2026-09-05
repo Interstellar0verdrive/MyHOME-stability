@@ -12,6 +12,7 @@ older `trigger:` / `action:` spelling still works if you prefer it.
 
 - [CEN+ keypads](#cen-keypads)
 - [CEN keypads](#cen-keypads-1)
+- [Device triggers and blueprints](#device-triggers-and-blueprints)
 - [Raw OpenWebNet commands](#raw-openwebnet-commands)
 - [Covers](#covers)
 - [Energy](#energy)
@@ -23,8 +24,14 @@ older `trigger:` / `action:` spelling still works if you prefer it.
 
 CEN+ scenario controls fire `myhome_cenplus_event`. See
 [Services and events → CEN+ keypad events](services-and-events.md#cen-keypad-events)
-for the full event data contract (`object`, `pushbutton`, `event`, and every
+for the full event data contract (`object`, `pushbutton`, `event`, `mac`, and every
 `event` value with its OpenWebNet WHAT).
+
+The event triggers below always work, whether or not the control is declared in
+`myhome.yaml`. If you would rather build these automations from the UI, declare the
+control under `scenario_control:` and use the
+[device triggers](#device-triggers-and-blueprints) instead — same events, two
+dropdowns.
 
 ### Short press → run a scene
 
@@ -142,9 +149,11 @@ automation:
 
 ## CEN keypads
 
-Classic (non-plus) CEN controls fire `myhome_cen_event`. See
+Classic (non-plus) CEN controls fire `myhome_cen_event`, whose `object` key carries
+the CEN WHERE. See
 [Services and events → CEN keypad events](services-and-events.md#cen-keypad-events-1)
-for the event data contract.
+for the event data contract; CEN controls support the same
+[device triggers](#device-triggers-and-blueprints) with `protocol: cen`.
 
 ```yaml
 automation:
@@ -161,6 +170,82 @@ automation:
         target:
           entity_id: script.leaving_home
 ```
+
+## Device triggers and blueprints
+
+Declaring a keypad under `scenario_control:` (see
+[Configuration → Scenario control](configuration.md#scenario-control-cen--cen))
+turns it into a device, and its buttons then appear in **Settings → Automations →
+Create automation → Add trigger → Device**.
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+  scenario_control:
+    keypad_living_room:
+      object: 25
+      name: "Living Room Keypad"
+      buttons: [1, 2, 3, 4]
+```
+
+The trigger the UI writes looks like this — `device_id` is the registry id of the
+keypad, which you normally never type by hand:
+
+```yaml
+automation:
+  - alias: "Living room keypad, button 2 held"
+    triggers:
+      - trigger: device
+        domain: myhome
+        device_id: 0123456789abcdef0123456789abcdef
+        type: pushbutton_long_press
+        subtype: button_2
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id: light.living_room
+```
+
+`type` is any event name of the control's protocol and `subtype` is `button_<n>`
+for any button in the device's `buttons` list; both are the same values the bus
+event carries, so a device trigger and an event trigger are interchangeable.
+
+The same control also gets an event entity, useful in templates and history:
+
+```yaml
+automation:
+  - alias: "Any press on the living room keypad"
+    triggers:
+      - trigger: state
+        entity_id: event.living_room_keypad_scenario_control
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.attributes.event_type == 'pushbutton_short_press' }}"
+    actions:
+      - action: notify.persistent_notification
+        data:
+          message: "Button {{ trigger.to_state.attributes.pushbutton }} pressed"
+```
+
+### Importing the blueprints
+
+Two ready-made blueprints ship in the repository. HACS does not install
+blueprints, so import them by URL: **Settings → Automations & scenes →
+Blueprints → Import blueprint**, and paste
+
+```
+https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/blueprints/automation/myhome/cenplus_button_light.yaml
+https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/blueprints/automation/myhome/cenplus_button_cover.yaml
+```
+
+| Blueprint | What it does |
+|---|---|
+| `cenplus_button_light.yaml` | One CEN+ button drives one light: short press toggles, holding turns it off. |
+| `cenplus_button_cover.yaml` | Two CEN+ buttons drive one cover: hold up/down to open/close, short press on either to stop. |
+
+Both ask for the scenario-control device, the button(s) and the target entity;
+the control must be declared in `myhome.yaml` first, otherwise there is no device
+to pick.
 
 ## Raw OpenWebNet commands
 

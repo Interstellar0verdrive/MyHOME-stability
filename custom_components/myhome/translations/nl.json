@@ -115,6 +115,54 @@
       "description": "Gateway `{mac}` heeft geen sectie in `{path}` (gateways gevonden in het bestand: {others}), dus er is geen apparaat aangemaakt.\n\nVoeg een sectie voor deze gateway toe, of controleer of het MAC-adres klopt, en herlaad daarna de integratie."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "pushbutton_short_press": "{subtype} ingedrukt",
+      "pushbutton_short_release": "{subtype} losgelaten na kort indrukken",
+      "pushbutton_long_press": "{subtype} ingedrukt gehouden",
+      "pushbutton_long_press_repeat": "{subtype} nog steeds ingedrukt gehouden",
+      "pushbutton_long_release": "{subtype} losgelaten na lang indrukken",
+      "rotate_cw_slow": "{subtype} langzaam met de klok mee gedraaid",
+      "rotate_cw_fast": "{subtype} snel met de klok mee gedraaid",
+      "rotate_ccw_slow": "{subtype} langzaam tegen de klok in gedraaid",
+      "rotate_ccw_fast": "{subtype} snel tegen de klok in gedraaid"
+    },
+    "trigger_subtype": {
+      "button_0": "Knop 0",
+      "button_1": "Knop 1",
+      "button_2": "Knop 2",
+      "button_3": "Knop 3",
+      "button_4": "Knop 4",
+      "button_5": "Knop 5",
+      "button_6": "Knop 6",
+      "button_7": "Knop 7",
+      "button_8": "Knop 8",
+      "button_9": "Knop 9",
+      "button_10": "Knop 10",
+      "button_11": "Knop 11",
+      "button_12": "Knop 12",
+      "button_13": "Knop 13",
+      "button_14": "Knop 14",
+      "button_15": "Knop 15",
+      "button_16": "Knop 16",
+      "button_17": "Knop 17",
+      "button_18": "Knop 18",
+      "button_19": "Knop 19",
+      "button_20": "Knop 20",
+      "button_21": "Knop 21",
+      "button_22": "Knop 22",
+      "button_23": "Knop 23",
+      "button_24": "Knop 24",
+      "button_25": "Knop 25",
+      "button_26": "Knop 26",
+      "button_27": "Knop 27",
+      "button_28": "Knop 28",
+      "button_29": "Knop 29",
+      "button_30": "Knop 30",
+      "button_31": "Knop 31",
+      "button_32": "Knop 32"
+    }
+  },
   "entity": {
     "button": {
       "lock": {
@@ -153,6 +201,11 @@
     "binary_sensor": {
       "gateway_connected": {
         "name": "Verbonden"
+      }
+    },
+    "event": {
+      "scenario_control": {
+        "name": "Scenariobediening"
       }
     }
   },

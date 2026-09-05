@@ -605,8 +605,10 @@ async def test_cenplus_event_mapping() -> None:
         CONF_LONG_RELEASE,
         EVENT_ROTATE_CW_SLOW,
     ]
-    assert events[0] == {"object": 1, "pushbutton": 1, "event": CONF_SHORT_PRESS}
-    assert events[-1] == {"object": 2, "pushbutton": 2, "event": EVENT_ROTATE_CW_SLOW}
+    # 0.4.0: the payload gained "mac" (additive, so multi-gateway automations and the
+    # device triggers can tell two gateways apart); the other three keys are unchanged.
+    assert events[0] == {"object": 1, "pushbutton": 1, "event": CONF_SHORT_PRESS, "mac": MAC}
+    assert events[-1] == {"object": 2, "pushbutton": 2, "event": EVENT_ROTATE_CW_SLOW, "mac": MAC}
     assert all(event["event"] is not None for event in events)
 
 

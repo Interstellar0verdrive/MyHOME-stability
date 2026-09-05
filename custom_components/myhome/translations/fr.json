@@ -115,6 +115,54 @@
       "description": "La passerelle `{mac}` n'a aucune section dans `{path}` (passerelles trouvées dans le fichier : {others}), aucun appareil n'a donc été créé.\n\nAjoutez une section pour cette passerelle, ou vérifiez que l'adresse MAC correspond, puis rechargez l'intégration."
     }
   },
+  "device_automation": {
+    "trigger_type": {
+      "pushbutton_short_press": "{subtype} appuyé",
+      "pushbutton_short_release": "{subtype} relâché après un appui court",
+      "pushbutton_long_press": "{subtype} maintenu appuyé",
+      "pushbutton_long_press_repeat": "{subtype} toujours maintenu appuyé",
+      "pushbutton_long_release": "{subtype} relâché après un appui long",
+      "rotate_cw_slow": "{subtype} tourné lentement dans le sens horaire",
+      "rotate_cw_fast": "{subtype} tourné rapidement dans le sens horaire",
+      "rotate_ccw_slow": "{subtype} tourné lentement dans le sens antihoraire",
+      "rotate_ccw_fast": "{subtype} tourné rapidement dans le sens antihoraire"
+    },
+    "trigger_subtype": {
+      "button_0": "Bouton 0",
+      "button_1": "Bouton 1",
+      "button_2": "Bouton 2",
+      "button_3": "Bouton 3",
+      "button_4": "Bouton 4",
+      "button_5": "Bouton 5",
+      "button_6": "Bouton 6",
+      "button_7": "Bouton 7",
+      "button_8": "Bouton 8",
+      "button_9": "Bouton 9",
+      "button_10": "Bouton 10",
+      "button_11": "Bouton 11",
+      "button_12": "Bouton 12",
+      "button_13": "Bouton 13",
+      "button_14": "Bouton 14",
+      "button_15": "Bouton 15",
+      "button_16": "Bouton 16",
+      "button_17": "Bouton 17",
+      "button_18": "Bouton 18",
+      "button_19": "Bouton 19",
+      "button_20": "Bouton 20",
+      "button_21": "Bouton 21",
+      "button_22": "Bouton 22",
+      "button_23": "Bouton 23",
+      "button_24": "Bouton 24",
+      "button_25": "Bouton 25",
+      "button_26": "Bouton 26",
+      "button_27": "Bouton 27",
+      "button_28": "Bouton 28",
+      "button_29": "Bouton 29",
+      "button_30": "Bouton 30",
+      "button_31": "Bouton 31",
+      "button_32": "Bouton 32"
+    }
+  },
   "entity": {
     "button": {
       "lock": {
@@ -153,6 +201,11 @@
     "binary_sensor": {
       "gateway_connected": {
         "name": "Connectée"
+      }
+    },
+    "event": {
+      "scenario_control": {
+        "name": "Commande de scénario"
       }
     }
   },

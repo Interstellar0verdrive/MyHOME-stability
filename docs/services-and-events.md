@@ -16,6 +16,7 @@ see [Recipes](recipes.md).
   - [Device discovery events](#device-discovery-events)
   - [CEN+ keypad events](#cen-keypad-events)
   - [CEN keypad events](#cen-keypad-events-1)
+  - [Device triggers and event entities](#device-triggers-and-event-entities)
   - [General/area/group bus events](#generalareagroup-bus-events)
   - [Raw bus traffic (`myhome_message_event`)](#raw-bus-traffic-myhome_message_event)
 
@@ -105,17 +106,19 @@ See [Discovery](discovery.md) for what triggers these and what they write.
 ### CEN+ keypad events
 
 `myhome_cenplus_event` fires on CEN+ scenario control activity. The event data has
-exactly three keys:
+exactly four keys:
 
 | Key | Type | Value |
 |---|---|---|
-| `object` | integer | The CEN+ object address (the WHERE without its leading `#`). |
+| `object` | integer | The CEN+ object address (the WHERE without its leading digit). |
 | `pushbutton` | integer | The button number on that object. |
 | `event` | string | One of the values in the table below. |
+| `mac` | string | MAC address of the gateway that saw the frame, normalised (`00:03:50:aa:bb:cc`). **Added in 0.4.0.** |
 
-There is **no** `gateway` key on this event. If you run more than one gateway and
-two of them can produce the same `object`/`pushbutton` pair, you cannot tell them
-apart from the event alone.
+`mac` is an **additive** change: the three original keys are untouched, so every
+automation written before 0.4.0 keeps matching. It exists so that two gateways which
+can both produce the same `object`/`pushbutton` pair can be told apart — a filter the
+[device triggers](#device-triggers-and-event-entities) always apply.
 
 | `event` value | OpenWebNet WHAT | Fired when |
 |---|---|---|
@@ -133,11 +136,31 @@ automations for each value: [Recipes → CEN+ keypads](recipes.md#cen-keypads).
 
 ### CEN keypad events
 
-Classic (non-plus) CEN controls fire `myhome_cen_event` with the same three keys
-(`object`, `pushbutton`, `event`) and a shorter list of values:
+Classic (non-plus) CEN controls fire `myhome_cen_event` with the same four keys
+(`object`, `pushbutton`, `event`, `mac`) and a shorter list of values:
 `pushbutton_short_press`, `pushbutton_short_release`, `pushbutton_long_press`,
-`pushbutton_long_release`. See [Recipes → CEN keypads](recipes.md#cen-keypads-1)
-for an example.
+`pushbutton_long_release`. `object` carries the CEN WHERE as an integer (the frame's
+`*15*what*<where>##`). See [Recipes → CEN keypads](recipes.md#cen-keypads-1) for an
+example.
+
+### Device triggers and event entities
+
+Since **0.4.0**, a CEN/CEN+ control declared under `scenario_control:` in
+`myhome.yaml` (see
+[Configuration → Scenario control](configuration.md#scenario-control-cen--cen))
+also becomes a **device** with:
+
+- one **event entity** (`event.<name>_scenario_control`) whose state is the timestamp
+  of the last press, with attributes `event_type` (the same string as the bus event's
+  `event`), `pushbutton`, `protocol` and `object` (CEN+) / `where` (CEN);
+- **device triggers**, one per declared button and event name, usable from the
+  automation editor ("Button 2 held down"). They are implemented on top of the bus
+  events above and match on `mac`, `object`, `pushbutton` and `event`, so they are
+  exactly as reliable as a hand-written event trigger, with the gateway filter added.
+
+Both are strictly additive: an undeclared control fires the bus events and nothing
+else, as in 0.3.x. See
+[Recipes → Device triggers and blueprints](recipes.md#device-triggers-and-blueprints).
 
 ### General/area/group bus events
 
@@ -195,6 +218,7 @@ automation:
         object: 25
         pushbutton: 1
         event: pushbutton_short_press
+        # mac: "00:03:50:AA:BB:CC"   # optional, only useful with several gateways
     action:
       service: scene.turn_on
       target:
