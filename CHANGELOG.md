@@ -202,8 +202,7 @@ for the upgrade story in plain language.
 ## [0.1.0] - 2026-02-22
 
 Baseline release of this fork (branched from `anotherjulien/MyHOME` via
-`artmakh/MyHOME`), with the stability-oriented changes described in the README:
-an event-session watchdog, command-session reconnect and retry, a rewritten
-config validator (duplicate WHERE detection, `device_class` alias, legacy
-MAC-root and multi-gateway formats, typo warnings), and assorted Home Assistant
+`artmakh/MyHOME`): configurable energy rate limiting (`min_delta_w`,
+`min_interval_sec`, `suppress_log_interval_sec`) with global sensor defaults in
+the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
