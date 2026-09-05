@@ -1,18 +1,19 @@
+# MyHOME (Stability) — BTicino/Legrand MyHOME for Home Assistant
 
-# MyHOME Integration for Home Assistant (WIP!)
+A custom integration for **BTicino / Legrand MyHOME** (OpenWebNet) installations,
+talking to the gateway (MyHOMEServer1, F454/F455, MH200N/MH202, ...) through the
+[`OWNd`](https://github.com/anotherjulien/OWNd) library.
 
-> **Repo note (stability-focused fork):** This repository is a personal fork primarily aimed at improving runtime stability (connection handling, timeouts/reconnects, less noisy logging) and keeping the integration usable over time. It is based on the enhanced fork by **artmakh** and still builds on the original project by **anotherjulien**.
->
-> - Status: **experimental / best-effort** (not an officially maintained integration)
-> - Target: Home Assistant users who want a more resilient MyHOME integration, even if some features are still work-in-progress
-> - Upstream references: `artmakh/MyHOME` and `anotherjulien/MyHOME`
->
-> **Stability-focused changes in this fork:**
-> - Gateway sessions that detect a dead connection and reconnect themselves (TCP keepalive + idle watchdog on the event session, timeout/retry/TTL on the command session) — no periodic reload needed
-> - Entity availability that reflects the real gateway connection state
-> - Config validation rewritten: duplicate WHERE detection, `device_class` alias on every platform, legacy MAC-root and multi-gateway formats, typo warnings
-> - Nothing polls any more: all platforms are event/push driven (`iot_class: local_push`)
-> - Home Assistant compatibility fixes and closed deprecations (see [CHANGELOG.md](CHANGELOG.md))
+It is a fork of the original [anotherjulien/MyHOME](https://github.com/anotherjulien/MyHOME)
+integration (via the `artmakh` fork), which is no longer maintained. This fork is
+maintained on a best-effort basis with one goal: **an integration that stays up and
+keeps working with current Home Assistant releases** — sessions that detect a dead
+connection and reconnect on their own, commands that are never silently dropped,
+strict configuration validation, and closed deprecations.
+
+- Current release: **0.2.1** — see [CHANGELOG.md](CHANGELOG.md)
+- Requires **Home Assistant 2026.8.0 or newer**
+- Devices are declared in a YAML file (`myhome.yaml`); the gateway is added from the UI
 
 ## What's new in 0.2.0 / Upgrading
 
@@ -25,10 +26,13 @@ the short version:
   every actuator; on upgrade the existing Lock/Unlock button entities are
   **removed**. To keep them for a device, add `lock_buttons: true` under it in
   `myhome.yaml` (Point-to-Point WHERE only — see [Lock/Unlock buttons](#lockunlock-buttons)).
-- **Energy sensors are functional again.** Instant power, daily, monthly and total
-  energy now populate correctly. `daily`/`monthly` energy entities are still
-  disabled by default — enable them from the entity's settings (gear icon →
-  **Enable**) if you use them.
+- **Energy totals are no longer discarded.** Instant power keeps working as before;
+  the daily/monthly/total energy sensors now receive the gateway's answers when
+  the gateway provides them. `daily`/`monthly` entities stay disabled by default —
+  enable them from the entity's settings (gear icon → **Enable**) if your gateway
+  supports the totaliser requests. Some gateways do not: a MyHOMEServer1 with
+  F520/F521 meters, for instance, acknowledges the requests without returning
+  data, so on that hardware those sensors remain `unknown`.
 - **You can probably remove your workaround automations** after a few days of
   watching the log: a periodic integration reload, a "command watchdog" that
   re-sends commands that didn't take effect, and a 2-hour
@@ -41,52 +45,58 @@ the short version:
 - **A duplicate `where` across two devices is now a clear setup error** naming
   both YAML keys, instead of silently dropping one of the devices.
 
-A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home automation systems, enhanced with OpenHAB-inspired patterns for better device management and auto-discovery.
-
-> **Note:** This is an enhanced fork of the original [MyHOME integration](https://github.com/anotherjulien/MyHOME) with additional features including auto-discovery, OpenHAB-inspired architecture, and improved device management.
-
 ## Features
 
-- **Complete Device Support**: Lights, switches, covers, climate, sensors, buttons, and alarm/dry-contact binary sensors
-- **Auto-Discovery**: Automatically detect and configure MyHOME devices
-- **OpenHAB-Inspired Architecture**: Discovery and device-type mapping follow OpenHAB's OpenWebNet binding conventions
-- **Real-Time Communication**: Async OpenWebNet protocol implementation
-- **Modern Home Assistant Integration**: Follows current HA patterns and standards
-- **Stability Improvements (this fork)**:
-  - Event session watchdog (TCP keepalive + idle timeout + reconnect/backoff) with availability reflecting the real connection state
-  - Command session with per-command timeout, single retry and a bounded queue with TTL (no more commands silently dropped)
-  - Config validation rewritten (duplicate WHERE detection, `class`/`device_class` alias, legacy/multi-gateway roots, typo warnings)
-  - Home Assistant compatibility fixes (uses `LIGHT_LUX`, closed deprecations)
-  - Fully push-driven (`iot_class: local_push`); nothing polls on a timer
+- **Lights**: ON/OFF and dimmable actuators, area/group/general addresses, bus interfaces
+- **Covers**: shutters and blinds with a time-based position estimate (`shutter_run`),
+  `set_cover_position`, `inverted` wiring, and real positions on advanced actuators
+- **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
+- **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
+- **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy
+  (when the gateway answers), temperature and illuminance
+- **Binary sensors**: dry contacts, alarm zones, motion sensors (with timeout)
+- **Buttons** (opt-in): Lock/Unlock of a single actuator (`lock_buttons: true`)
+- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`) and raw bus frames
+  (`myhome_message_event`) for automations
+- **Services**: send raw OpenWebNet messages, sync the gateway clock, start/stop
+  discovery, request instant power
+- **Discovery**: devices seen on the bus but not yet configured are written as
+  suggestions to `myhome_discovered.yaml` (your `myhome.yaml` is never modified)
+- **Multiple gateways** in one `myhome.yaml`; English, French, Italian and Dutch translations
+- **Resilient by design**: TCP keepalive and idle watchdog on the event session,
+  timeout/retry/TTL on the command queue, entity availability that follows the
+  real connection state, strict YAML validation with clear error messages
 
 ## Supported Devices
 
-| Device Type | Platform | Description |
-|-------------|----------|-------------|
-| **Lighting** | `light` | Dimmable lights, ON/OFF switches, light groups |
-| **Automation** | `cover` | Shutters, blinds, roller covers |
-| **Climate** | `climate` | Thermoregulation zones, temperature sensors |
-| **Energy** | `sensor` | Power meters, energy monitoring |
-| **Scenarios** | `button` | CEN/CEN+ scenario controls, opt-in Lock/Unlock |
-| **Auxiliary** | `switch` | Generic auxiliary devices |
-| **Alarm / contacts** | `binary_sensor` | Dry contacts, alarm zones, motion sensors (no dedicated `alarm_control_panel` platform in this fork) |
+| Home Assistant platform | OpenWebNet WHO | What it covers |
+|---|---|---|
+| `light` | 1 | ON/OFF and dimmer actuators |
+| `switch` | 1 | Actuators used for non-light loads |
+| `cover` | 2 | Shutters, blinds (basic and advanced actuators) |
+| `climate` | 4 | Thermostat zones, central unit |
+| `sensor` | 18, 4, 1 | Power/energy meters, temperature, illuminance |
+| `binary_sensor` | 25, 9, 1 | Dry contacts and alarm zones, auxiliary inputs, motion sensors |
+| `button` | 14 | Optional Lock/Unlock of an actuator |
 
 ## Installation
 
-### HACS (Recommended)
+### HACS (recommended)
 
-1. Open HACS in Home Assistant
-2. Go to "Integrations"
-3. Click the "+" button
-4. Search for "MyHOME"
-5. Install the integration
-6. Restart Home Assistant
+This repository is not in the default HACS store: add it as a custom repository.
 
-### Manual Installation
+1. In HACS open the menu (⋮) → **Custom repositories**
+2. Repository: `https://github.com/Interstellar0verdrive/MyHOME-stability-next`, type **Integration**, then **Add**
+3. Search for **MyHome** in HACS, open it and **Download**
+4. Restart Home Assistant
+5. Add the gateway from **Settings → Devices & services → Add integration → MyHOME**
+6. Describe your devices in `/config/myhome.yaml` (see [Configuration](#configuration)) and reload the integration
 
-1. Download the latest release
-2. Copy the `custom_components/myhome` folder to your Home Assistant `custom_components` directory
-3. Restart Home Assistant
+### Manual installation
+
+1. Download `myhome.zip` from the [latest release](https://github.com/Interstellar0verdrive/MyHOME-stability-next/releases/latest)
+2. Extract it to `custom_components/myhome/` in your Home Assistant configuration directory
+3. Restart Home Assistant and add the gateway from **Settings → Devices & services**
 
 ## Configuration
 
@@ -610,12 +620,12 @@ fixture mirroring a real (redacted) `myhome.yaml` lives in `tests/fixtures/`.
 
 ## License
 
-This project is licensed under the GNU License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
 - **Original MyHOME Integration**: This work builds upon the excellent foundation provided by [anotherjulien/MyHOME](https://github.com/anotherjulien/MyHOME)
-- **OpenHAB OpenWebNet Binding**: Inspiration for discovery patterns and device organization
+- **OpenHAB OpenWebNet binding**: reference for the discovery device-type mapping
 - **Home Assistant Community**: Continuous feedback and support
 - **BTicino/Legrand**: MyHOME protocol and documentation
 
@@ -626,7 +636,6 @@ This fork adds the following enhancements to the original integration:
 ### Architecture Improvements
 - **Modern HA Patterns**: `has_entity_name`, `DeviceInfo` with `via_device_id`, config entry migrations, `OptionsFlowWithReload`
 - **Resilient Sessions**: Command and event sessions verify their own connect/auth result, keep TCP keepalive, and recover from a dead connection without a full reload
-- **Enhanced Constants**: Device type organization kept only where a consumer (discovery) needs it — dead OpenHAB-style scaffolding was removed
 - **Better Error Handling**: Every dispatch into an entity is isolated, so a malformed frame or a misbehaving entity never tears down the session
 
 ### Auto-Discovery System
@@ -637,7 +646,7 @@ This fork adds the following enhancements to the original integration:
 
 ### Enhanced Device Support
 - **Time-based cover position**: basic actuators estimate position from `shutter_run` and support `set_cover_position`
-- **Working energy sensors**: instant power, daily/monthly/total energy, with a built-in keep-alive
+- **Energy**: instant power with a built-in keep-alive; daily/monthly/total energy sensors fed by the gateway's totaliser replies (when the gateway provides them)
 - **Improved Validation**: duplicate WHERE detection, `device_class` alias, typo warnings, honest error paths
 - **Opt-in Lock/Unlock buttons**: only for Point-to-Point actuators, only when requested per device
 
@@ -647,7 +656,7 @@ This fork adds the following enhancements to the original integration:
 - **Debugging Tools**: Per-frame chatter at `debug`, connection lifecycle at `info` (see [Debug Logging](#debug-logging))
 - **Test Suite**: pytest + pytest-homeassistant-custom-component, no real gateway required (see [Development](#development))
 
-While maintaining full compatibility with existing configurations, these enhancements make the integration more robust, user-friendly, and easier to maintain.
+Existing `myhome.yaml` files keep working unchanged (the only behaviour change on upgrade is the opt-in Lock/Unlock buttons, see [What's new](#whats-new-in-020--upgrading)).
 
 ### Stability-focused changes (this fork)
 
