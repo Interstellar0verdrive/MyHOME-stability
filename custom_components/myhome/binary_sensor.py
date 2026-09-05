@@ -43,9 +43,8 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
-from .validate import is_point_to_point
+from .myhome_device import MyHOMEEntity, address_attributes
 
 PIR_SENSITIVITY = ["low", "medium", "high", "very high"]
 
@@ -106,17 +105,6 @@ async def async_setup_entry(
         )
 
     async_add_entities(binary_sensors)
-
-
-def address_attributes(where: str, interface: str | None) -> dict[str, str]:
-    """`A`/`PL` for point-to-point WHEREs, plain `Where` otherwise (plat-10)."""
-    if is_point_to_point(where):
-        attributes = {"A": where[: len(where) // 2], "PL": where[len(where) // 2 :]}
-    else:
-        attributes = {"Where": where}
-    if interface is not None:
-        attributes["Int"] = interface
-    return attributes
 
 
 def entity_name_for(entity_name: str | None, device_class: BinarySensorDeviceClass | None) -> str:
@@ -211,8 +199,7 @@ class MyHOMEAuxiliary(MyHOMEBinarySensor):
         super().__init__(**kwargs)
         self._attr_extra_state_attributes = {"Auxiliary channel": self._where}
 
-    async def async_update(self) -> None:
-        """AUX channels cannot be queried; nothing to do."""
+    # AUX channels cannot be queried: no `async_update` (the base class skips it).
 
     def handle_event(self, message: OWNAuxEvent) -> None:
         """Handle an event message (must never raise: it runs in the event loop)."""

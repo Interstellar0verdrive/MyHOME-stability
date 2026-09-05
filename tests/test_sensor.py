@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import pytest
 from OWNd.message import OWNEnergyEvent, OWNHeatingEvent, OWNLightingEvent
 
 from homeassistant.config_entries import ConfigEntryState

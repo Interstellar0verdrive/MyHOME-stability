@@ -128,6 +128,12 @@
     },
     "send_failed": {
       "message": "Il gateway non ha accettato il comando {message} (coda chiusa o piena)."
+    },
+    "climate_no_target_temperature": {
+      "message": "Nessuna temperatura di setpoint indicata e nessuna ancora nota per {entity_id}."
+    },
+    "climate_unsupported_hvac_mode": {
+      "message": "La modalità {hvac_mode} non è supportata da {entity_id}."
     }
   },
   "services": {

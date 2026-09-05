@@ -603,6 +603,7 @@ class FakeOWNServer:
         answer: bool = True,
         initial_frames: list[str] | None = None,
         close_after_initial: bool = False,
+        default_replies: list[str] | None = None,
     ) -> None:
         self.replies = replies or {}
         self.nonce = nonce
@@ -610,10 +611,24 @@ class FakeOWNServer:
         self.answer = answer
         self.initial_frames = initial_frames or []
         self.close_after_initial = close_after_initial
+        self.default_replies = ["*#*0##"] if default_replies is None else default_replies
         self.received: list[str] = []
         self.sessions: list[str] = []
+        self.monitor_writers: list[asyncio.StreamWriter] = []
         self.server: asyncio.AbstractServer | None = None
         self.port = 0
+
+    async def push(self, frame: str) -> None:
+        """Send ``frame`` on every open monitor (event) session."""
+        for writer in list(self.monitor_writers):
+            writer.write(frame.encode())
+            await writer.drain()
+
+    async def drop_monitors(self) -> None:
+        """Close every monitor session from the gateway side (simulates a dead link)."""
+        writers, self.monitor_writers = self.monitor_writers, []
+        for writer in writers:
+            writer.close()
 
     async def __aenter__(self) -> FakeOWNServer:
         self.server = await asyncio.start_server(self._handle, "127.0.0.1", 0)
@@ -628,7 +643,8 @@ class FakeOWNServer:
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             writer.write(b"*#*1##")
-            self.sessions.append((await reader.readuntil(b"##")).decode())
+            session = (await reader.readuntil(b"##")).decode()
+            self.sessions.append(session)
             if self.nonce is not None:
                 writer.write(f"*#{self.nonce}##".encode())
                 await writer.drain()
@@ -644,17 +660,21 @@ class FakeOWNServer:
             await writer.drain()
             if self.close_after_initial:
                 return
+            if session == "*99*1##":
+                self.monitor_writers.append(writer)
             while True:
                 command = (await reader.readuntil(b"##")).decode()
                 self.received.append(command)
                 if not self.answer:
                     continue
-                for item in self.replies.get(command, ["*#*0##"]):
+                for item in self.replies.get(command, self.default_replies):
                     writer.write(item.encode())
                 await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionResetError):
             pass
         finally:
+            if writer in self.monitor_writers:
+                self.monitor_writers.remove(writer)
             writer.close()
 
 

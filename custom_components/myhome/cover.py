@@ -53,12 +53,12 @@ from .const import (
     CONF_SHUTTER_RUN,
     CONF_WHERE,
     CONF_WHO,
+    DEFAULT_SHUTTER_RUN,
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
-from .validate import is_point_to_point
+from .myhome_device import MyHOMEEntity, address_attributes
 
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
@@ -102,17 +102,6 @@ async def async_setup_entry(
     async_add_entities(covers)
 
 
-def address_attributes(where: str, interface: str | None) -> dict[str, str]:
-    """`A`/`PL` for point-to-point WHEREs, plain `Where` otherwise (plat-10)."""
-    if is_point_to_point(where):
-        attributes = {"A": where[: len(where) // 2], "PL": where[len(where) // 2 :]}
-    else:
-        attributes = {"Where": where}
-    if interface is not None:
-        attributes["Int"] = interface
-    return attributes
-
-
 class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     """A WHO 2 shutter."""
 
@@ -144,9 +133,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            entity_name=entity_name,
         )
-
-        self._attr_name = entity_name
 
         self._interface = interface
         self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
@@ -159,7 +147,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._attr_icon = icon
 
         self._advanced = bool(advanced)
-        self._shutter_run = float(shutter_run)
+        # Contract A guarantees a float >= 1; fall back to the schema default anyway.
+        self._shutter_run = float(shutter_run or DEFAULT_SHUTTER_RUN)
         self._inverted = bool(inverted)
 
         self._attr_supported_features = (

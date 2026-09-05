@@ -128,6 +128,12 @@
     },
     "send_failed": {
       "message": "Le serveur n'a pas accepté la commande {message} (file fermée ou pleine)."
+    },
+    "climate_no_target_temperature": {
+      "message": "Aucune température cible fournie et aucune connue pour le moment pour {entity_id}."
+    },
+    "climate_unsupported_hvac_mode": {
+      "message": "Le mode {hvac_mode} n'est pas pris en charge par {entity_id}."
     }
   },
   "services": {

@@ -136,7 +136,7 @@ def _as_str(value: Any) -> str | None:
 
 def _read_yaml_file(path: str) -> Any:
     """Executor job: parse the YAML configuration file (may raise)."""
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return yaml.safe_load(handle)
 
 

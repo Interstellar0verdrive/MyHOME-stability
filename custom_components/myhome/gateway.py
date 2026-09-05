@@ -73,6 +73,7 @@ from .const import (
     CONF_BUS_INTERFACE,
     CONF_DEVICE_TYPE,
     CONF_FIRMWARE,
+    CONF_INFO_LOG_INTERVAL_SEC,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
     CONF_MANUFACTURER,
@@ -80,6 +81,7 @@ from .const import (
     CONF_MIN_DELTA_W,
     CONF_MIN_INTERVAL_SEC,
     CONF_PLATFORMS,
+    CONF_SENSOR_DEFAULTS,
     CONF_SHORT_PRESS,
     CONF_SHORT_RELEASE,
     CONF_SSDP_LOCATION,
@@ -89,6 +91,11 @@ from .const import (
     CONF_WHERE,
     CONF_ZONE,
     DOMAIN,
+    EVENT_LONG_PRESS_REPEAT,
+    EVENT_ROTATE_CCW_FAST,
+    EVENT_ROTATE_CCW_SLOW,
+    EVENT_ROTATE_CW_FAST,
+    EVENT_ROTATE_CW_SLOW,
     LOGGER,
     SIGNAL_GATEWAY_CONNECTION,
 )
@@ -123,15 +130,6 @@ DEFAULT_MIN_DELTA_W = 5
 DEFAULT_MIN_INTERVAL_SEC = 1.0
 DEFAULT_SUPPRESS_LOG_INTERVAL_SEC = 60.0
 DEFAULT_INFO_LOG_INTERVAL_SEC = 0.0  # 0 = the INFO heartbeat is off (chatter stays at DEBUG)
-CONF_SENSOR_DEFAULTS = "sensor_defaults"  # gateway-level block merged by validate.py
-CONF_INFO_LOG_INTERVAL_SEC = "info_log_interval_sec"
-
-# CEN+ event values added by gw-14 (the existing names in const.py are unchanged).
-EVENT_LONG_PRESS_REPEAT = "pushbutton_long_press_repeat"
-EVENT_ROTATE_CW_SLOW = "rotate_cw_slow"
-EVENT_ROTATE_CW_FAST = "rotate_cw_fast"
-EVENT_ROTATE_CCW_SLOW = "rotate_ccw_slow"
-EVENT_ROTATE_CCW_FAST = "rotate_ccw_fast"
 
 _TRANSPORT_ERRORS = (SessionError, OSError, EOFError, TimeoutError)
 _ENTITY_EVENT_TYPES = (OWNLightingEvent, OWNAutomationEvent, OWNDryContactEvent, OWNAuxEvent, OWNHeatingEvent)

@@ -38,7 +38,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_time_change,
@@ -73,13 +72,13 @@ from .const import (
     CONF_PLATFORMS,
     CONF_WHERE,
     CONF_WHO,
+    DEFAULT_KEEPALIVE_MINUTES,
     DOMAIN,
     LOGGER,
     SERVICE_START_SENDING_INSTANT_POWER,
-    SIGNAL_GATEWAY_CONNECTION,
 )
 from .gateway import MyHOMEGatewayHandler
-from .myhome_device import MyHOMEEntity
+from .myhome_device import MyHOMEEntity, address_attributes
 
 # Keys of the sub-entity slots pre-seeded by validate.py in ``device[CONF_ENTITIES]``.
 POWER_SLOT = f"{SensorDeviceClass.POWER}"
@@ -97,7 +96,6 @@ ENVIRONMENT_REFRESH_INTERVAL = timedelta(minutes=5)
 # Instant power keep-alive (Contract E).  The meter accepts 1..255 minutes; we re-arm
 # KEEPALIVE_MARGIN_MINUTES before expiry so the stream never has a hole.
 KEEPALIVE_MARGIN_MINUTES = 5
-FALLBACK_KEEPALIVE_MINUTES = 125
 MAX_KEEPALIVE_MINUTES = 255
 
 SERVICE_SEND_INSTANT_POWER = SERVICE_START_SENDING_INSTANT_POWER
@@ -141,7 +139,7 @@ async def async_setup_entry(
                 power_devices_configured = True
                 sensors.append(
                     MyHOMEPowerSensor(
-                        keepalive_minutes=int(device.get(CONF_KEEPALIVE_MINUTES, FALLBACK_KEEPALIVE_MINUTES)),
+                        keepalive_minutes=int(device.get(CONF_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES)),
                         **common,
                     )
                 )
@@ -174,58 +172,18 @@ class _MyHOMESensorEntity(MyHOMEEntity):
     """Shared plumbing for every MyHOME sensor entity.
 
     A single MyHOME device (an F520 meter, for instance) hosts several entities, so
-    each of them claims its own slot in ``hass.data[...][CONF_ENTITIES]`` instead of
-    the generic platform slot used by the base class for one-entity devices.
+    each of them registers under its own ``_entity_slot`` in
+    ``hass.data[...][CONF_ENTITIES]`` (Contract C); the base class does the
+    bookkeeping.  Secondary entities carry no ``entity_name`` so their
+    ``_attr_translation_key`` names them (sc-05).
     """
 
-    _slot: str = PLATFORM
-
-    def _use_translated_name(self) -> None:
-        """Let ``_attr_translation_key`` name the entity (Contract C, sc-05).
-
-        The base class sets ``_attr_name = None`` (main entity of a device); an
-        explicitly set ``_attr_name`` always wins over the translation key in HA, so
-        secondary entities have to drop it.
-        """
-        try:
-            del self._attr_name
-        except AttributeError:  # pragma: no cover - defensive
-            pass
+    _entity_slot = PLATFORM
 
     @callback
-    def _async_claim_slot(self) -> None:
-        """Move our registration from the platform slot to the entity-specific one."""
-        entities = self._entities_registry()
-        if entities is None:
-            return
-        if entities.get(PLATFORM) is self:
-            del entities[PLATFORM]
-        entities[self._slot] = self
-
-    async def async_added_to_hass(self) -> None:
-        """Register, subscribe to the connection signal and send the first request."""
-        # Contract C: the base subscribes the availability signal, registers the entity
-        # and calls async_update() once.
-        await super().async_added_to_hass()
-        self._async_claim_slot()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_GATEWAY_CONNECTION.format(mac=self._gateway_handler.mac),
-                self._async_gateway_connection_changed,
-            )
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Unregister from our slot."""
-        entities = self._entities_registry()
-        if entities is not None and entities.get(self._slot) is self:
-            del entities[self._slot]
-        await super().async_will_remove_from_hass()
-
-    @callback
-    def _async_gateway_connection_changed(self, connected: bool) -> None:
-        """Re-issue our bus request as soon as the gateway session is back up."""
+    def _async_on_connection_change(self, connected: bool) -> None:
+        """Availability changed; on reconnection re-issue our bus request."""
+        super()._async_on_connection_change(connected)
         if connected:
             self.hass.async_create_task(self.async_update())
 
@@ -242,7 +200,7 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _slot = POWER_SLOT
+    _entity_slot = POWER_SLOT
 
     def __init__(
         self,
@@ -254,7 +212,7 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
         manufacturer: str,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
-        keepalive_minutes: int = FALLBACK_KEEPALIVE_MINUTES,
+        keepalive_minutes: int = DEFAULT_KEEPALIVE_MINUTES,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -267,7 +225,6 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
             model=model,
             gateway=gateway,
         )
-        self._use_translated_name()
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{POWER_SLOT}"
         self._attr_native_value = None
         self._keepalive_minutes = max(0, min(int(keepalive_minutes), MAX_KEEPALIVE_MINUTES))
@@ -293,7 +250,7 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
         ``duration`` defaults to the configured ``keepalive_minutes`` (sc-04: the
         service schema made it optional while the method required it).
         """
-        minutes = duration or self._keepalive_minutes or FALLBACK_KEEPALIVE_MINUTES
+        minutes = duration or self._keepalive_minutes or DEFAULT_KEEPALIVE_MINUTES
         minutes = max(1, min(int(minutes), MAX_KEEPALIVE_MINUTES))
         LOGGER.debug(
             "%s Arming instant power on %s for %s minutes.",
@@ -315,7 +272,17 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
 
 
 class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
-    """Daily / monthly / total energy totaliser of a WHO=18 meter."""
+    """Daily / monthly / total energy totaliser of a WHO=18 meter.
+
+    All three entities are functional since 0.2.0: the totals are requested at
+    add time, on every reconnection, every 5 minutes and right after local
+    midnight, and the replies read on the command session reach ``handle_event``
+    (sc-01 / gw-13).  "Energy today" and "Energy this month" are still created
+    **disabled by default** (unchanged behaviour, no surprise entities for
+    existing installations): enable them from Settings > Devices & services >
+    MyHOME > the meter device > "+N entities not shown" > enable, or from the
+    entity settings dialog.  The total "Energy" entity is enabled by default.
+    """
 
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
@@ -340,6 +307,10 @@ class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
         model: str | None,
         gateway: MyHOMEGatewayHandler,
     ) -> None:
+        translation_key, message_type, enabled_default = self._SLOTS[entity_specific_id]
+        # Before super().__init__(): the base class names the entity by the
+        # translation key only when it is already set (Contract C).
+        self._attr_translation_key = translation_key
         super().__init__(
             hass=hass,
             name=name,
@@ -351,13 +322,10 @@ class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
             model=model,
             gateway=gateway,
         )
-        self._slot = entity_specific_id
+        self._entity_slot = entity_specific_id
         self._entity_specific_id = entity_specific_id
-        translation_key, message_type, enabled_default = self._SLOTS[entity_specific_id]
         self._message_type = message_type
-        self._attr_translation_key = translation_key
         self._attr_entity_registry_enabled_default = enabled_default
-        self._use_translated_name()
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{entity_specific_id}"
         self._attr_native_value = None
 
@@ -429,7 +397,7 @@ class MyHOMETemperatureSensor(_MyHOMESensorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _slot = f"{SensorDeviceClass.TEMPERATURE}"
+    _entity_slot = f"{SensorDeviceClass.TEMPERATURE}"
 
     def __init__(
         self,
@@ -453,12 +421,11 @@ class MyHOMETemperatureSensor(_MyHOMESensorEntity, SensorEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            # Only entity of its device: it takes the device name (Contract C)
+            # unless the configuration gives it an explicit entity name.
+            entity_name=entity_name,
         )
-        # Only entity of its device: it takes the device name (Contract C) unless the
-        # configuration gives it an explicit entity name.
-        if entity_name:
-            self._attr_name = entity_name
-        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._slot}"
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self.entity_slot}"
         self._attr_native_value = None
 
     async def async_added_to_hass(self) -> None:
@@ -495,7 +462,7 @@ class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ILLUMINANCE
     _attr_native_unit_of_measurement = LIGHT_LUX
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _slot = f"{SensorDeviceClass.ILLUMINANCE}"
+    _entity_slot = f"{SensorDeviceClass.ILLUMINANCE}"
 
     def __init__(
         self,
@@ -519,18 +486,13 @@ class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            entity_name=entity_name,
         )
-        if entity_name:
-            self._attr_name = entity_name
-        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._slot}"
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self.entity_slot}"
         self._attr_native_value = None
         # A/PL is meaningful for a WHO=1 point-to-point WHERE (sc-17: the same split
         # was applied to WHO=18/WHO=4 wheres, where it means nothing).
-        if len(where) in (2, 4) and where.isdigit():
-            self._attr_extra_state_attributes = {
-                "A": where[: len(where) // 2],
-                "PL": where[len(where) // 2 :],
-            }
+        self._attr_extra_state_attributes = address_attributes(where, None)
 
     async def async_added_to_hass(self) -> None:
         """Schedule the slow refresh (sc-15: the sensor was requested only once)."""

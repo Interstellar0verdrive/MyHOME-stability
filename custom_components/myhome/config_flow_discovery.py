@@ -105,7 +105,7 @@ def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[
     atomically (temp file + os.replace). Returns the number of NEW entries."""
     existing: dict[str, Any] = {}
     try:
-        with open(path, "r", encoding="utf-8") as handle:
+        with open(path, encoding="utf-8") as handle:
             loaded = yaml.safe_load(handle)
             if isinstance(loaded, dict):
                 existing = loaded

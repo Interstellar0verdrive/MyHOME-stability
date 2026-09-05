@@ -1,4 +1,4 @@
-"""Tests for ``custom_components.myhome.validate`` (Contract A, .audit-2026-09/CONTRACTS.md).
+"""Tests for ``custom_components.myhome.validate`` (Contract A of the fix-phase contracts).
 
 Pure-python: no ``hass`` fixture is needed.  The module is loaded through
 ``_load_validate()`` so that the tests keep working while the package ``__init__``
@@ -20,7 +20,8 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-USER_YAML = REPO_ROOT / ".audit-2026-09" / "myhome.yaml"
+# Redacted copy of the user's real configuration (20 lights, 12 covers, 3 power meters).
+USER_YAML = REPO_ROOT / "tests" / "fixtures" / "myhome.yaml"
 MAC = "00:03:50:AA:BB:CC"
 MAC_NORM = "00:03:50:aa:bb:cc"
 MAC2 = "00:03:50:00:00:02"
@@ -72,17 +73,28 @@ def user_config() -> dict:
 
 
 def test_user_config_duplicate_where_raises(user_config):
+    # The historical bug (val-01 / CONSOLIDATED F): a second cover reusing WHERE '81'
+    # used to overwrite the first one silently.  The fixture is clean, so the
+    # duplicate is injected here.
+    covers = user_config["gateway"]["cover"]
+    assert covers["kids_room_shutter_2"]["where"] == "81"
+    covers["kids_room_shutter_old"] = {"where": "81", "name": "Kids Room Shutter Old"}
     with pytest.raises(Invalid) as err:
         check(user_config)
     message = str(err.value)
     assert "'81'" in message
     assert "kids_room_shutter_old" in message
     assert "kids_room_shutter_2" in message
-    assert err.value.path == ["gateway", "cover", "kids_room_shutter_2", "where"]
+    # The path points at the second occurrence (the injected one).
+    assert err.value.path == ["gateway", "cover", "kids_room_shutter_old", "where"]
 
 
 def test_user_config_after_rename(user_config):
-    user_config["gateway"]["cover"]["kids_room_shutter_2"]["where"] = "87"
+    # The fixture holds 12 covers; adding the "renamed" one (WHERE '87') gives 13.
+    user_config["gateway"]["cover"]["kids_room_shutter_old"] = {
+        "where": "87",
+        "name": "Kids Room Shutter Old",
+    }
     out = check(user_config)
     assert list(out) == [MAC_NORM]
     plat = platforms(out)

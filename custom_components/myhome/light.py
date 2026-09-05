@@ -40,9 +40,8 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
-from .validate import is_point_to_point
+from .myhome_device import MyHOMEEntity, address_attributes
 
 
 async def async_setup_entry(
@@ -120,21 +119,6 @@ def message_is_on(message: OWNLightingEvent) -> bool | None:
         return None
 
 
-def address_attributes(where: str, interface: str | None) -> dict[str, str]:
-    """Extra state attributes describing the bus address.
-
-    `A`/`PL` only make sense for a point-to-point WHERE; General, Area and Group
-    WHEREs are reported verbatim instead of being cut in half (plat-10).
-    """
-    if is_point_to_point(where):
-        attributes = {"A": where[: len(where) // 2], "PL": where[len(where) // 2 :]}
-    else:
-        attributes = {"Where": where}
-    if interface is not None:
-        attributes["Int"] = interface
-    return attributes
-
-
 class MyHOMELight(MyHOMEEntity, LightEntity):
     """A light or dimmer on the OpenWebNet bus."""
 
@@ -164,9 +148,8 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            entity_name=entity_name,
         )
-
-        self._attr_name = entity_name
 
         self._interface = interface
         self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
