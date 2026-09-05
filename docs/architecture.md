@@ -4,7 +4,7 @@ How the integration works inside. This page is for contributors, and for anyone
 who wants to check the claims in the README against the code rather than take
 them on trust.
 
-Everything below is from `custom_components/myhome/*.py` at version 0.2.1 and
+Everything below is from `custom_components/myhome/*.py` at version 0.3.0 and
 `OWNd` 0.7.48.
 
 ## Module map
@@ -258,6 +258,19 @@ Platforms must not override `available`, `device_info`, `should_poll` or
 `has_entity_name`. No entity is polled: `should_poll` is `False` in the base class,
 and anything periodic drives its own timer through the Home Assistant time helpers
 and cancels it through `async_on_remove`.
+
+## Statistics and diagnostics (0.3.0)
+
+The handler keeps a `GatewayStats` snapshot (`connected`, `last_frame_at`,
+`frames_rx`, `reconnects`, `commands_sent`, `commands_dropped`, `queue_length`,
+`session_state`) in `handler.stats` and publishes it on
+`SIGNAL_GATEWAY_STATS` (throttled to once per second, and immediately on
+connect, disconnect, authentication failure and every dropped command). The
+gateway diagnostic entities subscribe to that signal; `diagnostics.py` reads the
+same snapshot, the `session_parameters` in effect and the `recent_frames` ring
+buffer (last 50 monitor frames, command replies and commands) when you download
+diagnostics from the integration page. Identical status requests already waiting
+in the queue are coalesced by `send_status_request()`.
 
 ## The dispatcher
 

@@ -13,7 +13,7 @@ Assistant releases** — sessions that detect a dead connection and reconnect on
 their own, commands that are never silently dropped, strict configuration
 validation, and closed deprecations.
 
-- Current release: **0.2.1** — see [CHANGELOG.md](CHANGELOG.md)
+- Current release: **0.3.0** — see [CHANGELOG.md](CHANGELOG.md)
 - Requires **Home Assistant 2026.8.0 or newer**
 - Devices are declared in a YAML file (`myhome.yaml`); the gateway is added from the UI
 
@@ -24,7 +24,7 @@ validation, and closed deprecations.
   - [Installation](#installation)
   - [Gateway setup](#gateway-setup)
   - [Device configuration (`myhome.yaml`)](#device-configuration-myhomeyaml)
-- [What's new in 0.2.x / Upgrading](#whats-new-in-02x--upgrading)
+- [What's new / Upgrading](#whats-new--upgrading)
 - [Features](#features)
 - [Supported devices](#supported-devices)
 - [Documentation](#documentation)
@@ -125,9 +125,18 @@ for the full parameter tables (every platform, energy filtering, Lock/Unlock
 buttons, multiple gateways, custom icons) and [Recipes](docs/recipes.md) for
 copy-paste automations.
 
-## What's new in 0.2.x / Upgrading
+## What's new / Upgrading
 
-Release 0.2.0 is a stability-focused rewrite of the gateway session handling, the
+**0.3.0** adds observability without changing any default behaviour: a
+**Download diagnostics** file on the integration page, diagnostic entities on the
+gateway device (connected, last frame; reconnections, dropped commands and queue
+length disabled by default), Home Assistant **Repairs** for configuration problems,
+and session tunables (idle watchdog, probe window, command timeout, queue TTL,
+default keep-alive) in the integration's **Configure** dialog. See
+[Troubleshooting](docs/troubleshooting.md) and the
+[Configuration reference](docs/configuration.md).
+
+**0.2.0** is a stability-focused rewrite of the gateway session handling, the
 YAML validator and every platform. Full details in [CHANGELOG.md](CHANGELOG.md)
 and a step-by-step guide in [Migrating from the original](docs/migrating-from-original.md);
 the highlights:
@@ -208,9 +217,9 @@ The [`docs/`](docs/README.md) folder goes deeper than this README:
 
 ## Support & contributing
 
-- **GitHub Issues**: [Report bugs and feature requests](https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues)
-- **Wiki**: [Detailed documentation and examples](https://github.com/anotherjulien/MyHOME/wiki)
-- **Community Forum**: [Home Assistant Community](https://community.home-assistant.io/)
+- **Documentation**: the [docs/](docs/README.md) folder in this repository (kept in sync with the code and versioned with each release)
+- **Bug reports and feature requests**: [GitHub Issues](https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues) — please attach the diagnostics file (see [Troubleshooting](docs/troubleshooting.md)) and say which gateway model you have
+- **General MyHOME discussion**: the long-running [Legrand/BTicino MyHOME thread](https://community.home-assistant.io/t/legrand-bticino-myhome/229337) on the Home Assistant community forum, started for the original integration
 
 Contributions are welcome! Please fork the repository, create a feature branch,
 make your changes, add tests if applicable, and submit a pull request. See

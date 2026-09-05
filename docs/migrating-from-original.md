@@ -253,16 +253,6 @@ compatibility with existing installations. If you change the class of a binary
 sensor, expect to fix up references to it. (A device class of `None`, which is the
 default for WHO 9, renders as the literal `-None`.)
 
-### A motion sensor's state is not restored across a reload
-
-`binary_sensor` motion entities restore their previous state on startup — but on
-a **config entry reload** the gateway connection is closed before the platforms
-are unloaded, so the entity is already `unavailable` when Home Assistant snapshots
-it. `unavailable` is not a restorable on/off state, so the sensor starts blank
-after a reload and stays that way until the next motion frame. (The same problem
-was fixed for covers in 0.2.1 by persisting the position separately; the motion
-sensor has not had the same treatment.)
-
 ### Energy totals depend on the gateway
 
 The daily/monthly/total energy entities carry whatever the gateway answers to
