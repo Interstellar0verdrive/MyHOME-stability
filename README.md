@@ -8,12 +8,38 @@
 > - Upstream references: `artmakh/MyHOME` and `anotherjulien/MyHOME`
 >
 > **Stability-focused changes in this fork:**
-> - Event session watchdog (timeout + reconnect with exponential backoff)
-> - Command session reconnect & re-queue on reset
+> - Gateway sessions that detect a dead connection and reconnect themselves (TCP keepalive + idle watchdog on the event session, timeout/retry/TTL on the command session) — no periodic reload needed
+> - Entity availability that reflects the real gateway connection state
 > - Config validation rewritten: duplicate WHERE detection, `device_class` alias on every platform, legacy MAC-root and multi-gateway formats, typo warnings
-> - Home Assistant compatibility fixes (removed deprecated `UnitOfIlluminance` → uses `LIGHT_LUX`)
-> - Reduced polling aggressiveness (increased `scan_interval` for `binary_sensor` and `sensor`)
+> - Nothing polls any more: all platforms are event/push driven (`iot_class: local_push`)
+> - Home Assistant compatibility fixes and closed deprecations (see [CHANGELOG.md](CHANGELOG.md))
 
+## What's new in 0.2.0 / Upgrading
+
+Release 0.2.0 is a stability-focused rewrite of the gateway session handling, the
+YAML validator and every platform. Full details in [CHANGELOG.md](CHANGELOG.md);
+the short version:
+
+- **Minimum Home Assistant version is now 2026.8.0.**
+- **Breaking: Lock/Unlock buttons are now opt-in.** They used to be generated for
+  every actuator; on upgrade the existing Lock/Unlock button entities are
+  **removed**. To keep them for a device, add `lock_buttons: true` under it in
+  `myhome.yaml` (Point-to-Point WHERE only — see [Lock/Unlock buttons](#lockunlock-buttons)).
+- **Energy sensors are functional again.** Instant power, daily, monthly and total
+  energy now populate correctly. `daily`/`monthly` energy entities are still
+  disabled by default — enable them from the entity's settings (gear icon →
+  **Enable**) if you use them.
+- **You can probably remove your workaround automations** after a few days of
+  watching the log: a periodic integration reload, a "command watchdog" that
+  re-sends commands that didn't take effect, and a 2-hour
+  `start_sending_instant_power` automation are no longer necessary — the
+  integration now detects a dead session and reconnects itself, and arms/renews
+  the instant-power keep-alive on its own (`keepalive_minutes`, default 125 min).
+- **Discovery no longer rewrites `myhome.yaml`.** Suggestions for devices seen on
+  the bus but not yet configured are written to `myhome_discovered.yaml` (next to
+  your `myhome.yaml`) for you to review and copy in by hand.
+- **A duplicate `where` across two devices is now a clear setup error** naming
+  both YAML keys, instead of silently dropping one of the devices.
 
 A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home automation systems, enhanced with OpenHAB-inspired patterns for better device management and auto-discovery.
 
@@ -21,18 +47,17 @@ A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home autom
 
 ## Features
 
-- **Complete Device Support**: Lights, switches, covers, climate, sensors, buttons, and alarms
+- **Complete Device Support**: Lights, switches, covers, climate, sensors, buttons, and alarm/dry-contact binary sensors
 - **Auto-Discovery**: Automatically detect and configure MyHOME devices
-- **OpenHAB-Inspired Architecture**: Robust, modular design based on proven patterns
-- **Factory Pattern**: Organized device handlers for each category
+- **OpenHAB-Inspired Architecture**: Discovery and device-type mapping follow OpenHAB's OpenWebNet binding conventions
 - **Real-Time Communication**: Async OpenWebNet protocol implementation
 - **Modern Home Assistant Integration**: Follows current HA patterns and standards
 - **Stability Improvements (this fork)**:
-  - Event session watchdog (timeout + reconnect/backoff)
-  - Command session reconnect & re-queue
+  - Event session watchdog (TCP keepalive + idle timeout + reconnect/backoff) with availability reflecting the real connection state
+  - Command session with per-command timeout, single retry and a bounded queue with TTL (no more commands silently dropped)
   - Config validation rewritten (duplicate WHERE detection, `class`/`device_class` alias, legacy/multi-gateway roots, typo warnings)
-  - Home Assistant compatibility fixes (uses `LIGHT_LUX`)
-  - Reduced polling aggressiveness for sensors/binary_sensors
+  - Home Assistant compatibility fixes (uses `LIGHT_LUX`, closed deprecations)
+  - Fully push-driven (`iot_class: local_push`); nothing polls on a timer
 
 ## Supported Devices
 
@@ -42,10 +67,9 @@ A comprehensive Home Assistant integration for BTicino/Legrand MyHOME home autom
 | **Automation** | `cover` | Shutters, blinds, roller covers |
 | **Climate** | `climate` | Thermoregulation zones, temperature sensors |
 | **Energy** | `sensor` | Power meters, energy monitoring |
-| **Scenarios** | `button` | CEN/CEN+ scenario controls |
+| **Scenarios** | `button` | CEN/CEN+ scenario controls, opt-in Lock/Unlock |
 | **Auxiliary** | `switch` | Generic auxiliary devices |
-| **Alarm** | `alarm_control_panel`, `binary_sensor` | Security systems |
-| **Contacts** | `binary_sensor` | Dry contacts, motion sensors |
+| **Alarm / contacts** | `binary_sensor` | Dry contacts, alarm zones, motion sensors (no dedicated `alarm_control_panel` platform in this fork) |
 
 ## Installation
 
@@ -257,6 +281,22 @@ data:
   gateway: "00:03:50:XX:XX:XX"  # Optional
 ```
 
+### Energy Services
+
+#### `myhome.start_sending_instant_power`
+Asks the energy meter of the targeted power sensor(s) to (re)start sending instant
+power updates. The integration already does this automatically on startup, on
+reconnection and every `keepalive_minutes - 5` minutes (see [Sensor](#sensor)); use
+this service to force it, or for a one-off/different duration.
+
+```yaml
+service: myhome.start_sending_instant_power
+target:
+  entity_id: sensor.house_main_power
+data:
+  duration: 60  # minutes, 1-255. Optional: defaults to the sensor's keepalive_minutes
+```
+
 ### Utility Services
 
 #### `myhome.sync_time`
@@ -289,11 +329,24 @@ The integration fires several events for automation:
 
 ### Device Events
 
-- `myhome_cenplus_event`: CEN+ button events
-- `myhome_cen_event`: CEN button events
-- `myhome_general_light_event`: General lighting commands
-- `myhome_area_light_event`: Area lighting commands
-- `myhome_group_light_event`: Group lighting commands
+- `myhome_cenplus_event`: CEN+ scenario control events. Data: `object` (int, the
+  CEN+ device address), `pushbutton` (int), `event` — one of
+  `pushbutton_short_press`, `pushbutton_long_press` (fired once when a button is
+  first held), `pushbutton_long_press_repeat` (fired repeatedly while it stays
+  held), `pushbutton_long_release`, `rotate_cw_slow`, `rotate_cw_fast`,
+  `rotate_ccw_slow`, `rotate_ccw_fast` (rotary CEN+ devices only).
+- `myhome_cen_event`: CEN button events. Data: `object`, `pushbutton`, `event` —
+  one of `pushbutton_short_press`, `pushbutton_short_release`,
+  `pushbutton_long_press`, `pushbutton_long_release`.
+- `myhome_general_light_event`, `myhome_area_light_event`, `myhome_group_light_event`:
+  fired when a General/Area/Group lighting command is seen on the bus (e.g. someone
+  uses a physical "all lights off" button); data includes the raw `message` and the
+  `area`/`group` address.
+- `myhome_message_event`: every parsed OpenWebNet frame from the monitor session,
+  as `{"gateway": <host>, ...frame fields}`. Off by default — enable it with the
+  **"Generate events in Home Assistant for each message received"** integration
+  option if you want to build automations directly on raw bus traffic; expect a
+  lot of events on a busy plant.
 
 ### Example Event Automation
 
@@ -360,21 +413,22 @@ automation:
   - If a dimmer is incorrectly detected as a switch, manually edit the config and set `dimmable: true`
 - **Special states**: WHAT=8 often indicates "temporized ON" or other special states, not dimming capability
 
-**Devices discovered but not added:**
-1. **Check `/config/myhome.yaml`** - devices should be automatically added
-2. **Verify file permissions** - ensure Home Assistant can write to the config file
-3. **Monitor config file writing** - Look for debug logs like:
-   - `"Starting config file write process for device..."`
-   - `"Reading existing config file..."`
-   - `"Writing updated config to file..."`
-   - `"Config file write completed successfully"`
-   - `"Config file size after write: XXX bytes"`
-4. **Check for config write errors** - Look for error logs like:
-   - `"Error writing to config file"`
-   - `"Failed to add device to config file"`
-   - `"Error in config file write process"`
-5. **Monitor integration reload** - check logs for config reload errors
-6. **Restart integration** manually if auto-reload fails
+**Devices discovered but suggestions missing:**
+
+Since 0.2.0, discovery **never writes to `myhome.yaml`**. Suggestions for devices
+seen on the bus but not yet configured are written to `myhome_discovered.yaml`,
+next to your `myhome.yaml` (same folder, i.e. the path from `config_file_path` in
+the integration options, or your Home Assistant config directory). Review that
+file and copy the entries you want into `myhome.yaml` yourself, then reload the
+integration.
+
+1. **Check `myhome_discovered.yaml`** exists and has grown after a discovery run.
+2. **Verify file permissions** - ensure Home Assistant can write to that folder.
+3. Discovery only runs for the duration of `myhome.start_discovery` (default
+   60 s) or until `myhome.stop_discovery` is called; both flush whatever was
+   collected so far to the file.
+4. A device already present in `myhome.yaml` (matched on WHO/WHERE) is not
+   suggested again.
 
 #### Configuration Issues
 
@@ -395,7 +449,7 @@ logger:
     OWNd: debug
 ```
 
-> **Note:** Frequent "Command session connection reset" messages may be normal depending on gateway behavior and polling/services. For day-to-day use, keep `custom_components.myhome` at `info` level; use `debug` only when troubleshooting.
+> **Note:** For day-to-day use, keep `custom_components.myhome` at `info` (or leave the `logger:` block out entirely) — per-frame bus traffic is only logged at `debug`. Occasional "reconnecting" INFO lines after a gateway hiccup are expected; the integration retries and recovers on its own. Use `debug` only when troubleshooting.
 
 ### Configuration Validation
 
@@ -532,6 +586,28 @@ Contributions are welcome! Please:
 4. Add tests if applicable
 5. Submit a pull request
 
+## Development
+
+```bash
+# Set up a virtual environment with the same Home Assistant / OWNd versions this
+# integration targets, plus the test tooling:
+python3 -m venv .venv
+source .venv/bin/activate
+pip install homeassistant pytest pytest-homeassistant-custom-component ruff \
+  "OWNd==0.7.48"
+
+# Run the test suite (pytest.ini sets asyncio_mode = auto, required by the HA
+# test plugin):
+pytest tests
+
+# Lint (matches what was run before this release):
+ruff check custom_components tests --select F,E9,B,UP,ASYNC
+```
+
+The tests never talk to a real gateway: `tests/test_gateway.py` and
+`tests/test_init.py` spin up a loopback fake OpenWebNet server instead. A test
+fixture mirroring a real (redacted) `myhome.yaml` lives in `tests/fixtures/`.
+
 ## License
 
 This project is licensed under the GNU License - see the [LICENSE](LICENSE) file for details.
@@ -548,35 +624,38 @@ This project is licensed under the GNU License - see the [LICENSE](LICENSE) file
 This fork adds the following enhancements to the original integration:
 
 ### Architecture Improvements
-- **OpenHAB-Inspired Patterns**: Modular device handlers following proven OpenHAB patterns
-- **Factory Pattern**: Organized device creation and management
-- **Enhanced Constants**: Comprehensive device type organization and mapping
-- **Better Error Handling**: Improved logging and debugging capabilities
+- **Modern HA Patterns**: `has_entity_name`, `DeviceInfo` with `via_device_id`, config entry migrations, `OptionsFlowWithReload`
+- **Resilient Sessions**: Command and event sessions verify their own connect/auth result, keep TCP keepalive, and recover from a dead connection without a full reload
+- **Enhanced Constants**: Device type organization kept only where a consumer (discovery) needs it — dead OpenHAB-style scaffolding was removed
+- **Better Error Handling**: Every dispatch into an entity is isolated, so a malformed frame or a misbehaving entity never tears down the session
 
 ### Auto-Discovery System
-- **Device Discovery Service**: Automatic detection of MyHOME devices
+- **Device Discovery Service**: Automatic detection of MyHOME devices from bus traffic
 - **Real-Time Discovery**: Processes device responses as they arrive
-- **Smart Configuration**: Suggests optimal device settings based on type
-- **Discovery Services**: `start_discovery` and `stop_discovery` services
+- **Smart Configuration**: Suggests device settings based on the type it detects
+- **Discovery Services**: `start_discovery` and `stop_discovery`, writing suggestions to `myhome_discovered.yaml` (never to `myhome.yaml`)
 
 ### Enhanced Device Support
-- **Extended Device Types**: Better categorization following OpenHAB patterns
-- **Device Handlers**: Specialized handlers for each device category
-- **Improved Validation**: Better configuration validation and error reporting
-- **Properties Management**: Standardized device properties and capabilities
+- **Time-based cover position**: basic actuators estimate position from `shutter_run` and support `set_cover_position`
+- **Working energy sensors**: instant power, daily/monthly/total energy, with a built-in keep-alive
+- **Improved Validation**: duplicate WHERE detection, `device_class` alias, typo warnings, honest error paths
+- **Opt-in Lock/Unlock buttons**: only for Point-to-Point actuators, only when requested per device
 
 ### Developer Experience
-- **Modern HA Patterns**: Updated to current Home Assistant standards
-- **Better Documentation**: Comprehensive setup and configuration guides
-- **Debugging Tools**: Enhanced logging and troubleshooting capabilities
-- **Extensible Design**: Easy to add support for new device types
+- **Modern HA Patterns**: Updated to current Home Assistant standards (see [CHANGELOG.md](CHANGELOG.md) for the full deprecation list)
+- **Better Documentation**: Comprehensive setup and configuration guides, kept in sync with `validate.py`
+- **Debugging Tools**: Per-frame chatter at `debug`, connection lifecycle at `info` (see [Debug Logging](#debug-logging))
+- **Test Suite**: pytest + pytest-homeassistant-custom-component, no real gateway required (see [Development](#development))
 
 While maintaining full compatibility with existing configurations, these enhancements make the integration more robust, user-friendly, and easier to maintain.
 
 ### Stability-focused changes (this fork)
 
-- **Added:** Event listener watchdog (timeout + reconnect/backoff)
-- **Added:** Command session reconnect + retry queue
-- **Fixed:** Config validation accepting documented parameters; sensor `device_class` accepted
-- **Fixed:** HA constant import compatibility (`UnitOfIlluminance` → `LIGHT_LUX`)
-- **Changed:** Increased `scan_interval` defaults for sensors/binary_sensors to reduce load
+See [CHANGELOG.md](CHANGELOG.md) for the complete, versioned list. Summary as of
+0.2.0: event session watchdog with TCP keepalive and backoff reconnect; command
+session with per-command timeout, single retry and a bounded/TTL queue; entity
+availability tied to the real gateway connection; a rewritten config validator
+(duplicate WHERE detection, `device_class` alias, legacy/multi-gateway roots,
+typo warnings); working energy sensors with a built-in instant-power keep-alive;
+time-based cover position; opt-in Lock/Unlock buttons; and closed Home Assistant
+deprecations.

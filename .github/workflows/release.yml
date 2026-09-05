@@ -95,7 +95,7 @@ jobs:
 
             🚀 **Installation Path**: `custom_components/myhome/`
 
-            📋 **Requirements**: Home Assistant 2024.3.0+
+            📋 **Requirements**: Home Assistant 2026.8.0+
 
             🔧 **Dependencies**: OWNd==0.7.48
           files: |
