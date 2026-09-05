@@ -197,7 +197,7 @@ Four rotation values were also added and no longer fire with `event: null`:
    `lock_buttons: true` to the relevant devices now, so they come back on the
    first load instead of disappearing.
 4. **Add this repository to HACS as a custom repository.** HACS → menu (⋮) →
-   *Custom repositories* → `https://github.com/Interstellar0verdrive/MyHOME-stability-next`,
+   *Custom repositories* → `https://github.com/Interstellar0verdrive/MyHOME-stability`,
    type *Integration* → *Add*. Then search for **MyHome**, open it and
    *Download*.
 5. **Remove the old folder if you installed it manually.** Delete

@@ -133,7 +133,7 @@ the general lighting status `*#1*0##`.
 ## How to report your gateway
 
 Open an issue at
-<https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues> with the
+<https://github.com/Interstellar0verdrive/MyHOME-stability/issues> with the
 information below.
 
 ### 1. Turn on debug logging
