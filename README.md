@@ -6,9 +6,9 @@ talking to the gateway (MyHOMEServer1, F454/F455, MH200N/MH202, ...) through the
 
 It is a fork of [anotherjulien/MyHOME](https://github.com/anotherjulien/MyHOME)
 (via the `artmakh` fork), the integration that made MyHOME usable in Home Assistant
-in the first place and that this project owes everything to. The original is no
-longer being updated, so this fork carries it forward on a best-effort basis with
-one goal: **an integration that stays up and keeps working with current Home
+in the first place and that this project owes everything to. The original now
+receives only occasional community fixes, so this fork carries it forward on a
+best-effort basis with one goal: **an integration that stays up and keeps working with current Home
 Assistant releases** — sessions that detect a dead connection and reconnect on
 their own, commands that are never silently dropped, strict configuration
 validation, and closed deprecations.
@@ -39,10 +39,10 @@ This is a personal project, and it is honest about how it was made.
 I am not a professional developer. I run a MyHOME installation at home and for
 years I have gratefully used anotherjulien's integration, which is the foundation
 of everything here: without that work, and without the `OWNd` library by the same
-author, this fork would not exist. When the original project stopped receiving
-updates — perfectly understandable for volunteer work — I forked it to keep it
-alive for my own use and to fix the things that, over time, had broken with newer
-Home Assistant releases.
+author, this fork would not exist. When the original project slowed down to
+occasional community fixes — perfectly understandable for volunteer work — I
+forked it to keep it alive for my own use and to fix the things that, over time,
+had broken with newer Home Assistant releases.
 
 The code in this fork was written with AI assistance, with me in the lead. That
 does not mean a ten-line prompt and a "done": it meant hundreds of hours of
