@@ -46,7 +46,10 @@ for the upgrade story in plain language.
   command socket, where they were discarded instead of reaching the entities.
   Both are fixed: the filter only ever applies to instant active-power frames,
   and command-session replies are dispatched to entities exactly like monitor
-  events.
+  events. Note: some gateways (e.g. MyHOMEServer1 with F520/F521 meters)
+  acknowledge the totaliser requests without returning data; on such hardware
+  the daily/monthly/total sensors still show `unknown`, which is why they stay
+  disabled by default.
 - **Duplicate WHERE silently dropped a device.** Two devices sharing the same
   WHO/WHERE (e.g. two covers both on `where: "81"`) used to have the second
   silently overwrite the first. This is now a setup error naming both YAML keys.
