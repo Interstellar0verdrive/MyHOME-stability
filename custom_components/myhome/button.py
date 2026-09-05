@@ -37,8 +37,7 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
-from .validate import is_point_to_point
+from .myhome_device import MyHOMEEntity, address_attributes
 
 
 async def async_setup_entry(
@@ -74,23 +73,12 @@ async def async_setup_entry(
     async_add_entities(buttons)
 
 
-def address_attributes(where: str, interface: str | None) -> dict[str, str]:
-    """`A`/`PL` for point-to-point WHEREs, plain `Where` otherwise (plat-10)."""
-    if is_point_to_point(where):
-        attributes = {"A": where[: len(where) // 2], "PL": where[len(where) // 2 :]}
-    else:
-        attributes = {"Where": where}
-    if interface is not None:
-        attributes["Int"] = interface
-    return attributes
-
-
 class MyHOMECommandButton(MyHOMEEntity, ButtonEntity):
     """Base class of the two WHO 14 buttons attached to an actuator."""
 
-    # Slot used to register the entity in `hass.data[...][entities]`: the base class
-    # uses the platform name, but two buttons share one device dict.
-    _registry_slot: str = "button"
+    # Contract C: two buttons share one device dict, so each registers under its
+    # own slot (`disable` / `enable`) instead of the platform name.
+    _entity_slot = "button"
     # WHO 14 WHAT: 0 disables (locks) the actuator, 1 enables (unlocks) it.
     _what: str = "0"
     _unique_id_suffix: str = ""
@@ -121,10 +109,8 @@ class MyHOMECommandButton(MyHOMEEntity, ButtonEntity):
             gateway=gateway,
         )
 
-        # The base class pins `_attr_name = None` (the main entity of a device takes
-        # the device name); these are secondary entities, so drop the attribute and
-        # let `_attr_translation_key` provide the localised name (plat-16).
-        del self._attr_name
+        # Secondary entities: no `entity_name`, so the base class leaves `_attr_name`
+        # unset and `_attr_translation_key` provides the localised name (plat-16).
 
         # Unique ids must stay exactly as `__init__.expected_unique_ids()` builds them.
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._unique_id_suffix}"
@@ -137,26 +123,6 @@ class MyHOMECommandButton(MyHOMEEntity, ButtonEntity):
         self._attr_extra_state_attributes = address_attributes(where, self._interface)
         if source_platform is not None:
             self._attr_extra_state_attributes["Actuator"] = source_platform
-
-    async def async_update(self) -> None:
-        """Buttons have no state to poll (the base class calls this on add)."""
-
-    async def async_added_to_hass(self) -> None:
-        """Register under the button's own slot of the shared device dict."""
-        await super().async_added_to_hass()
-        entities = self._entities_registry()
-        if entities is not None:
-            # The base class registered us under the platform name; both buttons of a
-            # device live in the same dict, so each takes its own slot.
-            entities.pop(self._platform, None)
-            entities[self._registry_slot] = self
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Unregister the button."""
-        entities = self._entities_registry()
-        if entities is not None and entities.get(self._registry_slot) is self:
-            del entities[self._registry_slot]
-        await super().async_will_remove_from_hass()
 
     async def async_press(self) -> None:
         """Send the WHO 14 command as a parsed OWN message (never a raw string)."""
@@ -180,7 +146,7 @@ class DisableCommandButtonEntity(MyHOMECommandButton):
 
     _attr_translation_key = "lock"
     _attr_icon = "mdi:lock-alert"
-    _registry_slot = "disable"
+    _entity_slot = "disable"
     _unique_id_suffix = "disable"
     _what = "0"
 
@@ -190,6 +156,6 @@ class EnableCommandButtonEntity(MyHOMECommandButton):
 
     _attr_translation_key = "unlock"
     _attr_icon = "mdi:lock-open-variant-outline"
-    _registry_slot = "enable"
+    _entity_slot = "enable"
     _unique_id_suffix = "enable"
     _what = "1"

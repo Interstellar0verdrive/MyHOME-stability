@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.core import HomeAssistant
@@ -31,26 +30,14 @@ from custom_components.myhome.const import (
 
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
 
-# Redacted copy of the user's real /config/myhome.yaml (see .audit-2026-09/EVIDENCE.md).
-REAL_CONFIG_PATH = Path(__file__).resolve().parents[1] / ".audit-2026-09" / "myhome.yaml"
+# Redacted copy of the user's real /config/myhome.yaml (20 lights, 12 covers, 3 power
+# meters, no duplicate WHERE).
+REAL_CONFIG_PATH = Path(__file__).resolve().parent / "fixtures" / "myhome.yaml"
 
 
 def real_config_yaml() -> str:
-    """The user's real configuration, with the historical duplicate WHERE fixed.
-
-    ``tapparella_camera_bambino`` and ``tapparella_camera_aleksander_2`` both used
-    WHERE '81'; the schema now rejects that, so the second one is renamed to '87'
-    (the fix the user has to apply).  If the audit copy no longer carries the
-    duplicate the file is used as is.
-    """
-    if not REAL_CONFIG_PATH.is_file():
-        pytest.skip(f"{REAL_CONFIG_PATH} is not available")
-    text = REAL_CONFIG_PATH.read_text(encoding="utf-8")
-    duplicate = "where: '81'"
-    if text.count(duplicate) > 1:
-        head, _, tail = text.rpartition(duplicate)
-        text = f"{head}where: '87'{tail}"
-    return text
+    """The user's real configuration (tests/fixtures/myhome.yaml)."""
+    return REAL_CONFIG_PATH.read_text(encoding="utf-8")
 
 
 class Commands:

@@ -11,7 +11,8 @@ automations.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -80,7 +81,7 @@ _DISCOVERY_COMMANDS = (
 class MyHOMEDeviceDiscoveryService:
     """Discovery service for one gateway (created by the gateway handler)."""
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry, gateway_handler: "MyHOMEGatewayHandler") -> None:
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry, gateway_handler: MyHOMEGatewayHandler) -> None:
         self.hass = hass
         self.config_entry = config_entry
         self.gateway_handler = gateway_handler
@@ -89,9 +90,11 @@ class MyHOMEDeviceDiscoveryService:
         self._discovered_devices: dict[str, dict[str, Any]] = {}
         self._discovery_active = False
         self._discovery_timeout = DISCOVERY_TIMEOUT_SEC
-        self._discovery_task: Optional[asyncio.Task] = None
-        self._timer_handle: Optional[asyncio.TimerHandle] = None
-        self._completion_task: Optional[asyncio.Task] = None
+        self._discovery_task: asyncio.Task | None = None
+        self._timer_handle: asyncio.TimerHandle | None = None
+        self._completion_task: asyncio.Task | None = None
+        # Set by stop_discovery(); the worker waits on it instead of polling.
+        self._stopped = asyncio.Event()
 
         self._message_to_device_type: dict[str, Callable[[OWNMessage], str]] = {
             "OWNLightingEvent": self._determine_lighting_device_type,
@@ -121,6 +124,7 @@ class MyHOMEDeviceDiscoveryService:
 
         LOGGER.info("%s Starting device discovery (%ss)", self.gateway_handler.log_id, self._discovery_timeout)
         self._discovery_active = True
+        self._stopped.clear()
         self._discovered_devices.clear()
 
         # Tracked task + tracked timer: both are cancelled by stop_discovery(),
@@ -136,6 +140,7 @@ class MyHOMEDeviceDiscoveryService:
             return
         LOGGER.info("%s Stopping device discovery (%s)", self.gateway_handler.log_id, reason)
         self._discovery_active = False
+        self._stopped.set()
 
         if self._timer_handle is not None:
             self._timer_handle.cancel()
@@ -218,7 +223,7 @@ class MyHOMEDeviceDiscoveryService:
         )
 
     # ------------------------------------------------------------------ classification
-    def _extract_device_info(self, message: OWNMessage) -> Optional[dict[str, Any]]:
+    def _extract_device_info(self, message: OWNMessage) -> dict[str, Any] | None:
         message_type = type(message).__name__
         if message_type not in self._message_to_device_type:
             return None
@@ -304,8 +309,9 @@ class MyHOMEDeviceDiscoveryService:
     async def _discovery_worker(self) -> None:
         try:
             await self._send_discovery_commands()
-            while self._discovery_active:
-                await asyncio.sleep(1)
+            if self._discovery_active:
+                # Keep the task alive until stop_discovery() (timer or service).
+                await self._stopped.wait()
         except asyncio.CancelledError:
             LOGGER.debug("%s Discovery worker cancelled", self.gateway_handler.log_id)
             raise
@@ -324,7 +330,7 @@ class MyHOMEDeviceDiscoveryService:
             await self.gateway_handler.send_status_request(own_command)
             await asyncio.sleep(0.5)
 
-    async def discover_device_by_address(self, where: str) -> Optional[dict[str, Any]]:
+    async def discover_device_by_address(self, where: str) -> dict[str, Any] | None:
         """Probe a single WHERE on the common subsystems and return what answered."""
         for who in (1, 2, 4, 18, 25, 9):
             own_command = OWNCommand.parse(f"*#{who}*{where}##")

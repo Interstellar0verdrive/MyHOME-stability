@@ -92,20 +92,19 @@ from .const import (
     CONF_MIN_DELTA_W,
     CONF_MIN_INTERVAL_SEC,
     CONF_SUPPRESS_LOG_INTERVAL_SEC,
+    CONF_INFO_LOG_INTERVAL_SEC,
     CONF_KEEPALIVE_MINUTES,
+    CONF_SENSOR_DEFAULTS,
+    DEFAULT_KEEPALIVE_MINUTES,
     DEFAULT_MANUFACTURER,
+    DEFAULT_SHUTTER_RUN,
 )
 
 # --------------------------------------------------------------------------------------
 # YAML keys that only the validator needs to know about (not in const.py).
 # --------------------------------------------------------------------------------------
-CONF_INFO_LOG_INTERVAL_SEC = "info_log_interval_sec"  # read by gateway.py, declared here
-CONF_SENSOR_DEFAULTS = "sensor_defaults"
 CONF_ENERGY_DEFAULTS = "energy"  # legacy alias of sensor_defaults
 DEVICE_CLASS_ALIAS = "device_class"  # YAML alias of CONF_DEVICE_CLASS ("class")
-
-DEFAULT_SHUTTER_RUN = 20.0  # seconds, Contract F
-DEFAULT_KEEPALIVE_MINUTES = 125  # Contract E (0 = keep-alive disabled)
 
 # Built-in defaults for the power/energy reporting filter and keep-alive.  Gateway level
 # ``sensor_defaults`` (alias ``energy``) override these, per-sensor keys override both.
@@ -205,7 +204,7 @@ class MacAddress:
         return mac
 
     def __repr__(self) -> str:
-        return "MacAddress(msg=%r)" % self.msg
+        return f"MacAddress(msg={self.msg!r})"
 
 
 # --------------------------------------------------------------------------------------
@@ -253,7 +252,7 @@ class General:
         raise Invalid(self.msg or f"Invalid General WHERE {v!r}, it must be '0'.")
 
     def __repr__(self) -> str:
-        return "General(msg=%r)" % self.msg
+        return f"General(msg={self.msg!r})"
 
 
 class Area:
@@ -274,7 +273,7 @@ class Area:
         raise Invalid(self.msg or f"Invalid Area WHERE {v!r}, it must be a string in [00, 1-9, 10].")
 
     def __repr__(self) -> str:
-        return "Area(msg=%r)" % self.msg
+        return f"Area(msg={self.msg!r})"
 
 
 class Group:
@@ -289,7 +288,7 @@ class Group:
         raise Invalid(self.msg or f"Invalid Group WHERE {v!r}, it must be a string like '#[1-255]'.")
 
     def __repr__(self) -> str:
-        return "Group(msg=%r)" % self.msg
+        return f"Group(msg={self.msg!r})"
 
 
 class PointToPoint:
@@ -310,7 +309,7 @@ class PointToPoint:
         raise Invalid(self.msg or f"Invalid WHERE {v!r}, A must be [0-10] and PL must be [0-15].")
 
     def __repr__(self) -> str:
-        return "PointToPoint(msg=%r)" % self.msg
+        return f"PointToPoint(msg={self.msg!r})"
 
 
 class SpecialWhere:
@@ -325,7 +324,7 @@ class SpecialWhere:
         raise Invalid(self.msg or f"Invalid WHERE {v!r}, it must be a string of digits.")
 
     def __repr__(self) -> str:
-        return "SpecialWhere(msg=%r)" % self.msg
+        return f"SpecialWhere(msg={self.msg!r})"
 
 
 class BusInterface:
@@ -346,7 +345,7 @@ class BusInterface:
         raise Invalid(self.msg or f"Invalid Bus Interface number {v!r}, it must be a string of 2 digits (00-15).")
 
     def __repr__(self) -> str:
-        return "BusInterface(msg=%r)" % self.msg
+        return f"BusInterface(msg={self.msg!r})"
 
 
 class Zone:
@@ -367,7 +366,7 @@ class Zone:
         raise Invalid(self.msg or f"Invalid zone {v!r}, expected '#0' (central unit), '1'-'99' or '#0#<zone>'.")
 
     def __repr__(self) -> str:
-        return "Zone(msg=%r)" % self.msg
+        return f"Zone(msg={self.msg!r})"
 
 
 ACTUATOR_WHERE = All(

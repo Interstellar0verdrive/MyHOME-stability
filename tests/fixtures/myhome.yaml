@@ -1,0 +1,276 @@
+# Versione originale:
+# Website: https://community.home-assistant.io/t/legrand-bticino-myhome/229337
+# Github: https://github.com/anotherjulien/MyHOME/tree/98f1e2555c8fc95d1d9b93f9450cef41da1aebc3
+
+# Versione custimizzata (fine 2025) dopo che la versione originale è stata abbandonata:
+# https://github.com/rdr-66/MyHOME
+# Vedi: https://community.home-assistant.io/t/legrand-bticino-myhome/229337/1085
+
+# Nuova versione forkata: 
+# https://github.com/artmakh/MyHOME
+
+# Temporizzatori tapparelle:
+# post originale:    https://community.home-assistant.io/t/custom-component-cover-time-based/187654/1
+# post modificato:   https://github.com/nagyrobi/home-assistant-custom-components-cover-rf-time-based
+# versione migliore: https://github.com/duhow/hass-cover-time-based
+# versione synced:   https://github.com/kotborealis/home-assistant-custom-components-cover-time-based-synced
+# versione tilt:     https://github.com/Sese-Schneider/ha-cover-time-based
+# versione via UI:   https://github.com/duhow/hass-cover-time-based?tab=readme-ov-file
+
+# Nota: manufacturer e model sono solo cosmetici, 
+# per l'interfaccia di Home Assistant (non vengono usati nel funzionamento)
+
+# device:     MyHOMEServer1
+# IP:         192.168.2.100
+# MAC:        00:03:50:A4:A5:A5
+# port:       20000
+
+ gateway:
+  mac: 00:03:50:a4:a5:a5
+
+  sensor_defaults:
+    min_delta_w: 5                  # default = 5  --> process if delta >= 5 W
+    min_interval_sec: 5             # default = 1  --> OR if last processed value is older than 1 seconds
+    suppress_log_interval_sec: 60   # default = 60
+
+  light:
+    # =========================================== Luci in Ingresso (spostata in Sala)
+    luce_ingresso_piccionaia:
+      where: '11'
+      name: Luce Ingresso Piccionaia
+      dimmable: false
+      icon: fapro:luce-sala-piccionaia
+
+    # =========================================== Luci in Cucina
+    luce_cucina_striscia_led:
+      where: '41'
+      name: Luce Cucina Striscia LED
+      dimmable: false
+      icon: fapro:luce-cucina-striscia-led
+    luce_cucina_centrale:
+      where: '13'
+      name: Luce Cucina Centrale
+      dimmable: false
+      icon: fapro:luce-cucina-centrale
+    # =========================================== Luci in Sala
+    luce_sala_tavola:
+      where: '21'
+      name: Luce Sala Tavola
+      dimmable: false
+      icon: fapro:luce-sala-tavola
+    luce_sala_nicchia:
+      where: '14'
+      name: Luce Sala Nicchia
+      dimmable: false
+      icon: fapro:luce-sala-nicchia
+    luce_sala_divano:
+      where: '12'
+      name: Luce Sala Divano
+      dimmable: false
+      icon: fapro:luce-sala-divano
+    # =========================================== Luci in Corridoio
+    luce_corridoio_soffitto:
+      where: '24'
+      name: Luce Corridoio Soffitto
+      dimmable: false
+      icon: fapro:luce-corridoio-soffitto
+    luce_corridoio_cuore:
+      where: '18'
+      name: Luce Corridoio Cuore
+      dimmable: false
+      icon: fapro:luce-corridoio-cuore
+    # =========================================== Luci in Camera
+    luce_camera_letto_sx:
+      where: '33'
+      name: Luce Camera Letto SX
+      dimmable: false
+      icon: fapro:luce-camera-sx
+    luce_camera_letto_dx:
+      where: '38'
+      name: Luce Camera Letto DX
+      dimmable: false
+      icon: fapro:luce-camera-dx
+    luce_camera_armadi:
+      where: '26'
+      name: Luce Camera Armadi
+      dimmable: false
+      icon: fapro:luce-camera-armadi
+    # =========================================== Luci in Camera Aleksander
+    luce_camera_aleksander_letto:
+      where: '25'
+      name: Luce Camera Aleksander Letto
+      dimmable: false
+      icon: fapro:luce-camera-aleksander-parete
+    luce_camera_aleksander_comodino_dummy:
+      where: '42'
+      name: Luce Camera Aleksander Comodino Dummy
+      dimmable: false
+      icon: fapro:luce-camera-aleksander-comodino
+    # =========================================== Luci in Bagno
+    luce_bagno_centrale:
+      where: '28'
+      name: Luce Bagno Centrale
+      dimmable: false
+      icon: fapro:luce-bagno-soffitto
+    luce_bagno_specchio:
+      where: '27'
+      name: Luce Bagno Specchio
+      dimmable: false
+      icon: fapro:luce-bagno-specchio
+    # =========================================== Luci in Bagno Piccolo
+    luce_bagno_piccolo_antibagno_soffitto:
+      where: '22'
+      name: Luce Bagno Piccolo Antibagno Soffitto
+      dimmable: false
+      icon: fapro:luce-antibagno
+    luce_bagno_piccolo_a_luminosa:
+      where: '17'
+      name: Luce Bagno Piccolo A Luminosa
+      dimmable: false
+      icon: fapro:luce-bagno-piccolo-a-luminosa
+    luce_bagno_piccolo_specchio:
+      where: '23'
+      name: Luce Bagno Piccolo Specchio
+      dimmable: false
+      icon: fapro:luce-bagno-piccolo-specchio
+    # =========================================== Luci in Terrazza
+    luce_terrazza_parco:
+      where: '15'
+      name: Luce Terrazza Parco
+      dimmable: false
+      icon: fapro:luce-terrazza-parco
+    luce_terrazza_tangenziale:
+      where: '16'
+      name: Luce Terrazza Tangenziale
+      dimmable: false
+      icon: fapro:luce-terrazza-tangenziale
+
+
+  cover:
+    # =========================================== Tapparelle della Cucina
+    tapparella_cucina_1:
+      where: '91'
+      name: Tapparella Cucina 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    tapparella_cucina_2:
+      where: '94'
+      name: Tapparella Cucina 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    # =========================================== Tapparelle della Sala
+    tapparella_sala_1:
+      where: '92'
+      name: Tapparella Sala 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    tapparella_sala_2:
+      where: '83'
+      name: Tapparella Sala 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    # =========================================== Tapparelle della Camera
+    tapparella_camera_1:
+      where: '96'
+      name: Tapparella Camera 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    tapparella_camera_2:
+      where: '95'
+      name: Tapparella Camera 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    tapparella_camera_3:
+      where: '82'
+      name: Tapparella Camera 3
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    # =========================================== Tapparelle della Cameretta
+    tapparella_camera_aleksander_1:
+      where: '86'
+      name: Tapparella Camera Aleksander 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    tapparella_camera_aleksander_2:
+      where: '81'
+      name: Tapparella Camera Aleksander 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    tapparella_camera_aleksander_3:
+      where: '93'
+      name: Tapparella Camera Aleksander 3
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    # =========================================== Tapparella del Bagno
+    tapparella_bagno:
+      where: '84'
+      name: Tapparella Bagno
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+    # =========================================== Tapparella del Bagno Piccolo
+    tapparella_bagno_piccolo:
+      where: '85'
+      name: Tapparella Bagno Piccolo
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+
+  # ============================================= SENSORI 
+  sensor:
+    
+    # SENSORE Ta
+    # EX: sensore_consumi_casa_generale_power
+    casa_generale:
+      where: '51'
+      name: Casa Generale
+      device_class: power
+
+    # SENSORE Tb
+    # EX: sensore_consumi_cucina_lavastoviglie_power
+    # EX: elettrodomestico_cucina_lavastoviglie
+    elettrodomestico_cucina_frigo:
+      where: '52'
+      name: Elettrodomestico Cucina Frigo
+      device_class: power
+
+    # SENSORE Tc
+    # EX: sensore_consumi_cucina_forno_power
+    # EX: elettrodomestico_cucina_frigo_e_forno_power
+    elettrodomestico_cucina_forno:
+      where: '53'
+      name: Elettrodomestico Cucina Forno
+      device_class: power
+      # Override filtering for this sensor
+      min_delta_w: 1
+      # min_interval_sec: 10
+      # refresh_period: 10      # equivalent alias (optional)
+      # suppress_log_interval_sec: 60
+
+
+
+# IMPORANTE!
+# Per fare funzionare questi sensori bisogna usare delle automazioni che leggono i dati ogni tot minuti
+# Queste automazioni sono nel package calcolo_consumi.yaml ("AUTOMAZIONI PER LEGGERE I DATI FORNITI DAI SENSORI DI POTENZA")
+

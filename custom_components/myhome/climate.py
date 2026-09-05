@@ -143,9 +143,8 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            entity_name=entity_name,
         )
-        if entity_name:
-            self._attr_name = entity_name
 
         self._standalone = standalone
         self._central = True if self._where.startswith("#0") else central
@@ -228,7 +227,11 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             return
 
         if hvac_mode not in (HVACMode.HEAT, HVACMode.COOL):
-            raise ServiceValidationError(f"{hvac_mode} is not supported by {self.entity_id}")
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="climate_unsupported_hvac_mode",
+                translation_placeholders={"hvac_mode": str(hvac_mode), "entity_id": str(self.entity_id)},
+            )
 
         # sc-10: MyHOME has no "mode only" command for HEAT/COOL, the set point goes with
         # it.  The old code silently did nothing while the set point was unknown.
@@ -263,7 +266,9 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             temperature = self._local_target_temperature
         if temperature is None:
             raise ServiceValidationError(
-                f"No target temperature given and none known yet for {self.entity_id}"
+                translation_domain=DOMAIN,
+                translation_key="climate_no_target_temperature",
+                translation_placeholders={"entity_id": str(self.entity_id)},
             )
 
         target_temperature = float(temperature) - self._local_offset

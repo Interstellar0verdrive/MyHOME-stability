@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import voluptuous as vol
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
@@ -22,6 +23,8 @@ from .helpers_core import (
     mock_gateway,
     write_yaml,
 )
+from .helpers_platforms import REAL_CONFIG_PATH
+from .test_gateway import FakeOWNServer, wait_until
 
 SERVICES = ("sync_time", "send_message", "start_discovery", "stop_discovery")
 
@@ -221,7 +224,7 @@ async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
             await hass.services.async_call(DOMAIN, "send_message", {"gateway": "zz", "message": "*1*0*11##"}, blocking=True)
         with pytest.raises(ServiceValidationError):
             await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
-        with pytest.raises(Exception):  # vol.Invalid from the service schema (non-string message)
+        with pytest.raises(ServiceValidationError):  # cv.string coerces 1 -> "1", which is not a frame
             await hass.services.async_call(DOMAIN, "send_message", {"message": 1}, blocking=True)
 
 
@@ -281,3 +284,72 @@ class pytest_default_path:  # noqa: N801 - tiny context helper
     def __exit__(self, *exc):
         self.hass.config.config_dir = self._old
         return False
+
+
+# --------------------------------------------------------------------------- end to end
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_end_to_end_with_fake_gateway(hass: HomeAssistant) -> None:
+    """Real setup against a loopback OpenWebNet server: no OWNd mock at all.
+
+    Uses the user's configuration (tests/fixtures/myhome.yaml): the connection test,
+    the event and command sessions, the dispatcher and the entities are the real
+    ones.  Checks a light event, a cover event, an energy totaliser reply read on
+    the command session, and the availability transitions on the connection signal.
+    """
+    light_key, cover_key, meter_key = f"{MAC}-1-11", f"{MAC}-2-81", f"{MAC}-18-51-total-energy"
+    replies = {
+        "*#1*11##": ["*1*0*11##", "*#*1##"],  # light status: off
+        "*#18*51*51##": ["*#18*51*51*12345##", "*#*1##"],  # energy totaliser reply (sc-01)
+    }
+    async with FakeOWNServer(replies, default_replies=["*#*1##"]) as server:
+        entry = make_entry(REAL_CONFIG_PATH, data={**ENTRY_DATA_V2, "host": "127.0.0.1", "port": server.port})
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.LOADED
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        registry = er.async_get(hass)
+        light_id = registry.async_get_entity_id("light", DOMAIN, light_key)
+        cover_id = registry.async_get_entity_id("cover", DOMAIN, cover_key)
+        meter_id = registry.async_get_entity_id("sensor", DOMAIN, meter_key)
+        assert light_id and cover_id and meter_id
+
+        # Event session up -> SIGNAL_GATEWAY_CONNECTION(True) -> entities available.
+        await wait_until(lambda: handler.is_connected)
+        await wait_until(lambda: hass.states.get(light_id).state != "unavailable")
+        assert "*99*1##" in server.sessions
+        assert len(server.monitor_writers) == 1
+
+        # Command session: status requests answered, totaliser reply dispatched.
+        await wait_until(lambda: hass.states.get(light_id).state == "off")
+        await wait_until(lambda: hass.states.get(meter_id).state == "12345")
+        assert "*#18*51*#1200#1*125##" in server.received  # Contract E keep-alive armed
+        assert all(session in ("*99*0##", "*99*1##") for session in server.sessions)
+
+        # Monitor frames: light on, cover opening then stopped.
+        await server.push("*1*1*11##")
+        await wait_until(lambda: hass.states.get(light_id).state == "on")
+        await server.push("*2*1*81##")
+        await wait_until(lambda: hass.states.get(cover_id).state == "opening")
+        await server.push("*2*0*81##")
+        await wait_until(lambda: hass.states.get(cover_id).state in ("open", "closed"))
+        assert isinstance(hass.states.get(cover_id).attributes.get("current_position"), int)
+
+        # The gateway drops the monitor session: unavailable, then back after the
+        # reconnect (initial backoff 1 s) with the last known state.
+        # Monitor sessions so far: the connection test (OWNSession.test_connection
+        # negotiates a *99*1## session) plus the listening loop's own session.
+        monitors_before = server.sessions.count("*99*1##")
+        await server.drop_monitors()
+        await wait_until(lambda: hass.states.get(light_id).state == "unavailable")
+        assert hass.states.get(meter_id).state == "unavailable"
+        await wait_until(lambda: handler.is_connected and hass.states.get(light_id).state == "on", timeout=6.0)
+        assert hass.states.get(meter_id).state == "12345"
+        # Exactly one reconnect, and only one live monitor session at any time.
+        assert server.sessions.count("*99*1##") == monitors_before + 1
+        assert len(server.monitor_writers) == 1
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.NOT_LOADED
+        await wait_until(lambda: not server.monitor_writers)

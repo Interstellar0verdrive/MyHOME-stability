@@ -19,6 +19,23 @@ from .const import (
     DOMAIN,
     SIGNAL_GATEWAY_CONNECTION,
 )
+from .validate import is_point_to_point
+
+
+def address_attributes(where: str, interface: str | None) -> dict[str, str]:
+    """Extra state attributes describing the bus address of an entity.
+
+    `A`/`PL` only make sense for a point-to-point WHERE; General, Area and Group
+    WHEREs are reported verbatim instead of being cut in half (plat-10).  The bus
+    interface, when configured, is exposed as `Int`.
+    """
+    if is_point_to_point(where):
+        attributes = {"A": where[: len(where) // 2], "PL": where[len(where) // 2 :]}
+    else:
+        attributes = {"Where": where}
+    if interface is not None:
+        attributes["Int"] = interface
+    return attributes
 
 
 class MyHOMEEntity(Entity):
@@ -31,7 +48,15 @@ class MyHOMEEntity(Entity):
     - `available` mirrors the gateway event session (`gateway.is_connected`) and
       is refreshed through the SIGNAL_GATEWAY_CONNECTION dispatcher signal;
     - the entity registers itself in `hass.data[DOMAIN][mac][CONF_PLATFORMS]`
-      so the gateway dispatcher can find it, and unregisters on removal.
+      under its `entity_slot` so the gateway dispatcher can find it, and
+      unregisters on removal;
+    - naming: `_attr_name` is the YAML `entity_name` when given; otherwise an
+      entity that declares `_attr_translation_key` (secondary entities: Power,
+      Energy today, Lock...) is named by its translation and the attribute is
+      left unset, while the main entity of a device gets `_attr_name = None`
+      (= the device name; the explicit None stops HA from falling back to the
+      device-class name such as "Temperature").  Set `_attr_translation_key`
+      before calling `super().__init__()` when it is an instance attribute.
 
     Platforms must not override `available`, `device_info`, `should_poll` or
     `has_entity_name`.
@@ -39,6 +64,12 @@ class MyHOMEEntity(Entity):
 
     _attr_should_poll = False
     _attr_has_entity_name = True
+
+    # Key under which the entity registers itself in the device's `entities` dict.
+    # None -> the platform name (one entity per device).  Devices hosting several
+    # entities (energy meters, lock/unlock buttons) override it per entity so that
+    # the gateway dispatcher (`_entities_for`, `_refresh_light`) finds all of them.
+    _entity_slot: str | None = None
 
     def __init__(
         self,
@@ -51,6 +82,7 @@ class MyHOMEEntity(Entity):
         manufacturer: str | None,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
+        entity_name: str | None = None,
     ) -> None:
         self._hass = hass
         self._platform = platform
@@ -61,9 +93,10 @@ class MyHOMEEntity(Entity):
         self._manufacturer = manufacturer or DEFAULT_MANUFACTURER
         self._model = model
         self._gateway_handler = gateway
-        # Main entity of a device takes the device name; platforms set
-        # `_attr_name = entity_name` when the YAML provides one.
-        self._attr_name = None
+        if entity_name:
+            self._attr_name = entity_name
+        elif not getattr(self, "_attr_translation_key", None):
+            self._attr_name = None
         self._connection_unsub_registered = False
 
         device_info = DeviceInfo(
@@ -87,7 +120,11 @@ class MyHOMEEntity(Entity):
 
     @callback
     def _async_on_connection_change(self, connected: bool) -> None:
-        """Gateway connection state changed: push the new availability to HA."""
+        """Gateway connection state changed: push the new availability to HA.
+
+        Subclasses that must re-issue a bus request on reconnection override this
+        (keeping the `@callback` decorator) and call `super()`.
+        """
         self.async_write_ha_state()
 
     @callback
@@ -111,6 +148,11 @@ class MyHOMEEntity(Entity):
         self._async_subscribe_connection_signal()
 
     # ------------------------------------------------------------------ registration
+    @property
+    def entity_slot(self) -> str:
+        """Registry slot of this entity in the device's `entities` dict."""
+        return self._entity_slot or self._platform
+
     def _entities_registry(self) -> dict | None:
         """Return the `entities` dict of this device in hass.data, if present."""
         try:
@@ -121,15 +163,20 @@ class MyHOMEEntity(Entity):
             return None
 
     async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
+        """Subscribe, register in hass.data and send the first status request.
+
+        `async_update` is optional: platforms whose devices cannot be queried
+        (buttons, WHO 9 auxiliary channels) simply do not define it.
+        """
         self._async_subscribe_connection_signal()
         entities = self._entities_registry()
         if entities is not None:
-            entities[self._platform] = self
-        await self.async_update()
+            entities[self.entity_slot] = self
+        if hasattr(self, "async_update"):
+            await self.async_update()
 
     async def async_will_remove_from_hass(self) -> None:
         """When entity is removed from hass."""
         entities = self._entities_registry()
-        if entities is not None and entities.get(self._platform) is self:
-            del entities[self._platform]
+        if entities is not None and entities.get(self.entity_slot) is self:
+            del entities[self.entity_slot]
