@@ -105,7 +105,7 @@ or immediate disconnects after a reload, that is the symptom to report.
 
 ## Watchdog, keep-alive and queue parameters
 
-These are **hard-coded** in `custom_components/myhome/gateway.py` and
+Since 0.3.0 the first four are configurable from the integration's **Configure** dialog (see [Configuration reference](configuration.md)); the defaults below are the values used when nothing is set. They live in `custom_components/myhome/gateway.py` and
 `custom_components/myhome/own_session.py`. They are not exposed in the UI or in
 `myhome.yaml`. Tests override them on the handler instance; nothing else does.
 

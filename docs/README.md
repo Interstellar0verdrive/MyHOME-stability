@@ -4,10 +4,10 @@ Supplementary documentation for the MyHOME (Stability) integration. The
 [main README](../README.md) covers the elevator pitch, installation and a
 minimal configuration example; the pages here go deeper.
 
-- **[Configuration reference](configuration.md)** — gateway setup from the UI,
-  the full `myhome.yaml` schema (file location, root formats, every parameter per
-  platform), Lock/Unlock buttons, multiple gateways, custom icons/device
-  classes, and validation errors.
+- **[Configuration reference](configuration.md)** — gateway setup from the UI, the
+  integration options (including the session tunables), the full `myhome.yaml` schema
+  (file location, root formats, every parameter per platform), Lock/Unlock buttons,
+  multiple gateways, custom icons/device classes, and validation errors.
 - **[Services and events](services-and-events.md)** — the five services and
   their fields, and the event contracts (CEN/CEN+, general/area/group,
   discovery, raw bus traffic).
@@ -16,8 +16,9 @@ minimal configuration example; the pages here go deeper.
   `integration`/`utility_meter` when the gateway returns no totals.
 - **[Discovery](discovery.md)** — what a discovery run writes to
   `myhome_discovered.yaml` and does not touch in `myhome.yaml`.
-- **[Troubleshooting](troubleshooting.md)** — common issues, debug logging, and
-  upgrading from the pre-`myhome.yaml` (v0.8 and earlier) versions.
+- **[Troubleshooting](troubleshooting.md)** — common issues, the repair issues the
+  integration raises, how to download diagnostics for a bug report, debug logging,
+  and upgrading from the pre-`myhome.yaml` (v0.8 and earlier) versions.
 - **[Gateway compatibility](gateway-compatibility.md)** — what is verified, only
   expected, or unknown per gateway model; the hard-coded watchdog, keep-alive and
   queue values; how to report your own gateway.

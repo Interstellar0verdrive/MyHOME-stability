@@ -79,7 +79,19 @@
           "password": "Password",
           "config_file_path": "Percorso del file di configurazione",
           "command_worker_count": "Numero di sessioni di comando simultanee",
-          "generate_events": "Genera eventi in Home Assistant per ogni messaggio ricevuto"
+          "generate_events": "Genera eventi in Home Assistant per ogni messaggio ricevuto",
+          "idle_watchdog_sec": "Watchdog di inattività",
+          "probe_window_sec": "Finestra di sondaggio",
+          "command_timeout_sec": "Timeout di un comando",
+          "queue_ttl_sec": "Durata massima in coda dei comandi",
+          "default_keepalive_minutes": "Keep-alive predefinito della potenza istantanea"
+        },
+        "data_description": {
+          "idle_watchdog_sec": "Nessun frame ricevuto sulla sessione di monitoraggio per questo tempo: viene inviata una sonda innocua sulla sessione comandi. Predefinito 300 s (60-3600).",
+          "probe_window_sec": "Sonda inviata e ancora nulla sulla sessione di monitoraggio: riconnessione. Predefinito 30 s (5-300).",
+          "command_timeout_sec": "Tempo massimo per scrivere un comando e riceverne la conferma, prima di un unico nuovo tentativo e poi dello scarto. Predefinito 10 s (2-60).",
+          "queue_ttl_sec": "I comandi ancora in coda dopo questo tempo vengono scartati invece di essere inviati in ritardo. Predefinito 60 s (10-600).",
+          "default_keepalive_minutes": "Keep-alive richiesto ai contatori di energia quando un sensore non imposta keepalive_minutes in myhome.yaml. 0 lo disabilita. Predefinito 125 min (0-255)."
         }
       }
     },
@@ -87,6 +99,20 @@
       "invalid_host": "Indirizzo IP o hostname non valido",
       "invalid_port": "Porta non valida",
       "invalid_config_path": "Il file di configurazione non esiste in questo percorso"
+    }
+  },
+  "issues": {
+    "yaml_invalid": {
+      "title": "Il file di configurazione MyHOME non è valido",
+      "description": "L'integrazione non ha potuto caricare `{path}`:\n\n```\n{message}\n```\n\nCorreggere il file e ricaricare l'integrazione MyHOME. Finché il file non è valido non viene creato alcun dispositivo."
+    },
+    "unknown_keys": {
+      "title": "Chiavi sconosciute nel file di configurazione MyHOME",
+      "description": "`{path}` contiene {count} chiave/i che l'integrazione non conosce; vengono ignorate:\n\n{keys}\n\nRimuoverle o correggerle, poi ricaricare l'integrazione. Questo avviso può essere ignorato se le chiavi sono intenzionali."
+    },
+    "no_devices_for_gateway": {
+      "title": "Nessun dispositivo configurato per questo gateway MyHOME",
+      "description": "Il gateway `{mac}` non ha una sezione in `{path}` (gateway trovati nel file: {others}), quindi non è stato creato alcun dispositivo.\n\nAggiungere una sezione per questo gateway, oppure verificare che l'indirizzo MAC corrisponda, poi ricaricare l'integrazione."
     }
   },
   "entity": {
@@ -110,6 +136,23 @@
       },
       "energy_total": {
         "name": "Energia"
+      },
+      "gateway_last_frame": {
+        "name": "Ultimo frame"
+      },
+      "gateway_reconnects": {
+        "name": "Riconnessioni"
+      },
+      "gateway_commands_dropped": {
+        "name": "Comandi scartati"
+      },
+      "gateway_queue_length": {
+        "name": "Comandi in coda"
+      }
+    },
+    "binary_sensor": {
+      "gateway_connected": {
+        "name": "Connesso"
       }
     }
   },

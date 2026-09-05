@@ -12,6 +12,8 @@ of this schema.
 ## Contents
 
 - [Gateway setup](#gateway-setup)
+  - [Options](#options)
+  - [Repairs](#repairs)
 - [The `myhome.yaml` file](#the-myhomeyaml-file)
 - [Common parameters (all platforms)](#common-parameters-all-platforms)
 - [Light](#light)
@@ -71,6 +73,38 @@ without removing the integration:
   `myhome_message_event` (see [Services and events](services-and-events.md))
 
 Saving options reloads the integration.
+
+#### Session tunables
+
+Since 0.3.0 the timings that used to be hard-coded are editable in the same form.
+**The defaults are exactly the values 0.2.x used internally, so leaving them alone
+changes nothing** — only touch them if you are working around a specific gateway
+misbehaviour, and change one at a time.
+
+| Option | Default | Range | What it does |
+| --- | --- | --- | --- |
+| Idle watchdog | 300 s | 60–3600 | No frame received on the monitor session for this long: a harmless status request is sent through the command session to check the gateway is still alive. Lower it on a gateway that dies silently; raise it on a very quiet plant that produces false probes. |
+| Probe window | 30 s | 5–300 | The probe was sent and *still* nothing arrived on the monitor session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). |
+| Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
+| Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
+| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors that do not set `keepalive_minutes` themselves in `myhome.yaml`. `0` disables it. A per-sensor value in the file always wins. See [Energy monitoring](energy.md). |
+
+A [diagnostics download](troubleshooting.md#diagnostics-download) always reports the
+values actually in effect, under `effective_options`.
+
+### Repairs
+
+The integration reports configuration problems as Home Assistant **repair issues**
+(*Settings → System → Repairs*) instead of leaving them in the log:
+
+| Issue | Severity | Meaning |
+| --- | --- | --- |
+| MyHOME configuration file is invalid | Error | `myhome.yaml` could not be read, parsed or validated. The issue carries the file path and the exact validator message; no device is created until it is fixed. |
+| Unknown keys in the MyHOME configuration file | Warning | The file contains keys the integration does not know. They are ignored (never fatal, for backward compatibility) and listed with a "did you mean" hint. Dismissable if the keys are intentional. |
+| No devices configured for this MyHOME gateway | Warning | The gateway's MAC address has no section in the file — usually a typo in the MAC, or the section of a different gateway. |
+
+Each issue is cleared automatically as soon as a later load no longer hits its cause
+(fix the file, then reload the integration).
 
 ## The `myhome.yaml` file
 

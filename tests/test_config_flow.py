@@ -14,9 +14,19 @@ from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 
 from custom_components.myhome.config_flow import MANUAL_ENTRY, validate_host
 from custom_components.myhome.const import (
+    CONF_COMMAND_TIMEOUT_SEC,
+    CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_FILE_PATH,
     CONF_GENERATE_EVENTS,
+    CONF_IDLE_WATCHDOG_SEC,
+    CONF_PROBE_WINDOW_SEC,
+    CONF_QUEUE_TTL_SEC,
     CONF_WORKER_COUNT,
+    DEFAULT_COMMAND_TIMEOUT_SEC,
+    DEFAULT_IDLE_WATCHDOG_SEC,
+    DEFAULT_KEEPALIVE_MINUTES,
+    DEFAULT_PROBE_WINDOW_SEC,
+    DEFAULT_QUEUE_TTL_SEC,
     DOMAIN,
 )
 
@@ -273,6 +283,23 @@ async def test_reauth_flow(hass: HomeAssistant, mock_test_connection, mock_setup
     assert mock_setup_entry.await_count == 1  # reloaded once
 
 
+def _suggested(result) -> dict:
+    """Suggested values of the tunable number selectors shown by the options form."""
+    keys = (
+        CONF_IDLE_WATCHDOG_SEC,
+        CONF_PROBE_WINDOW_SEC,
+        CONF_COMMAND_TIMEOUT_SEC,
+        CONF_QUEUE_TTL_SEC,
+        CONF_DEFAULT_KEEPALIVE_MINUTES,
+    )
+    suggested = {}
+    for marker in result["data_schema"].schema:
+        name = getattr(marker, "schema", marker)
+        if name in keys:
+            suggested[name] = (marker.description or {}).get("suggested_value")
+    return suggested
+
+
 async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> None:
     """cf-01 / cf-10 / core-09: options flow opens, validates and reloads."""
     path = write_yaml(tmp_path)
@@ -285,6 +312,14 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
+    # G1-D: unset tunables are pre-filled with the values 0.2.x used internally.
+    assert _suggested(result) == {
+        CONF_IDLE_WATCHDOG_SEC: DEFAULT_IDLE_WATCHDOG_SEC,
+        CONF_PROBE_WINDOW_SEC: DEFAULT_PROBE_WINDOW_SEC,
+        CONF_COMMAND_TIMEOUT_SEC: DEFAULT_COMMAND_TIMEOUT_SEC,
+        CONF_QUEUE_TTL_SEC: DEFAULT_QUEUE_TTL_SEC,
+        CONF_DEFAULT_KEEPALIVE_MINUTES: DEFAULT_KEEPALIVE_MINUTES,
+    }
 
     good = {
         "address": HOST,
@@ -293,6 +328,12 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
         CONF_FILE_PATH: str(path),
         CONF_WORKER_COUNT: 2,
         CONF_GENERATE_EVENTS: True,
+        # NumberSelector hands floats back to the flow.
+        CONF_IDLE_WATCHDOG_SEC: 120.0,
+        CONF_PROBE_WINDOW_SEC: 15.0,
+        CONF_COMMAND_TIMEOUT_SEC: 5.0,
+        CONF_QUEUE_TTL_SEC: 30.0,
+        CONF_DEFAULT_KEEPALIVE_MINUTES: 0.0,
     }
     result = await hass.config_entries.options.async_configure(result["flow_id"], {**good, CONF_FILE_PATH: str(tmp_path / "nope.yaml")})
     assert result["type"] is FlowResultType.FORM
@@ -304,11 +345,23 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     result = await hass.config_entries.options.async_configure(result["flow_id"], good)
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {CONF_WORKER_COUNT: 2, CONF_FILE_PATH: str(path), CONF_GENERATE_EVENTS: True}
+    assert entry.options == {
+        CONF_WORKER_COUNT: 2,
+        CONF_FILE_PATH: str(path),
+        CONF_GENERATE_EVENTS: True,
+        CONF_IDLE_WATCHDOG_SEC: 120,
+        CONF_PROBE_WINDOW_SEC: 15,
+        CONF_COMMAND_TIMEOUT_SEC: 5,
+        CONF_QUEUE_TTL_SEC: 30,
+        CONF_DEFAULT_KEEPALIVE_MINUTES: 0,
+    }
+    # The floats of the selector are stored as ints for the handler / sensors.
+    assert all(isinstance(entry.options[key], int) for key in (CONF_IDLE_WATCHDOG_SEC, CONF_DEFAULT_KEEPALIVE_MINUTES))
     assert mock_setup_entry.await_count == 2  # OptionsFlowWithReload reloaded the entry
 
     # Only the connection data changes -> still exactly one reload.
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert _suggested(result)[CONF_IDLE_WATCHDOG_SEC] == 120
     result = await hass.config_entries.options.async_configure(result["flow_id"], {**good, "address": "10.0.0.2", "password": "999"})
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY

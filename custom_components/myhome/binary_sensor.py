@@ -1,4 +1,10 @@
-"""Support for MyHOME binary sensors (dry contacts, auxiliary channels, motion sensors)."""
+"""Support for MyHOME binary sensors (dry contacts, auxiliary channels, motion sensors).
+
+The platform also creates the ``connected`` diagnostic entity of the gateway device
+(0.3.0, plan G1-B): it is fed by the ``SIGNAL_GATEWAY_STATS`` snapshots, stays
+available while the gateway is down and exists even when no binary sensor at all is
+configured.
+"""
 
 from __future__ import annotations
 
@@ -13,9 +19,14 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import (
+    ExtraStoredData,
+    RestoredExtraData,
+    RestoreEntity,
+)
 from homeassistant.util import dt as dt_util
 
 from OWNd.message import (
@@ -41,10 +52,15 @@ from .const import (
     CONF_WHERE,
     CONF_WHO,
     DOMAIN,
+    GATEWAY_DIAG_CONNECTED,
     LOGGER,
 )
 from .gateway import MyHOMEGatewayHandler
-from .myhome_device import MyHOMEEntity, address_attributes
+from .myhome_device import (
+    MyHOMEEntity,
+    MyHOMEGatewayDiagnosticEntity,
+    address_attributes,
+)
 
 PIR_SENSITIVITY = ["low", "medium", "high", "very high"]
 
@@ -59,13 +75,16 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the binary sensor entities of this gateway (none when unconfigured)."""
-    configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS].get(PLATFORM, {})
-    if not configured_binary_sensors:
-        return
+    """Create the binary sensor entities of this gateway.
 
-    gateway_handler = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
-    binary_sensors: list[MyHOMEEntity] = []
+    The gateway ``connected`` diagnostic entity (0.3.0, plan G1-B) is created for
+    every gateway, including one without a single configured binary sensor.
+    """
+    gateway_data = hass.data[DOMAIN][config_entry.data[CONF_MAC]]
+    gateway_handler = gateway_data[CONF_ENTITY]
+    binary_sensors: list[Entity] = [MyHOMEGatewayConnectedSensor(gateway_handler)]
+
+    configured_binary_sensors = gateway_data[CONF_PLATFORMS].get(PLATFORM, {})
 
     for device_id, cfg in configured_binary_sensors.items():
         who = int(cfg[CONF_WHO])
@@ -224,6 +243,9 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
         super().__init__(**kwargs)
         self._timeout = DEFAULT_MOTION_TIMEOUT
         self._timeout_timer = None
+        # When the pending "no more motion" timer fires (UTC); persisted so a reload
+        # does not restart a full timeout from scratch.
+        self._expires_at: datetime | None = None
         self._attr_is_on = None
         self._attr_extra_state_attributes = {
             **address_attributes(self._where, self._interface),
@@ -241,9 +263,28 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_pir_sensitivity(self._full_where))
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_motion_timeout(self._full_where))
 
+    @property
+    def extra_restore_state_data(self) -> ExtraStoredData | None:
+        """Persist the state and the expiry independently of the entity state.
+
+        On a config entry reload the gateway connection is closed before the entities
+        are removed, so Home Assistant snapshots them as ``unavailable``: the last
+        state is then useless and only the extra data survives (same pattern as
+        ``cover.py``).  ``expires_at`` is stored as an ISO timestamp so the remaining
+        motion timeout is restored exactly instead of restarting from zero.
+        """
+        return RestoredExtraData(
+            {
+                "is_on": self._attr_is_on,
+                "expires_at": self._expires_at.isoformat() if self._expires_at else None,
+            }
+        )
+
     async def async_added_to_hass(self) -> None:
         """Register, query the sensor and restore the previous state."""
         await super().async_added_to_hass()
+        if await self._async_restore_from_extra_data():
+            return
         last_state = await self.async_get_last_state()
         if last_state is None or last_state.state not in (STATE_ON, STATE_OFF):
             return
@@ -258,6 +299,30 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
                 self._attr_is_on = not self._motion_detected
         self.async_write_ha_state()
 
+    async def _async_restore_from_extra_data(self) -> bool:
+        """Restore `is_on` / the pending timeout from the extra data, if any."""
+        extra_data = await self.async_get_last_extra_data()
+        if extra_data is None:
+            return False
+        stored = extra_data.as_dict()
+        is_on = stored.get("is_on")
+        if is_on is None:
+            return False
+        self._attr_is_on = bool(is_on)
+        if self._attr_is_on == self._motion_detected:
+            expires_at = dt_util.parse_datetime(stored.get("expires_at") or "")
+            remaining = (
+                (expires_at - dt_util.utcnow()).total_seconds()
+                if expires_at is not None
+                else self._timeout.total_seconds()
+            )
+            if remaining > 0:
+                self._schedule_timeout(remaining)
+            else:
+                self._attr_is_on = not self._motion_detected
+        self.async_write_ha_state()
+        return True
+
     async def async_will_remove_from_hass(self) -> None:
         """Cancel the pending timeout."""
         self._cancel_timeout()
@@ -268,12 +333,14 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
         if self._timeout_timer is not None:
             self._timeout_timer()
             self._timeout_timer = None
+        self._expires_at = None
 
     @callback
     def _schedule_timeout(self, seconds: float | None = None) -> None:
         """(Re)arm the "no more motion" timer."""
         self._cancel_timeout()
         delay = self._timeout.total_seconds() if seconds is None else seconds
+        self._expires_at = dt_util.utcnow() + timedelta(seconds=delay)
         self._timeout_timer = async_call_later(self.hass, delay, self._async_motion_expired)
 
     @callback
@@ -284,6 +351,7 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
         sensor toggles between the two states instead of being stuck.
         """
         self._timeout_timer = None
+        self._expires_at = None
         self._attr_is_on = not self._motion_detected
         self.async_write_ha_state()
 
@@ -315,3 +383,24 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
             return
 
         self.async_write_ha_state()
+
+
+# --------------------------------------------------------------------------- gateway
+class MyHOMEGatewayConnectedSensor(MyHOMEGatewayDiagnosticEntity, BinarySensorEntity):
+    """Whether the gateway event session is alive (0.3.0, plan G1-B).
+
+    Unlike every other entity of the integration this one keeps reporting a state
+    while the gateway is down (that is its whole point), see
+    ``MyHOMEGatewayDiagnosticEntity``.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, gateway: MyHOMEGatewayHandler) -> None:
+        super().__init__(gateway, GATEWAY_DIAG_CONNECTED, "gateway_connected")
+        # Until the first snapshot arrives, report what the handler knows.
+        self._attr_is_on = bool(getattr(gateway, "is_connected", False))
+
+    @callback
+    def _apply_stats(self, stats: Any) -> None:
+        self._attr_is_on = bool(stats.connected)

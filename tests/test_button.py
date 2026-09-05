@@ -13,7 +13,7 @@ from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import CONF_ENTITIES, CONF_PLATFORMS, DOMAIN
 
 from .helpers_core import MAC
-from .helpers_platforms import device_config, entity_object, real_config_yaml, setup_myhome
+from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, device_config, entity_object, real_config_yaml, setup_myhome
 
 LOCK_YAML = f"""
 gateway:
@@ -55,7 +55,9 @@ async def test_buttons_created_for_opted_in_device(hass: HomeAssistant, tmp_path
         assert {item.unique_id for item in buttons} == {f"{MAC}-1-11-disable", f"{MAC}-1-11-enable"}
 
         platforms = hass.data[DOMAIN][MAC][CONF_PLATFORMS]
-        assert {item.unique_id for item in buttons} == expected_unique_ids(MAC, {BUTTON: platforms[BUTTON]})
+        assert {item.unique_id for item in buttons} == expected_unique_ids(
+            MAC, {BUTTON: platforms[BUTTON]}
+        ) - GATEWAY_DIAG_UNIQUE_IDS
 
         for item in buttons:
             assert item.entity_category is EntityCategory.CONFIG

@@ -32,26 +32,43 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import callback
-from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 
 from .const import (
     CONF_ADDRESS,
+    CONF_COMMAND_TIMEOUT_SEC,
+    CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_DEVICE_TYPE,
     CONF_FILE_PATH,
     CONF_FIRMWARE,
     CONF_GENERATE_EVENTS,
+    CONF_IDLE_WATCHDOG_SEC,
     CONF_MANUFACTURER,
     CONF_MANUFACTURER_URL,
     CONF_OWN_PASSWORD,
+    CONF_PROBE_WINDOW_SEC,
+    CONF_QUEUE_TTL_SEC,
     CONF_SSDP_LOCATION,
     CONF_SSDP_ST,
     CONF_UDN,
     CONF_WORKER_COUNT,
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
+    DEFAULT_COMMAND_TIMEOUT_SEC,
     DEFAULT_CONFIG_FILE,
+    DEFAULT_IDLE_WATCHDOG_SEC,
+    DEFAULT_KEEPALIVE_MINUTES,
     DEFAULT_MANUFACTURER,
+    DEFAULT_PROBE_WINDOW_SEC,
+    DEFAULT_QUEUE_TTL_SEC,
     DOMAIN,
     GATEWAY_TEST_TIMEOUT_SEC,
     LOGGER,
@@ -79,6 +96,25 @@ _HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-
 
 PORT_VALIDATOR = vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))
 PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+
+# Session tunables exposed in the options flow (0.3.0, G1-D): option key, default
+# (= the value hard-coded in 0.2.x, so leaving them alone changes nothing), range and
+# unit.  gateway.py / sensor.py read them from ``entry.options`` with the same
+# defaults; ``OptionsFlowWithReload`` reloads the entry when any of them changes.
+TUNABLE_OPTIONS: tuple[tuple[str, int, int, int, str], ...] = (
+    (CONF_IDLE_WATCHDOG_SEC, DEFAULT_IDLE_WATCHDOG_SEC, 60, 3600, "s"),
+    (CONF_PROBE_WINDOW_SEC, DEFAULT_PROBE_WINDOW_SEC, 5, 300, "s"),
+    (CONF_COMMAND_TIMEOUT_SEC, DEFAULT_COMMAND_TIMEOUT_SEC, 2, 60, "s"),
+    (CONF_QUEUE_TTL_SEC, DEFAULT_QUEUE_TTL_SEC, 10, 600, "s"),
+    (CONF_DEFAULT_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES, 0, 255, "min"),
+)
+
+
+def _number_selector(minimum: int, maximum: int, unit: str) -> NumberSelector:
+    """Integer box selector with a unit label (the flow coerces the float back to int)."""
+    return NumberSelector(
+        NumberSelectorConfig(min=minimum, max=maximum, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement=unit)
+    )
 
 
 def validate_host(value: Any) -> str:
@@ -446,6 +482,8 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
             CONF_WORKER_COUNT: 1,
             CONF_FILE_PATH: self.hass.config.path(DEFAULT_CONFIG_FILE),
             CONF_GENERATE_EVENTS: False,
+            # Unset tunables are pre-filled with the value 0.2.x used internally.
+            **{key: default for key, default, *_ in TUNABLE_OPTIONS},
             **entry.options,
         }
 
@@ -470,6 +508,8 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_WORKER_COUNT: int(user_input[CONF_WORKER_COUNT]),
                     CONF_FILE_PATH: file_path,
                     CONF_GENERATE_EVENTS: bool(user_input[CONF_GENERATE_EVENTS]),
+                    # NumberSelector yields floats; the consumers expect ints.
+                    **{key: int(user_input[key]) for key, *_ in TUNABLE_OPTIONS},
                 }
                 data_changed = self.hass.config_entries.async_update_entry(entry, data=new_data)
                 if data_changed and new_options == dict(entry.options):
@@ -497,6 +537,12 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                         CONF_GENERATE_EVENTS,
                         description={"suggested_value": suggestions.get(CONF_GENERATE_EVENTS, options[CONF_GENERATE_EVENTS])},
                     ): bool,
+                    **{
+                        vol.Required(
+                            key, description={"suggested_value": suggestions.get(key, options[key])}
+                        ): _number_selector(minimum, maximum, unit)
+                        for key, _default, minimum, maximum, unit in TUNABLE_OPTIONS
+                    },
                 }
             ),
             errors=errors,
