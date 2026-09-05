@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import threading
+from unittest.mock import patch
+
 import pytest
+from OWNd.message import OWNGatewayCommand
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
@@ -243,6 +247,34 @@ async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
             await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
         with pytest.raises(ServiceValidationError):  # cv.string coerces 1 -> "1", which is not a frame
             await hass.services.async_call(DOMAIN, "send_message", {"message": 1}, blocking=True)
+
+
+async def test_sync_time_builds_the_command_off_the_event_loop(hass: HomeAssistant, tmp_path) -> None:
+    """0.3.1 (forks review 5.3, found by sxpert): ``OWNGatewayCommand.set_datetime_to_now``
+    calls ``pytz.timezone()``, which reads the tz database from disk.  Building the
+    command in the event loop is exactly what Home Assistant reports as a blocking
+    call, so it must happen in ``hass.async_add_executor_job``."""
+    entry = make_entry(write_yaml(tmp_path))
+    threads: list[str] = []
+    real = OWNGatewayCommand.set_datetime_to_now
+
+    def spy(time_zone: str):
+        threads.append(threading.current_thread().name)
+        return real(time_zone)
+
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        before = handler.send_buffer.qsize()
+        loop_thread = threading.current_thread().name
+
+        with patch.object(OWNGatewayCommand, "set_datetime_to_now", spy):
+            await hass.services.async_call(DOMAIN, "sync_time", {}, blocking=True)
+
+        # The command was still built and queued...
+        assert handler.send_buffer.qsize() == before + 1
+        # ...but not on the event loop thread.
+        assert threads and loop_thread not in threads
 
 
 async def test_two_gateways_require_explicit_gateway(hass: HomeAssistant, tmp_path) -> None:

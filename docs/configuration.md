@@ -156,10 +156,34 @@ Rules worth knowing:
 | `manufacturer` | string | No | `BTicino S.p.A.` | Cosmetic, shown in the device page. |
 | `model` | string | No | – | Cosmetic, shown in the device page. |
 | `who` | string | No | per platform | OpenWebNet WHO; only needed for sensors/binary sensors that support several. |
-| `interface` | string | No | – | Local bus interface (`"01"`..`"15"`) for devices behind a bus interface (light, switch, cover, sensors). |
+| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface (light, switch, cover, binary sensors). Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
 | `class` / `device_class` | string | No | per platform | Home Assistant device class (see the platform tables). |
 
 Accepted actuator WHERE forms (light, switch, cover): General `"0"`, Area `"00"`, `"1"`..`"10"`, Group `"#1"`..`"#255"`, Point-to-Point 2 digits (`"15"`, A=1 PL=5) or 4 digits (`"0115"`, A=01 PL=15). Sensors, binary sensors and climate accept any string of digits (energy meters are usually `"51"`..`"5N"`, thermo zones `"1"`..`"99"`).
+
+### Local bus interfaces (`interface`)
+
+A device behind an F422 bus interface is addressed on the bus as
+`<where>#4#<interface>` — for example WHERE `11` on interface 3 is `11#4#3`.
+
+- **Accepted forms**: an integer `0`..`15` or a string of 1 or 2 digits
+  (`3`, `"3"`, `"03"`). Anything else is a configuration error.
+- **Stored unpadded**: whatever you write, the value is normalised to the form the
+  bus uses (`"3"`), which is also the form every command the integration sends
+  carries. This changed in **0.3.1**: before it, commands went out zero padded
+  (`11#4#03`) while the bus answers unpadded.
+- **Entity identity is unchanged**: the internal device key, and therefore the
+  `unique_id` of every entity behind a bus interface, keeps the interface zero
+  padded (`1-11#4#03`). Upgrading to 0.3.1 does **not** rename your entities or
+  lose their history.
+- Incoming frames are matched against both spellings, so a gateway that reports
+  `11#4#3` and a configuration written `interface: "03"` resolve to the same
+  entity.
+
+> Devices behind a bus interface received **no state updates at all** before
+> 0.3.1: the `OWNd` version we shipped never extracted the interface from the
+> frame, so their updates were applied to a main-bus device with the same WHERE,
+> if one existed. Fixed by `OWNd` 0.7.49 plus the normalisation above.
 
 ## Light
 

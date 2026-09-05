@@ -36,6 +36,7 @@ from .const import (
     CONF_WHO,
     DOMAIN,
     LOGGER,
+    bus_full_where,
 )
 from .myhome_device import MyHOMEEntity, address_attributes
 
@@ -118,7 +119,9 @@ class MyHOMECommandButton(MyHOMEEntity, ButtonEntity):
 
         self._source_platform = source_platform
         self._interface = interface
-        self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
+        # The interface must go on the bus unpadded (`11#4#3`): that is what the
+        # F422 emits and what OWNd 0.7.49 parses back (0.3.1 / carferrer).
+        self._full_where = bus_full_where(self._where, self._interface)
 
         self._attr_extra_state_attributes = address_attributes(where, self._interface)
         if source_platform is not None:

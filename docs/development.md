@@ -8,7 +8,7 @@ Setting up a development environment, running the test suite, and linting.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install homeassistant pytest pytest-homeassistant-custom-component ruff \
-  "OWNd==0.7.48"
+  "OWNd==0.7.49"
 
 # Run the test suite (pytest.ini sets asyncio_mode = auto, required by the HA
 # test plugin):

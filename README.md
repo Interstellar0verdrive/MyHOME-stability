@@ -13,7 +13,7 @@ Assistant releases** — sessions that detect a dead connection and reconnect on
 their own, commands that are never silently dropped, strict configuration
 validation, and closed deprecations.
 
-- Current release: **0.3.0** — see [CHANGELOG.md](CHANGELOG.md)
+- Current release: **0.3.1** — see [CHANGELOG.md](CHANGELOG.md)
 - Requires **Home Assistant 2026.8.0 or newer**
 - Devices are declared in a YAML file (`myhome.yaml`); the gateway is added from the UI
 
@@ -126,6 +126,13 @@ buttons, multiple gateways, custom icons) and [Recipes](docs/recipes.md) for
 copy-paste automations.
 
 ## What's new / Upgrading
+
+**0.3.1** is a hotfix release. It upgrades the OpenWebNet library to `OWNd` 0.7.49
+and, with it, **fixes devices behind an F422 local bus interface**, which received
+no state updates at all before (their frames were applied to a main-bus device with
+the same WHERE). It also stops the **central heating unit** from de-synchronising
+zone 1, and stops `myhome.sync_time` from blocking the event loop. No configuration
+change is needed and no entity is renamed. See [CHANGELOG.md](CHANGELOG.md).
 
 **0.3.0** adds observability without changing any default behaviour: a
 **Download diagnostics** file on the integration page, diagnostic entities on the

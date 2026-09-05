@@ -1,4 +1,4 @@
-"""Exception-raising wrappers around the OWNd 0.7.48 session classes (Contract B).
+"""Exception-raising wrappers around the OWNd 0.7.49 session classes (Contract B).
 
 OWNd's sessions never raise: ``connect()`` returns ``None`` after five refused
 attempts or ``{"Success": False, ...}`` on a negotiation/password error, and
@@ -93,9 +93,14 @@ def enable_tcp_keepalive(
 def parse_frame(text: str, logger: logging.Logger, log_id: str) -> OWNMessage | str:
     """Parse one raw frame; return the raw text when OWNd cannot parse it.
 
-    ``OWNMessage.parse`` returns ``None`` or the raw string for unknown frames and
-    can even raise (``IndexError`` on a short WHO=13 frame or a CEN+ frame without
-    ``#n`` - verified on OWNd 0.7.48).  None of that is a transport failure.
+    ``OWNMessage.parse`` returns ``None`` for unknown frames and can even raise
+    (``IndexError`` on a short WHO=13 frame or a CEN+ frame without ``#n`` -
+    verified on OWNd 0.7.48 and 0.7.49).  None of that is a transport failure.
+
+    OWNd 0.7.49 changed ``OWNEvent.parse()`` to return ``None`` for an unknown WHO
+    where 0.7.48 returned the raw string; both are non-``OWNMessage`` values, so the
+    raw text still reaches the caller (and from there the frame ring buffer and
+    ``myhome_message_event``) unchanged.
     """
     try:
         parsed = OWNMessage.parse(text)
@@ -110,8 +115,9 @@ class OWNChannel(OWNSession):
 
     def __init__(self, gateway: OWNGateway, connection_type: str, logger: logging.Logger) -> None:
         super().__init__(gateway=gateway, connection_type=connection_type, logger=logger)
-        # OWNSession only *annotates* these; make them real attributes so close()
-        # and the readers can test them.
+        # OWNd 0.7.49 initialises these to None itself (0.7.48 only *annotated*
+        # them); re-assigning keeps us working on both and documents the contract
+        # close() and the readers rely on.
         self._stream_reader: asyncio.StreamReader | None = None
         self._stream_writer: asyncio.StreamWriter | None = None
         self._is_open = False

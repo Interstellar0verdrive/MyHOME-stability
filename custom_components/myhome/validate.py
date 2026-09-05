@@ -6,7 +6,9 @@ Contract A (see ``.audit-2026-09/CONTRACTS.md``): ``config_schema(yaml_dict)`` r
 
 for one or more gateways.  Accepted roots are a ``gateway:`` block and/or MAC-address
 root keys (legacy and multi-gateway styles).  Device keys are ``"{who}-{where}"`` or
-``"{who}-{where}#4#{interface}"`` (climate: ``"{who}-{zone}"``).
+``"{who}-{where}#4#{interface:02d}"`` (climate: ``"{who}-{zone}"``).  The device key
+keeps the interface zero padded because it is also the tail of every ``unique_id``;
+the ``interface`` value itself is stored unpadded, as the bus sends it.
 
 Every device config is post-processed so that the platform modules can index the keys
 listed in Contract A directly (``name``, ``entity_name``, ``icon``, ``icon_on``,
@@ -99,6 +101,7 @@ from .const import (
     DEFAULT_KEEPALIVE_MINUTES,
     DEFAULT_MANUFACTURER,
     DEFAULT_SHUTTER_RUN,
+    normalise_bus_interface,
 )
 
 # --------------------------------------------------------------------------------------
@@ -354,7 +357,12 @@ class SpecialWhere:
 
 
 class BusInterface:
-    """Local bus interface number ``00``..``15`` (int 0-15 accepted and zero padded)."""
+    """Local bus interface number ``0``..``15``.
+
+    Accepted as an int or as a 1-2 digit string (``3``, ``"3"``, ``"03"``); always
+    stored unpadded (``"3"``) so that ``{where}#4#{interface}`` matches the frames
+    the bus emits and OWNd 0.7.49 parses.
+    """
 
     def __init__(self, msg: str | None = None) -> None:
         self.msg = msg
@@ -362,13 +370,12 @@ class BusInterface:
     def __call__(self, v: object) -> str | None:
         if v is None:
             return None
-        if isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 15:
-            return f"{v:02d}"
-        if isinstance(v, str) and v.isdigit() and len(v) == 2:
-            if int(v) > 15:
-                raise Invalid(self.msg or f"Invalid Bus Interface number {v}, it must be between 00 and 15.")
-            return v
-        raise Invalid(self.msg or f"Invalid Bus Interface number {v!r}, it must be a string of 2 digits (00-15).")
+        normalised = normalise_bus_interface(v)
+        if normalised is None:
+            raise Invalid(
+                self.msg or f"Invalid Bus Interface number {v!r}, it must be 1 or 2 digits between 0 and 15."
+            )
+        return normalised
 
     def __repr__(self) -> str:
         return f"BusInterface(msg={self.msg!r})"
@@ -757,16 +764,24 @@ _GATEWAY_KNOWN_KEYS = {CONF_MAC, *DEVICE_PLATFORMS, CONF_ENERGY_DEFAULTS, CONF_S
 def device_key(device: Mapping) -> str:
     """Key of a validated device inside ``hass.data[DOMAIN][mac][CONF_PLATFORMS][platform]``.
 
-    ``"{who}-{where}"``, ``"{who}-{where}#4#{interface}"`` for devices behind a bus
+    ``"{who}-{where}"``, ``"{who}-{where}#4#{interface:02d}"`` for devices behind a bus
     interface, ``"{who}-{zone}"`` for climate (the central form ``#0#N`` keys as ``N``).
+
+    The bus interface is kept **zero padded here and only here**: this key is also the
+    device's registry identifier and the tail of every entity ``unique_id``
+    (``{mac}-{device_key}``), so unpadding it would rename every entity of every user
+    who has an F422 local bus.  The value stored in the device config (and therefore
+    every ``_full_where`` the platforms build) is the unpadded bus form; the gateway
+    dispatcher normalises incoming keys, so ``1-11#4#3`` frames resolve to the
+    ``1-11#4#03`` config entry (see ``gateway._entity_key_candidates``).
     """
     who = device[CONF_WHO]
     if CONF_ZONE in device and CONF_WHERE not in device:
         zone = device[CONF_ZONE]
         return f"{who}-{zone[3:] if zone.startswith('#0#') else zone}"
     where = device[CONF_WHERE]
-    interface = device.get(CONF_BUS_INTERFACE)
-    return f"{who}-{where}#4#{interface}" if interface else f"{who}-{where}"
+    interface = normalise_bus_interface(device.get(CONF_BUS_INTERFACE))
+    return f"{who}-{where}#4#{int(interface):02d}" if interface is not None else f"{who}-{where}"
 
 
 def _resolve_filter_block(block: Mapping) -> dict:

@@ -3,6 +3,46 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-09-05
+
+Hotfix release. Four bugs, no new features, no configuration change required. No
+`entity_id`, `unique_id` or event contract is touched — entities behind an F422 bus
+interface keep the exact ids they had in 0.3.0.
+
+### Fixed
+
+- **Devices behind an F422 local bus interface never received state updates.** The
+  `OWNd` version we shipped (0.7.48) compared an integer WHO against a list of
+  strings in `OWNMessage.interface`, so the property always returned `None` and the
+  `#4#<interface>` part never reached the entity address: a frame such as
+  `*1*1*11#4#3##` was reported as plain `1-11` and applied to the main-bus device
+  with the same WHERE, if one existed. The dependency is now pinned to
+  **`OWNd==0.7.49`**, which fixes this upstream (it also stops a `TypeError` on
+  thermostat local-offset values 6/7/8 and makes session shutdown robust against a
+  connection that was never opened). *Upstream `OWNd` fix; independently found by
+  GreenGrassBlueOcean and pinned by Dav41K9 and rdr-66.*
+- **Bus interface numbers were zero padded on the wire.** Every command the
+  integration sent carried `11#4#03` while the bus writes `11#4#3`, so the address in
+  our commands did not match the address in the gateway's replies — a mismatch that
+  became visible the moment the `OWNd` fix above started reporting interfaces at all.
+  `interface` is now accepted as an integer or as a 1- or 2-digit string (`3`, `"3"`,
+  `"03"`) and always normalised to the unpadded bus form. **Entity ids are
+  preserved:** the internal device key, and with it every `unique_id`, keeps the
+  padded spelling (`1-11#4#03`), and incoming frames are matched against both
+  spellings. See
+  [Configuration → Local bus interfaces](docs/configuration.md#local-bus-interfaces-interface).
+  *Problem identified by carferrer.*
+- **The central heating unit de-synchronised zone 1.** `OWNd` rewrites a heating
+  `zone 0` frame to the zone in the first WHERE parameter, so `*#4*0#1*20*1##` — the
+  central unit's actuator — was reported as entity `4-1` and drove zone 1's climate
+  entity with the central unit's state. Such frames are now routed to the
+  central-unit entity (`4-#0`). *Fix contributed by Jacopo Jannone, via michnovka's
+  fork.*
+- **`myhome.sync_time` blocked the event loop.** Building the command calls
+  `pytz.timezone()`, which reads the timezone database from disk; it now runs in an
+  executor, so Home Assistant no longer logs a blocking-call warning when the service
+  is called. *Found by sxpert.*
+
 ## [0.3.0] - 2026-09-05
 
 Robustness and observability. Everything in this release is **additive**: with the

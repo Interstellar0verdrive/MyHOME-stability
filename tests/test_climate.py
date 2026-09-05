@@ -259,6 +259,66 @@ async def test_hvac_action_is_derived_from_mode(hass: HomeAssistant, tmp_path) -
         )
 
 
+# --------------------------------------------------- central heating unit (0.3.1 / 5.4)
+CENTRAL_ZONE_YAML = f"""
+gateway:
+  mac: {MAC}
+  climate:
+    zona_uno:
+      zone: '1'
+      name: Zona Uno
+      heat: true
+    centrale:
+      zone: '#0'
+      name: Centrale
+      heat: true
+      central: true
+"""
+
+
+def _record(entity, sink: list[str]) -> None:
+    """Wrap ``handle_event`` so the test sees exactly what the dispatcher delivered."""
+    original = entity.handle_event
+
+    def spy(message) -> None:
+        sink.append(str(message))
+        original(message)
+
+    entity.handle_event = spy
+
+
+async def test_central_unit_frame_is_not_applied_to_zone_1(hass: HomeAssistant, tmp_path) -> None:
+    """0.3.1 (forks review 5.4, Jacopo Jannone via michnovka): OWNd rewrites a heating
+    ``zone 0`` to the zone in the first WHERE parameter, so ``*#4*0#1*20*1##`` - the
+    central unit's actuator 1 - reported entity ``4-1`` and drove zone 1's climate
+    entity with the central unit's state.  OWNd is pinned: the guard is in our
+    dispatcher and never touches its private ``_zone``."""
+    entry = make_entry(write_yaml(tmp_path, CENTRAL_ZONE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+
+        # OWNd itself still mis-reports the entity: we are guarding, not patching.
+        assert OWNHeatingEvent("*#4*0#1*20*1##").entity == "4-1"
+
+        zone_seen: list[str] = []
+        central_seen: list[str] = []
+        _record(_entity(hass, "4-1"), zone_seen)
+        _record(_entity(hass, "4-#0"), central_seen)
+
+        await handler._dispatch_message(OWNHeatingEvent("*#4*0#1*20*1##"), from_monitor=True)  # noqa: SLF001
+        await hass.async_block_till_done()
+        assert central_seen == ["*#4*0#1*20*1##"]
+        assert zone_seen == []
+
+        # A genuine zone-1 frame is untouched.
+        await handler._dispatch_message(OWNHeatingEvent("*#4*1*0*0215##"), from_monitor=True)  # noqa: SLF001
+        await hass.async_block_till_done()
+        assert zone_seen == ["*#4*1*0*0215##"]
+        assert len(central_seen) == 1
+        assert hass.states.get("climate.zona_uno").attributes["current_temperature"] == 21.5
+
+
 async def test_no_platform_unload_entry(hass: HomeAssistant, tmp_path) -> None:
     """sc-13: the dead platform-level async_unload_entry is gone."""
     import custom_components.myhome.climate as climate_module

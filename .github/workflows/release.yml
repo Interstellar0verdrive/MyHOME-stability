@@ -97,7 +97,7 @@ jobs:
 
             📋 **Requirements**: Home Assistant 2026.8.0+
 
-            🔧 **Dependencies**: OWNd==0.7.48
+            🔧 **Dependencies**: OWNd==0.7.49
           files: |
             myhome.zip
           prerelease: ${{ github.event.inputs.prerelease }}
