@@ -150,7 +150,7 @@ def _create_empty_config_file(path: str) -> None:
     with open(path, "x", encoding="utf-8") as handle:
         handle.write(
             "# MyHOME configuration\n"
-            "# See https://github.com/Interstellar0verdrive/MyHOME-stability-next for the format.\n"
+            "# See https://github.com/Interstellar0verdrive/MyHOME-stability for the format.\n"
             "# gateway:\n"
             "#   mac: 00:03:50:00:00:00\n"
             "#   light:\n"

@@ -70,7 +70,7 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
 This repository is not in the default HACS store: add it as a custom repository.
 
 1. In HACS open the menu (⋮) → **Custom repositories**
-2. Repository: `https://github.com/Interstellar0verdrive/MyHOME-stability-next`, type **Integration**, then **Add**
+2. Repository: `https://github.com/Interstellar0verdrive/MyHOME-stability`, type **Integration**, then **Add**
 3. Search for **MyHome** in HACS, open it and **Download**
 4. Restart Home Assistant
 5. Add the gateway from **Settings → Devices & services → Add integration → MyHOME**
@@ -78,7 +78,7 @@ This repository is not in the default HACS store: add it as a custom repository.
 
 #### Manual installation
 
-1. Download `myhome.zip` from the [latest release](https://github.com/Interstellar0verdrive/MyHOME-stability-next/releases/latest)
+1. Download `myhome.zip` from the [latest release](https://github.com/Interstellar0verdrive/MyHOME-stability/releases/latest)
 2. Extract it to `custom_components/myhome/` in your Home Assistant configuration directory
 3. Restart Home Assistant and add the gateway from **Settings → Devices & services**
 
@@ -218,7 +218,7 @@ The [`docs/`](docs/README.md) folder goes deeper than this README:
 ## Support & contributing
 
 - **Documentation**: the [docs/](docs/README.md) folder in this repository (kept in sync with the code and versioned with each release)
-- **Bug reports and feature requests**: [GitHub Issues](https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues) — please attach the diagnostics file (see [Troubleshooting](docs/troubleshooting.md)) and say which gateway model you have
+- **Bug reports and feature requests**: [GitHub Issues](https://github.com/Interstellar0verdrive/MyHOME-stability/issues) — please attach the diagnostics file (see [Troubleshooting](docs/troubleshooting.md)) and say which gateway model you have
 - **General MyHOME discussion**: the long-running [Legrand/BTicino MyHOME thread](https://community.home-assistant.io/t/legrand-bticino-myhome/229337) on the Home Assistant community forum, started for the original integration
 
 Contributions are welcome! Please fork the repository, create a feature branch,

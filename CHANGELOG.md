@@ -58,7 +58,7 @@ entity_id, unique_id or event contract is touched.
 ## [0.2.0] - 2026-09-05
 
 A stability-focused rewrite of the gateway session handling, the YAML validator and
-every platform. See the [v0.2.0 release notes](https://github.com/Interstellar0verdrive/MyHOME-stability-next/releases/tag/v0.2.0)
+every platform. See the [v0.2.0 release notes](https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.2.0)
 for the upgrade story in plain language.
 
 ### Breaking changes

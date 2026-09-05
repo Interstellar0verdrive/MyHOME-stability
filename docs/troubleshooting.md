@@ -108,7 +108,7 @@ For a bug report, attach a diagnostics file rather than a screenshot of the log:
    the device page and use its own **⋮ → Download diagnostics** — it adds that
    device's validated configuration).
 3. Attach the JSON file to the
-   [issue](https://github.com/Interstellar0verdrive/MyHOME-stability-next/issues).
+   [issue](https://github.com/Interstellar0verdrive/MyHOME-stability/issues).
 
 What is inside:
 
