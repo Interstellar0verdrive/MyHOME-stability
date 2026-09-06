@@ -402,8 +402,10 @@ automation:
 ```
 
 Variations that work well: count the frames instead of acting on the first one, so
-the room only reacts after a longer hold (six frames ≈ 3 s); or map a button to a
-scene instead of a group. The LEDs on every keypad follow the actuators, so whatever
+the room only reacts after a longer hold (six frames ≈ 3 s) — in that case anchor
+the `pressed_was_on` check to the time of the first frame of the hold, not to `now()`,
+or the light the hold switched on will look like it "was already on"; or map a
+button to a scene instead of a group. The LEDs on every keypad follow the actuators, so whatever
 Home Assistant switches on the bus is reflected on the wall without extra work.
 
 ## Raw OpenWebNet commands
