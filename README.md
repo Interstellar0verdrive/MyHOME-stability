@@ -127,25 +127,36 @@ copy-paste automations.
 
 ## What's new / Upgrading
 
-**0.4.0** also makes **CEN / CEN+ scenario controls first-class**. Declare a keypad
-under the new `scenario_control:` block and it becomes a device with an event entity
-(the last press is finally visible in the state machine and in history) and with
-**device triggers**, so "Button 2 held down on Living Room Keypad" is a dropdown in
-the automation editor rather than a hand-written event trigger. Two blueprints ship
-with the repository. Undeclared controls keep firing `myhome_cenplus_event` /
+**0.4.0** (7 September 2026) is the current release. It brings three additions, all
+opt-in or additive, with no renamed entity and no configuration change required:
+
+**A two-phase travel model for basic covers.** On most roller shutters the first
+seconds of a run only open the slats ("lamelle") and the last seconds only close
+them, which is why a plain time-based position reports "5 %" with the curtain still
+on the floor. Set `slat_time` (plus `opening_time` / `closing_time` when the motor is
+slower one way) and the position describes the curtain while the new tilt controls
+describe the slats — so "closed with the slats open" is one service call. Without
+the key, covers behave exactly as in 0.3.x. See
+[Configuration → Cover](docs/configuration.md#cover).
+
+**CEN / CEN+ scenario controls as first-class devices.** Declare a keypad under the
+new `scenario_control:` block and it becomes a device with an event entity (the last
+press is finally visible in the state machine and in history) and with **device
+triggers**, so "Button 2 held down on Living Room Keypad" is a dropdown in the
+automation editor rather than a hand-written event trigger. Two blueprints ship with
+the repository. Undeclared controls keep firing `myhome_cenplus_event` /
 `myhome_cen_event` and nothing else; those events gained a `mac` key (additive) so
 multi-gateway plants can tell identical object numbers apart. See
 [Configuration → Scenario control](docs/configuration.md#scenario-control-cen--cen).
 
-**0.4.0** adds a **two-phase travel model for basic covers**. On most roller shutters
-the first seconds of a run only open the slats ("lamelle") and the last seconds only
-close them, which is why a plain time-based position reports "5 %" with the curtain
-still on the floor. Set `slat_time` (plus `opening_time` / `closing_time` when the
-motor is slower one way) and the position describes the curtain while the new tilt
-controls describe the slats — so "closed with the slats open" is one service call.
-The key is opt-in: without it, covers behave exactly as in 0.3.x. See
-[Configuration → Cover](docs/configuration.md#cover) and
-[CHANGELOG.md](CHANGELOG.md).
+**Wall pushbuttons in dimmer mode become a second gesture.** A BTicino light
+pushbutton set to dimmer mode keeps sending "one step up/down" frames while held.
+Behind a dimmer nothing changes (the light entity already follows). Behind a relay
+those frames used to be dropped; they are now republished as
+`myhome_light_pushbutton_event`, so a hold on any plain wall button can drive a
+Zigbee bulb, a whole room, a scene. See
+[Recipes → Wall pushbuttons in dimmer mode](docs/recipes.md#wall-pushbuttons-in-dimmer-mode)
+and [CHANGELOG.md](CHANGELOG.md).
 
 **0.3.1** is a hotfix release. It upgrades the OpenWebNet library to `OWNd` 0.7.49
 and, with it, **fixes devices behind an F422 local bus interface**, which received

@@ -3,13 +3,14 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.4.0] - unreleased
+## [0.4.0] - 2026-09-07
 
-Two features: a two-phase travel model for covers, and CEN/CEN+ scenario controls as
-Home Assistant devices with UI-selectable triggers. Nothing is renamed and no
-`entity_id` or `unique_id` changes; the one event-contract change is additive (a new
-`mac` key on the CEN/CEN+ bus events). A `myhome.yaml` written for 0.3.x keeps behaving
-exactly as it did: both features are opt-in through new keys.
+Three additions: a two-phase travel model for covers, CEN/CEN+ scenario controls as
+Home Assistant devices with UI-selectable triggers, and a bus event for wall
+pushbuttons in dimmer mode. Nothing is renamed and no `entity_id` or `unique_id`
+changes; the event-contract changes are additive (a new `mac` key on the CEN/CEN+ bus
+events, one new event). A `myhome.yaml` written for 0.3.x keeps behaving exactly as it
+did: the cover model and the scenario controls are opt-in through new keys.
 
 ### Fixed
 

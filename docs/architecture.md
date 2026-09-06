@@ -4,7 +4,7 @@ How the integration works inside. This page is for contributors, and for anyone
 who wants to check the claims in the README against the code rather than take
 them on trust.
 
-Everything below is from `custom_components/myhome/*.py` at version 0.3.1 and
+Everything below is from `custom_components/myhome/*.py` at version 0.4.0 and
 `OWNd` 0.7.49.
 
 ## Module map
