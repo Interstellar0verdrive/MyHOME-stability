@@ -250,14 +250,38 @@ to pick.
 
 ## Wall pushbuttons in dimmer mode
 
-A BTicino light pushbutton set to dimmer mode by the installer keeps sending "one step
-up" / "one step down" frames while held (WHAT 30/31, about two per second). Wired to
-a relay those frames do nothing, but the integration republishes them as
-[`myhome_light_pushbutton_event`](services-and-events.md#wall-pushbutton-events-myhome_light_pushbutton_event),
-so the hold can drive a dimmable light that lives elsewhere, a Zigbee bulb for
-instance. The short press still gives `on`/`off`, which the `light` entity for that
-WHERE already follows: keep it in sync with the other bulb through two state
-automations, and add the hold on top.
+A BTicino light pushbutton can be configured (installer app) in **dimmer mode**: a
+short press still sends on/off, but while it is held it keeps sending "one step up" /
+"one step down" frames (WHAT 30/31, about two per second), alternating the direction
+at every hold. Two very different situations follow from that.
+
+### A real dimmer: nothing to do
+
+If the actuator behind the button is a dimmer (`dimmable: true` in `myhome.yaml`),
+the hold dims the light on the bus and the actuator broadcasts its level: the
+`light` entity follows on its own, brightness included. Home Assistant and the
+BTicino side stay in sync without any automation, exactly as for on/off.
+
+### A relay behind a dimmer-mode button: the hold becomes a free gesture
+
+If the actuator is a relay, the "step" frames do nothing physically, but the
+integration republishes them as
+[`myhome_light_pushbutton_event`](services-and-events.md#wall-pushbutton-events-myhome_light_pushbutton_event)
+(`where`, `event: dim_up` / `dim_down`). A plain wall button gets a second gesture
+that Home Assistant can attach to anything. Two things to know first:
+
+- the hold **always turns the button's own light on** (the pushbutton sends "on"
+  before the first step; the relay obeys). Automations should treat that as a given;
+- the button, not the light, decides the up/down direction, and it alternates at
+  every hold. Unless you drive a real dimmer, ignore `dim_up` vs `dim_down` and
+  decide in the automation.
+
+#### Example 1: hold to dim a Zigbee bulb
+
+A bedside pushbutton whose WHERE has no useful relay drives a Zigbee bulb: short
+press on/off is kept in sync by two state automations (see the CEN+ recipes for the
+shape), the hold dims. Each frame moves the bulb by 10 %, so a three-second hold
+spans most of the range.
 
 ```yaml
 automation:
@@ -289,8 +313,98 @@ automation:
           brightness_step_pct: "{{ 10 if trigger.id == 'up' else -10 }}"
 ```
 
-Each frame moves the bulb by 10 %, so a three-second hold spans most of the range.
-Two-gateway homes add `mac: "..."` to `event_data`.
+#### Example 2: hold on any light = the whole room
+
+With every wall button in dimmer mode, each light gets a "room" gesture: hold the
+button and the room toggles (anything on → all off, all off → all on). One
+automation with a `WHERE → group` table covers the house. The frames keep coming
+every 0.5 s while the button is held, so the automation acts once per hold: it
+remembers the last frame (timestamp + WHERE) and only reacts to the first frame of a
+new hold. Because the hold has already switched the pressed light on, that light is
+left out of the "anything on?" check unless it was on before the hold.
+
+```yaml
+input_number:
+  hold_last_frame:
+    min: 0
+    max: 4102444800
+    step: 0.001
+    mode: box
+input_text:
+  hold_last_where:
+    max: 10
+
+automation:
+  - alias: "Hold on a wall button toggles its room"
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: event
+        event_type: myhome_light_pushbutton_event
+        event_data:
+          event: dim_up
+      - trigger: event
+        event_type: myhome_light_pushbutton_event
+        event_data:
+          event: dim_down
+    variables:
+      where: "{{ trigger.event.data.where }}"
+      # WHERE -> [pressed light, light group to command, group to read the room state]
+      rooms:
+        "11": [light.hall, light.living_room, group.living_room]
+        "12": [light.sofa, light.living_room, group.living_room]
+        "13": [light.kitchen_ceiling, light.kitchen, group.kitchen]
+        "41": [light.kitchen_strip, light.kitchen, group.kitchen]
+    conditions:
+      # HA turns "11" into a number when rendering: compare as a string
+      - condition: template
+        value_template: "{{ (where | string) in rooms }}"
+    actions:
+      - variables:
+          light: "{{ rooms[where | string][0] }}"
+          room: "{{ rooms[where | string][1] }}"
+          room_state: "{{ rooms[where | string][2] }}"
+          now_ts: "{{ as_timestamp(now()) }}"
+          new_hold: >-
+            {{ (now_ts - states('input_number.hold_last_frame') | float(0)) > 1.0
+               or states('input_text.hold_last_where') != (where | string) }}
+          others_on: >-
+            {{ expand(room_state) | rejectattr('entity_id', 'eq', light)
+               | selectattr('state', 'eq', 'on') | list | count > 0 }}
+          pressed_was_on: >-
+            {{ is_state(light, 'on')
+               and (now_ts - as_timestamp(states[light].last_changed, 0)) >= 1.5 }}
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.hold_last_frame
+        data:
+          value: "{{ now_ts }}"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.hold_last_where
+        data:
+          value: "{{ where }}"
+      - if:
+          - condition: template
+            value_template: "{{ new_hold }}"
+        then:
+          - if:
+              - condition: template
+                value_template: "{{ others_on or pressed_was_on }}"
+            then:
+              - action: light.turn_off
+                target:
+                  entity_id: "{{ room }}"
+            else:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ room }}"
+```
+
+Variations that work well: count the frames instead of acting on the first one, so
+the room only reacts after a longer hold (six frames ≈ 3 s); or map a button to a
+scene instead of a group. The LEDs on every keypad follow the actuators, so whatever
+Home Assistant switches on the bus is reflected on the wall without extra work.
 
 ## Raw OpenWebNet commands
 
