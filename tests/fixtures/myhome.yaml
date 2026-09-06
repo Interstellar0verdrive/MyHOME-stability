@@ -1,0 +1,197 @@
+# Test fixture: a fictional home used by the test-suite.
+# Names, addresses and timings are invented; the layout (20 relay lights, 12 shutters
+# on two A lines, three F520 power channels) mirrors a typical MyHOMEServer1 install.
+gateway:
+  mac: 00:03:50:aa:bb:cc
+  sensor_defaults:
+    min_delta_w: 5
+    min_interval_sec: 5
+    suppress_log_interval_sec: 60
+  light:
+    hall_ceiling:
+      where: '11'
+      name: Hall Ceiling
+      dimmable: false
+      icon: mdi:ceiling-light
+    kitchen_strip:
+      where: '41'
+      name: Kitchen Strip
+      dimmable: false
+      icon: mdi:ceiling-light
+    kitchen_ceiling:
+      where: '13'
+      name: Kitchen Ceiling
+      dimmable: false
+      icon: mdi:ceiling-light
+    dining_table:
+      where: '21'
+      name: Dining Table
+      dimmable: false
+      icon: mdi:ceiling-light
+    living_niche:
+      where: '14'
+      name: Living Niche
+      dimmable: false
+      icon: mdi:ceiling-light
+    living_sofa:
+      where: '12'
+      name: Living Sofa
+      dimmable: false
+      icon: mdi:ceiling-light
+    hallway_ceiling:
+      where: '24'
+      name: Hallway Ceiling
+      dimmable: false
+      icon: mdi:ceiling-light
+    hallway_lamp:
+      where: '18'
+      name: Hallway Lamp
+      dimmable: false
+      icon: mdi:ceiling-light
+    bedroom_left:
+      where: '33'
+      name: Bedroom Left
+      dimmable: false
+      icon: mdi:ceiling-light
+    bedroom_right:
+      where: '38'
+      name: Bedroom Right
+      dimmable: false
+      icon: mdi:ceiling-light
+    bedroom_wardrobe:
+      where: '26'
+      name: Bedroom Wardrobe
+      dimmable: false
+      icon: mdi:ceiling-light
+    kids_room_wall:
+      where: '25'
+      name: Kids Room Wall
+      dimmable: false
+      icon: mdi:ceiling-light
+    kids_room_bedside_virtual:
+      where: '42'
+      name: Kids Room Bedside Virtual
+      dimmable: false
+      icon: mdi:ceiling-light
+    bathroom_ceiling:
+      where: '28'
+      name: Bathroom Ceiling
+      dimmable: false
+      icon: mdi:ceiling-light
+    bathroom_mirror:
+      where: '27'
+      name: Bathroom Mirror
+      dimmable: false
+      icon: mdi:ceiling-light
+    guest_bathroom_ceiling:
+      where: '22'
+      name: Guest Bathroom Ceiling
+      dimmable: false
+      icon: mdi:ceiling-light
+    guest_bathroom_wall:
+      where: '17'
+      name: Guest Bathroom Wall
+      dimmable: false
+      icon: mdi:ceiling-light
+    guest_bathroom_mirror:
+      where: '23'
+      name: Guest Bathroom Mirror
+      dimmable: false
+      icon: mdi:ceiling-light
+    terrace_front:
+      where: '15'
+      name: Terrace Front
+      dimmable: false
+      icon: mdi:ceiling-light
+    terrace_back:
+      where: '16'
+      name: Terrace Back
+      dimmable: false
+      icon: mdi:ceiling-light
+  cover:
+    kitchen_shutter_1:
+      where: '91'
+      name: Kitchen Shutter 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    kitchen_shutter_2:
+      where: '94'
+      name: Kitchen Shutter 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    living_shutter_1:
+      where: '92'
+      name: Living Shutter 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    living_shutter_2:
+      where: '83'
+      name: Living Shutter 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    bedroom_shutter_1:
+      where: '96'
+      name: Bedroom Shutter 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    bedroom_shutter_2:
+      where: '95'
+      name: Bedroom Shutter 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    bedroom_shutter_3:
+      where: '82'
+      name: Bedroom Shutter 3
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    kids_room_shutter_1:
+      where: '86'
+      name: Kids Room Shutter 1
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    kids_room_shutter_2:
+      where: '81'
+      name: Kids Room Shutter 2
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    kids_room_shutter_3:
+      where: '93'
+      name: Kids Room Shutter 3
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    bathroom_shutter:
+      where: '84'
+      name: Bathroom Shutter
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+    guest_bathroom_shutter:
+      where: '85'
+      name: Guest Bathroom Shutter
+      device_class: shutter
+      icon: mdi:window-shutter
+      shutter_run: 30
+  sensor:
+    mains_power:
+      where: '51'
+      name: Mains Power
+      device_class: power
+    fridge:
+      where: '52'
+      name: Fridge
+      device_class: power
+    oven:
+      where: '53'
+      name: Oven
+      device_class: power
+      min_delta_w: 1
