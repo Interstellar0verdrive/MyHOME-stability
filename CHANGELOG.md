@@ -49,14 +49,7 @@ did: the cover model and the scenario controls are opt-in through new keys.
   combinations the picker offers, never what reaches the bus. Controls that are *not*
   declared keep firing the bus events and create nothing, exactly as in 0.3.x.
 
-  *The device-trigger module is ported from
-  [fedem95/MyHOME](https://github.com/fedem95/MyHOME) by fedem95
-  (AGPL-3.0) — the base-schema extension, the type/subtype
-  split and the delegation to Home Assistant's own event trigger are theirs; the
-  concept was also explored by [mantovanellimatteo/MyHOME](https://github.com/mantovanellimatteo/MyHOME).
-  The event-entity model is ported from [adrael/MyHOME](https://github.com/adrael/MyHOME)
-  by raphael (AGPL-3.0), whose `event.py` implements the same
-  shape for a doorbell.*
+  *The device-trigger module is ported from [fedem95/MyHOME](https://github.com/fedem95/MyHOME) by fedem95 (AGPL-3.0): the base-schema extension, the type/subtype split and the delegation to Home Assistant's own event trigger are theirs; the concept was also explored by [mantovanellimatteo/MyHOME](https://github.com/mantovanellimatteo/MyHOME). The event-entity model is ported from [adrael/MyHOME](https://github.com/adrael/MyHOME) by raphael (AGPL-3.0), whose `event.py` implements the same shape for a doorbell.*
 
   See [Configuration → Scenario control](docs/configuration.md#scenario-control-cen--cen)
   and [Recipes → Device triggers and blueprints](docs/recipes.md#device-triggers-and-blueprints).
