@@ -315,16 +315,33 @@ automation:
 
 #### Example 2: hold on any light = the whole room
 
-With every wall button in dimmer mode, each light gets a "room" gesture: hold the
-button and the room toggles (anything on → all off, all off → all on). One
-automation with a `WHERE → group` table covers the house. The frames keep coming
-every 0.5 s while the button is held, so the automation acts once per hold: it
-remembers the last frame (timestamp + WHERE) and only reacts to the first frame of a
-new hold. Because the hold has already switched the pressed light on, that light is
-left out of the "anything on?" check unless it was on before the hold.
+With every wall button in dimmer mode, each light gets a "room" gesture. The rule
+that turned out to be the least surprising in daily use is a two-stage hold:
+
+- room **completely on** → the hold switches it all off;
+- **anything off** → the hold switches it all on; keep holding and it all goes off.
+
+The pressed light counts as it is at decision time, i.e. on (the hold itself
+switched it on), so if it was the only light off the room is "complete" and the hold
+switches everything off: to switch on just that light, a short press is enough.
+
+The frames keep coming every 0.5 s while the button is held, so the automation
+counts the frames of one hold (same WHERE, frames less than 1 s apart) and acts only
+at the threshold frame (five frames ≈ 2.5 s) and, for the second stage, at twice
+that. One automation with a `WHERE → group` table covers the house.
 
 ```yaml
 input_number:
+  hold_seconds:
+    min: 0.5
+    max: 6
+    step: 0.5
+    initial: 2.5
+  hold_frames:
+    min: 0
+    max: 1000
+    step: 1
+    mode: box
   hold_last_frame:
     min: 0
     max: 4102444800
@@ -333,9 +350,11 @@ input_number:
 input_text:
   hold_last_where:
     max: 10
+  hold_stage:
+    max: 10
 
 automation:
-  - alias: "Hold on a wall button toggles its room"
+  - alias: "Hold on a wall button drives its room"
     mode: queued
     max: 10
     triggers:
@@ -368,12 +387,12 @@ automation:
           new_hold: >-
             {{ (now_ts - states('input_number.hold_last_frame') | float(0)) > 1.0
                or states('input_text.hold_last_where') != (where | string) }}
-          others_on: >-
+          others_all_on: >-
             {{ expand(room_state) | rejectattr('entity_id', 'eq', light)
-               | selectattr('state', 'eq', 'on') | list | count > 0 }}
-          pressed_was_on: >-
-            {{ is_state(light, 'on')
-               and (now_ts - as_timestamp(states[light].last_changed, 0)) >= 1.5 }}
+               | rejectattr('state', 'eq', 'on') | list | count == 0 }}
+          count: "{{ 1 if new_hold else (states('input_number.hold_frames') | int(0)) + 1 }}"
+          threshold: "{{ [((states('input_number.hold_seconds') | float(2.5)) / 0.5) | round(0) | int, 1] | max }}"
+          stage: "{{ '' if new_hold else states('input_text.hold_stage') }}"
       - action: input_number.set_value
         target:
           entity_id: input_number.hold_last_frame
@@ -384,29 +403,59 @@ automation:
           entity_id: input_text.hold_last_where
         data:
           value: "{{ where }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.hold_frames
+        data:
+          value: "{{ count }}"
       - if:
           - condition: template
             value_template: "{{ new_hold }}"
         then:
-          - if:
-              - condition: template
-                value_template: "{{ others_on or pressed_was_on }}"
-            then:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.hold_stage
+            data:
+              value: ""
+      - choose:
+          - conditions: "{{ count == threshold }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: "{{ others_all_on }}"
+                then:
+                  - action: light.turn_off
+                    target:
+                      entity_id: "{{ room }}"
+                  - action: input_text.set_value
+                    target:
+                      entity_id: input_text.hold_stage
+                    data:
+                      value: "off"
+                else:
+                  - action: light.turn_on
+                    target:
+                      entity_id: "{{ room }}"
+                  - action: input_text.set_value
+                    target:
+                      entity_id: input_text.hold_stage
+                    data:
+                      value: "on"
+          - conditions: "{{ count == threshold * 2 and stage == 'on' }}"
+            sequence:
               - action: light.turn_off
                 target:
                   entity_id: "{{ room }}"
-            else:
-              - action: light.turn_on
+              - action: input_text.set_value
                 target:
-                  entity_id: "{{ room }}"
+                  entity_id: input_text.hold_stage
+                data:
+                  value: "off"
 ```
 
-Variations that work well: count the frames instead of acting on the first one, so
-the room only reacts after a longer hold (six frames ≈ 3 s) — in that case anchor
-the `pressed_was_on` check to the time of the first frame of the hold, not to `now()`,
-or the light the hold switched on will look like it "was already on"; or map a
-button to a scene instead of a group. The LEDs on every keypad follow the actuators, so whatever
-Home Assistant switches on the bus is reflected on the wall without extra work.
+Map a button to a scene instead of a group if you prefer. The LEDs on every keypad
+follow the actuators, so whatever Home Assistant switches on the bus is reflected on
+the wall without extra work.
 
 ## Raw OpenWebNet commands
 
