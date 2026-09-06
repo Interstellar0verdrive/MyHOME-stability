@@ -20,13 +20,13 @@ validation, and closed deprecations.
 ## Contents
 
 - [About this project](#about-this-project)
+- [Features](#features)
+- [Supported devices](#supported-devices)
 - [Quick start](#quick-start)
   - [Installation](#installation)
   - [Gateway setup](#gateway-setup)
   - [Device configuration (`myhome.yaml`)](#device-configuration-myhomeyaml)
 - [What's new / Upgrading](#whats-new--upgrading)
-- [Features](#features)
-- [Supported devices](#supported-devices)
 - [Documentation](#documentation)
 - [Support & contributing](#support--contributing)
 - [Acknowledgments](#acknowledgments)
@@ -60,6 +60,48 @@ If you know this domain and you are skeptical of AI-assisted code, you are right
 to be, and you are welcome to read the code, the tests and the
 [CHANGELOG](CHANGELOG.md): every change is documented with the reason behind it.
 Bug reports and pull requests are welcome; I will answer on a best-effort basis.
+
+## Features
+
+- **Lights**: ON/OFF and dimmable actuators, area/group/general addresses, bus interfaces
+- **Covers**: shutters and blinds with a time-based position estimate (`shutter_run`),
+  a two-phase slats/curtain model with tilt control (`slat_time`, `opening_time`,
+  `closing_time`), `set_cover_position`, `inverted` wiring, and real positions on
+  advanced actuators
+- **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
+- **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
+- **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy
+  (when the gateway answers), temperature and illuminance
+- **Binary sensors**: dry contacts, alarm zones, motion sensors (with timeout)
+- **Buttons** (opt-in): Lock/Unlock of a single actuator (`lock_buttons: true`)
+- **Scenario controls** (CEN / CEN+): declared keypads become devices with an event
+  entity and UI-selectable **device triggers** (`scenario_control:`), plus two
+  automation blueprints
+- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`, `myhome_cen_event`),
+  wall pushbuttons in dimmer mode held down (`myhome_light_pushbutton_event`, which
+  turns any relay's pushbutton into a second gesture) and raw bus frames
+  (`myhome_message_event`) for automations
+- **Services**: send raw OpenWebNet messages, sync the gateway clock, start/stop
+  discovery, request instant power
+- **Discovery**: devices seen on the bus but not yet configured are written as
+  suggestions to `myhome_discovered.yaml` (your `myhome.yaml` is never modified)
+- **Multiple gateways** in one `myhome.yaml`; English, French, Italian and Dutch translations
+- **Resilient by design**: TCP keepalive and idle watchdog on the event session,
+  timeout/retry/TTL on the command queue, entity availability that follows the
+  real connection state, strict YAML validation with clear error messages
+
+## Supported devices
+
+| Home Assistant platform | OpenWebNet WHO | What it covers |
+|---|---|---|
+| `light` | 1 | ON/OFF and dimmer actuators |
+| `switch` | 1 | Actuators used for non-light loads |
+| `cover` | 2 | Shutters, blinds (basic and advanced actuators) |
+| `climate` | 4 | Thermostat zones, central unit |
+| `sensor` | 18, 4, 1 | Power/energy meters, temperature, illuminance |
+| `binary_sensor` | 25, 9, 1 | Dry contacts and alarm zones, auxiliary inputs, motion sensors |
+| `button` | 14 | Optional Lock/Unlock of an actuator |
+| `event` | 25, 15 | CEN+ / CEN scenario controls declared as devices (device triggers, blueprints) |
 
 ## Quick start
 
@@ -195,47 +237,6 @@ the highlights:
 
 Existing `myhome.yaml` files keep working unchanged — the only behaviour change on
 upgrade is the opt-in Lock/Unlock buttons, above.
-
-## Features
-
-- **Lights**: ON/OFF and dimmable actuators, area/group/general addresses, bus interfaces
-- **Covers**: shutters and blinds with a time-based position estimate (`shutter_run`),
-  a two-phase slats/curtain model with tilt control (`slat_time`, `opening_time`,
-  `closing_time`), `set_cover_position`, `inverted` wiring, and real positions on
-  advanced actuators
-- **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
-- **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
-- **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy
-  (when the gateway answers), temperature and illuminance
-- **Binary sensors**: dry contacts, alarm zones, motion sensors (with timeout)
-- **Buttons** (opt-in): Lock/Unlock of a single actuator (`lock_buttons: true`)
-- **Scenario controls** (CEN / CEN+): declared keypads become devices with an event
-  entity and UI-selectable **device triggers** (`scenario_control:`), plus two
-  automation blueprints
-- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`, `myhome_cen_event`),
-  wall pushbuttons in dimmer mode held down (`myhome_light_pushbutton_event`, which
-  turns any relay's pushbutton into a second gesture) and raw bus frames
-  (`myhome_message_event`) for automations
-- **Services**: send raw OpenWebNet messages, sync the gateway clock, start/stop
-  discovery, request instant power
-- **Discovery**: devices seen on the bus but not yet configured are written as
-  suggestions to `myhome_discovered.yaml` (your `myhome.yaml` is never modified)
-- **Multiple gateways** in one `myhome.yaml`; English, French, Italian and Dutch translations
-- **Resilient by design**: TCP keepalive and idle watchdog on the event session,
-  timeout/retry/TTL on the command queue, entity availability that follows the
-  real connection state, strict YAML validation with clear error messages
-
-## Supported devices
-
-| Home Assistant platform | OpenWebNet WHO | What it covers |
-|---|---|---|
-| `light` | 1 | ON/OFF and dimmer actuators |
-| `switch` | 1 | Actuators used for non-light loads |
-| `cover` | 2 | Shutters, blinds (basic and advanced actuators) |
-| `climate` | 4 | Thermostat zones, central unit |
-| `sensor` | 18, 4, 1 | Power/energy meters, temperature, illuminance |
-| `binary_sensor` | 25, 9, 1 | Dry contacts and alarm zones, auxiliary inputs, motion sensors |
-| `button` | 14 | Optional Lock/Unlock of an actuator |
 
 ## Documentation
 
