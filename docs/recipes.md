@@ -457,6 +457,12 @@ Map a button to a scene instead of a group if you prefer. The LEDs on every keyp
 follow the actuators, so whatever Home Assistant switches on the bus is reflected on
 the wall without extra work.
 
+One limit of the example above: it keeps a single "last frame / last WHERE" pair, so
+two buttons held at the same time (their frames arrive interleaved, 24, 18, 24, 18…)
+reset each other and never reach the threshold. If that matters to you, keep the
+per-button counters in one `input_text` as JSON keyed by WHERE, and add a short
+per-room lock so two holds on the same room do not undo each other.
+
 ## Raw OpenWebNet commands
 
 `myhome.send_message` queues an arbitrary frame. See
