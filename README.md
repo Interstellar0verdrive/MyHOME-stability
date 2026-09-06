@@ -201,8 +201,10 @@ upgrade is the opt-in Lock/Unlock buttons, above.
 - **Scenario controls** (CEN / CEN+): declared keypads become devices with an event
   entity and UI-selectable **device triggers** (`scenario_control:`), plus two
   automation blueprints
-- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`, `myhome_cen_event`)
-  and raw bus frames (`myhome_message_event`) for automations
+- **Events**: CEN/CEN+ keypad presses (`myhome_cenplus_event`, `myhome_cen_event`),
+  wall pushbuttons in dimmer mode held down (`myhome_light_pushbutton_event`, which
+  turns any relay's pushbutton into a second gesture) and raw bus frames
+  (`myhome_message_event`) for automations
 - **Services**: send raw OpenWebNet messages, sync the gateway clock, start/stop
   discovery, request instant power
 - **Discovery**: devices seen on the bus but not yet configured are written as

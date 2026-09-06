@@ -22,9 +22,9 @@ minimal configuration example; the pages here go deeper.
 - **[Gateway compatibility](gateway-compatibility.md)** — what is verified, only
   expected, or unknown per gateway model; the hard-coded watchdog, keep-alive and
   queue values; how to report your own gateway.
-- **[Recipes](recipes.md)** — copy-paste examples for CEN/CEN+ keypads, raw
-  OpenWebNet commands, covers, energy, Lock/Unlock buttons, several gateways and
-  raw-bus debugging.
+- **[Recipes](recipes.md)** — copy-paste examples for CEN/CEN+ keypads, wall
+  pushbuttons in dimmer mode (room toggle, Zigbee bulb), raw OpenWebNet commands,
+  covers, energy, Lock/Unlock buttons, several gateways and raw-bus debugging.
 - **[Migrating from the original](migrating-from-original.md)** — coming from
   `anotherjulien/MyHOME` or the `artmakh` fork: what stays compatible, what
   changed, a step-by-step upgrade, and the known limitations.
