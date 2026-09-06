@@ -120,6 +120,11 @@ SCENARIO_CONTROL_WHO: dict[str, str] = {PROTOCOL_CEN_PLUS: WHO_CEN_PLUS, PROTOCO
 # Bus event fired for each protocol (unchanged contract, see docs/services-and-events.md).
 EVENT_CENPLUS = "myhome_cenplus_event"
 EVENT_CEN = "myhome_cen_event"
+# WHO 1 "command translation" frames (*1*1000#WHAT*WHERE##): what a physical light
+# pushbutton sent, before the actuator answered. The only trace a relay leaves of a
+# dimmer-mode hold (WHAT 30/31), so it is republished as a bus event (0.4.0).
+EVENT_LIGHT_PUSHBUTTON = "myhome_light_pushbutton_event"
+LIGHT_PUSHBUTTON_EVENTS: dict[int, str] = {0: "off", 1: "on", 30: "dim_up", 31: "dim_down"}
 SCENARIO_CONTROL_BUS_EVENT: dict[str, str] = {PROTOCOL_CEN_PLUS: EVENT_CENPLUS, PROTOCOL_CEN: EVENT_CEN}
 
 # Event names each protocol can produce, in the order gateway.py maps them.  These are

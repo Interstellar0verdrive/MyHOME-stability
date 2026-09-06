@@ -81,6 +81,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_MAC,
+    bus_full_where,
     CONF_BUS_INTERFACE,
     CONF_COMMAND_TIMEOUT_SEC,
     CONF_DEVICE_TYPE,
@@ -112,18 +113,19 @@ from .const import (
     DOMAIN,
     EVENT_CEN,
     EVENT_CENPLUS,
+    EVENT_LIGHT_PUSHBUTTON,
     EVENT_LONG_PRESS_REPEAT,
     EVENT_ROTATE_CCW_FAST,
     EVENT_ROTATE_CCW_SLOW,
     EVENT_ROTATE_CW_FAST,
     EVENT_ROTATE_CW_SLOW,
+    LIGHT_PUSHBUTTON_EVENTS,
     LOGGER,
     PROTOCOL_CEN,
     PROTOCOL_CEN_PLUS,
+    scenario_control_key,
     SIGNAL_GATEWAY_CONNECTION,
     SIGNAL_GATEWAY_STATS,
-    bus_full_where,
-    scenario_control_key,
 )
 from .myhome_device import MyHOMEEntity
 from .own_session import (
@@ -182,6 +184,8 @@ DEFAULT_INFO_LOG_INTERVAL_SEC = 0.0  # 0 = the INFO heartbeat is off (chatter st
 
 _TRANSPORT_ERRORS = (SessionError, OSError, EOFError, TimeoutError)
 _ENTITY_EVENT_TYPES = (OWNLightingEvent, OWNAutomationEvent, OWNDryContactEvent, OWNAuxEvent, OWNHeatingEvent)
+# *1*1000#WHAT[#...]*WHERE## — WHO 1 command translation (physical pushbutton echo).
+_LIGHT_TRANSLATION_RE = re.compile(r"^\*1\*1000#(?P<what>\d+)(?:#[^*]*)?\*(?P<where>[^*]+)##$")
 
 
 @dataclass(slots=True, frozen=True)
@@ -1041,7 +1045,10 @@ class MyHOMEGatewayHandler:
 
             if isinstance(message, _ENTITY_EVENT_TYPES):
                 if message.is_translation:
-                    LOGGER.debug("%s Ignoring translation message `%s`", self.log_id, message)
+                    if isinstance(message, OWNLightingEvent):
+                        self._fire_light_pushbutton_event(message)
+                    else:
+                        LOGGER.debug("%s Ignoring translation message `%s`", self.log_id, message)
                     return
                 if isinstance(message, OWNLightingEvent) and await self._handle_lighting_scope(message):
                     return
@@ -1168,6 +1175,32 @@ class MyHOMEGatewayHandler:
             self._log_limited(
                 logging.ERROR, f"entity-{obj.unique_id}", "%s %s failed to refresh", self.log_id, obj.unique_id, exc_info=True
             )
+
+    def _fire_light_pushbutton_event(self, message: OWNLightingEvent) -> None:
+        """Republish a WHO 1 command translation as ``myhome_light_pushbutton_event``.
+
+        ``*1*1000#WHAT*WHERE##`` is the gateway's echo of what a physical pushbutton
+        sent; the actuator's own status frame follows and drives the entity. For a
+        pushbutton in dimmer mode wired to a relay, the hold (WHAT 30 = up, 31 = down,
+        one frame every ~0.5 s while held) reaches the bus and nothing else, so this
+        is the only way to act on it. Payload: ``mac``, ``where``, ``what`` (int),
+        ``event`` (``on``/``off``/``dim_up``/``dim_down``/``dim_to_<pct>``/``what_<n>``)
+        and the raw ``message``. Never raises: an unparsable frame is logged and dropped.
+        """
+        match = _LIGHT_TRANSLATION_RE.match(str(message))
+        if match is None:
+            LOGGER.debug("%s Ignoring translation message `%s`", self.log_id, message)
+            return
+        what = int(match.group("what"))
+        where = match.group("where")
+        event = LIGHT_PUSHBUTTON_EVENTS.get(what)
+        if event is None:
+            event = f"dim_to_{what * 10}" if 2 <= what <= 10 else f"what_{what}"
+        self.hass.bus.async_fire(
+            EVENT_LIGHT_PUSHBUTTON,
+            {ATTR_MAC: self.mac, "where": where, "what": what, "event": event, "message": str(message)},
+        )
+        LOGGER.debug("%s Light pushbutton %s on WHERE %s (`%s`)", self.log_id, event, where, message)
 
     def _fire_cenplus_event(self, message: OWNCENPlusEvent) -> None:
         """CEN+ contract: ``myhome_cenplus_event`` {object, pushbutton, event} (gw-14)."""

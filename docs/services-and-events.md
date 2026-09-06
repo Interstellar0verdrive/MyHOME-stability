@@ -18,6 +18,7 @@ see [Recipes](recipes.md).
   - [CEN keypad events](#cen-keypad-events-1)
   - [Device triggers and event entities](#device-triggers-and-event-entities)
   - [General/area/group bus events](#generalareagroup-bus-events)
+  - [Wall pushbutton events (`myhome_light_pushbutton_event`)](#wall-pushbutton-events-myhome_light_pushbutton_event)
   - [Raw bus traffic (`myhome_message_event`)](#raw-bus-traffic-myhome_message_event)
 
 ## Services
@@ -177,6 +178,31 @@ The integration also re-requests the affected entity states when it sees these
 frames, so `light`/`cover` entities follow along on their own. See
 [Recipes → Raw OpenWebNet commands](recipes.md#raw-openwebnet-commands) for a
 `myhome.send_message` example that triggers one of these.
+
+### Wall pushbutton events (`myhome_light_pushbutton_event`)
+
+When someone presses a physical light pushbutton, the gateway echoes the command the
+button sent (`*1*1000#WHAT*WHERE##`, a "command translation") right before the
+actuator answers with its status. The status drives the `light` entity; the
+translation is republished as `myhome_light_pushbutton_event` so that the press itself
+can be acted on. Data:
+
+| key       | value                                                                 |
+|-----------|-----------------------------------------------------------------------|
+| `mac`     | gateway MAC (as in the CEN/CEN+ events)                               |
+| `where`   | the WHERE the button is addressed to, as a string (e.g. `"42"`)      |
+| `what`    | the original WHAT, as an integer                                      |
+| `event`   | `on`, `off`, `dim_up` (WHAT 30), `dim_down` (31), `dim_to_<pct>` (2-10), otherwise `what_<n>` |
+| `message` | the raw frame                                                         |
+
+The interesting case is a pushbutton configured in **dimmer mode** and wired to a
+relay: a short press gives `on`/`off` (and the light entity follows on its own), a
+**hold** gives one `dim_up` or `dim_down` every ~0.5 s for as long as the button is
+held, alternating direction between holds. The relay ignores those frames, so this
+event is their only trace: it turns a plain BTicino pushbutton into a dimming remote for
+anything in Home Assistant. A WHERE with no actuator behind it (a "virtual" light
+declared in `myhome.yaml` just to follow a button) works the same way. See
+[Recipes → Wall pushbuttons in dimmer mode](recipes.md#wall-pushbuttons-in-dimmer-mode).
 
 ### Raw bus traffic (`myhome_message_event`)
 

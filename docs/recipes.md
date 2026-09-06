@@ -13,6 +13,7 @@ older `trigger:` / `action:` spelling still works if you prefer it.
 - [CEN+ keypads](#cen-keypads)
 - [CEN keypads](#cen-keypads-1)
 - [Device triggers and blueprints](#device-triggers-and-blueprints)
+- [Wall pushbuttons in dimmer mode](#wall-pushbuttons-in-dimmer-mode)
 - [Raw OpenWebNet commands](#raw-openwebnet-commands)
 - [Covers](#covers)
 - [Energy](#energy)
@@ -246,6 +247,50 @@ https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/blueprints
 Both ask for the scenario-control device, the button(s) and the target entity;
 the control must be declared in `myhome.yaml` first, otherwise there is no device
 to pick.
+
+## Wall pushbuttons in dimmer mode
+
+A BTicino light pushbutton set to dimmer mode by the installer keeps sending "one step
+up" / "one step down" frames while held (WHAT 30/31, about two per second). Wired to
+a relay those frames do nothing, but the integration republishes them as
+[`myhome_light_pushbutton_event`](services-and-events.md#wall-pushbutton-events-myhome_light_pushbutton_event),
+so the hold can drive a dimmable light that lives elsewhere, a Zigbee bulb for
+instance. The short press still gives `on`/`off`, which the `light` entity for that
+WHERE already follows: keep it in sync with the other bulb through two state
+automations, and add the hold on top.
+
+```yaml
+automation:
+  - alias: "Bedside pushbutton: hold to dim the Zigbee bulb"
+    mode: queued
+    max: 5
+    triggers:
+      - trigger: event
+        event_type: myhome_light_pushbutton_event
+        event_data:
+          where: "42"
+          event: dim_up
+        id: up
+      - trigger: event
+        event_type: myhome_light_pushbutton_event
+        event_data:
+          where: "42"
+          event: dim_down
+        id: down
+    conditions:
+      - condition: state
+        entity_id: light.bedside_bulb
+        state: "on"
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.bedside_bulb
+        data:
+          brightness_step_pct: "{{ 10 if trigger.id == 'up' else -10 }}"
+```
+
+Each frame moves the bulb by 10 %, so a three-second hold spans most of the range.
+Two-gateway homes add `mac: "..."` to `event_data`.
 
 ## Raw OpenWebNet commands
 

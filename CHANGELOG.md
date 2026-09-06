@@ -26,6 +26,14 @@ exactly as it did: both features are opt-in through new keys.
 
 ### Added
 
+- **Wall pushbutton events.** The gateway echoes what a physical light pushbutton
+  sent (`*1*1000#WHAT*WHERE##`) right before the actuator answers; those frames were
+  dropped. They are now republished as `myhome_light_pushbutton_event`
+  (`mac`, `where`, `what`, `event`, `message`). The point is dimmer-mode pushbuttons
+  wired to relays: a hold sends `dim_up`/`dim_down` about twice a second and nothing
+  else on the bus reflects it, so this is the only way to turn such a button into a
+  dimming remote for, say, a Zigbee bulb. Short presses give `on`/`off` next to the
+  status the entity already follows. Found on a bedside pushbutton.
 - **CEN / CEN+ scenario controls as devices, with device triggers and an event
   entity.** A wall keypad has no state, so until now its presses existed only as
   `myhome_cenplus_event` / `myhome_cen_event` bus events, usable from YAML and

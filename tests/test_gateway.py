@@ -507,6 +507,24 @@ async def test_preset_level_refreshes_configured_light() -> None:
     assert light.events == []
 
 
+async def test_light_translation_frames_become_pushbutton_events() -> None:
+    """A physical pushbutton's own frames (WHO 1 command translation) are republished
+    as ``myhome_light_pushbutton_event`` and never reach the entity: the actuator's
+    status frame that follows is what drives the light. Dimmer-mode holds (30/31)
+    have no other trace on a relay."""
+    handler = make_handler()
+    light = register(handler, LIGHT, "1-42")
+    for raw in ("*1*1000#1*42##", "*1*1000#30*42##", "*1*1000#31*42##", "*1*1000#0*42##", "*1*1000#7*42##", "*1*1000#11*42##"):
+        await handler._dispatch_message(frame(raw), from_monitor=True)  # noqa: SLF001
+    events = fired(handler.hass, "myhome_light_pushbutton_event")
+    assert [event["event"] for event in events] == ["on", "dim_up", "dim_down", "off", "dim_to_70", "what_11"]
+    assert events[1] == {"mac": MAC, "where": "42", "what": 30, "event": "dim_up", "message": "*1*1000#30*42##"}
+    assert light.events == []
+    # Translations of other WHOs are still dropped silently.
+    await handler._dispatch_message(frame("*2*1000#1*85##"), from_monitor=True)  # noqa: SLF001
+    assert len(fired(handler.hass, "myhome_light_pushbutton_event")) == 6
+
+
 async def test_generate_events_never_fires_none(caplog: pytest.LogCaptureFixture) -> None:
     """gw-17: only real frames feed myhome_message_event; command replies do not."""
     handler = make_handler(generate_events=True)
