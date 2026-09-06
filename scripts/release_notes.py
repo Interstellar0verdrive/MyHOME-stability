@@ -31,6 +31,11 @@ def unwrap(text):
             else: buf.append(line)
     flush()
     return "\n".join(out)
-v=sys.argv[1]; sec=section(v)
-if sec is None: sys.exit("sezione %s non trovata" % v)
-print(unwrap(sec))
+REPO = "https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/"
+def absolutize(text):
+    """Release pages resolve relative links against the release URL, so point
+    docs/... and CHANGELOG.md links at the repository explicitly."""
+    return re.sub(r"\]\(((?:docs/|CHANGELOG|README|blueprints/)[^)\s]+)\)", lambda m: "](" + REPO + m.group(1) + ")", text)
+v = sys.argv[1]; sec = section(v)
+if sec is None: sys.exit("section %s not found" % v)
+print(absolutize(unwrap(sec)))
