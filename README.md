@@ -127,10 +127,14 @@ This repository is not in the default HACS store: add it as a custom repository.
 ### Gateway setup
 
 Add the gateway from **Settings → Devices & services → Add integration → MyHOME**.
-Most gateways are found via SSDP; otherwise choose **"Configure manually"** and
-enter host, port and password. A later password rejection raises a reauth flow,
-and **Configure** on the integration card changes the address, the `myhome.yaml`
-path, session count and raw-event generation without removing the integration.
+Many gateways announce themselves over SSDP; if yours does not appear, choose
+**"Configure manually"** and enter host, port and password (see
+[Gateway compatibility](docs/gateway-compatibility.md) for which models are
+confirmed). A later password rejection raises a reauth flow, and **Configure** on
+the integration card changes the address, the `myhome.yaml` path, the number of
+command sessions, raw-event generation and the five session tunables — idle
+watchdog, probe window, command timeout, queue TTL and the default instant-power
+keep-alive — without removing the integration.
 
 Full walkthrough and every option: [Configuration reference](docs/configuration.md).
 

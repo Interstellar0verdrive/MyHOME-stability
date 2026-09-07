@@ -9,6 +9,14 @@ below was observed on real hardware; everything else is an honest "we think so".
 If you run a gateway that is not verified here, the
 [reporting section](#how-to-report-your-gateway) tells you what to send.
 
+## Contents
+
+- [Legend](#legend)
+- [Connection, discovery and control](#connection-discovery-and-control)
+- [Energy, events and sessions](#energy-events-and-sessions)
+- [Watchdog, keep-alive and queue parameters](#watchdog-keep-alive-and-queue-parameters)
+- [How to report your gateway](#how-to-report-your-gateway)
+
 ## Legend
 
 | Mark | Meaning |
@@ -100,8 +108,10 @@ retrying.
 ### Note 3 — session limits
 
 The integration opens **one event (monitor) session** per gateway, plus **one
-command session per command worker** (default 1, configurable 1–10 in the
-integration options). A command session that has had nothing to send for 60 s is
+command session per command worker** (default 1, configurable in the integration
+options; values above **4** are capped at 4, `MAX_COMMAND_WORKERS`, because
+gateways hold only a handful of concurrent sessions). A command session that has
+had nothing to send for 60 s is
 closed and reopened on demand, specifically so an idle integration does not hold a
 slot on gateways with a small concurrent-session budget.
 
@@ -122,7 +132,7 @@ in `myhome.yaml`. Tests override them on the handler instance; nothing else does
 | Parameter | Value | Where | What it does |
 |---|---|---|---|
 | `IDLE_TIMEOUT_SEC` | `300.0` s | `gateway.py` | No frame on the monitor session for this long → send a probe status request. |
-| `PROBE_WINDOW_SEC` | `30.0` s | `gateway.py` | Probe sent and still nothing on the monitor → treat the session as dead and reconnect. |
+| `PROBE_WINDOW_SEC` | `30.0` s | `gateway.py` | Probe sent and answered on neither session → treat the monitor session as dead and reconnect. A probe the gateway ACKed on the **command** session proves it is alive and simply does not mirror replies onto the monitor: the watchdog then re-arms instead of reconnecting, and the monitor socket is left to TCP keepalive. |
 | `READ_POLL_SEC` | `30.0` s | `gateway.py` | Wake-up cadence of the listening loop; the granularity of the idle watchdog. |
 | `INITIAL_BACKOFF_SEC` | `1.0` s | `gateway.py` | First reconnect delay. |
 | `MAX_BACKOFF_SEC` | `60.0` s | `gateway.py` | Backoff ceiling; it doubles on each consecutive failure and resets once the session proves alive. |
