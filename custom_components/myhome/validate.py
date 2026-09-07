@@ -270,12 +270,25 @@ class MacAddress:
 # --------------------------------------------------------------------------------------
 # WHERE validators
 # --------------------------------------------------------------------------------------
+# Appended to every "you wrote an unquoted WHERE" message (P2-BUG-3).  It is advice,
+# not a diagnosis: the ambiguous values are exactly the ones this module cannot see.
+_QUOTE_EVERY_WHERE = (
+    "always quote every 'where:' value - YAML reads an unquoted 0115 as 77 and drops "
+    "the leading zero of 01 before the integration can see it"
+)
+
+
 def _where_text(v: object) -> str:
     """Turn the raw YAML value of a WHERE into a string.
 
-    YAML parses unquoted ``where: 01`` as the integer 1 (leading zero lost) and
-    ``where: 010`` as octal 8, so integers are accepted only when they cannot be
-    ambiguous: 0 (General) and 2- or 4-digit numbers without a leading zero.
+    An unquoted WHERE reaches this function as an ``int``: YAML has already dropped
+    the leading zero of ``where: 01`` and already read ``where: 0115`` as octal 77,
+    so the text the user actually wrote is unrecoverable here.  Integers whose
+    *decimal* spelling is itself a valid WHERE are accepted - existing configurations
+    rely on it - which means a value that was written with a leading zero is taken at
+    its decimal value and cannot be detected (``0115`` becomes WHERE ``77``, ``0000``
+    the General WHERE ``0``).  That is why every message below asks for quotes on the
+    whole file rather than claiming this one value was caught.
     """
     if isinstance(v, bool) or v is None:
         raise Invalid("WHERE is missing or not a string, quote it (e.g. where: '15')")
@@ -287,20 +300,15 @@ def _where_text(v: object) -> str:
         if 1 <= v <= 9:
             raise Invalid(
                 f"WHERE {v} was read by YAML as a number and is ambiguous: quote it as "
-                f"'0{v}' for A=0 PL={v} or as '{v}' for area {v}"
+                f"'0{v}' for A=0 PL={v} or as '{v}' for area {v}; {_QUOTE_EVERY_WHERE}"
             )
-        if v > 0:
-            # 3-digit and 5+ digit values are the shape sensor/binary_sensor addresses
-            # take (``where: 301``).  They lost no leading zero and are not octal, so
-            # the octal wording below would be misleading and its ``'0115'`` example is
-            # an actuator address a sensor would reject (INCONSISTENCY-5).
-            raise Invalid(
-                f"WHERE {v} was read by YAML as a number; quote it (where: '{v}') so the "
-                f"address is preserved exactly"
-            )
+        # Everything else: 3-digit and 5+ digit values are the shape sensor and
+        # binary_sensor addresses take (``where: 301``), so the message quotes the
+        # user's own value rather than an actuator address they never wrote
+        # (INCONSISTENCY-5).
         raise Invalid(
-            f"WHERE {v} was read by YAML as a number (leading zeros are lost, '0…' is octal): "
-            f"quote it, e.g. where: '0115'"
+            f"WHERE {v} was read by YAML as a number; quote it (where: '{v}') so the "
+            f"address is preserved exactly; {_QUOTE_EVERY_WHERE}"
         )
     if isinstance(v, str):
         text = v.strip()
@@ -619,6 +627,10 @@ BINARY_SENSOR_FIELDS: dict = {
     Optional(CONF_WHO, default="25"): _who("1", "9", "25"),
     Required(CONF_WHERE): SENSOR_WHERE,
     Optional(CONF_BUS_INTERFACE): BusInterface(),
+    # P2-BUG-2: binary_sensor.py reads `icon_on` (round 1, INCONSISTENCY-1) but the
+    # field was never declared here, so `known_keys` reported a working key as unknown
+    # and raised a Repairs issue contradicting the docs.
+    Optional(CONF_ICON_ON): str,
     Optional(CONF_INVERTED, default=False): Boolean(),
     Optional(CONF_DEVICE_CLASS): _device_class(BinarySensorDeviceClass, _BINARY_SENSOR_CLASSES),
     Optional(DEVICE_CLASS_ALIAS): _device_class(BinarySensorDeviceClass, _BINARY_SENSOR_CLASSES),
@@ -952,8 +964,17 @@ class MyHomeDeviceSchema(Schema):
         super().__init__({Optional(str): Schema(dict(fields), extra=ALLOW_EXTRA)}, extra=PREVENT_EXTRA)
 
     def __call__(self, data):
-        # Keys the user actually wrote, before the schema injects its defaults.
-        written = {key: set(value) for key, value in data.items() if isinstance(value, Mapping)}
+        # Keys the user actually wrote, before the schema injects its defaults.  The
+        # snapshot has to be taken first (``super().__call__`` returns new dicts), but
+        # it must not be what rejects a section that is not a mapping at all: a
+        # platform written as a YAML list is the most natural mistake in the file and
+        # used to raise AttributeError, which escapes the `vol.Invalid` handler in
+        # __init__ - raw traceback, no key path, no repair issue (P2-BUG-1).
+        written = (
+            {key: set(value) for key, value in data.items() if isinstance(value, Mapping)}
+            if isinstance(data, Mapping)
+            else {}
+        )
         data = super().__call__(data)
         finalize = _PLATFORM_FINALIZERS.get(self.platform)
         for yaml_key, device in data.items():
