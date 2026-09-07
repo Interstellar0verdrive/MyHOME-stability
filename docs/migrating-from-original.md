@@ -149,8 +149,8 @@ here too.
 suggestions to **`myhome_discovered.yaml`**, in the same folder as your
 `myhome.yaml`, for you to review and copy in by hand. A run stops itself after
 60 seconds, or when you call `myhome.stop_discovery`; both flush what was
-collected. Devices already present in `myhome.yaml` (matched on WHO/WHERE) are not
-suggested again.
+collected. Devices already present in `myhome.yaml` (matched on WHO, WHERE and bus
+interface) are not suggested again.
 
 ### There is an options flow
 
