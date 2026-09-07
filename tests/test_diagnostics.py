@@ -95,7 +95,8 @@ async def test_config_entry_diagnostics(hass: HomeAssistant, hass_client, tmp_pa
     assert data["entry"]["data"]["mac"].startswith("00:03:50")
     assert data["entry"]["data"]["mac"].endswith(REDACTED)
     assert MAC not in dumped
-    assert data["entry"]["data"]["host"] == "192.168.x.x"
+    # Only the first two octets survive (they help read routing problems).
+    assert data["entry"]["data"]["host"] == "192.0.x.x"
     assert HOST not in dumped
     assert data["entry"]["unique_id"].endswith(REDACTED)
 

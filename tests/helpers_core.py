@@ -19,7 +19,9 @@ from custom_components.myhome.const import CONF_FILE_PATH, CONF_WORKER_COUNT, DO
 
 MAC = "00:03:50:aa:bb:cc"
 MAC2 = "00:03:50:00:00:02"
-HOST = "192.168.1.135"
+# TEST-NET-1 (RFC 5737): an address reserved for documentation, so nothing in the
+# fixtures can be mistaken for -- or collide with -- a real gateway on anyone's LAN.
+HOST = "192.0.2.135"
 PASSWORD = "12345"
 
 TEST_OK = {"Success": True, "Message": None}
