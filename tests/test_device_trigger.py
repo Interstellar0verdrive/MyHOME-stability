@@ -27,6 +27,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.myhome.const import (
+    CONF_SHORT_PRESS,
     DOMAIN,
     EVENT_CENPLUS,
     SCENARIO_CONTROL_EVENT_TYPES,
@@ -392,7 +393,16 @@ def test_shipped_blueprints_are_valid(name: str) -> None:
     assert selector["entity"] == [{"domain": ["event"]}]
 
     # Both dropdowns stop at button 8, so both descriptions must say so.
-    assert "buttons 1-8" in blueprint.metadata["description"]
+    description = blueprint.metadata["description"]
+    assert "buttons 1-8" in description
+
+    # The picker offers CEN controls too (they own an ``event`` entity), and on CEN
+    # ``pushbutton_short_press`` is also sent at the start of a long press
+    # (SCENARIO_CONTROL_EVENT_TYPES["cen"], gateway.py), so a hold triggers the
+    # short-press branch first.  The blueprints keep the wide filter on purpose, so
+    # the description is the only place that can warn about it.
+    assert CONF_SHORT_PRESS in SCENARIO_CONTROL_EVENT_TYPES["cen"]
+    assert "CEN" in description and "myhome_cen_event" in description
 
     # Substitute the inputs the way Home Assistant does and check the triggers we get.
     inputs = {"scenario_control": "0123456789abcdef0123456789abcdef"}
