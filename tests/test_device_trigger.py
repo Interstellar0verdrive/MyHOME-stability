@@ -17,6 +17,7 @@ from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.components.device_automation.exceptions import (
     InvalidDeviceAutomationConfig,
 )
+from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.const import CONF_PLATFORM
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
@@ -27,15 +28,21 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.myhome.const import (
+    CONF_BUTTONS,
+    CONF_PLATFORMS,
     CONF_SHORT_PRESS,
+    DEFAULT_SCENARIO_BUTTONS,
     DOMAIN,
     EVENT_CENPLUS,
+    PROTOCOL_CEN_PLUS,
     SCENARIO_CONTROL_EVENT_TYPES,
+    SCENARIO_SUBTYPE_PREFIX,
+    scenario_control_key,
 )
 from custom_components.myhome.device_trigger import CONF_SUBTYPE, TRIGGER_SCHEMA
 
-from .helpers_core import MAC
-from .helpers_platforms import setup_myhome
+from .helpers_core import MAC, MAC2
+from .helpers_platforms import feed_frame, setup_myhome
 
 SCENARIO_YAML = f"""
 gateway:
@@ -128,9 +135,16 @@ async def test_no_triggers_for_a_normal_device(hass: HomeAssistant, tmp_path) ->
     ],
 )
 def test_trigger_schema_rejects_unknown_type_and_subtype(bad: dict[str, Any]) -> None:
-    """The schema is a closed set: only real event names and buttons 0-32."""
+    """The schema is a closed set: only real event names and buttons 0-32.
+
+    Both ends of the range are asserted, not just ``button_1``: ``ALL_SUBTYPES`` is
+    the union of CEN's 0-31 and CEN+'s 1-32, so narrowing it to ``range(1, 3)``
+    would break every CEN ``button_0`` and every keypad above 2 while keeping a
+    ``button_1``-only test green.
+    """
     base = {CONF_PLATFORM: "device", "domain": DOMAIN, "device_id": "abc"}
-    TRIGGER_SCHEMA({**base, "type": "pushbutton_short_press", CONF_SUBTYPE: "button_1"})
+    for subtype in ("button_0", "button_1", "button_32"):
+        TRIGGER_SCHEMA({**base, "type": "pushbutton_short_press", CONF_SUBTYPE: subtype})
     with pytest.raises(vol.Invalid):
         TRIGGER_SCHEMA({**base, **bad})
 
@@ -185,7 +199,7 @@ async def test_attached_cenplus_trigger_fires(hass: HomeAssistant, tmp_path, cal
             {"object": 25, "pushbutton": 1, "event": "pushbutton_long_press", "mac": MAC},
             {"object": 25, "pushbutton": 2, "event": "pushbutton_short_press", "mac": MAC},
             {"object": 26, "pushbutton": 2, "event": "pushbutton_long_press", "mac": MAC},
-            {"object": 25, "pushbutton": 2, "event": "pushbutton_long_press", "mac": "00:03:50:00:00:02"},
+            {"object": 25, "pushbutton": 2, "event": "pushbutton_long_press", "mac": MAC2},
         ):
             hass.bus.async_fire(EVENT_CENPLUS, payload)
         await hass.async_block_till_done()
@@ -194,8 +208,6 @@ async def test_attached_cenplus_trigger_fires(hass: HomeAssistant, tmp_path, cal
 
 async def test_attached_cen_trigger_fires_on_a_real_frame(hass: HomeAssistant, tmp_path, calls) -> None:
     """End to end: a bus frame reaches the automation through the device trigger."""
-    from .test_event import feed_frame
-
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
         device_id = device_id_of(hass, entry.entry_id, "cen-51")
         await _load_automation(
@@ -334,7 +346,7 @@ async def test_a_pushbutton_the_protocol_cannot_address_is_refused(
 
 
 async def test_an_automation_on_a_light_device_fails_to_set_up(
-    hass: HomeAssistant, tmp_path, calls, caplog
+    hass: HomeAssistant, tmp_path, caplog
 ) -> None:
     """End to end: the automation must be disabled, with the device named (finding 1).
 
@@ -363,11 +375,41 @@ async def test_buttons_default_when_the_entry_is_not_loaded(hass: HomeAssistant,
     """The editor lists triggers of unloaded entries too: fall back to the default list."""
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
         device_id = device_id_of(hass, entry.entry_id, "cenplus-25")
-        hass.data[DOMAIN].pop(MAC)
         from custom_components.myhome import device_trigger
 
-        triggers = await device_trigger.async_get_triggers(hass, device_id)
+        # Restored before leaving the block: the entry's own `async_unload_entry`
+        # runs on the way out and would otherwise find no handler and skip
+        # `close_listener()`. Safe today (function-scoped `hass`, and the unload
+        # uses `.get(mac, {})`), but the try/finally makes it not depend on that.
+        gateway_data = hass.data[DOMAIN].pop(MAC)
+        try:
+            triggers = await device_trigger.async_get_triggers(hass, device_id)
+        finally:
+            hass.data[DOMAIN][MAC] = gateway_data
         assert {item[CONF_SUBTYPE] for item in triggers} == {"button_1", "button_2", "button_3", "button_4"}
+
+
+async def test_an_empty_button_list_falls_back_to_the_default(hass: HomeAssistant, tmp_path) -> None:
+    """`buttons: []` must not leave the automation editor with an empty dropdown.
+
+    ``test_buttons_default_when_the_entry_is_not_loaded`` covers only the
+    ``KeyError`` / ``TypeError`` arm (no ``hass.data`` at all). The declared-but-
+    empty list is the other way to get nothing, and `_buttons_for`'s docstring
+    promises the same degradation for it. Mutation caught: ``return list(buttons)
+    or list(DEFAULT_SCENARIO_BUTTONS)`` -> ``return list(buttons)``, after which a
+    scenario control declared with ``buttons: []`` offers no trigger at all and the
+    user cannot build an automation on that keypad from the UI.
+    """
+    async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
+        device_id = device_id_of(hass, entry.entry_id, "cenplus-25")
+        cfg = hass.data[DOMAIN][MAC][CONF_PLATFORMS][EVENT][scenario_control_key(PROTOCOL_CEN_PLUS, 25)]
+        cfg[CONF_BUTTONS] = []
+
+        triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, device_id)
+        ours = [item for item in triggers if item["domain"] == DOMAIN]
+        assert {item[CONF_SUBTYPE] for item in ours} == {
+            f"{SCENARIO_SUBTYPE_PREFIX}{button}" for button in DEFAULT_SCENARIO_BUTTONS
+        }
 
 
 # ------------------------------------------------------------------------- blueprints
@@ -392,7 +434,17 @@ def test_shipped_blueprints_are_valid(name: str) -> None:
     assert selector["filter"] == [{"integration": DOMAIN}]
     assert selector["entity"] == [{"domain": ["event"]}]
 
-    # Both dropdowns stop at button 8, so both descriptions must say so.
+    # Both dropdowns stop at button 8 - asserted on the selector, not only on the
+    # prose. `assert "buttons 1-8" in description` stays green after adding
+    # `button_9`...`button_32` to the dropdown, which is exactly the change that
+    # would make the description a lie.
+    expected_options = [f"button_{number}" for number in range(1, 9)]
+    button_inputs = [key for key in blueprint.inputs if key.startswith("button")]
+    assert button_inputs  # a blueprint with no button picker would vacuously pass
+    for key in button_inputs:
+        options = blueprint.inputs[key]["selector"]["select"]["options"]
+        assert [option["value"] for option in options] == expected_options, key
+
     description = blueprint.metadata["description"]
     assert "buttons 1-8" in description
 

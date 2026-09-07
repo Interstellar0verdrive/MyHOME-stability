@@ -20,6 +20,11 @@ ruff check .
 # Run the test suite (pytest.ini sets asyncio_mode = auto, required by the HA
 # test plugin):
 pytest tests -q
+
+# The three tests that open real loopback sockets or spawn subprocesses carry the
+# `slow` marker; skipping them takes the run from ~13 s to ~8 s while leaving
+# every guarantee they cover pinned somewhere else as well:
+pytest tests -q -m "not slow"
 ```
 
 Both commands run in CI on every push and pull request
@@ -45,7 +50,7 @@ to it, which is why the documented command is the bare `ruff check .`.
 | `pytest.ini` | Value |
 |---|---|
 | `asyncio_mode` | `auto`, required by the Home Assistant test plugin |
-| `markers` | a `slow` marker, plus `strict_markers = true`: a misspelled mark is a **collection error**, not a silent no-op |
+| `markers` | a `slow` marker (a test that takes about a second or more on its own — CI can split these out with `-m "not slow"`), plus `strict_markers = true`: a misspelled mark is a **collection error**, not a silent no-op |
 | `strict_config` | `true` — an unknown ini key fails the run |
 | `timeout` | `60` seconds per test, which needs `pytest-timeout` (it is in `requirements_test.txt`) |
 

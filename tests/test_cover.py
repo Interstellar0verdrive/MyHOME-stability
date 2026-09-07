@@ -953,3 +953,34 @@ async def test_an_advanced_stop_disarms_the_safety_timer(
         commands.clear()
         await _advance(hass, freezer, 90)
         assert commands.status_frames == []
+
+
+async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A movement frame is never the echo of a movement *we* commanded.
+
+    Review 2 / W6: `_is_echo`'s first arm ("we commanded a movement, so only a
+    `stopped` frame can be its echo") was decided by nothing in the suite - 0 hits
+    in a full run - and dropping it left every test green. It is reachable, and by
+    the most ordinary route there is: our own `close_cover` is still running when
+    somebody at the wall keypad presses UP, well inside `STOP_ECHO_WINDOW_SEC`.
+
+    Mutation caught: removing `if frame_direction is not None: return False` from
+    that arm, after which the reversal is swallowed as an echo - Home Assistant
+    goes on reporting `closing` and estimating the shutter downwards while it is
+    actually running up, and the estimate is wrong until the next status request.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
+
+        await _advance(hass, freezer, 0.5)  # well inside the 1.5 s echo window
+        await feed_event(hass, cover, "*2*1*81##")  # somebody presses UP on the keypad
+
+        assert hass.states.get(ENTITY).state == CoverState.OPENING
+        await _advance(hass, freezer, 40)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
+        assert hass.states.get(ENTITY).state == CoverState.OPEN

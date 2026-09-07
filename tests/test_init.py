@@ -499,6 +499,7 @@ async def test_repairs_removed_with_the_entry(hass: HomeAssistant, tmp_path) -> 
 
 
 # --------------------------------------------------------------------------- end to end
+@pytest.mark.slow  # ~1.1 s: a real socket server plus a full config-entry setup
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
 async def test_end_to_end_with_fake_gateway(hass: HomeAssistant) -> None:
     """Real setup against a loopback OpenWebNet server: no OWNd mock at all.

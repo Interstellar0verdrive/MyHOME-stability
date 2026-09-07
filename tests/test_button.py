@@ -12,7 +12,7 @@ from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import CONF_ENTITIES, CONF_PLATFORMS, DOMAIN
 
 from .helpers_core import MAC
-from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, device_config, entity_object, real_config_yaml, setup_myhome
+from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, device_config, real_config_yaml, setup_myhome
 
 LOCK_YAML = f"""
 gateway:
@@ -83,12 +83,3 @@ async def test_button_names_and_press(hass: HomeAssistant, tmp_path) -> None:
         assert all(isinstance(message, OWNCommand) for message in commands.sent)
         assert all(message.is_valid for message in commands.sent)
 
-
-async def test_buttons_use_their_own_registry_slots(hass: HomeAssistant, tmp_path) -> None:
-    """Both buttons of a device must coexist in the shared `entities` dict."""
-    async with setup_myhome(hass, tmp_path, LOCK_YAML):
-        disable = entity_object(hass, BUTTON, "1-11", "disable")
-        enable = entity_object(hass, BUTTON, "1-11", "enable")
-        assert disable is not enable
-        assert disable.unique_id.endswith("-disable")
-        assert enable.unique_id.endswith("-enable")

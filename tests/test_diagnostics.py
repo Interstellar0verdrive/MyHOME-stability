@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -111,9 +112,11 @@ async def test_config_entry_diagnostics(hass: HomeAssistant, hass_client, tmp_pa
     assert HOST not in dumped
     assert data["entry"]["unique_id"].endswith(REDACTED)
 
-    # Versions.
+    # Versions. `home_assistant` was asserted for truthiness only, which passes for
+    # any string, a stale hard-coded one included - and the running HA version is
+    # the first thing a bug report is read for.
     assert data["versions"]["ownd"].startswith("0.7.")
-    assert data["versions"]["home_assistant"]
+    assert data["versions"]["home_assistant"] == HA_VERSION
     assert data["versions"]["myhome"] == MANIFEST_VERSION
 
     # Effective tunables (nothing set -> the 0.2.x values).
@@ -147,7 +150,12 @@ async def test_config_entry_diagnostics(hass: HomeAssistant, hass_client, tmp_pa
     }
     assert handler["session_parameters"]["idle_watchdog_sec"] == 300.0
     assert handler["session_parameters"]["command_timeout_sec"] == 10.0
-    assert isinstance(handler["queue_size"], int)
+    # The actual depth, not `isinstance(..., int)`: under mock_gateway() the sending
+    # loop is idle, so the two status requests the light and the cover ask for at
+    # setup are still queued. "How long is the backlog" is the whole point of this
+    # field in a bug report, and a constant 0 - or a read of some other queue - was
+    # indistinguishable from the truth. Mutation caught: `"queue_size": 0`.
+    assert handler["queue_size"] == 2
 
     # Ring buffer: last 50, session frames replaced by a marker.
     frames = data["recent_frames"]
@@ -157,12 +165,24 @@ async def test_config_entry_diagnostics(hass: HomeAssistant, hass_client, tmp_pa
 
 
 async def test_config_entry_diagnostics_reads_the_real_handler(hass: HomeAssistant, hass_client, tmp_path) -> None:
-    """Without any hand-written stats the real GatewayStats snapshot is serialised."""
+    """Without any hand-written stats the real GatewayStats snapshot is serialised.
+
+    The ring-buffer half used to be ``isinstance(data["recent_frames"], list)``,
+    which passes for ``[]`` - i.e. for a diagnostics dump that reads the wrong
+    attribute off the handler and silently reports no traffic at all, in the one
+    test whose point is that the *real* handler is the source. One frame now goes
+    in through ``_record_frame``, the method the listening loop itself calls, and
+    has to come out the other end. Mutation caught: ``getattr(handler,
+    "recent_frames", None)`` reading any other name.
+    """
     entry = make_entry(write_yaml(tmp_path))
     with mock_gateway():
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        assert list(handler.recent_frames) == []  # nothing has been received yet
+        handler._record_frame(FRAME_MONITOR, "*1*1*11##")  # noqa: SLF001 - as the loop does
         data = await get_diagnostics_for_config_entry(hass, hass_client, entry)
     stats = data["handler"]["stats"]
     assert set(stats) == {
@@ -176,7 +196,8 @@ async def test_config_entry_diagnostics_reads_the_real_handler(hass: HomeAssista
         "session_state",
     }
     assert stats["session_state"] == "disconnected"  # the loops are mocked out
-    assert isinstance(data["recent_frames"], list)
+    assert [item["frame"] for item in data["recent_frames"]] == ["*1*1*11##"]
+    assert data["recent_frames"][0]["direction"] == FRAME_MONITOR
 
 
 async def test_diagnostics_survive_a_handler_without_the_new_attributes(

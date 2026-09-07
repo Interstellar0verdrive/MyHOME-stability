@@ -526,40 +526,34 @@ async def test_path_is_the_discovered_file_beside_the_configured_yaml(hass: Home
     assert suggestions.path != str(config_file)
 
 
-async def test_path_falls_back_to_the_config_dir_without_the_option(hass: HomeAssistant) -> None:
-    """Pins the fallback when no ``config_file_path`` option is set.
+@pytest.mark.parametrize(
+    "options",
+    [
+        # Entries created before the option existed carry no path at all.
+        {},
+        # ``config_file_path: myhome.yaml`` is a legal value whose dirname is "".
+        {CONF_FILE_PATH: "myhome.yaml"},
+    ],
+    ids=["no-option", "bare-filename"],
+)
+async def test_path_falls_back_to_the_config_dir(hass: HomeAssistant, options: dict) -> None:
+    """Pins the fallback for both ways of ending up without a directory.
 
-    Why it matters in production: entries created before the option existed carry
-    no path. An empty directory would make ``os.path.join`` return a *relative*
-    filename, written wherever the HA process happens to be cwd'ed - somewhere the
-    user will never find it.
+    Why it matters in production: an empty directory makes ``os.path.join`` return
+    a *relative* filename, so the suggestions are written wherever the Home
+    Assistant process happens to be cwd'ed - somewhere the user will never find
+    them, on a run they were told produced a file.
 
-    Mutation caught: dropping the ``or self.hass.config.config_dir`` fallback, or
-    the ``if config_file`` guard.
+    Mutations caught: dropping the ``or self.hass.config.config_dir`` fallback,
+    dropping the ``if config_file`` guard, or reducing
+    ``os.path.join(directory or self.hass.config.config_dir, ...)`` to
+    ``os.path.join(directory, ...)``.
     """
-    entry = MockConfigEntry(domain=DOMAIN, unique_id=MAC, data={"mac": MAC}, options={})
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MAC, data={"mac": MAC}, options=options)
     suggestions = MyHOMEDiscoverySuggestions(hass, entry)
 
     assert suggestions.path == os.path.join(hass.config.config_dir, DISCOVERED_CONFIG_FILE)
     assert os.path.isabs(suggestions.path)
-
-
-async def test_path_uses_the_config_dir_for_a_bare_option_filename(hass: HomeAssistant) -> None:
-    """Pins the same fallback for an option holding a bare filename (no directory).
-
-    Why it matters in production: ``config_file_path: myhome.yaml`` is a legal
-    option value; ``os.path.dirname`` of it is ``""`` and joining on ``""`` would
-    yield a relative path again.
-
-    Mutation caught: changing ``os.path.join(directory or self.hass.config.config_dir, ...)``
-    to ``os.path.join(directory, ...)``.
-    """
-    entry = MockConfigEntry(
-        domain=DOMAIN, unique_id=MAC, data={"mac": MAC}, options={CONF_FILE_PATH: "myhome.yaml"}
-    )
-    suggestions = MyHOMEDiscoverySuggestions(hass, entry)
-
-    assert suggestions.path == os.path.join(hass.config.config_dir, DISCOVERED_CONFIG_FILE)
 
 
 async def test_add_queues_only_new_suggestable_devices(hass: HomeAssistant, tmp_path: Path) -> None:

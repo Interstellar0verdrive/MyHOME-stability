@@ -18,6 +18,7 @@ from custom_components.myhome.const import (
     CONF_FILE_PATH,
     CONF_GENERATE_EVENTS,
     CONF_IDLE_WATCHDOG_SEC,
+    CONF_OWN_PASSWORD,
     CONF_PROBE_WINDOW_SEC,
     CONF_QUEUE_TTL_SEC,
     CONF_WORKER_COUNT,
@@ -570,6 +571,15 @@ async def test_options_flow_keeps_no_password_as_none(hass: HomeAssistant, mock_
     await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    # The *read* half of the same problem: the form must suggest "" and not None.
+    # A selector rendered from None shows the literal string "None", so a user who
+    # opens the dialog and presses Submit stores "None" as the gateway password and
+    # locks themselves out. Mutation caught: `entry.data.get(CONF_PASSWORD) or ""`
+    # -> `entry.data.get(CONF_PASSWORD)`.
+    password_key = next(key for key in result["data_schema"].schema if key == CONF_OWN_PASSWORD)
+    assert password_key.description["suggested_value"] == ""
+
     unchanged = {
         "address": HOST,
         CONF_PORT: 20000,

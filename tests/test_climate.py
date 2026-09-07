@@ -234,10 +234,8 @@ async def test_set_temperature(hass: HomeAssistant, tmp_path) -> None:
         )
         assert "*#4*#2*#14*0225*3##" in _drain(hass)
 
-        # Direct call without a temperature and without a known set point: a readable
-        # error instead of `None - offset`.
-        with pytest.raises(ServiceValidationError):
-            await _entity(hass, "4-2").async_set_temperature()
+        # (The no-temperature / no-set-point refusal is pinned, with its
+        # translation_key, by test_service_errors_carry_their_own_translation_key.)
 
         # With a known set point the same call re-sends it.
         _entity(hass, "4-2").handle_event(OWNHeatingEvent("*#4*2*14*0220*3##"))
@@ -650,12 +648,12 @@ async def test_no_platform_unload_entry(hass: HomeAssistant, tmp_path) -> None:
     entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
     with mock_gateway():
         await _setup(hass, entry)
-        assert isinstance(
-            hass.data[DOMAIN][MAC][CONF_PLATFORMS][CLIMATE_DOMAIN]["4-2"][CONF_ENTITIES][
-                CLIMATE_DOMAIN
-            ].unique_id,
-            str,
-        )
+        # `isinstance(..., str)` was filler. The zone entity registers itself under
+        # the documented unique id and takes itself back out on unload, exactly as
+        # the sensor platform does (test_unload_drains_the_entities_registry_dict).
+        entities = hass.data[DOMAIN][MAC][CONF_PLATFORMS][CLIMATE_DOMAIN]["4-2"][CONF_ENTITIES]
+        assert entities[CLIMATE_DOMAIN].unique_id == f"{MAC}-4-2"
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+        assert entities == {}
     assert MAC not in hass.data[DOMAIN]
