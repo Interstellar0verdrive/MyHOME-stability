@@ -999,8 +999,9 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
     the `self._moving = None` from the grace callback (same).
 
     Review 3 / C3-2: the bound asks before it concludes. Nothing answers here, so the
-    direction goes - but only after `ADVANCED_PROBE_GRACE_SEC`, never at the moment
-    the status request goes out.
+    direction goes - but only after the status grace (the gateway's command timeout
+    plus a margin, see `ADVANCED_PROBE_GRACE_MARGIN_SEC`), never at the moment the
+    status request goes out.
     """
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
         entity_id = "cover.cover_advanced"
@@ -1018,7 +1019,7 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
         assert commands.status_frames == ["*#2*83##"]
         assert hass.states.get(entity_id).state == CoverState.OPENING
 
-        await _advance(hass, freezer, 3)  # the grace runs out unanswered
+        await _advance(hass, freezer, 13)  # the grace (10 s + 2 s) runs out unanswered
         state = hass.states.get(entity_id)
         assert state.state == CoverState.OPEN
         # The real position is still the actuator's own, never an estimate.
@@ -1108,7 +1109,7 @@ async def test_the_timing_keys_of_an_advanced_cover_size_the_safety_timer(
 
         await _advance(hass, freezer, 65)  # 125 s: past 90 + 30
         assert commands.status_frames == ["*#2*87##"]
-        await _advance(hass, freezer, 3)
+        await _advance(hass, freezer, 13)  # nothing answers within the grace
         assert hass.states.get(entity_id).state == CoverState.OPEN
 
 
@@ -1181,37 +1182,65 @@ async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
 async def test_the_status_grace_outlives_a_bus_round_trip(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """`ADVANCED_PROBE_GRACE_SEC` has to be long enough for the answer to come back.
+    """The status grace has to outlast the command path it is waiting on.
 
     The safety timer asks the actuator what it is doing and only then concludes; the
     whole value of that (C3-2) is that a *slow* actuator answers in time. The answer
-    travels the command queue, which is serialised across the gateway and may already
-    hold other requests, so the grace is not free: too short and the entity publishes
-    `closed` mid-run again - an advanced cover is not `assumed_state` and reads
-    *closed* at position 0 - once per run longer than its bound.
+    travels the ordinary command queue - one sending worker by default, a scene's
+    worth of commands possibly ahead of it, an idle command session that has to be
+    re-opened first - and how long all that may legitimately take is the user's own
+    `command_timeout_sec` option, 10 s by default.
+
+    Review 4 / C4-1: the round-3 grace was a fixed 2 s, which expires well inside
+    that budget. On a merely busy bus (the "close everything at sunset" scene is the
+    common one) the answer landed after the grace and the entity published `closed`
+    in the middle of the run again - an advanced cover is not `assumed_state` and
+    reads *closed* at position 0 - which is the symptom C3-2 was about.
 
     The other advanced tests feed the answer without moving the clock at all, so they
     pass for any grace whatsoever, and `test_a_slow_advanced_actuator_never_leaves_opening`
-    advances in one jump that straddles the whole sequence. Mutations caught:
-    `ADVANCED_PROBE_GRACE_SEC = 0.01` and `= 0.5`.
+    advances in one jump that straddles the whole sequence. Mutations caught: any
+    fixed grace shorter than the command timeout (`2.0`, the round-3 value, or `0.5`),
+    and a hard-coded `12.0` that would stop following the option.
     """
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
         entity_id = "cover.cover_advanced"
         cover = entity_object(hass, COVER, "2-83")
+        handler = cover._gateway_handler  # noqa: SLF001 - the real handler, default options
+        # The grace is the command path's own budget plus a margin, never a constant.
+        assert cover._advanced_probe_grace == (  # noqa: SLF001
+            handler.command_timeout + cover_module.ADVANCED_PROBE_GRACE_MARGIN_SEC
+        )
+
         await feed_event(hass, cover, "*#2*83*10*10*0*0*0##")  # closed, on the floor
+
+        seen: list[str] = []
+
+        @callback
+        def _record(event) -> None:
+            seen.append(event.data["new_state"].state)
+
+        unsub = async_track_state_change_event(hass, [entity_id], _record)
         await feed_event(hass, cover, "*2*1*83##")  # it starts opening
         commands.clear()
 
         await _advance(hass, freezer, 55)  # past the 50 s bound: the actuator is asked
         assert commands.status_frames == ["*#2*83##"]
 
-        # A round trip on a busy command queue is not instantaneous. The entity must
+        # A round trip on a busy command queue is not instantaneous, and four seconds
+        # is well inside what the command path is allowed to take. The entity must
         # still say `opening` while it waits, not flip to `closed` at position 0.
-        await _advance(hass, freezer, 1.0)
+        await _advance(hass, freezer, 4.0)
         assert hass.states.get(entity_id).state == CoverState.OPENING
 
         await feed_event(hass, cover, "*#2*83*10*11*60*0*0##")  # "still opening"
         assert hass.states.get(entity_id).state == CoverState.OPENING
+        unsub()
+        assert CoverState.CLOSED not in seen
+
+        # And the grace follows the option: a gateway given 30 s to answer gets 32.
+        handler.command_timeout = 30.0
+        assert cover._advanced_probe_grace == 32.0  # noqa: SLF001
 
 
 async def test_the_echo_recheck_waits_out_the_echo_window(

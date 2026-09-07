@@ -126,12 +126,27 @@ ECHO_RECHECK_DELAY_SEC = 2.0
 # only needs them to keep the safety timer out of the way of its longest run.
 ADVANCED_MOVE_MARGIN_SEC = 30.0
 # When the bound expires the actuator is asked for its status *first*; the direction
-# is dropped only if nothing answers within this grace. Otherwise an actuator that is
-# simply slower than the bound would leave "Opening" for a second or two in the
-# middle of every long run - and, since an advanced cover is not `assumed_state` and
-# is "closed" at position 0, would usually be published as *closed* while it is
-# actually running up, firing every automation watching for it.
-ADVANCED_PROBE_GRACE_SEC = 2.0
+# is dropped only if nothing answers within a grace period. Otherwise an actuator
+# that is simply slower than the bound would leave "Opening" for a second or two in
+# the middle of every long run - and, since an advanced cover is not `assumed_state`
+# and is "closed" at position 0, would be published as *closed* while it is actually
+# running up, firing every automation watching for it.
+#
+# That grace cannot be a fixed number of seconds. The status request travels the
+# ordinary command path, and how long that path may legitimately take is the user's
+# own `command_timeout_sec` option (10 s by default, up to 60): a queue that already
+# holds a scene's worth of commands, a command session that has to be re-opened
+# first, one sending worker. A grace shorter than that budget expires while the
+# request it is waiting for is still perfectly in time - which is exactly the
+# mid-run *closed* the re-read was added to prevent, only now on a busy bus instead
+# of on every run. So the grace is the handler's own command timeout plus the margin
+# below (the answer still has to travel back and be dispatched once the gateway has
+# ACKed it), and it follows the option if the user changes it.
+#
+# A gateway that is dead rather than slow still ends the movement: nothing answers,
+# and the direction is dropped one command timeout after the bound instead of two
+# seconds after it.
+ADVANCED_PROBE_GRACE_MARGIN_SEC = 2.0
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
 # A "stopped" frame during a free run *we* commanded is read as the physical end stop
@@ -314,6 +329,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # True between the safety timer's status request and its answer (or the end
         # of the grace): see `_async_advanced_movement_timeout`.
         self._advanced_probe_pending = False
+
+    @property
+    def _advanced_probe_grace(self) -> float:
+        """How long the safety timer waits for the actuator's answer, in seconds.
+
+        Read from the handler on every use rather than stored: it is the command
+        path's own budget plus a margin, so it must move with the option the user
+        tunes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`).
+        """
+        return float(self._gateway_handler.command_timeout) + ADVANCED_PROBE_GRACE_MARGIN_SEC
 
     # ------------------------------------------------------------------ state
     @property
@@ -649,7 +674,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         The direction is *not* cleared here. An actuator whose real run is longer
         than the bound is still moving, and publishing "not moving" in the middle of
         it would flip the entity to *Closed* / *Open* for as long as the answer takes
-        (see `ADVANCED_PROBE_GRACE_SEC`). So the status is re-read first; the answer
+        (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`). So the status is re-read first; the answer
         goes through `_set_advanced_direction`, which cancels the grace below and
         re-arms the full bound if the actuator says it is still running.
         """
@@ -666,7 +691,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # Armed before the request goes out, so an answer that lands while we are
         # still queueing it cancels the grace instead of racing it.
         self._advanced_timer = async_call_later(
-            self.hass, ADVANCED_PROBE_GRACE_SEC, self._async_advanced_probe_grace
+            self.hass, self._advanced_probe_grace, self._async_advanced_probe_grace
         )
         await self.async_update()
 
