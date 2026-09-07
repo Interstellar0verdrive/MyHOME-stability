@@ -14,13 +14,15 @@ pip install homeassistant pytest pytest-homeassistant-custom-component ruff \
 # test plugin):
 pytest tests
 
-# Lint (matches what was run before this release):
+# Lint (the same selection CI and the release checklist use):
 ruff check custom_components tests --select F,E9,B,UP,ASYNC
 ```
 
 The tests never talk to a real gateway: `tests/test_gateway.py` and
-`tests/test_init.py` spin up a loopback fake OpenWebNet server instead. A test
-fixture mirroring a real (redacted) `myhome.yaml` lives in `tests/fixtures/`.
+`tests/test_init.py` spin up a loopback fake OpenWebNet server instead.
+`tests/fixtures/myhome.yaml` is a fictional home — invented names and addresses
+over the layout of a typical MyHOMEServer1 install — kept deliberately
+realistic in size so the validator and the platforms are exercised at scale.
 
 See [Architecture → Test strategy](architecture.md#test-strategy) for what each
 test file covers, how the fake OpenWebNet server works, and what the end-to-end
