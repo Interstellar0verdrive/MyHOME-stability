@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from OWNd.message import (
+    MESSAGE_TYPE_MAIN_TEMPERATURE,
+    MESSAGE_TYPE_SECONDARY_TEMPERATURE,
     OWNAutomationEvent,
     OWNCommand,
     OWNEnergyEvent,
@@ -277,7 +279,24 @@ class MyHOMEDeviceDiscoveryService:
 
     @staticmethod
     def _determine_thermo_device_type(message: OWNMessage) -> str:
-        if getattr(message, "temperature", None) is not None:
+        """Tell a bare temperature probe from a thermoregulation zone.
+
+        ``OWNHeatingEvent`` has no ``temperature`` attribute in OWNd 0.7.49 (it
+        exposes ``main_temperature`` / ``secondary_temperature`` / ``set_temperature``
+        / ``mode``), so the previous ``getattr(message, "temperature")`` was always
+        ``None`` and every WHO 4 frame was classified as a zone: a plant full of
+        probes got a ``climate:`` suggestion for each of them.
+
+        A probe only ever reports a measured temperature; a zone also reports a mode
+        and/or a set point.  A frame that carries a mode is therefore a zone even when
+        it also carries a temperature.
+        """
+        # ``OWNHeatingCommand`` has no ``message_type`` at all, hence the getattr.
+        if (
+            getattr(message, "message_type", None)
+            in (MESSAGE_TYPE_MAIN_TEMPERATURE, MESSAGE_TYPE_SECONDARY_TEMPERATURE)
+            and getattr(message, "mode", None) is None
+        ):
             return DEVICE_TYPE_BUS_THERMO_SENSOR
         return DEVICE_TYPE_BUS_THERMO_ZONE
 
@@ -302,8 +321,12 @@ class MyHOMEDeviceDiscoveryService:
                 properties["power"] = message.active_power
         elif isinstance(message, OWNHeatingEvent):
             properties["thermo_type"] = device_info["device_type"]
-            if getattr(message, "temperature", None) is not None:
-                properties["temperature"] = message.temperature
+            # Same OWNd 0.7.49 API as sensor.py: the reading is in main_temperature or
+            # in secondary_temperature[1], never in a ``temperature`` attribute.
+            if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:
+                properties["temperature"] = message.main_temperature
+            elif message.message_type == MESSAGE_TYPE_SECONDARY_TEMPERATURE:
+                properties["temperature"] = message.secondary_temperature[1]
 
     # ------------------------------------------------------------------ worker
     async def _discovery_worker(self) -> None:

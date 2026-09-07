@@ -58,8 +58,14 @@ _SUGGESTABLE: dict[str, tuple[str, str]] = {
 
 
 def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
-    """Return `(platform, device_cfg)` for a discovered device, or None if the
-    device type has no entity representation (CEN/CEN+ buttons, alarm...)."""
+    """Return `(platform, device_cfg)` for a discovered device, or None when this
+    device type is not suggested.
+
+    "Not suggested" is not the same as "not supported": since 0.4.0 a CEN/CEN+
+    scenario control *does* have an entity representation (the `event` platform),
+    but it is declared under `scenario_control:` rather than under a platform
+    section, which this writer cannot emit yet, so keypad presses seen during a run
+    still land in `self._skipped`. Alarm devices have no entity support at all."""
     device_type = device_info["device_type"]
     if device_type not in _SUGGESTABLE:
         return None
@@ -197,7 +203,8 @@ class MyHOMEDiscoverySuggestions:
         if not self._pending:
             if self._skipped:
                 LOGGER.info(
-                    "Discovery finished: %d device(s) without entity support were not suggested (%s)",
+                    "Discovery finished: %d device(s) were not suggested and must be "
+                    "declared by hand (%s)",
                     len(self._skipped),
                     ", ".join(self._skipped[:10]),
                 )
@@ -212,7 +219,7 @@ class MyHOMEDiscoverySuggestions:
             return
         LOGGER.info(
             "Discovery finished: %d suggestion(s) (%d new) written to %s - copy the ones you want "
-            "into your myhome.yaml. %d device(s) without entity support were skipped.",
+            "into your myhome.yaml. %d device(s) were not suggested and must be declared by hand.",
             sum(len(d) for d in pending.values()),
             added,
             self.path,
