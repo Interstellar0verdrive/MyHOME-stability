@@ -1596,3 +1596,140 @@ async def test_a_short_refused_timed_run_survives_the_gateway_echo(
         assert state.state == CoverState.OPEN
         assert state.attributes[ATTR_CURRENT_POSITION] == 100
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+
+
+async def test_a_real_stop_inside_the_inherited_echo_window_is_re_read(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """C6-1: the window the continued run inherits may hide a real stop, so we ask.
+
+    The window C5-2 restores across `_continue_to_end_stop` protects the run from the
+    gateway's late "stopped" copy of the movement command that began it (the test
+    above). The same window also swallows a *genuine* stop - somebody at the keypad,
+    or an obstacle - for whatever is left of the 1.5 s, and nothing in the frame tells
+    the two apart. Swallowed with no follow-up, the estimate then runs on to the end
+    stop while the shutter stands still, and the entity settles on *Open* at 100 % for
+    a cover parked at tilt 42: wrong until the next command or the next bus frame.
+
+    So the frame is still ignored - it usually *is* the echo - but the actuator is
+    asked what it is really doing, exactly as for the ambiguous keypad press in the
+    same direction (`ECHO_RECHECK_DELAY_SEC`). Its answer costs two seconds of error
+    instead of a position that stays wrong.
+
+    Mutation caught: `_echo_after_restart` never set in `_continue_to_end_stop` (no
+    status request goes out at all), or the flag not honoured in `_async_echo_recheck`
+    (the re-check returns early because `_moving` is set during a continued run). With
+    either, the cover ends this test fully open at 100 / 100.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(
+            COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40}, blocking=True
+        )
+        assert commands.sent_frames == ["*2*1*85##"]
+        commands.clear()
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        # Same setup as the test above: the 1.2 s tilt run is over, its stop is refused,
+        # and the slats keep going with the echo window of `*2*1*85##` still open.
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await _advance(hass, freezer, 1.25)
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        # This time the "stopped" frame is real: the shutter is parked at tilt ~42. It
+        # is indistinguishable from the echo, so it is ignored just the same...
+        await feed_event(hass, cover, "*2*0*85##")
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+        assert commands.status_frames == []
+
+        # ...but two seconds later the actuator is asked what it is doing.
+        await _advance(hass, freezer, cover_module.ECHO_RECHECK_DELAY_SEC)
+        assert commands.status_frames == ["*#2*85##"]
+
+        # Its answer ends the run where the estimate has got to - a couple of seconds
+        # of overshoot - instead of letting it free-run to the upper end stop.
+        await feed_event(hass, cover, "*2*0*85##")
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state != CoverState.OPENING
+        position = state.attributes[ATTR_CURRENT_POSITION]
+        tilt = state.attributes[ATTR_CURRENT_TILT_POSITION]
+        assert position < 10
+
+        # And it stays there: no timer is left running towards the end stop.
+        await _advance(hass, freezer, 40)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == position
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == tilt
+
+async def test_a_position_frame_on_a_cover_declared_basic_is_ignored(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """C6-2: a dimension-10 frame must not switch a basic cover into the advanced model.
+
+    `advanced:` defaults to `false` and is the one key a user cannot guess from the
+    device label, so "an advanced actuator configured as basic" is an ordinary
+    misconfiguration. The dimension-10 branch used to be the only one in
+    `handle_event` with no `self._advanced` guard, so such a frame took the entity
+    apart: `_finish_movement` stopped the time-based estimate, `_set_advanced_direction`
+    then set the direction again *without* restarting it, and the entity read *Opening*
+    at a frozen percentage for the advanced safety bound plus its grace - here 60 + 42
+    seconds - with nothing in the log to connect it to the missing key. A later plain
+    `*2*1*81##` could not repair it either (the model is already "opening").
+
+    Mutation caught: dropping the `and not self._advanced` guard from the branch, after
+    which the position below jumps to 60 and a status re-read goes out at 60 s.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        assert hass.states.get(ENTITY).attributes[ATTR_ASSUMED_STATE] is True
+        commands.clear()
+
+        with caplog.at_level("DEBUG"):
+            await feed_event(hass, cover, "*#2*81*10*11*60*0*0##")  # "opening, from 60 %"
+        # The user is told which key would make the frame meaningful.
+        assert "configured as basic" in caplog.text
+        assert "advanced: true" in caplog.text
+
+        # Nothing moved: no direction, no position taken from the frame.
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.CLOSED
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+
+        # And no advanced timer was armed behind it: past the 30 s run + 30 s bound
+        # and the 42 s grace, the entity has still asked the actuator nothing.
+        await _advance(hass, freezer, 100)
+        assert commands.status_frames == []
+        assert hass.states.get(ENTITY).state == CoverState.CLOSED
+
+
+async def test_a_position_frame_does_not_interrupt_a_basic_cover_estimate(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """C6-2, the other half: the running estimate must survive the ignored frame.
+
+    Ignoring the frame is only useful if the model it protects keeps running. The
+    cover is opening on a 30 s run when the stray dimension-10 frame arrives; the
+    estimate has to carry on from where it was, not freeze at the position the frame
+    carried.
+
+    Mutation caught: the same missing guard - the estimate stops and the position
+    sticks at 60 for the rest of the run.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await feed_event(hass, cover, "*2*1*81##")  # somebody pressed "up" on the keypad
+        await _advance(hass, freezer, 6)  # a fifth of the 30 s run
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 20
+
+        await feed_event(hass, cover, "*#2*81*10*11*60*0*0##")
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.OPENING
+        assert state.attributes[ATTR_CURRENT_POSITION] == 20  # not 60
+
+        await _advance(hass, freezer, 6)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40

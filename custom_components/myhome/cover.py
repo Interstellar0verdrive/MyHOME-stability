@@ -137,15 +137,21 @@ ADVANCED_MOVE_MARGIN_SEC = 30.0
 # may have to be re-opened first (`connect_timeout`, 10 s), the write and the ACK are
 # allowed `command_timeout` (10 s by default, up to 60), and the whole thing gets one
 # retry with a fresh session before the command is dropped. That is
-# `MyHOMEGatewayHandler.command_budget` - 40 s with the defaults - and it is not a
-# corner case here: this entity has sent nothing for at least the whole safety bound,
-# and an unused command session is closed after a minute, so the re-read very
-# probably pays for a reconnect. A grace shorter than that budget expires while the
-# request it is waiting for is still perfectly in time - which is exactly the mid-run
-# *closed* the re-read was added to prevent. So the grace is the handler's own
-# command budget plus the margin below (the answer still has to travel back and be
-# dispatched once the gateway has ACKed it), read live, so it follows the option if
-# the user changes it.
+# `MyHOMEGatewayHandler.command_budget` - 40 s with the defaults.
+#
+# Is a re-opened session really the case to size this on? Not certainly, but plausibly
+# enough that the worst case is what counts. The command session is *shared by the
+# whole gateway*, not held per entity: the sending worker closes it after a minute in
+# which **nothing at all** was sent - by any entity, service call, discovery pass or
+# watchdog probe - so "this cover has been quiet" proves nothing on its own. In a
+# quiet house at three in the morning, which is exactly when a shutter runs on a
+# schedule with nobody watching, the session usually is closed. And being wrong the
+# cheap way costs a longer stale *Opening*, while being wrong the other way publishes
+# a moving shutter as *closed* and wakes every automation watching for it.
+#
+# So the grace is the handler's own command budget plus the margin below (the answer
+# still has to travel back and be dispatched once the gateway has ACKed it), read
+# live, so it follows the option if the user changes it.
 #
 # It is a long wait - 42 s by default, against a default bound of 50 s - and it is
 # meant to be: it is the price of never publishing a moving shutter as *closed*. A
@@ -323,6 +329,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._stopped_direction: str | None = None
         # True while a free run to an end stop that we commanded is in progress.
         self._own_free_run = False
+        # True while a *continued* free run is inside the echo window it inherited
+        # from the movement command that began it (see `_continue_to_end_stop`): the
+        # one situation in which an ignored "stopped" frame may have been real.
+        self._echo_after_restart = False
         self._move_duration: float | None = None
         # Where the estimate settles when the pending timer fires.
         self._end_position: int | None = None
@@ -539,6 +549,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._own_command = None
         self._stopped_direction = None
         self._own_free_run = own_command and target_position is None
+        # A fresh movement is not a continued one; `_continue_to_end_stop` sets the
+        # flag again after it has called us.
+        self._echo_after_restart = False
 
         if target_position is None:
             # Free run to the end stop: fully open (slats open) or fully closed.
@@ -569,6 +582,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._end_position = None
         self._end_tilt = None
         self._own_free_run = False
+        self._echo_after_restart = False
         self._move_duration = None
         if position is not None:
             frozen_position, frozen_tilt = self._normalise(position, 100 if tilt is None else tilt)
@@ -648,6 +662,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         own_command_at, own_command = self._own_command_at, self._own_command
         self._start_movement(direction)
         self._own_command_at, self._own_command = own_command_at, own_command
+        # Set *after* the restart, which clears it. It marks the residual slice of
+        # that inherited window as the one place where an ignored "stopped" frame may
+        # have been a real stop - somebody at the keypad, or the actuator hitting an
+        # obstacle - rather than the gateway's echo. Nothing in the frame tells the
+        # two apart, so `_is_echo` still ignores it and asks the actuator instead
+        # (`_schedule_echo_recheck`); without this flag the frame was swallowed with
+        # no follow-up at all and the estimate ran on to the end stop while the
+        # shutter stood still.
+        self._echo_after_restart = own_command_at is not None
         # `_stopped_direction` stays None: we stopped nothing, so no movement frame
         # may be swallowed as the echo of a stop.
         # The movement itself is still the one *we* commanded, and it now ends where
@@ -681,6 +704,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # We commanded a movement: only a "stopped" frame can be its echo.
             if frame_direction is not None:
                 return False
+            # During a *continued* run this window was inherited, not just armed: the
+            # echo it was waiting for may already have gone by, and this frame may be
+            # a real stop. Ask the actuator, exactly as for the ambiguous keypad press
+            # below. Outside that case the window was armed a fraction of a second
+            # ago by our own movement command, and the "stopped" frame that follows it
+            # is the gateway's, so there is nothing to re-read.
+            recheck = self._echo_after_restart
         else:
             # We commanded a stop: only the direction it interrupted can be echoed.
             if frame_direction is None or frame_direction != self._stopped_direction:
@@ -713,10 +743,21 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def _async_echo_recheck(self, now: datetime) -> None:
         """The ignored movement frame may have been real: re-read the actuator status."""
         self._echo_recheck = None
-        if self._moving is not None:  # pragma: no cover - equivalent mutant, see review 3
-            # A later frame already started the estimate: nothing was lost. The
-            # branch cannot be told apart by a test (the re-read is harmless when it
-            # runs anyway), so it is excluded from coverage rather than chased.
+        # A later frame already started the estimate: nothing was lost, so skip the
+        # re-read. No test can reach this on HA 2026.9: `async_call_later` hands the
+        # job to `create_eager_task`, so this coroutine runs *inside* the timer
+        # callback and finishes without ever suspending (nothing on the way to
+        # `send_status_request` awaits anything real). There is therefore no window
+        # in which a bus frame could set `_moving` between the timer firing and this
+        # line. The guard stays because that is a detail of how HA schedules jobs,
+        # not a promise; it is excluded from coverage rather than chased.
+        #
+        # A continued free run is the exception, and the reason for the second half of
+        # the condition: there the estimate is *deliberately* still running while we
+        # ask, because the whole question is whether the shutter is still running with
+        # it. The answer costs one status request and can only help - it either
+        # confirms the direction or delivers a real stop.
+        if self._moving is not None and not self._echo_after_restart:  # pragma: no cover - unreachable, see above
             return
         LOGGER.debug(
             "%s Cover %s: re-reading the status after an ignored movement frame",
@@ -754,7 +795,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         plain direction frame - and a "still running" answer re-arms the full bound.
         """
         self._advanced_timer = None
-        if self._moving is None:
+        # Same unreachable-guard as in `_async_echo_recheck`: the only thing that
+        # clears `_moving` also cancels this timer, and the eager job start leaves no
+        # window between the two. Kept for safety, excluded from coverage.
+        if self._moving is None:  # pragma: no cover - unreachable: eager tasks, see `_async_echo_recheck`
             return
         LOGGER.debug(
             "%s Cover %s: no stop reported %.0fs after the movement started; re-reading the status",
@@ -780,7 +824,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         left alone - it is the actuator's own last value, never an estimate.
         """
         self._advanced_timer = None
-        if not self._advanced_probe_pending or self._moving is None:
+        # And again: any answer to the status re-read goes through
+        # `_cancel_advanced_timer`, which clears the flag *and* cancels this grace, so
+        # neither half of the condition can be true when it fires. Excluded from
+        # coverage for the same reason as the two guards above.
+        if not self._advanced_probe_pending or self._moving is None:  # pragma: no cover - unreachable, see above
             return
         self._advanced_probe_pending = False
         LOGGER.debug(
@@ -1013,6 +1061,23 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             if self._inverted:
                 opening, closing = closing, opening
 
+            if message.current_position is not None and not self._advanced:
+                # Only an advanced actuator reports its own position, and this cover is
+                # declared basic - so its whole model is the time-based estimate. Taking
+                # the position would swap models half way: `_finish_movement` would stop
+                # the estimate and `_set_advanced_direction` would then set the direction
+                # again *without* restarting it, leaving the entity reading "Opening" at
+                # a frozen percentage until the advanced safety timer expires, and a
+                # later plain movement frame could not repair it. What is wrong here is
+                # the configuration, not the frame, so say so and change nothing.
+                LOGGER.debug(
+                    "%s Cover %s: ignoring a position report (%s%%) from a cover configured as basic; "
+                    "if this actuator really reports its own position, give it `advanced: true`",
+                    self._gateway_handler.log_id,
+                    self._where,
+                    message.current_position,
+                )
+                return
             if message.current_position is not None:
                 # Advanced actuator: a real position (0 = closed), inverted if wired so.
                 position = int(message.current_position)

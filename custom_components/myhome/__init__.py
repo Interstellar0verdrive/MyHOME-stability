@@ -520,7 +520,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # A misspelled `lights:` therefore never reaches this dict.  The one gateway-level
     # key that *is* called `platforms` is skipped when the leftover keys are copied
     # over (`validate.py`, the loop at the end of `MyHomeConfigSchema.__call__`), so
-    # it cannot land here either - see `_read_yaml_config` above for the type guard
+    # it cannot land here either - see `_async_load_gateway_config` above for the type guard
     # that keeps a bad value from taking every platform down.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

@@ -490,12 +490,19 @@ class MyHOMEGatewayHandler:
     def command_budget(self) -> float:
         """Longest one command may legitimately take, from dequeue to answer, in seconds.
 
-        `_deliver` may have to open a command session before it can write - the
-        sending worker closes an unused one after `command_session_idle`, so an entity
-        that has been quiet for a minute nearly always pays for a fresh connection -
-        and it gives the whole thing one retry with a new session before dropping the
+        `_deliver` may have to open a command session before it can write, and it
+        gives the whole thing one retry with a new session before dropping the
         command. So the bound is `COMMAND_ATTEMPTS` times a connect plus a write-and-
         ACK, i.e. 40 s with the default options.
+
+        Note what that session is: `sending_loop` holds **one per sending worker**
+        (one worker by default), shared by every entity, service call, discovery pass
+        and watchdog probe of this gateway, and it is closed only when the whole
+        `send_buffer` has stayed empty for `command_session_idle`. So "this entity has
+        been quiet for a minute" says nothing at all about whether a connection has to
+        be re-opened - only "nothing whatsoever has been sent for a minute" does, which
+        is likely in a quiet house but never certain. The bound above is the worst
+        case, and it is sized on the worst case on purpose.
 
         It is *not* the whole wait a caller sees: commands queued ahead of this one
         add their own time (bounded only by `command_ttl`). It is what a single
@@ -876,7 +883,7 @@ class MyHOMEGatewayHandler:
     async def _deliver(
         self, session: OWNCommandChannel | None, worker_id: int, item: _QueuedCommand
     ) -> tuple[OWNCommandChannel | None, bool]:
-        """Send one command: retry ONCE in place with a fresh session, then drop it.
+        """Send one command: `COMMAND_ATTEMPTS` tries in place, a fresh session each time.
 
         Returns the (possibly new) session and whether the gateway answered
         (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
@@ -913,7 +920,7 @@ class MyHOMEGatewayHandler:
                 self._command_sessions.pop(worker_id, None)
                 if attempt < COMMAND_ATTEMPTS:
                     LOGGER.debug(
-                        "%s Sending `%s` failed (%s: %s); retrying once with a fresh session",
+                        "%s Sending `%s` failed (%s: %s); retrying with a fresh session",
                         self.log_id,
                         item.message,
                         type(err).__name__,
@@ -923,9 +930,12 @@ class MyHOMEGatewayHandler:
                 self._log_limited(
                     logging.WARNING,
                     "cmd-dropped",
-                    "%s Command `%s` dropped after two attempts: %s: %s",
+                    # The count comes from the constant, not from the prose: if the
+                    # retry loop is ever allowed another attempt the message follows.
+                    "%s Command `%s` dropped after %s attempts: %s: %s",
                     self.log_id,
                     item.message,
+                    COMMAND_ATTEMPTS,
                     type(err).__name__,
                     err,
                 )
@@ -1112,13 +1122,18 @@ class MyHOMEGatewayHandler:
                 self._probe_sent_at = None
                 return
             # Each clause carries its own window on purpose: `idle` is the monitor's
-            # silence, while the ACK is only looked for since the probe went out
-            # (`probe_window`). One trailing duration would read as if it qualified
-            # both, and send a user hunting for a gateway that has been dead for
-            # `idle` seconds while it was in fact answering their lights all along.
+            # silence, while the ACK is only looked for since the probe went out. One
+            # trailing duration would read as if it qualified both, and send a user
+            # hunting for a gateway that has been dead for `idle` seconds while it was
+            # in fact answering their lights all along.
+            # Both numbers are measurements, not options. This check only runs once
+            # every `read_poll_interval` (30 s), so the time since the probe is the
+            # **Probe window** option rounded up to the next poll - printing the
+            # option itself would understate the silence we actually looked at, by a
+            # factor of six with the smallest window the options allow.
             raise SessionError(
                 f"nothing on the monitor for {idle:.0f} s and no status request acknowledged "
-                f"on the command session in the last {self.probe_window:.0f} s"
+                f"on the command session in the last {now - self._probe_sent_at:.0f} s"
             )
 
     def _probe_command(self) -> OWNCommand:

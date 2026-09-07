@@ -533,7 +533,7 @@ async def test_a_platform_map_of_the_wrong_type_does_not_take_the_entry_down(
 ) -> None:
     """C5-1, belt and braces: a non-mapping platform map is replaced, not propagated.
 
-    `_read_yaml_config` guards the type rather than only the absence of the key, so a
+    `_async_load_gateway_config` guards the type rather than only the absence of the key, so a
     future producer of that dict cannot take the config entry to SETUP_ERROR either.
     """
     entry = make_entry(write_yaml(tmp_path))
