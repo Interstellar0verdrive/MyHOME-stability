@@ -329,6 +329,76 @@ async def test_hvac_action_auto_with_both_supported_is_idle(hass: HomeAssistant,
         assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
 
 
+async def test_actuator_status_does_not_freeze_a_heat_and_cool_zone(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P2-RISK-1: dimension 20 carries no direction, so it must not disable sc-19.
+
+    OWNd builds MESSAGE_TYPE_ACTION from the valve status (dimension 19, which says
+    heating/cooling) *and* from the actuator status (dimension 20, which only says
+    active). On a `heat: true, cool: true` zone the actuator frame matched no branch
+    and assigned nothing, yet set `_action_reported`: the temperature derivation was
+    switched off for good and hvac_action froze at whatever it happened to hold.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        # Actuator 1 of the zone reports "on" - and nothing about the direction.
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*1##"))
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0250##"))  # current 25.0 > target
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        # A valve frame, which does carry the direction, is still authoritative.
+        entity.handle_event(OWNHeatingEvent("*#4*3*19*0*1##"))
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+
+async def test_actuator_status_first_does_not_leave_hvac_action_unknown(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P2-RISK-1: the actuator-frame-first order used to freeze hvac_action at None.
+
+    sc-19 exists precisely so that hvac_action is never `unknown`; a central unit that
+    reports actuator status instead of valve status defeated it permanently.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*1##"))  # actuator on, first
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+
+async def test_actuator_off_is_authoritative_on_any_zone(hass: HomeAssistant, tmp_path) -> None:
+    """An inactive actuator says "idle" without needing a direction, so it still wins."""
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0, below
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
+        entity.handle_event(OWNHeatingEvent("*#4*3#2*20*0##"))  # actuator 2 off
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
 async def test_all_message_types_reach_the_entity(hass: HomeAssistant, tmp_path) -> None:
     """F10: humidity, local offset, local set point and MODE_TARGET were never fed.
 

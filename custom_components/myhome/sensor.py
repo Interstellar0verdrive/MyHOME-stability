@@ -125,9 +125,14 @@ def keepalive_minutes_for(device: dict[str, Any], config_entry: ConfigEntry) -> 
     """Keep-alive of one power sensor: YAML first, then the config entry option.
 
     The YAML value always wins when the user actually wrote one.  validate.py injects
-    the built-in default (``DEFAULT_KEEPALIVE_MINUTES``) into every sensor and marks it
-    with ``keepalive_minutes_default``; only such a marked value is replaced by the
-    ``default_keepalive_minutes`` option of the gateway.
+    a ``keepalive_minutes`` into every sensor that does not write one, and marks it with
+    ``keepalive_minutes_default`` **only when the value came from the built-in defaults**
+    (``DEFAULT_KEEPALIVE_MINUTES``): a gateway-level ``sensor_defaults: keepalive_minutes:``
+    is the user's choice too, so ``_apply_sensor_defaults`` injects it *unmarked* and the
+    option does not override it (P2-UNCLEAR-1 - this is where to look when the *Default
+    instant-power keep-alive* option "does nothing").  Only a marked value is replaced by
+    the ``default_keepalive_minutes`` option, so the precedence is: the per-sensor key,
+    then ``sensor_defaults``, then the option, then the built-in default.
 
     RISK-1: the marker used to be documented but never written, so the fallback was a
     comparison with ``DEFAULT_KEEPALIVE_MINUTES`` - which made a user who wrote
@@ -137,9 +142,22 @@ def keepalive_minutes_for(device: dict[str, Any], config_entry: ConfigEntry) -> 
     """
     configured = int(device.get(CONF_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES))
     option = config_entry.options.get(CONF_DEFAULT_KEEPALIVE_MINUTES)
-    if option is None:
+    if option is None or not device.get(CONF_KEEPALIVE_MINUTES_DEFAULTED):
         return configured
-    return int(option) if device.get(CONF_KEEPALIVE_MINUTES_DEFAULTED) else configured
+    try:
+        # P2-NIT-1: the same defensive parse `gateway._option()` gives the other four
+        # TUNABLE_OPTIONS.  The options flow writes a number, but a hand-edited entry
+        # must not take the whole sensor platform - the four gateway diagnostics
+        # included - down with a ValueError.
+        return int(float(option))
+    except (TypeError, ValueError):
+        LOGGER.warning(
+            "Option `%s` is not a number (%r): using the configured %s minutes",
+            CONF_DEFAULT_KEEPALIVE_MINUTES,
+            option,
+            configured,
+        )
+        return configured
 
 
 async def async_setup_entry(

@@ -850,8 +850,75 @@ def test_keepalive_minutes_marker_says_where_the_value_came_from():
 
 
 # --------------------------------------------------------------------------------------
+# Sections that are not mappings (P2-BUG-1)
+# --------------------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "section",
+    [
+        pytest.param([{"name": "A", "where": "11"}], id="list"),
+        pytest.param("11", id="string"),
+        pytest.param(5, id="int"),
+    ],
+)
+def test_a_platform_section_that_is_not_a_mapping_fails_validation(section):
+    """P2-BUG-1: a YAML list is the shape every stock HA platform block has.
+
+    It used to raise ``AttributeError`` out of ``MyHomeDeviceSchema.__call__``, which
+    ``__init__._async_load_gateway_config`` does not catch: the user got a raw
+    traceback instead of the message with the key path, and no Repairs issue.
+    """
+    with pytest.raises(Invalid, match="expected a mapping") as err:
+        check(gw(light=section))
+    assert [str(part) for part in err.value.path] == ["gateway", "light"]
+
+
+def test_a_scenario_control_section_that_is_not_a_mapping_fails_validation():
+    """The same for the one section whose YAML name differs from its platform."""
+    with pytest.raises(Invalid, match="expected a mapping") as err:
+        check(gw(scenario_control=["kp"]))
+    assert [str(part) for part in err.value.path] == ["gateway", "scenario_control"]
+
+
+def test_a_null_platform_section_is_still_an_empty_section():
+    """``light:`` with nothing under it is deliberately an empty section, not an error."""
+    out = check(gw(light=None, binary_sensor=None))
+    assert platforms(out)["light"] == {}
+    assert platforms(out)["binary_sensor"] == {}
+
+
+# --------------------------------------------------------------------------------------
 # Unknown keys (val-07)
 # --------------------------------------------------------------------------------------
+def test_icon_on_is_a_known_binary_sensor_key(caplog):
+    """P2-BUG-2: binary_sensor.py honours `icon_on`; the schema called it unknown.
+
+    The key survived (the inner schema is ALLOW_EXTRA) and worked, but every start
+    logged a warning and raised the ``unknown keys`` Repairs issue for it, telling the
+    user to delete a key that was doing its job.
+    """
+    validate.reset_unknown_key_warnings()
+    with (
+        validate.collect_unknown_keys() as collected,
+        caplog.at_level(logging.WARNING, logger="custom_components.myhome"),
+    ):
+        out = check(
+            gw(
+                binary_sensor={
+                    "g": {
+                        "who": "25",
+                        "where": "33",
+                        "name": "G",
+                        "icon": "mdi:gate",
+                        "icon_on": "mdi:gate-open",
+                    }
+                }
+            )
+        )
+    assert collected == []
+    assert "icon_on" not in caplog.text
+    assert platforms(out)["binary_sensor"]["25-33"]["icon_on"] == "mdi:gate-open"
+
+
 def test_unknown_keys_warn_but_never_raise(caplog):
     validate.reset_unknown_key_warnings()
     with caplog.at_level(logging.WARNING, logger="custom_components.myhome"):
@@ -952,6 +1019,37 @@ def test_unquoted_where_ints():
         check(gw(light={"a": {"where": 8, "name": "A"}}))  # YAML `where: 010` (octal)
     with pytest.raises(Invalid, match="WHERE"):
         check(gw(light={"a": {"where": None, "name": "A"}}))
+
+
+@pytest.mark.parametrize("text", ["0115", "0000", "0100"])
+def test_an_octal_looking_where_is_documented_as_undetectable(text):
+    """P2-BUG-3: YAML resolves the leading zero before the validator ever runs.
+
+    ``where: 0115`` arrives here as the integer 77 and is indistinguishable from a
+    user who really wrote 77, so it is accepted at its decimal value. Nothing can be
+    done about that in this module - what can be done is to stop claiming otherwise,
+    which is why every unquoted-WHERE message now asks for quotes on the whole file.
+    """
+    value = yaml.safe_load(f"w: {text}")["w"]
+    assert isinstance(value, int)
+    out = check(gw(light={"a": {"where": value, "name": "A"}}))
+    # The address the plant will actually be driven at is the decimal reading.
+    assert list(platforms(out)["light"]) == [f"1-{value}"]
+
+
+@pytest.mark.parametrize("where", [1, 461])
+def test_every_unquoted_where_message_asks_to_quote_the_whole_file(where):
+    """P2-BUG-3: the surviving messages must not promise a detection that cannot happen.
+
+    The old wording either explained octal in a branch only a negative WHERE could
+    reach, or said the address "is preserved exactly" about a number the user never
+    wrote.
+    """
+    with pytest.raises(Invalid, match="quote it") as err:
+        check(gw(light={"a": {"where": where, "name": "A"}}))
+    message = str(err.value)
+    assert "always quote every 'where:' value" in message
+    assert "0115 as 77" in message
 
 
 @pytest.mark.parametrize("where", [301, 12345])
