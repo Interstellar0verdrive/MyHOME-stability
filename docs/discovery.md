@@ -10,6 +10,12 @@ file path** option, or your Home Assistant config directory). Review that file
 and copy the entries you want into `myhome.yaml` yourself, then reload the
 integration.
 
+If `myhome_discovered.yaml` cannot be parsed — a half-finished hand-edit is the
+usual cause — the integration never overwrites it: it keeps your file exactly as it
+is and writes the run's suggestions to `myhome_discovered.yaml.new` instead. Both
+the warning and the closing *"Discovery finished"* line name that sibling, so the
+log always tells you which of the two files to open.
+
 > **If you ran discovery before this version and your plant has an F422 local bus
 > interface,** delete `myhome_discovered.yaml` before your next run. The old file may
 > hold two blocks for the same physical device: one without an `interface:` key,
@@ -28,9 +34,12 @@ integration.
   window: open the contact, press a button.
 - A device already present in `myhome.yaml` (matched on WHO, WHERE and bus
   interface) is not suggested again. A CEN / CEN+ scenario control already declared
-  under `scenario_control:` is likewise left out of the run's closing report — it is
-  matched on its protocol and object number, which is how the integration keys it, and
-  not on WHO/WHERE.
+  under `scenario_control:` is likewise left out of the run's closing report. It is
+  matched on the key the integration really stores it under — `cenplus-<object>` for
+  CEN+, `cen-<where>` for CEN — and not on the WHO/WHERE device key a suggestable
+  device uses. That key carries no F422 bus interface, so a keypad declared on the
+  main bus counts as declared for the riser keypad at the same address too, even
+  though the report names the two apart.
 - Progress fires `myhome_device_discovered` per device and
   `myhome_discovery_completed` when the run ends (see
   [Events → Device discovery events](services-and-events.md#device-discovery-events)).
@@ -78,7 +87,12 @@ frame the classifier cannot place. Pressing keypad buttons during a run therefor
 fires `myhome_device_discovered` and adds nothing to the file — that is expected,
 not a failure. Declare scenario controls by hand, under
 [`scenario_control:`](configuration.md#scenario-control-cen--cen). If the keypad is
-already declared there, the run does not mention it at all.
+already declared there, the run still sees it: it is logged as `Discovered …`,
+counted in the `Discovery completed: N device(s) seen` line, listed in
+`myhome_discovery_completed`'s `discovered_count` and `discovered_devices`, and
+published on `myhome_device_discovered` like every other device seen during the run.
+The one thing it is left out of is the closing *"must be declared by hand"* clause,
+because there is nothing left to do about it.
 
 A lighting or automation frame addressed to the whole plant (WHERE `0`), to an area
 (`00`, `1`–`9`, `100` — the bus spells area 10 with three digits) or to a group

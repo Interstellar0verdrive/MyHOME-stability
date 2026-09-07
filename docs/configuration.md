@@ -98,10 +98,10 @@ misbehaviour, and change one at a time.
 | Option | Default | Range | What it does |
 | --- | --- | --- | --- |
 | Idle watchdog | 300 s | 60–3600 | No frame received on the monitor session for this long: a harmless status request is sent through the command session to check the gateway is still alive. Lower it on a gateway that dies silently; raise it on a very quiet plant that produces false probes. |
-| Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session — the probe or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
+| Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session after the probe went out — the probe itself, or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
 | Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
 | Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
-| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` block. `0` disables it. Any value written in the file — per sensor or under `sensor_defaults:` — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
+| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` (alias `energy:`) block. `0` disables it. Any value written in the file — per sensor or in either gateway-level block — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
 
 A [diagnostics download](troubleshooting.md#diagnostics-download) always reports the
 values actually in effect, under `effective_options`.
@@ -153,7 +153,7 @@ Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_se
 
 Rules worth knowing:
 
-- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it accepts unquoted integers only as `0`, a two-digit or a four-digit value and refuses every other number — a bare `1`-`9`, which is ambiguous, a negative value, which is no address at all, and the 3- and 5-digit forms sensor addresses take, above all — and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device.
+- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it accepts unquoted integers only as `0`, a two-digit or a four-digit value and refuses every other number — a bare `1`-`9`, which is ambiguous, a negative value, which is no address at all, and the 3- and 5-digit forms sensor addresses take, above all — and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device — everywhere except a WHO 4 zone or temperature probe, whose address is a zone number and is normalised (`'01'` is `1`; see [Climate](#climate)).
 - **Each WHO/WHERE may appear only once per gateway**, across all platforms (a duplicate `where` used to silently drop one of the two devices). The error names both YAML keys. The only tolerated overlap is a `climate` zone plus a `sensor` of class `temperature` on the same zone: the two share one device, which keeps the **climate** name, and the probe's own `name` becomes the sensor's `entity_name` (device "Living Zone", sensor "Living Zone Living Probe").
 - **Unknown keys do not break the configuration**: they are kept and reported once at WARNING level with a "did you mean" hint (e.g. `dimable` → `dimmable`). Check the log after editing the file.
 - `device_class` is accepted as an alias of `class` on every platform (they must not both be given with different values).
@@ -222,7 +222,7 @@ A device behind an F422 bus interface is addressed on the bus as
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
+| `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). Get this key wrong in the *other* direction — an actuator that does report its own position, left at `false` — and those position frames are ignored: the timed estimate is what the cover was configured for, and mixing the two would leave the entity reading *Opening* at a frozen percentage. The log says so once per frame, at debug level, and names `advanced: true`. |
 | `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
 | `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
 | `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
@@ -260,7 +260,12 @@ which the actuator's own frame at the end of the run then puts back in step. Tha
 holds however short the run was: a two-percent nudge of the position slider takes
 well under the second and a half in which the gateway may still be repeating the
 command that started it, and the repeat is recognised as one rather than being read
-as the shutter stopping.
+as the shutter stopping. The price of recognising it is that a *real* stop in that
+same second and a half — somebody at the keypad, or the shutter meeting an obstacle —
+cannot be told apart from it either. So that one is handled the same way as the
+ambiguous keypad press: the frame is ignored, the actuator is asked what it is really
+doing, and its answer ends the run about two seconds late instead of letting the
+estimate run on to the end stop and settle there.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
 frame that says it stopped is lost, the state would otherwise stay that way for
@@ -273,24 +278,36 @@ wait for the acknowledgement (the **Command timeout** option, ten seconds by def
 see [Session tunables](#session-tunables)), and which gives the whole attempt one
 retry before giving up. So the wait is **twice the sum of those two, plus two
 seconds — about 42 seconds with the defaults** — and it grows with the **Command
-timeout** option: setting that to 30 seconds makes the wait 82. The re-opened
-connection is the normal case here rather than the exception: the actuator has been
-moving for the best part of a minute without Home Assistant sending anything, and an
-unused command connection is closed after sixty seconds.
+timeout** option: setting that to 30 seconds makes the wait 82. Is a re-opened
+connection really the case to size that wait on? Not certainly, but plausibly enough.
+Home Assistant keeps **one** command connection per gateway — shared by every entity,
+service call and background check, not one per cover — and closes it after a minute
+in which it sent nothing at all. In a quiet house at three in the morning, which is
+exactly when a shutter runs on a schedule with nobody watching, that connection
+usually is closed. And the wait is sized on the worst case on purpose: being wrong
+the cheap way leaves *Opening* on screen a little longer, while being wrong the other
+way publishes a moving shutter as *closed* and wakes every automation watching for
+it.
 
 An actuator that is still running answers well inside that, so it is not reported as
-stopped in the middle of a long run — including while the bus is busy with a scene,
-which is exactly when the command path needs its full budget. The one case that can
-still get through is a status re-read stuck behind a long queue of other commands:
-those are dropped only after the **Command queue TTL** option (sixty seconds by
-default), and waiting that long before clearing a genuinely lost direction would be
-worse than the problem. The reported position is not affected either way: it is
-always the actuator's own value, never an estimate.
+stopped in the middle of a long run; an ordinary scene is comfortably inside it too —
+a dozen commands the gateway acknowledges in well under a second. What is *not*
+covered is a queue whose own backlog outlasts the wait: queued commands are dropped
+only after the **Command queue TTL** option, sixty seconds by default, and holding
+*Opening* for a whole minute after a genuinely lost frame would be worse than the
+problem the deadline exists for. The reported position is not affected either way: it
+is always the actuator's own value, never an estimate.
 
 This is also the one thing the timing keys still do on an `advanced:` cover — a
 shutter, awning or garage door whose run is longer than the 50 seconds of the default
 needs `shutter_run` (or `opening_time` / `closing_time`) so that the safety timer
 stays out of its way.
+
+The two models are never mixed. A cover left at `advanced: false` ignores any frame
+carrying a position — an advanced actuator that was not declared as one — and keeps
+its timed estimate running; a cover declared `advanced: true` never estimates a
+position at all. If a shutter reads *Opening* at a percentage that does not move, the
+debug log will have said which of the two you are missing.
 
 ### The two-phase travel model (`slat_time`)
 
@@ -413,7 +430,7 @@ Notes:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. A leading zero is accepted and normalised (`'01'` is zone `1`); `"#0"` and `"#0#N"` are written exactly as shown. |
+| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. A leading zero is accepted and normalised (`'01'` is zone `1`); `"#0"` and `"#0#N"` are written exactly as shown. Because the two spellings are the same device, a file that contains both is refused as a duplicate and the gateway does not load until one is removed. |
 | `name` | string | `Zone N` / `Central unit` | Optional. |
 | `heat` | boolean | `true` | Heating support. At least one of `heat` / `cool` must be `true`; a zone with both `false` is a configuration error (it could only be switched off). |
 | `cool` | boolean | `false` | Cooling support. |
@@ -426,8 +443,14 @@ Notes:
 > available and stayed `unknown` for ever. Normalising it gives the device key,
 > `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
 > worked is renamed — the padded entity never received a frame — and the old, empty
-> entity and device are pruned on the first load; an automation that referenced the
-> old `entity_id` has to be pointed at the new one.
+> entity and device are pruned on the first load. The new entity is created before
+> that prune, so it takes the same id with a `_2` suffix (`climate.my_zone` →
+> `climate.my_zone_2`); the old id is freed by the prune and can be given back to it
+> from *Settings → Devices & services → Entities*. Either way, an automation that
+> referenced the old `entity_id` has to be pointed at the new one. Because the two
+> spellings are the same device, a file that contains **both** is refused as a
+> duplicate and the whole gateway does not load — every entity of that gateway, not
+> only the two — until one of the two entries is removed.
 
 **Zones with more than one actuator.** A central unit that reports *actuator* status
 sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`). The protocol layer
@@ -435,10 +458,13 @@ parses the actuator number `n` but offers no public way to read it, and this
 integration will not reach into its internals for a value a future release could
 rename — so the frames of a zone's actuators are treated as one. A zone with a valve
 and a pump, or one actuator per circuit, therefore reports *Idle* as soon as **any**
-one of them switches off, even if another is still running. The value is not stuck:
-the actuator's next "on" frame hands the mode/temperature derivation back its job, and
-from then on the temperature readings drive `hvac_action` again. A central unit that
-also reports *valve* status keeps the direction the valve named through an actuator
+one of them switches off, even if another is still running. The value is not stuck.
+On a heat-only or cool-only zone — the usual case, since `cool` defaults to `false` —
+the actuator's next "on" frame is itself a direction, and the zone goes straight back
+to *Heating* (or *Cooling*). On a `heat: true, cool: true` zone that frame carries no
+direction, so it hands the mode/temperature derivation back its job and the
+temperature readings drive `hvac_action` again. A central unit that also reports
+*valve* status keeps the direction the valve named through an actuator
 frame that only says *active* — that one no longer overrules it. An actuator **off** is
 still taken as the zone's answer there too, so the *Idle*-on-any-off limitation above
 applies to such a plant as well, until the next valve frame restores the direction.
@@ -449,7 +475,7 @@ central unit that reports *valve* status and no per-actuator status at all.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. A temperature probe is addressed by zone, so a leading zero in its `where` is accepted and normalised (`'01'` is `1`, `'0302'` is `302`) — see the note below. |
+| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. The zone is `1`-`99`, or a secondary probe written `<sensor><zone>` (`'302'` is probe 3 of zone 2). An address whose zone part is `0` — `'0'`, `'00'`, `'100'`, `'200'`…`'900'`, `'1000'` — is **refused**: the bus reports every one of those frames as the central unit (`4-#0`), which is a `climate:` device with `zone: "#0"`, never a temperature sensor. A temperature probe is addressed by zone, so a leading zero in its `where` is accepted and normalised (`'01'` is `1`, `'0302'` is `302`) — see the note below. Because the two spellings are the same device, a file that contains both is refused as a duplicate and the gateway does not load until one is removed. |
 | `who` | string | from `class` | Only needed to override the WHO implied by the class (must match). |
 | `keepalive_minutes` | integer 0-255 | `125` | Power meters only: the integration asks the meter to push instant power for this many minutes and renews the request by itself. `0` disables the automatic keep-alive. |
 | `min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`, `info_log_interval_sec` | number | see [Energy monitoring](energy.md) | Per-sensor overrides of the power filtering defaults. |
@@ -463,8 +489,16 @@ Units are fixed by the class (W, Wh, °C, lx). Energy filtering, totals and
 > available and stayed `unknown` for ever. Normalising it gives the device key,
 > `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
 > worked is renamed — the padded entity never received a frame — and the old, empty
-> entity and device are pruned on the first load; an automation that referenced the
-> old `entity_id` has to be pointed at the new one.
+> entity and device are pruned on the first load. The new entity is created before
+> that prune, so it takes the same id with a `_2` suffix (`sensor.hall_probe` →
+> `sensor.hall_probe_2`); the old id is freed by the prune and can be given back to
+> it from *Settings → Devices & services → Entities*. Either way, an automation that
+> referenced the old `entity_id` has to be pointed at the new one. Because the two
+> spellings are the same device, a file that contains **both** is refused as a
+> duplicate and the whole gateway does not load — every entity of that gateway, not
+> only the two — until one of the two entries is removed. An address the bus can only
+> read as the central unit is refused rather than normalised, because there is
+> nothing to normalise it to.
 
 Only WHO 4 addresses are normalised this way. A WHO 18, WHO 9, WHO 25 or WHO 1
 sensor keeps whatever text the bus writes, so padding is self-consistent there.
@@ -625,8 +659,9 @@ report.
 
 - **`required key not provided`**: `where` and `name` are mandatory (climate: `zone`/`name` optional).
 - **an invalid or ambiguous `where`**: either the address is not a valid OpenWebNet WHERE, or it was written unquoted in a shape that could mean two things. The message echoes the value you actually wrote and asks for quotes on every `where:` in the file: a leading zero is already gone by the time the validator runs, so this is advice, not a diagnosis of that one value. Quoting is necessary, not sufficient — a 3- or 5-digit address is a sensor address and is refused on a light, a switch or a cover whether it is quoted or not — and a negative value is refused outright, with its own message, since no platform has a negative address.
-- **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named).
+- **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named). When the two entries spell the address differently — `'01'` and `'001'` are the same WHO 4 zone — the message quotes **both** spellings as the file writes them (`… collides with climate 'living_room', which writes it '01'`) and says that addresses are compared after they are normalised.
 - **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
+- **`sensor 'x': WHERE '0' is the central unit's address, not a probe's`**: a WHO 4 temperature probe is addressed by zone (`1`-`99`, or `<sensor><zone>`). The central unit is a `climate:` device with `zone: "#0"`.
 - **a WHO 1 `binary_sensor` with a `class` other than `motion`**: WHO 1 inputs are modelled as motion sensors only. Drop the class, or move the device to `who: "25"` if it is a dry contact.
 - **`scenario_control 'x' is missing the required 'object'`** / **`a CEN control is addressed by 'where', not by 'object'`**: a CEN+ control needs `object`, a CEN control needs `where`; never both.
 - **`scenario_control 'x': pushbutton N is out of range for protocol …`**: CEN+ buttons are 1-32, CEN buttons are 0-31.

@@ -111,8 +111,16 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
   carries an `interface` key as well — the F422 local bus interface of the device,
   unpadded, and `null` for a device on the main bus. It also carries a `category` — a
   coarse grouping of the device family, one of `lighting`, `automation`, `energy`,
-  `thermoregulation`, `scenario`, `auxiliary`, `alarm`, or `generic` for a frame the
-  classifier could not place.
+  `thermoregulation`, `scenario`, `auxiliary` or `alarm`. (`generic` exists as a
+  defensive fallback in the code; no frame a run can see produces it.)
+  `discovered_device` also carries `unique_id`, `name`, `device_type`, `who`, `where`
+  and a `properties` mapping. `properties` always holds `ownId` (the address as the
+  bus writes it, `1*11#4#3`), `where`, `discovered_at`, `message_type` and
+  `message_str`, and adds what the frame happened to say: `dimmable` (with
+  `brightness`, or with a `note` naming `dimmable: true` when the actuator only
+  answered ON/OFF) on a lighting frame, `shutter_type` on an automation frame,
+  `meter_type` (with `power` when the frame carries one) on an energy frame, and
+  `thermo_type` plus the `temperature` reading on a WHO 4 frame.
 - `myhome_discovery_completed`: fired when a discovery run finishes (`myhome.stop_discovery`
   or the 60-second timeout). Data: `gateway_mac`, `reason` (`stopped` when the service
   ended the run, `timeout` when it ran out), `discovered_count` and

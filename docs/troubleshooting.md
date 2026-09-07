@@ -77,6 +77,9 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
 See [Discovery](discovery.md) — since 0.2.0, suggestions go to `myhome_discovered.yaml`, not `myhome.yaml`.
 
 1. **Check `myhome_discovered.yaml`** exists and has grown after a discovery run.
+   If a `myhome_discovered.yaml.new` sits next to it, your `myhome_discovered.yaml`
+   is not valid YAML and the suggestions went to the sibling instead — the
+   *"Discovery finished"* line in the log names the file that was written.
 2. **Verify file permissions** - ensure Home Assistant can write to that folder.
 3. Discovery only runs for the duration of `myhome.start_discovery` (default
    60 s) or until `myhome.stop_discovery` is called; both flush whatever was
@@ -84,8 +87,11 @@ See [Discovery](discovery.md) — since 0.2.0, suggestions go to `myhome_discove
 4. A device already present in `myhome.yaml` (matched on WHO, WHERE and bus
    interface) is not suggested again — a device behind an F422 interface and the
    main-bus device with the same WHERE are two different devices. A CEN / CEN+
-   scenario control already declared under `scenario_control:` is matched on its
-   protocol and object number instead, and is left out of the closing report.
+   scenario control already declared under `scenario_control:` is matched instead on
+   the key the integration really stores it under (`cenplus-<object>` for CEN+,
+   `cen-<where>` for CEN), and is left out of the closing report. That key carries no
+   F422 bus interface, so declaring the main-bus keypad covers the riser keypad at the
+   same address as well.
 
 ## Configuration issues
 
