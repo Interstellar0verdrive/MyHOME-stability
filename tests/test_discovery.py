@@ -30,6 +30,7 @@ from custom_components.myhome.const import (
     DEVICE_TYPE_BUS_THERMO_CU,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
     DEVICE_TYPE_BUS_THERMO_ZONE,
+    DEVICE_TYPE_TO_PLATFORM,
     DOMAIN,
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
@@ -234,13 +235,39 @@ async def test_the_discovered_event_names_the_event_platform(hass: HomeAssistant
 
 
 # ------------------------------------------------------------------ no YAML section
+def test_the_published_platform_values_are_exactly_the_documented_ones() -> None:
+    """``platform`` is a public event payload, so its value set is a contract.
+
+    Why it matters in production: ``docs/services-and-events.md`` enumerates the
+    values an automation may switch on.  It still listed ``switch``, and after the
+    WHO 9 fix (an auxiliary channel is a ``binary_sensor``; ``switch`` is WHO 1 only)
+    no row can produce it -- the mirror image of the bug that fix removed, which was
+    naming a section that would reject the device.
+
+    Mutation caught: adding a value here without the docs sentence catching up, or
+    re-introducing a section this integration does not build entities for.
+    """
+    assert set(DEVICE_TYPE_TO_PLATFORM.values()) - {None} == {
+        "light",
+        "cover",
+        "sensor",
+        "climate",
+        "event",
+        "binary_sensor",
+    }
+
+
 @pytest.mark.parametrize(
     ("frame", "device_type"),
     [
-        # WHO 5, an alarm zone: there is no alarm platform, and every section that
-        # exists refuses WHO 5 (binary_sensor is WHO 1/9/25).
+        # A real burglar-alarm sensor frame: WHERE is "<zone><sensor>", so this is
+        # sensor 2 of zone 1 (OWNd's OWNAlarmEvent reads it that way).  It carries no
+        # "#", so it is not taken for a group address and really reaches this code.
+        ("*5*11*12##", DEVICE_TYPE_BUS_ALARM_ZONE),
+        # The control panel itself: a single-character WHERE.
         ("*5*17*0##", DEVICE_TYPE_BUS_ALARM_ZONE),
     ],
+    ids=["zone-sensor", "control-panel"],
 )
 def test_a_device_with_no_yaml_section_publishes_platform_none(
     hass: HomeAssistant, tmp_path, frame: str, device_type: str
@@ -249,12 +276,36 @@ def test_a_device_with_no_yaml_section_publishes_platform_none(
 
     An alarm device was published as ``binary_sensor``, which is the same stale-value
     bug the round-1 fix removed for scenario controls: it sends the reader to a
-    section that would reject the device.  ``None`` says what is true.
+    section that would reject the device (``binary_sensor`` is WHO 1/9/25).  ``None``
+    says what is true.
+
+    The first case is the reason this is an observable behaviour and not only a table
+    entry: a burglar alarm reports its sensors with a plain WHERE.
     """
     info = device_info(hass, tmp_path, frame)
     assert info["device_type"] == device_type
     assert info["platform"] is None
     assert generate_suggested_config(info) is None
+
+
+@pytest.mark.parametrize("frame", ["*5*1*#1##", "*5*5*#2##"])
+def test_an_alarm_zone_address_is_not_taken_for_a_device(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """``*5*<what>*#<zone>##`` is dropped by the group-address guard, on purpose.
+
+    Why it matters in production: on WHO 5 a leading ``#`` is zone N, not a group, so
+    this guard is wider than its name.  Letting these frames through would announce a
+    device the integration has no entity and no ``myhome.yaml`` section for, and add
+    it to the "must be declared by hand" count -- which promises the user something
+    that cannot be done for an alarm zone.  This test states the choice so the next
+    reader does not "fix" the guard by accident.
+
+    Mutation caught: narrowing the guard to let ``#``-prefixed WHO 5 WHEREs through.
+    """
+    message = OWNEvent.parse(frame)
+    assert message is not None and message.where.startswith("#")
+    assert make_service(hass, tmp_path)._extract_device_info(message) is None  # noqa: SLF001
 
 
 def test_an_auxiliary_channel_is_published_as_a_binary_sensor(

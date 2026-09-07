@@ -29,8 +29,10 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.myhome.const import (
     CONF_BUTTONS,
+    CONF_LONG_PRESS,
     CONF_PLATFORMS,
     CONF_SHORT_PRESS,
+    CONF_SHORT_RELEASE,
     DEFAULT_SCENARIO_BUTTONS,
     DOMAIN,
     EVENT_CENPLUS,
@@ -454,7 +456,13 @@ def test_shipped_blueprints_are_valid(name: str) -> None:
     # short-press branch first.  The blueprints keep the wide filter on purpose, so
     # the description is the only place that can warn about it.
     assert CONF_SHORT_PRESS in SCENARIO_CONTROL_EVENT_TYPES["cen"]
-    assert "CEN" in description and "myhome_cen_event" in description
+    # `"CEN" in description` was vacuous: the very first words are "MyHOME CEN+
+    # button".  Pin the sentences of the paragraph itself, and the two event names it
+    # sends CEN users to.
+    assert "written for CEN+ controls" in description
+    assert "The picker also shows CEN controls" in description
+    assert "myhome_cen_event" in description
+    assert CONF_SHORT_RELEASE in description and CONF_LONG_PRESS in description
 
     # Substitute the inputs the way Home Assistant does and check the triggers we get.
     inputs = {"scenario_control": "0123456789abcdef0123456789abcdef"}

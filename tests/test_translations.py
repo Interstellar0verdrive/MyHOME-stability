@@ -17,7 +17,9 @@ from typing import Any
 
 import pytest
 
+from custom_components.myhome.config_flow import TUNABLE_OPTIONS
 from custom_components.myhome.const import CONF_WORKER_COUNT, MAX_COMMAND_WORKERS
+from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
 
 COMPONENT = Path(__file__).resolve().parents[1] / "custom_components" / "myhome"
 STRINGS = COMPONENT / "strings.json"
@@ -81,10 +83,17 @@ def test_each_locale_uses_the_same_placeholders_as_strings_json(path: Path) -> N
 
 
 def test_every_options_tunable_documents_its_range() -> None:
-    """The worker count was the one option with a label and no ``data_description``.
+    """Every option with a label has a ``data_description``, naming its REAL range.
 
-    Its range is also the one the runtime clamps to (MAX_COMMAND_WORKERS), so the
-    text has to name that number: a user who reads "1-10" and saves 8 gets 4.
+    The ranges live in ``config_flow.TUNABLE_OPTIONS`` (and MAX_COMMAND_WORKERS for
+    the worker count) and are repeated as prose in five files.  Checking only that a
+    description exists, or only the worker count's number, leaves the other five
+    sentences free to go stale in all five languages with the suite green -- and the
+    worker count's own range is the one the runtime clamps to, so a user who reads
+    "1-10" and saves 8 gets 4.
+
+    Mutation caught: changing a bound in ``TUNABLE_OPTIONS`` without rewriting the
+    five sentences that quote it.
     """
     for path in [STRINGS, *TRANSLATIONS]:
         step = load(path)["options"]["step"]["init"]
@@ -96,6 +105,25 @@ def test_every_options_tunable_documents_its_range() -> None:
             "generate_events",
         }, path.name
         assert f"1-{MAX_COMMAND_WORKERS}" in step["data_description"][CONF_WORKER_COUNT], path.name
+        for key, _default, minimum, maximum, _unit in TUNABLE_OPTIONS:
+            assert f"({minimum}-{maximum})" in step["data_description"][key], f"{path.name}: {key}"
+
+
+def test_the_device_automation_translations_cover_every_trigger() -> None:
+    """The automation editor labels each trigger from these two tables.
+
+    Why it matters in production: ``ALL_SUBTYPES`` is *computed* from
+    ``SCENARIO_CONTROL_BUTTON_RANGE`` and ``ALL_TRIGGER_TYPES`` from
+    ``SCENARIO_CONTROL_EVENT_TYPES``, so widening either constant silently produces
+    triggers the editor shows by their raw key.  Nothing pinned the two together.
+
+    Mutation caught: adding a protocol event or widening a button range without
+    adding the ``device_automation`` strings for it (and the reverse: a leftover
+    subtype no protocol can address).
+    """
+    device_automation = load(STRINGS)["device_automation"]
+    assert set(device_automation["trigger_subtype"]) == set(ALL_SUBTYPES)
+    assert set(device_automation["trigger_type"]) == set(ALL_TRIGGER_TYPES)
 
 
 def test_strings_json_and_the_english_translation_are_identical() -> None:

@@ -254,7 +254,15 @@ class MyHOMEDeviceDiscoveryService:
             return None
         where = str(where)
         if where.startswith("#"):
-            # groups / general addresses are not devices
+            # Groups and general addresses are not devices.  This also drops the
+            # ``*5*<what>*#<zone>##`` frames of a burglar alarm, where ``#N`` is zone N
+            # and not a group -- deliberately: an alarm zone has no entity and no
+            # ``myhome.yaml`` section, so announcing it would only grow the
+            # "must be declared by hand" count with something that cannot be declared
+            # at all.  A real alarm *sensor* frame (``*5*<what>*<zone><sensor>##``,
+            # e.g. ``*5*11*12##`` = sensor 2 of zone 1) carries a plain WHERE, gets
+            # through, and is what makes ``platform: null`` a value the public
+            # discovery event really publishes.
             return None
 
         device_type = self._message_to_device_type[message_type](message)
