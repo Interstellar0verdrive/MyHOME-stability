@@ -15,12 +15,14 @@ import socket
 import time
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import fields
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import DOMAIN as SENSOR
 from OWNd.message import OWNCommand, OWNLightingCommand, OWNMessage
@@ -37,13 +39,19 @@ from custom_components.myhome.const import (
     CONF_PROBE_WINDOW_SEC,
     CONF_QUEUE_TTL_SEC,
     CONF_SHORT_PRESS,
+    CONF_SHORT_RELEASE,
     DOMAIN,
+    EVENT_CEN,
+    EVENT_CENPLUS,
     LOGGER,
     SIGNAL_GATEWAY_CONNECTION,
     SIGNAL_GATEWAY_STATS,
 )
 from custom_components.myhome.gateway import (
     EVENT_LONG_PRESS_REPEAT,
+    EVENT_ROTATE_CCW_FAST,
+    EVENT_ROTATE_CCW_SLOW,
+    EVENT_ROTATE_CW_FAST,
     EVENT_ROTATE_CW_SLOW,
     FRAME_COMMAND,
     FRAME_MONITOR,
@@ -68,6 +76,7 @@ from custom_components.myhome.own_session import (
 )
 
 from .helpers_core import ENTRY_DATA_V2, MAC
+from .helpers_platforms import FakeGatewayStats
 
 SIGNAL = SIGNAL_GATEWAY_CONNECTION.format(mac=MAC)
 STATS_SIGNAL = SIGNAL_GATEWAY_STATS.format(mac=MAC)
@@ -244,6 +253,58 @@ async def running(handler: MyHOMEGatewayHandler, *, listening: bool = True, send
         await handler.close_listener()
 
 
+class SleepRecorder:
+    """``asyncio`` stand-in for gateway.py that records what it is asked to sleep.
+
+    Everything except ``sleep`` is delegated to the real module, so the loops keep
+    using real queues and tasks; ``sleep`` returns at once and remembers the delay.
+    That turns the reconnect pacing into an assertion on a list instead of an
+    assertion on the wall clock (the suite's tightest timing was
+    ``2 <= len(instances) <= 8`` after ``asyncio.sleep(0.3)``).
+    """
+
+    def __init__(self) -> None:
+        self.delays: list[float] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(asyncio, name)
+
+    async def sleep(self, delay: float, *args: Any, **kwargs: Any) -> Any:
+        self.delays.append(delay)
+        return await asyncio.sleep(0, *args, **kwargs)
+
+
+@contextmanager
+def recorded_sleep() -> Iterator[SleepRecorder]:
+    """Replace ``asyncio`` inside gateway.py only, for the duration of the block."""
+    recorder = SleepRecorder()
+    with patch.object(gateway_module, "asyncio", recorder):
+        yield recorder
+
+
+class FakeClock:
+    """Controllable replacement for ``MyHOMEGatewayHandler._now``.
+
+    ``reads`` counts the calls, which is what the idle-watchdog tests wait on: it
+    proves the listening loop ran its poll timeout again, without sleeping for a
+    guessed number of milliseconds.
+    """
+
+    def __init__(self, value: float = 0.0) -> None:
+        self.value = value
+        self.reads = 0
+
+    def __call__(self) -> float:
+        self.reads += 1
+        return self.value
+
+    async def advance_to(self, value: float, *, polls: int = 3) -> None:
+        """Move the clock and wait until the loop has looked at it ``polls`` times."""
+        self.value = value
+        target = self.reads + polls
+        await wait_until(lambda: self.reads >= target)
+
+
 def fired(hass: MagicMock, event_type: str) -> list[dict[str, Any]]:
     return [call.args[1] for call in hass.bus.async_fire.call_args_list if call.args[0] == event_type]
 
@@ -349,6 +410,44 @@ async def test_command_dropped_after_two_failures(caplog: pytest.LogCaptureFixtu
     )
 
 
+async def test_refused_command_is_reported_and_counted(caplog: pytest.LogCaptureFixture) -> None:
+    """gw-02: a NACK is not a silent success.
+
+    The command was delivered and the gateway said no. Pins: one rate-limited
+    WARNING naming the refused frame, the reply frames of the refused command
+    still reaching the entities, and the refusal counting as *sent* rather than
+    *dropped* (it was answered). Mutation caught: `if result.acknowledged:` ->
+    `if True:` in ``_on_command_result``, which makes the whole else arm dead and
+    leaves the user with no trace of the refusal at all.
+    """
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+    handler = make_handler()
+    light = register(handler, LIGHT, "1-11")
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        channel.responder = lambda message: CommandResult(False, [frame("*1*0*11##")])
+
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            await wait_until(lambda: handler.stats.commands_sent == 1)
+            # The identical refusal is rate limited: the key is per message.
+            assert await handler.send(OWNLightingCommand.switch_on("11"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            await wait_until(lambda: handler.stats.commands_sent == 2)
+
+    refusals = [
+        record
+        for record in caplog.records
+        if "refused" in record.message and record.levelno == logging.WARNING
+    ]
+    assert len(refusals) == 1
+    assert "*1*1*11##" in refusals[0].message
+    assert light.events == ["*1*0*11##", "*1*0*11##"]
+    assert handler.stats.commands_dropped == 0  # answered, just not accepted
+
+
 async def test_command_ttl_expired_is_dropped_without_sending(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
     handler = make_handler()
@@ -395,7 +494,15 @@ async def test_idle_command_session_is_closed() -> None:
 
 # --------------------------------------------------------------------------- event path
 async def test_none_from_get_next_reconnects_with_backoff_no_hot_loop() -> None:
-    """gw-04: None from the session is a broken connection; reconnects are paced."""
+    """gw-04: None from the session is a broken connection; reconnects are paced.
+
+    The pacing is asserted on the recorded delays rather than on how many
+    reconnects fit into a real 0.3 s (which was the tightest wall-clock assertion
+    in the suite and could exceed its ``<= 8`` upper bound on a loaded runner):
+    every failed attempt but the first must be preceded by exactly one sleep, and
+    the delays must grow. Mutation caught: dropping the ``asyncio.sleep(backoff)``
+    from the transport-error arm, which turns reconnection into a hot loop.
+    """
     handler = make_handler()
     handler.initial_backoff = 0.02
     handler.max_backoff = 0.08
@@ -403,14 +510,42 @@ async def test_none_from_get_next_reconnects_with_backoff_no_hot_loop() -> None:
     def configure(channel: FakeEventChannel, index: int) -> None:
         channel.feed(None)
 
-    with fake_channels(event=Factory(FakeEventChannel, configure)) as (event, _, dispatch):
+    with recorded_sleep() as sleeps, fake_channels(event=Factory(FakeEventChannel, configure)) as (
+        event,
+        _,
+        dispatch,
+    ):
         async with running(handler, sending=False):
-            await asyncio.sleep(0.3)
+            await wait_until(lambda: len(sleeps.delays) >= 4)
             count = len(event.instances)
-    # 0.02 + 0.04 + 0.08 + 0.08 ... -> a handful of attempts in 0.3 s, not thousands.
-    assert 2 <= count <= 8
+    # One paced attempt per sleep: never a hot loop, never a stalled loop.
+    assert count >= 4
+    assert sleeps.delays[:4] == [0.02, 0.04, 0.08, 0.08]
     assert all(channel.closed for channel in event.instances)
     assert connection_calls(dispatch)[:2] == [True, False]
+
+
+async def test_backoff_stops_growing_at_max_backoff() -> None:
+    """gw-04: the reconnect delay is capped, so an overnight outage never ends up
+    waiting hours before the next attempt.
+
+    Mutation caught: ``backoff = min(backoff * 2, self.max_backoff)`` ->
+    ``backoff = backoff * 2`` in the listening loop. The existing pacing test only
+    proves the delay *grows*; nothing proved it stops growing.
+    """
+    handler = make_handler()
+    handler.initial_backoff = 0.01
+    handler.max_backoff = 0.02
+
+    def configure(channel: FakeEventChannel, index: int) -> None:
+        channel.feed(None)
+
+    with recorded_sleep() as sleeps, fake_channels(event=Factory(FakeEventChannel, configure)):
+        async with running(handler, sending=False):
+            await wait_until(lambda: len(sleeps.delays) >= 6)
+            delays = list(sleeps.delays[:6])
+    assert delays == [0.01, 0.02, 0.02, 0.02, 0.02, 0.02]
+    assert max(delays) == handler.max_backoff
 
 
 async def test_transport_error_reconnects_and_signals_availability() -> None:
@@ -445,6 +580,103 @@ async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFix
                 await asyncio.sleep(0.05)
             assert len(event.instances) == 2
     assert any("probe went unanswered" in record.message for record in caplog.records)
+
+
+async def test_answered_probe_keeps_the_session() -> None:
+    """gw-03: a probe that IS answered inside ``probe_window`` must not reconnect.
+
+    ``test_idle_watchdog_probes_then_reconnects`` only covers the unanswered case.
+    On a quiet bus the answered case is the normal one, so the mutation
+    ``if now - self._probe_sent_at >= self.probe_window:`` -> ``if True:`` would
+    drop and rebuild the monitor session on every single probe - a spurious
+    reconnect storm that nothing in the suite noticed.
+
+    The handler's clock is replaced, so the whole scenario is decided by the
+    values below and not by how fast the machine is.
+    """
+    handler = make_handler()
+    clock = FakeClock()
+    handler._now = clock  # noqa: SLF001 - shadows the static clock on this instance
+    handler.idle_timeout = 100.0
+    handler.probe_window = 50.0
+    handler.read_poll_interval = 0.01
+    register(handler, LIGHT, "1-11")
+
+    with fake_channels() as (event, command, _):
+        async with running(handler):
+            await wait_until(lambda: handler.is_connected)
+            # Silence long enough for the watchdog to probe the bus.
+            await clock.advance_to(150.0)
+            await wait_until(lambda: command.instances and command.instances[0].sent)
+            assert command.instances[0].sent == ["*#1*11##"]
+
+            # Still inside the window: the gateway is allowed to be slow.
+            await clock.advance_to(180.0)
+            assert len(event.instances) == 1
+
+            # The answer arrives: the session is healthy again.
+            event.instances[0].feed("*1*1*11##")
+            await wait_until(lambda: handler.recent_frames)
+            await clock.advance_to(200.0)
+
+    assert len(event.instances) == 1
+
+
+async def test_a_bug_in_the_listening_loop_does_not_kill_the_task() -> None:
+    """gw-16: the loop's catch-all is the "never give up" guarantee.
+
+    ``test_dispatch_errors_never_tear_down_the_session`` covers errors raised
+    *inside* the dispatcher, which are caught one level deeper. This raises in the
+    loop body itself (``_record_frame``), which only the bare ``except Exception``
+    of ``listening_loop`` can absorb. Mutation caught: narrowing that catch-all to
+    a specific exception type, after which one unexpected bug silently ends the
+    task and the gateway never comes back until Home Assistant is restarted.
+    """
+    handler = make_handler()
+    good = register(handler, LIGHT, "1-11")
+    real_record = handler._record_frame  # noqa: SLF001
+    calls: list[str] = []
+
+    def record_once_then_work(direction: str, message: Any) -> None:
+        calls.append(str(message))
+        if len(calls) == 1:
+            raise RuntimeError("bug in the listening loop")
+        real_record(direction, message)
+
+    handler._record_frame = record_once_then_work  # noqa: SLF001
+
+    with fake_channels() as (event, _, _):
+        async with running(handler, sending=False):
+            await wait_until(lambda: handler.is_connected)
+            event.instances[0].feed("*1*1*11##")
+            # The session is rebuilt instead of the task dying.
+            await wait_until(lambda: len(event.instances) == 2)
+            assert handler.listening_worker is not None and not handler.listening_worker.done()
+            event.instances[1].feed("*1*1*11##")
+            await wait_until(lambda: good.events == ["*1*1*11##"])
+
+    assert handler.listening_worker is None  # only close_listener() ends it
+
+
+async def test_probe_falls_back_to_an_energy_meter_then_a_climate_zone() -> None:
+    """gw-03: the idle probe must work for a gateway with no lamp or shutter.
+
+    ``_probe_command``'s two fallbacks are unreachable from the test fixture,
+    which always has a point-to-point light, so a WHO 18-only or climate-only
+    installation would have silently probed with the general lighting status - a
+    frame such a gateway may not answer, which would make the watchdog reconnect
+    for ever. Mutation caught: deleting either fallback arm.
+    """
+    energy_only = make_handler()
+    register(energy_only, SENSOR, "18-51", **{"class": "power", "who": "18"})
+    assert str(energy_only._probe_command()) == "*#18*51*51##"  # noqa: SLF001
+
+    climate_only = make_handler()
+    register(climate_only, CLIMATE, "4-2", zone="2")
+    assert str(climate_only._probe_command()) == "*#4*2*0##"  # noqa: SLF001
+
+    # Nothing configured at all: the general lighting status is the last resort.
+    assert str(make_handler()._probe_command()) == "*#1*0##"  # noqa: SLF001
 
 
 async def test_event_auth_failure_stops_loop_and_starts_reauth() -> None:
@@ -501,6 +733,41 @@ async def test_button_platform_skipped_and_general_status_requested() -> None:
     await handler._dispatch_message(frame("*1*1*3##"), from_monitor=True)  # noqa: SLF001
     assert fired(handler.hass, "myhome_area_light_event") == [{"message": "*1*1*3##", "area": 3, "event": "on"}]
     assert queued(handler) == ["*#1*0##", "*#1*3##"]
+
+
+async def test_general_area_group_automation_frames_never_reach_a_cover() -> None:
+    """gw-18 (WHO 2): a general / area / group shutter frame is a bus event only.
+
+    The lighting equivalents are covered above; the automation ones and the
+    lighting *group* arm were not. Delivering such a frame to the entities would
+    restart the timed position estimate of every cover in the house, and dropping
+    the handler would silently stop the three ``myhome_*_automation_event`` events
+    the docs and the shipped blueprints advertise. Mutation caught:
+    ``_handle_automation_scope`` returning False, and the ``is_group`` arm of
+    ``_handle_lighting_scope``.
+    """
+    handler = make_handler()
+    cover = register(handler, COVER, "2-81")
+    light = register(handler, LIGHT, "1-11")
+    for raw in ("*2*1*0##", "*2*2*3##", "*2*0*#3##", "*1*1*#3##"):
+        await handler._dispatch_message(frame(raw), from_monitor=True)  # noqa: SLF001
+
+    assert fired(handler.hass, "myhome_general_automation_event") == [
+        {"message": "*2*1*0##", "event": "open"}
+    ]
+    assert fired(handler.hass, "myhome_area_automation_event") == [
+        {"message": "*2*2*3##", "area": 3, "event": "close"}
+    ]
+    assert fired(handler.hass, "myhome_group_automation_event") == [
+        {"message": "*2*0*#3##", "group": 3, "event": "stop"}
+    ]
+    assert fired(handler.hass, "myhome_group_light_event") == [
+        {"message": "*1*1*#3##", "group": 3, "event": "on"}
+    ]
+    assert cover.events == []
+    assert light.events == []
+    # A group frame matches no WHERE, so it must not re-request anything either.
+    assert queued(handler) == []
 
 
 async def test_preset_level_refreshes_configured_light() -> None:
@@ -639,6 +906,55 @@ async def test_cenplus_event_mapping() -> None:
     assert events[0] == {"object": 1, "pushbutton": 1, "event": CONF_SHORT_PRESS, "mac": MAC}
     assert events[-1] == {"object": 2, "pushbutton": 2, "event": EVENT_ROTATE_CW_SLOW, "mac": MAC}
     assert all(event["event"] is not None for event in events)
+
+
+async def test_cen_and_cenplus_press_names_are_complete_and_distinct() -> None:
+    """gw-14: every documented press maps to its own name.
+
+    These names are the automation contract: they are the ``type``/``subtype``
+    values of the device triggers, of the shipped blueprints and of
+    docs/services-and-events.md, so two presses sharing a name - or a swapped
+    pair - silently breaks every automation bound to them.
+    ``test_cenplus_event_mapping`` only ever sends WHAT 25 of the four rotations,
+    and no test sends a CEN frame with a ``#state`` suffix at all.
+
+    Mutations caught: swapping any two of the four rotation names, and swapping
+    ``short_release`` with ``long_press`` on the CEN side. The CEN branch *order*
+    matters too: ``is_released_after_short_press`` raises ``TypeError`` when the
+    frame carries no state (OWNd 0.7.49), so ``is_pressed`` has to be tested
+    first - the bare ``*15*21*51##`` below is what pins that.
+    """
+    handler = make_handler()
+    for raw in (
+        "*25*21#1*21##",  # short press
+        "*25*22#1*21##",  # held
+        "*25*23#1*21##",  # still held
+        "*25*24#1*21##",  # released
+        "*25*25#1*21##",  # rotate clockwise, slow
+        "*25*26#1*21##",  # rotate clockwise, fast
+        "*25*27#1*21##",  # rotate counter-clockwise, slow
+        "*25*28#1*21##",  # rotate counter-clockwise, fast
+    ):
+        await handler._dispatch_message(frame(raw), from_monitor=True)  # noqa: SLF001
+    cenplus = [event["event"] for event in fired(handler.hass, EVENT_CENPLUS)]
+    assert cenplus == [
+        CONF_SHORT_PRESS,
+        CONF_LONG_PRESS,
+        EVENT_LONG_PRESS_REPEAT,
+        CONF_LONG_RELEASE,
+        EVENT_ROTATE_CW_SLOW,
+        EVENT_ROTATE_CW_FAST,
+        EVENT_ROTATE_CCW_SLOW,
+        EVENT_ROTATE_CCW_FAST,
+    ]
+    assert len(set(cenplus)) == len(cenplus)
+
+    # CEN frames carry the state in the WHAT suffix; the stateless frame first.
+    for raw in ("*15*21*51##", "*15*21#1*51##", "*15*21#3*51##", "*15*21#2*51##"):
+        await handler._dispatch_message(frame(raw), from_monitor=True)  # noqa: SLF001
+    cen = [event["event"] for event in fired(handler.hass, EVENT_CEN)]
+    assert cen == [CONF_SHORT_PRESS, CONF_SHORT_RELEASE, CONF_LONG_PRESS, CONF_LONG_RELEASE]
+    assert len(set(cen)) == len(cen)
 
 
 # --------------------------------------------------------------------------- energy throttle
@@ -1012,15 +1328,32 @@ async def test_channel_open_failures() -> None:
         await channel.open(timeout=2)
         assert channel.is_open
         await channel.close()
-    # Refused connection -> OSError, never a silent None.
+    # Refused connection -> OSError, never a silent None.  The socket is bound and
+    # never listened on, and stays open for the whole check: closing it first (as
+    # this test used to) frees the port, and another process claiming it in the
+    # meantime would turn the refusal into a successful connect.
     probe = socket.socket()
     probe.bind(("127.0.0.1", 0))
-    free_port = probe.getsockname()[1]
-    probe.close()
-    channel = OWNCommandChannel(make_gateway(free_port), LOGGER)
-    with pytest.raises(OSError):
-        await channel.open(timeout=2)
-    await channel.close()
+    closed_port = probe.getsockname()[1]
+    try:
+        channel = OWNCommandChannel(make_gateway(closed_port), LOGGER)
+        with pytest.raises(OSError):
+            await channel.open(timeout=2)
+        await channel.close()
+    finally:
+        probe.close()
+
+
+def test_fake_gateway_stats_stays_field_compatible() -> None:
+    """``helpers_platforms.FakeGatewayStats`` is a hand-written copy of
+    ``gateway.GatewayStats`` that the platform tests dispatch instead of the real
+    snapshot. Nothing made the two stay in step: a field added to (or renamed in)
+    the real dataclass would leave every platform test asserting a shape
+    production no longer publishes.
+    """
+    assert {field.name for field in fields(FakeGatewayStats)} == {
+        field.name for field in fields(GatewayStats)
+    }
 
 
 def test_parse_frame_never_raises() -> None:
