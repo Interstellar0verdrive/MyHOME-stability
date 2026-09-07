@@ -101,7 +101,7 @@ misbehaviour, and change one at a time.
 | Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session after the probe went out — the probe itself, or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
 | Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
 | Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
-| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` block. `0` disables it. Any value written in the file — per sensor or under `sensor_defaults:` — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
+| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` (alias `energy:`) block. `0` disables it. Any value written in the file — per sensor or in either gateway-level block — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
 
 A [diagnostics download](troubleshooting.md#diagnostics-download) always reports the
 values actually in effect, under `effective_options`.
@@ -153,7 +153,7 @@ Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_se
 
 Rules worth knowing:
 
-- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it accepts unquoted integers only as `0`, a two-digit or a four-digit value and refuses every other number — a bare `1`-`9`, which is ambiguous, a negative value, which is no address at all, and the 3- and 5-digit forms sensor addresses take, above all — and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device.
+- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it accepts unquoted integers only as `0`, a two-digit or a four-digit value and refuses every other number — a bare `1`-`9`, which is ambiguous, a negative value, which is no address at all, and the 3- and 5-digit forms sensor addresses take, above all — and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device — everywhere except a WHO 4 zone or temperature probe, whose address is a zone number and is normalised (`'01'` is `1`; see [Climate](#climate)).
 - **Each WHO/WHERE may appear only once per gateway**, across all platforms (a duplicate `where` used to silently drop one of the two devices). The error names both YAML keys. The only tolerated overlap is a `climate` zone plus a `sensor` of class `temperature` on the same zone: the two share one device, which keeps the **climate** name, and the probe's own `name` becomes the sensor's `entity_name` (device "Living Zone", sensor "Living Zone Living Probe").
 - **Unknown keys do not break the configuration**: they are kept and reported once at WARNING level with a "did you mean" hint (e.g. `dimable` → `dimmable`). Check the log after editing the file.
 - `device_class` is accepted as an alias of `class` on every platform (they must not both be given with different values).
@@ -430,7 +430,7 @@ Notes:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. A leading zero is accepted and normalised (`'01'` is zone `1`); `"#0"` and `"#0#N"` are written exactly as shown. |
+| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. A leading zero is accepted and normalised (`'01'` is zone `1`); `"#0"` and `"#0#N"` are written exactly as shown. Because the two spellings are the same device, a file that contains both is refused as a duplicate and the gateway does not load until one is removed. |
 | `name` | string | `Zone N` / `Central unit` | Optional. |
 | `heat` | boolean | `true` | Heating support. At least one of `heat` / `cool` must be `true`; a zone with both `false` is a configuration error (it could only be switched off). |
 | `cool` | boolean | `false` | Cooling support. |
@@ -443,8 +443,14 @@ Notes:
 > available and stayed `unknown` for ever. Normalising it gives the device key,
 > `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
 > worked is renamed — the padded entity never received a frame — and the old, empty
-> entity and device are pruned on the first load; an automation that referenced the
-> old `entity_id` has to be pointed at the new one.
+> entity and device are pruned on the first load. The new entity is created before
+> that prune, so it takes the same id with a `_2` suffix (`climate.my_zone` →
+> `climate.my_zone_2`); the old id is freed by the prune and can be given back to it
+> from *Settings → Devices & services → Entities*. Either way, an automation that
+> referenced the old `entity_id` has to be pointed at the new one. Because the two
+> spellings are the same device, a file that contains **both** is refused as a
+> duplicate and the whole gateway does not load — every entity of that gateway, not
+> only the two — until one of the two entries is removed.
 
 **Zones with more than one actuator.** A central unit that reports *actuator* status
 sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`). The protocol layer
@@ -466,7 +472,7 @@ central unit that reports *valve* status and no per-actuator status at all.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. A temperature probe is addressed by zone, so a leading zero in its `where` is accepted and normalised (`'01'` is `1`, `'0302'` is `302`) — see the note below. |
+| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. The zone is `1`-`99`, or a secondary probe written `<sensor><zone>` (`'302'` is probe 3 of zone 2). An address whose zone part is `0` — `'0'`, `'00'`, `'100'`, `'200'`…`'900'`, `'1000'` — is **refused**: the bus reports every one of those frames as the central unit (`4-#0`), which is a `climate:` device with `zone: "#0"`, never a temperature sensor. A temperature probe is addressed by zone, so a leading zero in its `where` is accepted and normalised (`'01'` is `1`, `'0302'` is `302`) — see the note below. Because the two spellings are the same device, a file that contains both is refused as a duplicate and the gateway does not load until one is removed. |
 | `who` | string | from `class` | Only needed to override the WHO implied by the class (must match). |
 | `keepalive_minutes` | integer 0-255 | `125` | Power meters only: the integration asks the meter to push instant power for this many minutes and renews the request by itself. `0` disables the automatic keep-alive. |
 | `min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`, `info_log_interval_sec` | number | see [Energy monitoring](energy.md) | Per-sensor overrides of the power filtering defaults. |
@@ -480,8 +486,16 @@ Units are fixed by the class (W, Wh, °C, lx). Energy filtering, totals and
 > available and stayed `unknown` for ever. Normalising it gives the device key,
 > `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
 > worked is renamed — the padded entity never received a frame — and the old, empty
-> entity and device are pruned on the first load; an automation that referenced the
-> old `entity_id` has to be pointed at the new one.
+> entity and device are pruned on the first load. The new entity is created before
+> that prune, so it takes the same id with a `_2` suffix (`sensor.hall_probe` →
+> `sensor.hall_probe_2`); the old id is freed by the prune and can be given back to
+> it from *Settings → Devices & services → Entities*. Either way, an automation that
+> referenced the old `entity_id` has to be pointed at the new one. Because the two
+> spellings are the same device, a file that contains **both** is refused as a
+> duplicate and the whole gateway does not load — every entity of that gateway, not
+> only the two — until one of the two entries is removed. An address the bus can only
+> read as the central unit is refused rather than normalised, because there is
+> nothing to normalise it to.
 
 Only WHO 4 addresses are normalised this way. A WHO 18, WHO 9, WHO 25 or WHO 1
 sensor keeps whatever text the bus writes, so padding is self-consistent there.
@@ -642,8 +656,9 @@ report.
 
 - **`required key not provided`**: `where` and `name` are mandatory (climate: `zone`/`name` optional).
 - **an invalid or ambiguous `where`**: either the address is not a valid OpenWebNet WHERE, or it was written unquoted in a shape that could mean two things. The message echoes the value you actually wrote and asks for quotes on every `where:` in the file: a leading zero is already gone by the time the validator runs, so this is advice, not a diagnosis of that one value. Quoting is necessary, not sufficient — a 3- or 5-digit address is a sensor address and is refused on a light, a switch or a cover whether it is quoted or not — and a negative value is refused outright, with its own message, since no platform has a negative address.
-- **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named).
+- **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named). When the two entries spell the address differently — `'01'` and `'001'` are the same WHO 4 zone — the message quotes **both** spellings as the file writes them (`… collides with climate 'living_room', which writes it '01'`) and says that addresses are compared after they are normalised.
 - **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
+- **`sensor 'x': WHERE '0' is the central unit's address, not a probe's`**: a WHO 4 temperature probe is addressed by zone (`1`-`99`, or `<sensor><zone>`). The central unit is a `climate:` device with `zone: "#0"`.
 - **a WHO 1 `binary_sensor` with a `class` other than `motion`**: WHO 1 inputs are modelled as motion sensors only. Drop the class, or move the device to `who: "25"` if it is a dry contact.
 - **`scenario_control 'x' is missing the required 'object'`** / **`a CEN control is addressed by 'where', not by 'object'`**: a CEN+ control needs `object`, a CEN control needs `where`; never both.
 - **`scenario_control 'x': pushbutton N is out of range for protocol …`**: CEN+ buttons are 1-32, CEN buttons are 0-31.
