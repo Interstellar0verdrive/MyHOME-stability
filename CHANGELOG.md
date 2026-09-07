@@ -12,10 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     estimate after a plain "opening"/"closing" frame; advanced covers now only track
     the direction from those frames, and they finally report `opening` / `closing`
     from their own status frames (states 11-14);
-  - after a short timed run (a tilt target below ~17 %), the gateway's late copy of
-    the movement command could start a phantom run to the end stop; the echo window
-    now also covers our own stop commands, and only one contradicting frame per
-    command is ignored, so a real keypad stop right after it is still honoured;
   - `set_cover_position` to the value a moving cover was passing through did nothing
     and the cover ran on; it now stops there;
   - a full `open_cover` / `close_cover` did not re-calibrate: the actuator's end-stop
@@ -26,41 +22,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     racing it;
   - `inverted` now also mirrors the level of an advanced actuator, so direction
     flags and position agree.
-- Timing keys (`shutter_run`, `slat_time`, `opening_time`, `closing_time`) written
-  on an `advanced` cover are now reported as ignored with a warning instead of
-  silently dropped.
-- Covers, second review round:
-  - a keypad press within 1.5 s of a stop sent by Home Assistant is no longer
-    discarded. Only a frame that can actually be the gateway echoing our own command
-    is ignored: a `stopped` frame after a movement we commanded, or a copy of the
-    movement our own stop interrupted. A movement in any other direction is honoured
-    immediately, a press in the same direction is recovered by a status re-read about
-    two seconds later, and a stop the gateway refused no longer arms the window at
-    all. Without this a shutter driven from the wall could run fully open while Home
+- Covers, the gateway's own echoes — one mechanism, refined over the three review
+  rounds:
+  - after a short timed run (a tilt target below ~17 %) the gateway's late copy of
+    the movement command could start a phantom run to the end stop, and a keypad
+    press within 1.5 s of a stop sent by Home Assistant was discarded. Only a frame
+    that can actually be the gateway echoing our own command is ignored now: a
+    `stopped` frame after a movement we commanded, or a copy of the movement our own
+    stop interrupted. A movement in any other direction is honoured immediately, a
+    press in the same direction is recovered by a status re-read about two seconds
+    later, and a stop the gateway refused now changes nothing at all — neither the
+    repeat window nor the estimated position, on either of the two paths that send a
+    stop. Without this a shutter driven from the wall could run fully open while Home
     Assistant reported it closed, until the next command from Home Assistant;
+  - a `cover.stop_cover` the gateway could not take — its command queue was full, or
+    the connection was closing — used to freeze the position half way and keep
+    reporting it for good, because the actuator's own stop frame at the end of the
+    physical run re-froze the same stale value. The shutter goes on running in that
+    case, so the estimate now goes on running with it. The stop that ends a
+    `cover.set_cover_position` or a tilt run follows the same rule;
   - an advanced actuator no longer stays *Opening* / *Closing* for ever when its
-    `stopped` frame is lost: the direction is dropped after the longest configured
-    travel time plus 30 s and the actuator's status is re-read; the reported position
-    is never estimated.
+    `stopped` frame is lost: after the longest configured travel time plus 30 s the
+    actuator's status is re-read, and the direction is dropped only if nothing
+    answers within about two seconds — so an actuator whose real run is longer than
+    that timer is never reported as *closed* (or *open*) in the middle of it, waking
+    every automation watching for it. The reported position is never estimated.
 - Sensors, binary sensors and climate, found by the same review:
   - a platform section written as a YAML list or a scalar (`light: [...]`) is
     reported as a normal validation error with its key path instead of crashing the
     setup with a traceback;
-  - `icon_on` given without `icon` now works on lights, switches and binary sensors
-    (the entity's default icon is used while off);
   - `icon` was documented as a common key but ignored by sensors, binary sensors,
     climate zones and the scenario-control event entity, and `icon_on` by binary
-    sensors; they now work (the Lock/Unlock buttons keep their fixed icons, and the
-    validator knows `icon_on` on a binary sensor, so it no longer reports it as an
-    unknown key);
+    sensors; they now work, `icon_on` given without `icon` included (the entity's
+    default icon is used while off, the Lock/Unlock buttons keep their fixed icons,
+    and the validator knows `icon_on` on a binary sensor, so it no longer reports it
+    as an unknown key). On a `power` or `energy` meter `icon` applies to every entity
+    of the meter, not only to the main one;
   - `entity_name` on a `class: power` meter now renames the Power entity;
   - in a plant with a central unit, every nameless zone was called "Central unit";
     only the bare `#0` is, `#0#5` is "Zone 5" again;
   - a `climate` zone paired with a temperature `sensor` on the same zone lost the
     zone's name to the probe: the shared device keeps the climate name and the probe
     name becomes the sensor's `entity_name`;
+  - `hvac_action` on a `heat: true, cool: true` zone could freeze as soon as the
+    central unit reported *actuator* status (dimension 20) instead of *valve* status
+    (dimension 19): at `unknown` when such a frame arrived first, and at `idle` from
+    the first actuator off/on pair onwards — the ordinary duty cycle of a thermostat.
+    Only a frame that actually carries a direction, or one on a heat-only /
+    cool-only zone, or one reporting "not active", now settles the attribute;
+    otherwise it is still derived from the temperature;
   - an explicit `keepalive_minutes` equal to the built-in default (125) was overridden
     by the *Default instant-power keep-alive* option; the file value now always wins;
+  - a non-numeric *Default instant-power keep-alive* option, only reachable through a
+    hand-edited entry, took the whole sensor platform down, the four gateway
+    diagnostic entities included; it now falls back to the configured value with a
+    warning, like the other tunables;
   - a WHO 1 illuminance sensor behind an F422 interface never received its interface
     and matched no reply;
   - a dimmer switched on with `transition:` kept a stale brightness;
@@ -70,10 +86,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     spelled (`31#4#3` / `31#4#03`), like the frame dispatcher;
   - an unquoted 3- or 5-digit `where` (the shape sensor addresses take) is no longer
     blamed on lost leading zeros and octal; the message quotes the user's own value;
-  - a WHO 9 auxiliary binary sensor claimed to be `off` from the moment it was
-    created. The bus never answers a status request for an auxiliary channel, so
-    there was nothing behind that `off`: the entity now starts `unknown` and
-    restores its last known state across a restart or a reload.
 - Device triggers, blueprints, flows and diagnostics:
   - a device trigger on a device that is not a scenario control (a light, a cover,
     the gateway) is now refused with a readable error; it used to be accepted and the
@@ -86,6 +98,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - the options flow no longer turns a gateway configured *without* a password into
     one with an empty password (which OWNd reports as "invalid password" instead of
     asking for one);
+  - the options refused to save at all on an entry whose stored number of command
+    sessions was 5-10, i.e. every entry saved before the 1-4 bound landed: the dialog
+    opened pre-filled with the stale value and then rejected it on every submit,
+    including one that only meant to change the gateway address. The form now opens
+    on the clamped value — the number the integration has been running since setup —
+    and the first save writes it down;
+  - the diagnostics download's `effective_options` reported the stored number of
+    command sessions instead of the clamped one actually in use, contradicting
+    `handler.sending_workers` a few lines below it in the same file;
   - a gateway that never set the **Configuration file path** option showed no file
     name at all in the diagnostics download, and `config_file_is_default_location:
     false` — the opposite of the truth. Both now report the default: `myhome.yaml`,
@@ -103,7 +124,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - discovery: scenario controls report `platform: event`, not `button`, in
     `myhome_device_discovered`, and a device family with no `myhome.yaml` section
     (alarm devices) reports `platform: null` instead of `binary_sensor`, which the
-    schema rejects.
+    schema rejects;
+  - discovery suggested a thermoregulation central unit as `climate: {zone: '0'}`, a
+    value the configuration schema refuses — pasting it did not break one device, it
+    made the whole `myhome.yaml` fail to load. Every WHO 4 frame whose WHERE is `0`
+    (a plant-wide mode change, the plant temperature, the central unit's own actuator
+    status) is now recognised as the central unit and suggested as
+    `climate: {zone: '#0'}`, the form the schema accepts;
+  - discovery: the line a run logs about devices it could not suggest (CEN/CEN+
+    keypads, alarm devices) counted every previous run as well — three runs reported
+    "3 device(s)" for one keypad. It now reports what that run saw.
 - Gateway, sessions and setup, found by the same review:
   - one unexpected exception inside the command sending loop used to kill the
     command path for the life of the process: the loop now survives it, the command
@@ -128,11 +158,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - a platform that refuses to unload is now logged as an error instead of passing
     unnoticed; the sockets are already closed at that point, so the entry has to be
     reloaded.
-- Tests: service-call refusals are pinned to their own translation key (a wrong
-  message could pass before), and the suite covers the gateway failure surface
-  (refused commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press
-  table, the idle-probe window, the listening loop's catch-all, the reconnect
-  backoff cap), the session error paths and discovery.
+
+### Testing
+
+- Service-call refusals are pinned to their own translation key (a wrong message
+  could pass before), and the suite covers the gateway failure surface (refused
+  commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press table, the
+  idle-probe window, the listening loop's catch-all, the reconnect backoff cap), the
+  session error paths, the translation files and discovery.
 
 ### Added
 
@@ -168,9 +201,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   used to close and rebuild the event session whenever the probe produced nothing on
   the monitor within *Probe window* seconds. Some gateways answer on the command
   session without mirroring the reply onto the monitor, and those were reconnected
-  every `idle watchdog + probe window` seconds for no reason: an acknowledged probe
-  now re-arms the watchdog instead, and only a probe answered on *neither* session
-  reconnects. The monitor socket itself is still guarded by TCP keepalive.
+  every `idle watchdog + probe window` seconds for no reason: an ACK on the command
+  port now re-arms the watchdog instead (it need not be the probe's own ACK), and
+  only a status request answered on *neither* session reconnects. The monitor socket
+  itself is still guarded by TCP keepalive.
 - **The Number of concurrent command sessions option is capped at 4** (gateways hold
   only a handful of concurrent sessions), and the options form now offers 1-4 rather
   than 1-10. An entry saved with more than 4 opens 4; a non-numeric value left by a
@@ -178,6 +212,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Discovery suggests a **WHO 9 auxiliary channel as a `binary_sensor`** with
   `who: "9"`, not as a `switch`. The switch platform only accepts `who: "1"`, so
   copying the old suggestion into `myhome.yaml` blocked the whole setup.
+- **A WHO 9 auxiliary binary sensor no longer claims to be `off` before it has any
+  news.** The bus never answers a status request for an auxiliary channel, so there
+  was nothing behind that `off`: the entity now starts `unknown` and restores its
+  last known state across a restart or a reload. An automation triggered on `off` at
+  startup will no longer fire.
+- Timing keys (`shutter_run`, `slat_time`, `opening_time`, `closing_time`) written on
+  an `advanced` cover now come with a warning saying what they actually do: they
+  never produce a position (the actuator reports its own), and the travel times are
+  used only to bound the direction safety timer. The warning used to call them
+  "ignored", which stopped being true when that timer landed.
+- The error for an unquoted `where:` no longer promises that quoting the value will
+  make it valid: on a light, a switch or a cover a 3-digit address is refused whether
+  it is quoted or not. A negative `where:` gets its own message instead of being told
+  to quote itself.
+- **The diagnostics download no longer publishes the config entry's title.** It
+  defaults to "<model> Gateway", but Home Assistant lets a user rename an entry from
+  the integrations page, and a renamed gateway commonly carries a household, street
+  or family name — and this is the one file users are told to attach to a public
+  issue. The gateway model is still reported, from the entry data.
+- The two shipped CEN+ blueprints now say what happens if a CEN control is picked in
+  their device selector (a CEN keypad sends the short press at the start of every
+  press, so a hold acts twice) and point CEN users at the `myhome_cen_event` trigger
+  with `pushbutton_short_release` / `pushbutton_long_press`.
 - The dead `invalid_port` and `gateway_vanished` translation keys were removed (no
   code path could set them), and so was an unload helper that could never cancel
   anything (the session close already does).
