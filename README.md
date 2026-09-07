@@ -131,8 +131,9 @@ Many gateways announce themselves over SSDP; if yours does not appear, choose
 **"Configure manually"** and enter host, port and password (see
 [Gateway compatibility](docs/gateway-compatibility.md) for which models are
 confirmed). A later password rejection raises a reauth flow, and **Configure** on
-the integration card changes the address, the `myhome.yaml` path, the number of
-command sessions, raw-event generation and the five session tunables — idle
+the integration card changes the address, port and password, the `myhome.yaml`
+path, the number of command sessions, raw-event generation and the five session
+tunables — idle
 watchdog, probe window, command timeout, queue TTL and the default instant-power
 keep-alive — without removing the integration.
 

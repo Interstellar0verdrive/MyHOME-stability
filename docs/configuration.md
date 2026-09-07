@@ -12,7 +12,7 @@ of this schema.
 ## Contents
 
 - [Gateway setup](#gateway-setup)
-  - [Automatic discovery](#automatic-discovery-recommended)
+  - [Automatic discovery (recommended)](#automatic-discovery-recommended)
   - [Manual gateway configuration](#manual-gateway-configuration)
   - [Reauthentication](#reauthentication)
   - [Options](#options)
@@ -23,6 +23,7 @@ of this schema.
 - [Light](#light)
 - [Switch](#switch)
 - [Cover](#cover)
+  - [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)
   - [The two-phase travel model (`slat_time`)](#the-two-phase-travel-model-slat_time)
   - [Calibrating a cover](#calibrating-a-cover)
 - [Binary sensor](#binary-sensor)
@@ -39,7 +40,9 @@ of this schema.
 
 ### Automatic discovery (recommended)
 
-Most MyHOME gateways support automatic discovery via SSDP:
+Many MyHOME gateways announce themselves over SSDP, but no model has been
+confirmed on real hardware yet (see
+[Gateway compatibility → Note 1](gateway-compatibility.md#note-1--the-two-discovery-paths)):
 
 1. Go to **Settings → Devices & services**
 2. Click **"+ ADD INTEGRATION"**
@@ -150,7 +153,7 @@ Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_se
 
 Rules worth knowing:
 
-- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it refuses the shapes that are visibly ambiguous (a bare `1`-`9`, and the 3- or 5-digit forms sensor addresses take) and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device.
+- **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it accepts unquoted integers only as `0`, a two-digit or a four-digit value and refuses every other number — a bare `1`-`9`, which is ambiguous, a negative value, which is no address at all, and the 3- and 5-digit forms sensor addresses take, above all — and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device.
 - **Each WHO/WHERE may appear only once per gateway**, across all platforms (a duplicate `where` used to silently drop one of the two devices). The error names both YAML keys. The only tolerated overlap is a `climate` zone plus a `sensor` of class `temperature` on the same zone: the two share one device, which keeps the **climate** name, and the probe's own `name` becomes the sensor's `entity_name` (device "Living Zone", sensor "Living Zone Living Probe").
 - **Unknown keys do not break the configuration**: they are kept and reported once at WARNING level with a "did you mean" hint (e.g. `dimable` → `dimmable`). Check the log after editing the file.
 - `device_class` is accepted as an alias of `class` on every platform (they must not both be given with different values).
@@ -162,12 +165,12 @@ Rules worth knowing:
 | `where` | string | Yes | – | OpenWebNet WHERE address (see the platform notes for the accepted forms). Climate uses `zone` instead. |
 | `name` | string | Yes | – | Device name in Home Assistant (optional for climate). |
 | `entity_name` | string | No | device name | Name of the main entity when it must differ from the device name. On a `class: power` meter it renames the **Power** entity; the daily/monthly/total energy entities of a `power` or `energy` meter keep their own translated names ("Energy today", "Energy this month", "Energy"). On a `scenario_control` the main entity is named `<device name> Scenario control` by default, not after the device alone; setting `entity_name` there also changes its `entity_id`, which is otherwise `event.<device>_scenario_control`. |
-| `icon` | string | No | – | Icon of the main entity (`mdi:...` or any registered icon set). Not applied to the optional Lock/Unlock buttons, which keep their fixed padlock icons. |
+| `icon` | string | No | – | Icon of the entity (`mdi:...` or any registered icon set). On a `power` or `energy` meter, which owns several entities, it is applied to **all** of them (Power and the three energy totalisers) — unlike `entity_name`, which only renames the main one. Not applied to the optional Lock/Unlock buttons, which keep their fixed padlock icons. |
 | `icon_on` | string | No | – | Icon used while the entity is on (light, switch, binary sensor). |
 | `manufacturer` | string | No | `BTicino S.p.A.` | Cosmetic, shown in the device page. |
 | `model` | string | No | – | Cosmetic, shown in the device page. |
 | `who` | string | No | per platform | OpenWebNet WHO; only needed for sensors/binary sensors that support several. |
-| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface: light, switch, cover, WHO 1 motion binary sensors and WHO 1 illuminance sensors. **Refused** on the other sensor WHOs (4 temperature, 9 auxiliary, 18 energy, 25 dry contact) because their frames never carry the interface, so such a device could never receive an update; not accepted on climate (addressed by zone) or `scenario_control`. Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
+| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface: light, switch, cover, WHO 1 motion binary sensors and WHO 1 illuminance sensors. **Refused** on the other sensor WHOs (4 temperature, 9 auxiliary, 18 energy, 25 dry contact) because their frames never carry the interface, so such a device could never receive an update; on climate (addressed by zone) and on `scenario_control` the key is not part of the schema at all: it is reported as an unknown key (a WARNING and the *Unknown keys* repair issue) and has no effect. Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
 | `class` / `device_class` | string | No | per platform | Home Assistant device class (see the platform tables). |
 
 Accepted actuator WHERE forms (light, switch, cover): General `"0"`, Area `"00"`, `"1"`..`"10"`, Group `"#1"`..`"#255"`, Point-to-Point 2 digits (`"15"`, A=1 PL=5) or 4 digits (`"0115"`, A=01 PL=15). Sensors and binary sensors accept any string of digits (energy meters are usually `"51"`..`"5N"`). Climate is different: its `zone` (and its `where` alias) accepts only `"#0"` for the central unit, `"1"`..`"99"` for a zone, or `"#0#<zone>"` for a zone driven through the central unit.
@@ -220,10 +223,10 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. Ignored on `advanced` actuators, which report their real position: since 0.4.0 the validator says so with a warning naming the cover and the keys it dropped, so the log line is expected and not a symptom. |
-| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. |
-| `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. |
-| `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longest of `shutter_run` / `opening_time` / `closing_time`, plus 30 seconds, is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). The validator warns when the keys are set on an `advanced` cover, so the log line is expected and not a symptom. |
+| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls. |
+| `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
+| `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
 | `inverted` | boolean | `false` | The actuator is wired the other way round: `open_cover` sends *lower*, a bus "raising" frame is read as closing and an advanced actuator's reported level is mirrored. Home Assistant's own convention is unchanged: position `0` is still closed, `100` still open. |
 | `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). |
 | `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
@@ -231,6 +234,37 @@ A device behind an F422 bus interface is addressed on the bus as
 `slat_time` must leave at least one second of curtain travel in both directions
 (`slat_time < min(opening_time, closing_time) - 1`), otherwise the configuration is
 rejected with the name of the offending cover.
+
+### Keypad presses and gateway echoes
+
+Neither of the two rules below depends on `slat_time`: the first applies to every
+basic (timed) cover, the second to every `advanced:` one.
+
+The gateway repeats commands back to Home Assistant a moment after it accepts them,
+and those repeats look exactly like a keypad press. A frame arriving within 1.5 s of
+a command sent by Home Assistant is ignored as such a repeat only when it can be one:
+a `stopped` frame right after a movement we asked for, or a copy of the movement our
+own `cover.stop_cover` interrupted. A movement in any other direction, such as
+pressing *up* on the keypad right after stopping a shutter that was going down, is
+honoured straight away. Pressing the **same** direction again within that second and
+a half cannot be told apart from the repeat, so it is ignored; the integration then
+re-reads the actuator's status, and the movement is picked up about two seconds late
+rather than lost. A stop the gateway did not accept — its command queue was full, or
+the connection was closing — changes nothing at all: no repeat can follow a command
+that was never sent, and the shutter is still running, so the estimate keeps running
+with it.
+
+An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
+frame that says it stopped is lost, the state would otherwise stay that way for ever,
+so the integration re-reads the actuator's status after the longest configured travel
+time plus 30 seconds, and drops the direction only if nothing answers within about
+two seconds. An actuator that is still running answers, so it is never reported as
+stopped in the middle of a long run, and its answer starts the countdown again. The
+reported position is not affected either way: it is always the actuator's own value,
+never an estimate. This is also the one thing the timing keys still do on an
+`advanced:` cover — a shutter, awning or garage door whose run is longer than the 50
+seconds of the default needs `shutter_run` (or `opening_time` / `closing_time`) so
+that the safety timer stays out of its way.
 
 ### The two-phase travel model (`slat_time`)
 
@@ -258,8 +292,12 @@ Consequences, all of them deliberate:
   pinned to `100` and the tilt services are ignored (with a DEBUG log line).
 - The tilt services (`cover.open_cover_tilt`, `cover.close_cover_tilt`,
   `cover.set_cover_tilt_position`, `cover.stop_cover_tilt`) are only offered on a
-  **basic** actuator with `slat_time` greater than `0`. On an `advanced:` cover the
-  timing keys are ignored (with a warning) and no tilt control appears at all.
+  **basic** actuator with `slat_time` greater than `0`. On an `advanced:` cover
+  there is no tilt control at all, and the timing keys never produce a position —
+  the actuator reports its own. They are not unused, though: they set the safety
+  timer described under [Keypad presses and gateway
+  echoes](#keypad-presses-and-gateway-echoes), which is why the integration logs a
+  warning naming that as their only remaining effect.
 - `cover.set_cover_position` computes the run through **both** phases: from fully
   closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
 - `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
@@ -275,21 +313,9 @@ Consequences, all of them deliberate:
   estimate has a reference from then on.
 - Movements started from a physical keypad (or by a scenario) are tracked through the
   very same model, from the `opening` / `closing` / `stopped` frames on the bus.
-- The gateway repeats commands back to Home Assistant a moment after it accepts
-  them, and those repeats look exactly like a keypad press. A frame arriving within
-  1.5 s of a command sent by Home Assistant is ignored as such a repeat only when it
-  can be one: a `stopped` frame right after a movement we asked for, or a copy of
-  the movement our own `cover.stop_cover` interrupted. A movement in any other
-  direction, such as pressing *up* on the keypad right after stopping a shutter that
-  was going down, is honoured straight away. Pressing the **same** direction again
-  within that second and a half cannot be told apart from the repeat, so it is
-  ignored; the integration then re-reads the actuator's status, and the movement is
-  picked up about two seconds late rather than lost.
-- An advanced actuator's *Opening* / *Closing* state comes from its own frames. If
-  the frame that says it stopped is lost, the state would otherwise stay that way
-  for ever, so it is dropped automatically after the longest configured travel time
-  plus 30 seconds, and the actuator's status is re-read. The reported position is
-  not affected: it is always the actuator's own value.
+- Gateway echoes and the advanced actuator's direction safety timer apply to every
+  cover, whatever `slat_time` is — see [Keypad presses and gateway
+  echoes](#keypad-presses-and-gateway-echoes) above.
 - `slat_time: 0` (the default) is exactly the 0.3.x linear behaviour, tilt included:
   no tilt feature, no extra attribute.
 
@@ -368,6 +394,15 @@ Notes:
 | `standalone` | boolean | `false` | Standalone thermostat (no central unit). |
 | `central` | boolean | `false` | Zone driven through the central unit (`#0#N` addressing). |
 
+**Zones with more than one actuator.** A central unit that reports *actuator* status
+sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`), and the protocol layer
+does not expose the actuator number `n`. A zone with a valve and a pump, or one
+actuator per circuit, therefore reports *Idle* as soon as **any** one of them
+switches off, even if another is still running. The value is not stuck: the next
+frame, or the next temperature reading, puts the mode/temperature derivation back in
+charge. Zones with a single actuator — the usual case — and central units that report
+*valve* status (which carries the direction) are exact.
+
 ## Sensor
 
 | Parameter | Type | Default | Description |
@@ -443,8 +478,9 @@ Notes:
   press, long ones included, and `pushbutton_long_press` repeats while the button
   is held. Use `pushbutton_short_release` for "the user tapped the button" — see
   [CEN keypad events](services-and-events.md#cen-keypad-events-1).
-- `interface:` is **not supported** for scenario controls. A CEN control is
-  identified by its WHERE alone, so a CEN keypad on an F422 local bus and one on
+- `interface:` is **not supported** for scenario controls — writing it produces the
+  "unknown key" warning and has no effect. A CEN control is identified by its WHERE
+  alone, so a CEN keypad on an F422 local bus and one on
   the main bus with the same WHERE are indistinguishable; declare only one of them.
 
 See [Recipes → CEN+ keypads](recipes.md#cen-keypads) for automations, blueprints
@@ -523,7 +559,7 @@ States** and in `state_attr(...)` templates.
 | `Shutter run`, `Slat time`, `Opening time`, `Closing time` | Basic covers | The travel times in seconds, in use — `Slat time` and the two directions only appear when they actually differ from the defaults. |
 | `Sensor` | WHO 25 dry contacts | The WHERE split as OpenWebNet writes it, `(<type>)<number>`: `301` renders as `(3)01`, i.e. dry contact number `01`. Type `3` is a dry contact, type `4` an IR detector. A WHERE of any other shape is reported verbatim. |
 | `Auxiliary channel` | WHO 9 auxiliary binary sensors | The WHERE, verbatim. |
-| `Timeout`, `Sensitivity` | WHO 1 motion sensors | The sensor's own motion timeout in seconds and its PIR sensitivity, both queried from the sensor at startup. |
+| `Timeout`, `Sensitivity` | WHO 1 motion sensors | How long the entity waits before going back to *off*: the sensor's own motion timeout plus a 15 s margin. Both are requested from the sensor when the entity is added and show a default (`315` s, `medium`) until it answers. `Sensitivity` is the PIR level as a word — `low`, `medium`, `high` or `very high`. |
 | `event_type`, `pushbutton`, `protocol`, `buttons`, `object` / `where` | Scenario controls | The last press and the control's identity — see [Services and events](services-and-events.md#device-triggers-and-event-entities). |
 
 Power, energy and temperature sensors and climate zones carry no address
@@ -535,7 +571,7 @@ report.
 `myhome.yaml` is validated on every (re)load. Errors block the setup and are shown in the integration card with the key path (`gateway.cover.<key>.where`); warnings only appear in the log. Typical messages:
 
 - **`required key not provided`**: `where` and `name` are mandatory (climate: `zone`/`name` optional).
-- **an invalid or ambiguous `where`**: either the address is not a valid OpenWebNet WHERE, or it was written unquoted in a shape that could mean two things. The message echoes the value you actually wrote and asks for quotes on every `where:` in the file: a leading zero is already gone by the time the validator runs, so this is advice, not a diagnosis of that one value.
+- **an invalid or ambiguous `where`**: either the address is not a valid OpenWebNet WHERE, or it was written unquoted in a shape that could mean two things. The message echoes the value you actually wrote and asks for quotes on every `where:` in the file: a leading zero is already gone by the time the validator runs, so this is advice, not a diagnosis of that one value. Quoting is necessary, not sufficient — a 3- or 5-digit address is a sensor address and is refused on a light, a switch or a cover whether it is quoted or not — and a negative value is refused outright, with its own message, since no platform has a negative address.
 - **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named).
 - **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
 - **a WHO 1 `binary_sensor` with a `class` other than `motion`**: WHO 1 inputs are modelled as motion sensors only. Drop the class, or move the device to `who: "25"` if it is a dry contact.

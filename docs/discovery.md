@@ -36,6 +36,7 @@ entry:
 | Automation actuator | `cover` (WHO 2, `shutter_run: 20`) |
 | Energy meter | `sensor` (WHO 18, `class: power`) |
 | Thermoregulation zone | `climate` (WHO 4) |
+| Thermoregulation central unit | `climate` (WHO 4, `zone: "#0"`) |
 | Temperature probe | `sensor` (WHO 4, `class: temperature`) |
 | Dry contact / IR detector | `binary_sensor` (WHO 25, `class: motion`) |
 | Auxiliary channel | `binary_sensor` (`who: "9"`, no class) |
@@ -46,7 +47,8 @@ zone reporting its own sensor (`climate`), a WHERE above 99 is a probe of its ow
 zone and is suggested as `climate`; delete that line if you only want the reading,
 or keep both, since a `climate` zone and a `temperature` sensor on the same zone are
 allowed together. The first WHO 4 frame seen for a WHERE decides, and the run never
-revises it.
+revises it. A WHO 4 frame whose WHERE is `0` is the central unit rather than a zone,
+and is suggested as `zone: "#0"` — the only spelling the schema accepts for it.
 
 An auxiliary channel is suggested as a `binary_sensor` with an explicit
 `who: "9"`, never as a `switch`: WHO 9 is read-only on this integration (the bus
@@ -60,6 +62,10 @@ frame the classifier cannot place. Pressing keypad buttons during a run therefor
 fires `myhome_device_discovered` and adds nothing to the file — that is expected,
 not a failure. Declare scenario controls by hand, under
 [`scenario_control:`](configuration.md#scenario-control-cen--cen).
+
+Of the burglar-alarm traffic, the per-sensor frames are reported (their WHERE is
+`<zone><sensor>`); the zone-level frames, addressed `#<zone>`, are not, because an
+alarm zone has no entity and no `myhome.yaml` section to declare it under.
 
 For debug-log examples of a discovery run, and what to check when no devices are
 found or suggestions are missing, see

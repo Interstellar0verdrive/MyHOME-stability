@@ -98,7 +98,10 @@ until it is fixed. Previously some of these were silent.
 
 - **Quote every `where`.** Unquoted YAML numbers lose leading zeros (`where: 01`
   becomes `1`) and `0…` is read as octal. Ambiguous values are rejected with a
-  message telling you exactly how to quote them.
+  message telling you exactly how to quote them — but only the ones the validator
+  can still see. `where: 01` reaches it as `1` and `where: 0115` as `77`: those
+  load, silently, as a different device. Quote the whole file rather than waiting
+  for an error.
 
 - **A `sensor` must declare its class** (`power`, `energy`, `temperature` or
   `illuminance`); if `who` is also given it must match the class.
