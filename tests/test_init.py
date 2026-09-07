@@ -494,6 +494,61 @@ async def test_repair_no_devices_for_gateway_created_then_cleared(hass: HomeAssi
     assert _issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY) is None
 
 
+async def test_a_gateway_level_platforms_key_is_really_ignored(hass: HomeAssistant, tmp_path) -> None:
+    """C5-1: `platforms:` in the gateway block is our own key name, and must not land.
+
+    The gateway schema accepts extra keys, so a user can write anything at gateway
+    level; unknown ones are reported as ignored.  `platforms` is the name of the map
+    the schema itself builds, so copying it over as a leftover key used to replace
+    that map with the user's raw value and fail every platform of the gateway with
+    `'str' object has no attribute 'get'` - a log a user cannot connect to the one
+    word they added to their file.
+    """
+    bad = f"""
+gateway:
+  mac: {MAC}
+  platforms: nonsense
+  light:
+    light_test:
+      where: '11'
+      name: Light Test
+"""
+    entry = make_entry(write_yaml(tmp_path, bad))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+
+    # The platform map is ours, and the light really exists.
+    assert isinstance(hass.data[DOMAIN][MAC][CONF_PLATFORMS], dict)
+    assert er.async_get(hass).async_get_entity_id("light", DOMAIN, f"{MAC}-1-11") is not None
+
+    # ...and the user is still told the key was ignored.
+    issue = _issue(hass, entry, ISSUE_UNKNOWN_KEYS)
+    assert issue is not None
+    assert "platforms" in issue.translation_placeholders["keys"]
+
+
+async def test_a_platform_map_of_the_wrong_type_does_not_take_the_entry_down(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """C5-1, belt and braces: a non-mapping platform map is replaced, not propagated.
+
+    `_read_yaml_config` guards the type rather than only the absence of the key, so a
+    future producer of that dict cannot take the config entry to SETUP_ERROR either.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with (
+        mock_gateway(),
+        patch(
+            "custom_components.myhome.config_schema",
+            return_value={MAC: {CONF_PLATFORMS: "nonsense"}},
+        ),
+    ):
+        assert await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.data[DOMAIN][MAC][CONF_PLATFORMS] == {}
+
+
 async def test_repairs_removed_with_the_entry(hass: HomeAssistant, tmp_path) -> None:
     """Removing the gateway must not leave its repair issues behind."""
     entry = make_entry(write_yaml(tmp_path), mac=MAC2)

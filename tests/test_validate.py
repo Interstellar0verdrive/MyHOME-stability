@@ -919,6 +919,22 @@ def test_icon_on_is_a_known_binary_sensor_key(caplog):
     assert platforms(out)["binary_sensor"]["25-33"]["icon_on"] == "mdi:gate-open"
 
 
+def test_a_gateway_key_named_platforms_does_not_replace_the_platform_map(caplog):
+    """C5-1: the leftover-key loop must not copy our own ``platforms`` key over.
+
+    The gateway block is ALLOW_EXTRA, so ``platforms: nonsense`` survives validation
+    and is reported as an unknown key that is ignored.  It has to really be ignored:
+    it is the name of the map the schema itself builds, and overwriting that map with
+    the user's raw value fails every platform of the gateway at setup time.
+    """
+    validate.reset_unknown_key_warnings()
+    with caplog.at_level(logging.WARNING, logger="custom_components.myhome"):
+        out = check(gw(platforms="nonsense", light={"a": {"where": "15", "name": "A"}}))
+    assert set(platforms(out)) == {"light"}
+    assert platforms(out)["light"]["1-15"]["name"] == "A"
+    assert any("'platforms'" in rec.getMessage() for rec in caplog.records)
+
+
 def test_unknown_keys_warn_but_never_raise(caplog):
     validate.reset_unknown_key_warnings()
     with caplog.at_level(logging.WARNING, logger="custom_components.myhome"):

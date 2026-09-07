@@ -304,7 +304,13 @@ async def _async_load_gateway_config(hass: HomeAssistant, entry: ConfigEntry, pa
         gateway_config = {CONF_PLATFORMS: {}}
     else:
         _async_clear_issue(hass, entry, ISSUE_NO_DEVICES_FOR_GATEWAY)
-    gateway_config.setdefault(CONF_PLATFORMS, {})
+    # Belt and braces: every reader of this dict (the platform modules, and
+    # `expected_unique_ids` below) calls `.get`/`.items()` on the platform map, so
+    # anything that is not a mapping there takes the whole entry down with an error
+    # that names neither `myhome.yaml` nor the key that caused it.  `setdefault`
+    # alone only helps when the key is missing, not when it holds the wrong type.
+    if not isinstance(gateway_config.get(CONF_PLATFORMS), dict):
+        gateway_config[CONF_PLATFORMS] = {}
     return gateway_config
 
 
@@ -511,8 +517,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # PLATFORMS, and `warn_unknown_keys((root_key,), gateway, _GATEWAY_KNOWN_KEYS)`
     # has already told the user about every section the schema does not know -
     # `validate.py:194` / `:1273`, covered by test_repair_unknown_keys_created_then_cleared.
-    # A misspelled `lights:` therefore never reaches this dict, and the warning that
-    # used to stand here could not fire.
+    # A misspelled `lights:` therefore never reaches this dict.  The one gateway-level
+    # key that *is* called `platforms` is skipped when the leftover keys are copied
+    # over (`validate.py`, the loop at the end of `MyHomeConfigSchema.__call__`), so
+    # it cannot land here either - see `_read_yaml_config` above for the type guard
+    # that keeps a bad value from taking every platform down.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Loops start AFTER the entities exist so no frame is dispatched into a half-built map.
