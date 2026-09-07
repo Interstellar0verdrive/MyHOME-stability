@@ -152,6 +152,24 @@ and anchors alone. To preview what the release will say:
 python3 scripts/release_notes.py x.y.z | less
 ```
 
+**Bumping the release action.** The publishing step runs
+`softprops/action-gh-release`, a third-party action, with `contents: write`, so it is
+pinned to a full commit SHA rather than to a tag, with the release that SHA belongs
+to in a trailing comment:
+
+```yaml
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
+```
+
+To move to a newer release of the action: find that release's commit on GitHub,
+replace the 40 characters **and** the `# vX.Y.Z` comment in the same edit, then run
+`pytest tests/test_release_workflow.py`. The suite only checks the *shape* of the ref
+— it accepts a `vN` tag as readily as a 40-character SHA — so it will catch a branch
+ref such as `@master`, but not a comment left behind on the previous version, nor a
+pin quietly moved back to a tag. Keep the SHA form: the comment is the only
+human-readable version marker there is.
+
 ### After the job
 
 - `git pull` — the job pushed the manifest bump to the branch you ran it on, so
