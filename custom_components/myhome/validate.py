@@ -1298,10 +1298,48 @@ def _resolve_gateway_mac(root_key: str, gateway: Mapping) -> str:
     return mac
 
 
+def _addresses_as_written(data: object) -> dict[tuple[str, str, str], str]:
+    """Remember every device address exactly as the file spells it.
+
+    P6-UNCLEAR-1: an address is normalised before two devices are compared - a WHO 4
+    zone loses its leading zeros (``'01'`` and ``'001'`` are both zone ``1``), a group
+    ``'#01'`` becomes ``'#1'`` - so by the time a duplicate is found the validator no
+    longer knows what the user actually typed.  ``Duplicate WHERE '1'`` for a file whose
+    two entries say ``'01'`` and ``'001'`` quotes a value that appears nowhere in it, and
+    the reader is told to "fix the WHERE" they cannot find.  This snapshot is taken from
+    the raw YAML, before the schema has touched anything, so it must assume nothing about
+    the shape: whatever does not look like ``<root>: <platform>: <key>: {where|zone: ...}``
+    is skipped and the message simply falls back to the normalised address.
+    """
+    written: dict[tuple[str, str, str], str] = {}
+    if not isinstance(data, Mapping):
+        return written
+    for root_key, gateway in data.items():
+        if not isinstance(root_key, str) or not isinstance(gateway, Mapping):
+            continue
+        for platform in (*DEVICE_PLATFORMS, SCENARIO_SECTION):
+            section = gateway.get(platform)
+            if not isinstance(section, Mapping):
+                continue
+            for yaml_key, device in section.items():
+                if not isinstance(yaml_key, str) or not isinstance(device, Mapping):
+                    continue
+                for field in (CONF_WHERE, CONF_ZONE):
+                    value = device.get(field)
+                    if isinstance(value, bool) or not isinstance(value, (str, int)):
+                        continue
+                    written[(root_key, platform, yaml_key)] = str(value)
+                    break
+    return written
+
+
 class MyHomeConfigSchema(Schema):
     """Top-level ``myhome.yaml`` schema producing the Contract A structure keyed by MAC."""
 
     def __call__(self, data):
+        # Taken *before* the schema runs: the finalizers normalise the addresses away
+        # and the duplicate message below has to quote the spellings the file contains.
+        written_addresses = _addresses_as_written(data)
         data = super().__call__(data)
         result: dict = {}
         origin_of_mac: dict[str, str] = {}
@@ -1347,12 +1385,28 @@ class MyHomeConfigSchema(Schema):
                                 else (key, other_key, yaml_key)
                             )
                             continue
+                        # P6-UNCLEAR-1 / P6-RISK-2: name both spellings the file uses.  A
+                        # padded and an unpadded entry for the same zone now collide, and
+                        # that refusal stops the whole gateway from loading, so the message
+                        # is the only thing the user has to find the two lines to edit.
                         address = device.get(CONF_WHERE, device.get(CONF_ZONE))
+                        mine = written_addresses.get((root_key, platform, yaml_key)) or str(address)
+                        theirs = written_addresses.get((root_key, other_platform, other_key))
+                        differs = theirs is not None and theirs != mine
                         raise Invalid(
-                            f"Duplicate WHERE '{address}' (who {device[CONF_WHO]}): {platform} '{yaml_key}' "
-                            f"collides with {other_platform} '{other_key}' (both map to device '{key}'). "
-                            f"Each WHO/WHERE (+interface) may appear only once per gateway; "
-                            f"fix the WHERE or remove one of the two devices.",
+                            f"Duplicate WHERE '{mine}' (who {device[CONF_WHO]}): {platform} '{yaml_key}' "
+                            f"collides with {other_platform} '{other_key}'"
+                            + (f", which writes it '{theirs}'" if differs else "")
+                            + f" (both map to device '{key}'). "
+                            + (
+                                "Addresses are compared after they are normalised - a WHO 4 zone "
+                                "loses its leading zeros and '#01' is '#1' - so the two spellings "
+                                "are one and the same device. "
+                                if differs
+                                else ""
+                            )
+                            + "Each WHO/WHERE (+interface) may appear only once per gateway; "
+                            "fix the WHERE or remove one of the two devices.",
                             path=[root_key, platform, yaml_key, CONF_WHERE if CONF_WHERE in device else CONF_ZONE],
                         )
                     origins_of_key.setdefault(key, []).append((platform, yaml_key))

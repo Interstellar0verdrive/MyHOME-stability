@@ -1123,6 +1123,41 @@ def test_the_refused_probe_addresses_are_exactly_the_ones_ownd_keys_as_the_centr
     assert refused == {"0", "100", "200", "300", "400", "500", "600", "700", "800", "900", "1000"}
 
 
+def test_the_duplicate_message_quotes_both_spellings_the_file_contains():
+    """P6-UNCLEAR-1 / P6-RISK-2: the two lines to edit must be findable in the file.
+
+    A padded and an unpadded entry for the same zone are now one device, so the file is
+    refused as a whole and the gateway does not load at all - which is exactly what a
+    user debugging the old padded-probe bug produces.  The message used to quote the
+    *normalised* address (``Duplicate WHERE '1'``), a value that appears nowhere in a
+    file written ``'01'`` + ``'001'``, and then told the reader to "fix the WHERE".
+
+    Mutation caught: quoting ``address`` instead of the snapshot taken before the schema.
+    """
+    with pytest.raises(Invalid) as err:
+        check(gw(climate={"a": {"zone": "01", "name": "A"}, "b": {"zone": "001", "name": "B"}}))
+    message = str(err.value)
+    assert "'001'" in message and "'01'" in message
+    assert "Duplicate WHERE '1' " not in message
+    assert "normalised" in message
+
+    with pytest.raises(Invalid) as err:
+        check(
+            gw(
+                sensor={
+                    "p1": {"where": "01", "name": "P1", "class": "temperature"},
+                    "p2": {"where": "001", "name": "P2", "class": "temperature"},
+                }
+            )
+        )
+    assert "'001'" in str(err.value) and "'01'" in str(err.value)
+
+    # Two identical spellings need no explanation: the message stays as short as before.
+    with pytest.raises(Invalid) as err:
+        check(gw(light={"a": {"where": "12", "name": "A"}, "b": {"where": "12", "name": "B"}}))
+    assert "normalised" not in str(err.value)
+
+
 def test_a_zero_padded_temperature_probe_is_still_a_duplicate_of_the_unpadded_one():
     """P5-BUG-1, second consequence: ``4-01`` and ``4-1`` used to be two devices.
 
