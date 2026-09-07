@@ -46,6 +46,7 @@ automation:
           object: 1
           pushbutton: 1
           event: pushbutton_short_press
+          # mac: "00:03:50:aa:bb:cc"   # only needed with more than one gateway
     actions:
       - action: scene.turn_on
         target:
@@ -153,8 +154,13 @@ automation:
 Classic (non-plus) CEN controls fire `myhome_cen_event`, whose `object` key carries
 the CEN WHERE. See
 [Services and events → CEN keypad events](services-and-events.md#cen-keypad-events-1)
-for the event data contract; CEN controls support the same
-[device triggers](#device-triggers-and-blueprints) with `protocol: cen`.
+for the event data contract. CEN controls support
+[device triggers](#device-triggers-and-blueprints) too, over their own shorter list
+of event names: `pushbutton_short_press`, `pushbutton_short_release`,
+`pushbutton_long_press` and `pushbutton_long_release`. The two lists are not nested
+either way — `pushbutton_short_release` is CEN-only, and the long-press repeat and
+the four rotary events are CEN+-only — and a trigger asking a CEN control for a
+CEN+-only event is refused when the automation loads.
 
 Match a tap on **`pushbutton_short_release`**, not on `pushbutton_short_press`:
 on CEN the "press" frame is sent at the start of every press, long ones included,
@@ -214,9 +220,16 @@ automation:
           entity_id: light.living_room
 ```
 
-`type` is any event name of the control's protocol and `subtype` is `button_<n>`
-for any button in the device's `buttons` list; both are the same values the bus
-event carries, so a device trigger and an event trigger are interchangeable.
+`type` is any event name of the control's protocol and `subtype` is `button_<n>`;
+both are the same values the bus event carries, so a device trigger and an event
+trigger are all but interchangeable — except that the device trigger **also** matches
+the gateway `mac`, which the event trigger only does if you add it, so it is the
+narrower of the two.
+
+`buttons:` only decides which combinations the picker offers. A device trigger
+written by hand for a button you did not declare still works, as long as the number
+is inside the protocol's range (CEN+ `1`-`32`, CEN `0`-`31`); outside that range it
+is refused when the automation loads.
 
 The same control also gets an event entity, useful in templates and history:
 
@@ -257,6 +270,13 @@ to pick — the picker lists the declared scenario controls of this integration 
 nothing else. Both offer **buttons 1-8** only — for a higher button number on a
 large keypad, use a device trigger or a plain `myhome_cenplus_event` trigger as
 shown above.
+
+**They are CEN+ blueprints.** The picker cannot filter by protocol, so a declared
+**CEN** control appears in it as well, and the blueprints do run on one — but on CEN
+the short press fires at the *start of every press*, long ones included (see
+[CEN keypads](#cen-keypads-1)), so holding a button in the light blueprint toggles
+the light first and then turns it off. On a CEN control, build the automation on a
+plain `myhome_cen_event` trigger matching `pushbutton_short_release` instead.
 
 ## Wall pushbuttons in dimmer mode
 
@@ -508,10 +528,13 @@ script:
 ```
 
 The integration recognises general/area/group frames coming back on the bus and
-re-requests the affected states, so your `light` entities follow along. It also
-fires `myhome_general_light_event` (and `myhome_area_light_event` /
+fires `myhome_general_light_event` (or `myhome_area_light_event` /
 `myhome_group_light_event`) with `message` and `event: on|off`, plus `area` or
-`group` where applicable.
+`group` where applicable. For a **general** or **area** lighting frame it also
+re-requests the affected states, so your `light` entities follow along on their own;
+a **group** frame fires the event only, because a group has no WHERE to poll. The
+three WHO 2 automation events fire the event only as well — covers report their own
+movement as it happens.
 
 ### Sync the gateway clock
 
@@ -593,8 +616,9 @@ If the motor is measurably slower in one direction, replace `shutter_run` with
 ### Closed, with the slats open
 
 The classic night position: curtain all the way down, slats open for a bit of air
-and light. It needs `slat_time` (the tilt services only exist with it) and is a
-single service call — the cover runs up for `slat_time` seconds and stops.
+and light. It needs a **basic** actuator with `slat_time` set — the tilt services
+only exist there, and an `advanced:` cover gets no tilt control at all — and is a
+single service call: the cover runs up for `slat_time` seconds and stops.
 
 ```yaml
 script:
@@ -747,7 +771,11 @@ connection drops; the `to:` lists above exclude it deliberately.
 ## Energy
 
 Declare the meter with `class: power`. This creates the **Power** entity plus
-three energy entities (today / this month / total):
+three energy entities (today / this month / total) — but *Energy today* and *Energy
+this month* are **disabled by default**, so on a fresh install you see two entities,
+not four. Enable them from the entity settings if your gateway answers totaliser
+requests; see
+[Energy → Daily/monthly/total energy](energy.md#dailymonthlytotal-energy-and-gateways-without-totals).
 
 ```yaml
 gateway:
@@ -839,6 +867,23 @@ Any MAC notation is accepted (`00:03:50:aa:bb:cc`, `00-03-50-AA-BB-CC`,
 `myhome.send_message`, `myhome.sync_time`, `myhome.start_discovery` and
 `myhome.stop_discovery`. `myhome.start_sending_instant_power` targets entities
 instead, so it needs no `gateway`.
+
+**Events need the same care.** The CEN, CEN+ and wall-pushbutton events all carry a
+`mac` key, normalised the same way. Two gateways can produce the same
+`object`/`pushbutton` pair, or the same pushbutton WHERE, so on a multi-gateway plant
+add `mac:` to the `event_data` of every such trigger or the automation fires twice:
+
+```yaml
+      - trigger: event
+        event_type: myhome_cenplus_event
+        event_data:
+          mac: "00:03:50:aa:bb:cc"
+          object: 1
+          pushbutton: 1
+          event: pushbutton_short_press
+```
+
+Device triggers need no such addition: they always match on `mac`.
 
 ## Debugging with raw bus events
 
