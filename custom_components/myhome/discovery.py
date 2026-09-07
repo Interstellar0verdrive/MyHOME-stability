@@ -31,6 +31,9 @@ from OWNd.message import (
 from .config_flow_discovery import MyHOMEDiscoverySuggestions
 from .const import (
     ALL_DEVICE_SUPPORTED_TYPES,
+    CONF_BUS_INTERFACE,
+    CONF_WHERE,
+    CONF_WHO,
     DEVICE_TYPE_BUS_ALARM_ZONE,
     DEVICE_TYPE_BUS_AUTOMATION,
     DEVICE_TYPE_BUS_AUX,
@@ -47,8 +50,11 @@ from .const import (
     DEVICE_TYPE_TO_PLATFORM,
     DOMAIN,
     LOGGER,
+    bus_full_where,
     is_bus_scope_address,
+    normalise_bus_interface,
 )
+from .validate import device_key
 
 if TYPE_CHECKING:
     from .gateway import MyHOMEGatewayHandler
@@ -282,6 +288,18 @@ class MyHOMEDeviceDiscoveryService:
         if not device_type or device_type not in ALL_DEVICE_SUPPORTED_TYPES:
             device_type = DEVICE_TYPE_GENERIC
 
+        # The F422 local bus interface lives in ``message.interface``, never in
+        # ``message.where``: OWNd 0.7.49 parses ``*1*1*11#4#3##`` as ``where == '11'``
+        # with ``interface == '3'`` (and keeps the pair in ``entity``, ``1-11#4#3``).
+        # Reading ``where`` alone made a lamp on a private riser look like the
+        # main-bus lamp with the same address, which is a different physical device:
+        # the pasted block drove the wrong actuator, the entity never updated (the
+        # gateway dispatches these frames by ``1-11#4#03``, never by ``1-11``), and
+        # the two shared one unique id, so whichever answered second was silently
+        # never announced at all.  ``normalise_bus_interface`` unpads it, because the
+        # bus sends ``#4#3`` and ``#4#03`` for the same interface.
+        interface = normalise_bus_interface(getattr(message, "interface", None))
+
         if device_type == DEVICE_TYPE_BUS_THERMO_CU:
             # The central unit is addressed ``#0``, never ``0`` (see
             # _determine_thermo_device_type): re-spell the WHERE before it reaches the
@@ -292,23 +310,34 @@ class MyHOMEDeviceDiscoveryService:
             # name is copied verbatim into the user's myhome.yaml.
             name = "MyHOME Thermoregulation Central Unit"
         else:
-            name = f"MyHOME {device_type.replace('_', ' ').title()} {where}"
+            # ``11#4#3`` in the name, so the two devices are told apart in the file
+            # the user reads and in the "Discovered ..." log line.
+            name = f"MyHOME {device_type.replace('_', ' ').title()} {bus_full_where(where, interface)}"
 
         who = str(getattr(message, "who", "") or "")
+        # ``validate.device_key`` is the one definition of a device's identity, and
+        # this id is ``{mac}-{device_key}`` -- the same string as the device registry
+        # identifier and the tail of every entity ``unique_id``, interface zero
+        # padded and all.  Building it here by hand is how the spellings drift.
+        key = device_key({CONF_WHO: who, CONF_WHERE: where, CONF_BUS_INTERFACE: interface})
         device_info: dict[str, Any] = {
             # unique per gateway AND WHO (a light and a shutter may share a WHERE)
-            "unique_id": f"{self._mac}-{who}-{where}",
+            "unique_id": f"{self._mac}-{key}",
             "name": name,
             "device_type": device_type,
             "who": who,
             "where": where,
+            # Unpadded, as ``myhome.yaml`` spells it; ``None`` for a device on the
+            # main bus.  Published in ``myhome_device_discovered`` too.
+            "interface": interface,
             # Published verbatim (``None`` included): the table is exhaustive over
             # ALL_DEVICE_SUPPORTED_TYPES, and inventing a fallback section here is
             # exactly what made an alarm device look like a ``binary_sensor``.
             "platform": DEVICE_TYPE_TO_PLATFORM.get(device_type),
             "category": _DEVICE_CATEGORY.get(device_type, "generic"),
             "properties": {
-                "ownId": f"{who}*{where}" if who else where,
+                # The address as it appears on the bus, interface included.
+                "ownId": f"{who}*{bus_full_where(where, interface)}" if who else where,
                 "where": where,
                 "discovered_at": dt_util.utcnow().isoformat(),
                 "message_type": message_type,

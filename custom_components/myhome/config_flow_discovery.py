@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Mapping
 from typing import Any
 
 import yaml
@@ -22,6 +23,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_BUS_INTERFACE,
     CONF_DEVICE_CLASS,
     CONF_DIMMABLE,
     CONF_FILE_PATH,
@@ -43,6 +45,7 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
+from .validate import INTERFACE_CAPABLE_WHO, device_key
 
 # device_type -> (platform, WHO)
 _SUGGESTABLE: dict[str, tuple[str, str]] = {
@@ -85,6 +88,15 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
         cfg[CONF_ZONE] = where
     else:
         cfg[CONF_WHERE] = where
+    # A device behind an F422 local bus interface: ``where`` is its address on the
+    # riser (``11``) and the interface says which riser (``3``), so the two keys must
+    # travel together or the block addresses the main-bus device of the same number.
+    # Only WHO 1, 2 and 15 frames carry an interface, and ``validate.py`` refuses the
+    # key on any other WHO, so a value that somehow reached us on, say, a WHO 18
+    # meter is dropped rather than written into YAML that will not load.
+    interface = device_info.get(CONF_BUS_INTERFACE)
+    if interface is not None and who in INTERFACE_CAPABLE_WHO:
+        cfg[CONF_BUS_INTERFACE] = str(interface)
     cfg["name"] = device_info["name"]
 
     if platform == "light":
@@ -100,19 +112,23 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
     return platform, cfg
 
 
-def is_device_configured(hass: HomeAssistant, mac: str, who: str, where: str) -> bool:
-    """True when `{who}-{where}` is already a device key of ANY loaded platform
-    of this gateway (validated config in hass.data)."""
-    key = f"{who}-{where}"
+def is_device_configured(hass: HomeAssistant, mac: str, device_cfg: Mapping[str, Any]) -> bool:
+    """True when this device is already declared under ANY loaded platform of the
+    gateway (validated config in ``hass.data``).
+
+    The comparison is on the full device key ``validate.device_key`` builds -- the
+    same function that keyed the loaded configuration -- so ``1-11`` and
+    ``1-11#4#03`` are the two different devices they really are.  Until discovery
+    learned to read the F422 interface it only knew ``who``/``where``, and this
+    function had to accept a configured ``1-11#4#03`` as an answer to a discovered
+    ``1-11``; that made a riser device and a main-bus device suppress each other,
+    which is a suggestion silently missing rather than a duplicate one.
+    """
+    key = device_key(device_cfg)
     platforms = hass.data.get(DOMAIN, {}).get(mac, {}).get(CONF_PLATFORMS, {})
-    for devices in platforms.values():
-        if not isinstance(devices, dict):
-            continue
-        for device_key in devices:
-            # interface-qualified keys look like "1-11#4#01"
-            if device_key == key or device_key.split("#", 1)[0] == key:
-                return True
-    return False
+    return any(
+        key in devices for devices in platforms.values() if isinstance(devices, dict)
+    )
 
 
 def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[str, Any]]]) -> int:
@@ -211,12 +227,14 @@ class MyHOMEDiscoverySuggestions:
             LOGGER.debug("Discovery: no YAML suggestion for %s", device_info["unique_id"])
             return False
         platform, cfg = suggestion
-        who = cfg[CONF_WHO]
-        where = cfg.get(CONF_WHERE, cfg.get(CONF_ZONE))
-        if is_device_configured(self.hass, mac, who, where):
-            LOGGER.debug("Discovery: %s-%s already configured, skipping", who, where)
+        if is_device_configured(self.hass, mac, cfg):
+            LOGGER.debug("Discovery: %s already configured, skipping", device_key(cfg))
             return False
-        key = f"discovered_{who}_{where}".replace("#", "_")
+        # The YAML key is cosmetic, but it has to be unique and typeable: derived from
+        # the device key so an interfaced device (``1-11#4#03``) cannot collide with
+        # the main-bus device of the same address, with the characters YAML would
+        # rather not see in a mapping key replaced by "_".
+        key = f"discovered_{device_key(cfg)}".replace("-", "_").replace("#", "_")
         self._pending.setdefault(platform, {})[key] = cfg
         return True
 
