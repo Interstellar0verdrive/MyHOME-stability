@@ -933,6 +933,23 @@ def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
             path=[yaml_key, CONF_WHO],
         )
     _reject_unusable_interface(device, yaml_key, SENSOR)
+    if sensor_class == SensorDeviceClass.TEMPERATURE:
+        # P5-BUG-1: the WHERE of a thermo probe *is* a zone (docs/configuration.md), and
+        # OWNd keys every WHO 4 frame from ``int(where)`` - so ``where: '01'`` would key
+        # ``4-01`` and never meet a single frame, exactly as ``zone: '01'`` did before
+        # P4-BUG-1 fixed the same defect on the climate side (see ``Zone`` above).  The
+        # entity is created, is named, is available and stays ``unknown`` for ever, with
+        # nothing in the log but a debug line, so the padded form has to be normalised
+        # rather than refused - it is what a careful user writes after following the
+        # validator's own advice to quote every ``where:`` value.
+        #
+        # ``str(int(...))`` is right for a secondary probe too (``'302'`` stays ``'302'``
+        # and ``'0302'`` becomes ``'302'``), because OWNd applies ``int()`` to the whole
+        # WHERE.  ``SENSOR_WHERE`` has already guaranteed a string of digits here, so the
+        # conversion cannot fail.  WHO 18 and WHO 1 sensors are deliberately left alone:
+        # their keys keep whatever text the bus writes, so padding is self-consistent
+        # there and normalising it would rename entities that work today.
+        device[CONF_WHERE] = str(int(device[CONF_WHERE]))
     if sensor_class in (SensorDeviceClass.POWER, SensorDeviceClass.ENERGY):
         device[CONF_ENTITIES][f"daily-{SensorDeviceClass.ENERGY}"] = {}
         device[CONF_ENTITIES][f"monthly-{SensorDeviceClass.ENERGY}"] = {}

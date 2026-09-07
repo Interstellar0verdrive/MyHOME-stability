@@ -47,7 +47,12 @@ from custom_components.myhome.sensor import (
 )
 
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
-from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, diagnostic_entity_id, dispatch_stats
+from .helpers_platforms import (
+    GATEWAY_DIAG_UNIQUE_IDS,
+    diagnostic_entity_id,
+    dispatch_stats,
+    feed_frame,
+)
 
 # The user's real configuration: three WHO=18 meters (one with a per-sensor override),
 # plus a thermo probe and an illuminance sensor to cover the other two sensor classes.
@@ -126,6 +131,19 @@ gateway:
       name: Garden
       device_class: power
       keepalive_minutes: 125
+"""
+
+# P5-BUG-1: the WHERE of a thermo probe is a zone, written here the way a careful user
+# writes it - quoted and padded, as the validator's own advice and the documented
+# actuator addresses both suggest.
+PADDED_PROBE_YAML = f"""
+gateway:
+  mac: {MAC}
+  sensor:
+    sonda_uno:
+      where: '01'
+      name: Sonda Uno
+      device_class: temperature
 """
 
 POWER_ENTITY = "sensor.mains_power_power"
@@ -571,6 +589,21 @@ async def test_temperature_and_illuminance(
         await hass.async_block_till_done()
         assert hass.states.get(TEMPERATURE_ENTITY).state == "25.0"
         assert hass.states.get(ILLUMINANCE_ENTITY).state == "450"
+
+
+async def test_a_padded_temperature_probe_receives_its_frames(hass: HomeAssistant, tmp_path) -> None:
+    """P5-BUG-1, end to end: ``where: '01'`` used to key ``4-01`` and never meet a frame.
+
+    Routed through ``feed_frame`` (and therefore through the gateway dispatcher) on
+    purpose: this is a test about the *key a frame is looked up by*, which
+    ``feed_event`` bypasses by handing the message to the entity itself. Before the
+    fix the entity existed, was named, was available and stayed ``unknown`` for ever.
+    """
+    entry = make_entry(write_yaml(tmp_path, PADDED_PROBE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        await feed_frame(hass, "*#4*1*0*0215##")
+        assert hass.states.get("sensor.sonda_uno").state == "21.5"
 
 
 async def test_pending_refresh_does_not_outlive_the_entity(hass: HomeAssistant, tmp_path) -> None:
