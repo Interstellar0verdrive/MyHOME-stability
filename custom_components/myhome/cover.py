@@ -83,11 +83,38 @@ from .const import (
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity, address_attributes
 
-# A frame that contradicts our own command and arrives this soon after it is the
-# gateway's echo (MyHOMEServer1 answers a movement with "stopped" then "opening",
-# and a stop with a late copy of the movement). Only one such frame is ignored per
-# command, so a real keypad press right after it is still honoured.
+# The gateway repeats our own commands back to us a moment later, and those repeats
+# arrive as ordinary bus frames - they look exactly like somebody at the wall keypad.
+# Only two shapes of repeat have ever been seen (MyHOMEServer1, 0.4.0):
+#
+#   * we tell the shutter to MOVE -> the gateway answers "stopped" first, and only
+#     then the movement we asked for;
+#   * we tell the shutter to STOP -> the gateway sends one more late copy of the
+#     movement it was interrupting.
+#
+# So a frame is ignored as an echo only when it matches one of those two shapes and
+# arrives within `STOP_ECHO_WINDOW_SEC` of our own command, and only once. Anything
+# else is taken at face value. In particular a movement in a direction the gateway
+# could not possibly be echoing - we stopped it while it was closing and it starts
+# opening - is somebody at the keypad and is obeyed straight away.
+#
+# One case stays genuinely ambiguous: a keypad press in the *same* direction we have
+# just stopped, inside the window. Nothing in the frame tells it apart from the echo,
+# so we still ignore it, but we then ask the actuator what it is actually doing
+# (`ECHO_RECHECK_DELAY_SEC`). If it really is running, its answer restarts the
+# estimate a couple of seconds late - a small error instead of a position that would
+# stay wrong until the next command.
 STOP_ECHO_WINDOW_SEC = 1.5
+# How long after an ignored movement frame the actuator is asked for its status.
+# Must be longer than the echo window, so the answer is never mistaken for an echo.
+ECHO_RECHECK_DELAY_SEC = 2.0
+# An advanced actuator reports its own position, so no timer bounds its movement:
+# if its "stopped" frame is lost the entity would read "Opening" for ever. This much
+# on top of the longest configured run is when we give up waiting, clear the
+# direction and ask the actuator again. Generous on purpose: an actuator that is
+# genuinely still running answers the re-request with its direction, which re-arms
+# the timer, so the only cost of overshooting is a stale "Opening" for that long.
+ADVANCED_MOVE_MARGIN_SEC = 30.0
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
 # A "stopped" frame during a free run *we* commanded is read as the physical end stop
@@ -249,6 +276,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # (see `_is_echo`).
         self._own_command_at: datetime | None = None
         self._own_command: str | None = None
+        # Which movement our own stop interrupted: only *that* direction can come
+        # back as a late echo, everything else is a real event.
+        self._stopped_direction: str | None = None
         # True while a free run to an end stop that we commanded is in progress.
         self._own_free_run = False
         self._move_duration: float | None = None
@@ -257,6 +287,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._end_tilt: int | None = None
         self._stop_timer = None
         self._tick_unsub = None
+        # One-shot status re-request after an ignored movement frame (see `_is_echo`).
+        self._echo_recheck = None
+        # Upper bound on how long an advanced actuator may report a direction.
+        self._advanced_move_timeout = max(self._opening_time, self._closing_time) + ADVANCED_MOVE_MARGIN_SEC
+        self._advanced_timer = None
 
     # ------------------------------------------------------------------ state
     @property
@@ -374,13 +409,29 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     # ------------------------------------------------------------------ movement
     @callback
     def _cancel_timers(self) -> None:
-        """Cancel the auto-stop and the position ticker."""
+        """Cancel the auto-stop, the position ticker and the two safety timers."""
         if self._stop_timer is not None:
             self._stop_timer()
             self._stop_timer = None
         if self._tick_unsub is not None:
             self._tick_unsub()
             self._tick_unsub = None
+        self._cancel_echo_recheck()
+        self._cancel_advanced_timer()
+
+    @callback
+    def _cancel_echo_recheck(self) -> None:
+        """Drop the pending "was that frame real?" status request, if any."""
+        if self._echo_recheck is not None:
+            self._echo_recheck()
+            self._echo_recheck = None
+
+    @callback
+    def _cancel_advanced_timer(self) -> None:
+        """Drop the pending advanced-movement safety timer, if any."""
+        if self._advanced_timer is not None:
+            self._advanced_timer()
+            self._advanced_timer = None
 
     @callback
     def _start_movement(
@@ -420,6 +471,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         else:
             self._own_command_at = None
             self._own_command = None
+        self._stopped_direction = None
         self._own_free_run = own_command and target_position is None
 
         if target_position is None:
@@ -468,27 +520,46 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._stop_timer = None
         needs_stop = self._target_position is not None
         end_position, end_tilt = self._end_position, self._end_tilt
+        # Read before `_finish_movement` clears it: `_mark_own_stop` needs to know
+        # which movement this stop interrupts.
+        interrupted = self._moving
         self._finish_movement(end_position, end_tilt)
         if needs_stop:
             await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
-            self._mark_own_stop()
+            self._mark_own_stop(interrupted)
         self.async_write_ha_state()
 
     @callback
-    def _mark_own_stop(self) -> None:
-        """Remember that *we* just sent a stop: a late movement echo must not restart the estimate."""
+    def _mark_own_stop(self, interrupted: str | None) -> None:
+        """Remember that *we* just sent a stop, and which movement it interrupted.
+
+        Only a late copy of `interrupted` can be the gateway echoing that stop back
+        at us; a frame in the other direction is somebody at the keypad.
+        """
         self._own_command_at = dt_util.utcnow()
         self._own_command = None
+        self._stopped_direction = interrupted
 
     def _is_echo(self, frame_direction: str | None) -> bool:
-        """True for the one frame that contradicts our last command inside the echo window.
+        """True for a frame that can only be the gateway repeating our own command.
 
-        The gateway answers a movement command with "stopped" and a stop command with
-        a late copy of the movement: each is ignored exactly once, so a second
-        contradicting frame (a real keypad press) is still honoured.
+        Exactly two shapes qualify (see `STOP_ECHO_WINDOW_SEC`): the "stopped" frame
+        that follows a movement *we* commanded, and a late copy of the movement our
+        own stop interrupted. Each is ignored once. Every other frame - a stop we did
+        not command, a movement in a direction we were not running - is a real event.
         """
-        if self._own_command_at is None or frame_direction == self._own_command:
+        if self._own_command_at is None:
             return False
+        recheck = False
+        if self._own_command is not None:
+            # We commanded a movement: only a "stopped" frame can be its echo.
+            if frame_direction is not None:
+                return False
+        else:
+            # We commanded a stop: only the direction it interrupted can be echoed.
+            if frame_direction is None or frame_direction != self._stopped_direction:
+                return False
+            recheck = True
         elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
         if elapsed >= STOP_ECHO_WINDOW_SEC:
             return False
@@ -500,7 +571,61 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             elapsed,
         )
         self._own_command_at = None
+        if recheck:
+            # It could just as well have been somebody pressing the same direction
+            # again on the keypad, and nothing in the frame says which: ask the
+            # actuator itself instead of silently losing the movement.
+            self._schedule_echo_recheck()
         return True
+
+    @callback
+    def _schedule_echo_recheck(self) -> None:
+        """Ask the actuator what it is really doing, once the echo window is over."""
+        self._cancel_echo_recheck()
+        self._echo_recheck = async_call_later(self.hass, ECHO_RECHECK_DELAY_SEC, self._async_echo_recheck)
+
+    async def _async_echo_recheck(self, now: datetime) -> None:
+        """The ignored movement frame may have been real: re-read the actuator status."""
+        self._echo_recheck = None
+        if self._moving is not None:
+            # A later frame already started the estimate: nothing was lost.
+            return
+        LOGGER.debug(
+            "%s Cover %s: re-reading the status after an ignored movement frame",
+            self._gateway_handler.log_id,
+            self._where,
+        )
+        await self.async_update()
+
+    @callback
+    def _set_advanced_direction(self, direction: str | None) -> None:
+        """Track an advanced actuator's direction, and bound how long it may last.
+
+        Nothing times an advanced actuator (its position comes from its own status
+        frames), so a lost "stopped" frame would leave the entity reading "Opening"
+        for ever. The timer below is the only thing that ends such a movement.
+        """
+        self._moving = direction
+        self._cancel_advanced_timer()
+        if direction is not None:
+            self._advanced_timer = async_call_later(
+                self.hass, self._advanced_move_timeout, self._async_advanced_movement_timeout
+            )
+
+    async def _async_advanced_movement_timeout(self, now: datetime) -> None:
+        """The actuator never said it stopped: clear the direction and ask again."""
+        self._advanced_timer = None
+        if self._moving is None:
+            return
+        LOGGER.debug(
+            "%s Cover %s: no stop reported %.0fs after the movement started; re-reading the status",
+            self._gateway_handler.log_id,
+            self._where,
+            self._advanced_move_timeout,
+        )
+        self._moving = None
+        self.async_write_ha_state()
+        await self.async_update()
 
     # ------------------------------------------------------------------ lifecycle
     @property
@@ -584,10 +709,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover and freeze the estimated position and tilt."""
-        await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
+        sent = await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
         if not self._advanced:
+            interrupted = self._moving
             self._finish_movement(*self._estimate())
-            self._mark_own_stop()
+            if sent:
+                # A stop the gateway never took cannot be echoed back, so arming the
+                # echo window on it would only swallow somebody else's frame.
+                self._mark_own_stop(interrupted)
             self.async_write_ha_state()
 
     async def async_stop_cover_tilt(self, **kwargs: Any) -> None:
@@ -710,18 +839,18 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 self._finish_movement(position)
                 # Status 11-14 carry a position *and* a direction: keep it visible.
                 if opening:
-                    self._moving = OPENING
+                    self._set_advanced_direction(OPENING)
                 elif closing:
-                    self._moving = CLOSING
+                    self._set_advanced_direction(CLOSING)
             elif self._advanced:
                 # A plain WHAT frame from an advanced actuator: track the direction only,
                 # the position comes from its own status frames, never from the timer.
                 if opening:
-                    self._moving = OPENING
+                    self._set_advanced_direction(OPENING)
                 elif closing:
-                    self._moving = CLOSING
+                    self._set_advanced_direction(CLOSING)
                 elif opening is False and closing is False:
-                    self._moving = None
+                    self._set_advanced_direction(None)
             elif opening:
                 # Someone pressed the keypad (or a scenario ran): the very same
                 # two-phase model tracks the movement until it stops.

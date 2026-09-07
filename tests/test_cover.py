@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
@@ -828,3 +829,127 @@ async def test_stop_echo_window_boundary(
         assert commands.sent_frames == (
             ["*2*2*81##", "*2*0*81##"] if expected_state == CoverState.CLOSING else ["*2*2*81##"]
         )
+
+
+# ---------------------------------------------------------------- review 2 (2026-09-07)
+async def test_keypad_movement_after_our_stop_is_honoured(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The gateway can only echo the movement it was interrupting, never the other one.
+
+    Review 2 / C1: "stop it - no, open it again" on the wall keypad used to be
+    swallowed whole, leaving Home Assistant reporting `closed` / 0 % while the
+    shutter ran fully open. Mutation caught: `_is_echo` ignoring *any* movement
+    frame inside the window after our own stop.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        stopped_at = hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION]
+        assert 80 <= stopped_at <= 86
+
+        await _advance(hass, freezer, 1.0)  # well inside the echo window
+        await feed_event(hass, cover, "*2*1*81##")  # somebody presses UP
+        assert hass.states.get(ENTITY).state == CoverState.OPENING
+        await _advance(hass, freezer, 40)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
+
+
+async def test_same_direction_echo_after_our_stop_is_ignored_then_rechecked(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The ambiguous case: ignore the frame, then ask the actuator what it is doing.
+
+    A copy of the movement we just stopped is exactly what the gateway echoes, so it
+    must not restart the estimate (mutation caught: dropping `_mark_own_stop()` from
+    `async_stop_cover`, review 2 / G6). But it could equally be a second keypad press
+    in the same direction, and that must not be lost for ever (review 2 / C1): a
+    status re-request follows, and its answer restarts the estimate.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        stopped_at = hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION]
+        commands.clear()
+
+        await _advance(hass, freezer, 1.0)
+        await feed_event(hass, cover, "*2*2*81##")  # the gateway's late copy - or a new press
+        assert hass.states.get(ENTITY).state != CoverState.CLOSING
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == stopped_at
+
+        # Bounded recovery: the actuator is asked what it is really doing.
+        await _advance(hass, freezer, 2.5)
+        assert commands.status_frames == ["*#2*81##"]
+        await feed_event(hass, cover, "*2*2*81##")  # it answers "still closing"
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
+        await _advance(hass, freezer, 40)
+        assert hass.states.get(ENTITY).state == CoverState.CLOSED
+
+
+async def test_a_stop_the_gateway_refused_does_not_arm_the_echo_window(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A stop that never reached the bus cannot be echoed back, so nothing is swallowed."""
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+
+        await _advance(hass, freezer, 0.5)
+        await feed_event(hass, cover, "*2*2*81##")  # the shutter never stopped
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
+
+
+async def test_advanced_movement_is_bounded_by_a_safety_timer(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Review 2 / C2: one lost "stopped" frame must not pin the entity on `opening`.
+
+    Nothing times an advanced actuator, so before the safety timer the direction was
+    only ever cleared by another bus frame. Mutation caught: removing the timer from
+    `_set_advanced_direction`, after which the entity reads *Opening* for ever.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*42*0*0##")
+        await feed_event(hass, cover, "*2*1*83##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        await _advance(hass, freezer, 40)  # inside the 20 s run + 30 s margin
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        commands.clear()
+        await _advance(hass, freezer, 15)  # 55 s: the "stopped" frame is never coming
+        state = hass.states.get(entity_id)
+        assert state.state == CoverState.OPEN
+        # The real position is still the actuator's own, never an estimate.
+        assert state.attributes[ATTR_CURRENT_POSITION] == 42
+        assert commands.status_frames == ["*#2*83##"]
+
+
+async def test_an_advanced_stop_disarms_the_safety_timer(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The normal case must stay silent: no stray status request after a clean stop."""
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*2*1*83##")
+        await feed_event(hass, cover, "*#2*83*10*10*80*0*0##")  # position + "stopped"
+        assert hass.states.get(entity_id).state == CoverState.OPEN
+        commands.clear()
+        await _advance(hass, freezer, 90)
+        assert commands.status_frames == []
