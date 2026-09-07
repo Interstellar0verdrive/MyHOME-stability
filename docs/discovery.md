@@ -35,6 +35,14 @@ entry:
 | Dry contact / IR detector | `binary_sensor` (WHO 25, `class: motion`) |
 | Auxiliary channel | `binary_sensor` (`who: "9"`, no class) |
 
+A zone and a probe are told apart by the WHERE alone: a plain zone number is the
+zone reporting its own sensor (`climate`), a WHERE above 99 is a probe of its own
+(`sensor`). A probe wired as the *main* sensor of a zone therefore looks like the
+zone and is suggested as `climate`; delete that line if you only want the reading,
+or keep both, since a `climate` zone and a `temperature` sensor on the same zone are
+allowed together. The first WHO 4 frame seen for a WHERE decides, and the run never
+revises it.
+
 An auxiliary channel is suggested as a `binary_sensor` with an explicit
 `who: "9"`, never as a `switch`: WHO 9 is read-only on this integration (the bus
 reports the channel, nothing commands it) and the `switch` platform only accepts

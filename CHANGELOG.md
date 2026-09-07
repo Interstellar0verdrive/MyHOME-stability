@@ -90,9 +90,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     name at all in the diagnostics download, and `config_file_is_default_location:
     false` — the opposite of the truth. Both now report the default: `myhome.yaml`,
     in the default location;
-  - discovery: temperature probes are suggested as `class: temperature` sensors
-    (they were misclassified as zones), and scenario controls report
-    `platform: event`, not `button`, in `myhome_device_discovered`.
+  - discovery: a thermoregulation zone is suggested as `climate` and a temperature
+    probe of its own (WHERE above 99) as a `class: temperature` sensor. Before, the
+    classifier tested an attribute OWNd does not have, so every probe became a zone;
+    the first correction of this round then turned every zone into a probe. A probe
+    wired as a zone's main sensor is indistinguishable from the zone on the bus and
+    is reported as a zone; the first WHO 4 frame decides and is never revised;
+  - discovery: scenario controls report `platform: event`, not `button`, in
+    `myhome_device_discovered`, and a device family with no `myhome.yaml` section
+    (alarm devices) reports `platform: null` instead of `binary_sensor`, which the
+    schema rejects.
 - Gateway, sessions and setup, found by the same review:
   - one unexpected exception inside the command sending loop used to kill the
     command path for the life of the process: the loop now survives it, the command

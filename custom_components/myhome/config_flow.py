@@ -311,7 +311,8 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         CONF_ADDRESS,
-                        description={"suggested_value": suggestions.get(CONF_ADDRESS, "192.168.1.135")},
+                        # The factory default of a BTicino gateway, not any real installation.
+                        description={"suggested_value": suggestions.get(CONF_ADDRESS, "192.168.1.35")},
                     ): str,
                     vol.Required(
                         CONF_PORT,
