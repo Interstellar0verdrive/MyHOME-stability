@@ -85,6 +85,7 @@
           "default_keepalive_minutes": "Keep-alive predefinito della potenza istantanea"
         },
         "data_description": {
+          "command_worker_count": "Quante sessioni di comando l'integrazione apre verso il gateway. Più sessioni inviano in parallelo i comandi in coda, ma un gateway ne accetta solo poche. Predefinito 1 (1-4).",
           "idle_watchdog_sec": "Nessun frame ricevuto sulla sessione di monitoraggio per questo tempo: viene inviata una sonda innocua sulla sessione comandi. Predefinito 300 s (60-3600).",
           "probe_window_sec": "Sonda inviata e ancora nulla sulla sessione di monitoraggio: riconnessione. Predefinito 30 s (5-300).",
           "command_timeout_sec": "Tempo massimo per scrivere un comando e riceverne la conferma, prima di un unico nuovo tentativo e poi dello scarto. Predefinito 10 s (2-60).",

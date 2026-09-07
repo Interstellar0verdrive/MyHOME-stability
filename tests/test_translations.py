@@ -11,10 +11,13 @@ sees in English or, more often, a leftover nobody removed -- the eight dead
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from custom_components.myhome.const import CONF_WORKER_COUNT, MAX_COMMAND_WORKERS
 
 COMPONENT = Path(__file__).resolve().parents[1] / "custom_components" / "myhome"
 STRINGS = COMPONENT / "strings.json"
@@ -27,12 +30,23 @@ def load(path: Path) -> dict[str, Any]:
 
 def leaf_keys(data: Any, prefix: str = "") -> set[str]:
     """Every dotted path of the JSON tree that ends on a string."""
+    return set(flatten(data, prefix))
+
+
+def flatten(data: Any, prefix: str = "") -> dict[str, Any]:
+    """The JSON tree as ``{dotted path: leaf value}``."""
     if not isinstance(data, dict):
-        return {prefix}
-    keys: set[str] = set()
+        return {prefix: data}
+    flat: dict[str, Any] = {}
     for key, value in data.items():
-        keys |= leaf_keys(value, f"{prefix}.{key}" if prefix else key)
-    return keys
+        flat |= flatten(value, f"{prefix}.{key}" if prefix else key)
+    return flat
+
+
+# Home Assistant substitutes ``{name}``-style placeholders; a locale that drops one
+# loses the only piece of information the string carries, and one that invents a
+# placeholder renders the braces verbatim to the user.
+PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
 
 def test_the_translation_files_are_found() -> None:
@@ -48,6 +62,40 @@ def test_each_locale_has_the_same_keys_as_strings_json(path: Path) -> None:
     actual = leaf_keys(load(path))
     assert actual - expected == set(), f"{path.name} has keys strings.json does not"
     assert expected - actual == set(), f"{path.name} is missing keys of strings.json"
+
+
+@pytest.mark.parametrize("path", TRANSLATIONS, ids=lambda path: path.stem)
+def test_each_locale_uses_the_same_placeholders_as_strings_json(path: Path) -> None:
+    """Same key set is not enough: the ``{...}`` substitutions must match too.
+
+    A locale that drops ``{path}`` from ``issues.yaml_invalid.description`` keeps the
+    same key set and the suite stays green, while the user is told their
+    configuration is invalid without being told which file; one that invents a
+    placeholder shows the braces verbatim.
+    """
+    expected = flatten(load(STRINGS))
+    actual = flatten(load(path))
+    for key, text in expected.items():
+        assert isinstance(text, str), key
+        assert set(PLACEHOLDER.findall(actual[key])) == set(PLACEHOLDER.findall(text)), key
+
+
+def test_every_options_tunable_documents_its_range() -> None:
+    """The worker count was the one option with a label and no ``data_description``.
+
+    Its range is also the one the runtime clamps to (MAX_COMMAND_WORKERS), so the
+    text has to name that number: a user who reads "1-10" and saves 8 gets 4.
+    """
+    for path in [STRINGS, *TRANSLATIONS]:
+        step = load(path)["options"]["step"]["init"]
+        assert set(step["data_description"]) == set(step["data"]) - {
+            "address",
+            "port",
+            "password",
+            "config_file_path",
+            "generate_events",
+        }, path.name
+        assert f"1-{MAX_COMMAND_WORKERS}" in step["data_description"][CONF_WORKER_COUNT], path.name
 
 
 def test_strings_json_and_the_english_translation_are_identical() -> None:

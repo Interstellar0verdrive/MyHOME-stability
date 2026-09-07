@@ -8,7 +8,7 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 
 from custom_components.myhome.config_flow import MANUAL_ENTRY, validate_host
@@ -27,6 +27,7 @@ from custom_components.myhome.const import (
     DEFAULT_PROBE_WINDOW_SEC,
     DEFAULT_QUEUE_TTL_SEC,
     DOMAIN,
+    MAX_COMMAND_WORKERS,
 )
 
 from .helpers_core import ENTRY_DATA_V2, HOST, MAC, PASSWORD, TEST_OK, make_entry, write_yaml
@@ -510,6 +511,48 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     assert entry.data[CONF_HOST] == "10.0.0.2"
     assert entry.data[CONF_PASSWORD] == "999"
     assert mock_setup_entry.await_count == 3
+
+
+async def test_options_flow_refuses_more_workers_than_the_setup_will_start(
+    hass: HomeAssistant, mock_setup_entry, tmp_path
+) -> None:
+    """The form's range and the runtime clamp must be the same number.
+
+    ``__init__.async_setup_entry`` clamps the worker count to MAX_COMMAND_WORKERS, so
+    a form that accepted 1-10 let a user save 8, read 8 back at every visit and run 4,
+    with nothing anywhere saying so.
+    """
+    path = write_yaml(tmp_path)
+    entry = make_entry(path)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    submission = {
+        "address": HOST,
+        CONF_PORT: 20000,
+        "password": PASSWORD,
+        CONF_FILE_PATH: str(path),
+        CONF_GENERATE_EVENTS: False,
+        CONF_IDLE_WATCHDOG_SEC: float(DEFAULT_IDLE_WATCHDOG_SEC),
+        CONF_PROBE_WINDOW_SEC: float(DEFAULT_PROBE_WINDOW_SEC),
+        CONF_COMMAND_TIMEOUT_SEC: float(DEFAULT_COMMAND_TIMEOUT_SEC),
+        CONF_QUEUE_TTL_SEC: float(DEFAULT_QUEUE_TTL_SEC),
+        CONF_DEFAULT_KEEPALIVE_MINUTES: float(DEFAULT_KEEPALIVE_MINUTES),
+    }
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {**submission, CONF_WORKER_COUNT: MAX_COMMAND_WORKERS + 1}
+        )
+
+    # The top of the range is still accepted.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**submission, CONF_WORKER_COUNT: MAX_COMMAND_WORKERS}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_WORKER_COUNT] == MAX_COMMAND_WORKERS
 
 
 async def test_options_flow_keeps_no_password_as_none(hass: HomeAssistant, mock_setup_entry, tmp_path) -> None:
