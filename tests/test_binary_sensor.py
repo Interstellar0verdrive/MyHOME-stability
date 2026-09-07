@@ -173,13 +173,45 @@ async def test_motion_timeout_frame_updates_the_timer(
 
 
 async def test_motion_sensitivity_and_unknown_frames(hass: HomeAssistant, tmp_path) -> None:
-    """plat-03: unrelated dimension replies are ignored, never raised."""
+    """plat-03: unrelated dimension replies are ignored, never raised.
+
+    "Ignored" is now asserted as *nothing changed* rather than as `is not None`.
+    The entity still existing only proves the frame did not raise: the old
+    assertion kept passing for the whole class of regressions where an unrelated
+    frame quietly clobbers the state or an attribute of a motion sensor, which is
+    the actual guarantee `handle_event`'s message-type filter is there to give.
+
+    Mutation caught: the plausible "simplify handle_event" refactor that drops the
+    message-type filter and widens the last arm to a bare `else`, after which a
+    timer reply rewrites the sensor's Sensitivity. Note that dropping the filter
+    *on its own* is inert - the `if/elif` chain below it matches nothing for such
+    a frame - so no single-line mutation of it is observable; what the snapshot
+    pins is the pair, and with it the whole class of "an unrelated frame quietly
+    changed something", which `is not None` could never have seen.
+
+    Note: `binary_sensor.py`'s `0 <= sensitivity < len(PIR_SENSITIVITY)` range
+    check cannot be reached from a real frame on OWNd 0.7.49 - OWNd builds its own
+    log line with `PIR_SENSITIVITY_MAPPING[value]` first and raises IndexError, so
+    `parse_frame` returns the raw text and the message never reaches an entity.
+    The guard is defensive against a future OWNd that widens that mapping; it is
+    deliberately not what this test pins.
+    """
+    entity_id = "binary_sensor.sensore_movimento_motion"
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
         normal = entity_object(hass, BINARY_SENSOR, "1-11")
         await feed_event(hass, normal, "*#1*11*5*3##")
-        assert hass.states.get("binary_sensor.sensore_movimento_motion").attributes["Sensitivity"] == "very high"
+        assert hass.states.get(entity_id).attributes["Sensitivity"] == "very high"
+
+        before = hass.states.get(entity_id)
+        # A dimension reply that belongs to another feature of the same WHERE.
         await feed_event(hass, normal, "*#1*11*2*0*1*0##")
-        assert hass.states.get("binary_sensor.sensore_movimento_motion") is not None
+        after = hass.states.get(entity_id)
+        assert after.state == before.state
+        assert dict(after.attributes) == dict(before.attributes)
+
+        # A real PIR frame still gets through: the filter is not a blanket refusal.
+        await feed_event(hass, normal, "*#1*11*5*0##")
+        assert hass.states.get(entity_id).attributes["Sensitivity"] == "low"
 
 
 async def test_motion_state_restored(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:

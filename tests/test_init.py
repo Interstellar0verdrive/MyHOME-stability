@@ -392,7 +392,13 @@ async def test_repair_invalid_yaml_created_then_cleared(hass: HomeAssistant, tmp
     assert issue.severity is ir.IssueSeverity.ERROR
     assert issue.is_fixable is False
     assert issue.translation_placeholders["path"] == str(path)
-    assert "mapping" in issue.translation_placeholders["message"]
+    # `gateway: [1, 2]` IS a mapping at the top level, so this is the schema engine
+    # rejecting the section - not `__init__.py`'s own "must contain a mapping"
+    # branch, which the test below covers. Assert only what this integration
+    # controls (the offending key reaches the user); the exact wording belongs to
+    # the engine and is pinned by `test_probatio_and_voluptuous_agree`, which also
+    # documents that the two engines render the path differently.
+    assert "gateway" in issue.translation_placeholders["message"]
 
     path.write_text(BASIC_YAML, encoding="utf-8")
     with mock_gateway():
@@ -400,6 +406,32 @@ async def test_repair_invalid_yaml_created_then_cleared(hass: HomeAssistant, tmp
         await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
     assert _issue(hass, entry, ISSUE_YAML_INVALID) is None
+
+
+async def test_repair_top_level_not_a_mapping(hass: HomeAssistant, tmp_path) -> None:
+    """G1-C: a configuration file that is not a mapping at all is reported by name.
+
+    `__init__.py` checks this itself, before the schema ever runs, because the
+    schema's own error for a list would be unreadable. The check had no test: the
+    only file that reached the repair issue was `gateway: [1, 2]`, which IS a
+    mapping, so the branch was a coverage miss and the assertion that looked like
+    it covered it was really reading the schema engine's wording.
+
+    Mutation caught: deleting the `if not isinstance(parsed, dict)` branch, after
+    which a YAML list reaches `config_schema` and the user gets the engine's
+    complaint about `data` instead of a sentence naming the actual problem.
+    """
+    path = write_yaml(tmp_path, "- 1\n- 2\n")
+    entry = make_entry(path)
+    with mock_gateway():
+        assert not await _setup(hass, entry)
+
+    issue = _issue(hass, entry, ISSUE_YAML_INVALID)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    message = issue.translation_placeholders["message"]
+    assert "must contain a mapping" in message
+    assert "found list" in message  # the type is named, so the user can see what they wrote
 
 
 async def test_repair_unknown_keys_created_then_cleared(hass: HomeAssistant, tmp_path) -> None:

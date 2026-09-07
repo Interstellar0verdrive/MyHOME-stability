@@ -211,12 +211,37 @@ async def test_button_outside_the_declared_list_still_reported(hass: HomeAssista
 
 
 async def test_unknown_event_name_is_ignored(hass: HomeAssistant, tmp_path) -> None:
-    """A defensive guard: an event name the protocol does not declare never raises."""
+    """A defensive guard: an event name the protocol does not declare never raises.
+
+    Asserting only `state == STATE_UNKNOWN` on a fresh entity is a "did not
+    crash" check: it holds for any guard that quietly drops the press, and it
+    cannot distinguish "ignored" from "recorded but not written". The real
+    guarantee is that a CEN+-only name arriving on a CEN control leaves an
+    already-recorded press exactly as it was - so this now fires a genuine press
+    first and asserts the entity does not move afterwards.
+
+    Mutation caught: deleting the `return` in `handle_scenario_event`'s
+    `event_type not in self._attr_event_types` guard, which then reaches
+    `_trigger_event` and overwrites (or, on HA's own validation, raises on) a
+    press the user's automations are bound to.
+    """
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
+        entity_id = "event.keypad_ingresso_scenario_control"
+        assert hass.states.get(entity_id).state == STATE_UNKNOWN
+
+        # A real CEN short press on WHERE 51, through the gateway dispatcher.
+        await feed_frame(hass, "*15*21*51##")
+        recorded = hass.states.get(entity_id)
+        assert recorded.state != STATE_UNKNOWN
+        assert recorded.attributes[ATTR_EVENT_TYPE] == "pushbutton_short_press"
+
         entity = entity_object(hass, EVENT, "cen-51")
         entity.handle_scenario_event("pushbutton_long_press_repeat", 1)  # CEN+ only
         await hass.async_block_till_done()
-        assert hass.states.get("event.keypad_ingresso_scenario_control").state == STATE_UNKNOWN
+
+        after = hass.states.get(entity_id)
+        assert after.state == recorded.state
+        assert dict(after.attributes) == dict(recorded.attributes)
 
 
 async def test_entity_registers_in_the_device_entities_slot(hass: HomeAssistant, tmp_path) -> None:

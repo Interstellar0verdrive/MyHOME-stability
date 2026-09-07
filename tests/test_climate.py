@@ -66,10 +66,12 @@ async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
     handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
-    if hasattr(handler, "_set_connected"):
-        handler._set_connected(True)  # noqa: SLF001 - Contract B helper
-    else:  # pragma: no cover - older gateway.py
-        handler.is_connected = True
+    # No `hasattr` fallback: every climate test depends on the entities actually
+    # being told the gateway is up, and a silent `handler.is_connected = True`
+    # would set the attribute without publishing the availability signal - so a
+    # rename of `_set_connected` used to WEAKEN every test in this file instead of
+    # failing one of them. Fail loudly here instead.
+    handler._set_connected(True)  # noqa: SLF001 - Contract B helper
     await hass.async_block_till_done()
 
 
