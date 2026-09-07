@@ -10,6 +10,14 @@ file path** option, or your Home Assistant config directory). Review that file
 and copy the entries you want into `myhome.yaml` yourself, then reload the
 integration.
 
+> **If you ran discovery before this version and your plant has an F422 local bus
+> interface,** delete `myhome_discovered.yaml` before your next run. The old file may
+> hold two blocks for the same physical device: one without an `interface:` key,
+> written by the earlier version, which is wrong and drives the main-bus device of the
+> same address, and one with it, which is right. The file is only ever added to, never
+> cleaned up, so both survive and both are accepted by the schema. Nothing is lost by
+> deleting it — a run rewrites it.
+
 - Start with `myhome.start_discovery`, stop early with `myhome.stop_discovery`
   (see [Services](services-and-events.md#services)); a run otherwise stops itself
   after 60 seconds. Both flush whatever was collected so far to the file.
@@ -19,7 +27,10 @@ integration.
   answer one, so those devices are seen only when they emit a frame during the
   window: open the contact, press a button.
 - A device already present in `myhome.yaml` (matched on WHO, WHERE and bus
-  interface) is not suggested again.
+  interface) is not suggested again. A CEN / CEN+ scenario control already declared
+  under `scenario_control:` is likewise left out of the run's closing report — it is
+  matched on its protocol and object number, which is how the integration keys it, and
+  not on WHO/WHERE.
 - Progress fires `myhome_device_discovered` per device and
   `myhome_discovery_completed` when the run ends (see
   [Events → Device discovery events](services-and-events.md#device-discovery-events)).
@@ -66,7 +77,8 @@ Everything else is seen and reported on the event bus but **never** written to
 frame the classifier cannot place. Pressing keypad buttons during a run therefore
 fires `myhome_device_discovered` and adds nothing to the file — that is expected,
 not a failure. Declare scenario controls by hand, under
-[`scenario_control:`](configuration.md#scenario-control-cen--cen).
+[`scenario_control:`](configuration.md#scenario-control-cen--cen). If the keypad is
+already declared there, the run does not mention it at all.
 
 A lighting or automation frame addressed to the whole plant (WHERE `0`), to an area
 (`00`, `1`–`9`, `100` — the bus spells area 10 with three digits) or to a group
@@ -77,6 +89,10 @@ hand if you want an entity that commands a whole area — see
 but it is a choice, not something a run will offer you, and the schema spells area 10
 `10`, never `100`.
 
+A frame whose F422 interface is outside `0`-`15` is ignored as well: the address
+could not be declared anyway (the configuration schema refuses the same value), so a
+run does not offer it rather than announcing the main-bus device with the same WHERE.
+
 Of the burglar-alarm traffic, the per-sensor frames are reported (their WHERE is
 `<zone><sensor>`); the zone-level frames, addressed `#<zone>`, are not, because an
 alarm zone has no entity and no `myhome.yaml` section to declare it under.
@@ -85,6 +101,10 @@ What a run could not suggest is reported in its closing log line, in two clauses
 say different things: *"N device(s) must be declared by hand under `scenario_control:`"*
 names the section to write them under, while *"N device(s) belong to a family this
 integration has no support for"* is the alarm case, which has no section anywhere.
+Each device is named `<device type>@<address>`, with the address exactly as the bus
+writes it, F422 interface included (`bus_cen_scenario_control@11#4#3`). At most ten
+names are listed; when there are more, the list ends with `, ... and N more`. Keypads
+you have already declared are not counted.
 
 For debug-log examples of a discovery run, and what to check when no devices are
 found or suggestions are missing, see

@@ -178,14 +178,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `myhome_device_discovered` carries the interface too (unpadded, `null` on the
     main bus), and the `unique_id` of a device behind one now includes it
     (`{mac}-1-11#4#03`) — which is also the form `discovered_devices` reports in
-    `myhome_discovery_completed`;
+    `myhome_discovery_completed`. A frame carrying an interface outside the 0-15 an
+    F422 local bus has (`…#4#16`) is now ignored rather than announced as the
+    main-bus device with the same WHERE: it should not exist on real hardware, and no
+    suggestion is better than one that drives the wrong actuator. **If you ran
+    discovery before this version and your plant has an F422 local bus interface,
+    delete `myhome_discovered.yaml` before your next run**: the old file may hold two
+    blocks for the same physical device, one without an `interface:` key, written by
+    the earlier version, which is wrong, and one with it, which is right. That file is
+    only ever added to, never cleaned up, so both survive and both are accepted by the
+    schema. Nothing is lost by deleting it — a run rewrites it;
   - discovery: the line a run logs about devices it could not suggest counted every
     previous run as well — three runs reported "3 device(s)" for one keypad. It now
     reports what that run saw, and in two clauses rather than one: a CEN / CEN+
     scenario control really can be declared by hand, under `scenario_control:`, while
     a burglar-alarm device belongs to a family this integration has no section for
     anywhere. The old line sent a reader hunting for an alarm chapter that has never
-    existed.
+    existed. It no longer names a CEN / CEN+ keypad you have already declared,
+    either: such a control can never be written into `myhome_discovered.yaml`, and it
+    was reported as one to "declare by hand" on every run, months after it was
+    configured — it is now looked up under the key it is really stored by
+    (`cenplus-<object>` / `cen-<where>`). Each device is named by its full bus
+    address, interface included (`bus_cen_scenario_control@11#4#3`), so a keypad on
+    the main bus and one on a private riser are no longer the same name twice; and a
+    list cut at ten names ends with `, ... and N more` instead of showing ten names
+    next to a count of eleven.
 - Gateway, sessions and setup, found by the same review:
   - one unexpected exception inside the command sending loop used to kill the
     command path for the life of the process: the loop now survives it, the command

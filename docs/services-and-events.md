@@ -119,7 +119,16 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
   `discovered_devices` — the list of `{mac}-{device key}` unique ids seen during the
   run, suggested or not (`00:03:50:11:22:33-1-11`, or
   `00:03:50:11:22:33-1-11#4#03` behind a bus interface, `…-4-#0` for a
-  thermoregulation central unit).
+  thermoregulation central unit). A CEN / CEN+ scenario control is the exception: it
+  is listed as `{mac}-25-<where>` / `{mac}-15-<where>`, built from the frame's WHO and
+  WHERE, while the device registry identifier of the same keypad once declared is
+  `{mac}-cenplus-<object>` / `{mac}-cen-<where>` (and its entity `unique_id`
+  `{mac}-cenplus-<object>-event`). For `*25*21#3*225##` on gateway
+  `00:03:50:11:22:33` the run publishes `00:03:50:11:22:33-25-225`, while the same
+  keypad declared as `object: 25` is `00:03:50:11:22:33-cenplus-25` in the registry —
+  the same number, a different string. Looking a keypad up in the registry by the id
+  discovery published therefore finds nothing, and an alarm device has no registry
+  entry at all.
 
 See [Discovery](discovery.md) for what triggers these and what they write.
 

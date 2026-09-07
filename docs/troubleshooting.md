@@ -83,7 +83,9 @@ See [Discovery](discovery.md) — since 0.2.0, suggestions go to `myhome_discove
    collected so far to the file.
 4. A device already present in `myhome.yaml` (matched on WHO, WHERE and bus
    interface) is not suggested again — a device behind an F422 interface and the
-   main-bus device with the same WHERE are two different devices.
+   main-bus device with the same WHERE are two different devices. A CEN / CEN+
+   scenario control already declared under `scenario_control:` is matched on its
+   protocol and object number instead, and is left out of the closing report.
 
 ## Configuration issues
 
