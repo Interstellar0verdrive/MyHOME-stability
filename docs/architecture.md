@@ -4,8 +4,8 @@ How the integration works inside. This page is for contributors, and for anyone
 who wants to check the claims in the README against the code rather than take
 them on trust.
 
-Everything below is from `custom_components/myhome/*.py` at version 0.4.0 and
-`OWNd` 0.7.49.
+Everything below is from `custom_components/myhome/*.py` on `master` (the state
+that will ship as the next release) and `OWNd` 0.7.49.
 
 ## Contents
 
@@ -179,7 +179,7 @@ stateDiagram-v2
     Idle --> Connected: frame received
     Idle --> Probing: idle >= 300 s<br/>queue a status request
     Probing --> Connected: any frame arrives on the monitor
-    Probing --> Connected: probe ACKed on the command session<br/>(re-arm, do not reconnect)
+    Probing --> Connected: a status request ACKed on the command session<br/>(the probe, or any other)<br/>(re-arm, do not reconnect)
     Probing --> Closed: no frame within 30 s<br/>and no ACK either<br/>SessionError -> reconnect
     Connected --> Closed: transport error<br/>is_connected = False
     AuthFailed --> [*]: loops stopped,<br/>reauth flow started
@@ -462,6 +462,9 @@ sets `asyncio_mode = auto`, which the Home Assistant test plugin requires).
 | `test_diagnostics.py` | The diagnostics payload: redaction of the password, MAC/host/UDN masking, the session-negotiation marker, and the shape of `config` / `handler` / `recent_frames`. |
 | `test_light.py`, `test_switch.py`, `test_cover.py`, `test_climate.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`, `test_event.py` | Per-platform behaviour. |
 | `test_device_trigger.py` | What the automation editor is offered per protocol, an attached trigger firing on a real bus frame, and the shipped blueprints against Home Assistant's blueprint schema. |
+| `test_discovery.py` | The discovery service: message classification (zone vs probe vs central unit, dimmer vs on/off, auxiliary, alarm), the start/stop service lifecycle, the 60 s timeout, the `myhome_device_discovered` / `myhome_discovery_completed` payloads and worker cancellation on unload. |
+| `test_config_flow_discovery.py` | The YAML suggestion writer: what each device type becomes, de-duplication against `myhome.yaml`, the atomic merge into `myhome_discovered.yaml`, and a round-trip of every suggestion through the real `validate.config_schema`. |
+| `test_translations.py` | That `strings.json` and the four locales carry the same keys and the same `{placeholders}`, that every options tunable has a `data_description` naming its real range, and that the device-automation strings cover every trigger. |
 
 ### The fake OpenWebNet server
 
