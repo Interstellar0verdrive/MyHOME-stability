@@ -375,10 +375,17 @@ async def test_buttons_default_when_the_entry_is_not_loaded(hass: HomeAssistant,
     """The editor lists triggers of unloaded entries too: fall back to the default list."""
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
         device_id = device_id_of(hass, entry.entry_id, "cenplus-25")
-        hass.data[DOMAIN].pop(MAC)
         from custom_components.myhome import device_trigger
 
-        triggers = await device_trigger.async_get_triggers(hass, device_id)
+        # Restored before leaving the block: the entry's own `async_unload_entry`
+        # runs on the way out and would otherwise find no handler and skip
+        # `close_listener()`. Safe today (function-scoped `hass`, and the unload
+        # uses `.get(mac, {})`), but the try/finally makes it not depend on that.
+        gateway_data = hass.data[DOMAIN].pop(MAC)
+        try:
+            triggers = await device_trigger.async_get_triggers(hass, device_id)
+        finally:
+            hass.data[DOMAIN][MAC] = gateway_data
         assert {item[CONF_SUBTYPE] for item in triggers} == {"button_1", "button_2", "button_3", "button_4"}
 
 

@@ -94,13 +94,23 @@ async def test_real_config_creates_every_light(hass: HomeAssistant, tmp_path) ->
             MAC, {LIGHT: platforms[LIGHT]}
         ) - GATEWAY_DIAG_UNIQUE_IDS
 
-        state = hass.states.get("light.kitchen_ceiling")
-        assert state is not None
-        assert state.attributes["friendly_name"] == "Kitchen Ceiling"
-        assert state.attributes["icon"] == "mdi:ceiling-light"
-        assert state.attributes["A"] == "1"
-        assert state.attributes["PL"] == "3"
-        assert state.attributes[ATTR_SUPPORTED_COLOR_MODES] == [ColorMode.ONOFF]
+        # The docstring says "lights" and it means it: one WHERE per shape the
+        # fixture contains, so a regression in the A/PL split (which is derived
+        # from the WHERE, digit by digit) cannot hide behind a single example.
+        expected = {
+            # entity id                    friendly name       A     PL
+            "light.hall_ceiling": ("Hall Ceiling", "1", "1"),
+            "light.kitchen_ceiling": ("Kitchen Ceiling", "1", "3"),
+            "light.kitchen_strip": ("Kitchen Strip", "4", "1"),
+            "light.bedroom_right": ("Bedroom Right", "3", "8"),
+        }
+        for entity_id, (friendly_name, area, light_point) in expected.items():
+            state = hass.states.get(entity_id)
+            assert state is not None, entity_id
+            assert state.attributes["friendly_name"] == friendly_name
+            assert state.attributes["icon"] == "mdi:ceiling-light"
+            assert (state.attributes["A"], state.attributes["PL"]) == (area, light_point), entity_id
+            assert state.attributes[ATTR_SUPPORTED_COLOR_MODES] == [ColorMode.ONOFF]
 
 
 async def test_status_request_on_add_uses_full_where(hass: HomeAssistant, tmp_path) -> None:
