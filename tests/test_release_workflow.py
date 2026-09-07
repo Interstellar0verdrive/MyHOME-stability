@@ -141,13 +141,15 @@ def test_the_tag_guard_asks_the_remote_and_not_only_the_checkout(steps, order) -
     Mutation caught: reverting the guard to `git rev-parse` alone (or dropping the
     `--exit-code`, without which `ls-remote` succeeds whether or not it found the tag).
     """
-    run = steps[order[GUARD]]["run"]
+    # The shell comments explain all of this, so read the commands only: an
+    # assertion satisfied by the prose above the command would pin nothing.
+    command = "\n".join(
+        line for line in steps[order[GUARD]]["run"].splitlines() if not line.strip().startswith("#")
+    )
 
-    assert "git ls-remote" in run
-    assert "--exit-code" in run  # without it ls-remote exits 0 on no match
-    assert "--tags origin" in run
-    assert 'refs/tags/$TAG' in run
-    assert "exit 1" in run
+    assert 'git ls-remote --exit-code --tags origin "refs/tags/$TAG"' in command
+    assert 'git rev-parse "$TAG"' in command  # the local half is still there
+    assert command.count("exit 1") == 2
 
 
 def test_no_action_is_pinned_to_a_moving_ref(steps) -> None:
