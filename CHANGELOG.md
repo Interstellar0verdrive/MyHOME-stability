@@ -181,9 +181,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `myhome_device_discovered` carries the interface too (unpadded, `null` on the
     main bus), and the `unique_id` of a device behind one now includes it
     (`{mac}-1-11#4#03`) — which is also the form `discovered_devices` reports in
-    `myhome_discovery_completed`. A frame carrying an interface outside the 0-15 an
-    F422 local bus has (`…#4#16`) is now ignored rather than announced as the
-    main-bus device with the same WHERE: it should not exist on real hardware, and no
+    `myhome_discovery_completed`. A frame carrying an F422 interface outside the
+    0-15 range (`…#4#16`) is now ignored rather than announced as the main-bus device
+    with the same WHERE: such a frame should not exist on real hardware, and no
     suggestion is better than one that drives the wrong actuator. **If you ran
     discovery before this version and your plant has an F422 local bus interface,
     delete `myhome_discovered.yaml` before your next run**: the old file may hold two
@@ -305,7 +305,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   session without mirroring the reply onto the monitor, and those were reconnected
   every `idle watchdog + probe window` seconds for no reason: an ACK on the command
   port now re-arms the watchdog instead (it need not be the probe's own ACK), and
-  only a status request answered on *neither* session reconnects. The monitor socket
+  only silence on the monitor together with no status-request ACK on the command
+  session reconnects. The monitor socket
   itself is still guarded by TCP keepalive. The log line says exactly what was
   checked, each half with the window it was measured over — *"nothing on the monitor
   for N s and no status request acknowledged on the command session in the last
