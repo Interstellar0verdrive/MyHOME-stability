@@ -599,8 +599,10 @@ async def test_answered_probe_keeps_the_session() -> None:
     not any more: the fake command channel ACKs the probe, so the R7 short-circuit
     absorbs the mutation before the reconnect. What is pinned here is the *whole*
     quiet-bus sequence (probe sent once, no second monitor session, the answer
-    clears the watchdog); the window boundary itself is pinned by
-    ``test_probe_window_is_a_boundary``, which keeps the command session mute.
+    clears the watchdog) through the real loops; the window boundary itself is
+    pinned by ``test_probe_window_is_a_boundary`` and the short-circuit by
+    ``test_only_a_command_ack_newer_than_the_probe_keeps_the_session``, both of
+    which keep the command session mute and drive ``_check_idle`` by hand.
 
     The handler's clock is replaced, so the whole scenario is decided by the
     values below and not by how fast the machine is.
@@ -975,8 +977,16 @@ async def test_cen_and_cenplus_press_names_are_complete_and_distinct() -> None:
 
 # --------------------------------------------------------------------------- energy throttle
 async def test_throttle_applies_only_to_active_power() -> None:
-    """gw-06 / sc-02 / sc-03: OR semantics on instant power; totals always pass."""
+    """gw-06 / sc-02 / sc-03: OR semantics on instant power; totals always pass.
+
+    The interval arm is decided on ``FakeClock`` rather than on a real
+    ``asyncio.sleep(0.25)`` against a 0.2 s interval: 50 ms of margin is what a
+    loaded CI runner eats for breakfast, and the last frame would then arrive
+    before the interval elapsed and be suppressed.
+    """
     handler = make_handler(sensor_defaults={"min_delta_w": 5, "min_interval_sec": 0.2})
+    clock = FakeClock()
+    handler._now = clock  # noqa: SLF001 - the interval arm must be decided by hand
     meter = register(handler, SENSOR, "18-51", **{"class": "power", "min_delta_w": 5, "min_interval_sec": 0.2})
 
     async def dispatch(raw: str) -> None:
@@ -989,7 +999,7 @@ async def test_throttle_applies_only_to_active_power() -> None:
     await dispatch("*#18*51*53*98765##")  # monthly: always
     await dispatch("*#18*51*113*616##")  # +3 W, still too soon -> suppressed
     await dispatch("*#18*51*113*630##")  # +17 W -> delta accepts
-    await asyncio.sleep(0.25)
+    clock.value = 1.0  # the 0.2 s interval has elapsed, and only that
     await dispatch("*#18*51*113*632##")  # +2 W but interval elapsed -> accepted (OR)
     assert meter.events == [
         "*#18*51*113*613##",
@@ -999,6 +1009,26 @@ async def test_throttle_applies_only_to_active_power() -> None:
         "*#18*51*113*630##",
         "*#18*51*113*632##",
     ]
+
+
+async def test_energy_delta_exactly_at_the_threshold_is_accepted() -> None:
+    """Contract B says ``|dW| >= min_delta_w``, so the threshold itself must pass.
+
+    ``test_throttle_applies_only_to_active_power`` only uses deltas of 2, 3 and
+    17 W, so it never touches the boundary. Mutation caught: ``or abs(watts -
+    last_w) >= settings.min_delta_w`` -> ``> settings.min_delta_w``, which for a
+    meter whose load steps in exact ``min_delta_w`` increments suppresses every
+    single update - the sensor freezes at its first reading.
+
+    The clock is frozen so the interval arm can never be the reason a sample passes.
+    """
+    handler = make_handler(sensor_defaults={"min_delta_w": 5, "min_interval_sec": 1000})
+    handler._now = FakeClock()  # noqa: SLF001 - the interval arm must never decide
+    register(handler, SENSOR, "18-51", **{"class": "power", "min_delta_w": 5, "min_interval_sec": 1000})
+
+    assert handler._should_process_active_power("18-51", 100) is True  # noqa: SLF001 - first sample
+    assert handler._should_process_active_power("18-51", 104) is False  # noqa: SLF001 - 4 W
+    assert handler._should_process_active_power("18-51", 105) is True  # noqa: SLF001 - exactly 5 W
 
 
 async def test_throttle_reads_per_sensor_and_gateway_defaults() -> None:
@@ -1386,6 +1416,7 @@ async def test_command_channel_timeout_and_peer_close() -> None:
     assert server.sessions == ["*99*1##"]
 
 
+@pytest.mark.slow  # ~2 s: three real loopback sessions, one of them a real connect timeout
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
 async def test_channel_open_failures() -> None:
     async with FakeOWNServer(nonce="603356072", password_ok=False) as server:
@@ -1654,19 +1685,6 @@ async def test_idle_watchdog_does_not_reconnect_when_the_probe_cannot_be_queued(
     await handler._check_idle()  # noqa: SLF001 - must not raise
 
 
-async def test_idle_watchdog_keeps_the_session_when_the_probe_is_acked() -> None:
-    """A gateway that ACKs the probe but does not mirror it on the monitor is alive."""
-    handler = make_handler()
-    register(handler, LIGHT, "1-11")
-    with fake_channels() as (event, command, _dispatch):
-        async with running(handler):
-            await wait_until(lambda: command.instances and command.instances[0].sent, timeout=3)
-            assert command.instances[0].sent == ["*#1*11##"]
-            await asyncio.sleep(handler.idle_timeout + handler.probe_window + 0.3)
-            assert len(event.instances) == 1  # no reconnect
-    assert handler.stats.reconnects == 0
-
-
 async def test_area_status_request_keeps_the_bus_where() -> None:
     handler = make_handler()
     for raw in ("*1*1*3##", "*1*1*00##", "*1*1*100##"):
@@ -1710,7 +1728,7 @@ async def test_probe_window_is_a_boundary() -> None:
 
     The reconnect path is only reachable when the command session is mute as well
     (a gateway that ACKs short-circuits it, see
-    ``test_idle_watchdog_keeps_the_session_when_the_probe_is_acked``), so nothing
+    ``test_only_a_command_ack_newer_than_the_probe_keeps_the_session``), so nothing
     drains the command queue here and ``_check_idle`` is driven by hand on a fake
     clock. Mutations caught: ``if now - self._probe_sent_at >= self.probe_window:``
     -> ``if True:`` (every probe becomes a reconnect) and ``>=`` -> ``>`` (the
@@ -1735,6 +1753,83 @@ async def test_probe_window_is_a_boundary() -> None:
     with pytest.raises(SessionError):
         await handler._check_idle()  # noqa: SLF001 - window elapsed, nothing answered
 
+
+async def test_no_probe_before_the_idle_timeout() -> None:
+    """gw-03: the watchdog stays quiet until ``idle_timeout`` has actually elapsed.
+
+    ``test_option_plumbing`` and friends only assert that the attribute holds the
+    number the options produced; nothing asserted that the number *gates* anything.
+    Mutation caught: ``if idle < self.idle_timeout:`` -> ``if idle < 0.0:``, after
+    which the watchdog probes the bus on every single poll of the listening loop
+    (``read_poll_interval``: 1 s in production) instead of once every five minutes.
+    """
+    handler = make_handler()
+    register(handler, LIGHT, "1-11")
+    clock = FakeClock()
+    handler._now = clock  # noqa: SLF001 - shadows the static clock on this instance
+    handler.idle_timeout = 100.0
+    handler._last_rx = 0.0  # noqa: SLF001
+
+    clock.value = 99.0
+    await handler._check_idle()  # noqa: SLF001 - one second short of the timeout
+    assert handler._probe_sent_at is None  # noqa: SLF001
+    assert queued(handler) == []
+
+    clock.value = 100.0
+    await handler._check_idle()  # noqa: SLF001 - the timeout itself must fire
+    assert handler._probe_sent_at == 100.0  # noqa: SLF001
+    assert queued(handler) == ["*#1*11##"]
+
+
+async def test_only_a_command_ack_newer_than_the_probe_keeps_the_session() -> None:
+    """gw-03 / R7: an ACK proves the gateway is alive only if it postdates the probe.
+
+    The short-circuit exists for gateways that answer on the command port without
+    mirroring the reply onto the monitor; both of its arms are decided here on a
+    fake clock, with nothing draining the command queue, so neither depends on how
+    fast the machine is. This replaces the wall-clock
+    ``test_idle_watchdog_keeps_the_session_when_the_probe_is_acked``, which spent
+    0.65 s asserting that nothing happened and passed just as happily when the
+    runner was too slow to let the watchdog run at all.
+
+    Mutation caught: ``if self._command_ack_at is not None and self._command_ack_at
+    >= self._probe_sent_at:`` -> ``if self._command_ack_at is not None:``, after
+    which a single ACK from any command the gateway ever answered suppresses the
+    reconnect for good - the monitor session can be dead and the watchdog will
+    never rebuild it.
+    """
+    # A stale ACK, from before the probe went out, proves nothing.
+    stale = make_handler()
+    register(stale, LIGHT, "1-11")
+    stale_clock = FakeClock()
+    stale._now = stale_clock  # noqa: SLF001
+    stale.idle_timeout = 100.0
+    stale.probe_window = 50.0
+    stale._command_ack_at = -10.0  # noqa: SLF001 - answered ten seconds before clock 0
+    stale._last_rx = -150.0  # noqa: SLF001 - silent for 150 s at clock 0
+
+    await stale._check_idle()  # noqa: SLF001 - queues the probe and arms the window
+    assert stale._probe_sent_at == 0.0  # noqa: SLF001
+    stale_clock.value = 50.0
+    with pytest.raises(SessionError):
+        await stale._check_idle()  # noqa: SLF001
+
+    # An ACK that postdates the probe re-arms the watchdog instead of reconnecting.
+    alive = make_handler()
+    register(alive, LIGHT, "1-11")
+    alive_clock = FakeClock()
+    alive._now = alive_clock  # noqa: SLF001
+    alive.idle_timeout = 100.0
+    alive.probe_window = 50.0
+    alive._last_rx = -150.0  # noqa: SLF001
+
+    await alive._check_idle()  # noqa: SLF001
+    assert alive._probe_sent_at == 0.0  # noqa: SLF001
+    alive._command_ack_at = 10.0  # noqa: SLF001 - the command port answered after the probe
+    alive_clock.value = 50.0
+    await alive._check_idle()  # noqa: SLF001 - must not raise
+    assert alive._probe_sent_at is None  # noqa: SLF001 - disarmed
+    assert alive._last_rx == 50.0  # noqa: SLF001 - the silence clock restarts
 
 
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
