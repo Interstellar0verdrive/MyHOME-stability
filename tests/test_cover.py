@@ -620,3 +620,150 @@ async def test_keypad_stop_is_not_mistaken_for_an_echo(
         assert state.state == CoverState.OPEN
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert 0 < state.attributes[ATTR_CURRENT_TILT_POSITION] < 100
+
+
+# ---------------------------------------------------------------- review 2026-09-07
+INVERTED_ADVANCED_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_adv_inverted:
+      where: '84'
+      name: Cover Adv Inverted
+      advanced: true
+      inverted: true
+"""
+
+
+async def test_advanced_position_is_never_estimated(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+    """A plain movement frame on an advanced actuator must not start the timer model."""
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*42*0*0##")
+        await feed_event(hass, cover, "*2*1*83##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        await _advance(hass, freezer, 40)
+        # No status frame arrived: the real position must survive untouched.
+        assert hass.states.get(entity_id).attributes[ATTR_CURRENT_POSITION] == 42
+        await feed_event(hass, cover, "*2*0*83##")
+        assert hass.states.get(entity_id).state == CoverState.OPEN
+
+
+async def test_advanced_status_keeps_the_direction(hass: HomeAssistant, tmp_path) -> None:
+    """Status 11-14 carry a position and a direction: both must be visible."""
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*11*42*0*0##")
+        state = hass.states.get(entity_id)
+        assert state.state == CoverState.OPENING
+        assert state.attributes[ATTR_CURRENT_POSITION] == 42
+        await feed_event(hass, cover, "*#2*83*10*12*60*0*0##")
+        assert hass.states.get(entity_id).state == CoverState.CLOSING
+        await feed_event(hass, cover, "*#2*83*10*10*60*0*0##")
+        assert hass.states.get(entity_id).state == CoverState.OPEN
+
+
+async def test_inverted_advanced_cover_inverts_the_position_too(hass: HomeAssistant, tmp_path) -> None:
+    async with setup_myhome(hass, tmp_path, INVERTED_ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_adv_inverted"
+        cover = entity_object(hass, COVER, "2-84")
+        await feed_event(hass, cover, "*#2*84*10*10*30*0*0##")
+        assert hass.states.get(entity_id).attributes[ATTR_CURRENT_POSITION] == 70
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: entity_id, ATTR_POSITION: 70}, blocking=True
+        )
+        assert commands.sent_frames == ["*#2*84*#11#001*30##"]
+
+
+async def test_late_movement_echo_after_our_stop_is_ignored(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A 0.6 s tilt run finishes before the gateway echoes the raise command."""
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(
+            COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 20}, blocking=True
+        )
+        await _advance(hass, freezer, 0.8)
+        assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
+        await feed_event(hass, cover, "*2*1*85##")  # stale echo of the raise command
+        await _advance(hass, freezer, 40)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 20
+
+
+async def test_set_position_to_the_current_value_stops_a_moving_cover(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        await feed_event(hass, cover, "*2*1*81##")  # keypad
+        await _advance(hass, freezer, 12)
+        current = hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION]
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: current}, blocking=True
+        )
+        assert commands.sent_frames == ["*2*0*81##"]
+        await _advance(hass, freezer, 40)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == current
+
+
+async def test_end_stop_frame_recalibrates_a_full_close(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The motor reaches the floor before our timer: the estimate must snap to closed."""
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 50}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 0.1)
+        await feed_event(hass, cover, "*2*0*81##")  # gateway echo, ignored
+        await _advance(hass, freezer, 12)  # 80 % of the expected 15 s run
+        await feed_event(hass, cover, "*2*0*81##")  # physical end stop
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
+
+
+async def test_early_stop_during_our_full_run_is_a_real_stop(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A stop well before the end of our own run is somebody stopping it: freeze."""
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 50}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 6)  # 40 % of the expected 15 s run
+        await feed_event(hass, cover, "*2*0*81##")
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.OPEN
+        assert 25 <= state.attributes[ATTR_CURRENT_POSITION] <= 32
+
+
+async def test_second_stop_inside_the_echo_window_is_honoured(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(COVER, "open_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        await _advance(hass, freezer, 0.2)
+        await feed_event(hass, cover, "*2*0*85##")  # gateway echo, ignored
+        await _advance(hass, freezer, 0.8)
+        await feed_event(hass, cover, "*2*0*85##")  # real keypad stop, inside the window
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state == CoverState.OPEN
+        assert 0 < state.attributes[ATTR_CURRENT_TILT_POSITION] < 100
+
+
+async def test_restore_wins_over_the_first_status_reply(hass: HomeAssistant, tmp_path) -> None:
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 42}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await feed_event(hass, cover, "*2*0*81##")
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 42

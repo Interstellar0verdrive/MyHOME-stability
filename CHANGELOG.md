@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- Covers, found by the 2026-09-07 code review (all reproduced with tests):
+  - an advanced actuator's real position could be overwritten by the time-based
+    estimate after a plain "opening"/"closing" frame; advanced covers now only track
+    the direction from those frames, and they finally report `opening` / `closing`
+    from their own status frames (states 11-14);
+  - after a short timed run (a tilt target below ~17 %), the gateway's late copy of
+    the movement command could start a phantom run to the end stop; the echo window
+    now also covers our own stop commands, and only one contradicting frame per
+    command is ignored, so a real keypad stop right after it is still honoured;
+  - `set_cover_position` to the value a moving cover was passing through did nothing
+    and the cover ran on; it now stops there;
+  - a full `open_cover` / `close_cover` did not re-calibrate: the actuator's end-stop
+    frame froze the stale estimate instead of snapping it to `0` / `100`. It snaps
+    now, once three quarters of the expected run have elapsed; earlier stops are
+    still honoured as real stops;
+  - the last position is restored *before* the first status request instead of
+    racing it;
+  - `inverted` now also mirrors the level of an advanced actuator, so direction
+    flags and position agree.
+- Timing keys (`shutter_run`, `slat_time`, `opening_time`, `closing_time`) written
+  on an `advanced` cover are now reported as ignored with a warning instead of
+  silently dropped.
+
 ## [0.4.0] - 2026-09-07
 
 Three additions: a two-phase travel model for covers, CEN/CEN+ scenario controls as
@@ -18,7 +45,8 @@ did: the cover model and the scenario controls are opt-in through new keys.
   MyHOMEServer1 answers a movement command with a "stopped" frame immediately
   followed by the "opening"/"closing" one, and that stop was taken as the end of
   the run, so the shutter ran to the end stop. The stop echo arriving within 1.5 s
-  of our own command is now ignored; real stops (keypad) are still honoured.
+  of our own command is now ignored (one frame per command: a second stop inside the
+  window, i.e. a keypad press, is honoured; keypad-started runs are unaffected).
   Found live on the first calibrated shutter.
 - `myhome.send_message` crashed with an internal error on frames that OWNd's typed
   parser does not model, such as a CEN+ virtual press (`*25*21#1*#2##`, WHERE starting

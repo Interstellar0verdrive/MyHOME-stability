@@ -861,3 +861,14 @@ def test_probatio_and_voluptuous_agree():
     assert probatio_results == voluptuous_results
     # Sanity: the case list covers both outcomes.
     assert any("ok" in r for r in probatio_results) and any("invalid" in r for r in probatio_results)
+
+
+def test_advanced_cover_timing_keys_are_reported_as_ignored(caplog: pytest.LogCaptureFixture) -> None:
+    """Review 2026-09-07: timing keys on an advanced actuator are accepted but reported."""
+    config = check(gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True, "slat_time": 3, "shutter_run": 30}}))
+    assert config is not None
+    assert "cover 'shutter': shutter_run, slat_time ignored" in caplog.text
+    caplog.clear()
+    check(gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True}}))
+    assert "ignored" not in caplog.text
+

@@ -633,7 +633,11 @@ curtain on the floor.
   is the plain `|target − current| / 100 × shutter_run` seconds; with it, the slat
   phase is added whenever the curtain leaves (or reaches) the floor.
 - **basic, target `0` or `100`**: the cover is run into its end stop instead of being
-  stopped by a timer, which re-calibrates the estimate for free.
+  stopped by a timer, which re-calibrates the estimate for free (the end-stop frame
+  snaps the estimate to `0` / `100`; see the two-phase model notes in the
+  configuration reference for the one caveat).
+- **basic, target equal to the position the cover is passing through**: the cover is
+  stopped right there.
 
 ```yaml
 script:
@@ -647,8 +651,8 @@ script:
 ```
 
 If the position is not known yet (fresh install, nothing restored), a basic cover
-runs to the nearest end instead — fully open for a target ≥ 50, fully closed
-below — so that the estimate gets a reference point. Run one full open and one
+runs to whichever end is closer to the requested position instead — fully open for
+a target ≥ 50, fully closed below — so that the estimate gets a reference point. Run one full open and one
 full close after setting up a cover; from then on the estimate has a baseline and
 is restored across restarts and reloads.
 

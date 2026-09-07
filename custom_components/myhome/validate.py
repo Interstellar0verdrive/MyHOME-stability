@@ -707,6 +707,26 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
         )
 
 
+_COVER_TIMING_KEYS = (CONF_SHUTTER_RUN, CONF_SLAT_TIME, CONF_OPENING_TIME, CONF_CLOSING_TIME)
+
+
+def _warn_ignored_cover_timings(device: Mapping, yaml_key: str, written: set[str]) -> None:
+    """An advanced actuator reports its real position: the timing keys do nothing.
+
+    Accepted (rejecting them would break an upgrade) but reported, so a user does not
+    wait for tilt controls that will never appear.
+    """
+    if not device.get(CONF_ADVANCED_SHUTTER):
+        return
+    ignored = [key for key in _COVER_TIMING_KEYS if key in written]
+    if ignored:
+        LOGGER.warning(
+            "cover '%s': %s ignored, an advanced actuator reports its real position",
+            yaml_key,
+            ", ".join(ignored),
+        )
+
+
 def _finalize_binary_sensor(device: MutableMapping, yaml_key: str) -> None:
     if CONF_DEVICE_CLASS not in device:
         device[CONF_DEVICE_CLASS] = _BINARY_SENSOR_DEFAULT_CLASS.get(device[CONF_WHO])
@@ -853,6 +873,8 @@ class MyHomeDeviceSchema(Schema):
         super().__init__({Optional(str): Schema(dict(fields), extra=ALLOW_EXTRA)}, extra=PREVENT_EXTRA)
 
     def __call__(self, data):
+        # Keys the user actually wrote, before the schema injects its defaults.
+        written = {key: set(value) for key, value in data.items() if isinstance(value, Mapping)}
         data = super().__call__(data)
         finalize = _PLATFORM_FINALIZERS.get(self.platform)
         for yaml_key, device in data.items():
@@ -861,6 +883,8 @@ class MyHomeDeviceSchema(Schema):
             _inject_common_defaults(device)
             if finalize is not None:
                 finalize(device, yaml_key)
+            if self.platform == COVER:
+                _warn_ignored_cover_timings(device, yaml_key, written.get(yaml_key, set()))
         return data
 
 

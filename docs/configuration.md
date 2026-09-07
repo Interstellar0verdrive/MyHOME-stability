@@ -205,11 +205,11 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (0 = closed, 100 = open), derive open/closed and support *set position* by timed stop. |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. Ignored on `advanced` actuators. |
 | `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. |
 | `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. |
 | `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. |
-| `inverted` | boolean | `false` | Swap the up/down semantics (position 0 becomes open). |
+| `inverted` | boolean | `false` | The actuator is wired the other way round: `open_cover` sends *lower*, a bus "raising" frame is read as closing and an advanced actuator's reported level is mirrored. Home Assistant's own convention is unchanged: position `0` is still closed, `100` still open. |
 | `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). |
 | `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
 
@@ -247,8 +247,12 @@ Consequences, all of them deliberate:
 - `cover.set_cover_position` computes the run through **both** phases: from fully
   closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
 - `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
-  what re-calibrates the estimate; `set_cover_position` with `0` or `100` does the
-  same instead of stopping by timer.
+  what re-calibrates the estimate: a "stopped" frame that arrives during a full run
+  commanded from Home Assistant, once at least three quarters of the expected run
+  have elapsed, is read as the physical end stop and the estimate snaps to `0` /
+  `100`. Earlier stops are taken for what they most likely are, somebody pressing
+  *stop*, and freeze the estimate where it is. `set_cover_position` with `0` or
+  `100` uses the same full run instead of stopping by timer.
 - Movements started from a physical keypad (or by a scenario) are tracked through the
   very same model, from the `opening` / `closing` / `stopped` frames on the bus.
 - `slat_time: 0` (the default) is exactly the 0.3.x linear behaviour, tilt included:

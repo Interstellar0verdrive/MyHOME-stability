@@ -84,10 +84,17 @@ from .const import (
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity, address_attributes
 
-# How often the estimated position is pushed to Home Assistant while the cover moves.
-# A "stopped" frame this soon after our own movement command is the gateway's echo.
+# A frame that contradicts our own command and arrives this soon after it is the
+# gateway's echo (MyHOMEServer1 answers a movement with "stopped" then "opening",
+# and a stop with a late copy of the movement). Only one such frame is ignored per
+# command, so a real keypad press right after it is still honoured.
 STOP_ECHO_WINDOW_SEC = 1.5
+# How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
+# A "stopped" frame during a free run *we* commanded is read as the physical end stop
+# (which re-calibrates the estimate) once this fraction of the expected run has
+# elapsed; earlier, it is taken for a real stop and the estimate is frozen.
+END_STOP_MIN_FRACTION = 0.75
 
 OPENING = "opening"
 CLOSING = "closing"
@@ -237,10 +244,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._move_start_tilt: int | None = None
         # Set only when *we* have to stop the cover (`set_cover_position`, tilt).
         self._target_position: int | None = None
-        # When we sent the movement command ourselves: the gateway echoes a
-        # "stopped" frame right before the "opening"/"closing" one, which must
-        # not cancel a timed target (see handle_event).
+        # The last command *we* sent (OPENING / CLOSING / None = stop) and when: the
+        # gateway echoes a "stopped" frame right before the "opening"/"closing" one,
+        # and a late copy of the movement after our stop; both must be ignored
+        # (see `_is_echo`).
         self._own_command_at: datetime | None = None
+        self._own_command: str | None = None
+        # True while a free run to an end stop that we commanded is in progress.
+        self._own_free_run = False
+        self._move_duration: float | None = None
         # Where the estimate settles when the pending timer fires.
         self._end_position: int | None = None
         self._end_tilt: int | None = None
@@ -300,7 +312,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         clamped = int(max(0, min(100, round(position))))
         if clamped > 0:
             return clamped, 100
-        if self._slat_time <= 0:
+        if not self._has_tilt:
             return 0, 0
         return 0, int(max(0, min(100, round(tilt))))
 
@@ -403,7 +415,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._move_started_at = dt_util.utcnow()
         self._moving = direction
         self._target_position = target_position
-        self._own_command_at = dt_util.utcnow() if own_command else None
+        if own_command:
+            self._own_command_at = dt_util.utcnow()
+            self._own_command = direction
+        else:
+            self._own_command_at = None
+            self._own_command = None
+        self._own_free_run = own_command and target_position is None
 
         if target_position is None:
             # Free run to the end stop: fully open (slats open) or fully closed.
@@ -414,6 +432,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._end_position, self._end_tilt = self._normalise(end_position, end_tilt)
 
         duration = self._travel_time(direction, position, tilt, self._end_position, self._end_tilt)
+        self._move_duration = duration
         if duration <= 0:
             self._finish_movement(self._end_position, self._end_tilt)
             return
@@ -432,11 +451,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._target_position = None
         self._end_position = None
         self._end_tilt = None
+        self._own_free_run = False
+        self._move_duration = None
         if position is not None:
             frozen_position, frozen_tilt = self._normalise(position, 100 if tilt is None else tilt)
             self._attr_current_cover_position = frozen_position
             self._attr_current_cover_tilt_position = frozen_tilt
-            self._attr_is_closed = frozen_position == 0 and frozen_tilt == 0
+            self._attr_is_closed = frozen_position == 0 and (not self._has_tilt or frozen_tilt == 0)
 
     @callback
     def _async_position_tick(self, now: datetime) -> None:
@@ -451,7 +472,36 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._finish_movement(end_position, end_tilt)
         if needs_stop:
             await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
+            self._mark_own_stop()
         self.async_write_ha_state()
+
+    @callback
+    def _mark_own_stop(self) -> None:
+        """Remember that *we* just sent a stop: a late movement echo must not restart the estimate."""
+        self._own_command_at = dt_util.utcnow()
+        self._own_command = None
+
+    def _is_echo(self, frame_direction: str | None) -> bool:
+        """True for the one frame that contradicts our last command inside the echo window.
+
+        The gateway answers a movement command with "stopped" and a stop command with
+        a late copy of the movement: each is ignored exactly once, so a second
+        contradicting frame (a real keypad press) is still honoured.
+        """
+        if self._own_command_at is None or frame_direction == self._own_command:
+            return False
+        elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
+        if elapsed >= STOP_ECHO_WINDOW_SEC:
+            return False
+        LOGGER.debug(
+            "%s Cover %s: ignoring the gateway echo (%s) %.2fs after our command",
+            self._gateway_handler.log_id,
+            self._where,
+            frame_direction or "stopped",
+            elapsed,
+        )
+        self._own_command_at = None
+        return True
 
     # ------------------------------------------------------------------ lifecycle
     @property
@@ -469,10 +519,17 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        """Register, request the status and restore the last known position/tilt."""
+        """Restore the last known position/tilt, then register and request the status.
+
+        The restore comes first on purpose: registering the entity sends a status
+        request, and a movement reply could otherwise race the restore.
+        """
+        if not self._advanced and self._attr_current_cover_position is None:
+            await self._async_restore_position()
         await super().async_added_to_hass()
-        if self._advanced or self._attr_current_cover_position is not None:
-            return
+
+    async def _async_restore_position(self) -> None:
+        """Bring back the estimate saved by `extra_restore_state_data` (or the old state)."""
         position: int | None = None
         tilt: int | None = None
         extra_data = await self.async_get_last_extra_data()
@@ -497,7 +554,6 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 # curtain rests on the floor.
                 tilt = 100 if int(position) > 0 else 0
             self._finish_movement(int(position), int(tilt))
-            self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel pending timers before the entity goes away."""
@@ -532,6 +588,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
         if not self._advanced:
             self._finish_movement(*self._estimate())
+            self._mark_own_stop()
             self.async_write_ha_state()
 
     async def async_stop_cover_tilt(self, **kwargs: Any) -> None:
@@ -551,7 +608,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         position = int(kwargs[ATTR_POSITION])
 
         if self._advanced:
-            await self._gateway_handler.send(OWNAutomationCommand.set_shutter_level(self._full_where, position))
+            level = 100 - position if self._inverted else position
+            await self._gateway_handler.send(OWNAutomationCommand.set_shutter_level(self._full_where, level))
             return
 
         current = self.current_cover_position
@@ -570,6 +628,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             await self.async_close_cover()
             return
         if position == current:
+            if self._moving is not None:
+                # Already passing through the target: stop here instead of ignoring it.
+                await self.async_stop_cover()
             return
 
         direction = OPENING if position > current else CLOSING
@@ -624,6 +685,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._start_movement(direction, target_position=0, target_tilt=target_tilt, own_command=True)
             self.async_write_ha_state()
 
+    def _reached_end_stop(self) -> bool:
+        """A stop during our own free run counts as the end stop once most of it has run."""
+        if self._move_started_at is None or not self._move_duration:
+            return False
+        elapsed = (dt_util.utcnow() - self._move_started_at).total_seconds()
+        return elapsed >= END_STOP_MIN_FRACTION * self._move_duration
+
     # ------------------------------------------------------------------ events
     def handle_event(self, message: OWNAutomationEvent) -> None:
         """Handle an event message (must never raise: it runs in the event loop)."""
@@ -636,29 +704,43 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 opening, closing = closing, opening
 
             if message.current_position is not None:
-                # Advanced actuator: a real position (0 = closed).
-                self._finish_movement(int(message.current_position))
-                if message.is_closed is not None:
-                    self._attr_is_closed = message.is_closed
+                # Advanced actuator: a real position (0 = closed), inverted if wired so.
+                position = int(message.current_position)
+                if self._inverted:
+                    position = 100 - position
+                self._finish_movement(position)
+                # Status 11-14 carry a position *and* a direction: keep it visible.
+                if opening:
+                    self._moving = OPENING
+                elif closing:
+                    self._moving = CLOSING
+            elif self._advanced:
+                # A plain WHAT frame from an advanced actuator: track the direction only,
+                # the position comes from its own status frames, never from the timer.
+                if opening:
+                    self._moving = OPENING
+                elif closing:
+                    self._moving = CLOSING
+                elif opening is False and closing is False:
+                    self._moving = None
             elif opening:
                 # Someone pressed the keypad (or a scenario ran): the very same
                 # two-phase model tracks the movement until it stops.
-                if self._moving != OPENING:
+                if self._moving != OPENING and not self._is_echo(OPENING):
                     self._start_movement(OPENING)
             elif closing:
-                if self._moving != CLOSING:
+                if self._moving != CLOSING and not self._is_echo(CLOSING):
                     self._start_movement(CLOSING)
             elif opening is False and closing is False:
-                if self._moving is not None and self._own_command_at is not None:
-                    # MyHOMEServer1 answers a movement command with a "stopped"
-                    # frame immediately followed by the "opening"/"closing" one;
-                    # that stop is an echo, not the end of the run.
-                    elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
-                    if elapsed < STOP_ECHO_WINDOW_SEC:
-                        LOGGER.debug("%s Ignoring the gateway stop echo %.2fs after our command", self._gateway_handler.log_id, elapsed)
-                        return
-                # "Stopped": freeze wherever the estimate got to.
-                self._finish_movement(*self._estimate())
+                if self._is_echo(None):
+                    return
+                if self._own_free_run and self._moving is not None and self._reached_end_stop():
+                    # The actuator hit the end stop before our timer: snap to the end,
+                    # this is what re-calibrates the estimate.
+                    self._finish_movement(self._end_position, self._end_tilt)
+                else:
+                    # "Stopped": freeze wherever the estimate got to.
+                    self._finish_movement(*self._estimate())
         except Exception:  # pragma: no cover - defensive, keeps the session alive
             LOGGER.exception("%s Error handling cover event %s", self._gateway_handler.log_id, message)
             return
