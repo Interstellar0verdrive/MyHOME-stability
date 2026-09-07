@@ -146,8 +146,11 @@ def keepalive_minutes_for(device: dict[str, Any], config_entry: ConfigEntry) -> 
         return configured
     try:
         # P2-NIT-1: the same defensive parse `gateway._option()` gives the other four
-        # TUNABLE_OPTIONS, minus its clamp - `MyHOMEEnergySensor.__init__` already
-        # clamps to 0..MAX_KEEPALIVE_MINUTES.  The options flow writes a number, but a
+        # TUNABLE_OPTIONS, minus its clamp - `MyHOMEPowerSensor.__init__` already
+        # clamps to 0..MAX_KEEPALIVE_MINUTES (P4-INCONSISTENCY-3: the comment used to
+        # name `MyHOMEEnergySensor`, which never arms the stream and takes no
+        # keep-alive at all, so the justification pointed at the wrong class).
+        # The options flow writes a number, but a
         # hand-edited entry must not take the whole sensor platform - the four gateway
         # diagnostics included - down with an exception.
         # P3-NIT-4: `int()` of an infinity raises OverflowError, not ValueError, so

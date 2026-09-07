@@ -288,10 +288,14 @@ def _where_text(v: object) -> str:
     4-digit values, which existing configurations rely on - which means a value that
     *was* written with a leading zero inside those windows is taken at its decimal
     value and cannot be detected (``0115`` becomes WHERE ``77``, ``0000`` the General
-    WHERE ``0``).  The 3- and 5-digit shapes sensor addresses take are refused
-    outright, quoted or not: ``where: 301`` is a valid sensor address only as a
-    string, and ``docs/configuration.md`` says so.  That is why every message below
-    asks for quotes on the whole file rather than claiming this one value was caught.
+    WHERE ``0``).  Unquoted 3- and 5-digit *integers* - the shapes sensor addresses
+    take - are refused on every platform, because nothing here can tell ``where: 301``
+    from a mistyped actuator address.  Quoting is what makes them reachable: the text
+    then reaches the platform's own WHERE validator, which accepts ``where: '301'`` on
+    a sensor or a binary sensor and still refuses it on a light, a switch or a cover -
+    which is why the message must not promise that quoting will make the value valid.
+    That is also why every message below asks for quotes on the whole file rather than
+    claiming this one value was caught.
     """
     if isinstance(v, bool) or v is None:
         raise Invalid("WHERE is missing or not a string, quote it (e.g. where: '15')")
