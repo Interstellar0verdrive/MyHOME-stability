@@ -1582,6 +1582,31 @@ def test_the_advanced_cover_warning_names_only_the_keys_the_user_wrote(
     assert "shutter_run does nothing here" in caplog.text
 
 
+def test_the_advanced_warning_names_shutter_run_first_when_it_still_bounds_the_timer(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """D4-1's other half: `shutter_run` plus *one* directional key.
+
+    `_keys_that_bound_the_advanced_timer` exists for exactly this file. With both
+    directional keys written, `shutter_run` reaches the deadline through neither and
+    is reported as inert (the test above). With only one written, the *other*
+    direction still falls back to `shutter_run`, so it does reach
+    `max(opening_time, closing_time)` and has to be named as bounding - and named
+    first, in the order the value travels: the fallback, then the key that overrides
+    it in one direction.
+
+    Mutation caught: `insert(0, ...)` -> `append(...)` in
+    `_keys_that_bound_the_advanced_timer`.
+    """
+    check(_cover(advanced=True, shutter_run=30, opening_time=20))
+    assert "shutter_run and opening_time are still read" in caplog.text
+    assert "does nothing here" not in caplog.text
+
+    caplog.clear()
+    check(_cover(advanced=True, shutter_run=30, closing_time=25))
+    assert "shutter_run and closing_time are still read" in caplog.text
+
+
 def test_slat_time_is_not_cross_checked_on_an_advanced_cover(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

@@ -948,7 +948,7 @@ async def test_a_stop_the_gateway_refused_changes_nothing(
         # The shutter never stopped: the estimate must keep running to the floor.
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
         await _advance(hass, freezer, 0.5)
-        # And nothing was armed either, so a frame inside the window is still honoured.
+        # The shutter is still going, so a frame in that direction changes nothing here.
         await feed_event(hass, cover, "*2*2*81##")
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
         await _advance(hass, freezer, 30)
@@ -1000,7 +1000,7 @@ async def test_a_timed_stop_the_gateway_refused_runs_on_to_the_end_stop(
         assert state.state == CoverState.CLOSING
         assert state.attributes[ATTR_CURRENT_POSITION] < 50
 
-        # Nothing was armed either: a real frame in that direction is still honoured.
+        # The shutter is still going, so a frame in that direction changes nothing here.
         await feed_event(hass, cover, "*2*2*81##")
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
 
@@ -1011,6 +1011,42 @@ async def test_a_timed_stop_the_gateway_refused_runs_on_to_the_end_stop(
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert state.state == CoverState.CLOSED
+
+
+async def test_a_refused_stop_cover_arms_no_echo_window(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same rule on the explicit `stop_cover`, whose refusal returns even earlier.
+
+    `async_stop_cover` says it too - "a stop the gateway never took cannot be echoed
+    back, so arming the echo window on it would only swallow somebody else's frame" -
+    and the `not sent` arm returns before `_mark_own_stop`. Nothing pinned that
+    either, for the same reason as the test above: the "still honoured" line in
+    `test_a_stop_the_gateway_refused_changes_nothing` feeds a `closing` frame while
+    the entity is still `CLOSING`, so `_is_echo` is never reached.
+
+    Mutation caught: calling `_mark_own_stop(self._moving)` in the `not sent` arm of
+    `async_stop_cover` before it returns.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
+
+        # Somebody stops it at the wall instead, then presses "down" again straight
+        # away. Both frames are real events; neither is an echo of anything we sent.
+        await feed_event(hass, cover, "*2*0*81##")
+        assert hass.states.get(ENTITY).state == CoverState.OPEN
+        await feed_event(hass, cover, "*2*2*81##")
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
 
 
 async def test_advanced_movement_is_bounded_by_a_safety_timer(

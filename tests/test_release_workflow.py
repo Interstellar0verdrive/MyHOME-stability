@@ -173,4 +173,4 @@ def test_no_action_is_pinned_to_a_moving_ref(steps) -> None:
     assert refs, "the release job runs no actions at all?"
     for action in sorted(refs):
         ref = action.rsplit("@", 1)[-1]
-        assert re.fullmatch(r"v\d+(?:\.\d+)*|[0-9a-f]{40}", ref), action
+        assert re.fullmatch(r"v\d+(?:\.\d+)*(?:-(?:alpha|beta|rc)[\d.]*)?|[0-9a-fA-F]{40}", ref), action

@@ -713,8 +713,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def _async_echo_recheck(self, now: datetime) -> None:
         """The ignored movement frame may have been real: re-read the actuator status."""
         self._echo_recheck = None
-        if self._moving is not None:
-            # A later frame already started the estimate: nothing was lost.
+        if self._moving is not None:  # pragma: no cover - equivalent mutant, see review 3
+            # A later frame already started the estimate: nothing was lost. The
+            # branch cannot be told apart by a test (the re-read is harmless when it
+            # runs anyway), so it is excluded from coverage rather than chased.
             return
         LOGGER.debug(
             "%s Cover %s: re-reading the status after an ignored movement frame",
