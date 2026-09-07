@@ -458,10 +458,13 @@ parses the actuator number `n` but offers no public way to read it, and this
 integration will not reach into its internals for a value a future release could
 rename — so the frames of a zone's actuators are treated as one. A zone with a valve
 and a pump, or one actuator per circuit, therefore reports *Idle* as soon as **any**
-one of them switches off, even if another is still running. The value is not stuck:
-the actuator's next "on" frame hands the mode/temperature derivation back its job, and
-from then on the temperature readings drive `hvac_action` again. A central unit that
-also reports *valve* status keeps the direction the valve named through an actuator
+one of them switches off, even if another is still running. The value is not stuck.
+On a heat-only or cool-only zone — the usual case, since `cool` defaults to `false` —
+the actuator's next "on" frame is itself a direction, and the zone goes straight back
+to *Heating* (or *Cooling*). On a `heat: true, cool: true` zone that frame carries no
+direction, so it hands the mode/temperature derivation back its job and the
+temperature readings drive `hvac_action` again. A central unit that also reports
+*valve* status keeps the direction the valve named through an actuator
 frame that only says *active* — that one no longer overrules it. An actuator **off** is
 still taken as the zone's answer there too, so the *Idle*-on-any-off limitation above
 applies to such a plant as well, until the next valve frame restores the direction.
