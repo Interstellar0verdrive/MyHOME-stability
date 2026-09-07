@@ -21,32 +21,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - the last position is restored *before* the first status request instead of
     racing it;
   - `inverted` now also mirrors the level of an advanced actuator, so direction
-    flags and position agree.
-- Covers, the gateway's own echoes — one mechanism, refined over the three review
-  rounds:
-  - after a short timed run (a tilt target below ~17 %) the gateway's late copy of
-    the movement command could start a phantom run to the end stop, and a keypad
-    press within 1.5 s of a stop sent by Home Assistant was discarded. Only a frame
-    that can actually be the gateway echoing our own command is ignored now: a
-    `stopped` frame after a movement we commanded, or a copy of the movement our own
-    stop interrupted. A movement in any other direction is honoured immediately, a
-    press in the same direction is recovered by a status re-read about two seconds
-    later, and a stop the gateway refused now changes nothing at all — neither the
-    repeat window nor the estimated position, on either of the two paths that send a
-    stop. Without this a shutter driven from the wall could run fully open while Home
-    Assistant reported it closed, until the next command from Home Assistant;
+    flags and position agree;
+  - a `slat_time` on an `advanced` cover could make the whole `myhome.yaml` fail to
+    load. The key does nothing on an advanced actuator (it has no tilt phase), but it
+    was still cross-checked against the run times, and that check ran before the
+    warning that explains the key is inert there.
+- Covers, the frames we cannot tell apart from our own commands:
+  - after a timed run short enough to finish before the gateway's late copy of our
+    movement command arrives (a small tilt target on a short `slat_time`), that copy
+    could start a phantom run to the end stop. Only a frame that can actually be the
+    gateway echoing our own command is ignored now: a `stopped` frame after a
+    movement we commanded, or a copy of the movement our own stop interrupted. A
+    movement in any other direction is honoured immediately, a press in the same
+    direction is recovered by a status re-read about two seconds later, and a stop
+    Home Assistant could not even send — its command queue was full, or the
+    connection was closing — now changes nothing at all, neither the repeat window
+    nor the estimated position, on both of the two paths that send a stop. Without
+    this a shutter driven from the wall could run fully open while Home Assistant
+    reported it closed, until the next command from Home Assistant;
   - a `cover.stop_cover` the gateway could not take — its command queue was full, or
     the connection was closing — used to freeze the position half way and keep
     reporting it for good, because the actuator's own stop frame at the end of the
     physical run re-froze the same stale value. The shutter goes on running in that
     case, so the estimate now goes on running with it. The stop that ends a
-    `cover.set_cover_position` or a tilt run follows the same rule;
-  - an advanced actuator no longer stays *Opening* / *Closing* for ever when its
-    `stopped` frame is lost: after the longest configured travel time plus 30 s the
-    actuator's status is re-read, and the direction is dropped only if nothing
-    answers within about two seconds — so an actuator whose real run is longer than
-    that timer is never reported as *closed* (or *open*) in the middle of it, waking
-    every automation watching for it. The reported position is never estimated.
+    `cover.set_cover_position` or a tilt run follows the same rule, and had one
+    failure of its own: it used to leave the position sitting on the target the
+    shutter never reached, while the shutter itself ran on to the end stop. That run
+    is now carried on to the end stop in the model too, so the actuator's own frame
+    at the end of it puts the position back in step instead of confirming a wrong
+    one.
+- Covers, an advanced actuator whose `stopped` frame is lost: it no longer stays
+  *Opening* / *Closing* for ever. After the longest configured travel time plus 30 s
+  the actuator's status is re-read, and the direction is dropped only if nothing
+  answers within the time the command path is allowed to take (the
+  `command_timeout_sec` option, ten seconds by default, plus a two-second margin).
+  An actuator whose real run is longer than that timer is therefore never reported as
+  *closed* (or *open*) in the middle of it, waking every automation watching for it —
+  not even while the bus is busy with a scene, which is exactly when the command path
+  needs its full budget. The reported position is never estimated.
 - Sensors, binary sensors and climate, found by the same review:
   - a platform section written as a YAML list or a scalar (`light: [...]`) is
     reported as a normal validation error with its key path instead of crashing the
@@ -61,6 +73,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `entity_name` on a `class: power` meter now renames the Power entity;
   - in a plant with a central unit, every nameless zone was called "Central unit";
     only the bare `#0` is, `#0#5` is "Zone 5" again;
+  - a thermo zone written with a leading zero (`zone: '01'`, or `where: '01'`) is
+    normalised to the form the bus uses, so its frames reach the entity. It used to
+    be keyed `4-01` while every frame for that zone arrives as `4-1`: the climate
+    entity was created, was available and stayed `unknown` for ever, with nothing in
+    the log but a debug line. The same mismatch hid a duplicate zone from the
+    duplicate check and stopped a zone from sharing its device with the WHO 4
+    temperature probe on the same zone;
   - a `climate` zone paired with a temperature `sensor` on the same zone lost the
     zone's name to the probe: the shared device keeps the climate name and the probe
     name becomes the sensor's `entity_name`;
@@ -70,7 +89,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     the first actuator off/on pair onwards — the ordinary duty cycle of a thermostat.
     Only a frame that actually carries a direction, or one on a heat-only /
     cool-only zone, or one reporting "not active", now settles the attribute;
-    otherwise it is still derived from the temperature;
+    otherwise it is still derived from the temperature. On a plant that reports the
+    valve status too, an actuator frame that only says "on" no longer overrules the
+    direction the valve frame had just reported, which used to publish `idle` while
+    the valve was open — precisely when the valve is modulating;
   - an explicit `keepalive_minutes` equal to the built-in default (125) was overridden
     by the *Default instant-power keep-alive* option; the file value now always wins;
   - a non-numeric *Default instant-power keep-alive* option, only reachable through a
@@ -84,8 +106,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     one cannot outlive a config entry reload;
   - the energy throttle resolves a sensor key whichever way its bus interface is
     spelled (`31#4#3` / `31#4#03`), like the frame dispatcher;
-  - an unquoted 3- or 5-digit `where` (the shape sensor addresses take) is no longer
-    blamed on lost leading zeros and octal; the message quotes the user's own value;
+  - a WHO 25 dry contact whose WHERE does not have the `<type><number>` shape (it
+    starts with neither `3` nor `4`) reports its `Sensor` attribute verbatim instead
+    of being split at a meaningless place.
 - Device triggers, blueprints, flows and diagnostics:
   - a device trigger on a device that is not a scenario control (a light, a cover,
     the gateway) is now refused with a readable error; it used to be accepted and the
@@ -94,29 +117,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - the per-device diagnostics download no longer contains the device's `name` /
     `entity_name`, the HMAC password frame is redacted like the other negotiation
     frames, and the configuration file is reported by name only, never with its
-    directory;
+    directory — with a `config_file_is_default_location` flag saying whether it sits
+    where the integration would look for it anyway, and an entry that never set the
+    option reported as `myhome.yaml`, in the default location;
   - the options flow no longer turns a gateway configured *without* a password into
     one with an empty password (which OWNd reports as "invalid password" instead of
     asking for one);
-  - the options refused to save at all on an entry whose stored number of command
-    sessions was 5-10, i.e. every entry saved before the 1-4 bound landed: the dialog
-    opened pre-filled with the stale value and then rejected it on every submit,
-    including one that only meant to change the gateway address. The form now opens
-    on the clamped value — the number the integration has been running since setup —
-    and the first save writes it down;
-  - the diagnostics download's `effective_options` reported the stored number of
-    command sessions instead of the clamped one actually in use, contradicting
-    `handler.sending_workers` a few lines below it in the same file;
-  - a gateway that never set the **Configuration file path** option showed no file
-    name at all in the diagnostics download, and `config_file_is_default_location:
-    false` — the opposite of the truth. Both now report the default: `myhome.yaml`,
-    in the default location;
   - discovery: a thermoregulation zone is suggested as `climate` and a temperature
     probe of its own (WHERE above 99) as a `class: temperature` sensor. Before, the
-    classifier tested an attribute OWNd does not have, so every probe became a zone;
-    the first correction of this round then turned every zone into a probe. A probe
-    wired as a zone's main sensor is indistinguishable from the zone on the bus and
-    is reported as a zone; the first WHO 4 frame decides and is never revised;
+    classifier tested an attribute OWNd does not have, so every probe became a zone.
+    A probe wired as a zone's main sensor is indistinguishable from the zone on the
+    bus and is reported as a zone; the first WHO 4 frame decides and is never
+    revised. The same wrong attribute kept the `temperature` property out of
+    `myhome_device_discovered` altogether; a WHO 4 device now really publishes its
+    reading;
   - discovery: the WHO 25 "scan" entry never left the machine (OWNd cannot build a
     general dry-contact status request, and there is none on the bus); the entry is
     gone and the docs now say that dry contacts and keypads are seen only when they
@@ -131,9 +145,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (a plant-wide mode change, the plant temperature, the central unit's own actuator
     status) is now recognised as the central unit and suggested as
     `climate: {zone: '#0'}`, the form the schema accepts;
-  - discovery: the line a run logs about devices it could not suggest (CEN/CEN+
-    keypads, alarm devices) counted every previous run as well — three runs reported
-    "3 device(s)" for one keypad. It now reports what that run saw.
+  - discovery treated the plant-wide addresses of a lighting or automation frame as
+    if they were devices. On WHO 1 and WHO 2 the bus spells them in the WHERE: `0` is
+    the general address (every light, or every shutter, of the plant), `00`, `1`-`9`
+    and `100` are the areas (`100` is area 10) and `#1`-`#255` are the groups; only
+    the group form was dropped. Any plant-wide or area button press during a run
+    therefore produced a suggested device: `light: {where: '0'}`, an entity whose
+    "turn on" switches on every lamp in the house and that can never show a state, or
+    `light: {where: '100'}`, which the configuration schema refuses outright — and one
+    refused block does not break one device, it makes the whole `myhome.yaml` fail to
+    load, so every device of that gateway disappears. These frames are exactly the
+    ones the gateway already refuses to hand to any entity; both now ask the same
+    question;
+  - a device on a private riser behind an F422 local bus interface was discovered as
+    the main-bus device with the same address: the library reports `*1*1*11#4#3##`
+    with a WHERE of `11` and keeps the interface apart, and discovery read the WHERE
+    only. The suggested block therefore had no `interface:` key, so it drove the
+    wrong actuator (`light.turn_on` sent `*1*1*11##`) and its entity never updated;
+    and because both devices got the same identity, a plant with an actuator `11` on
+    the main bus and one at `11#4#3` had one of the two silently never announced and
+    never suggested. Discovery now reads the interface where the rest of the
+    integration reads it, writes `interface:` into the suggestion, and identifies the
+    device the way `validate.py` does. The `discovered_device` payload of
+    `myhome_device_discovered` carries the interface too (unpadded, `null` on the
+    main bus), and the `unique_id` of a device behind one now includes it
+    (`{mac}-1-11#4#03`) — which is also the form `discovered_devices` reports in
+    `myhome_discovery_completed`;
+  - discovery: the line a run logs about devices it could not suggest counted every
+    previous run as well — three runs reported "3 device(s)" for one keypad. It now
+    reports what that run saw, and in two clauses rather than one: a CEN / CEN+
+    scenario control really can be declared by hand, under `scenario_control:`, while
+    a burglar-alarm device belongs to a family this integration has no section for
+    anywhere. The old line sent a reader hunting for an alarm chapter that has never
+    existed.
 - Gateway, sessions and setup, found by the same review:
   - one unexpected exception inside the command sending loop used to kill the
     command path for the life of the process: the loop now survives it, the command
@@ -158,37 +202,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - a platform that refuses to unload is now logged as an error instead of passing
     unnoticed; the sockets are already closed at that point, so the entry has to be
     reloaded.
-
-### Testing
-
-- Service-call refusals are pinned to their own translation key (a wrong message
-  could pass before), and the suite covers the gateway failure surface (refused
-  commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press table, the
-  idle-probe window, the listening loop's catch-all, the reconnect backoff cap), the
-  session error paths, the translation files and discovery.
-- The release job tagged and packaged the *previous* version number: it created
-  the tag and built `myhome.zip` before writing the new version into
-  `manifest.json`, then committed the bump in a commit no tag pointed at. HACS
-  reads `manifest.json` from the tag, so a release made with that job would have
-  installed one version while Home Assistant reported the one before it. The bump
-  now runs first, is asserted and committed, and the tag and the zip cover it. No
-  shipped release is affected: every existing tag was made by hand with the bump
-  already committed, so nothing needs re-installing.
-- The test tooling is pinned (`ruff`, `pytest`, `pytest-timeout`), one racy socket
-  test was made deterministic, and the reauth guarantee is back inside the
-  `pytest -m "not slow"` lane.
+- The release job tagged and packaged the *previous* version number: it created the
+  tag and built `myhome.zip` before writing the new version into `manifest.json`,
+  then committed the bump in a commit no tag pointed at. HACS reads `manifest.json`
+  from the tag, so a release made with that job would have installed one version
+  while Home Assistant reported the one before it. The bump now runs first, is
+  asserted and committed, and the tag and the zip cover it. No shipped release is
+  affected: every existing tag was made by hand with the bump already committed, so
+  nothing needs re-installing.
 
 ### Added
 
 - CI runs `ruff` and `pytest` on every push and pull request
-  (`.github/workflows/tests.yml`), with the rule set pinned in `ruff.toml`; the
-  suite used to run only on a developer's machine.
+  (`.github/workflows/tests.yml`), with the rule set pinned in `ruff.toml` and the
+  test tooling pinned in `requirements_test.txt`; the suite used to run only on a
+  developer's machine. It now also covers the gateway failure surface (refused
+  commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press table, the
+  idle-probe window, the listening loop's catch-all, the reconnect backoff cap), the
+  session error paths, service-call refusals against their own translation key, the
+  translation files, discovery and the release job. The two older workflows
+  (`hassfest.yml`, `validate.yml`) moved to `actions/checkout@v5` and cancel a run
+  that a newer push has superseded.
 - `strings.json` as the source of the translations.
 - `requirements_test.txt` (the one dependency list CI and the development docs
   install), `scripts/release_notes.py` (the CHANGELOG section of a version,
   unwrapped for the GitHub release page) and a `.gitattributes` pinning LF line
-  endings, so the CRLF-to-LF rewrite of `__init__.py` / `config_flow.py` cannot
-  happen again file by file.
+  endings, so the CRLF-to-LF rewrite of the five files it caught (`__init__.py`,
+  `config_flow.py`, `manifest.json`, `LICENSE` and `release.yml`) cannot happen
+  again file by file.
 
 ### Changed
 
@@ -215,10 +256,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   every `idle watchdog + probe window` seconds for no reason: an ACK on the command
   port now re-arms the watchdog instead (it need not be the probe's own ACK), and
   only a status request answered on *neither* session reconnects. The monitor socket
-  itself is still guarded by TCP keepalive.
+  itself is still guarded by TCP keepalive. The log line says exactly what was
+  checked — *"no status request acknowledged on the command session and nothing on
+  the monitor for N s"* — instead of claiming the gateway answered nothing while it
+  was demonstrably ACKing the user's lights.
 - **The Number of concurrent command sessions option is capped at 4** (gateways hold
   only a handful of concurrent sessions), and the options form now offers 1-4 rather
-  than 1-10. An entry saved with more than 4 opens 4; a non-numeric value left by a
+  than 1-10, explained in the dialog itself (*Default 1 (1-4)*). An entry saved with
+  more than 4 opens 4; the form opens on that clamped number — the one the
+  integration is actually running — and the first save writes it down, and the
+  diagnostics download reports the same clamped number, so it agrees with
+  `handler.sending_workers` a few lines below it. A non-numeric value left by a
   hand-edited entry falls back to 1 with a warning instead of failing the setup.
 - Discovery suggests a **WHO 9 auxiliary channel as a `binary_sensor`** with
   `who: "9"`, not as a `switch`. The switch platform only accepts `who: "1"`, so
@@ -229,26 +277,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   last known state across a restart or a reload. An automation triggered on `off` at
   startup will no longer fire.
 - Timing keys (`shutter_run`, `slat_time`, `opening_time`, `closing_time`) written on
-  an `advanced` cover now come with a warning saying what they actually do: they
-  never produce a position (the actuator reports its own), and the travel times are
-  used only to bound the direction safety timer. The warning used to call them
-  "ignored", which stopped being true when that timer landed.
-- The error for an unquoted `where:` no longer promises that quoting the value will
-  make it valid: on a light, a switch or a cover a 3-digit address is refused whether
-  it is quoted or not. A negative `where:` gets its own message instead of being told
-  to quote itself.
-- **The diagnostics download no longer publishes the config entry's title.** It
-  defaults to "<model> Gateway", but Home Assistant lets a user rename an entry from
-  the integrations page, and a renamed gateway commonly carries a household, street
-  or family name — and this is the one file users are told to attach to a public
-  issue. The gateway model is still reported, from the entry data.
+  an `advanced` cover now come with a warning that names only the keys actually
+  written in the file, and says of each one whether it bounds the direction safety
+  timer or does nothing at all. The warning used to call them all "ignored", which
+  stopped being true when that timer landed.
+- The error for an unquoted `where:` now echoes the value you actually wrote instead
+  of an actuator address you never typed, and no longer promises that quoting it will
+  make it valid — on a light, a switch or a cover a 3- or 5-digit address is refused
+  either way. A negative `where:` gets its own message instead of being told to quote
+  itself.
+- **The diagnostics download no longer publishes the config entry's title**, which is
+  reported as `**REDACTED**`. It defaults to "<model> Gateway", but Home Assistant
+  lets a user rename an entry from the integrations page, and a renamed gateway
+  commonly carries a household, street or family name — and this is the one file
+  users are told to attach to a public issue. The gateway model is still reported,
+  from the entry data.
+- The placeholder addresses the UI shows are neutral examples: the manual gateway
+  form suggests `192.168.1.35`, and the `gateway` field of every service shows
+  `00:03:50:AA:BB:CC`.
 - The two shipped CEN+ blueprints now say what happens if a CEN control is picked in
   their device selector (a CEN keypad sends the short press at the start of every
   press, so a hold acts twice) and point CEN users at the `myhome_cen_event` trigger
   with `pushbutton_short_release` / `pushbutton_long_press`.
-- The dead `invalid_port` and `gateway_vanished` translation keys were removed (no
-  code path could set them), and so was an unload helper that could never cancel
-  anything (the session close already does).
+- The dead `invalid_port` and `gateway_vanished` translation keys were removed
+  (neither was reachable: `invalid_port` had no assignment at all, and the
+  `gateway_vanished` branch sat behind the form's own schema validation), and so was
+  an unload helper that could never cancel anything (the session close already does).
 
 ## [0.4.0] - 2026-09-07
 
