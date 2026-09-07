@@ -166,6 +166,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press table, the
   idle-probe window, the listening loop's catch-all, the reconnect backoff cap), the
   session error paths, the translation files and discovery.
+- The release job tagged and packaged the *previous* version number: it created
+  the tag and built `myhome.zip` before writing the new version into
+  `manifest.json`, then committed the bump in a commit no tag pointed at. HACS
+  reads `manifest.json` from the tag, so a release made with that job would have
+  installed one version while Home Assistant reported the one before it. The bump
+  now runs first, is asserted and committed, and the tag and the zip cover it. No
+  shipped release is affected: every existing tag was made by hand with the bump
+  already committed, so nothing needs re-installing.
+- The test tooling is pinned (`ruff`, `pytest`, `pytest-timeout`), one racy socket
+  test was made deterministic, and the reauth guarantee is back inside the
+  `pytest -m "not slow"` lane.
 
 ### Added
 
