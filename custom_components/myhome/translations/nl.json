@@ -90,7 +90,7 @@
           "probe_window_sec": "Hoelang de sonde de tijd krijgt om beantwoord te worden. Als er binnen die tijd niets op de monitorsessie binnenkomt en de gateway geen enkel statusverzoek op de commandosessie bevestigt, wordt de verbinding opnieuw opgebouwd. Standaard 30 s (5-300).",
           "command_timeout_sec": "Hoe lang één commando mag duren om verstuurd en bevestigd te worden, voordat het eenmaal opnieuw wordt geprobeerd en daarna verworpen. Standaard 10 s (2-60).",
           "queue_ttl_sec": "Commando's die na deze tijd nog in de wachtrij staan worden verworpen in plaats van te laat verstuurd. Standaard 60 s (10-600).",
-          "default_keepalive_minutes": "Keep-alive die aan de energiemeters wordt gevraagd wanneer noch de sensor noch sensor_defaults: keepalive_minutes instelt in myhome.yaml. 0 schakelt het uit. Standaard 125 min (0-255)."
+          "default_keepalive_minutes": "Keep-alive die aan de energiemeters wordt gevraagd wanneer keepalive_minutes noch op de sensor noch in het sensor_defaults:-blok (alias energy:) van de gateway in myhome.yaml is ingesteld. 0 schakelt het uit. Standaard 125 min (0-255)."
         }
       }
     },

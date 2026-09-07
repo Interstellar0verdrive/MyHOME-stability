@@ -952,13 +952,40 @@ def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
         # rather than refused - it is what a careful user writes after following the
         # validator's own advice to quote every ``where:`` value.
         #
-        # ``str(int(...))`` is right for a secondary probe too (``'302'`` stays ``'302'``
-        # and ``'0302'`` becomes ``'302'``), because OWNd applies ``int()`` to the whole
-        # WHERE.  ``SENSOR_WHERE`` has already guaranteed a string of digits here, so the
-        # conversion cannot fail.  WHO 18 and WHO 1 sensors are deliberately left alone:
-        # their keys keep whatever text the bus writes, so padding is self-consistent
-        # there and normalising it would rename entities that work today.
+        # ``str(int(...))`` is right for a secondary probe too (``'302'`` stays ``'302'``,
+        # ``'0302'`` becomes ``'302'``): OWNd int-normalises the WHERE of a *zone* frame
+        # and reports a *probe* frame's WHERE verbatim, and a bus writes a probe address
+        # unpadded - so ``'302'`` is the only spelling a frame can carry either way
+        # (P6-INCONSISTENCY-1).  ``SENSOR_WHERE`` has already guaranteed a string of
+        # digits here, so the conversion cannot fail.  WHO 18 and WHO 1 sensors are
+        # deliberately left alone: their keys keep whatever text the bus writes, so
+        # padding is self-consistent there and normalising it would rename entities that
+        # work today.
+        as_written = device[CONF_WHERE]
         device[CONF_WHERE] = str(int(device[CONF_WHERE]))
+        # P6-RISK-1: normalising is not enough, because a whole family of addresses can
+        # never meet a frame at all.  OWNd reads the zone of a WHO 4 frame out of its
+        # WHERE (``zone = int(where)``; a zone above 99 is split into ``sensor`` = the
+        # first digit and ``zone`` = the rest) and, whenever that zone is 0, reports the
+        # frame under the *central unit's* key ``4-#0``.  So ``'0'``, ``'00'``, ``'100'``,
+        # ``'200'``..``'900'`` and ``'1000'`` would build a probe that is created, named,
+        # available and ``unknown`` for ever - while its readings are delivered to the
+        # central unit's climate entity - which is exactly the failure the normalisation
+        # above exists to prevent.  There is nothing to normalise them to, because the
+        # central unit is a ``climate:`` device (``zone: '#0'``) and never a probe, so
+        # they are refused instead.  The rule is OWNd's own, not a list of values, so it
+        # keeps holding for longer addresses (``'10000'``) too.
+        number = int(device[CONF_WHERE])
+        zone_part = number if number <= 99 else int(str(number)[1:])
+        if zone_part == 0:
+            raise Invalid(
+                f"sensor '{yaml_key}': WHERE '{as_written}' is the central unit's address, not a "
+                f"probe's - every WHO 4 frame whose zone part is 0 is reported as '4-#0'. A "
+                f"temperature probe must be a zone ('1'-'99') or a secondary probe written "
+                f"'<sensor><zone>' (e.g. '302' = probe 3 of zone 2); the central unit itself is a "
+                f"climate device with zone '#0', not a temperature sensor",
+                path=[yaml_key, CONF_WHERE],
+            )
     if sensor_class in (SensorDeviceClass.POWER, SensorDeviceClass.ENERGY):
         device[CONF_ENTITIES][f"daily-{SensorDeviceClass.ENERGY}"] = {}
         device[CONF_ENTITIES][f"monthly-{SensorDeviceClass.ENERGY}"] = {}
@@ -1280,10 +1307,48 @@ def _resolve_gateway_mac(root_key: str, gateway: Mapping) -> str:
     return mac
 
 
+def _addresses_as_written(data: object) -> dict[tuple[str, str, str], str]:
+    """Remember every device address exactly as the file spells it.
+
+    P6-UNCLEAR-1: an address is normalised before two devices are compared - a WHO 4
+    zone loses its leading zeros (``'01'`` and ``'001'`` are both zone ``1``), a group
+    ``'#01'`` becomes ``'#1'`` - so by the time a duplicate is found the validator no
+    longer knows what the user actually typed.  ``Duplicate WHERE '1'`` for a file whose
+    two entries say ``'01'`` and ``'001'`` quotes a value that appears nowhere in it, and
+    the reader is told to "fix the WHERE" they cannot find.  This snapshot is taken from
+    the raw YAML, before the schema has touched anything, so it must assume nothing about
+    the shape: whatever does not look like ``<root>: <platform>: <key>: {where|zone: ...}``
+    is skipped and the message simply falls back to the normalised address.
+    """
+    written: dict[tuple[str, str, str], str] = {}
+    if not isinstance(data, Mapping):
+        return written
+    for root_key, gateway in data.items():
+        if not isinstance(root_key, str) or not isinstance(gateway, Mapping):
+            continue
+        for platform in (*DEVICE_PLATFORMS, SCENARIO_SECTION):
+            section = gateway.get(platform)
+            if not isinstance(section, Mapping):
+                continue
+            for yaml_key, device in section.items():
+                if not isinstance(yaml_key, str) or not isinstance(device, Mapping):
+                    continue
+                for field in (CONF_WHERE, CONF_ZONE):
+                    value = device.get(field)
+                    if isinstance(value, bool) or not isinstance(value, (str, int)):
+                        continue
+                    written[(root_key, platform, yaml_key)] = str(value)
+                    break
+    return written
+
+
 class MyHomeConfigSchema(Schema):
     """Top-level ``myhome.yaml`` schema producing the Contract A structure keyed by MAC."""
 
     def __call__(self, data):
+        # Taken *before* the schema runs: the finalizers normalise the addresses away
+        # and the duplicate message below has to quote the spellings the file contains.
+        written_addresses = _addresses_as_written(data)
         data = super().__call__(data)
         result: dict = {}
         origin_of_mac: dict[str, str] = {}
@@ -1329,12 +1394,28 @@ class MyHomeConfigSchema(Schema):
                                 else (key, other_key, yaml_key)
                             )
                             continue
+                        # P6-UNCLEAR-1 / P6-RISK-2: name both spellings the file uses.  A
+                        # padded and an unpadded entry for the same zone now collide, and
+                        # that refusal stops the whole gateway from loading, so the message
+                        # is the only thing the user has to find the two lines to edit.
                         address = device.get(CONF_WHERE, device.get(CONF_ZONE))
+                        mine = written_addresses.get((root_key, platform, yaml_key)) or str(address)
+                        theirs = written_addresses.get((root_key, other_platform, other_key))
+                        differs = theirs is not None and theirs != mine
                         raise Invalid(
-                            f"Duplicate WHERE '{address}' (who {device[CONF_WHO]}): {platform} '{yaml_key}' "
-                            f"collides with {other_platform} '{other_key}' (both map to device '{key}'). "
-                            f"Each WHO/WHERE (+interface) may appear only once per gateway; "
-                            f"fix the WHERE or remove one of the two devices.",
+                            f"Duplicate WHERE '{mine}' (who {device[CONF_WHO]}): {platform} '{yaml_key}' "
+                            f"collides with {other_platform} '{other_key}'"
+                            + (f", which writes it '{theirs}'" if differs else "")
+                            + f" (both map to device '{key}'). "
+                            + (
+                                "Addresses are compared after they are normalised - a WHO 4 zone "
+                                "loses its leading zeros and '#01' is '#1' - so the two spellings "
+                                "are one and the same device. "
+                                if differs
+                                else ""
+                            )
+                            + "Each WHO/WHERE (+interface) may appear only once per gateway; "
+                            "fix the WHERE or remove one of the two devices.",
                             path=[root_key, platform, yaml_key, CONF_WHERE if CONF_WHERE in device else CONF_ZONE],
                         )
                     origins_of_key.setdefault(key, []).append((platform, yaml_key))

@@ -18,8 +18,14 @@ from typing import Any
 import pytest
 
 from custom_components.myhome.config_flow import TUNABLE_OPTIONS
-from custom_components.myhome.const import CONF_WORKER_COUNT, MAX_COMMAND_WORKERS
+from custom_components.myhome.const import (
+    CONF_DEFAULT_KEEPALIVE_MINUTES,
+    CONF_SENSOR_DEFAULTS,
+    CONF_WORKER_COUNT,
+    MAX_COMMAND_WORKERS,
+)
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
+from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
 
 COMPONENT = Path(__file__).resolve().parents[1] / "custom_components" / "myhome"
 STRINGS = COMPONENT / "strings.json"
@@ -107,6 +113,28 @@ def test_every_options_tunable_documents_its_range() -> None:
         assert f"1-{MAX_COMMAND_WORKERS}" in step["data_description"][CONF_WORKER_COUNT], path.name
         for key, _default, minimum, maximum, _unit in TUNABLE_OPTIONS:
             assert f"({minimum}-{maximum})" in step["data_description"][key], f"{path.name}: {key}"
+
+
+def test_the_keepalive_option_names_both_blocks_that_beat_it() -> None:
+    """P6-INCONSISTENCY-2: ``energy:`` is an alias of ``sensor_defaults:`` and blocks it too.
+
+    ``_merge_sensor_defaults`` reads both block names and records both in ``from_file``,
+    so a ``keepalive_minutes`` written under the legacy ``energy:`` spelling is *not*
+    marked as defaulted and the option cannot replace it - exactly like one written under
+    ``sensor_defaults:``.  The description was rewritten in round 5 precisely so the
+    option would stop looking as if it did nothing, and it named only one of the two
+    blocks: the user with the older spelling is the one most likely to read it.
+
+    Mutation caught: dropping the alias from the sentence in any of the five files.
+    """
+    for path in [STRINGS, *TRANSLATIONS]:
+        description = load(path)["options"]["step"]["init"]["data_description"][
+            CONF_DEFAULT_KEEPALIVE_MINUTES
+        ]
+        # The trailing colon is what makes these YAML keys rather than ordinary words:
+        # "energy" alone is in the English sentence anyway ("the energy meters").
+        assert f"{CONF_SENSOR_DEFAULTS}:" in description, path.name
+        assert f"{CONF_ENERGY_DEFAULTS}:" in description, path.name
 
 
 def test_the_device_automation_translations_cover_every_trigger() -> None:

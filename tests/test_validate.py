@@ -1055,8 +1055,10 @@ def test_a_zero_padded_temperature_probe_address_is_normalised(written, key):
     key of every WHO 4 frame from ``int(where)``: ``where: '01'`` used to key ``4-01``,
     which no frame can ever carry, so the probe was created, was available and stayed
     ``unknown`` for ever - exactly the failure the zone had before round 4. A secondary
-    probe address keeps its own number (``'302'`` stays ``'302'``), because OWNd applies
-    ``int()`` to the whole WHERE and reports ``4-302``.
+    probe address keeps its own number (``'302'`` stays ``'302'``): OWNd int-normalises
+    the WHERE of a *zone* frame and reports a *probe* frame's WHERE verbatim, and a bus
+    writes a probe address unpadded, so ``'302'`` is the only spelling a frame can carry
+    either way (P6-INCONSISTENCY-1).
 
     Mutation caught: dropping the normalisation from ``_finalize_sensor``.
     """
@@ -1064,6 +1066,96 @@ def test_a_zero_padded_temperature_probe_address_is_normalised(written, key):
     assert list(platforms(out)["sensor"]) == [key]
     # The stored WHERE is what every status request and ``_full_where`` is built from.
     assert platforms(out)["sensor"][key]["where"] == key.removeprefix("4-")
+
+
+@pytest.mark.parametrize("where", ["0", "00", "100", "200", "500", "900", "1000"])
+def test_a_temperature_probe_on_the_central_units_address_is_refused(where):
+    """P6-RISK-1: an address whose zone part is 0 can never meet a frame.
+
+    OWNd reports every WHO 4 frame whose zone works out to 0 under the central unit's
+    key ``4-#0``, so a probe written ``where: '0'`` (or ``'100'``, ``'1000'``, ...) is
+    created, named, available and ``unknown`` for ever while its readings land on the
+    ``climate`` entity of the central unit - the same silent dead entity the padding
+    normalisation above exists to remove.  ``'0'`` is not far-fetched: the docs say the
+    WHERE of a probe is a zone and that the central unit is ``#0``, ``'#0'`` is refused
+    by ``SpecialWhere`` (not a digit string), so ``'0'`` is the obvious second attempt.
+
+    Mutation caught: dropping the ``zone_part == 0`` refusal from ``_finalize_sensor``.
+    """
+    with pytest.raises(Invalid, match="is the central unit's address"):
+        check(gw(sensor={"p": {"where": where, "name": "P", "class": "temperature"}}))
+
+
+@pytest.mark.parametrize(
+    ("where", "key"),
+    [("1", "4-1"), ("01", "4-1"), ("99", "4-99"), ("101", "4-101"), ("302", "4-302"), ("999", "4-999")],
+)
+def test_the_neighbours_of_the_refused_probe_addresses_still_load(where, key):
+    """The refusal is the zone-0 family only: every address that resolves still works."""
+    out = check(gw(sensor={"p": {"where": where, "name": "P", "class": "temperature"}}))
+    assert list(platforms(out)["sensor"]) == [key]
+
+
+def test_the_refused_probe_addresses_are_exactly_the_ones_ownd_keys_as_the_central_unit():
+    """The rule is derived from OWNd's key computation, not from a hand-written list.
+
+    ``OWNHeatingEvent`` sets ``zone = int(where)``, splits a zone above 99 into
+    ``sensor`` (first digit) + ``zone`` (the rest), and ``unique_id`` returns
+    ``'4-#0'`` whenever that zone is 0.  Re-deriving the refused set here means the
+    validator and OWNd cannot drift apart silently: if OWNd ever changed the split,
+    this test would be the first thing to notice.
+    """
+
+    def ownd_keys_it_as_the_central_unit(where: str) -> bool:
+        zone = int(where)
+        if zone > 99:
+            zone = int(str(zone)[1:])
+        return zone == 0
+
+    refused = set()
+    for number in range(0, 1301):
+        where = str(number)
+        try:
+            check(gw(sensor={"p": {"where": where, "name": "P", "class": "temperature"}}))
+        except Invalid:
+            refused.add(where)
+    assert refused == {str(n) for n in range(0, 1301) if ownd_keys_it_as_the_central_unit(str(n))}
+    assert refused == {"0", "100", "200", "300", "400", "500", "600", "700", "800", "900", "1000"}
+
+
+def test_the_duplicate_message_quotes_both_spellings_the_file_contains():
+    """P6-UNCLEAR-1 / P6-RISK-2: the two lines to edit must be findable in the file.
+
+    A padded and an unpadded entry for the same zone are now one device, so the file is
+    refused as a whole and the gateway does not load at all - which is exactly what a
+    user debugging the old padded-probe bug produces.  The message used to quote the
+    *normalised* address (``Duplicate WHERE '1'``), a value that appears nowhere in a
+    file written ``'01'`` + ``'001'``, and then told the reader to "fix the WHERE".
+
+    Mutation caught: quoting ``address`` instead of the snapshot taken before the schema.
+    """
+    with pytest.raises(Invalid) as err:
+        check(gw(climate={"a": {"zone": "01", "name": "A"}, "b": {"zone": "001", "name": "B"}}))
+    message = str(err.value)
+    assert "'001'" in message and "'01'" in message
+    assert "Duplicate WHERE '1' " not in message
+    assert "normalised" in message
+
+    with pytest.raises(Invalid) as err:
+        check(
+            gw(
+                sensor={
+                    "p1": {"where": "01", "name": "P1", "class": "temperature"},
+                    "p2": {"where": "001", "name": "P2", "class": "temperature"},
+                }
+            )
+        )
+    assert "'001'" in str(err.value) and "'01'" in str(err.value)
+
+    # Two identical spellings need no explanation: the message stays as short as before.
+    with pytest.raises(Invalid) as err:
+        check(gw(light={"a": {"where": "12", "name": "A"}, "b": {"where": "12", "name": "B"}}))
+    assert "normalised" not in str(err.value)
 
 
 def test_a_zero_padded_temperature_probe_is_still_a_duplicate_of_the_unpadded_one():
