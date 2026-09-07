@@ -357,9 +357,10 @@ class MyHOMEGatewayHandler:
 
     - ``idle_watchdog_sec``: silence on the monitor session for this long triggers
       a harmless status request through the command session;
-    - ``probe_window_sec``: if that probe is answered on neither session within
-      this window the event session is closed and reconnected with backoff; a
-      status request ACKed on the command session re-arms the watchdog instead;
+    - ``probe_window_sec``: if nothing arrives on the monitor and no status request
+      is acknowledged on the command session within this window, the event session
+      is closed and reconnected with backoff; any ACKed status request re-arms the
+      watchdog, it need not be the probe;
     - ``command_timeout_sec``: how long one command may take to be written and
       acknowledged (NACK included) before the session is considered broken;
     - ``queue_ttl_sec``: commands still queued after this long are dropped instead
@@ -1110,9 +1111,14 @@ class MyHOMEGatewayHandler:
                 self._last_rx = now
                 self._probe_sent_at = None
                 return
+            # Each clause carries its own window on purpose: `idle` is the monitor's
+            # silence, while the ACK is only looked for since the probe went out
+            # (`probe_window`). One trailing duration would read as if it qualified
+            # both, and send a user hunting for a gateway that has been dead for
+            # `idle` seconds while it was in fact answering their lights all along.
             raise SessionError(
-                f"no status request acknowledged on the command session "
-                f"and nothing on the monitor for {idle:.0f} s"
+                f"nothing on the monitor for {idle:.0f} s and no status request acknowledged "
+                f"on the command session in the last {self.probe_window:.0f} s"
             )
 
     def _probe_command(self) -> OWNCommand:

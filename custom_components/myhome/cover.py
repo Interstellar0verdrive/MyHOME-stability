@@ -744,10 +744,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         The direction is *not* cleared here. An actuator whose real run is longer
         than the bound is still moving, and publishing "not moving" in the middle of
-        it would flip the entity to *Closed* / *Open* for as long as the answer takes
-        (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`). So the status is re-read first; the answer
-        goes through `_set_advanced_direction`, which cancels the grace below and
-        re-arms the full bound if the actuator says it is still running.
+        it would flip the entity to *Closed* / *Open* for as long as the answer
+        takes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`). So the status is re-read
+        first. Whatever comes back cancels the grace below - through
+        `_cancel_advanced_timer`, which `_finish_movement` reaches for the commonest
+        answer of all, "stopped at N %", and `_set_advanced_direction` reaches for a
+        plain direction frame - and a "still running" answer re-arms the full bound.
         """
         self._advanced_timer = None
         if self._moving is None:

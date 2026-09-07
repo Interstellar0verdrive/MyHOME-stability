@@ -578,7 +578,8 @@ async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFix
                 await asyncio.sleep(0.05)
             assert len(event.instances) == 2
     assert any(
-        "no status request acknowledged on the command session and nothing on the monitor" in record.message
+        "nothing on the monitor for" in record.message
+        and "no status request acknowledged on the command session in the last" in record.message
         for record in caplog.records
     )
 
@@ -2076,8 +2077,11 @@ async def test_an_acked_ordinary_command_does_not_speak_for_the_watchdog() -> No
     clock.value = 50.0
     with pytest.raises(SessionError) as excinfo:
         await handler._check_idle()  # noqa: SLF001
+    # Each clause carries the window it was actually measured over: 200 s of monitor
+    # silence, but only the 50 s since the probe went out for the missing ACK (C5-6).
     assert str(excinfo.value) == (
-        "no status request acknowledged on the command session and nothing on the monitor for 200 s"
+        "nothing on the monitor for 200 s and no status request acknowledged "
+        "on the command session in the last 50 s"
     )
 
 

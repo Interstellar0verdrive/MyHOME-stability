@@ -402,8 +402,9 @@ def is_bus_scope_address(message: OWNMessage) -> bool:
       device of that gateway disappears.
 
     Two callers, one definition, so the dispatcher and the discovery service cannot
-    drift apart again.  ``is_general`` returns ``None`` (not ``False``) for every WHO
-    other than 1 and 2, hence the ``bool()``.
+    drift apart again.  ``is_general`` returns ``None`` (not ``False``) for a WHO 1 /
+    WHO 2 frame whose WHERE is not the general address -- every other WHO gets a plain
+    ``False`` -- hence the ``bool()``.
     """
     return bool(message.is_general or message.is_area or message.is_group)
 
