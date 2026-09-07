@@ -422,7 +422,9 @@ def test_the_two_spellings_of_an_interface_are_the_same_device(hass: HomeAssista
     assert list(service.get_discovered_devices()) == [f"{MAC}-1-11#4#03"]
 
 
-async def test_the_main_bus_and_the_riser_are_two_devices(hass: HomeAssistant, tmp_path) -> None:
+async def test_the_main_bus_and_the_riser_are_two_devices(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
     """A plant with actuator 11 on the main bus *and* at ``11#4#3`` has two devices.
 
     Why it matters in production: ``handle_discovery_message`` keeps the first
@@ -445,6 +447,12 @@ async def test_the_main_bus_and_the_riser_are_two_devices(hass: HomeAssistant, t
     assert sorted(service.get_discovered_devices()) == [f"{MAC}-1-11", f"{MAC}-1-11#4#03"]
     assert len(seen) == 2
     assert service.suggestions.pending_count == 2
+    # ...and the INFO line the user reads tells them apart, which "WHERE=11" twice
+    # would not.
+    announced = [line for line in caplog.text.splitlines() if "Discovered" in line]
+    assert len(announced) == 2
+    assert announced[0].endswith("WHERE=11")
+    assert announced[1].endswith("WHERE=11#4#3")
 
 
 # Frames a real 60-second run can see, in one list: the devices worth suggesting, the

@@ -228,7 +228,9 @@ class MyHOMEDeviceDiscoveryService:
             self.gateway_handler.log_id,
             device_info["device_type"],
             device_info["who"],
-            device_info["where"],
+            # The address as the bus writes it: without the interface, the main-bus
+            # actuator 11 and the one on the riser produce the same line twice.
+            bus_full_where(device_info["where"], device_info["interface"]),
         )
         self._create_discovery_result(device_info)
 
