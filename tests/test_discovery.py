@@ -33,8 +33,11 @@ from custom_components.myhome.const import (
     DEVICE_TYPE_BUS_THERMO_ZONE,
     DEVICE_TYPE_TO_PLATFORM,
     DOMAIN,
+    PROTOCOL_CEN,
+    PROTOCOL_CEN_PLUS,
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
+    scenario_control_key,
 )
 from custom_components.myhome.discovery import (
     _DEVICE_CATEGORY,
@@ -460,6 +463,12 @@ def test_a_device_behind_a_bus_interface_keeps_its_interface(hass: HomeAssistant
 
     platform, cfg = generate_suggested_config(info)
     assert (platform, cfg["where"], cfg["interface"]) == ("light", "11", "3")
+    # The name is the ONLY human-readable difference between this block and the
+    # main-bus one in ``myhome_discovered.yaml``, which is the file the user copies
+    # from: two blocks both called "... Switch 11" cannot be told apart by eye, and
+    # the `interface:` line is the sort of detail a reader skips.
+    assert info["name"] == "MyHOME Bus On Off Switch 11#4#3"
+    assert cfg["name"].endswith("11#4#3")
 
 
 def test_the_two_spellings_of_an_interface_are_the_same_device(hass: HomeAssistant, tmp_path) -> None:
@@ -505,6 +514,35 @@ def test_a_bus_interface_out_of_range_is_not_a_main_bus_device(hass: HomeAssista
     for frame, unique_id in (("*1*1*11#4#0##", f"{MAC}-1-11#4#00"), ("*1*1*12#4#15##", f"{MAC}-1-12#4#15")):
         service.handle_discovery_message(OWNEvent.parse(frame))
         assert unique_id in service.get_discovered_devices(), frame
+
+
+def test_a_discovered_keypad_id_is_not_its_registry_identifier(hass: HomeAssistant, tmp_path) -> None:
+    """The id published for a scenario control identifies the frame, not the device.
+
+    Why it matters in production: ``myhome_device_discovered`` and
+    ``myhome_discovery_completed`` invite exactly one automation - take an id out of
+    the event and look the device up in the registry - and for every device that lands
+    on a platform section that works, because the id is ``{mac}-{validate.device_key}``.
+    A CEN/CEN+ control is the exception: the integration keys a *declared* control
+    ``cenplus-<object>`` / ``cen-<where>`` (``const.scenario_control_key``), so the
+    registry identifier of this keypad is ``{mac}-cenplus-25`` while discovery
+    publishes ``{mac}-25-225``, and the lookup silently finds nothing.
+
+    The two spellings are pinned side by side so the divergence stays deliberate: it
+    is what ``discovery.py``'s comment and ``docs/services-and-events.md`` have to keep
+    saying.  An alarm device has no registry entry at all, hence the third assertion.
+    """
+    keypad = device_info(hass, tmp_path, "*25*21#3*225##")
+    assert keypad["unique_id"] == f"{MAC}-25-225"
+    assert keypad["unique_id"] != f"{MAC}-{scenario_control_key(PROTOCOL_CEN_PLUS, 25)}"
+
+    cen_keypad = device_info(hass, tmp_path, "*15*1*11##")
+    assert cen_keypad["unique_id"] == f"{MAC}-15-11"
+    assert cen_keypad["unique_id"] != f"{MAC}-{scenario_control_key(PROTOCOL_CEN, 11)}"
+
+    # ...and an alarm sensor is published with no platform, so it has no device at all.
+    assert device_info(hass, tmp_path, "*5*11*12##")["platform"] is None
+
 
 
 async def test_the_main_bus_and_the_riser_are_two_devices(
