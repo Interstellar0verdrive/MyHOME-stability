@@ -106,15 +106,32 @@ from .myhome_device import MyHOMEEntity, address_attributes
 # stay wrong until the next command.
 STOP_ECHO_WINDOW_SEC = 1.5
 # How long after an ignored movement frame the actuator is asked for its status.
-# Must be longer than the echo window, so the answer is never mistaken for an echo.
+# The answer can never be mistaken for an echo whatever this value is (`_is_echo`
+# disarms the window before scheduling the re-check), so the number is only about
+# usefulness: long enough for the gateway to have finished echoing our command and
+# for a real movement to have made some progress worth asking about, short enough
+# that the position is wrong for two seconds rather than until the next command.
 ECHO_RECHECK_DELAY_SEC = 2.0
 # An advanced actuator reports its own position, so no timer bounds its movement:
 # if its "stopped" frame is lost the entity would read "Opening" for ever. This much
-# on top of the longest configured run is when we give up waiting, clear the
-# direction and ask the actuator again. Generous on purpose: an actuator that is
-# genuinely still running answers the re-request with its direction, which re-arms
-# the timer, so the only cost of overshooting is a stale "Opening" for that long.
+# on top of the longest configured run is when we stop waiting and ask the actuator
+# what it is doing. Generous on purpose: an actuator that is genuinely still running
+# answers with its direction, which re-arms the timer, so the only cost of
+# overshooting is a stale "Opening" for that long.
+#
+# This is the one thing the timing keys (`shutter_run` / `opening_time` /
+# `closing_time`) still do on an `advanced:` cover: they bound this timer, and
+# nothing else. The position is always the actuator's own value, never an estimate,
+# so a cover whose real run is longer than the default (`DEFAULT_SHUTTER_RUN` + 30 s)
+# only needs them to keep the safety timer out of the way of its longest run.
 ADVANCED_MOVE_MARGIN_SEC = 30.0
+# When the bound expires the actuator is asked for its status *first*; the direction
+# is dropped only if nothing answers within this grace. Otherwise an actuator that is
+# simply slower than the bound would leave "Opening" for a second or two in the
+# middle of every long run - and, since an advanced cover is not `assumed_state` and
+# is "closed" at position 0, would usually be published as *closed* while it is
+# actually running up, firing every automation watching for it.
+ADVANCED_PROBE_GRACE_SEC = 2.0
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
 # A "stopped" frame during a free run *we* commanded is read as the physical end stop
@@ -289,9 +306,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._tick_unsub = None
         # One-shot status re-request after an ignored movement frame (see `_is_echo`).
         self._echo_recheck = None
-        # Upper bound on how long an advanced actuator may report a direction.
+        # Upper bound on how long an advanced actuator may report a direction. The
+        # timing keys are used for this and for nothing else on an advanced cover
+        # (see `ADVANCED_MOVE_MARGIN_SEC`): they never produce a position.
         self._advanced_move_timeout = max(self._opening_time, self._closing_time) + ADVANCED_MOVE_MARGIN_SEC
         self._advanced_timer = None
+        # True between the safety timer's status request and its answer (or the end
+        # of the grace): see `_async_advanced_movement_timeout`.
+        self._advanced_probe_pending = False
 
     # ------------------------------------------------------------------ state
     @property
@@ -428,10 +450,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
     @callback
     def _cancel_advanced_timer(self) -> None:
-        """Drop the pending advanced-movement safety timer, if any."""
+        """Drop the pending advanced-movement safety timer (and its grace), if any."""
         if self._advanced_timer is not None:
             self._advanced_timer()
             self._advanced_timer = None
+        # Every frame from the actuator goes through `_set_advanced_direction`, which
+        # comes here first: an answer to the safety timer's status request therefore
+        # always clears the flag below, whatever the answer says.
+        self._advanced_probe_pending = False
 
     @callback
     def _start_movement(
@@ -524,8 +550,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # which movement this stop interrupts.
         interrupted = self._moving
         self._finish_movement(end_position, end_tilt)
-        if needs_stop:
-            await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
+        # Same rule as `async_stop_cover`: only a stop the gateway accepted can come
+        # back as an echo, so a refused one must not arm the window - it could then
+        # only swallow a real frame from somebody else.
+        if needs_stop and await self._gateway_handler.send(
+            OWNAutomationCommand.stop_shutter(self._full_where)
+        ):
             self._mark_own_stop(interrupted)
         self.async_write_ha_state()
 
@@ -603,7 +633,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         Nothing times an advanced actuator (its position comes from its own status
         frames), so a lost "stopped" frame would leave the entity reading "Opening"
-        for ever. The timer below is the only thing that ends such a movement.
+        for ever. The timer below is the only thing that ends such a movement, and
+        the configured travel times are used here - and only here - to size it.
         """
         self._moving = direction
         self._cancel_advanced_timer()
@@ -613,7 +644,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             )
 
     async def _async_advanced_movement_timeout(self, now: datetime) -> None:
-        """The actuator never said it stopped: clear the direction and ask again."""
+        """The actuator never said it stopped: ask it, and only then give up on it.
+
+        The direction is *not* cleared here. An actuator whose real run is longer
+        than the bound is still moving, and publishing "not moving" in the middle of
+        it would flip the entity to *Closed* / *Open* for as long as the answer takes
+        (see `ADVANCED_PROBE_GRACE_SEC`). So the status is re-read first; the answer
+        goes through `_set_advanced_direction`, which cancels the grace below and
+        re-arms the full bound if the actuator says it is still running.
+        """
         self._advanced_timer = None
         if self._moving is None:
             return
@@ -623,9 +662,32 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._where,
             self._advanced_move_timeout,
         )
+        self._advanced_probe_pending = True
+        # Armed before the request goes out, so an answer that lands while we are
+        # still queueing it cancels the grace instead of racing it.
+        self._advanced_timer = async_call_later(
+            self.hass, ADVANCED_PROBE_GRACE_SEC, self._async_advanced_probe_grace
+        )
+        await self.async_update()
+
+    @callback
+    def _async_advanced_probe_grace(self, now: datetime) -> None:
+        """Nothing answered the safety timer's status request: drop the direction.
+
+        This is the lost-"stopped"-frame case the bound exists for. The position is
+        left alone - it is the actuator's own last value, never an estimate.
+        """
+        self._advanced_timer = None
+        if not self._advanced_probe_pending or self._moving is None:
+            return
+        self._advanced_probe_pending = False
+        LOGGER.debug(
+            "%s Cover %s: no answer to the status re-read either; the movement is over as far as we know",
+            self._gateway_handler.log_id,
+            self._where,
+        )
         self._moving = None
         self.async_write_ha_state()
-        await self.async_update()
 
     # ------------------------------------------------------------------ lifecycle
     @property
@@ -708,16 +770,25 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self.async_write_ha_state()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
-        """Stop the cover and freeze the estimated position and tilt."""
+        """Stop the cover and freeze the estimated position and tilt.
+
+        A stop the gateway did not accept leaves everything as it was: the shutter
+        is still running, so the estimate must keep running with it.
+        """
         sent = await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
-        if not self._advanced:
-            interrupted = self._moving
-            self._finish_movement(*self._estimate())
-            if sent:
-                # A stop the gateway never took cannot be echoed back, so arming the
-                # echo window on it would only swallow somebody else's frame.
-                self._mark_own_stop(interrupted)
-            self.async_write_ha_state()
+        if not sent or self._advanced:
+            # The command never reached the bus (queue full, or the handler is
+            # closing), so the shutter is still running: touching the model here
+            # would freeze the position at wherever the estimate had got to and
+            # leave it there for good. Change nothing, exactly as `open`, `close`
+            # and `set_position` do when their own command is refused.
+            return
+        interrupted = self._moving
+        self._finish_movement(*self._estimate())
+        # A stop the gateway never took cannot be echoed back, so arming the echo
+        # window on it would only swallow somebody else's frame.
+        self._mark_own_stop(interrupted)
+        self.async_write_ha_state()
 
     async def async_stop_cover_tilt(self, **kwargs: Any) -> None:
         """Stop the slats: the same bus command as `stop_cover`."""
@@ -837,7 +908,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 if self._inverted:
                     position = 100 - position
                 self._finish_movement(position)
-                # Status 11-14 carry a position *and* a direction: keep it visible.
+                # Dimension 10 also carries the state, and 11-14 mean "moving". Which
+                # position those four carry is not settled: OWNd reads it as the
+                # position the run *started* from ("is opening from initial position
+                # N", OWNd/message.py:593 and 604), while for state 10 it reads it as
+                # the current one ("is opened at N%", message.py:583). The value is
+                # written either way, because under both readings it is the
+                # actuator's own report of where the cover is or was when this run
+                # began - which is also our last known position, so it can only
+                # confirm it, never rewind it to something we never saw. What the
+                # 11-14 frames add is the direction, and that is kept visible.
                 if opening:
                     self._set_advanced_direction(OPENING)
                 elif closing:
