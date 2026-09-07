@@ -1733,3 +1733,193 @@ async def test_a_position_frame_does_not_interrupt_a_basic_cover_estimate(
 
         await _advance(hass, freezer, 6)
         assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
+
+
+async def test_a_fresh_command_after_a_continued_run_re_reads_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The inherited-window flag must not outlive the run that set it.
+
+    `_echo_after_restart` marks one specific window as ambiguous: the residual slice a
+    continued free run inherits from the command that began it (C6-1). An ordinary
+    command that lands while that run is still going arms a *fresh* window a fraction
+    of a second before the gateway echoes it back, which is the case `_is_echo`
+    documents as having "nothing to re-read". If the flag survived into it, every such
+    command would put a status request on the bus two seconds later for no reason, and
+    the actuator's answer could end a run the user had only just started.
+
+    Mutation caught: deleting `self._echo_after_restart = False` from `_start_movement`
+    - the flag then leaks out of `_continue_to_end_stop` into the next command and a
+    `*#2*85##` goes out at `ECHO_RECHECK_DELAY_SEC`. The run below is deliberately a
+    long one: a short run would end first and `_finish_movement` would cancel the
+    re-check timer before it could fire, hiding the leak.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(
+            COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40}, blocking=True
+        )
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        # The 1.2 s tilt run ends, its stop is refused: the run continues to the end
+        # stop and inherits the echo window of the command that began it.
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await _advance(hass, freezer, 1.25)
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        # An ordinary command lands while that run is still going: it arms its own echo
+        # window from scratch, so the "stopped" frame that follows is the gateway's copy
+        # of it and there is nothing ambiguous left to ask about.
+        commands.clear()
+        await hass.services.async_call(COVER, "open_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        assert commands.sent_frames == ["*2*1*85##"]
+        await feed_event(hass, cover, "*2*0*85##")
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        await _advance(hass, freezer, cover_module.ECHO_RECHECK_DELAY_SEC)
+        assert commands.status_frames == []
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+
+async def test_a_new_command_drops_the_pending_echo_re_read(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A re-read that a later command made pointless must not reach the bus.
+
+    `_is_echo` schedules a status request two seconds out whenever the frame it
+    ignored might have been real. If another command arrives first the question is
+    already answered - that command restarted the model - so `_cancel_timers` drops
+    the pending re-read. Nothing exercised `_cancel_echo_recheck`'s body at all
+    (`cover.py:494-495` was unreached by the whole suite), so the unsubscribe could be
+    dropped and a stale `*#2*85##` would land on the bus after every such sequence.
+
+    Mutation caught: removing the `self._echo_recheck()` call from
+    `_cancel_echo_recheck`, or replacing its body with `return`.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(COVER, "open_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        await _advance(hass, freezer, 1.0)
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+
+        # The gateway's late copy of the movement our stop interrupted: ignored, but
+        # ambiguous enough that a re-read is armed for `ECHO_RECHECK_DELAY_SEC`.
+        await feed_event(hass, cover, "*2*1*85##")
+        assert hass.states.get(SLAT_ENTITY).state != CoverState.OPENING
+
+        # The user does not wait for it: they close the slats again straight away.
+        commands.clear()
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        assert commands.sent_frames == ["*2*2*85##"]
+
+        # That command answered the question, so the armed re-read is dropped.
+        await _advance(hass, freezer, cover_module.ECHO_RECHECK_DELAY_SEC)
+        assert commands.status_frames == []
+
+
+async def test_stop_cover_tilt_stops_the_slats(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`stop_cover_tilt` is a real button in the UI, and it is the same bus stop.
+
+    The tilt controls are the only ones a slat cover shows while the slats are moving,
+    so this is the button a user reaches for to park the slats half open.
+    `async_stop_cover_tilt` delegates to `async_stop_cover`; nothing exercised it, so
+    the delegation could be removed and the button would silently do nothing.
+
+    Mutation caught: replacing the body of `async_stop_cover_tilt` with `return`.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        await hass.services.async_call(COVER, "open_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        await _advance(hass, freezer, 1.0)
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+        commands.clear()
+
+        await hass.services.async_call(COVER, "stop_cover_tilt", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        assert commands.sent_frames == ["*2*0*85##"]
+
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state != CoverState.OPENING
+        frozen = state.attributes[ATTR_CURRENT_TILT_POSITION]
+        assert 0 < frozen < 100  # parked mid-phase, which is the point of the button
+
+        # And the estimate really stopped: the slats do not drift on.
+        await _advance(hass, freezer, 30)
+        assert hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_TILT_POSITION] == frozen
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_frame", "expected_end"),
+    [(100, "*2*1*81##", 100), (0, "*2*2*81##", 0)],
+)
+async def test_the_two_ends_of_the_position_slider_run_to_the_end_stop(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, target, expected_frame, expected_end
+) -> None:
+    """Dragging the slider all the way is an open/close, not a timed run.
+
+    Both ends are special-cased in `async_set_cover_position`: a timed run computed
+    from an estimate would stop the shutter a few percent short of the end stop and
+    leave the estimate uncalibrated, while running into the end stop re-calibrates it
+    for free. Only the `position <= 0` half was exercised, so the `>= 100` half could
+    have sent the opposite command - the shutter would go down when the user asked for
+    fully open - with the suite green.
+
+    Mutation caught: `await self.async_open_cover()` -> `await self.async_close_cover()`
+    in the `position >= 100` arm.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 42}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        commands.clear()
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: target}, blocking=True
+        )
+        assert commands.sent_frames == [expected_frame]
+
+        # A free run to the end stop: no stop command is ever sent, and the estimate
+        # lands exactly on the end rather than a few percent short of it.
+        await _advance(hass, freezer, 31)
+        assert commands.sent_frames == [expected_frame]
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == expected_end
+
+
+@pytest.mark.parametrize(
+    ("restored_state", "expected_position"),
+    [(CoverState.CLOSED, 0), (CoverState.OPEN, 100)],
+)
+async def test_a_restored_state_without_a_position_is_read_from_the_state_itself(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, restored_state, expected_position
+) -> None:
+    """The upgrade path: a cover restored from before positions existed.
+
+    `myhome` covers stored no `current_position` until the two-phase model landed, and
+    a restored state is whatever the *previous* version wrote. Without this fallback
+    the entity comes back with no position at all, which makes the first
+    `set_cover_position` take the "unknown position" branch and run the shutter to an
+    end stop instead of to the position asked for - one wrong full travel per cover,
+    once, on the release that upgrades them.
+
+    The slats follow the curtain (`tilt = 100 if position > 0 else 0`): a cover resting
+    on the floor has its slats closed, a raised one has them open.
+
+    Mutation caught: swapping the two `position =` assignments in
+    `async_added_to_hass`.
+    """
+    mock_restore_cache(hass, (State(SLAT_ENTITY, restored_state),))  # no attributes at all
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == expected_position
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == expected_position
+
+        # And the estimate starts from there: a run in the direction it can still go
+        # moves away from the restored end, it does not jump to the other one.
+        service = "close_cover" if expected_position == 100 else "open_cover"
+        await hass.services.async_call(COVER, service, {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+        await _advance(hass, freezer, 6)
+        moved = hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_POSITION]
+        assert moved != expected_position
+        assert abs(moved - expected_position) < 50  # from the restored end, not the other one

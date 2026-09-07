@@ -532,7 +532,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # Nothing known yet: assume the opposite end so that a full travel
             # settles on the correct position.
             position, tilt = (0, 0) if direction == OPENING else (100, 100)
-        if tilt is None:
+        if tilt is None:  # pragma: no cover - unreachable: only a cover without
+            # `slat_time` can have a position and no tilt, and such a cover never
+            # reports one (`current_cover_tilt_position`, `_attr_is_closed`).
             tilt = 100 if position > 0 else 0
         position, tilt = self._normalise(position, tilt)
 
