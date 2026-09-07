@@ -56,6 +56,25 @@ CONF_UDN = "UDN"
 CONF_WORKER_COUNT = "command_worker_count"
 # Upper bound for the option: gateways hold only a handful of concurrent sessions.
 MAX_COMMAND_WORKERS = 4
+
+
+def clamp_worker_count(value: object, default: int = 1) -> int:
+    """How many command sessions an option value really opens.
+
+    Three places need the same answer and used to compute it apart: the setup
+    (``__init__.async_setup_entry``, which acts on it), the options form (which
+    pre-fills it -- an entry saved under the old 1-10 form otherwise opened on a
+    number its own schema then refused, so *every* save failed, including one that
+    only meant to change the IP address), and the diagnostics "effective options"
+    section (which reports it next to ``handler.sending_workers``, and used to
+    contradict it).  A hand-edited entry may hold anything at all, hence the
+    non-numeric fallback.
+    """
+    try:
+        number = int(value)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return default
+    return min(max(1, number), MAX_COMMAND_WORKERS)
 CONF_FILE_PATH = "config_file_path"
 CONF_GENERATE_EVENTS = "generate_events"
 CONF_WHO = "who"
