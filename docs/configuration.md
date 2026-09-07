@@ -223,7 +223,7 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the gateway's command timeout plus a couple of seconds; see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the **Command timeout** option plus a couple of seconds; see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
 | `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
 | `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
 | `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
@@ -258,20 +258,21 @@ shutter carries on to its end stop, and so does the estimate, which the actuator
 frame at the end of the run then puts back in step.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
-frame that says it stopped is lost, the state would otherwise stay that way for ever,
-so the integration re-reads the actuator's status after the longest configured travel
-time plus 30 seconds, and drops the direction only if nothing answers. "Nothing
-answers" is measured against the command path itself, not against a fixed delay: the
-answer has to be queued, sent and acknowledged like any other command, so the wait is
-the gateway's own command timeout (`command_timeout_sec`, ten seconds by default)
-plus two seconds, and it grows with that option. An actuator that is still running
-answers well inside that, so it is never reported as stopped in the middle of a long
-run — not even while the bus is busy with a scene — and its answer starts the
-countdown again. The reported position is not affected either way: it is always the
-actuator's own value, never an estimate. This is also the one thing the timing keys
-still do on an `advanced:` cover — a shutter, awning or garage door whose run is
-longer than the 50 seconds of the default needs `shutter_run` (or `opening_time` /
-`closing_time`) so that the safety timer stays out of its way.
+frame that says it stopped is lost, the state would otherwise stay that way for
+ever, so the integration re-reads the actuator's status after the longest configured
+travel time plus 30 seconds, and drops the direction only if nothing answers.
+"Nothing answers" is measured against the command path itself, not against a fixed
+delay: the answer has to be queued, sent and acknowledged like any other command, so
+the wait is the gateway's own **Command timeout** option (ten seconds by default,
+see [Session tunables](#session-tunables)) plus two seconds, and it grows with that option.
+An actuator that is still running answers well inside that, so it is never reported
+as stopped in the middle of a long run — not even while the bus is busy with a scene
+— and its answer starts the countdown again. The reported position is not affected
+either way: it is always the actuator's own value, never an estimate. This is also
+the one thing the timing keys still do on an `advanced:` cover — a shutter, awning
+or garage door whose run is longer than the 50 seconds of the default needs
+`shutter_run` (or `opening_time` / `closing_time`) so that the safety timer stays
+out of its way.
 
 ### The two-phase travel model (`slat_time`)
 

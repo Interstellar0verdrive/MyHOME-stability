@@ -54,7 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   *Opening* / *Closing* for ever. After the longest configured travel time plus 30 s
   the actuator's status is re-read, and the direction is dropped only if nothing
   answers within the time the command path is allowed to take (the
-  `command_timeout_sec` option, ten seconds by default, plus a two-second margin).
+  **Command timeout** option, ten seconds by default, plus a two-second margin).
   An actuator whose real run is longer than that timer is therefore never reported as
   *closed* (or *open*) in the middle of it, waking every automation watching for it —
   not even while the bus is busy with a scene, which is exactly when the command path
