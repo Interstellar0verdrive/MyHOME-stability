@@ -20,7 +20,8 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-# Redacted copy of the user's real configuration (20 lights, 12 covers, 3 power meters).
+# The fictional reference configuration (main gateway: 20 lights, 12 covers, 3 power
+# meters; second gateway: one device of every other platform). Nothing is real.
 USER_YAML = REPO_ROOT / "tests" / "fixtures" / "myhome.yaml"
 MAC = "00:03:50:AA:BB:CC"
 MAC_NORM = "00:03:50:aa:bb:cc"
@@ -96,7 +97,8 @@ def test_user_config_after_rename(user_config):
         "name": "Kids Room Shutter Old",
     }
     out = check(user_config)
-    assert list(out) == [MAC_NORM]
+    # The fixture declares two gateways; only the first one is asserted here.
+    assert list(out) == [MAC_NORM, MAC2]
     plat = platforms(out)
     assert set(plat) == {"light", "cover", "sensor"}  # no lock_buttons -> no button platform
     assert len(plat["cover"]) == 13

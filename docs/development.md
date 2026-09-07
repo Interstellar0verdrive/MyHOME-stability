@@ -27,7 +27,7 @@ validate the integration manifest (hassfest) and the HACS metadata.
 
 The tests never talk to a real gateway: `tests/test_gateway.py` and
 `tests/test_init.py` spin up a loopback fake OpenWebNet server instead. A test
-fixture mirroring a real (redacted) `myhome.yaml` lives in `tests/fixtures/`.
+fixture describing an entirely fictional home lives in `tests/fixtures/`.
 
 See [Architecture → Test strategy](architecture.md#test-strategy) for what each
 test file covers, how the fake OpenWebNet server works, and what the end-to-end

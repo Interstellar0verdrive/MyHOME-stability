@@ -195,3 +195,57 @@ gateway:
       name: Oven
       device_class: power
       min_delta_w: 1
+
+# A second fictional gateway (the garden studio next to the house) whose only job
+# is to make the end-to-end test cover the platforms the main gateway does not
+# use: switch, binary_sensor, climate, scenario_control (CEN and CEN+), the
+# button pair of `lock_buttons`, a dimmable light and a device behind a local bus
+# interface. Everything here is invented, exactly like the section above.
+00:03:50:00:00:02:
+  light:
+    studio_ceiling:
+      where: '11'
+      name: Studio Ceiling
+      dimmable: true
+      lock_buttons: true
+    workshop_bench:
+      where: '12'
+      name: Workshop Bench
+      interface: 3
+  switch:
+    studio_socket:
+      where: '15'
+      name: Studio Socket
+      device_class: outlet
+  cover:
+    studio_shutter:
+      where: '81'
+      name: Studio Shutter
+      device_class: shutter
+      shutter_run: 24
+      slat_time: 2
+  binary_sensor:
+    studio_door:
+      where: '31'
+      name: Studio Door
+      device_class: door
+  climate:
+    studio_zone:
+      zone: 1
+      name: Studio Zone
+  sensor:
+    studio_temperature:
+      where: '32'
+      name: Studio Temperature
+      device_class: temperature
+  scenario_control:
+    studio_keypad:
+      protocol: cen_plus
+      object: 5
+      name: Studio Keypad
+      buttons: [1, 2, 3, 4]
+    workshop_keypad:
+      protocol: cen
+      where: '51'
+      name: Workshop Keypad
+      buttons: [0, 1]

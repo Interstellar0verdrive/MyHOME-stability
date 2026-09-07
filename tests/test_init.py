@@ -17,6 +17,7 @@ from custom_components.myhome import expected_unique_ids, issue_id, normalise_en
 from custom_components.myhome.const import (
     CONF_ENTITY,
     CONF_FILE_PATH,
+    CONF_PLATFORMS,
     DOMAIN,
     GATEWAY_DIAG_SUFFIXES,
     ISSUE_NO_DEVICES_FOR_GATEWAY,
@@ -505,6 +506,110 @@ async def test_end_to_end_with_fake_gateway(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
         assert entry.state is ConfigEntryState.NOT_LOADED
         await wait_until(lambda: not server.monitor_writers)
+
+
+# Unique ids of the second (fictional) gateway of tests/fixtures/myhome.yaml, one
+# device per platform the main gateway does not use.
+SECOND_GATEWAY_ENTITIES: dict[str, tuple[str, ...]] = {
+    "light": (f"{MAC2}-1-11", f"{MAC2}-1-12#4#03"),  # dimmable + behind bus interface 3
+    "switch": (f"{MAC2}-1-15",),
+    "cover": (f"{MAC2}-2-81",),
+    "binary_sensor": (f"{MAC2}-25-31-door",),
+    "climate": (f"{MAC2}-4-1",),
+    "sensor": (f"{MAC2}-4-32-temperature",),
+    "event": (f"{MAC2}-cenplus-5-event", f"{MAC2}-cen-51-event"),
+    "button": (f"{MAC2}-1-11-disable", f"{MAC2}-1-11-enable"),  # lock_buttons: true
+}
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_end_to_end_second_gateway_covers_every_platform(hass: HomeAssistant) -> None:
+    """Every shipped platform is set up and driven by real frames, not just three.
+
+    ``test_end_to_end_with_fake_gateway`` above only proves light, cover and the
+    WHO 18 sensors, because that is all the main gateway of the fixture declares.
+    The second gateway declares one device of each remaining platform, so switch,
+    binary_sensor, climate, event (CEN *and* CEN+), button (``lock_buttons``), a
+    dimmable light, a light behind a local bus interface and a WHO 4 temperature
+    sensor all go through the real setup, the real session and the real
+    dispatcher here.
+
+    Pins: the platform list, the unique-id shape of every platform, and the
+    routing of a monitor frame to each of them.  Mutations caught: dropping a
+    platform from ``PLATFORMS``, and any ``_dispatch_to_entities`` regression that
+    stops one message type from reaching its entity (a bug the platform tests
+    cannot see, since ``feed_event`` calls ``handle_event`` directly).
+    """
+    async with FakeOWNServer(default_replies=["*#*1##"]) as server:
+        entry = make_entry(
+            REAL_CONFIG_PATH,
+            data={**ENTRY_DATA_V2, "host": "127.0.0.1", "port": server.port},
+            mac=MAC2,
+        )
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.LOADED
+        handler = hass.data[DOMAIN][MAC2][CONF_ENTITY]
+
+        registry = er.async_get(hass)
+        entity_ids: dict[str, str] = {}
+        for domain, unique_ids in SECOND_GATEWAY_ENTITIES.items():
+            for unique_id in unique_ids:
+                entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+                assert entity_id is not None, f"{domain} entity {unique_id} was not created"
+                entity_ids[unique_id] = entity_id
+
+        # Nothing was pruned and nothing extra was invented.
+        assert {item.unique_id for item in er.async_entries_for_config_entry(registry, entry.entry_id)} == (
+            expected_unique_ids(MAC2, hass.data[DOMAIN][MAC2][CONF_PLATFORMS])
+        )
+
+        await wait_until(lambda: handler.is_connected)
+        light_id = entity_ids[f"{MAC2}-1-11"]
+        await wait_until(lambda: hass.states.get(light_id).state != "unavailable")
+
+        # One monitor frame per platform, straight off the fake gateway's bus.
+        await server.push("*1*1*11##")  # dimmable light on
+        await wait_until(lambda: hass.states.get(light_id).state == "on")
+
+        switch_id = entity_ids[f"{MAC2}-1-15"]
+        await server.push("*1*1*15##")
+        await wait_until(lambda: hass.states.get(switch_id).state == "on")
+
+        cover_id = entity_ids[f"{MAC2}-2-81"]
+        await server.push("*2*1*81##")
+        await wait_until(lambda: hass.states.get(cover_id).state == "opening")
+
+        door_id = entity_ids[f"{MAC2}-25-31-door"]
+        await server.push("*25*31#31*31##")
+        await wait_until(lambda: hass.states.get(door_id).state == "on")
+
+        climate_id = entity_ids[f"{MAC2}-4-1"]
+        await server.push("*#4*1*0*0205*3##")  # zone 1 measures 20.5 C
+        await wait_until(lambda: hass.states.get(climate_id).attributes.get("current_temperature") == 20.5)
+
+        cenplus_id = entity_ids[f"{MAC2}-cenplus-5-event"]
+        await server.push("*25*21#1*25##")  # CEN+ object 5, pushbutton 1, short press
+        await wait_until(
+            lambda: hass.states.get(cenplus_id).attributes.get("event_type") == "pushbutton_short_press"
+        )
+
+        cen_id = entity_ids[f"{MAC2}-cen-51-event"]
+        await server.push("*15*1*51##")  # CEN WHERE 51, pushbutton 1, pressed
+        await wait_until(
+            lambda: hass.states.get(cen_id).attributes.get("event_type") == "pushbutton_short_press"
+        )
+
+        # The bus-interface light and the WHO 4 sensor have no state yet, but they
+        # follow the gateway's availability like every other entity.
+        for unique_id in (f"{MAC2}-1-12#4#03", f"{MAC2}-4-32-temperature"):
+            assert hass.states.get(entity_ids[unique_id]).state != "unavailable"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.NOT_LOADED
+
 
 async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant, tmp_path) -> None:
     """A CEN+ virtual press (WHERE starting with '#') is a valid frame even if OWNd's typed parser crashes on it."""
