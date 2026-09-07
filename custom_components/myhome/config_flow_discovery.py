@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import yaml
+from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -34,6 +35,8 @@ from .const import (
     CONF_ZONE,
     DEVICE_TYPE_BUS_AUTOMATION,
     DEVICE_TYPE_BUS_AUX,
+    DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
+    DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_DIMMER,
     DEVICE_TYPE_BUS_DRY_CONTACT_IR,
     DEVICE_TYPE_BUS_ENERGY_METER,
@@ -45,6 +48,10 @@ from .const import (
     DISCOVERED_CONFIG_FILE,
     DOMAIN,
     LOGGER,
+    PROTOCOL_CEN,
+    PROTOCOL_CEN_PLUS,
+    bus_full_where,
+    scenario_control_key,
 )
 from .validate import INTERFACE_CAPABLE_WHO, device_key
 
@@ -133,6 +140,63 @@ def is_device_configured(hass: HomeAssistant, mac: str, device_cfg: Mapping[str,
     )
 
 
+# device_type of a CEN / CEN+ keypad -> the ``protocol:`` value that declares it.
+_SCENARIO_PROTOCOL: dict[str, str] = {
+    DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL: PROTOCOL_CEN,
+    DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL: PROTOCOL_CEN_PLUS,
+}
+
+
+def scenario_control_address(protocol: str, where: object) -> int | None:
+    """The object number of a scenario control, from the WHERE discovery saw.
+
+    A CEN+ frame writes the object number preceded by a ``2`` (``*25*21#3*225##`` is
+    object 25), which is why ``gateway._fire_cenplus_event`` reads
+    ``OWNCENPlusEvent.object`` and not the WHERE; a CEN control is addressed by its
+    WHERE as it stands.  Discovery keeps only the WHERE, so the same arithmetic has to
+    be redone here -- and it has to give the same answer, because this number is what
+    ``scenario_control_key`` turns into the key a declared keypad is stored under.
+
+    ``None`` for anything that is not a plain number (nothing on the bus produces it
+    today; the caller then treats the control as undeclared, which is the old
+    behaviour).
+    """
+    text = str(where)
+    if protocol == PROTOCOL_CEN_PLUS:
+        # Drop the leading "2" the bus prefixes to every CEN+ object number.
+        text = text[1:]
+    if not text.isdigit():
+        return None
+    return int(text)
+
+
+def is_scenario_control_configured(hass: HomeAssistant, mac: str, device_info: Mapping[str, Any]) -> bool:
+    """True when this discovered CEN / CEN+ keypad is already under ``scenario_control:``.
+
+    A scenario control is never suggestable (the writer cannot emit a
+    ``scenario_control:`` block), so ``add()`` used to give up before it ever asked
+    whether the user had already declared it: every run closed by telling the owner of
+    a keypad configured months ago to go and declare it by hand.  A *suggestable*
+    device gets the opposite treatment two lines further down -- ``is_device_configured``
+    filters it out and it is never mentioned -- so this is the same question, asked
+    with the key a scenario control is really stored under.
+
+    That key (``const.scenario_control_key``) is ``cenplus-<object>`` / ``cen-<where>``
+    and carries no interface, exactly like the lookup
+    ``gateway._dispatch_scenario_event`` does when a press arrives: a control declared
+    as ``cen-11`` receives the frames of the riser keypad 11 too, so discovery must
+    treat it as declared for both.
+    """
+    protocol = _SCENARIO_PROTOCOL.get(device_info["device_type"])
+    if protocol is None:
+        return False
+    address = scenario_control_address(protocol, device_info["where"])
+    if address is None:
+        return False
+    declared = hass.data.get(DOMAIN, {}).get(mac, {}).get(CONF_PLATFORMS, {}).get(EVENT)
+    return isinstance(declared, dict) and scenario_control_key(protocol, address) in declared
+
+
 def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[str, Any]]]) -> int:
     """Executor job: merge `suggestions` into the YAML file at `path` and write it
     atomically (temp file + os.replace). Returns the number of NEW entries."""
@@ -184,6 +248,23 @@ def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[
     return added
 
 
+# How many device names the end-of-run report spells out before it summarises the rest.
+# A plant with a dozen keypads is ordinary, and one very long log line helps nobody.
+_REPORT_NAME_LIMIT = 10
+
+
+def _name_list(names: list[str]) -> str:
+    """The device names of one report clause, truncated but never silently.
+
+    "11 device(s) ... (a, b, ... j)" -- ten names for a count of eleven, with nothing
+    saying so -- reads like the counter is wrong.  The count and this list are the
+    whole message for a device the run could not suggest, so the cut has to be visible.
+    """
+    shown = ", ".join(names[:_REPORT_NAME_LIMIT])
+    hidden = len(names) - _REPORT_NAME_LIMIT
+    return f"{shown}, ... and {hidden} more" if hidden > 0 else shown
+
+
 class MyHOMEDiscoverySuggestions:
     """Per-entry collector of YAML suggestions for discovered devices."""
 
@@ -230,6 +311,12 @@ class MyHOMEDiscoverySuggestions:
         suggestion = generate_suggested_config(device_info)
         if suggestion is None:
             device_type = device_info["device_type"]
+            if is_scenario_control_configured(self.hass, mac, device_info):
+                # Already declared under ``scenario_control:``: there is nothing for the
+                # user to do, so it must not be counted in the "must be declared by
+                # hand" clause below.
+                LOGGER.debug("Discovery: %s already declared as a scenario control, skipping", device_info["unique_id"])
+                return False
             # A device type with a platform is one the integration really builds an
             # entity for; the writer just cannot express its section yet (a CEN/CEN+
             # keypad goes under ``scenario_control:``), so the user *can* write it by
@@ -238,7 +325,12 @@ class MyHOMEDiscoverySuggestions:
             # telling its owner to "declare it by hand" sent them looking through
             # docs/configuration.md for a chapter that does not exist.
             target = self._skipped if DEVICE_TYPE_TO_PLATFORM.get(device_type) else self._unsupported
-            target.append(f"{device_type}@{device_info['where']}")
+            # The address as the bus writes it, interface included: WHO 15 carries one,
+            # so a CEN keypad on the main bus and one on a riser would otherwise be the
+            # same "bus_cen_scenario_control@11" twice, and the report would read like a
+            # bug in its own counter.  Same spelling as the "Discovered ..." INFO line.
+            address = bus_full_where(str(device_info["where"]), device_info.get(CONF_BUS_INTERFACE))
+            target.append(f"{device_type}@{address}")
             LOGGER.debug("Discovery: no YAML suggestion for %s", device_info["unique_id"])
             return False
         platform, cfg = suggestion
@@ -264,17 +356,21 @@ class MyHOMEDiscoverySuggestions:
         carries a plain WHERE.  They used to be counted in the same sentence, so
         "1 device(s) ... must be declared by hand (bus_alarm_zone@12)" sent a careful
         reader hunting for an alarm chapter that has never existed.
+
+        A control the user has *already* declared never reaches either list
+        (``is_scenario_control_configured`` in ``add()``): the sentence names something
+        to do, so it must only name devices that still need doing.
         """
         clauses = []
         if self._skipped:
             clauses.append(
                 f"{len(self._skipped)} device(s) must be declared by hand under "
-                f"`scenario_control:` ({', '.join(self._skipped[:10])})"
+                f"`scenario_control:` ({_name_list(self._skipped)})"
             )
         if self._unsupported:
             clauses.append(
                 f"{len(self._unsupported)} device(s) belong to a family this integration "
-                f"has no support for ({', '.join(self._unsupported[:10])})"
+                f"has no support for ({_name_list(self._unsupported)})"
             )
         return "; ".join(clauses)
 

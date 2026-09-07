@@ -703,10 +703,31 @@ def no_discovery_sleep(hold_from: int | None = None) -> Iterator[_NoSleep]:
         yield recorder
 
 
+# A myhome.yaml that already declares the two keypads the run below sees, so the
+# end-of-run report has something real to stay quiet about.  ``object: 25`` is CEN+
+# WHERE 225 and the CEN control is addressed by its WHERE.
+DECLARED_KEYPADS_YAML = f"""
+gateway:
+  mac: {MAC}
+  scenario_control:
+    kitchen_keypad:
+      object: 25
+      name: Kitchen Keypad
+    hallway_keypad:
+      protocol: cen
+      where: '11'
+      name: Hallway Keypad
+  light:
+    light_test:
+      where: '11'
+      name: Light Test
+"""
+
+
 @asynccontextmanager
-async def running_gateway(hass: HomeAssistant, tmp_path) -> AsyncIterator[Any]:
+async def running_gateway(hass: HomeAssistant, tmp_path, yaml_text: str | None = None) -> AsyncIterator[Any]:
     """A loaded config entry with the real handler and its real discovery service."""
-    entry = make_entry(write_yaml(tmp_path))
+    entry = make_entry(write_yaml(tmp_path) if yaml_text is None else write_yaml(tmp_path, yaml_text))
     entry.add_to_hass(hass)
     with mock_gateway():
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -882,6 +903,54 @@ async def test_a_device_that_cannot_be_declared_is_reported_apart_from_one_that_
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_a_keypad_already_declared_is_not_reported_as_one_to_declare(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """End to end: a run over a plant whose keypads are configured says nothing.
+
+    Why it matters in production: "N device(s) must be declared by hand under
+    ``scenario_control:``" is written as an instruction, and it is the only thing a
+    run ever says about a CEN/CEN+ control.  ``MyHOMEDiscoverySuggestions.add`` gave
+    up as soon as the writer said "cannot suggest this" - which is always, for a
+    keypad - so it never asked whether the control was already declared, and the owner
+    of a plant configured months ago was told to declare it again on every run.  A
+    lamp in the same file is filtered out and never mentioned, so the asymmetry was
+    not something a reader could infer.
+
+    The declared spellings are the two real ones: a CEN+ control keyed by ``object``
+    (WHERE 225) and a CEN control keyed by ``where``.
+
+    Mutation caught: dropping the ``is_scenario_control_configured`` check from
+    ``add()`` - the run closes with "2 device(s) must be declared by hand".
+    """
+    async with running_gateway(hass, tmp_path, DECLARED_KEYPADS_YAML) as entry:
+        service = hass.data[DOMAIN][MAC][CONF_ENTITY].discovery_service
+        assert set(hass.data[DOMAIN][MAC][CONF_PLATFORMS]["event"]) == {"cenplus-25", "cen-11"}
+
+        with no_discovery_sleep():
+            await hass.services.async_call(DOMAIN, SERVICE_START_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+            service.handle_discovery_message(OWNEvent.parse("*25*21#3*225##"))  # the CEN+ keypad
+            service.handle_discovery_message(OWNEvent.parse("*15*1*11##"))  # the CEN keypad
+            service.handle_discovery_message(OWNEvent.parse("*25*21#3*299##"))  # object 99: NOT declared
+            caplog.clear()
+            await hass.services.async_call(DOMAIN, SERVICE_STOP_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+
+        # All three were seen; only the undeclared one is something to do.
+        assert len(service.get_discovered_devices()) == 3
+        reported = [line for line in caplog.text.splitlines() if "declared by hand" in line]
+        assert len(reported) == 1, caplog.text
+        assert "1 device(s) must be declared by hand" in reported[0]
+        assert "bus_cenplus_scenario_control@299" in reported[0]
+        assert "@225" not in reported[0]
+        assert "bus_cen_scenario_control" not in reported[0]
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
 
 
 async def test_a_second_start_does_not_restart_the_run(hass: HomeAssistant, tmp_path) -> None:
