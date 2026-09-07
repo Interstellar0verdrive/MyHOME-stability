@@ -12,9 +12,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
+import struct
 import time
 from collections.abc import Callable, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import fields
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -72,6 +73,7 @@ from custom_components.myhome.own_session import (
     OWNCommandChannel,
     OWNEventChannel,
     SessionError,
+    enable_tcp_keepalive,
     parse_frame,
 )
 
@@ -1177,6 +1179,11 @@ async def test_loops_do_not_start_after_close() -> None:
 
 
 # --------------------------------------------------------------------------- own_session on loopback
+# `asyncio.open_connection` reads with a 64 KiB limit; a frame longer than that
+# with no `##` in it is what makes `readuntil` raise `LimitOverrunError`.
+OVER_LONG_FRAME_BYTES = 70_000
+
+
 class FakeOWNServer:
     """Minimal OpenWebNet gateway: greeting ACK, session ACK (or nonce), scripted replies."""
 
@@ -1190,6 +1197,10 @@ class FakeOWNServer:
         initial_frames: list[str] | None = None,
         close_after_initial: bool = False,
         default_replies: list[str] | None = None,
+        negotiation_ok: bool = True,
+        close_during_negotiation: bool = False,
+        flood_negotiation: bool = False,
+        reset_after_initial: bool = False,
     ) -> None:
         self.replies = replies or {}
         self.nonce = nonce
@@ -1198,9 +1209,19 @@ class FakeOWNServer:
         self.initial_frames = initial_frames or []
         self.close_after_initial = close_after_initial
         self.default_replies = ["*#*0##"] if default_replies is None else default_replies
+        # Scripted negotiation / transport failures (F9).  OWNd's own session classes
+        # swallow all of these and return None, which is exactly what own_session.py
+        # exists to fix, so every one of them needs a server that can produce it.
+        self.negotiation_ok = negotiation_ok
+        self.close_during_negotiation = close_during_negotiation
+        self.flood_negotiation = flood_negotiation
+        self.reset_after_initial = reset_after_initial
         self.received: list[str] = []
         self.sessions: list[str] = []
         self.monitor_writers: list[asyncio.StreamWriter] = []
+        # Every accepted connection, so `__aexit__` can hang up on the ones a
+        # failing test left behind (see the note there).
+        self.clients: list[asyncio.StreamWriter] = []
         self.server: asyncio.AbstractServer | None = None
         self.port = 0
 
@@ -1223,14 +1244,34 @@ class FakeOWNServer:
 
     async def __aexit__(self, *exc: object) -> None:
         assert self.server is not None
+        # `wait_closed()` also waits for the connection handlers, and a handler
+        # parked on `readuntil` never returns on its own. A test that fails (or
+        # raises) before closing its channel would otherwise hang here for ever
+        # instead of reporting its assertion, which is exactly what happens while
+        # mutation-testing the error paths below. Hang up first, then wait.
+        for writer in self.clients:
+            with suppress(Exception):  # already gone is the normal case
+                writer.transport.abort()
+        self.clients.clear()
         self.server.close()
         await self.server.wait_closed()
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.clients.append(writer)
         try:
             writer.write(b"*#*1##")
             session = (await reader.readuntil(b"##")).decode()
             self.sessions.append(session)
+            if self.close_during_negotiation:
+                # EOF between the greeting and the negotiation reply.
+                return
+            if self.flood_negotiation:
+                # A negotiation reply that never terminates: `readuntil` gives up
+                # once the stream limit is exceeded.
+                writer.write(b"*" * OVER_LONG_FRAME_BYTES)
+                await writer.drain()
+                await reader.readuntil(b"##")
+                return
             if self.nonce is not None:
                 writer.write(f"*#{self.nonce}##".encode())
                 await writer.drain()
@@ -1240,11 +1281,21 @@ class FakeOWNServer:
                 if not self.password_ok:
                     return
             else:
-                writer.write(b"*#*1##")
+                writer.write(b"*#*1##" if self.negotiation_ok else b"*#*0##")
+                if not self.negotiation_ok:
+                    await writer.drain()
+                    return
             for item in self.initial_frames:
                 writer.write(item.encode())
             await writer.drain()
             if self.close_after_initial:
+                return
+            if self.reset_after_initial:
+                # SO_LINGER 0 makes close() send an RST instead of a FIN, so the
+                # client sees a connection *reset* rather than a clean EOF.
+                sock = writer.get_extra_info("socket")
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+                writer.transport.abort()
                 return
             if session == "*99*1##":
                 self.monitor_writers.append(writer)
@@ -1342,6 +1393,180 @@ async def test_channel_open_failures() -> None:
         await channel.close()
     finally:
         probe.close()
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_failed_negotiation_is_never_reported_as_an_open_session() -> None:
+    """sess-01: a session that did not negotiate must raise, not come back "open".
+
+    This is the worst failure mode in own_session.py: OWNd's own `connect()`
+    returns `{"Success": False, ...}` instead of raising, so without the explicit
+    `raise` the code falls straight through to `self._is_open = True` and hands
+    the gateway handler a dead channel, which it then uses for every command
+    until the first write fails.
+
+    A negotiation refusal is NOT an authentication failure - it must stay a plain
+    `SessionError`, because `AuthenticationError` is what starts a reauth flow and
+    a reauth prompt is the wrong answer to a gateway that is simply busy.
+
+    Mutation caught: deleting `raise SessionError(f"{self._type} session
+    negotiation failed ({reason})")` in `OWNChannel.open`.
+    """
+    async with FakeOWNServer(negotiation_ok=False) as server:
+        channel = OWNCommandChannel(make_gateway(server.port), LOGGER)
+        with pytest.raises(SessionError) as excinfo:
+            await channel.open(timeout=2)
+        assert not isinstance(excinfo.value, AuthenticationError)
+        assert "negotiation failed" in str(excinfo.value)
+        assert "negotiation_refused" in str(excinfo.value)
+        assert not channel.is_open
+        assert channel._stream_writer is None  # noqa: SLF001 - the socket is closed on failure
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_negotiation_transport_failures_raise_session_errors() -> None:
+    """sess-02: a gateway that dies mid-negotiation is a broken session, not a crash.
+
+    Both of these reach `open()` as raw `asyncio` stream exceptions, which are
+    neither `OSError` nor `TimeoutError`, so without their own `except` arms they
+    would escape `open()` unconverted: the gateway handler's listening loop
+    catches `_TRANSPORT_ERRORS` to pace its reconnects, and an exception outside
+    that tuple takes the catch-all path instead (a full traceback in the log on
+    every reconnect attempt of a rebooting gateway).
+
+    Mutations caught: deleting either the `IncompleteReadError` or the
+    `LimitOverrunError` arm of `OWNChannel.open`.
+    """
+    async with FakeOWNServer(close_during_negotiation=True) as server:
+        channel = OWNEventChannel(make_gateway(server.port), LOGGER)
+        with pytest.raises(SessionError) as excinfo:
+            await channel.open(timeout=2)
+        assert "during negotiation" in str(excinfo.value)
+        assert isinstance(excinfo.value.__cause__, asyncio.IncompleteReadError)
+        assert not channel.is_open
+
+    async with FakeOWNServer(flood_negotiation=True) as server:
+        channel = OWNEventChannel(make_gateway(server.port), LOGGER)
+        with pytest.raises(SessionError) as excinfo:
+            await channel.open(timeout=2)
+        assert "malformed negotiation frame" in str(excinfo.value)
+        assert isinstance(excinfo.value.__cause__, asyncio.LimitOverrunError)
+        assert not channel.is_open
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_read_frame_rejects_a_closed_session_and_an_over_long_frame() -> None:
+    """sess-03: `read_frame` never returns garbage and never reads a dead socket.
+
+    The "not open" guard is what stops the listening loop from reading a channel
+    the gateway handler has already closed (it would raise `AttributeError` on a
+    `None` reader instead of the `SessionError` the loop knows how to pace).
+    The over-long arm additionally has to clear `_is_open`, or the handler would
+    keep re-reading a stream whose buffer it can never drain.
+
+    Mutations caught: deleting the `not self._is_open or reader is None` guard,
+    and deleting `self._is_open = False` from the `LimitOverrunError` arm.
+    """
+    async with FakeOWNServer() as server:
+        channel = OWNEventChannel(make_gateway(server.port), LOGGER)
+        # Never opened: no socket has been created at all.
+        with pytest.raises(SessionError, match="not open"):
+            await channel.get_next()
+
+        await channel.open(timeout=2)
+        await channel.close()
+        # Opened and then closed: the reader is gone, the guard is the only defence.
+        with pytest.raises(SessionError, match="not open"):
+            await channel.get_next()
+
+    async with FakeOWNServer(initial_frames=["*" * OVER_LONG_FRAME_BYTES]) as server:
+        channel = OWNEventChannel(make_gateway(server.port), LOGGER)
+        await channel.open(timeout=2)
+        with pytest.raises(SessionError, match="over-long frame"):
+            await channel.get_next()
+        assert not channel.is_open
+        await channel.close()
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_connection_reset_mid_session_closes_the_channel() -> None:
+    """sess-04: an RST is not a clean EOF, and must still mark the channel closed.
+
+    Every other test in this file closes the fake server politely, so a reset -
+    what a rebooting gateway, a NAT timeout or an unplugged cable actually
+    produce - was never simulated. `OSError` is re-raised rather than wrapped
+    (the caller wants the errno), which makes it the one error path that could
+    silently skip `self._is_open = False` and leave the handler convinced the
+    channel is usable for ever.
+
+    Mutation caught: deleting `self._is_open = False` from the `except OSError`
+    arm of `read_frame`.
+    """
+    async with FakeOWNServer(initial_frames=["*1*1*11##"], reset_after_initial=True) as server:
+        channel = OWNEventChannel(make_gateway(server.port), LOGGER)
+        await channel.open(timeout=2)
+        assert str(await channel.get_next()) == "*1*1*11##"
+        with pytest.raises(OSError) as excinfo:
+            for _ in range(5):  # the RST may land after one more read on some stacks
+                await channel.get_next()
+        assert not isinstance(excinfo.value, SessionError)  # a real errno, not a wrapper
+        assert not channel.is_open
+        await channel.close()
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_command_session_survives_stray_signaling_and_unparsable_replies() -> None:
+    """sess-05: only an ACK or a NACK ends a command; everything else is skipped.
+
+    A gateway that interleaves an unsolicited signaling frame (here a stray nonce
+    challenge) or a frame OWNd cannot parse must not desynchronise the session:
+    if either were treated as the end of the command, the NEXT command would read
+    this one's ACK and every reply after it would be attributed to the wrong
+    frame - the exact desynchronisation `send_command` was written to prevent.
+
+    Mutations caught: replacing the `continue` after "Ignoring signaling frame"
+    with a `return CommandResult(False, replies)`, and dropping the final `else`
+    so an unparsable frame is appended to `replies` (it is not an `OWNMessage`,
+    so the caller would then dispatch a bare string).
+    """
+    replies = {
+        # A stray nonce is an OWNSignaling that is neither ACK nor NACK; `*#*3##`
+        # is not a frame OWNd can parse at all.  Both sit before the real reply.
+        "*#1*0##": ["*#603356072##", "*#*3##", "*1*1*11##", "*#*1##"],
+    }
+    async with FakeOWNServer(replies) as server:
+        channel = OWNCommandChannel(make_gateway(server.port), LOGGER)
+        await channel.open(timeout=2)
+        result = await channel.send_command(OWNLightingCommand.status("0"), timeout=2)
+        assert result.acknowledged is True
+        # Neither the signaling frame nor the unparsable one reaches the caller.
+        assert [str(reply) for reply in result.replies] == ["*1*1*11##"]
+        assert channel.is_open
+        await channel.close()
+
+
+def test_tcp_keepalive_is_best_effort() -> None:
+    """sess-06: keepalive tuning must never break a working session.
+
+    `enable_tcp_keepalive` runs on every `open()`. A transport with no socket
+    (any non-TCP transport) and a socket that refuses the options (a platform
+    without them, or a socket already torn down) both have to degrade to a
+    plain `False`, because raising here would turn a perfectly good session into
+    a reconnect loop.
+
+    Mutations caught: dropping the `if sock is None: return False` guard, and
+    narrowing or removing the `except OSError: return False`.
+    """
+    no_socket = MagicMock()
+    no_socket.get_extra_info.return_value = None
+    assert enable_tcp_keepalive(no_socket) is False
+
+    refusing = MagicMock()
+    refusing.get_extra_info.return_value.setsockopt.side_effect = OSError(22, "Invalid argument")
+    assert enable_tcp_keepalive(refusing) is False
+
+    accepting = MagicMock()
+    assert enable_tcp_keepalive(accepting) is True
 
 
 def test_fake_gateway_stats_stays_field_compatible() -> None:
