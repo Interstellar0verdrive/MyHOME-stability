@@ -269,6 +269,39 @@ gateway:
 """
 
 
+# A WHO 1 sensor behind an F422: the configuration keeps the interface zero padded
+# (it is the tail of the unique id), the bus writes it unpadded.
+INTERFACE_SENSOR_YAML = f"""
+gateway:
+  mac: {MAC}
+  sensor:
+    hall_light_level:
+      where: '31'
+      name: Hall Light Level
+      class: illuminance
+      interface: 3
+      min_delta_w: 42
+"""
+
+
+async def test_sensor_config_lookup_normalises_the_bus_interface(hass: HomeAssistant, tmp_path) -> None:
+    """NIT-6: the energy throttle looked the sensor up with the raw key.
+
+    ``_dispatch_to_entities`` resolves ``1-31#4#3`` (as the bus writes it) against the
+    configured ``1-31#4#03``; the throttle did not, so it would have fallen back to the
+    built-in defaults for a device whose key came from a frame.
+    """
+    entry = make_entry(write_yaml(tmp_path, INTERFACE_SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        handler = _handler(hass)
+        assert "1-31#4#03" in hass.data[DOMAIN][MAC][CONF_PLATFORMS]["sensor"]
+
+        for key in ("1-31#4#03", "1-31#4#3"):
+            assert handler._sensor_display_name(key) == "Hall Light Level"
+            assert handler._energy_settings_for(key).min_delta_w == 42
+
+
 async def test_class_energy_creates_only_the_three_totalisers(hass: HomeAssistant, tmp_path) -> None:
     """INCONSISTENCY-6: `class: energy` is not a lighter `class: power`.
 

@@ -21,7 +21,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_SUPPORTED_FEATURES, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -57,9 +57,30 @@ gateway:
       central: true
 """
 
+# A cooling-only zone and a zone addressed directly (`standalone: true`), neither of
+# which any fixture used to cover (F10).
+COOLING_YAML = f"""
+gateway:
+  mac: {MAC}
+  climate:
+    study_cooling:
+      zone: '5'
+      name: Study Cooling
+      heat: false
+      cool: true
+    guest_room:
+      zone: '6'
+      name: Guest Room
+      heat: true
+      standalone: true
+      icon: 'mdi:radiator'
+"""
+
 ZONE = "climate.zone_living"
 FAN_ZONE = "climate.zone_bathroom"
 CENTRAL = "climate.centrale"
+COOLING_ZONE = "climate.study_cooling"
+STANDALONE_ZONE = "climate.guest_room"
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
@@ -250,13 +271,197 @@ async def test_hvac_action_is_derived_from_mode(hass: HomeAssistant, tmp_path) -
         await hass.async_block_till_done()
         assert hass.states.get(ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
 
-        # A real actuator frame wins over the derived value.
-        entity.handle_event(OWNHeatingEvent("*#4*2*19*1*1##"))
+        # A real actuator frame wins over the derived value: the zone only supports
+        # heating, so an active valve means HEATING whatever the temperatures say.
+        # F10: this used to be asserted as `in (HEATING, IDLE)`, which any of the four
+        # branches of the derivation satisfies.
+        entity.handle_event(OWNHeatingEvent("*#4*2*19*0*1##"))
         await hass.async_block_till_done()
-        assert hass.states.get(ZONE).attributes[ATTR_HVAC_ACTION] in (
-            HVACAction.HEATING,
-            HVACAction.IDLE,
+        assert hass.states.get(ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        # An idle valve on a zone that is not off is IDLE, not OFF.
+        entity.handle_event(OWNHeatingEvent("*#4*2*19*0*0##"))
+        await hass.async_block_till_done()
+        assert hass.states.get(ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
+async def test_hvac_action_cooling_and_unknown_temperatures(hass: HomeAssistant, tmp_path) -> None:
+    """F10: the COOL branches of the action derivation were never executed."""
+    entry = make_entry(write_yaml(tmp_path, COOLING_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-5")
+
+        # Mode known but no temperature yet -> IDLE rather than a wrong guess.
+        entity.handle_event(OWNHeatingEvent("*4*210*5##"))  # mode cool
+        await hass.async_block_till_done()
+        assert hass.states.get(COOLING_ZONE).state == HVACMode.COOL
+        assert hass.states.get(COOLING_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        entity.handle_event(OWNHeatingEvent("*#4*5*14*0200*3##"))  # target 20.0
+        entity.handle_event(OWNHeatingEvent("*#4*5*0*0250##"))  # current 25.0
+        await hass.async_block_till_done()
+        assert hass.states.get(COOLING_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.COOLING
+
+        entity.handle_event(OWNHeatingEvent("*#4*5*0*0180##"))  # current 18.0
+        await hass.async_block_till_done()
+        assert hass.states.get(COOLING_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        # An active valve on a cooling-only zone means COOLING.
+        entity.handle_event(OWNHeatingEvent("*#4*5*19*1*0##"))
+        await hass.async_block_till_done()
+        assert hass.states.get(COOLING_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.COOLING
+
+
+async def test_hvac_action_auto_with_both_supported_is_idle(hass: HomeAssistant, tmp_path) -> None:
+    """F10: a zone that can do both cannot tell heating from cooling in AUTO."""
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0200*3##"))  # target 20.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0250##"))  # current 25.0
+        entity.handle_event(OWNHeatingEvent("*4*311*3##"))  # mode auto
+        await hass.async_block_till_done()
+        state = hass.states.get(FAN_ZONE)
+        assert state.state == HVACMode.AUTO
+        assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
+async def test_all_message_types_reach_the_entity(hass: HomeAssistant, tmp_path) -> None:
+    """F10: humidity, local offset, local set point and MODE_TARGET were never fed.
+
+    ``handle_event`` has no try/except, and the local-offset branch adds the offset to
+    the set point, so a frame arriving before any set point is known must not raise.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-2")
+
+        # Offset first, with no set point known yet.
+        entity.handle_event(OWNHeatingEvent("*#4*2*13*0001##"))  # local offset +1
+        entity.handle_event(OWNHeatingEvent("*#4*2*60*45##"))  # humidity 45 %
+        await hass.async_block_till_done()
+        assert hass.states.get(ZONE).attributes["current_humidity"] == 45
+
+        # The displayed set point includes the local offset.
+        entity.handle_event(OWNHeatingEvent("*#4*2*14*0220*3##"))  # target 22.0
+        await hass.async_block_till_done()
+        assert hass.states.get(ZONE).attributes["temperature"] == 23.0
+
+        # A local set point read off the knob works the other way round.
+        entity.handle_event(OWNHeatingEvent("*#4*2*12*0215*3##"))
+        await hass.async_block_till_done()
+        assert hass.states.get(ZONE).attributes["temperature"] == 21.5
+
+        # MODE_TARGET carries both the mode and the set point.
+        entity.handle_event(OWNHeatingEvent("*4*110#0225*2##"))
+        await hass.async_block_till_done()
+        state = hass.states.get(ZONE)
+        assert state.state == HVACMode.HEAT
+        assert state.attributes["temperature"] == 23.5  # 22.5 + the +1 offset
+
+
+@pytest.mark.parametrize(
+    ("mode_frame", "expected"),
+    [
+        ("*4*110*2##", "*#4*#2*#14*0225*1##"),  # HEAT -> heating set point
+        ("*4*103*2##", "*#4*#2*#14*0225*3##"),  # OFF  -> the neutral AUTO form
+    ],
+)
+async def test_set_temperature_follows_the_current_mode(
+    hass: HomeAssistant, tmp_path, mode_frame: str, expected: str
+) -> None:
+    """F10: every set_temperature test ran with `hvac_mode` still None."""
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        _entity(hass, "4-2").handle_event(OWNHeatingEvent(mode_frame))
+        await hass.async_block_till_done()
+        _drain(hass)
+
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            "set_temperature",
+            {ATTR_ENTITY_ID: ZONE, ATTR_TEMPERATURE: 22.5},
+            blocking=True,
         )
+        assert expected in _drain(hass)
+
+
+async def test_cooling_zone_set_temperature(hass: HomeAssistant, tmp_path) -> None:
+    """The COOL branch of async_set_temperature, on a zone that only cools."""
+    entry = make_entry(write_yaml(tmp_path, COOLING_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        _entity(hass, "4-5").handle_event(OWNHeatingEvent("*4*210*5##"))  # mode cool
+        await hass.async_block_till_done()
+        _drain(hass)
+
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            "set_temperature",
+            {ATTR_ENTITY_ID: COOLING_ZONE, ATTR_TEMPERATURE: 19.0},
+            blocking=True,
+        )
+        assert "*#4*#5*#14*0190*2##" in _drain(hass)
+        assert hass.states.get(COOLING_ZONE).attributes["hvac_modes"] == [
+            HVACMode.OFF,
+            HVACMode.AUTO,
+            HVACMode.COOL,
+        ]
+
+
+async def test_standalone_zone_and_icon(hass: HomeAssistant, tmp_path) -> None:
+    """F10: `standalone: true` appeared in no fixture, so all four call sites ran False.
+
+    A standalone zone is addressed directly (`*4*303*6##`), not through the central
+    unit (`*4*303*#6##`).  The `icon` key is checked here too (INCONSISTENCY-1).
+    """
+    entry = make_entry(write_yaml(tmp_path, COOLING_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        assert hass.states.get(STANDALONE_ZONE).attributes["icon"] == "mdi:radiator"
+        _drain(hass)
+
+        await hass.services.async_call(
+            CLIMATE_DOMAIN, "turn_off", {ATTR_ENTITY_ID: STANDALONE_ZONE}, blocking=True
+        )
+        assert "*4*303*6##" in _drain(hass)
+
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            "set_hvac_mode",
+            {ATTR_ENTITY_ID: STANDALONE_ZONE, ATTR_HVAC_MODE: HVACMode.AUTO},
+            blocking=True,
+        )
+        assert "*4*311*6##" in _drain(hass)
+
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            "set_temperature",
+            {ATTR_ENTITY_ID: STANDALONE_ZONE, ATTR_TEMPERATURE: 21.5},
+            blocking=True,
+        )
+        assert "*#4*6*#14*0215*3##" in _drain(hass)
+
+
+async def test_service_errors_carry_their_own_translation_key(hass: HomeAssistant, tmp_path) -> None:
+    """F10: a bare `pytest.raises(ServiceValidationError)` let the two keys be swapped."""
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-2")
+
+        with pytest.raises(ServiceValidationError) as err:
+            await entity.async_set_temperature()
+        assert err.value.translation_key == "climate_no_target_temperature"
+
+        with pytest.raises(ServiceValidationError) as err:
+            await entity.async_set_hvac_mode(HVACMode.DRY)
+        assert err.value.translation_key == "climate_unsupported_hvac_mode"
 
 
 # --------------------------------------------------- central heating unit (0.3.1 / 5.4)
@@ -317,6 +522,53 @@ async def test_central_unit_frame_is_not_applied_to_zone_1(hass: HomeAssistant, 
         assert zone_seen == ["*#4*1*0*0215##"]
         assert len(central_seen) == 1
         assert hass.states.get("climate.zone_one").attributes["current_temperature"] == 21.5
+
+
+# ------------------------------------------------- climate + temperature probe (BUG-3)
+ZONE_AND_PROBE_YAML = f"""
+gateway:
+  mac: {MAC}
+  climate:
+    living_zone:
+      zone: '1'
+      name: Living Zone
+      heat: true
+  sensor:
+    living_probe:
+      where: '1'
+      name: Living Probe
+      class: temperature
+"""
+
+
+async def test_zone_and_probe_share_a_device_without_renaming_the_zone(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """BUG-3: docs/configuration.md sanctions this pairing, and it renamed the zone.
+
+    Both devices key as ``4-1``, which is also the device registry identifier, so the
+    two entities land on one device.  The sensor platform is set up after the climate
+    one, so its ``name`` used to overwrite the device name - and the climate entity's
+    friendly name *is* the device name.
+    """
+    entry = make_entry(write_yaml(tmp_path, ZONE_AND_PROBE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+
+        assert hass.states.get("climate.living_zone").attributes["friendly_name"] == "Living Zone"
+        probe = hass.states.get("sensor.living_zone_living_probe")
+        assert probe is not None
+        assert probe.attributes["friendly_name"] == "Living Zone Living Probe"
+
+        # One device for both entities, named after the climate zone.
+        registry = er.async_get(hass)
+        device_registry = dr.async_get(hass)
+        device = device_registry.async_get_device_by_identifier((DOMAIN, f"{MAC}-4-1"), entry.entry_id)
+        assert device.name == "Living Zone"
+        assert {
+            item.unique_id
+            for item in er.async_entries_for_device(registry, device.id)
+        } == {f"{MAC}-4-1", f"{MAC}-4-1-temperature"}
 
 
 async def test_no_platform_unload_entry(hass: HomeAssistant, tmp_path) -> None:

@@ -1286,6 +1286,20 @@ class MyHOMEGatewayHandler:
             )
 
     # ------------------------------------------------------------------ energy throttle
+    def _sensor_cfg(self, entity_key: str) -> dict[str, Any]:
+        """Configuration of one sensor, whichever way its bus interface is spelled.
+
+        NIT-6: the throttle looked the key up verbatim while ``_dispatch_to_entities``
+        goes through ``_entity_key_candidates``, so a ``#4#3``-spelled key would have
+        silently fallen back to the built-in defaults instead of the configured ones.
+        """
+        sensors = self._platform_cfg(SENSOR)
+        for key in _entity_key_candidates(entity_key):
+            cfg = sensors.get(key)
+            if isinstance(cfg, dict):
+                return cfg
+        return {}
+
     def _energy_settings_for(self, entity_key: str) -> _EnergySettings:
         """Per-sensor throttle settings: sensor dict (canonical keys, already merged
         with ``sensor_defaults`` by validate.py) -> gateway ``sensor_defaults`` -> code defaults."""
@@ -1294,8 +1308,7 @@ class MyHOMEGatewayHandler:
             return cached
         defaults = self._gw_cfg().get(CONF_SENSOR_DEFAULTS)
         defaults = defaults if isinstance(defaults, dict) else {}
-        sensor_cfg = self._platform_cfg(SENSOR).get(entity_key)
-        sensor_cfg = sensor_cfg if isinstance(sensor_cfg, dict) else {}
+        sensor_cfg = self._sensor_cfg(entity_key)
 
         def _value(key: str, fallback: float, cast: type) -> Any:
             raw = sensor_cfg.get(key, defaults.get(key, fallback))
@@ -1337,8 +1350,8 @@ class MyHOMEGatewayHandler:
         return accept
 
     def _sensor_display_name(self, entity_key: str) -> str:
-        cfg = self._platform_cfg(SENSOR).get(entity_key)
-        name = cfg.get(CONF_NAME) if isinstance(cfg, dict) else None
+        cfg = self._sensor_cfg(entity_key)
+        name = cfg.get(CONF_NAME)
         return str(name).strip() if isinstance(name, str) and name.strip() else entity_key
 
     def _log_energy_suppression(self, entity_key: str, watts: int, settings: _EnergySettings) -> None:
