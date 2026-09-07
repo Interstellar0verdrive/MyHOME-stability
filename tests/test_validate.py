@@ -971,6 +971,63 @@ def test_climate_where_is_treated_as_zone():
         check(gw(climate={"z": {"zone": "abc"}}))
 
 
+@pytest.mark.parametrize("padded", ["01", "09", "0", "007"])
+def test_a_zero_padded_zone_is_normalised_to_the_form_the_bus_uses(padded):
+    """P4-BUG-1: ``zone: '01'`` used to key ``4-01`` while its frames arrive as ``4-1``.
+
+    The entity was created, was available and stayed ``unknown`` for ever, with no
+    error anywhere - the exact failure ``_reject_unusable_interface`` exists to
+    prevent for ``interface:``, reached through the zone instead. And the padded form
+    is what a careful user writes: the validator's own advice is "always quote every
+    'where:' value", and every actuator address in the documentation is padded.
+
+    Mutation caught: ``return str(int(text))`` -> ``return text``.
+    """
+    if padded == "0":  # zone 0 does not exist; only 1..99 are zones
+        with pytest.raises(Invalid, match="Invalid zone"):
+            check(gw(climate={"z": {"zone": padded, "name": "Z"}}))
+        return
+    out = check(gw(climate={"z": {"zone": padded, "name": "Z"}}))
+    assert list(platforms(out)["climate"]) == [f"4-{int(padded)}"]
+    # The stored zone is what every ``_full_where`` the platform builds is made of.
+    assert platforms(out)["climate"][f"4-{int(padded)}"]["zone"] == str(int(padded))
+    # ``where:`` is a documented alias of ``zone:`` and must behave identically.
+    out = check(gw(climate={"z": {"where": padded, "name": "Z"}}))
+    assert list(platforms(out)["climate"]) == [f"4-{int(padded)}"]
+
+
+def test_a_zero_padded_zone_is_still_a_duplicate_of_the_unpadded_one():
+    """P4-BUG-1, second consequence: ``4-01`` and ``4-1`` used to be two devices.
+
+    Two climate zones both addressing zone 1 are a configuration error the validator
+    is supposed to catch (val-01); before the normalisation the padded spelling
+    walked straight past it and produced a second, permanently dead entity.
+    """
+    with pytest.raises(Invalid, match="climate 'z2' collides with climate 'z1'"):
+        check(gw(climate={"z1": {"zone": "1"}, "z2": {"zone": "01"}}))
+    with pytest.raises(Invalid, match="climate 'z2' collides with climate 'z1'"):
+        check(gw(climate={"z1": {"zone": 1}, "z2": {"where": "01"}}))
+
+
+def test_a_zero_padded_zone_still_shares_its_device_with_the_temperature_probe(caplog):
+    """P4-BUG-1, third consequence: the BUG-3 pairing is keyed on ``4-N``.
+
+    A zone written ``'01'`` and its WHO 4 probe written ``'1'`` used to land on two
+    different device keys, so the reconciliation never ran: the probe's name silently
+    overwrote the zone's, which is the very bug BUG-3 fixed.
+    """
+    with caplog.at_level(logging.INFO, logger="custom_components.myhome"):
+        out = check(
+            gw(
+                climate={"living": {"zone": "01", "name": "Living Zone"}},
+                sensor={"probe": {"where": "1", "name": "Living Probe", "class": "temperature"}},
+            )
+        )
+    assert platforms(out)["sensor"]["4-1"]["name"] == "Living Zone"
+    assert platforms(out)["sensor"]["4-1"]["entity_name"] == "Living Probe"
+    assert any("both address zone 4-1" in rec.getMessage() for rec in caplog.records)
+
+
 def test_nameless_zones_behind_a_central_unit_keep_their_number():
     """BUG-2: only the bare ``#0`` is "Central unit".
 

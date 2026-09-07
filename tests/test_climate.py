@@ -658,6 +658,48 @@ async def test_central_unit_frame_is_not_applied_to_zone_1(hass: HomeAssistant, 
         assert hass.states.get("climate.zone_one").attributes["current_temperature"] == 21.5
 
 
+# ------------------------------------------------------- a zero-padded zone (P4-BUG-1)
+PADDED_ZONE_YAML = f"""
+gateway:
+  mac: {MAC}
+  climate:
+    padded_zone:
+      where: '01'
+      name: Padded Zone
+      heat: true
+"""
+
+
+async def test_a_zone_written_with_a_padded_where_still_receives_its_frames(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P4-BUG-1: ``where: '01'`` used to key the device ``4-01`` and never hear a frame.
+
+    The validator's own advice is "always quote every 'where:' value", and every
+    actuator address in the documentation is written padded, so ``'01'`` is what a
+    careful user writes for zone 1. The entity was created, was named, was available
+    and stayed ``unknown`` for ever - the only trace being the dispatcher's DEBUG
+    line "No entity configured for 4-1".
+
+    Routed through ``_dispatch_message`` on purpose: this is a test about the *key*
+    the frame is looked up by, which calling ``handle_event`` directly would skip.
+    """
+    entry = make_entry(write_yaml(tmp_path, PADDED_ZONE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        # The key OWNd builds for every WHO 4 frame of zone 1, from ``int(zone)``.
+        assert OWNHeatingEvent("*4*110*1##").entity == "4-1"
+        assert list(hass.data[DOMAIN][MAC][CONF_PLATFORMS][CLIMATE_DOMAIN]) == ["4-1"]
+
+        await handler._dispatch_message(OWNHeatingEvent("*4*110*1##"), from_monitor=True)  # noqa: SLF001
+        await handler._dispatch_message(OWNHeatingEvent("*#4*1*0*0215##"), from_monitor=True)  # noqa: SLF001
+        await hass.async_block_till_done()
+        state = hass.states.get("climate.padded_zone")
+        assert state.state == HVACMode.HEAT
+        assert state.attributes["current_temperature"] == 21.5
+
+
 # ------------------------------------------------- climate + temperature probe (BUG-3)
 ZONE_AND_PROBE_YAML = f"""
 gateway:

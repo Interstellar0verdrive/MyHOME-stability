@@ -477,7 +477,19 @@ class ButtonList:
 
 
 class Zone:
-    """Thermoregulation zone: ``#0`` (central unit), ``1``..``99`` or ``#0#<zone>``."""
+    """Thermoregulation zone: ``#0`` (central unit), ``1``..``99`` or ``#0#<zone>``.
+
+    P4-BUG-1: a numeric zone is always returned **unpadded**, whether the user wrote
+    it as an integer (``zone: 1``) or as a string (``zone: '01'``, or the same value
+    under the ``where:`` alias).  The zone is the tail of the device key (``4-1``) and
+    every WHO 4 frame arrives keyed from ``int(zone)``, so a key built from ``'01'``
+    would be ``4-01`` and would never meet a single frame: the entity is created, is
+    available, and stays ``unknown`` for ever with no error anywhere.  The padded form
+    is exactly what a user writes after following the validator's own advice to quote
+    every ``where:`` value, so it has to be normalised rather than refused.  The
+    central-unit spellings ``#0`` and ``#0#N`` keep their own text (the regex below
+    already refuses a padded ``#0#01``).
+    """
 
     def __init__(self, msg: str | None = None) -> None:
         self.msg = msg
@@ -490,7 +502,7 @@ class Zone:
             if text == "#0" or re.fullmatch(r"#0#[1-9][0-9]?", text):
                 return text
             if text.isdigit() and 1 <= int(text) <= 99:
-                return text
+                return str(int(text))
         raise Invalid(self.msg or f"Invalid zone {v!r}, expected '#0' (central unit), '1'-'99' or '#0#<zone>'.")
 
     def __repr__(self) -> str:
