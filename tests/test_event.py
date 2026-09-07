@@ -182,6 +182,35 @@ async def test_cen_frames_fire_the_entity(hass: HomeAssistant, tmp_path) -> None
         assert hass.states.get("event.keypad_soggiorno_scenario_control").state == STATE_UNKNOWN
 
 
+async def test_the_cen_press_sequence_is_the_documented_one(hass: HomeAssistant, tmp_path) -> None:
+    """Pin the four CEN frames to the story the documentation tells.
+
+    CEN reuses the CEN+ event names for different things, which is the trap a user
+    copying a CEN+ recipe falls into:
+
+    - ``*15*N*W##``    the button was **pressed** -- also sent at the start of a long
+      press, so it is not "the user tapped the button";
+    - ``*15*N#1*W##``  released after a short press -- *this* is a tap;
+    - ``*15*N#3*W##``  extended pressure, retransmitted while the button stays held
+      (there is no separate ``..._repeat`` name on CEN, unlike CEN+);
+    - ``*15*N#2*W##``  released after an extended press.
+    """
+    async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
+        payloads = _capture(hass, EVENT_CEN)
+        for frame in ("*15*1*51##", "*15*1#3*51##", "*15*1#3*51##", "*15*1#2*51##", "*15*1#1*51##"):
+            await feed_frame(hass, frame)
+
+        assert [item["event"] for item in payloads] == [
+            "pushbutton_short_press",
+            "pushbutton_long_press",
+            "pushbutton_long_press",  # the same name twice: the bus repeats it
+            "pushbutton_long_release",
+            "pushbutton_short_release",
+        ]
+        state = hass.states.get("event.keypad_ingresso_scenario_control")
+        assert state.attributes[ATTR_EVENT_TYPE] == "pushbutton_short_release"
+
+
 async def test_mac_is_in_both_bus_payloads(hass: HomeAssistant, tmp_path) -> None:
     """0.4.0: `mac` disambiguates multi-gateway setups (additive, documented)."""
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):

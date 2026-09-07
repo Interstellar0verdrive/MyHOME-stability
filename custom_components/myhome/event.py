@@ -102,6 +102,12 @@ class MyHOMEScenarioControl(MyHOMEEntity, EventEntity):
     """
 
     _attr_device_class = EventDeviceClass.BUTTON
+    # Kept on purpose, although ``MyHOMEEntity`` reserves translation keys for
+    # *secondary* entities and a scenario control owns exactly one entity: the key is
+    # what makes the entity_id ``event.<name>_scenario_control``, which the docs, the
+    # recipes and every existing user automation already name.  Dropping it (and
+    # setting ``_attr_name = None``) would rename every user's entity and lose its
+    # history, so it must never be "cleaned up" without a migration step.
     _attr_translation_key = CONF_SCENARIO_CONTROL
 
     def __init__(
@@ -147,11 +153,6 @@ class MyHOMEScenarioControl(MyHOMEEntity, EventEntity):
             address_key: object_id if address_key == CONF_OBJECT else where,
             CONF_BUTTONS: self._buttons,
         }
-
-    @property
-    def buttons(self) -> list[int]:
-        """Pushbutton numbers declared for this control (used by the device triggers)."""
-        return self._buttons
 
     def handle_scenario_event(self, event_type: str, pushbutton: int) -> None:
         """A CEN/CEN+ frame for this control arrived: publish it as an entity event.
