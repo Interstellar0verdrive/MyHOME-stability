@@ -7,7 +7,8 @@ and the gateway handler's listening/sending loops are replaced by idle coroutine
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,21 @@ HOST = "192.0.2.135"
 PASSWORD = "12345"
 
 TEST_OK = {"Success": True, "Message": None}
+
+
+async def wait_until(predicate: Callable[[], bool], timeout: float = 3.0) -> None:
+    """Poll ``predicate`` until true or fail.
+
+    Lives here rather than in one test module because several of them wait on a
+    background task Home Assistant deliberately keeps out of
+    ``async_block_till_done`` (config-entry background tasks); importing it from a
+    ``test_*.py`` would execute that whole module as a side effect.
+    """
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        if time.monotonic() > deadline:
+            raise AssertionError("condition not met in time")
+        await asyncio.sleep(0.005)
 
 # Data as written by the v0.1.x manual config flow (1-tuples persisted as JSON lists).
 LEGACY_ENTRY_DATA_V1: dict[str, Any] = {

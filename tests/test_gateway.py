@@ -77,7 +77,7 @@ from custom_components.myhome.own_session import (
     parse_frame,
 )
 
-from .helpers_core import ENTRY_DATA_V2, MAC
+from .helpers_core import ENTRY_DATA_V2, MAC, wait_until
 from .helpers_platforms import FakeGatewayStats
 
 SIGNAL = SIGNAL_GATEWAY_CONNECTION.format(mac=MAC)
@@ -87,15 +87,6 @@ LOGGER_NAME = LOGGER.name
 
 def frame(raw: str) -> OWNMessage | str:
     return parse_frame(raw, LOGGER, "[test]")
-
-
-async def wait_until(predicate: Callable[[], bool], timeout: float = 3.0) -> None:
-    """Poll ``predicate`` until true or fail."""
-    deadline = time.monotonic() + timeout
-    while not predicate():
-        if time.monotonic() > deadline:
-            raise AssertionError("condition not met in time")
-        await asyncio.sleep(0.005)
 
 
 # --------------------------------------------------------------------------- fakes
