@@ -576,7 +576,7 @@ async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFix
                 event.instances[1].feed("*1*1*11##")
                 await asyncio.sleep(0.05)
             assert len(event.instances) == 2
-    assert any("probe went unanswered" in record.message for record in caplog.records)
+    assert any("no answer on either session" in record.message for record in caplog.records)
 
 
 async def test_answered_probe_keeps_the_session() -> None:

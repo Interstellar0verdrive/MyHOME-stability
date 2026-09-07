@@ -908,7 +908,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 if self._inverted:
                     position = 100 - position
                 self._finish_movement(position)
-                # Status 11-14 carry a position *and* a direction: keep it visible.
+                # Dimension 10 also carries the state, and 11-14 mean "moving". Which
+                # position those four carry is not settled: OWNd reads it as the
+                # position the run *started* from ("is opening from initial position
+                # N", OWNd/message.py:593 and 604), while for state 10 it reads it as
+                # the current one ("is opened at N%", message.py:583). The value is
+                # written either way, because under both readings it is the
+                # actuator's own report of where the cover is or was when this run
+                # began - which is also our last known position, so it can only
+                # confirm it, never rewind it to something we never saw. What the
+                # 11-14 frames add is the direction, and that is kept visible.
                 if opening:
                     self._set_advanced_direction(OPENING)
                 elif closing:

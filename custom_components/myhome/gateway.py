@@ -1033,12 +1033,13 @@ class MyHOMEGatewayHandler:
 
     async def _check_idle(self) -> None:
         """Idle watchdog (gw-03): after ``idle_timeout`` without a monitor frame, probe
-        through the command session; reconnect only if that probe went unanswered on
-        *both* sessions within ``probe_window``.
+        through the command session; reconnect only if *neither* session produced
+        anything within ``probe_window``.
 
-        A status request the gateway ACKed proves it is alive even when it does not
-        mirror command replies onto the monitor, so in that case the monitor is left
-        to TCP keepalive instead of being dropped and rebuilt (R7).
+        Any status request the gateway ACKs on the command port proves it is alive -
+        it need not be the probe itself - even when it does not mirror command replies
+        onto the monitor, so in that case the monitor is left to TCP keepalive instead
+        of being dropped and rebuilt (R7).
         """
         now = self._now()
         idle = now - self._last_rx
@@ -1068,14 +1069,14 @@ class MyHOMEGatewayHandler:
                 self._log_limited(
                     logging.DEBUG,
                     "probe-not-mirrored",
-                    "%s The probe was answered on the command session but not mirrored on the monitor; "
-                    "not reconnecting",
+                    "%s The command session answered a status request after the probe went out but nothing "
+                    "was mirrored on the monitor; not reconnecting",
                     self.log_id,
                 )
                 self._last_rx = now
                 self._probe_sent_at = None
                 return
-            raise SessionError(f"no event for {idle:.0f} s and the probe went unanswered")
+            raise SessionError(f"no event for {idle:.0f} s and no answer on either session")
 
     def _probe_command(self) -> OWNCommand:
         """A harmless status request whose reply shows up on the monitor session.

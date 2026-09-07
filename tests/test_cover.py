@@ -678,6 +678,18 @@ async def test_advanced_status_keeps_the_direction(hass: HomeAssistant, tmp_path
         await feed_event(hass, cover, "*#2*83*10*10*60*0*0##")
         assert hass.states.get(entity_id).state == CoverState.OPEN
 
+        # Review 3 / C3-8: OWNd reads the number in a 11-14 frame as the position the
+        # run *started* from, and the one in a state-10 frame as the current position.
+        # Both are the actuator's own value and both are written, so a run that starts
+        # at 20 reports 20 until the actuator says otherwise - it never reports a
+        # position the actuator did not send.
+        await feed_event(hass, cover, "*#2*83*10*10*80*0*0##")
+        assert hass.states.get(entity_id).attributes[ATTR_CURRENT_POSITION] == 80
+        await feed_event(hass, cover, "*#2*83*10*11*20*0*0##")
+        state = hass.states.get(entity_id)
+        assert state.state == CoverState.OPENING
+        assert state.attributes[ATTR_CURRENT_POSITION] == 20
+
 
 async def test_inverted_advanced_cover_inverts_the_position_too(hass: HomeAssistant, tmp_path) -> None:
     async with setup_myhome(hass, tmp_path, INVERTED_ADVANCED_YAML) as (_entry, commands):
@@ -858,6 +870,19 @@ async def test_keypad_movement_after_our_stop_is_honoured(
         await _advance(hass, freezer, 40)
         assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
 
+        # Review 3 / C3-9: a stop on a cover that was *not* moving interrupts nothing,
+        # so it can be echoed by nothing either - the next keypad press is honoured
+        # whatever its direction. Mutation caught: `_stopped_direction = interrupted
+        # or OPENING`, which swallows the press below.
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+        await feed_event(hass, cover, "*2*0*81##")  # somebody stops it at the wall
+        assert hass.states.get(ENTITY).state == CoverState.OPEN
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 0.5)
+        await feed_event(hass, cover, "*2*1*81##")
+        assert hass.states.get(ENTITY).state == CoverState.OPENING
+
 
 async def test_same_direction_echo_after_our_stop_is_ignored_then_rechecked(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
@@ -881,7 +906,8 @@ async def test_same_direction_echo_after_our_stop_is_ignored_then_rechecked(
 
         await _advance(hass, freezer, 1.0)
         await feed_event(hass, cover, "*2*2*81##")  # the gateway's late copy - or a new press
-        assert hass.states.get(ENTITY).state != CoverState.CLOSING
+        # `!= CLOSING` would also pass on `unknown` / `unavailable`: say what it is.
+        assert hass.states.get(ENTITY).state == CoverState.OPEN
         assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == stopped_at
 
         # Bounded recovery: the actuator is asked what it is really doing.

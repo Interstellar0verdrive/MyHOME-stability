@@ -236,13 +236,16 @@ ALL_DEVICE_SUPPORTED_TYPES: set[str] = {
     DEVICE_TYPE_BUS_AUX,
 }
 
-# Device type -> the ``myhome.yaml`` section the device would be declared under.
+# Device type -> the Home Assistant platform the device ends up on, which for every
+# row but one is also the ``myhome.yaml`` section it is declared under.  The exception
+# is a CEN / CEN+ scenario control: it becomes an ``event`` entity, but it is written
+# under ``scenario_control:`` - there is no ``event:`` section in the file schema.
 # This is published verbatim as the ``platform`` key of ``myhome_device_discovered``
-# (see docs/services-and-events.md), so every value here is a promise that such a
-# section exists and accepts this device's WHO.  ``None`` means "no section can hold
-# it": the honest answer for a family the integration has no platform for, and the
-# reason the round-1 "button" -> "event" fix was needed for scenario controls (a stale
-# value sends users looking for a ``button.*`` entity that will never exist).
+# (see docs/services-and-events.md), so every value here is a promise that the
+# integration really builds that kind of entity for this WHO.  ``None`` means it
+# builds none: the honest answer for a family the integration has no platform for, and
+# the reason the round-1 "button" -> "event" fix was needed for scenario controls (a
+# stale value sends users looking for a ``button.*`` entity that will never exist).
 DEVICE_TYPE_TO_PLATFORM: dict[str, str | None] = {
     DEVICE_TYPE_BUS_ON_OFF_SWITCH: "light",
     DEVICE_TYPE_BUS_DIMMER: "light",
