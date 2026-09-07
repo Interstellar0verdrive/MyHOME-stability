@@ -33,8 +33,11 @@ from custom_components.myhome.const import (
     DEVICE_TYPE_BUS_THERMO_ZONE,
     DEVICE_TYPE_TO_PLATFORM,
     DOMAIN,
+    PROTOCOL_CEN,
+    PROTOCOL_CEN_PLUS,
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
+    scenario_control_key,
 )
 from custom_components.myhome.discovery import (
     _DEVICE_CATEGORY,
@@ -460,6 +463,12 @@ def test_a_device_behind_a_bus_interface_keeps_its_interface(hass: HomeAssistant
 
     platform, cfg = generate_suggested_config(info)
     assert (platform, cfg["where"], cfg["interface"]) == ("light", "11", "3")
+    # The name is the ONLY human-readable difference between this block and the
+    # main-bus one in ``myhome_discovered.yaml``, which is the file the user copies
+    # from: two blocks both called "... Switch 11" cannot be told apart by eye, and
+    # the `interface:` line is the sort of detail a reader skips.
+    assert info["name"] == "MyHOME Bus On Off Switch 11#4#3"
+    assert cfg["name"].endswith("11#4#3")
 
 
 def test_the_two_spellings_of_an_interface_are_the_same_device(hass: HomeAssistant, tmp_path) -> None:
@@ -474,6 +483,66 @@ def test_the_two_spellings_of_an_interface_are_the_same_device(hass: HomeAssista
         service.handle_discovery_message(OWNEvent.parse(frame))
 
     assert list(service.get_discovered_devices()) == [f"{MAC}-1-11#4#03"]
+
+
+def test_a_bus_interface_out_of_range_is_not_a_main_bus_device(hass: HomeAssistant, tmp_path) -> None:
+    """A ``#4#`` value the integration cannot use must drop the frame, not the interface.
+
+    Why it matters in production: ``normalise_bus_interface`` answers ``None`` for
+    anything outside 0-15, and ``None`` is also how this module spells "on the main
+    bus".  A ``*1*1*11#4#16##`` frame was therefore discovered as ``{mac}-1-11`` and
+    suggested with no ``interface:`` at all -- the exact wrong suggestion reading the
+    interface was added to remove, this time for a device that is certainly not on the
+    main bus.  ``validate.BusInterface`` refuses the same value outright ("it must be
+    1 or 2 digits between 0 and 15"), so discovery refuses the frame too: no
+    suggestion is better than a wrong one.
+
+    An F422 local bus is a 0-15 field on the wire, so such a frame should not exist on
+    real hardware; what is pinned here is the failure mode, not the frame.
+
+    Mutation caught: dropping the ``if raw_interface and interface is None`` guard -
+    the device comes back as the main-bus ``{mac}-1-11``.
+    """
+    service = make_service(hass, tmp_path)
+    for frame in ("*1*1*11#4#16##", "*15*1*11#4#16##"):
+        service.handle_discovery_message(OWNEvent.parse(frame))
+
+    assert service.get_discovered_devices() == {}
+    assert service.suggestions.pending_count == 0
+    assert service.suggestions._skipped == []  # noqa: SLF001
+    # The two values on either side of the range boundary are still real devices.
+    for frame, unique_id in (("*1*1*11#4#0##", f"{MAC}-1-11#4#00"), ("*1*1*12#4#15##", f"{MAC}-1-12#4#15")):
+        service.handle_discovery_message(OWNEvent.parse(frame))
+        assert unique_id in service.get_discovered_devices(), frame
+
+
+def test_a_discovered_keypad_id_is_not_its_registry_identifier(hass: HomeAssistant, tmp_path) -> None:
+    """The id published for a scenario control identifies the frame, not the device.
+
+    Why it matters in production: ``myhome_device_discovered`` and
+    ``myhome_discovery_completed`` invite exactly one automation - take an id out of
+    the event and look the device up in the registry - and for every device that lands
+    on a platform section that works, because the id is ``{mac}-{validate.device_key}``.
+    A CEN/CEN+ control is the exception: the integration keys a *declared* control
+    ``cenplus-<object>`` / ``cen-<where>`` (``const.scenario_control_key``), so the
+    registry identifier of this keypad is ``{mac}-cenplus-25`` while discovery
+    publishes ``{mac}-25-225``, and the lookup silently finds nothing.
+
+    The two spellings are pinned side by side so the divergence stays deliberate: it
+    is what ``discovery.py``'s comment and ``docs/services-and-events.md`` have to keep
+    saying.  An alarm device has no registry entry at all, hence the third assertion.
+    """
+    keypad = device_info(hass, tmp_path, "*25*21#3*225##")
+    assert keypad["unique_id"] == f"{MAC}-25-225"
+    assert keypad["unique_id"] != f"{MAC}-{scenario_control_key(PROTOCOL_CEN_PLUS, 25)}"
+
+    cen_keypad = device_info(hass, tmp_path, "*15*1*11##")
+    assert cen_keypad["unique_id"] == f"{MAC}-15-11"
+    assert cen_keypad["unique_id"] != f"{MAC}-{scenario_control_key(PROTOCOL_CEN, 11)}"
+
+    # ...and an alarm sensor is published with no platform, so it has no device at all.
+    assert device_info(hass, tmp_path, "*5*11*12##")["platform"] is None
+
 
 
 async def test_the_main_bus_and_the_riser_are_two_devices(
@@ -703,10 +772,31 @@ def no_discovery_sleep(hold_from: int | None = None) -> Iterator[_NoSleep]:
         yield recorder
 
 
+# A myhome.yaml that already declares the two keypads the run below sees, so the
+# end-of-run report has something real to stay quiet about.  ``object: 25`` is CEN+
+# WHERE 225 and the CEN control is addressed by its WHERE.
+DECLARED_KEYPADS_YAML = f"""
+gateway:
+  mac: {MAC}
+  scenario_control:
+    kitchen_keypad:
+      object: 25
+      name: Kitchen Keypad
+    hallway_keypad:
+      protocol: cen
+      where: '11'
+      name: Hallway Keypad
+  light:
+    light_test:
+      where: '11'
+      name: Light Test
+"""
+
+
 @asynccontextmanager
-async def running_gateway(hass: HomeAssistant, tmp_path) -> AsyncIterator[Any]:
+async def running_gateway(hass: HomeAssistant, tmp_path, yaml_text: str | None = None) -> AsyncIterator[Any]:
     """A loaded config entry with the real handler and its real discovery service."""
-    entry = make_entry(write_yaml(tmp_path))
+    entry = make_entry(write_yaml(tmp_path) if yaml_text is None else write_yaml(tmp_path, yaml_text))
     entry.add_to_hass(hass)
     with mock_gateway():
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -882,6 +972,54 @@ async def test_a_device_that_cannot_be_declared_is_reported_apart_from_one_that_
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_a_keypad_already_declared_is_not_reported_as_one_to_declare(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """End to end: a run over a plant whose keypads are configured says nothing.
+
+    Why it matters in production: "N device(s) must be declared by hand under
+    ``scenario_control:``" is written as an instruction, and it is the only thing a
+    run ever says about a CEN/CEN+ control.  ``MyHOMEDiscoverySuggestions.add`` gave
+    up as soon as the writer said "cannot suggest this" - which is always, for a
+    keypad - so it never asked whether the control was already declared, and the owner
+    of a plant configured months ago was told to declare it again on every run.  A
+    lamp in the same file is filtered out and never mentioned, so the asymmetry was
+    not something a reader could infer.
+
+    The declared spellings are the two real ones: a CEN+ control keyed by ``object``
+    (WHERE 225) and a CEN control keyed by ``where``.
+
+    Mutation caught: dropping the ``is_scenario_control_configured`` check from
+    ``add()`` - the run closes with "2 device(s) must be declared by hand".
+    """
+    async with running_gateway(hass, tmp_path, DECLARED_KEYPADS_YAML) as entry:
+        service = hass.data[DOMAIN][MAC][CONF_ENTITY].discovery_service
+        assert set(hass.data[DOMAIN][MAC][CONF_PLATFORMS]["event"]) == {"cenplus-25", "cen-11"}
+
+        with no_discovery_sleep():
+            await hass.services.async_call(DOMAIN, SERVICE_START_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+            service.handle_discovery_message(OWNEvent.parse("*25*21#3*225##"))  # the CEN+ keypad
+            service.handle_discovery_message(OWNEvent.parse("*15*1*11##"))  # the CEN keypad
+            service.handle_discovery_message(OWNEvent.parse("*25*21#3*299##"))  # object 99: NOT declared
+            caplog.clear()
+            await hass.services.async_call(DOMAIN, SERVICE_STOP_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+
+        # All three were seen; only the undeclared one is something to do.
+        assert len(service.get_discovered_devices()) == 3
+        reported = [line for line in caplog.text.splitlines() if "declared by hand" in line]
+        assert len(reported) == 1, caplog.text
+        assert "1 device(s) must be declared by hand" in reported[0]
+        assert "bus_cenplus_scenario_control@299" in reported[0]
+        assert "@225" not in reported[0]
+        assert "bus_cen_scenario_control" not in reported[0]
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
 
 
 async def test_a_second_start_does_not_restart_the_run(hass: HomeAssistant, tmp_path) -> None:

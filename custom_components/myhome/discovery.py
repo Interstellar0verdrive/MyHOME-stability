@@ -278,12 +278,15 @@ class MyHOMEDeviceDiscoveryService:
             # has taken the WHO 1 / WHO 2 groups: the ``*5*<what>*#<zone>##`` frames
             # of a burglar alarm, where ``#N`` is zone N and not a group -- dropped
             # deliberately, because an alarm zone has no entity and no
-            # ``myhome.yaml`` section, so announcing it would only grow the
-            # "must be declared by hand" count with something that cannot be declared
-            # at all.  A real alarm *sensor* frame (``*5*<what>*<zone><sensor>##``,
-            # e.g. ``*5*11*12##`` = sensor 2 of zone 1) carries a plain WHERE, gets
-            # through, and is what makes ``platform: null`` a value the public
-            # discovery event really publishes.
+            # ``myhome.yaml`` section: announcing it would add to the run's report a
+            # device the user can do nothing about.  The report already carries the
+            # alarm frames that *do* get through -- a real alarm *sensor* frame
+            # (``*5*<what>*<zone><sensor>##``, e.g. ``*5*11*12##`` = sensor 2 of zone 1)
+            # carries a plain WHERE, so it is announced, counted in
+            # ``config_flow_discovery``'s "belong to a family this integration has no
+            # support for" clause, and is what makes ``platform: null`` a value the
+            # public discovery event really publishes -- and one zone-level frame per
+            # zone on top of them is noise.
             return None
 
         device_type = self._message_to_device_type[message_type](message)
@@ -300,7 +303,23 @@ class MyHOMEDeviceDiscoveryService:
         # the two shared one unique id, so whichever answered second was silently
         # never announced at all.  ``normalise_bus_interface`` unpads it, because the
         # bus sends ``#4#3`` and ``#4#03`` for the same interface.
-        interface = normalise_bus_interface(getattr(message, "interface", None))
+        raw_interface = getattr(message, "interface", None)
+        interface = normalise_bus_interface(raw_interface)
+        if raw_interface and interface is None:
+            # The frame carries an interface this integration cannot use (an F422 local
+            # bus is a 0-15 field, so ``#4#16`` should not exist on real hardware).
+            # ``None`` here would mean "on the main bus", and the device would be
+            # announced and suggested as the main-bus device of the same address --
+            # which is the very defect reading the interface was added to fix.
+            # ``validate.BusInterface`` refuses such a value outright, so discovery
+            # refuses the frame rather than inventing an identity for it.
+            LOGGER.debug(
+                "%s Discovery ignoring `%s`: bus interface %r is not usable (expected 0-15)",
+                self.gateway_handler.log_id,
+                message,
+                raw_interface,
+            )
+            return None
 
         if device_type == DEVICE_TYPE_BUS_THERMO_CU:
             # The central unit is addressed ``#0``, never ``0`` (see
@@ -320,7 +339,16 @@ class MyHOMEDeviceDiscoveryService:
         # ``validate.device_key`` is the one definition of a device's identity, and
         # this id is ``{mac}-{device_key}`` -- the same string as the device registry
         # identifier and the tail of every entity ``unique_id``, interface zero
-        # padded and all.  Building it here by hand is how the spellings drift.
+        # padded and all -- for every device that lands on a platform section.
+        # Building it here by hand is how the spellings drift.
+        #
+        # A CEN / CEN+ scenario control is the exception, and a user matching these ids
+        # against the device registry has to know it: the integration keys a declared
+        # control ``cenplus-<object>`` / ``cen-<where>`` (``const.scenario_control_key``,
+        # registry identifier ``{mac}-cenplus-25``, entity id ``{mac}-cenplus-25-event``),
+        # while the id published here for the same keypad is ``{mac}-25-225`` -- it
+        # identifies the frame, not the registry device.  An alarm device has no
+        # registry entry at all.
         key = device_key({CONF_WHO: who, CONF_WHERE: where, CONF_BUS_INTERFACE: interface})
         device_info: dict[str, Any] = {
             # unique per gateway AND WHO (a light and a shutter may share a WHERE)

@@ -39,14 +39,18 @@ from custom_components.myhome.config_flow_discovery import (
     _merge_and_write,
     generate_suggested_config,
     is_device_configured,
+    is_scenario_control_configured,
+    scenario_control_address,
 )
 from custom_components.myhome.const import (
     CONF_FILE_PATH,
     CONF_PLATFORMS,
     DEVICE_TYPE_BUS_ALARM_SYSTEM,
+    DEVICE_TYPE_BUS_ALARM_ZONE,
     DEVICE_TYPE_BUS_AUTOMATION,
     DEVICE_TYPE_BUS_AUX,
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
+    DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_DIMMER,
     DEVICE_TYPE_BUS_DRY_CONTACT_IR,
     DEVICE_TYPE_BUS_ENERGY_METER,
@@ -57,6 +61,9 @@ from custom_components.myhome.const import (
     DEVICE_TYPE_BUS_THERMO_ZONE,
     DISCOVERED_CONFIG_FILE,
     DOMAIN,
+    PROTOCOL_CEN,
+    PROTOCOL_CEN_PLUS,
+    scenario_control_key,
 )
 from custom_components.myhome.validate import config_schema
 
@@ -663,6 +670,152 @@ async def test_add_queues_only_new_suggestable_devices(hass: HomeAssistant, tmp_
         "discovered_18_5_1": {"who": "18", "where": "5#1", "name": "Main Meter", "class": "power"}
     }
     assert pending["climate"] == {"discovered_4_3": {"who": "4", "zone": "3", "name": "Bedroom Zone"}}
+
+
+# --------------------------------------------------------------------------------------
+# scenario controls: already declared, and how the report names them
+# --------------------------------------------------------------------------------------
+
+
+def test_scenario_control_address_redoes_the_arithmetic_the_gateway_does() -> None:
+    """Pins the WHERE -> object-number conversion against the gateway's own reading.
+
+    Why it matters in production: a declared keypad is stored under
+    ``cenplus-<object>`` / ``cen-<where>``, and ``gateway._fire_cenplus_event`` gets
+    that object from ``OWNCENPlusEvent.object`` (the WHERE without its leading ``2``).
+    Discovery keeps only the WHERE, so this function has to arrive at the same number:
+    if it drifts, the test below stops recognising a declared control and every run
+    goes back to telling the user to declare a keypad they already have.
+
+    Mutation caught: dropping the ``text[1:]`` for CEN+ (object 225 instead of 25),
+    or applying it to CEN as well (address 1 instead of 11).
+    """
+    assert scenario_control_address(PROTOCOL_CEN_PLUS, "225") == 25
+    assert scenario_control_address(PROTOCOL_CEN_PLUS, "22047") == 2047
+    assert scenario_control_address(PROTOCOL_CEN, "11") == 11
+    # Nothing on the bus produces these; the caller treats them as "not declared".
+    assert scenario_control_address(PROTOCOL_CEN_PLUS, "2") is None
+    assert scenario_control_address(PROTOCOL_CEN, "#4") is None
+
+
+async def test_a_scenario_control_already_declared_is_not_reported_as_one_to_declare(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A keypad the user already declared must not be counted in the report.
+
+    Why it matters in production: "N device(s) must be declared by hand under
+    ``scenario_control:``" is the only report a run produces about a CEN/CEN+ control,
+    and it is written as an instruction.  ``add()`` gave up as soon as
+    ``generate_suggested_config`` said "not suggestable", which is *always* for a
+    keypad, so the owner of a control configured months ago was told to go and declare
+    it again on every single run - while a light already in ``myhome.yaml`` is filtered
+    out three lines further down and never mentioned at all.
+
+    Mutation caught: removing the ``is_scenario_control_configured`` check from
+    ``add()``, or looking the control up by ``device_key`` (``25-225``) instead of by
+    ``scenario_control_key`` (``cenplus-25``), which is the key it is really stored
+    under.
+    """
+    entry = make_entry(tmp_path / "myhome.yaml")
+    _load_platforms(
+        hass,
+        MAC,
+        {"event": {scenario_control_key(PROTOCOL_CEN_PLUS, 25): {}, scenario_control_key(PROTOCOL_CEN, 11): {}}},
+    )
+    suggestions = MyHOMEDiscoverySuggestions(hass, entry)
+
+    # WHERE 225 is CEN+ object 25, WHERE 11 is CEN address 11: both declared.
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL, "225", "Kitchen Keypad")) is False
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL, "11", "Hallway Keypad")) is False
+    assert suggestions._skipped == []  # noqa: SLF001 - the report list is the unit under test
+    assert suggestions._skipped_report() == ""  # noqa: SLF001
+
+    # ...and one that is NOT declared is still reported, or the fix would be a silence.
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL, "226", "Study Keypad")) is False
+    assert suggestions._skipped == ["bus_cenplus_scenario_control@226"]  # noqa: SLF001
+
+
+async def test_a_declared_keypad_of_another_gateway_is_still_reported(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The lookup is per gateway, like every other ``hass.data`` lookup here.
+
+    Why it matters in production: two gateways can carry the same CEN+ object number,
+    and the whole point of the MAC in the key is that they are different keypads.
+    Filtering a run of gateway A because gateway B declares that object would hide a
+    device the user really does have to declare.
+
+    Mutation caught: looking the control up in ``hass.data[DOMAIN]`` without the MAC.
+    """
+    _load_platforms(hass, MAC2, {"event": {scenario_control_key(PROTOCOL_CEN_PLUS, 25): {}}})
+    suggestions = MyHOMEDiscoverySuggestions(hass, make_entry(tmp_path / "myhome.yaml"))
+
+    assert is_scenario_control_configured(
+        hass, MAC, {"device_type": DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL, "where": "225"}
+    ) is False
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL, "225", "Kitchen Keypad")) is False
+    assert suggestions._skipped == ["bus_cenplus_scenario_control@225"]  # noqa: SLF001
+
+
+async def test_the_report_tells_two_keypads_at_the_same_address_apart(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The report names a device by its full bus address, interface included.
+
+    Why it matters in production: WHO 15 is one of the three interface-capable WHOs,
+    so a CEN keypad on the main bus and one at the same WHERE on a private riser are
+    two devices - and since discovery learned to read the F422 interface, a run really
+    does see both.  Named by their bare WHERE they were the same string twice, so the
+    line read "2 device(s) ... (bus_cen_scenario_control@11,
+    bus_cen_scenario_control@11)", which looks like a bug in the counter rather than
+    like two keypads.  These names are the only handle the user has on a device the
+    run could not suggest.
+
+    Mutation caught: going back to ``f"{device_type}@{device_info['where']}"`` - the
+    two entries collapse into the same string.
+    """
+    suggestions = MyHOMEDiscoverySuggestions(hass, make_entry(tmp_path / "myhome.yaml"))
+    _load_platforms(hass, MAC, {})
+
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL, "11", "Main Bus Keypad")) is False
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL, "11", "Riser Keypad", "3")) is False
+
+    assert suggestions._skipped == [  # noqa: SLF001
+        "bus_cen_scenario_control@11",
+        "bus_cen_scenario_control@11#4#3",
+    ]
+    report = suggestions._skipped_report()  # noqa: SLF001
+    assert "2 device(s)" in report
+    assert "bus_cen_scenario_control@11#4#3" in report
+
+
+async def test_the_report_says_so_when_it_truncates_its_list(hass: HomeAssistant, tmp_path: Path) -> None:
+    """A count of eleven with ten names must not look like a miscount.
+
+    Why it matters in production: a plant with a dozen keypads is ordinary, and the
+    report spells out at most ten of them.  With nothing marking the cut, the line read
+    "11 device(s) must be declared by hand ... (ten names)" and the eleventh device
+    simply did not exist as far as the user could tell - so they had no way of knowing
+    which one they still had to find.
+
+    Mutation caught: dropping the ``, ... and N more`` tail (or the ``hidden > 0``
+    guard, which would then append ``and 0 more`` to every short list).
+    """
+    suggestions = MyHOMEDiscoverySuggestions(hass, make_entry(tmp_path / "myhome.yaml"))
+    _load_platforms(hass, MAC, {})
+
+    for number in range(11):
+        suggestions.add(_device_info(DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL, str(11 + number), "Keypad"))
+    for number in range(3):
+        suggestions.add(_device_info(DEVICE_TYPE_BUS_ALARM_ZONE, str(11 + number), "Alarm Sensor"))
+
+    report = suggestions._skipped_report()  # noqa: SLF001
+    assert "11 device(s) must be declared by hand" in report
+    assert "bus_cen_scenario_control@20, ... and 1 more" in report
+    assert "bus_cen_scenario_control@21" not in report
+    # The short clause is untouched: no ellipsis, no "and 0 more".
+    assert "3 device(s) belong to a family this integration has no support for" in report
+    assert "more" not in report.split("; ")[1]
 
 
 async def test_a_config_directory_it_cannot_write_is_reported_not_swallowed(
