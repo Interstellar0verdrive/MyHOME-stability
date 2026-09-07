@@ -490,12 +490,19 @@ class MyHOMEGatewayHandler:
     def command_budget(self) -> float:
         """Longest one command may legitimately take, from dequeue to answer, in seconds.
 
-        `_deliver` may have to open a command session before it can write - the
-        sending worker closes an unused one after `command_session_idle`, so an entity
-        that has been quiet for a minute nearly always pays for a fresh connection -
-        and it gives the whole thing one retry with a new session before dropping the
+        `_deliver` may have to open a command session before it can write, and it
+        gives the whole thing one retry with a new session before dropping the
         command. So the bound is `COMMAND_ATTEMPTS` times a connect plus a write-and-
         ACK, i.e. 40 s with the default options.
+
+        Note what that session is: `sending_loop` holds **one per sending worker**
+        (one worker by default), shared by every entity, service call, discovery pass
+        and watchdog probe of this gateway, and it is closed only when the whole
+        `send_buffer` has stayed empty for `command_session_idle`. So "this entity has
+        been quiet for a minute" says nothing at all about whether a connection has to
+        be re-opened - only "nothing whatsoever has been sent for a minute" does, which
+        is likely in a quiet house but never certain. The bound above is the worst
+        case, and it is sized on the worst case on purpose.
 
         It is *not* the whole wait a caller sees: commands queued ahead of this one
         add their own time (bounded only by `command_ttl`). It is what a single

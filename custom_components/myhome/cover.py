@@ -137,15 +137,21 @@ ADVANCED_MOVE_MARGIN_SEC = 30.0
 # may have to be re-opened first (`connect_timeout`, 10 s), the write and the ACK are
 # allowed `command_timeout` (10 s by default, up to 60), and the whole thing gets one
 # retry with a fresh session before the command is dropped. That is
-# `MyHOMEGatewayHandler.command_budget` - 40 s with the defaults - and it is not a
-# corner case here: this entity has sent nothing for at least the whole safety bound,
-# and an unused command session is closed after a minute, so the re-read very
-# probably pays for a reconnect. A grace shorter than that budget expires while the
-# request it is waiting for is still perfectly in time - which is exactly the mid-run
-# *closed* the re-read was added to prevent. So the grace is the handler's own
-# command budget plus the margin below (the answer still has to travel back and be
-# dispatched once the gateway has ACKed it), read live, so it follows the option if
-# the user changes it.
+# `MyHOMEGatewayHandler.command_budget` - 40 s with the defaults.
+#
+# Is a re-opened session really the case to size this on? Not certainly, but plausibly
+# enough that the worst case is what counts. The command session is *shared by the
+# whole gateway*, not held per entity: the sending worker closes it after a minute in
+# which **nothing at all** was sent - by any entity, service call, discovery pass or
+# watchdog probe - so "this cover has been quiet" proves nothing on its own. In a
+# quiet house at three in the morning, which is exactly when a shutter runs on a
+# schedule with nobody watching, the session usually is closed. And being wrong the
+# cheap way costs a longer stale *Opening*, while being wrong the other way publishes
+# a moving shutter as *closed* and wakes every automation watching for it.
+#
+# So the grace is the handler's own command budget plus the margin below (the answer
+# still has to travel back and be dispatched once the gateway has ACKed it), read
+# live, so it follows the option if the user changes it.
 #
 # It is a long wait - 42 s by default, against a default bound of 50 s - and it is
 # meant to be: it is the price of never publishing a moving shutter as *closed*. A
