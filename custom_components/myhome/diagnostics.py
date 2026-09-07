@@ -34,8 +34,6 @@ from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from typing import Any
 
-from OWNd import __version__ as OWND_VERSION
-
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -49,6 +47,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.loader import async_get_integration
+from OWNd import __version__ as OWND_VERSION
 
 from .const import (
     CONF_COMMAND_TIMEOUT_SEC,

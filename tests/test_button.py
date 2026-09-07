@@ -6,7 +6,6 @@ from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.const import ATTR_ENTITY_ID, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
-
 from OWNd.message import OWNCommand
 
 from custom_components.myhome import expected_unique_ids

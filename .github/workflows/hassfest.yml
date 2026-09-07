@@ -5,9 +5,15 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v2"
+      - uses: "actions/checkout@v4"
+      # home-assistant/actions publishes no release tags; @master is the ref the
+      # Home Assistant developer documentation itself documents for hassfest.
       - uses: home-assistant/actions/hassfest@master

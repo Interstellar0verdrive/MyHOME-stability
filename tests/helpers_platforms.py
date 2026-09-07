@@ -7,21 +7,19 @@ tests can assert the OpenWebNet frames each platform produces.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager, contextmanager
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-
 from OWNd.message import OWNEvent, OWNMessage
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import (
     CONF_ENTITIES,
@@ -35,13 +33,15 @@ from custom_components.myhome.const import (
 
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
 
-# Redacted copy of the user's real /config/myhome.yaml (20 lights, 12 covers, 3 power
-# meters, no duplicate WHERE).
+# The fixture configuration: an entirely fictional home, sized and shaped like a
+# typical MyHOMEServer1 install (main gateway: 20 lights, 12 covers, 3 power
+# channels, no duplicate WHERE; a second gateway carrying one device of every
+# other platform). Nothing in it comes from anyone's real installation.
 REAL_CONFIG_PATH = Path(__file__).resolve().parent / "fixtures" / "myhome.yaml"
 
 
 def real_config_yaml() -> str:
-    """The user's real configuration (tests/fixtures/myhome.yaml)."""
+    """The fictional reference configuration (tests/fixtures/myhome.yaml)."""
     return REAL_CONFIG_PATH.read_text(encoding="utf-8")
 
 
@@ -125,7 +125,13 @@ def entity_object(hass: HomeAssistant, platform: str, device_key: str, slot: str
 
 
 async def feed_event(hass: HomeAssistant, entity, frame: str) -> None:
-    """Dispatch a bus frame to one entity, the way gateway.listening_loop does."""
+    """Dispatch a bus frame to one entity, the way gateway.listening_loop does.
+
+    Deliberately unit level: this calls ``handle_event`` directly and does NOT go
+    through ``gateway._dispatch_message``, so a regression in *routing* (which
+    entity a frame is delivered to) is invisible here. Routing is covered by
+    ``test_gateway.py`` and end to end by ``test_init.py``.
+    """
     message = OWNEvent.parse(frame)
     assert message is not None, frame
     entity.handle_event(message)

@@ -52,7 +52,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoredExtraData, RestoreEntity
 from homeassistant.util import dt as dt_util
-
 from OWNd.message import (
     OWNAutomationCommand,
     OWNAutomationEvent,

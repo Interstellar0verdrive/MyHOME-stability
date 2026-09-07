@@ -29,96 +29,96 @@ import re
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from contextlib import contextmanager
 
+from homeassistant.components.binary_sensor import (
+    DOMAIN as BINARY_SENSOR,
+    BinarySensorDeviceClass,
+)
+from homeassistant.components.button import DOMAIN as BUTTON
+from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.cover import (
+    DOMAIN as COVER,
+    CoverDeviceClass,
+)
+from homeassistant.components.event import DOMAIN as EVENT
+from homeassistant.components.light import DOMAIN as LIGHT
+from homeassistant.components.sensor import (
+    DOMAIN as SENSOR,
+    SensorDeviceClass,
+)
+from homeassistant.components.switch import (
+    DOMAIN as SWITCH,
+    SwitchDeviceClass,
+)
+from homeassistant.const import CONF_MAC, CONF_NAME
+from homeassistant.helpers.device_registry import format_mac as ha_format_mac
 from voluptuous import (
     ALLOW_EXTRA,
     PREVENT_EXTRA,
-    Schema,
-    Optional,
-    Required,
-    Coerce,
-    Boolean,
-    Any,
     All,
+    Any,
+    Boolean,
+    Coerce,
     In,
     Invalid,
+    Optional,
     Range,
+    Required,
+    Schema,
 )
-from homeassistant.helpers.device_registry import format_mac as ha_format_mac
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.switch import (
-    SwitchDeviceClass,
-    DOMAIN as SWITCH,
-)
-from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.cover import (
-    CoverDeviceClass,
-    DOMAIN as COVER,
-)
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    DOMAIN as BINARY_SENSOR,
-)
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    DOMAIN as SENSOR,
-)
-from homeassistant.components.climate import DOMAIN as CLIMATE
-from homeassistant.components.event import DOMAIN as EVENT
-from homeassistant.const import CONF_NAME, CONF_MAC
 
 from .const import (
-    LOGGER,
-    CONF_PLATFORMS,
-    CONF_WHO,
-    CONF_WHERE,
-    CONF_BUS_INTERFACE,
-    CONF_ENTITIES,
-    CONF_ENTITY_NAME,
-    CONF_ICON,
-    CONF_ICON_ON,
-    CONF_ZONE,
-    CONF_FAN_SUPPORT,
-    CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-    CONF_DEVICE_CLASS,
-    CONF_DIMMABLE,
     CONF_ADVANCED_SHUTTER,
-    CONF_INVERTED,
-    CONF_HEATING_SUPPORT,
-    CONF_COOLING_SUPPORT,
-    CONF_STANDALONE,
-    CONF_CENTRAL,
-    CONF_GATEWAY as CONF_GATEWAY_BLOCK,
-    # Contract A keys (added to const.py by F2; platform modules import them from there).
-    CONF_LOCK_BUTTONS,
-    CONF_SHUTTER_RUN,
-    CONF_SOURCE_PLATFORM,
-    CONF_MIN_DELTA_W,
-    CONF_MIN_INTERVAL_SEC,
-    CONF_SUPPRESS_LOG_INTERVAL_SEC,
-    CONF_INFO_LOG_INTERVAL_SEC,
-    CONF_KEEPALIVE_MINUTES,
-    CONF_SENSOR_DEFAULTS,
-    DEFAULT_KEEPALIVE_MINUTES,
-    CONF_SLAT_TIME,
-    CONF_OPENING_TIME,
-    CONF_CLOSING_TIME,
-    DEFAULT_MANUFACTURER,
-    DEFAULT_SHUTTER_RUN,
-    DEFAULT_SLAT_TIME,
-    normalise_bus_interface,
+    CONF_BUS_INTERFACE,
     # CEN / CEN+ scenario controls (0.4.0)
     CONF_BUTTONS,
+    CONF_CENTRAL,
+    CONF_CLOSING_TIME,
+    CONF_COOLING_SUPPORT,
+    CONF_DEVICE_CLASS,
+    CONF_DEVICE_MODEL,
+    CONF_DIMMABLE,
+    CONF_ENTITIES,
+    CONF_ENTITY_NAME,
+    CONF_FAN_SUPPORT,
+    CONF_GATEWAY as CONF_GATEWAY_BLOCK,
+    CONF_HEATING_SUPPORT,
+    CONF_ICON,
+    CONF_ICON_ON,
+    CONF_INFO_LOG_INTERVAL_SEC,
+    CONF_INVERTED,
+    CONF_KEEPALIVE_MINUTES,
+    # Contract A keys (added to const.py by F2; platform modules import them from there).
+    CONF_LOCK_BUTTONS,
+    CONF_MANUFACTURER,
+    CONF_MIN_DELTA_W,
+    CONF_MIN_INTERVAL_SEC,
     CONF_OBJECT,
+    CONF_OPENING_TIME,
+    CONF_PLATFORMS,
     CONF_PROTOCOL,
     CONF_SCENARIO_CONTROL,
+    CONF_SENSOR_DEFAULTS,
+    CONF_SHUTTER_RUN,
+    CONF_SLAT_TIME,
+    CONF_SOURCE_PLATFORM,
+    CONF_STANDALONE,
+    CONF_SUPPRESS_LOG_INTERVAL_SEC,
+    CONF_WHERE,
+    CONF_WHO,
+    CONF_ZONE,
+    DEFAULT_KEEPALIVE_MINUTES,
+    DEFAULT_MANUFACTURER,
     DEFAULT_SCENARIO_BUTTONS,
+    DEFAULT_SHUTTER_RUN,
+    DEFAULT_SLAT_TIME,
+    LOGGER,
     PROTOCOL_CEN_PLUS,
     SCENARIO_CONTROL_BUTTON_RANGE,
     SCENARIO_CONTROL_MODELS,
     SCENARIO_CONTROL_WHO,
     SCENARIO_OBJECT_RANGE,
     SCENARIO_PROTOCOLS,
+    normalise_bus_interface,
     scenario_control_key,
 )
 
@@ -299,7 +299,8 @@ def _where_text(v: object) -> str:
                 f"address is preserved exactly"
             )
         raise Invalid(
-            f"WHERE {v} was read by YAML as a number (leading zeros are lost, '0…' is octal): quote it, e.g. where: '0115'"
+            f"WHERE {v} was read by YAML as a number (leading zeros are lost, '0…' is octal): "
+            f"quote it, e.g. where: '0115'"
         )
     if isinstance(v, str):
         text = v.strip()
@@ -1250,7 +1251,10 @@ class MyHomeConfigSchema(Schema):
             # Keep the remaining (non-platform) gateway-level keys for backward
             # compatibility; __init__.py merges them into hass.data[DOMAIN][mac].
             for key, value in gateway.items():
-                if key in (CONF_MAC, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS, SCENARIO_SECTION) or key in DEVICE_PLATFORMS:
+                if (
+                    key in (CONF_MAC, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS, SCENARIO_SECTION)
+                    or key in DEVICE_PLATFORMS
+                ):
                     continue
                 entry[key] = value
 

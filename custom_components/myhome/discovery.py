@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
-
 from OWNd.message import (
     MESSAGE_TYPE_MAIN_TEMPERATURE,
     MESSAGE_TYPE_SECONDARY_TEMPERATURE,
@@ -151,7 +150,7 @@ class MyHOMEDeviceDiscoveryService:
         task, self._discovery_task = self._discovery_task, None
         if task is not None and not task.done() and task is not asyncio.current_task():
             task.cancel()
-            try:
+            try:  # noqa: SIM105 - awaiting a cancelled task reads better than suppress()
                 await task
             except asyncio.CancelledError:
                 pass

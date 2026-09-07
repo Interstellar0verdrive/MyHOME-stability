@@ -13,9 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
 from homeassistant.core import HomeAssistant
-
 from OWNd.message import OWNEvent
 
 from custom_components.myhome.config_flow_discovery import generate_suggested_config

@@ -7,22 +7,20 @@ in ``handler.send_buffer``.
 from __future__ import annotations
 
 import pytest
-from OWNd.message import OWNHeatingEvent
-
 from homeassistant.components.climate import (
     ATTR_HVAC_ACTION,
     ATTR_HVAC_MODE,
+    DOMAIN as CLIMATE_DOMAIN,
     ClimateEntityFeature,
     HVACAction,
     HVACMode,
 )
-from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_SUPPORTED_FEATURES, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-
+from OWNd.message import OWNHeatingEvent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome import expected_unique_ids
@@ -89,10 +87,12 @@ async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
     handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
-    if hasattr(handler, "_set_connected"):
-        handler._set_connected(True)  # noqa: SLF001 - Contract B helper
-    else:  # pragma: no cover - older gateway.py
-        handler.is_connected = True
+    # No `hasattr` fallback: every climate test depends on the entities actually
+    # being told the gateway is up, and a silent `handler.is_connected = True`
+    # would set the attribute without publishing the availability signal - so a
+    # rename of `_set_connected` used to WEAKEN every test in this file instead of
+    # failing one of them. Fail loudly here instead.
+    handler._set_connected(True)  # noqa: SLF001 - Contract B helper
     await hass.async_block_till_done()
 
 

@@ -6,25 +6,25 @@ import threading
 from unittest.mock import patch
 
 import pytest
-from OWNd.message import OWNGatewayCommand
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
+from OWNd.message import OWNGatewayCommand
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome import expected_unique_ids, issue_id, normalise_entry_data
 from custom_components.myhome.const import (
     CONF_ENTITY,
     CONF_FILE_PATH,
+    CONF_PLATFORMS,
     CONF_WORKER_COUNT,
     DOMAIN,
-    MAX_COMMAND_WORKERS,
     GATEWAY_DIAG_SUFFIXES,
     ISSUE_NO_DEVICES_FOR_GATEWAY,
     ISSUE_UNKNOWN_KEYS,
     ISSUE_YAML_INVALID,
+    MAX_COMMAND_WORKERS,
 )
 
 from .helpers_core import (
@@ -89,6 +89,12 @@ async def test_setup_and_unload(hass: HomeAssistant, tmp_path) -> None:
         for service in SERVICES:
             assert hass.services.has_service(DOMAIN, service)
 
+        # Held on to across the unload: nulling the handler's two fields proves
+        # nothing about the tasks themselves.  Under `mock_gateway` both loops are
+        # `await asyncio.Event().wait()`, so they can only ever end by cancellation.
+        workers = [handler.listening_worker, *handler.sending_workers]
+        assert not any(task.done() for task in workers)
+
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -96,6 +102,13 @@ async def test_setup_and_unload(hass: HomeAssistant, tmp_path) -> None:
     assert MAC not in hass.data[DOMAIN]
     assert handler.listening_worker is None
     assert handler.sending_workers == []
+    # core-10: every loop task is really finished, not merely forgotten, so none of
+    # them can run against the `hass.data` entry that has just been popped.  Two
+    # independent mechanisms guarantee it - `close_listener` cancels and awaits
+    # them, and they are `entry.async_create_background_task`s, which Home
+    # Assistant cancels on unload - which is exactly why the third pass that used
+    # to live in `_async_cancel_workers` could never do anything.
+    assert all(task.done() for task in workers)
     for service in SERVICES:
         assert not hass.services.has_service(DOMAIN, service)
 
@@ -176,7 +189,11 @@ async def test_invalid_yaml_is_setup_error(hass: HomeAssistant, tmp_path) -> Non
     assert entry.state is ConfigEntryState.SETUP_ERROR
     assert str(path) in (entry.reason or "")
 
-    path = write_yaml(tmp_path, "gateway:\n  mac: 00:03:50:aa:bb:cc\n  light:\n    a: {where: '11', name: A}\n    b: {where: '11', name: B}\n")
+    path = write_yaml(
+        tmp_path,
+        "gateway:\n  mac: 00:03:50:aa:bb:cc\n  light:\n"
+        "    a: {where: '11', name: A}\n    b: {where: '11', name: B}\n",
+    )
     entry = make_entry(path, mac=MAC2)
     with mock_gateway():
         assert not await _setup(hass, entry)
@@ -224,7 +241,7 @@ async def test_registry_pruning_keeps_user_disabled_entities(hass: HomeAssistant
     assert device_registry.async_get_device_by_identifier((DOMAIN, MAC), entry.entry_id) is not None
     # The gateway diagnostic entities have no YAML counterpart: pruning must keep them.
     kept_ids = {entity.unique_id for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id)}
-    assert GATEWAY_DIAG_IDS <= kept_ids
+    assert kept_ids >= GATEWAY_DIAG_IDS
 
 
 async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
@@ -238,17 +255,30 @@ async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
         await hass.services.async_call(DOMAIN, "sync_time", {}, blocking=True)
         assert handler.send_buffer.qsize() == before + 1
 
-        await hass.services.async_call(DOMAIN, "send_message", {"gateway": "00-03-50-AA-BB-CC", "message": "*1*0*11##"}, blocking=True)
+        await hass.services.async_call(
+            DOMAIN, "send_message", {"gateway": "00-03-50-AA-BB-CC", "message": "*1*0*11##"}, blocking=True
+        )
         assert handler.send_buffer.qsize() == before + 2
 
-        with pytest.raises(ServiceValidationError):
+        # Each refusal is pinned to its own `translation_key`: a bare
+        # `pytest.raises(ServiceValidationError)` cannot tell the four apart, so
+        # deleting any one branch leaves the user with a different (wrong) message
+        # and a green suite.  `invalid_gateway` is the clearest case: without it
+        # "zz" falls through to `gateway_not_found`, which also raises.
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "send_message", {"message": "not a frame"}, blocking=True)
-        with pytest.raises(ServiceValidationError):
-            await hass.services.async_call(DOMAIN, "send_message", {"gateway": "zz", "message": "*1*0*11##"}, blocking=True)
-        with pytest.raises(ServiceValidationError):
+        assert err.value.translation_key == "invalid_message"
+        with pytest.raises(ServiceValidationError) as err:
+            await hass.services.async_call(
+                DOMAIN, "send_message", {"gateway": "zz", "message": "*1*0*11##"}, blocking=True
+            )
+        assert err.value.translation_key == "invalid_gateway"
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
-        with pytest.raises(ServiceValidationError):  # cv.string coerces 1 -> "1", which is not a frame
+        assert err.value.translation_key == "gateway_not_found"
+        with pytest.raises(ServiceValidationError) as err:  # cv.string coerces 1 -> "1", not a frame
             await hass.services.async_call(DOMAIN, "send_message", {"message": 1}, blocking=True)
+        assert err.value.translation_key == "invalid_message"
 
 
 async def test_sync_time_builds_the_command_off_the_event_loop(hass: HomeAssistant, tmp_path) -> None:
@@ -297,8 +327,11 @@ gateway:
         assert await _setup(hass, entry2)
         assert set(hass.data[DOMAIN]) == {MAC, MAC2}
 
-        with pytest.raises(ServiceValidationError):
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "sync_time", {}, blocking=True)
+        # Two gateways loaded and none named: `gateway` stops being optional.
+        assert err.value.translation_key == "gateway_required"
+        assert err.value.translation_placeholders == {"count": "2"}
         await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
 
         # Services survive the unload of ONE entry.
@@ -361,7 +394,13 @@ async def test_repair_invalid_yaml_created_then_cleared(hass: HomeAssistant, tmp
     assert issue.severity is ir.IssueSeverity.ERROR
     assert issue.is_fixable is False
     assert issue.translation_placeholders["path"] == str(path)
-    assert "mapping" in issue.translation_placeholders["message"]
+    # `gateway: [1, 2]` IS a mapping at the top level, so this is the schema engine
+    # rejecting the section - not `__init__.py`'s own "must contain a mapping"
+    # branch, which the test below covers. Assert only what this integration
+    # controls (the offending key reaches the user); the exact wording belongs to
+    # the engine and is pinned by `test_probatio_and_voluptuous_agree`, which also
+    # documents that the two engines render the path differently.
+    assert "gateway" in issue.translation_placeholders["message"]
 
     path.write_text(BASIC_YAML, encoding="utf-8")
     with mock_gateway():
@@ -369,6 +408,32 @@ async def test_repair_invalid_yaml_created_then_cleared(hass: HomeAssistant, tmp
         await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.LOADED
     assert _issue(hass, entry, ISSUE_YAML_INVALID) is None
+
+
+async def test_repair_top_level_not_a_mapping(hass: HomeAssistant, tmp_path) -> None:
+    """G1-C: a configuration file that is not a mapping at all is reported by name.
+
+    `__init__.py` checks this itself, before the schema ever runs, because the
+    schema's own error for a list would be unreadable. The check had no test: the
+    only file that reached the repair issue was `gateway: [1, 2]`, which IS a
+    mapping, so the branch was a coverage miss and the assertion that looked like
+    it covered it was really reading the schema engine's wording.
+
+    Mutation caught: deleting the `if not isinstance(parsed, dict)` branch, after
+    which a YAML list reaches `config_schema` and the user gets the engine's
+    complaint about `data` instead of a sentence naming the actual problem.
+    """
+    path = write_yaml(tmp_path, "- 1\n- 2\n")
+    entry = make_entry(path)
+    with mock_gateway():
+        assert not await _setup(hass, entry)
+
+    issue = _issue(hass, entry, ISSUE_YAML_INVALID)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    message = issue.translation_placeholders["message"]
+    assert "must contain a mapping" in message
+    assert "found list" in message  # the type is named, so the user can see what they wrote
 
 
 async def test_repair_unknown_keys_created_then_cleared(hass: HomeAssistant, tmp_path) -> None:
@@ -501,6 +566,110 @@ async def test_end_to_end_with_fake_gateway(hass: HomeAssistant) -> None:
         assert entry.state is ConfigEntryState.NOT_LOADED
         await wait_until(lambda: not server.monitor_writers)
 
+
+# Unique ids of the second (fictional) gateway of tests/fixtures/myhome.yaml, one
+# device per platform the main gateway does not use.
+SECOND_GATEWAY_ENTITIES: dict[str, tuple[str, ...]] = {
+    "light": (f"{MAC2}-1-11", f"{MAC2}-1-12#4#03"),  # dimmable + behind bus interface 3
+    "switch": (f"{MAC2}-1-15",),
+    "cover": (f"{MAC2}-2-81",),
+    "binary_sensor": (f"{MAC2}-25-31-door",),
+    "climate": (f"{MAC2}-4-1",),
+    "sensor": (f"{MAC2}-4-32-temperature",),
+    "event": (f"{MAC2}-cenplus-5-event", f"{MAC2}-cen-51-event"),
+    "button": (f"{MAC2}-1-11-disable", f"{MAC2}-1-11-enable"),  # lock_buttons: true
+}
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_end_to_end_second_gateway_covers_every_platform(hass: HomeAssistant) -> None:
+    """Every shipped platform is set up and driven by real frames, not just three.
+
+    ``test_end_to_end_with_fake_gateway`` above only proves light, cover and the
+    WHO 18 sensors, because that is all the main gateway of the fixture declares.
+    The second gateway declares one device of each remaining platform, so switch,
+    binary_sensor, climate, event (CEN *and* CEN+), button (``lock_buttons``), a
+    dimmable light, a light behind a local bus interface and a WHO 4 temperature
+    sensor all go through the real setup, the real session and the real
+    dispatcher here.
+
+    Pins: the platform list, the unique-id shape of every platform, and the
+    routing of a monitor frame to each of them.  Mutations caught: dropping a
+    platform from ``PLATFORMS``, and any ``_dispatch_to_entities`` regression that
+    stops one message type from reaching its entity (a bug the platform tests
+    cannot see, since ``feed_event`` calls ``handle_event`` directly).
+    """
+    async with FakeOWNServer(default_replies=["*#*1##"]) as server:
+        entry = make_entry(
+            REAL_CONFIG_PATH,
+            data={**ENTRY_DATA_V2, "host": "127.0.0.1", "port": server.port},
+            mac=MAC2,
+        )
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.LOADED
+        handler = hass.data[DOMAIN][MAC2][CONF_ENTITY]
+
+        registry = er.async_get(hass)
+        entity_ids: dict[str, str] = {}
+        for domain, unique_ids in SECOND_GATEWAY_ENTITIES.items():
+            for unique_id in unique_ids:
+                entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+                assert entity_id is not None, f"{domain} entity {unique_id} was not created"
+                entity_ids[unique_id] = entity_id
+
+        # Nothing was pruned and nothing extra was invented.
+        assert {item.unique_id for item in er.async_entries_for_config_entry(registry, entry.entry_id)} == (
+            expected_unique_ids(MAC2, hass.data[DOMAIN][MAC2][CONF_PLATFORMS])
+        )
+
+        await wait_until(lambda: handler.is_connected)
+        light_id = entity_ids[f"{MAC2}-1-11"]
+        await wait_until(lambda: hass.states.get(light_id).state != "unavailable")
+
+        # One monitor frame per platform, straight off the fake gateway's bus.
+        await server.push("*1*1*11##")  # dimmable light on
+        await wait_until(lambda: hass.states.get(light_id).state == "on")
+
+        switch_id = entity_ids[f"{MAC2}-1-15"]
+        await server.push("*1*1*15##")
+        await wait_until(lambda: hass.states.get(switch_id).state == "on")
+
+        cover_id = entity_ids[f"{MAC2}-2-81"]
+        await server.push("*2*1*81##")
+        await wait_until(lambda: hass.states.get(cover_id).state == "opening")
+
+        door_id = entity_ids[f"{MAC2}-25-31-door"]
+        await server.push("*25*31#31*31##")
+        await wait_until(lambda: hass.states.get(door_id).state == "on")
+
+        climate_id = entity_ids[f"{MAC2}-4-1"]
+        await server.push("*#4*1*0*0205*3##")  # zone 1 measures 20.5 C
+        await wait_until(lambda: hass.states.get(climate_id).attributes.get("current_temperature") == 20.5)
+
+        cenplus_id = entity_ids[f"{MAC2}-cenplus-5-event"]
+        await server.push("*25*21#1*25##")  # CEN+ object 5, pushbutton 1, short press
+        await wait_until(
+            lambda: hass.states.get(cenplus_id).attributes.get("event_type") == "pushbutton_short_press"
+        )
+
+        cen_id = entity_ids[f"{MAC2}-cen-51-event"]
+        await server.push("*15*1*51##")  # CEN WHERE 51, pushbutton 1, pressed
+        await wait_until(
+            lambda: hass.states.get(cen_id).attributes.get("event_type") == "pushbutton_short_press"
+        )
+
+        # The bus-interface light and the WHO 4 sensor have no state yet, but they
+        # follow the gateway's availability like every other entity.
+        for unique_id in (f"{MAC2}-1-12#4#03", f"{MAC2}-4-32-temperature"):
+            assert hass.states.get(entity_ids[unique_id]).state != "unavailable"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.state is ConfigEntryState.NOT_LOADED
+
+
 async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant, tmp_path) -> None:
     """A CEN+ virtual press (WHERE starting with '#') is a valid frame even if OWNd's typed parser crashes on it."""
     entry = make_entry(write_yaml(tmp_path))
@@ -510,8 +679,9 @@ async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant,
         before = handler.send_buffer.qsize()
         await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2##"}, blocking=True)
         assert handler.send_buffer.qsize() == before + 1
-        with pytest.raises(ServiceValidationError):
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2"}, blocking=True)
+        assert err.value.translation_key == "invalid_message"
 
 
 # --------------------------------------------------------------------------- review 2026-09-07
@@ -533,7 +703,9 @@ async def test_worker_count_option_is_guarded(hass: HomeAssistant, tmp_path, cap
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_failed_platform_unload_is_reported(hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+async def test_failed_platform_unload_is_reported(
+    hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture
+) -> None:
     entry = make_entry(write_yaml(tmp_path))
     with mock_gateway():
         assert await _setup(hass, entry)

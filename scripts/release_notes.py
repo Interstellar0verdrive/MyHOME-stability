@@ -41,9 +41,8 @@ def unwrap(text):
 
     def flush():
         if buf:
-            first = buf[0].rstrip()
-            rest = [line.strip() for line in buf[1:]]
-            out.append(" ".join([first] + rest))
+            first, *rest = buf
+            out.append(" ".join([first.rstrip(), *(line.strip() for line in rest)]))
             buf.clear()
 
     for line in text.split("\n"):

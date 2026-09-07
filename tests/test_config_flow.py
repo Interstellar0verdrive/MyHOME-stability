@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import HomeAssistant
@@ -96,7 +95,9 @@ async def test_manual_flow_creates_entry(hass: HomeAssistant, mock_test_connecti
     """cf-03: plain values in entry data; cf-04: errors are not sticky."""
     result = await _start_manual(hass)
 
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {**CUSTOM_INPUT, "address": "192.168.1.300"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CUSTOM_INPUT, "address": "192.168.1.300"}
+    )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"address": "invalid_host"}
 
@@ -146,7 +147,11 @@ async def test_manual_flow_password_required(hass: HomeAssistant, mock_test_conn
 
 async def test_manual_flow_cannot_connect(hass: HomeAssistant, mock_test_connection) -> None:
     """cf-07: None / OSError -> back to the form with cannot_connect."""
-    mock_test_connection.side_effect = [None, OSError("unreachable"), {"Success": False, "Message": "negotiation_refused"}]
+    mock_test_connection.side_effect = [
+        None,
+        OSError("unreachable"),
+        {"Success": False, "Message": "negotiation_refused"},
+    ]
     result = await _start_manual(hass)
     result = await hass.config_entries.flow.async_configure(result["flow_id"], CUSTOM_INPUT)
     assert result["type"] is FlowResultType.FORM
@@ -162,7 +167,9 @@ async def test_manual_flow_cannot_connect(hass: HomeAssistant, mock_test_connect
     assert result["reason"] == "negotiation_refused"
 
 
-async def test_manual_flow_already_configured(hass: HomeAssistant, mock_test_connection, mock_setup_entry, tmp_path) -> None:
+async def test_manual_flow_already_configured(
+    hass: HomeAssistant, mock_test_connection, mock_setup_entry, tmp_path
+) -> None:
     """cf-09: re-adding the gateway aborts and only refreshes the host."""
     entry = make_entry(write_yaml(tmp_path))
     entry.add_to_hass(hass)
@@ -174,7 +181,9 @@ async def test_manual_flow_already_configured(hass: HomeAssistant, mock_test_con
     assert mock_test_connection.await_count == 0
 
 
-async def test_user_flow_discovered_gateway(hass: HomeAssistant, no_ssdp_discovery, mock_test_connection, mock_setup_entry) -> None:
+async def test_user_flow_discovered_gateway(
+    hass: HomeAssistant, no_ssdp_discovery, mock_test_connection, mock_setup_entry
+) -> None:
     no_ssdp_discovery.return_value = [
         {
             "address": HOST,
@@ -265,7 +274,9 @@ async def test_ssdp_already_configured_keeps_custom_port(hass: HomeAssistant, mo
 async def test_ssdp_without_serial_aborts(hass: HomeAssistant) -> None:
     info = _ssdp_info()
     info.upnp = {"modelName": "MyHomeServer1"}
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=info)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=info
+    )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_serial"
 
@@ -462,7 +473,9 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
         CONF_QUEUE_TTL_SEC: 30.0,
         CONF_DEFAULT_KEEPALIVE_MINUTES: 0.0,
     }
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {**good, CONF_FILE_PATH: str(tmp_path / "nope.yaml")})
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**good, CONF_FILE_PATH: str(tmp_path / "nope.yaml")}
+    )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {CONF_FILE_PATH: "invalid_config_path"}
 
@@ -489,7 +502,9 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     # Only the connection data changes -> still exactly one reload.
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert _suggested(result)[CONF_IDLE_WATCHDOG_SEC] == 120
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {**good, "address": "10.0.0.2", "password": "999"})
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**good, "address": "10.0.0.2", "password": "999"}
+    )
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.data[CONF_HOST] == "10.0.0.2"

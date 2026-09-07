@@ -1,0 +1,44 @@
+# Lint configuration for the whole repository (integration, tests and scripts).
+#
+# Pinned here on purpose: `ruff check .` must give the same answer on a
+# developer's laptop and in `.github/workflows/tests.yml`, whatever global or
+# editor configuration happens to be installed.
+
+# Home Assistant 2026.9 requires Python 3.13+; the integration is developed and
+# tested on 3.14, and nothing in the tree uses 3.14-only syntax.
+target-version = "py313"
+
+# Measured, not chosen: at 120 characters 99 % of the tree already fits (the
+# median line is 38 characters, the 99th percentile 112). 100 would have meant
+# rewrapping ~400 lines of working code.
+line-length = 120
+
+exclude = [".venv", "venv", "__pycache__"]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+
+ignore = [
+    # The tree carries `# noqa` codes for rule families this configuration does
+    # not select (BLE001, SLF001, ANN001, ARG...), because they were written
+    # against a wider ad-hoc selection. RUF100 would flag every one of them as
+    # unused and deleting them would silently weaken that other selection.
+    "RUF100",
+]
+
+[lint.isort]
+# `homeassistant`, `OWNd`, `pytest` and `voluptuous` are all third-party here;
+# only the integration itself and the test package are first-party.
+known-first-party = ["custom_components", "tests"]
+# Keep `from x import (A, DOMAIN as B)` on one statement instead of splitting the
+# aliased member into a second import of the same module.
+combine-as-imports = true

@@ -20,7 +20,8 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-# Redacted copy of the user's real configuration (20 lights, 12 covers, 3 power meters).
+# The fictional reference configuration (main gateway: 20 lights, 12 covers, 3 power
+# meters; second gateway: one device of every other platform). Nothing is real.
 USER_YAML = REPO_ROOT / "tests" / "fixtures" / "myhome.yaml"
 MAC = "00:03:50:AA:BB:CC"
 MAC_NORM = "00:03:50:aa:bb:cc"
@@ -96,7 +97,8 @@ def test_user_config_after_rename(user_config):
         "name": "Kids Room Shutter Old",
     }
     out = check(user_config)
-    assert list(out) == [MAC_NORM]
+    # The fixture declares two gateways; only the first one is asserted here.
+    assert list(out) == [MAC_NORM, MAC2]
     plat = platforms(out)
     assert set(plat) == {"light", "cover", "sensor"}  # no lock_buttons -> no button platform
     assert len(plat["cover"]) == 13
@@ -286,17 +288,17 @@ def test_defaults_per_platform():
     )
     plat = platforms(out)
     light = plat["light"]["1-11"]
-    assert COMMON_KEYS <= set(light)
+    assert set(light) >= COMMON_KEYS
     assert light["dimmable"] is False and light["lock_buttons"] is False
     assert light["manufacturer"] == "BTicino S.p.A." and light["model"] is None
     assert light["entities"] == {} and light["icon"] is None and light["entity_name"] is None
 
     switch = plat["switch"]["1-12"]
-    assert COMMON_KEYS <= set(switch)
+    assert set(switch) >= COMMON_KEYS
     assert switch["class"] == validate.SwitchDeviceClass.SWITCH
 
     cover = plat["cover"]["2-81"]
-    assert COMMON_KEYS <= set(cover)
+    assert set(cover) >= COMMON_KEYS
     assert cover["advanced"] is False and cover["inverted"] is False
     assert cover["shutter_run"] == 20.0 and isinstance(cover["shutter_run"], float)
     assert cover["class"] == validate.CoverDeviceClass.SHUTTER
@@ -305,17 +307,29 @@ def test_defaults_per_platform():
     assert cover["opening_time"] == 20.0 and cover["closing_time"] == 20.0
 
     binary = plat["binary_sensor"]["25-301"]
-    assert COMMON_KEYS <= set(binary)
+    assert set(binary) >= COMMON_KEYS
     assert binary["class"] == validate.BinarySensorDeviceClass.OPENING and binary["inverted"] is False
 
     sensor = plat["sensor"]["18-51"]
-    assert COMMON_KEYS <= set(sensor)
+    assert set(sensor) >= COMMON_KEYS
     for key in ("min_delta_w", "min_interval_sec", "suppress_log_interval_sec", "keepalive_minutes"):
         assert key in sensor
 
     climate = plat["climate"]["4-3"]
     assert climate["zone"] == "3" and climate["name"] == "Zone 3"
-    for key in ("heat", "cool", "fan", "standalone", "central", "entities", "manufacturer", "model", "icon", "icon_on", "entity_name"):
+    for key in (
+        "heat",
+        "cool",
+        "fan",
+        "standalone",
+        "central",
+        "entities",
+        "manufacturer",
+        "model",
+        "icon",
+        "icon_on",
+        "entity_name",
+    ):
         assert key in climate
 
     # Each device dict has its own entities mapping.
@@ -387,7 +401,14 @@ def test_sensor_requires_class_and_matching_who():
     assert err.value.path == ["gateway", "sensor", "s", "class"]
     with pytest.raises(Invalid, match="requires who 18"):
         check(gw(sensor={"s": {"where": "51", "name": "S", "class": "power", "who": "4"}}))
-    out = check(gw(sensor={"t": {"where": "1", "name": "T", "class": "temperature"}, "i": {"where": "12", "name": "I", "class": "illuminance"}}))
+    out = check(
+        gw(
+            sensor={
+                "t": {"where": "1", "name": "T", "class": "temperature"},
+                "i": {"where": "12", "name": "I", "class": "illuminance"},
+            }
+        )
+    )
     assert set(platforms(out)["sensor"]) == {"4-1", "1-12"}
     assert platforms(out)["sensor"]["4-1"]["entities"] == {}
 
@@ -490,14 +511,26 @@ def test_duplicate_after_normalisation():
     with pytest.raises(Invalid, match="Duplicate"):
         check(gw(light={"a": {"where": "#1", "name": "A"}, "b": {"where": "#01", "name": "B"}}))
     with pytest.raises(Invalid, match="1-0115#4#01"):
-        check(gw(light={"a": {"where": "0115", "interface": 1, "name": "A"}, "b": {"where": "0115", "interface": "01", "name": "B"}}))
+        check(
+            gw(
+                light={
+                    "a": {"where": "0115", "interface": 1, "name": "A"},
+                    "b": {"where": "0115", "interface": "01", "name": "B"},
+                }
+            )
+        )
 
 
 def test_climate_zone_and_temperature_sensor_may_share_zone():
     out = check(gw(climate={"z": {"zone": 1}}, sensor={"t": {"where": "1", "name": "T", "class": "temperature"}}))
     assert "4-1" in platforms(out)["climate"] and "4-1" in platforms(out)["sensor"]
     with pytest.raises(Invalid, match="climate 'z2' collides with climate 'z1'"):
-        check(gw(climate={"z1": {"zone": 1}, "z2": {"zone": "1"}}, sensor={"t": {"where": "1", "name": "T", "class": "temperature"}}))
+        check(
+            gw(
+                climate={"z1": {"zone": 1}, "z2": {"zone": "1"}},
+                sensor={"t": {"where": "1", "name": "T", "class": "temperature"}},
+            )
+        )
 
 
 def test_climate_and_temperature_sensor_share_one_device_without_losing_a_name(caplog):
@@ -776,7 +809,12 @@ def test_sensor_defaults_merge_and_overrides():
 def test_builtin_sensor_defaults():
     out = check(gw(sensor={"a": {"where": "51", "name": "A", "class": "power"}}))
     a = platforms(out)["sensor"]["18-51"]
-    assert (a["min_delta_w"], a["min_interval_sec"], a["suppress_log_interval_sec"], a["keepalive_minutes"]) == (5, 1.0, 60.0, 125)
+    assert (
+        a["min_delta_w"],
+        a["min_interval_sec"],
+        a["suppress_log_interval_sec"],
+        a["keepalive_minutes"],
+    ) == (5, 1.0, 60.0, 125)
 
 
 def test_keepalive_minutes_marker_says_where_the_value_came_from():
@@ -936,7 +974,10 @@ def test_invalid_actuator_where(where):
         check(gw(light={"a": {"where": where, "name": "A"}}))
 
 
-@pytest.mark.parametrize(("where", "key"), [("0", "1-0"), ("00", "1-00"), ("9", "1-9"), ("#01", "1-#1"), ("0915", "1-0915"), ("1015", "1-1015")])
+@pytest.mark.parametrize(
+    ("where", "key"),
+    [("0", "1-0"), ("00", "1-00"), ("9", "1-9"), ("#01", "1-#1"), ("0915", "1-0915"), ("1015", "1-1015")],
+)
 def test_valid_actuator_where(where, key):
     assert list(platforms(check(gw(light={"a": {"where": where, "name": "A"}})))["light"]) == [key]
 
@@ -982,44 +1023,109 @@ _ENGINE_SCRIPT = textwrap.dedent(
     import voluptuous as vol
     assert ("probatio" in vol.__file__) == (engine == "probatio"), vol.__file__
     parent = types.ModuleType("custom_components"); parent.__path__ = [os.path.join(root, "custom_components")]
-    pkg = types.ModuleType("custom_components.myhome"); pkg.__path__ = [os.path.join(root, "custom_components", "myhome")]
+    pkg = types.ModuleType("custom_components.myhome")
+    pkg.__path__ = [os.path.join(root, "custom_components", "myhome")]
     sys.modules["custom_components"] = parent; sys.modules["custom_components.myhome"] = pkg
     importlib.import_module("custom_components.myhome.const")
     validate = importlib.import_module("custom_components.myhome.validate")
     assert validate.Schema is vol.Schema
+    def tagged(value):
+        # A bare `default=str` would let two engines returning DIFFERENT TYPES with
+        # the same repr still "agree"; the type name travels with the value.
+        return {"__type__": type(value).__name__, "__str__": str(value)}
     cases = json.load(sys.stdin)
     results = []
     for case in cases:
         try:
             out = validate.config_schema(copy.deepcopy(case))
-            results.append({"ok": json.loads(json.dumps(out, default=str, sort_keys=True))})
+            results.append({"ok": json.loads(json.dumps(out, default=tagged, sort_keys=True))})
         except vol.Invalid as err:
-            results.append({"invalid": [str(p) for p in err.path]})
+            # `error_message` is the text validate.py authored; `str(err)` is that
+            # text plus the engine's OWN rendering of the path, which the two
+            # engines spell differently (see the test below).
+            results.append({
+                "invalid": [str(p) for p in err.path],
+                "message": err.error_message,
+                "rendered": str(err),
+            })
     json.dump(results, sys.stdout, sort_keys=True)
     '''
 )
 
 _ENGINE_CASES = [
-    {"gateway": {"mac": MAC, "light": {"a": {"where": "15", "name": "A", "lock_buttons": True}, "b": {"where": "#01", "name": "B"}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "light": {"a": {"where": "15", "name": "A", "lock_buttons": True}, "b": {"where": "#01", "name": "B"}},
+        }
+    },
     {MAC: {"cover": {"c": {"where": 81, "name": "C", "device_class": "blind", "shutter_run": 25}}}},
-    {"gateway": {"mac": MAC, "energy": {"min_delta_w": 7}, "sensor_defaults": {"refresh_period": 3}, "sensor": {"s": {"where": "51", "name": "S", "device_class": "power", "min_delta_w": 1}}}},
-    {"gateway": {"mac": MAC, "binary_sensor": {"a": {"where": "302", "name": "A"}, "b": {"where": "303", "name": "B", "who": 1}}}},
-    {"gateway": {"mac": MAC, "climate": {"z": {"where": "4"}, "c": {"central": True, "zone": 2, "name": "X"}, "cu": {}}}},
-    {"gateway": {"mac": MAC, "light": {"a": {"where": "12", "name": "A"}}, "switch": {"b": {"where": "12", "name": "B"}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "energy": {"min_delta_w": 7},
+            "sensor_defaults": {"refresh_period": 3},
+            "sensor": {"s": {"where": "51", "name": "S", "device_class": "power", "min_delta_w": 1}},
+        }
+    },
+    {
+        "gateway": {
+            "mac": MAC,
+            "binary_sensor": {"a": {"where": "302", "name": "A"}, "b": {"where": "303", "name": "B", "who": 1}},
+        }
+    },
+    {
+        "gateway": {
+            "mac": MAC,
+            "climate": {"z": {"where": "4"}, "c": {"central": True, "zone": 2, "name": "X"}, "cu": {}},
+        }
+    },
+    {
+        "gateway": {
+            "mac": MAC,
+            "light": {"a": {"where": "12", "name": "A"}},
+            "switch": {"b": {"where": "12", "name": "B"}},
+        }
+    },
     {"gateway": {"mac": MAC, "light": {"a": {"where": 1, "name": "A"}}}},
     {"gateway": {"mac": 350}},
     {"gateway": {"mac": MAC, "energy": {"min_delta_w": -5}}},
-    {"gateway": {"mac": MAC, "cover": {"c": {"where": "81", "name": "C", "class": "shutter", "device_class": "blind"}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "cover": {"c": {"where": "81", "name": "C", "class": "shutter", "device_class": "blind"}},
+        }
+    },
     {"gateway": {"mac": MAC}, MAC: {}},
-    {"gateway": {"mac": MAC, "scenario_control": {"kp": {"object": 25, "name": "K"}, "cen": {"protocol": "cen", "where": "51", "name": "C", "buttons": [0, 1]}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "scenario_control": {
+                "kp": {"object": 25, "name": "K"},
+                "cen": {"protocol": "cen", "where": "51", "name": "C", "buttons": [0, 1]},
+            },
+        }
+    },
     {"gateway": {"mac": MAC, "scenario_control": {"kp": {"protocol": "cen", "object": 25, "name": "K"}}}},
 ]
 
 
-def _run_engine(engine: str) -> list:
+def _engine_cases() -> list:
+    """The 13 frozen literals plus the reference configuration itself.
+
+    The literals are small and adversarial; the fixture is the only case with the
+    real shape and size of a user's file (two gateways, every platform), and it is
+    what `test_end_to_end_with_fake_gateway` and half the platform tests are built
+    on. An engine difference that only shows up at that scale used to be outside
+    the agreement contract entirely.
+    """
+    return [*_ENGINE_CASES, yaml.safe_load(USER_YAML.read_text(encoding="utf-8"))]
+
+
+def _run_engine(engine: str, cases: list) -> list:
     proc = subprocess.run(
         [sys.executable, "-c", _ENGINE_SCRIPT, engine, str(REPO_ROOT)],
-        input=json.dumps(_ENGINE_CASES),
+        input=json.dumps(cases),
         capture_output=True,
         text=True,
         check=False,
@@ -1028,18 +1134,62 @@ def _run_engine(engine: str) -> list:
     return json.loads(proc.stdout)
 
 
+@pytest.mark.slow  # ~1.3 s: two full Home Assistant imports in two subprocesses
 def test_probatio_and_voluptuous_agree():
-    probatio_results = _run_engine("probatio")
-    voluptuous_results = _run_engine("voluptuous")
-    assert len(probatio_results) == len(_ENGINE_CASES)
+    """val-00: HA 2026.9's probatio shim and real voluptuous must decide identically.
+
+    Guards the `_section()` lambda-wrapping workaround in validate.py. The test is
+    not self-fulfilling: the in-script `assert ("probatio" in vol.__file__) ==
+    (engine == "probatio")` and `assert validate.Schema is vol.Schema` make a
+    subprocess that loaded the wrong engine exit non-zero, which `_run_engine`
+    turns into a failure.
+
+    Agreement covers the accepted output, the error path AND the error message
+    (`__init__.py` puts that text in front of the user in a repair issue, and
+    `test_init.py` asserts on it, so an engine that reworded it would otherwise
+    pass here and break there), over a corpus that now includes the reference
+    configuration and not only the 13 hand-written literals.
+    """
+    cases = _engine_cases()
+    probatio_results = _run_engine("probatio", cases)
+    voluptuous_results = _run_engine("voluptuous", cases)
+    assert len(probatio_results) == len(cases)
+
+    # `rendered` is compared separately, below: it is the only part the two engines
+    # legitimately disagree on.
+    renderings = [
+        (probatio.pop("rendered", None), voluptuous.pop("rendered", None))
+        for probatio, voluptuous in zip(probatio_results, voluptuous_results, strict=True)
+    ]
     assert probatio_results == voluptuous_results
-    # Sanity: the case list covers both outcomes.
+    # Sanity: the case list covers both outcomes, and the fixture is an accepted one.
     assert any("ok" in r for r in probatio_results) and any("invalid" in r for r in probatio_results)
+    assert "ok" in probatio_results[-1], probatio_results[-1]
+
+    # Documented divergence, not a bug in validate.py: both engines append their own
+    # notation for the offending path to the authored message - probatio writes
+    # "... at 'gateway.switch.b.where'", voluptuous "... @ data['gateway'][...]".
+    # `__init__.py` puts `str(err)` verbatim into the repair issue the user reads, so
+    # that one sentence IS engine-dependent while everything validate.py controls is
+    # not. Pinned here so a future engine change that touches the authored half
+    # (rather than only the suffix) fails instead of silently reaching users.
+    compared = 0
+    for result, (probatio_text, voluptuous_text) in zip(probatio_results, renderings, strict=True):
+        if "invalid" not in result:
+            assert probatio_text is None and voluptuous_text is None
+            continue
+        compared += 1
+        assert probatio_text.startswith(result["message"])
+        assert voluptuous_text.startswith(result["message"])
+        assert probatio_text != voluptuous_text or "@" not in voluptuous_text
+    assert compared, "no invalid case in the corpus"
 
 
 def test_advanced_cover_timing_keys_are_reported_as_ignored(caplog: pytest.LogCaptureFixture) -> None:
     """Review 2026-09-07: timing keys on an advanced actuator are accepted but reported."""
-    config = check(gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True, "slat_time": 3, "shutter_run": 30}}))
+    config = check(
+        gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True, "slat_time": 3, "shutter_run": 30}})
+    )
     assert config is not None
     assert "cover 'shutter': shutter_run, slat_time ignored" in caplog.text
     caplog.clear()

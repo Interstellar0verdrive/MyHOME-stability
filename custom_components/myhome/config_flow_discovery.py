@@ -18,7 +18,6 @@ import tempfile
 from typing import Any
 
 import yaml
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -149,7 +148,7 @@ def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[
             yaml.safe_dump(existing, handle, default_flow_style=False, sort_keys=False, allow_unicode=True)
         os.replace(tmp_path, path)
     except BaseException:
-        try:
+        try:  # noqa: SIM105 - contextlib.suppress here would hide the cleanup from a reader
             os.unlink(tmp_path)
         except OSError:
             pass

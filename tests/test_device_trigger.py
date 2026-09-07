@@ -12,7 +12,6 @@ from typing import Any
 
 import pytest
 import voluptuous as vol
-
 from homeassistant.components import automation
 from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.components.device_automation.exceptions import (
@@ -22,7 +21,6 @@ from homeassistant.const import CONF_PLATFORM
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
-
 from pytest_homeassistant_custom_component.common import (
     async_get_device_automations,
     async_mock_service,
@@ -261,7 +259,7 @@ async def test_a_light_device_is_refused_as_a_scenario_control(hass: HomeAssista
         from custom_components.myhome import device_trigger
 
         device_id = device_id_of(hass, entry.entry_id, "1-11")
-        with pytest.raises(InvalidDeviceAutomationConfig, match="MyHOME CEN/CEN. scenario control"):
+        with pytest.raises(InvalidDeviceAutomationConfig, match=r"MyHOME CEN/CEN\+ scenario control"):
             await device_trigger.async_validate_trigger_config(
                 hass,
                 {

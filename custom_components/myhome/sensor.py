@@ -23,9 +23,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import voluptuous as vol
-
-from homeassistant.components.sensor import DOMAIN as PLATFORM
 from homeassistant.components.sensor import (
+    DOMAIN as PLATFORM,
     RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
@@ -48,7 +47,6 @@ from homeassistant.helpers.event import (
     async_track_time_change,
     async_track_time_interval,
 )
-
 from OWNd.message import (
     MESSAGE_TYPE_ACTIVE_POWER,
     MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
@@ -379,7 +377,7 @@ class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     # slot -> (translation key, OWNd message type, enabled by default)
-    _SLOTS: dict[str, tuple[str, str, bool]] = {
+    _SLOTS: dict[str, tuple[str, str, bool]] = {  # noqa: RUF012 - a read-only lookup table, never mutated
         DAILY_ENERGY_SLOT: ("energy_today", MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION, False),
         MONTHLY_ENERGY_SLOT: ("energy_month", MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION, False),
         TOTAL_ENERGY_SLOT: ("energy_total", MESSAGE_TYPE_ENERGY_TOTALIZER, True),

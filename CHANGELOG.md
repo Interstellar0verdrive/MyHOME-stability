@@ -65,7 +65,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - discovery: temperature probes are suggested as `class: temperature` sensors
     (they were misclassified as zones), and scenario controls report
     `platform: event`, not `button`, in `myhome_device_discovered`.
-- Tests and CI: see below.
+- Tests: service-call refusals are pinned to their own translation key (a wrong
+  message could pass before), and the suite covers the gateway failure surface
+  (refused commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press
+  table, the idle-probe window, the listening loop's catch-all, the reconnect
+  backoff cap), the session error paths and discovery.
+
+### Added
+
+- CI runs `ruff` and `pytest` on every push and pull request
+  (`.github/workflows/tests.yml`), with the rule set pinned in `ruff.toml`; the
+  suite used to run only on a developer's machine.
+- `strings.json` as the source of the translations.
 
 ### Changed
 
@@ -80,8 +91,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A CEN scenario control used to accept trigger types only CEN+ can fire
   (`rotate_cw_slow`, `pushbutton_long_press_repeat`); such a trigger now fails
   validation. It never fired; it used to fail quietly.
-- `strings.json` added as the source of the translations; the dead `invalid_port`
-  and `gateway_vanished` translation keys were removed (no code path could set them).
+- The dead `invalid_port` and `gateway_vanished` translation keys were removed (no
+  code path could set them), and so was an unload helper that could never cancel
+  anything (the session close already does).
 
 ## [0.4.0] - 2026-09-07
 

@@ -28,7 +28,6 @@ from homeassistant.helpers.restore_state import (
     RestoreEntity,
 )
 from homeassistant.util import dt as dt_util
-
 from OWNd.message import (
     MESSAGE_TYPE_MOTION,
     MESSAGE_TYPE_MOTION_TIMEOUT,
