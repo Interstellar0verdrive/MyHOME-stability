@@ -713,10 +713,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def _async_echo_recheck(self, now: datetime) -> None:
         """The ignored movement frame may have been real: re-read the actuator status."""
         self._echo_recheck = None
-        if self._moving is not None:  # pragma: no cover - equivalent mutant, see review 3
-            # A later frame already started the estimate: nothing was lost. The
-            # branch cannot be told apart by a test (the re-read is harmless when it
-            # runs anyway), so it is excluded from coverage rather than chased.
+        # A later frame already started the estimate: nothing was lost, so skip the
+        # re-read. No test can reach this on HA 2026.9: `async_call_later` hands the
+        # job to `create_eager_task`, so this coroutine runs *inside* the timer
+        # callback and finishes without ever suspending (nothing on the way to
+        # `send_status_request` awaits anything real). There is therefore no window
+        # in which a bus frame could set `_moving` between the timer firing and this
+        # line. The guard stays because that is a detail of how HA schedules jobs,
+        # not a promise; it is excluded from coverage rather than chased.
+        if self._moving is not None:  # pragma: no cover - unreachable: eager tasks, see above
             return
         LOGGER.debug(
             "%s Cover %s: re-reading the status after an ignored movement frame",
@@ -754,7 +759,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         plain direction frame - and a "still running" answer re-arms the full bound.
         """
         self._advanced_timer = None
-        if self._moving is None:
+        # Same unreachable-guard as in `_async_echo_recheck`: the only thing that
+        # clears `_moving` also cancels this timer, and the eager job start leaves no
+        # window between the two. Kept for safety, excluded from coverage.
+        if self._moving is None:  # pragma: no cover - unreachable: eager tasks, see `_async_echo_recheck`
             return
         LOGGER.debug(
             "%s Cover %s: no stop reported %.0fs after the movement started; re-reading the status",
@@ -780,7 +788,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         left alone - it is the actuator's own last value, never an estimate.
         """
         self._advanced_timer = None
-        if not self._advanced_probe_pending or self._moving is None:
+        # And again: any answer to the status re-read goes through
+        # `_cancel_advanced_timer`, which clears the flag *and* cancels this grace, so
+        # neither half of the condition can be true when it fires. Excluded from
+        # coverage for the same reason as the two guards above.
+        if not self._advanced_probe_pending or self._moving is None:  # pragma: no cover - unreachable, see above
             return
         self._advanced_probe_pending = False
         LOGGER.debug(
