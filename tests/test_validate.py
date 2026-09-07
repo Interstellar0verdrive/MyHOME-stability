@@ -1066,6 +1066,52 @@ def test_unquoted_sensor_where_is_not_blamed_on_octal(where):
     assert f"where: '{where}'" in message
 
 
+def test_a_negative_unquoted_where_is_not_told_to_quote_itself():
+    """P3-UNCLEAR-1: `where: '-1'` is refused too, so quoting is not the advice."""
+    with pytest.raises(Invalid, match="never negative") as err:
+        check(gw(light={"a": {"where": -1, "name": "A"}}))
+    message = str(err.value)
+    assert "quote it (where: '-1')" not in message
+    # The standing "quote every where:" advice is still worth giving.
+    assert "always quote every 'where:' value" in message
+
+
+def test_the_quote_it_message_does_not_promise_the_quoted_value_will_pass():
+    """P3-UNCLEAR-1: `'301'` is a valid sensor address and an invalid actuator one.
+
+    The message is emitted for every platform, so on a light it used to send the user
+    round the loop once more: quote the value, get a second, unrelated message back.
+    """
+    with pytest.raises(Invalid, match="quote it") as err:
+        check(gw(light={"a": {"where": 301, "name": "A"}}))
+    message = str(err.value)
+    assert "it is not a valid address for this platform" in message
+    assert "is preserved exactly" not in message
+    # The same value, quoted, really is refused on a light - and accepted on a sensor.
+    with pytest.raises(Invalid):
+        check(gw(light={"a": {"where": "301", "name": "A"}}))
+    out = check(gw(sensor={"s": {"where": "301", "name": "S", "class": "power"}}))
+    assert list(platforms(out)["sensor"]) == ["18-301"]
+
+
+@pytest.mark.parametrize("where", [100, 301, 12345])
+def test_the_where_docstring_rule_is_the_one_the_code_implements(where):
+    """P3-INCONSISTENCY-2: 3- and 5-digit integers are refused, valid sensor shape or not.
+
+    The round-2 docstring said integers "whose decimal spelling is itself a valid
+    WHERE" were accepted, which would have made `where: 301` legal on a sensor.
+    """
+    with pytest.raises(Invalid):
+        check(gw(sensor={"s": {"where": where, "name": "S", "class": "power"}}))
+
+
+@pytest.mark.parametrize("where", [0, 10, 99, 1000, 1015])
+def test_the_unambiguous_integer_shapes_stay_accepted(where):
+    """P3-INCONSISTENCY-2: the other half of the rule - existing files rely on it."""
+    out = check(gw(light={"a": {"where": where, "name": "A"}}))
+    assert list(platforms(out)["light"]) == [f"1-{where}"]
+
+
 @pytest.mark.parametrize("where", ["abc", "123", "1116", "#0", "#256", "", " "])
 def test_invalid_actuator_where(where):
     with pytest.raises(Invalid):
@@ -1283,14 +1329,28 @@ def test_probatio_and_voluptuous_agree():
     assert compared, "no invalid case in the corpus"
 
 
-def test_advanced_cover_timing_keys_are_reported_as_ignored(caplog: pytest.LogCaptureFixture) -> None:
-    """Review 2026-09-07: timing keys on an advanced actuator are accepted but reported."""
+def test_advanced_cover_timing_keys_are_reported(caplog: pytest.LogCaptureFixture) -> None:
+    """Review 2026-09-07 / C3-4: timing keys on an advanced actuator are reported...
+
+    ...but the warning may no longer call them "ignored": since 0.4.0 the run times
+    bound the safety timer that clears a direction whose "stopped" frame was lost
+    (`cover.py`, `_advanced_move_timeout`). Only `slat_time` does nothing.
+    """
     config = check(
         gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True, "slat_time": 3, "shutter_run": 30}})
     )
     assert config is not None
-    assert "cover 'shutter': shutter_run, slat_time ignored" in caplog.text
+    assert "cover 'shutter': an advanced actuator reports its real position" in caplog.text
+    assert "so shutter_run, slat_time neither estimate it nor enable tilt" in caplog.text
+    assert "only to bound the safety timer" in caplog.text
+    assert "slat_time is ignored" in caplog.text
+    # The old wording claimed the run times did nothing at all.
+    assert "shutter_run, slat_time ignored" not in caplog.text
     caplog.clear()
     check(gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True}}))
-    assert "ignored" not in caplog.text
+    assert "advanced actuator reports its real position" not in caplog.text
+    caplog.clear()
+    # A basic cover uses every one of them, so it is never warned about.
+    check(gw(cover={"shutter": {"where": "83", "name": "S", "slat_time": 3, "shutter_run": 30}}))
+    assert "advanced actuator reports its real position" not in caplog.text
 
