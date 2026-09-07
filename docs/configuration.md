@@ -12,13 +12,19 @@ of this schema.
 ## Contents
 
 - [Gateway setup](#gateway-setup)
+  - [Automatic discovery](#automatic-discovery-recommended)
+  - [Manual gateway configuration](#manual-gateway-configuration)
+  - [Reauthentication](#reauthentication)
   - [Options](#options)
   - [Repairs](#repairs)
 - [The `myhome.yaml` file](#the-myhomeyaml-file)
 - [Common parameters (all platforms)](#common-parameters-all-platforms)
+  - [Local bus interfaces (`interface`)](#local-bus-interfaces-interface)
 - [Light](#light)
 - [Switch](#switch)
 - [Cover](#cover)
+  - [The two-phase travel model (`slat_time`)](#the-two-phase-travel-model-slat_time)
+  - [Calibrating a cover](#calibrating-a-cover)
 - [Binary sensor](#binary-sensor)
 - [Climate](#climate)
 - [Sensor](#sensor)
@@ -151,16 +157,16 @@ Rules worth knowing:
 |-----------|------|----------|---------|-------------|
 | `where` | string | Yes | – | OpenWebNet WHERE address (see the platform notes for the accepted forms). Climate uses `zone` instead. |
 | `name` | string | Yes | – | Device name in Home Assistant (optional for climate). |
-| `entity_name` | string | No | device name | Name of the main entity when it must differ from the device name. |
+| `entity_name` | string | No | device name | Name of the main entity when it must differ from the device name. On a `class: power` meter it renames the **Power** entity; the daily/monthly/total energy entities of a `power` or `energy` meter keep their own translated names ("Energy today", "Energy this month", "Energy"). |
 | `icon` | string | No | – | Icon of the main entity (`mdi:...` or any registered icon set). |
 | `icon_on` | string | No | – | Icon used while the entity is on (light, switch). |
 | `manufacturer` | string | No | `BTicino S.p.A.` | Cosmetic, shown in the device page. |
 | `model` | string | No | – | Cosmetic, shown in the device page. |
 | `who` | string | No | per platform | OpenWebNet WHO; only needed for sensors/binary sensors that support several. |
-| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface (light, switch, cover, binary sensors). Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
+| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface (light, switch, cover, binary sensor, sensor; not climate, which is addressed by zone, and not `scenario_control`). Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
 | `class` / `device_class` | string | No | per platform | Home Assistant device class (see the platform tables). |
 
-Accepted actuator WHERE forms (light, switch, cover): General `"0"`, Area `"00"`, `"1"`..`"10"`, Group `"#1"`..`"#255"`, Point-to-Point 2 digits (`"15"`, A=1 PL=5) or 4 digits (`"0115"`, A=01 PL=15). Sensors, binary sensors and climate accept any string of digits (energy meters are usually `"51"`..`"5N"`, thermo zones `"1"`..`"99"`).
+Accepted actuator WHERE forms (light, switch, cover): General `"0"`, Area `"00"`, `"1"`..`"10"`, Group `"#1"`..`"#255"`, Point-to-Point 2 digits (`"15"`, A=1 PL=5) or 4 digits (`"0115"`, A=01 PL=15). Sensors and binary sensors accept any string of digits (energy meters are usually `"51"`..`"5N"`). Climate is different: its `zone` (and its `where` alias) accepts only `"#0"` for the central unit, `"1"`..`"99"` for a zone, or `"#0#<zone>"` for a zone driven through the central unit.
 
 ### Local bus interfaces (`interface`)
 
@@ -300,6 +306,17 @@ See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
 | `class` | binary sensor device class | by WHO | Default `opening` for WHO 25, `motion` for WHO 1, none for WHO 9. |
 | `inverted` | boolean | `false` | Invert the reported state. |
 
+Notes:
+
+- A binary sensor is the **main entity** of its device, like a light or a cover:
+  its friendly name is the device `name` (or `entity_name` when set), with no
+  device-class word appended. Entity ids are unchanged — only the friendly name is.
+- **WHO 1 supports `class: motion` only.** A WHO 1 binary sensor declared with any
+  other class is a configuration error: the load stops with the key path of the
+  offending device and a repair issue in *Settings → System → Repairs*. Motion
+  sensors live on the lighting bus and are the only WHO 1 input this platform
+  models; for a dry contact use WHO 25.
+
 ## Climate
 
 | Parameter | Type | Default | Description |
@@ -316,11 +333,11 @@ See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power`/`energy` are WHO 18 meters (`power` also creates the daily/monthly/total energy entities), `temperature` WHO 4 (WHERE = zone), `illuminance` WHO 1. |
+| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. |
 | `who` | string | from `class` | Only needed to override the WHO implied by the class (must match). |
 | `keepalive_minutes` | integer 0-255 | `125` | Power meters only: the integration asks the meter to push instant power for this many minutes and renews the request by itself. `0` disables the automatic keep-alive. |
 | `min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`, `info_log_interval_sec` | number | see [Energy monitoring](energy.md) | Per-sensor overrides of the power filtering defaults. |
-| `refresh_period` | number | – | Alias of `min_interval_sec` (upstream name). |
+| aliases | – | – | `refresh_period` and `refresh_period_sec` are accepted for `min_interval_sec`, and `energy_min_delta_w` / `energy_min_interval_sec` / `energy_suppress_log_interval_sec` / `energy_info_log_interval_sec` for their canonical counterparts. The canonical key wins if both are given. See [Energy monitoring](energy.md#sensor_defaults). |
 
 Units are fixed by the class (W, Wh, °C, lx). Energy filtering, totals and
 `keepalive_minutes` are covered in full in [Energy monitoring](energy.md).
@@ -337,7 +354,7 @@ top, since **0.4.0**:
 
 - a **device** with one **event entity**, so the last press is visible in the state
   machine and in history (`event.<name>_scenario_control`);
-- **device triggers**, so "Button 2 held down on Keypad Soggiorno" can be picked
+- **device triggers**, so "Button 2 held down on Living Room Keypad" can be picked
   from the automation editor instead of hand-written event triggers.
 
 Controls you do not declare keep working exactly as before, firing the bus events
@@ -363,10 +380,10 @@ gateway:
 |-----------|------|----------|---------|-------------|
 | `name` | string | Yes | – | Device name in Home Assistant. |
 | `protocol` | `cen_plus` \| `cen` | No | `cen_plus` | Which of the two protocols the control speaks. |
-| `object` | integer 1-2047 | Yes for `cen_plus` | – | CEN+ object number (the WHERE without its leading digit, i.e. the number the bus event reports as `object`). Not allowed for `cen`. |
+| `object` | integer 1-2047 | Yes for `cen_plus` | – | CEN+ object number: the frame's WHERE without its leading `#` (WHERE `#25` → `object: 25`), i.e. the number the bus event reports as `object`. Not allowed for `cen`. |
 | `where` | string of digits | Yes for `cen` | – | CEN address, as it appears in the `*15*…*<where>##` frame. Not allowed for `cen_plus`. |
 | `buttons` | list of integers | No | `[1, 2, 3, 4]` | Which pushbuttons the automation editor should offer. CEN+ buttons are `1`-`32`, CEN buttons are `0`-`31`. |
-| `entity_name`, `manufacturer`, `model` | string | No | see below | The common cosmetic keys; `model` defaults to `CEN+ scenario control` / `CEN scenario control`. |
+| `entity_name`, `icon`, `manufacturer`, `model` | string | No | see below | The common cosmetic keys; `model` defaults to `CEN+ scenario control` / `CEN scenario control`. |
 
 Notes:
 
@@ -382,7 +399,14 @@ Notes:
 - The event entity's `event_types` are exactly the event names of the protocol —
   see the [event tables](services-and-events.md#cen-keypad-events). CEN+ adds the
   long-press repeat and the four rotary events; CEN has the release after a short
-  press instead.
+  press instead. Beware that the four CEN names describe different gestures from
+  the CEN+ ones: on CEN, `pushbutton_short_press` fires at the start of *every*
+  press, long ones included, and `pushbutton_long_press` repeats while the button
+  is held. Use `pushbutton_short_release` for "the user tapped the button" — see
+  [CEN keypad events](services-and-events.md#cen-keypad-events-1).
+- `interface:` is **not supported** for scenario controls. A CEN control is
+  identified by its WHERE alone, so a CEN keypad on an F422 local bus and one on
+  the main bus with the same WHERE are indistinguishable; declare only one of them.
 
 See [Recipes → CEN+ keypads](recipes.md#cen-keypads) for automations, blueprints
 and the device-trigger UI.
@@ -454,6 +478,7 @@ gateway:
 - **`Invalid <WHERE>`** / **`quote it`**: the address is not a valid OpenWebNet WHERE, or an unquoted number lost its leading zero.
 - **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named).
 - **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
+- **a WHO 1 `binary_sensor` with a `class` other than `motion`**: WHO 1 inputs are modelled as motion sensors only. Drop the class, or move the device to `who: "25"` if it is a dry contact.
 - **`scenario_control 'x' is missing the required 'object'`** / **`a CEN control is addressed by 'where', not by 'object'`**: a CEN+ control needs `object`, a CEN control needs `where`; never both.
 - **`scenario_control 'x': pushbutton N is out of range for protocol …`**: CEN+ buttons are 1-32, CEN buttons are 0-31.
 - **`gateway 'x' needs a 'mac'`** / **`configured twice`**: every root entry needs a MAC (as `mac:` or as the root key) and each MAC may appear once.

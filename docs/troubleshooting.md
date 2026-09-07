@@ -10,7 +10,7 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
 - [Repairs](#repairs)
 - [Diagnostics download](#diagnostics-download)
 - [Debug logging](#debug-logging)
-- [Migration from v0.8 and earlier](#migration-from-v08-and-earlier)
+- [Migration from the original integration v0.8 and earlier](#migration-from-the-original-integration-v08-and-earlier)
 
 ## Gateway connection issues
 
@@ -22,10 +22,13 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
 ## Device discovery issues
 
 **"Discovery not active" in logs:**
-- Ensure you're calling the service correctly: `service: myhome.start_discovery` with `gateway: "MAC_ADDRESS"`
-- Don't put service calls in the YAML config file - use Developer Tools → Services
+- Ensure you are calling the action correctly: `action: myhome.start_discovery`
+  with `gateway: "00:03:50:AA:BB:CC"` (the `gateway` field is only needed with
+  more than one gateway loaded)
+- Do not put action calls in `configuration.yaml` — run them from
+  **Developer tools → Actions**, or from an automation or script
 - Check that the gateway MAC address is correct
-- Verify the service call shows `discovery_active: True` in debug logs
+- Confirm the run actually started: the log shows `Starting device discovery (60s)` at INFO
 
 **No devices found during discovery:**
 1. **Enable debug logging** to see discovery messages:
@@ -36,24 +39,31 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
        custom_components.myhome.gateway: debug
        custom_components.myhome.config_flow_discovery: debug
    ```
-2. **Check discovery status** - Look for logs like:
-   - `"Starting MyHOME device discovery on gateway..."`
-   - `"Sending discovery command 1/6: *#1*0##"`
-   - `"Discovery message received: *1*8*11##"`
-   - `"Discovered new device: MyHOME Bus Dimmer 11 at WHERE=11"`
-   - `"Starting device configuration suggestion for MyHOME Bus Dimmer 11"`
-   - `"Starting config file write process for device MyHOME Bus Dimmer 11"`
-   - `"Successfully added device MyHOME Bus Dimmer 11 to configuration file"`
+2. **Check discovery status** — with `custom_components.myhome.discovery: debug`,
+   a healthy run logs, in order:
+   - `Starting device discovery (60s)` (INFO)
+   - ``Discovery status request `*#1*0##` `` — then the same for `*#2*0##`,
+     `*#4*0##`, `*#18*0##`, `*#25*0##` and `*#9*0##`, half a second apart
+   - `Discovered bus_dimmer at WHO=1 WHERE=11` (INFO), once per new device
+   - `Discovery completed: N device(s) seen` (INFO)
+
+   The suggestions are then flushed to `myhome_discovered.yaml`. Nothing is ever
+   written to `myhome.yaml`.
 3. **Verify device responses** - Look for incoming messages after discovery commands
 4. **Check gateway communication** - Ensure devices are responding to status requests
 5. **Manual device test** - Try controlling devices through other MyHOME apps first
 
 **Incorrect device type detection:**
-- **Dimmer vs Switch**: Discovery determines device type based on status responses
-  - Devices reporting dimming levels (WHAT=2-10, excluding 8) are detected as dimmers
-  - Devices reporting only ON/OFF states (WHAT=0,1,8) are detected as switches
-  - If a dimmer is incorrectly detected as a switch, manually edit the config and set `dimmable: true`
-- **Special states**: WHAT=8 often indicates "temporized ON" or other special states, not dimming capability
+- **Dimmer vs switch**: discovery classifies on what the actuator answered.
+  - A frame carrying a brightness, or a preset level (WHAT 2–10, 8 included),
+    is classified as a **dimmer** and the suggestion carries `dimmable: true`.
+  - A frame carrying only ON/OFF (WHAT 0 or 1) is classified as an on/off
+    **switch**, and the discovered device carries the note *"Detected as on/off
+    switch; set `dimmable: true` manually for dimmers"*.
+  - Because the classification depends on the state the device happened to be
+    in, a dimmer that was fully on (WHAT 1) when discovery ran is reported as a
+    switch. Set `dimmable: true` by hand — it is the expected correction, not a
+    bug.
 
 **Devices discovered but suggestions missing:**
 
@@ -72,7 +82,9 @@ See [Discovery](discovery.md) — since 0.2.0, suggestions go to `myhome_discove
 1. **Validate YAML syntax**: Ensure `myhome.yaml` has correct formatting
 2. **Check device addresses**: Verify WHERE addresses match physical devices
 3. **Review device types**: Ensure correct platform assignments
-4. **Restart Home Assistant**: Required after `myhome.yaml` changes
+4. **Reload the integration** after every `myhome.yaml` change: *Settings →
+   Devices & services → MyHOME → ⋮ → Reload*. A full Home Assistant restart is
+   not needed — the file is re-read and re-validated on every reload.
 
 See [Configuration → Validation errors](configuration.md#validation-errors) for
 the exact error messages the integration produces.
@@ -144,9 +156,11 @@ logger:
 
 > **Note:** For day-to-day use, keep `custom_components.myhome` at `info` (or leave the `logger:` block out entirely) — per-frame bus traffic is only logged at `debug`. Occasional "reconnecting" INFO lines after a gateway hiccup are expected; the integration retries and recovers on its own. Use `debug` only when troubleshooting.
 
-## Migration from v0.8 and earlier
+## Migration from the original integration v0.8 and earlier
 
-If upgrading from version 0.8 or earlier:
+If you are upgrading from `anotherjulien/MyHOME` **v0.8 or earlier** — the
+releases that were configured in `configuration.yaml`, before `myhome.yaml`
+existed:
 
 1. **Create myhome.yaml**: Move device configurations from `configuration.yaml`
 2. **Update device structure**: Follow the new YAML format below
@@ -158,7 +172,7 @@ If upgrading from version 0.8 or earlier:
 ```yaml
 myhome:
   gateways:
-    - host: 192.168.1.35
+    - host: 192.168.1.10
       devices:
         light:
           - where: "15"
@@ -168,7 +182,7 @@ myhome:
 
 **New format (myhome.yaml):**
 ```yaml
-"00:03:50:XX:XX:XX":
+"00:03:50:AA:BB:CC":
   light:
     living_room:
       where: "15"

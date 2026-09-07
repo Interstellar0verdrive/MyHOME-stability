@@ -20,6 +20,7 @@ see [Recipes](recipes.md).
   - [General/area/group bus events](#generalareagroup-bus-events)
   - [Wall pushbutton events (`myhome_light_pushbutton_event`)](#wall-pushbutton-events-myhome_light_pushbutton_event)
   - [Raw bus traffic (`myhome_message_event`)](#raw-bus-traffic-myhome_message_event)
+  - [Example event automation](#example-event-automation)
 
 ## Services
 
@@ -28,9 +29,9 @@ see [Recipes](recipes.md).
 Start automatic device discovery on a gateway. See [Discovery](discovery.md).
 
 ```yaml
-service: myhome.start_discovery
+action: myhome.start_discovery
 data:
-  gateway: "00:03:50:XX:XX:XX"  # Optional
+  gateway: "00:03:50:AA:BB:CC"  # Optional
 ```
 
 ### `myhome.stop_discovery`
@@ -38,9 +39,9 @@ data:
 Stop active device discovery.
 
 ```yaml
-service: myhome.stop_discovery
+action: myhome.stop_discovery
 data:
-  gateway: "00:03:50:XX:XX:XX"  # Optional
+  gateway: "00:03:50:AA:BB:CC"  # Optional
 ```
 
 ### `myhome.start_sending_instant_power`
@@ -52,7 +53,7 @@ reconnection and every `keepalive_minutes - 5` minutes (see
 or for a one-off/different duration.
 
 ```yaml
-service: myhome.start_sending_instant_power
+action: myhome.start_sending_instant_power
 target:
   entity_id: sensor.house_main_power
 data:
@@ -64,22 +65,25 @@ data:
 Synchronize gateway time with Home Assistant.
 
 ```yaml
-service: myhome.sync_time
+action: myhome.sync_time
 data:
-  gateway: "00:03:50:XX:XX:XX"  # Optional
+  gateway: "00:03:50:AA:BB:CC"  # Optional
 ```
 
 ### `myhome.send_message`
 
-Send raw OpenWebNet commands to the gateway. The frame is parsed by `OWNd` before
-being sent; if it does not parse, or parses as invalid, the call fails with *"…
-is not a valid OpenWebNet command"* and nothing is sent. If the queue is closed or
-full, the call fails with *"The gateway did not accept the command …"*.
+Send raw OpenWebNet commands to the gateway. The frame must have the OpenWebNet
+shape (`*…##`); it is then handed to `OWNd`'s typed parser, and — since 0.4.0 —
+sent as a generic command when that parser has no type for it, so frames such as
+a CEN+ virtual press (`*25*21#1*#2##`) go through. A frame that is not
+well-formed fails with *"… is not a valid OpenWebNet command"* and nothing is
+sent. If the queue is closed or full, the call fails with *"The gateway did not
+accept the command …"*.
 
 ```yaml
-service: myhome.send_message
+action: myhome.send_message
 data:
-  gateway: "00:03:50:XX:XX:XX"  # Optional
+  gateway: "00:03:50:AA:BB:CC"  # Optional
   message: "*1*1*15##"  # Turn on light at address 15
 ```
 
@@ -111,7 +115,7 @@ exactly four keys:
 
 | Key | Type | Value |
 |---|---|---|
-| `object` | integer | The CEN+ object address (the WHERE without its leading digit). |
+| `object` | integer | The CEN+ object address: the frame's WHERE without its leading `#` (WHERE `#25` → `object: 25`). |
 | `pushbutton` | integer | The button number on that object. |
 | `event` | string | One of the values in the table below. |
 | `mac` | string | MAC address of the gateway that saw the frame, normalised (`00:03:50:aa:bb:cc`). **Added in 0.4.0.** |
@@ -138,11 +142,27 @@ automations for each value: [Recipes → CEN+ keypads](recipes.md#cen-keypads).
 ### CEN keypad events
 
 Classic (non-plus) CEN controls fire `myhome_cen_event` with the same four keys
-(`object`, `pushbutton`, `event`, `mac`) and a shorter list of values:
-`pushbutton_short_press`, `pushbutton_short_release`, `pushbutton_long_press`,
-`pushbutton_long_release`. `object` carries the CEN WHERE as an integer (the frame's
-`*15*what*<where>##`). See [Recipes → CEN keypads](recipes.md#cen-keypads-1) for an
-example.
+(`object`, `pushbutton`, `event`, `mac`) and a shorter list of values. `object`
+carries the CEN WHERE as an integer, and `pushbutton` the frame's WHAT, which on
+CEN *is* the button number (`*15*<pushbutton>*<where>##`).
+
+The four names are the same strings CEN+ uses, but a CEN keypad reports a
+different gesture with each of them:
+
+| CEN frame | `event` value | Fired when |
+|---|---|---|
+| `*15*N*<where>##` | `pushbutton_short_press` | Button N is **pressed** — sent at the start of a long press too, not only for a tap. |
+| `*15*N#1*<where>##` | `pushbutton_short_release` | Button N is released after a short press. This is the frame that means "the user tapped the button". |
+| `*15*N#3*<where>##` | `pushbutton_long_press` | Extended pressure. It repeats while the button stays held (there is no separate "repeat" event as on CEN+). |
+| `*15*N#2*<where>##` | `pushbutton_long_release` | Button N is released after an extended press. |
+
+So on CEN, use **`pushbutton_short_release`** for "the user tapped the button":
+`pushbutton_short_press` also fires at the start of every long press, and an
+automation triggered on `pushbutton_long_press` with the default `mode: single`
+will log "already running" while the button is held — use `mode: queued` (or
+`mode: single` with `max_exceeded: silent`) there.
+
+See [Recipes → CEN keypads](recipes.md#cen-keypads-1) for an example.
 
 ### Device triggers and event entities
 
@@ -153,7 +173,8 @@ also becomes a **device** with:
 
 - one **event entity** (`event.<name>_scenario_control`) whose state is the timestamp
   of the last press, with attributes `event_type` (the same string as the bus event's
-  `event`), `pushbutton`, `protocol` and `object` (CEN+) / `where` (CEN);
+  `event`), `pushbutton`, `protocol`, `buttons` (the declared list) and `object`
+  (CEN+) / `where` (CEN);
 - **device triggers**, one per declared button and event name, usable from the
   automation editor ("Button 2 held down"). They are implemented on top of the bus
   events above and match on `mac`, `object`, `pushbutton` and `event`, so they are
@@ -190,7 +211,7 @@ can be acted on. Data:
 | key       | value                                                                 |
 |-----------|-----------------------------------------------------------------------|
 | `mac`     | gateway MAC (as in the CEN/CEN+ events)                               |
-| `where`   | the WHERE the button is addressed to, as a string (e.g. `"42"`)      |
+| `where`   | the WHERE the button is addressed to, as a string (e.g. `"42"`); behind an F422 local bus interface it carries the full bus form, `"11#4#3"` |
 | `what`    | the original WHAT, as an integer                                      |
 | `event`   | `on`, `off`, `dim_up` (WHAT 30), `dim_down` (31), `dim_to_<pct>` (2-10), otherwise `what_<n>` |
 | `message` | the raw frame                                                         |
@@ -222,7 +243,7 @@ Event data for a frame `OWNd` could parse:
 | `family` | yes | Frame family, e.g. `Event`, `Request`, `Command translation`. |
 | `type` | yes | Message type, e.g. `Status`, `Dimension request`. |
 | `who` | yes | The WHO as an integer. |
-| `where`, `interface`, `where parameters`, `what`, `what parameters`, `dimension`, `dimension parameters`, `dimension values` | no | Present only when the frame carries them. |
+| `where`, `interface`, `where parameters`, `what`, `what parameters`, `dimension`, `dimension parameters`, `dimension values` | no | Present only when the frame carries them **and the value is non-zero**: `OWNd` omits a key whose value is `0`, so a light switching off (`*1*0*11##`) arrives with no `what` at all. Read them with `trigger.event.data.get('what')`, never with `trigger.event.data.what`. |
 
 For a frame `OWNd` could **not** parse, only `gateway` and `message` (the raw
 text) are present.
@@ -237,16 +258,16 @@ for watching the bus live and logging unmapped addresses.
 ```yaml
 automation:
   - alias: "Scene Button Pressed"
-    trigger:
-      platform: event
-      event_type: myhome_cenplus_event
-      event_data:
-        object: 25
-        pushbutton: 1
-        event: pushbutton_short_press
-        # mac: "00:03:50:AA:BB:CC"   # optional, only useful with several gateways
-    action:
-      service: scene.turn_on
-      target:
-        entity_id: scene.evening_lights
+    triggers:
+      - trigger: event
+        event_type: myhome_cenplus_event
+        event_data:
+          object: 25
+          pushbutton: 1
+          event: pushbutton_short_press
+          # mac: "00:03:50:AA:BB:CC"   # optional, only useful with several gateways
+    actions:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.evening_lights
 ```
