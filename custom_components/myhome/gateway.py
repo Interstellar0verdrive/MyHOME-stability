@@ -1034,8 +1034,17 @@ class MyHOMEGatewayHandler:
 
     async def _check_idle(self) -> None:
         """Idle watchdog (gw-03): after ``idle_timeout`` without a monitor frame, probe
-        through the command session; reconnect only if *neither* session produced
-        anything within ``probe_window``.
+        through the command session; reconnect only if nothing arrived on the monitor
+        **and** no status request was acknowledged on the command session within
+        ``probe_window``.
+
+        That second half is narrower than "the command session said nothing", and
+        deliberately so: only a status request stamps ``_command_ack_at``
+        (``_on_command_result``), because only a status request is a question we know
+        the gateway had to answer. An ordinary command it ACKs, or a status request it
+        NACKs, does not re-arm the watchdog, and the monitor session is rebuilt even
+        though the command port is demonstrably alive - so the log must not claim
+        neither session answered.
 
         Any status request the gateway ACKs on the command port proves it is alive -
         it need not be the probe itself - even when it does not mirror command replies
@@ -1077,7 +1086,10 @@ class MyHOMEGatewayHandler:
                 self._last_rx = now
                 self._probe_sent_at = None
                 return
-            raise SessionError(f"no event for {idle:.0f} s and no answer on either session")
+            raise SessionError(
+                f"no status request acknowledged on the command session "
+                f"and nothing on the monitor for {idle:.0f} s"
+            )
 
     def _probe_command(self) -> OWNCommand:
         """A harmless status request whose reply shows up on the monitor session.

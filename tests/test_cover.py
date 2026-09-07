@@ -957,17 +957,28 @@ async def test_a_stop_the_gateway_refused_changes_nothing(
         assert state.state == CoverState.CLOSED
 
 
-async def test_a_timed_stop_the_gateway_refused_does_not_arm_the_echo_window(
+async def test_a_timed_stop_the_gateway_refused_runs_on_to_the_end_stop(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Review 3 / C3-3: the same rule on the stop that ends a `set_cover_position`.
+    """The refused-stop rule on the stop that ends a `set_cover_position`.
 
-    That stop is sent by the movement deadline, and its `send()` result used to be
-    discarded: a refused stop armed the echo window anyway, and the window then
-    swallowed the first frame in the interrupted direction - which, the stop having
-    never reached the bus, can only be a real one. Mutation caught: calling
-    `_mark_own_stop(interrupted)` without looking at the result, after which the
-    keypad frame below is ignored and the cover stays *open* at 50 %.
+    Review 3 / C3-3 made that stop look at its `send()` result, but only to decide
+    whether to arm the echo window: the estimate was still settled on the target
+    first, unconditionally. Review 4 / C4-2: a stop that never reached the bus does
+    not stop anything, so the shutter runs on to its end stop while Home Assistant
+    reported it parked at a position it never reached - and the actuator's own
+    `stopped` frame at the end of the physical run then re-froze that same stale
+    value, for good.
+
+    The timed run is now converted into a free run instead: the estimate keeps
+    running, and the frame at the end of it re-calibrates the position exactly as it
+    does for an `open_cover` / `close_cover` we sent ourselves.
+
+    Mutations caught: settling the estimate before the send (the round-3 shape),
+    after which the cover reads *open* at 50 % for ever; and dropping
+    `self._own_free_run = True` from `_continue_to_end_stop`, after which the frame
+    at the floor freezes the estimate wherever it happened to be instead of snapping
+    it to closed.
     """
     mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
     async with setup_myhome(hass, tmp_path, BASIC_YAML):
@@ -982,10 +993,24 @@ async def test_a_timed_stop_the_gateway_refused_does_not_arm_the_echo_window(
         # 100 -> 50 on a 30 s run: the auto-stop is due after 15 s, and refused.
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
             await _advance(hass, freezer, 16)
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
 
-        await feed_event(hass, cover, "*2*2*81##")  # the shutter is still going down
+        # The shutter never got the stop: it is still going down, already past the
+        # target, and the estimate goes down with it.
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.CLOSING
+        assert state.attributes[ATTR_CURRENT_POSITION] < 50
+
+        # Nothing was armed either: a real frame in that direction is still honoured.
+        await feed_event(hass, cover, "*2*2*81##")
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
+
+        # 12 s into the ~14 s of travel that were left: the actuator's own frame is
+        # the end stop, and re-calibrates the estimate on the floor.
+        await _advance(hass, freezer, 12)
+        await feed_event(hass, cover, "*2*0*81##")
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
 
 
 async def test_advanced_movement_is_bounded_by_a_safety_timer(
@@ -999,8 +1024,9 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
     the `self._moving = None` from the grace callback (same).
 
     Review 3 / C3-2: the bound asks before it concludes. Nothing answers here, so the
-    direction goes - but only after `ADVANCED_PROBE_GRACE_SEC`, never at the moment
-    the status request goes out.
+    direction goes - but only after the status grace (the gateway's command timeout
+    plus a margin, see `ADVANCED_PROBE_GRACE_MARGIN_SEC`), never at the moment the
+    status request goes out.
     """
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
         entity_id = "cover.cover_advanced"
@@ -1018,7 +1044,7 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
         assert commands.status_frames == ["*#2*83##"]
         assert hass.states.get(entity_id).state == CoverState.OPENING
 
-        await _advance(hass, freezer, 3)  # the grace runs out unanswered
+        await _advance(hass, freezer, 13)  # the grace (10 s + 2 s) runs out unanswered
         state = hass.states.get(entity_id)
         assert state.state == CoverState.OPEN
         # The real position is still the actuator's own, never an estimate.
@@ -1108,7 +1134,7 @@ async def test_the_timing_keys_of_an_advanced_cover_size_the_safety_timer(
 
         await _advance(hass, freezer, 65)  # 125 s: past 90 + 30
         assert commands.status_frames == ["*#2*87##"]
-        await _advance(hass, freezer, 3)
+        await _advance(hass, freezer, 13)  # nothing answers within the grace
         assert hass.states.get(entity_id).state == CoverState.OPEN
 
 
@@ -1142,6 +1168,46 @@ async def test_an_advanced_stop_disarms_the_safety_timer(
         await feed_event(hass, cover, "*2*1*83##")
         await feed_event(hass, cover, "*#2*83*10*10*80*0*0##")  # position + "stopped"
         assert hass.states.get(entity_id).state == CoverState.OPEN
+        commands.clear()
+        await _advance(hass, freezer, 90)
+        assert commands.status_frames == []
+
+
+async def test_a_stop_on_an_advanced_cover_leaves_the_model_to_the_actuator(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Review 4 / C4-5: `stop_cover` on an advanced cover only sends the command.
+
+    An advanced actuator's position *and* direction come from its own frames, so
+    there is nothing to end here: the entity stays *Opening* until the actuator says
+    it stopped, and the safety timer that bounds that direction stays armed. This is
+    the arm of `async_stop_cover` that used to share one comment with the
+    refused-command one - a reader who took that comment at face value would have
+    read this as a refusal path and "fixed" it by freezing the estimate.
+
+    Mutation caught: dropping the `if self._advanced: return`, after which the cover
+    is published as *open* at 42 % the moment the stop is sent, before the actuator
+    has stopped at all.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*42*0*0##")
+        await feed_event(hass, cover, "*2*1*83##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        commands.clear()
+
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: entity_id}, blocking=True)
+        assert commands.sent_frames == ["*2*0*83##"]
+        # The command is on its way: only the actuator's own frame ends the movement.
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        assert hass.states.get(entity_id).attributes[ATTR_CURRENT_POSITION] == 42
+
+        await feed_event(hass, cover, "*#2*83*10*10*55*0*0##")  # "stopped at 55 %"
+        state = hass.states.get(entity_id)
+        assert state.state == CoverState.OPEN
+        assert state.attributes[ATTR_CURRENT_POSITION] == 55
+        # ... and that frame took the safety timer with it: no stray status request.
         commands.clear()
         await _advance(hass, freezer, 90)
         assert commands.status_frames == []
@@ -1181,37 +1247,65 @@ async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
 async def test_the_status_grace_outlives_a_bus_round_trip(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """`ADVANCED_PROBE_GRACE_SEC` has to be long enough for the answer to come back.
+    """The status grace has to outlast the command path it is waiting on.
 
     The safety timer asks the actuator what it is doing and only then concludes; the
     whole value of that (C3-2) is that a *slow* actuator answers in time. The answer
-    travels the command queue, which is serialised across the gateway and may already
-    hold other requests, so the grace is not free: too short and the entity publishes
-    `closed` mid-run again - an advanced cover is not `assumed_state` and reads
-    *closed* at position 0 - once per run longer than its bound.
+    travels the ordinary command queue - one sending worker by default, a scene's
+    worth of commands possibly ahead of it, an idle command session that has to be
+    re-opened first - and how long all that may legitimately take is the user's own
+    `command_timeout_sec` option, 10 s by default.
+
+    Review 4 / C4-1: the round-3 grace was a fixed 2 s, which expires well inside
+    that budget. On a merely busy bus (the "close everything at sunset" scene is the
+    common one) the answer landed after the grace and the entity published `closed`
+    in the middle of the run again - an advanced cover is not `assumed_state` and
+    reads *closed* at position 0 - which is the symptom C3-2 was about.
 
     The other advanced tests feed the answer without moving the clock at all, so they
     pass for any grace whatsoever, and `test_a_slow_advanced_actuator_never_leaves_opening`
-    advances in one jump that straddles the whole sequence. Mutations caught:
-    `ADVANCED_PROBE_GRACE_SEC = 0.01` and `= 0.5`.
+    advances in one jump that straddles the whole sequence. Mutations caught: any
+    fixed grace shorter than the command timeout (`2.0`, the round-3 value, or `0.5`),
+    and a hard-coded `12.0` that would stop following the option.
     """
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
         entity_id = "cover.cover_advanced"
         cover = entity_object(hass, COVER, "2-83")
+        handler = cover._gateway_handler  # noqa: SLF001 - the real handler, default options
+        # The grace is the command path's own budget plus a margin, never a constant.
+        assert cover._advanced_probe_grace == (  # noqa: SLF001
+            handler.command_timeout + cover_module.ADVANCED_PROBE_GRACE_MARGIN_SEC
+        )
+
         await feed_event(hass, cover, "*#2*83*10*10*0*0*0##")  # closed, on the floor
+
+        seen: list[str] = []
+
+        @callback
+        def _record(event) -> None:
+            seen.append(event.data["new_state"].state)
+
+        unsub = async_track_state_change_event(hass, [entity_id], _record)
         await feed_event(hass, cover, "*2*1*83##")  # it starts opening
         commands.clear()
 
         await _advance(hass, freezer, 55)  # past the 50 s bound: the actuator is asked
         assert commands.status_frames == ["*#2*83##"]
 
-        # A round trip on a busy command queue is not instantaneous. The entity must
+        # A round trip on a busy command queue is not instantaneous, and four seconds
+        # is well inside what the command path is allowed to take. The entity must
         # still say `opening` while it waits, not flip to `closed` at position 0.
-        await _advance(hass, freezer, 1.0)
+        await _advance(hass, freezer, 4.0)
         assert hass.states.get(entity_id).state == CoverState.OPENING
 
         await feed_event(hass, cover, "*#2*83*10*11*60*0*0##")  # "still opening"
         assert hass.states.get(entity_id).state == CoverState.OPENING
+        unsub()
+        assert CoverState.CLOSED not in seen
+
+        # And the grace follows the option: a gateway given 30 s to answer gets 32.
+        handler.command_timeout = 30.0
+        assert cover._advanced_probe_grace == 32.0  # noqa: SLF001
 
 
 async def test_the_echo_recheck_waits_out_the_echo_window(

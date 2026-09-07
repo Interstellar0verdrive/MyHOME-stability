@@ -694,20 +694,29 @@ async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant,
 
 # --------------------------------------------------------------------------- review 2026-09-07
 async def test_worker_count_option_is_guarded(hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture) -> None:
-    """A hand-edited option must neither crash the setup nor flood the gateway with sessions."""
+    """A hand-edited option must neither crash the setup nor flood the gateway with sessions.
+
+    Review 4 / C4-6: the warning must also name the number that is really in use.
+    It used to hard-code "using 1" next to a fallback that is a parameter of
+    ``clamp_worker_count``, so the log and the sessions could drift apart. Mutation
+    caught: putting a literal back in the message.
+    """
     entry = make_entry(write_yaml(tmp_path), options={CONF_WORKER_COUNT: "abc"})
     with mock_gateway():
         assert await _setup(hass, entry)
         handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
         assert len(handler.sending_workers) == 1
-        assert "is not a number" in caplog.text
+        assert f"is not a number ('abc'): using {len(handler.sending_workers)}" in caplog.text
         assert await hass.config_entries.async_unload(entry.entry_id)
 
+    caplog.clear()
     entry = make_entry(write_yaml(tmp_path), options={CONF_WORKER_COUNT: 99}, mac="00:03:50:aa:bb:dd")
     with mock_gateway():
         assert await _setup(hass, entry)
         handler = hass.data[DOMAIN]["00:03:50:aa:bb:dd"][CONF_ENTITY]
         assert len(handler.sending_workers) == MAX_COMMAND_WORKERS
+        # 99 *is* a number: it is clamped, silently, exactly as the options form does.
+        assert "is not a number" not in caplog.text
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
