@@ -47,7 +47,7 @@ from custom_components.myhome.sensor import (
 )
 
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
-from .helpers_platforms import diagnostic_entity_id, dispatch_stats
+from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, diagnostic_entity_id, dispatch_stats
 
 # The user's real configuration: three WHO=18 meters (one with a per-sensor override),
 # plus a thermo probe and an illuminance sensor to cover the other two sensor classes.
@@ -223,8 +223,7 @@ async def test_entities_and_unique_ids(hass: HomeAssistant, tmp_path) -> None:
         assert f"{MAC}-1-31-illuminance" in created
 
         # Enabled by default: power + total energy; daily/monthly stay opt-in.
-        assert hass.states.get(POWER_ENTITY) is not None
-        assert hass.states.get(TOTAL_ENTITY) is not None
+        # (The two enabled ones are checked by the Contract C loop below.)
         assert hass.states.get(DAILY_ENTITY) is None
         assert registry.async_get(DAILY_ENTITY).disabled_by is er.RegistryEntryDisabler.INTEGRATION
 
@@ -307,18 +306,27 @@ async def test_class_energy_creates_only_the_three_totalisers(hass: HomeAssistan
 
     It creates the three totalisers and nothing else - no Power entity, no instant
     power stream - so the keep-alive and filter keys have no effect on such a device.
+
+    "only" is asserted as an exact set, not with ``in`` / ``not in``: the old form
+    accepted any number of extra entities, so a regression that also built the
+    Power entity (and with it the instant-power keep-alive this class exists to
+    avoid) would have kept it green. Mutation caught: adding any further slot to
+    the ``class: energy`` branch of ``sensor.async_setup_entry``.
     """
     entry = make_entry(write_yaml(tmp_path, ENERGY_ONLY_YAML))
     with mock_gateway():
         await _setup(hass, entry)
         registry = er.async_get(hass)
-        created = {
-            e.unique_id for e in er.async_entries_for_config_entry(registry, entry.entry_id)
-        }
-        for suffix in ("daily-energy", "monthly-energy", "total-energy"):
-            assert f"{MAC}-18-54-{suffix}" in created
-        assert f"{MAC}-18-54-power" not in created
+        entries = er.async_entries_for_config_entry(registry, entry.entry_id)
+        created = {e.unique_id for e in entries}
+        assert created == {
+            f"{MAC}-18-54-{suffix}" for suffix in ("daily-energy", "monthly-energy", "total-energy")
+        } | GATEWAY_DIAG_UNIQUE_IDS
         # Only the total is enabled by default; nothing arms the instant power stream.
+        disabled_by = {e.unique_id: e.disabled_by for e in entries}
+        assert disabled_by[f"{MAC}-18-54-total-energy"] is None
+        for suffix in ("daily-energy", "monthly-energy"):
+            assert disabled_by[f"{MAC}-18-54-{suffix}"] is er.RegistryEntryDisabler.INTEGRATION
         assert hass.states.get("sensor.garden_meter_energy") is not None
         assert [f for f in _drain(hass) if "#1200#1" in f] == []
 
@@ -601,16 +609,32 @@ async def test_pending_refresh_does_not_outlive_the_entity(hass: HomeAssistant, 
         assert not sensor._pending_updates
 
 
-async def test_unload_removes_entities_from_the_registry_dict(hass: HomeAssistant, tmp_path) -> None:
-    """sc-13: no platform-level async_unload_entry; the entities unregister themselves."""
+async def test_unload_drains_the_entities_registry_dict(hass: HomeAssistant, tmp_path) -> None:
+    """sc-13: no platform-level async_unload_entry; the entities unregister themselves.
+
+    This used to assert ``MAC not in hass.data[DOMAIN]``, which is ``__init__``'s
+    ``async_unload_entry`` dropping the whole per-gateway dict and says nothing
+    about ``MyHOMEEntity.async_will_remove_from_hass`` - the code the name refers
+    to. Replacing that method's body with ``return`` left the suite green.
+
+    The bug it now catches is the classic reload leak: a stale entity object left
+    in ``hass.data[...][CONF_ENTITIES]``, so after a reload the gateway dispatcher
+    keeps pushing frames into an entity that is detached from ``hass``. The dict
+    object is captured *before* the unload, so the ``__init__`` teardown cannot be
+    what empties it.
+
+    ``daily-energy`` and ``monthly-energy`` are disabled by default: they are never
+    added to ``hass``, so nothing ever removes them and they correctly stay behind.
+    That asymmetry is the proof that the two enabled slots left by themselves.
+    """
     entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
     with mock_gateway():
         await _setup(hass, entry)
-        assert set(
-            hass.data[DOMAIN][MAC][CONF_PLATFORMS]["sensor"]["18-51"][CONF_ENTITIES]
-        ) >= {"power", "total-energy"}
+        entities = hass.data[DOMAIN][MAC][CONF_PLATFORMS]["sensor"]["18-51"][CONF_ENTITIES]
+        assert set(entities) == {"power", "daily-energy", "monthly-energy", "total-energy"}
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+        assert set(entities) == {"daily-energy", "monthly-energy"}
     assert MAC not in hass.data[DOMAIN]
 
     import custom_components.myhome.sensor as sensor_module
@@ -730,6 +754,7 @@ async def test_gateway_diagnostic_sensors(hass: HomeAssistant, tmp_path) -> None
             GATEWAY_DIAG_COMMANDS_DROPPED: ("total_increasing", False),
             GATEWAY_DIAG_QUEUE_LENGTH: ("measurement", False),
         }
+        # Registry-level flags first; the state classes need the counters enabled.
         for suffix, (_state_class, enabled) in expected_flags.items():
             entity_id = diagnostic_entity_id(hass, SENSOR, suffix)
             assert entity_id is not None, suffix
@@ -761,8 +786,14 @@ async def test_gateway_diagnostic_sensors(hass: HomeAssistant, tmp_path) -> None
         assert hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_COMMANDS_DROPPED)).state == "2"
         assert hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_QUEUE_LENGTH)).state == "7"
 
-        queue_state = hass.states.get(diagnostic_entity_id(hass, SENSOR, GATEWAY_DIAG_QUEUE_LENGTH))
-        assert queue_state.attributes["state_class"] == "measurement"
+        # The first element of `expected_flags` was computed and thrown away, so only
+        # queue_length's state class was ever checked. A counter silently downgraded
+        # from `total_increasing` to `measurement` breaks Home Assistant's long-term
+        # statistics for it - the whole reason these entities exist - and nothing
+        # noticed. Mutation caught: either counter's `_attr_state_class`.
+        for suffix, (state_class, _enabled) in expected_flags.items():
+            state = hass.states.get(diagnostic_entity_id(hass, SENSOR, suffix))
+            assert state.attributes.get("state_class") == state_class, suffix
 
 
 async def test_gateway_diagnostic_sensors_stay_available(hass: HomeAssistant, tmp_path) -> None:
