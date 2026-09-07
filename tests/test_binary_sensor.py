@@ -371,10 +371,12 @@ async def test_motion_extra_data_restores_expired_state(hass: HomeAssistant, tmp
 async def test_auxiliary_channel_starts_unknown(hass: HomeAssistant, tmp_path) -> None:
     """P2-RISK-2: a WHO 9 channel cannot be queried, so it does not know its state.
 
-    It used to report a hard `off` (or `on` when `inverted`) from the moment it was
-    created, whatever the bus actually held - an automation saw a transition that never
-    happened. OWNd 0.7.49 has no auxiliary command class at all, so `unknown` until the
-    first spontaneous frame is the only honest answer.
+    It used to report a hard `off` from the moment it was created, whatever the bus
+    actually held and whatever `inverted` said (P3-NIT-5: `__init__` assigned
+    `_attr_is_on` directly, so the inversion was not applied to the initial value) - an
+    automation saw a transition that never happened. OWNd 0.7.49 has no auxiliary
+    command class at all, so `unknown` until the first spontaneous frame is the only
+    honest answer.
     """
     async with setup_myhome(hass, tmp_path, INVERTED_YAML):
         assert hass.states.get("binary_sensor.alarm_relay").state == STATE_UNKNOWN

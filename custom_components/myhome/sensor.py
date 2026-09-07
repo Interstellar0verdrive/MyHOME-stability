@@ -146,11 +146,14 @@ def keepalive_minutes_for(device: dict[str, Any], config_entry: ConfigEntry) -> 
         return configured
     try:
         # P2-NIT-1: the same defensive parse `gateway._option()` gives the other four
-        # TUNABLE_OPTIONS.  The options flow writes a number, but a hand-edited entry
-        # must not take the whole sensor platform - the four gateway diagnostics
-        # included - down with a ValueError.
+        # TUNABLE_OPTIONS, minus its clamp - `MyHOMEEnergySensor.__init__` already
+        # clamps to 0..MAX_KEEPALIVE_MINUTES.  The options flow writes a number, but a
+        # hand-edited entry must not take the whole sensor platform - the four gateway
+        # diagnostics included - down with an exception.
+        # P3-NIT-4: `int()` of an infinity raises OverflowError, not ValueError, so
+        # `"inf"` and `1e400` used to escape through the gap this parse exists to close.
         return int(float(option))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         LOGGER.warning(
             "Option `%s` is not a number (%r): using the configured %s minutes",
             CONF_DEFAULT_KEEPALIVE_MINUTES,

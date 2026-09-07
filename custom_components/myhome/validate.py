@@ -283,12 +283,15 @@ def _where_text(v: object) -> str:
 
     An unquoted WHERE reaches this function as an ``int``: YAML has already dropped
     the leading zero of ``where: 01`` and already read ``where: 0115`` as octal 77,
-    so the text the user actually wrote is unrecoverable here.  Integers whose
-    *decimal* spelling is itself a valid WHERE are accepted - existing configurations
-    rely on it - which means a value that was written with a leading zero is taken at
-    its decimal value and cannot be detected (``0115`` becomes WHERE ``77``, ``0000``
-    the General WHERE ``0``).  That is why every message below asks for quotes on the
-    whole file rather than claiming this one value was caught.
+    so the text the user actually wrote is unrecoverable here.  Integers are accepted
+    only in the shapes that cannot be visibly ambiguous - ``0`` (General) and 2- or
+    4-digit values, which existing configurations rely on - which means a value that
+    *was* written with a leading zero inside those windows is taken at its decimal
+    value and cannot be detected (``0115`` becomes WHERE ``77``, ``0000`` the General
+    WHERE ``0``).  The 3- and 5-digit shapes sensor addresses take are refused
+    outright, quoted or not: ``where: 301`` is a valid sensor address only as a
+    string, and ``docs/configuration.md`` says so.  That is why every message below
+    asks for quotes on the whole file rather than claiming this one value was caught.
     """
     if isinstance(v, bool) or v is None:
         raise Invalid("WHERE is missing or not a string, quote it (e.g. where: '15')")
@@ -302,13 +305,25 @@ def _where_text(v: object) -> str:
                 f"WHERE {v} was read by YAML as a number and is ambiguous: quote it as "
                 f"'0{v}' for A=0 PL={v} or as '{v}' for area {v}; {_QUOTE_EVERY_WHERE}"
             )
+        if v < 0:
+            # P3-UNCLEAR-1: telling the user to write `where: '-1'` is advice that
+            # cannot work - no platform has a negative address - so say the real
+            # thing instead of sending them round the loop once more.
+            raise Invalid(
+                f"WHERE {v} is not an address: a WHERE is never negative; "
+                f"{_QUOTE_EVERY_WHERE}"
+            )
         # Everything else: 3-digit and 5+ digit values are the shape sensor and
         # binary_sensor addresses take (``where: 301``), so the message quotes the
         # user's own value rather than an actuator address they never wrote
-        # (INCONSISTENCY-5).
+        # (INCONSISTENCY-5).  Quoting is necessary but not sufficient: on a light,
+        # switch or cover `'301'` is then refused as an invalid actuator address, so
+        # the message must not promise that the quoted value will pass (P3-UNCLEAR-1).
         raise Invalid(
             f"WHERE {v} was read by YAML as a number; quote it (where: '{v}') so the "
-            f"address is preserved exactly; {_QUOTE_EVERY_WHERE}"
+            f"address reaches the integration exactly as written - if the quoted value "
+            f"is then refused, it is not a valid address for this platform; "
+            f"{_QUOTE_EVERY_WHERE}"
         )
     if isinstance(v, str):
         text = v.strip()
@@ -746,20 +761,31 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
 _COVER_TIMING_KEYS = (CONF_SHUTTER_RUN, CONF_SLAT_TIME, CONF_OPENING_TIME, CONF_CLOSING_TIME)
 
 
-def _warn_ignored_cover_timings(device: Mapping, yaml_key: str, written: set[str]) -> None:
-    """An advanced actuator reports its real position: the timing keys do nothing.
+def _warn_cover_timings_on_advanced(device: Mapping, yaml_key: str, written: set[str]) -> None:
+    """An advanced actuator reports its real position: the timing keys buy almost nothing.
 
     Accepted (rejecting them would break an upgrade) but reported, so a user does not
-    wait for tilt controls that will never appear.
+    wait for tilt controls or a position estimate that will never appear.
+
+    C3-4: the warning used to call the keys "ignored", which stopped being true in
+    round 2.  ``MyHOMECover`` now derives ``_advanced_move_timeout`` from
+    ``max(opening_time, closing_time)`` - both defaulting to ``shutter_run`` - plus
+    ``ADVANCED_MOVE_MARGIN_SEC``, the deadline after which a direction whose "stopped"
+    frame was lost is cleared and the actuator asked again.  So the run times do have
+    one effect on an advanced cover and the message says which.  ``slat_time`` really
+    is ignored: ``_has_tilt`` is False whenever the actuator is advanced.
     """
     if not device.get(CONF_ADVANCED_SHUTTER):
         return
-    ignored = [key for key in _COVER_TIMING_KEYS if key in written]
-    if ignored:
+    written_timings = [key for key in _COVER_TIMING_KEYS if key in written]
+    if written_timings:
         LOGGER.warning(
-            "cover '%s': %s ignored, an advanced actuator reports its real position",
+            "cover '%s': an advanced actuator reports its real position, so %s neither "
+            "estimate it nor enable tilt; shutter_run, opening_time and closing_time "
+            "are still used, but only to bound the safety timer that clears a movement "
+            "whose 'stopped' frame never arrived, and slat_time is ignored",
             yaml_key,
-            ", ".join(ignored),
+            ", ".join(written_timings),
         )
 
 
@@ -984,7 +1010,7 @@ class MyHomeDeviceSchema(Schema):
             if finalize is not None:
                 finalize(device, yaml_key)
             if self.platform == COVER:
-                _warn_ignored_cover_timings(device, yaml_key, written.get(yaml_key, set()))
+                _warn_cover_timings_on_advanced(device, yaml_key, written.get(yaml_key, set()))
         return data
 
 

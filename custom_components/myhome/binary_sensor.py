@@ -103,9 +103,21 @@ async def async_setup_entry(
         # `who` to 1/9/25 and `_finalize_binary_sensor` refuses a WHO 1 that is not a
         # motion sensor, so a configuration the platform cannot build no longer reaches
         # here - it is rejected by the validator with a real message and a key path
-        # (round 1, NIT-4). What used to be a WARNING + `continue` would now only hide
-        # a WHO added to the schema without a matching entity class.
-        assert entity_class is not None, f"binary sensor {device_id}: no entity class for WHO {who}"
+        # (round 1, NIT-4). The check below can therefore only fire the day a WHO is
+        # added to the schema without a matching entity class.
+        # P3-NIT-3: it used to be an `assert`, which `python -O` removes - leaving
+        # `entity_class(...)` to raise `TypeError` on `None` - and which in either case
+        # took the whole platform down, the gateway `connected` diagnostic entity
+        # included. Skip the one device instead, the way the pre-round-2 code did.
+        if entity_class is None:  # pragma: no cover - the validator makes this unreachable
+            LOGGER.error(
+                "Ignoring binary sensor %s: WHO %s with class %s has no entity class "
+                "(a WHO was added to BINARY_SENSOR_FIELDS without one)",
+                device_id,
+                who,
+                device_class,
+            )
+            continue
 
         binary_sensors.append(
             entity_class(
@@ -249,9 +261,11 @@ class MyHOMEAuxiliary(MyHOMEBinarySensor, RestoreEntity):
         super().__init__(**kwargs)
         # P2-RISK-2: the bus never answers a WHO 9 query, so before the first
         # spontaneous frame - days away for an alarm or gate contact - the channel does
-        # not know its state. It used to claim a definite `off` (or `on` when
-        # `inverted`) and fall back to it after every restart and every reload, which
-        # an automation sees as a transition that never happened on the bus.
+        # not know its state. It used to claim a definite `off` - whatever the
+        # `inverted` option said, since `__init__` assigned `_attr_is_on` directly
+        # rather than through `_apply_state` (P3-NIT-5) - and fall back to it after
+        # every restart and every reload, which an automation sees as a transition that
+        # never happened on the bus.
         self._attr_is_on = None
         self._attr_extra_state_attributes = {"Auxiliary channel": self._where}
 
