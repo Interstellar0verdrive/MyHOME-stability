@@ -6,13 +6,12 @@ import threading
 from unittest.mock import patch
 
 import pytest
-from OWNd.message import OWNGatewayCommand
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
+from OWNd.message import OWNGatewayCommand
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome import expected_unique_ids, issue_id, normalise_entry_data
 from custom_components.myhome.const import (
@@ -174,7 +173,11 @@ async def test_invalid_yaml_is_setup_error(hass: HomeAssistant, tmp_path) -> Non
     assert entry.state is ConfigEntryState.SETUP_ERROR
     assert str(path) in (entry.reason or "")
 
-    path = write_yaml(tmp_path, "gateway:\n  mac: 00:03:50:aa:bb:cc\n  light:\n    a: {where: '11', name: A}\n    b: {where: '11', name: B}\n")
+    path = write_yaml(
+        tmp_path,
+        "gateway:\n  mac: 00:03:50:aa:bb:cc\n  light:\n"
+        "    a: {where: '11', name: A}\n    b: {where: '11', name: B}\n",
+    )
     entry = make_entry(path, mac=MAC2)
     with mock_gateway():
         assert not await _setup(hass, entry)
@@ -222,7 +225,7 @@ async def test_registry_pruning_keeps_user_disabled_entities(hass: HomeAssistant
     assert device_registry.async_get_device_by_identifier((DOMAIN, MAC), entry.entry_id) is not None
     # The gateway diagnostic entities have no YAML counterpart: pruning must keep them.
     kept_ids = {entity.unique_id for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id)}
-    assert GATEWAY_DIAG_IDS <= kept_ids
+    assert kept_ids >= GATEWAY_DIAG_IDS
 
 
 async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
@@ -236,13 +239,17 @@ async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
         await hass.services.async_call(DOMAIN, "sync_time", {}, blocking=True)
         assert handler.send_buffer.qsize() == before + 1
 
-        await hass.services.async_call(DOMAIN, "send_message", {"gateway": "00-03-50-AA-BB-CC", "message": "*1*0*11##"}, blocking=True)
+        await hass.services.async_call(
+            DOMAIN, "send_message", {"gateway": "00-03-50-AA-BB-CC", "message": "*1*0*11##"}, blocking=True
+        )
         assert handler.send_buffer.qsize() == before + 2
 
         with pytest.raises(ServiceValidationError):
             await hass.services.async_call(DOMAIN, "send_message", {"message": "not a frame"}, blocking=True)
         with pytest.raises(ServiceValidationError):
-            await hass.services.async_call(DOMAIN, "send_message", {"gateway": "zz", "message": "*1*0*11##"}, blocking=True)
+            await hass.services.async_call(
+                DOMAIN, "send_message", {"gateway": "zz", "message": "*1*0*11##"}, blocking=True
+            )
         with pytest.raises(ServiceValidationError):
             await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
         with pytest.raises(ServiceValidationError):  # cv.string coerces 1 -> "1", which is not a frame

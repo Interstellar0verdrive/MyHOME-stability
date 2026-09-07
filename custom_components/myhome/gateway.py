@@ -39,6 +39,24 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from homeassistant.components.button import DOMAIN as BUTTON
+from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.event import DOMAIN as EVENT
+from homeassistant.components.light import DOMAIN as LIGHT
+from homeassistant.components.sensor import DOMAIN as SENSOR
+from homeassistant.components.switch import DOMAIN as SWITCH
+from homeassistant.const import (
+    CONF_ENTITIES,
+    CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
+)
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
 from OWNd.connection import OWNGateway, OWNSession
 from OWNd.message import (
     MESSAGE_TYPE_ACTIVE_POWER,
@@ -60,28 +78,8 @@ from OWNd.message import (
     OWNMessage,
 )
 
-from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.climate import DOMAIN as CLIMATE
-from homeassistant.components.cover import DOMAIN as COVER
-from homeassistant.components.event import DOMAIN as EVENT
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.sensor import DOMAIN as SENSOR
-from homeassistant.components.switch import DOMAIN as SWITCH
-from homeassistant.const import (
-    CONF_ENTITIES,
-    CONF_FRIENDLY_NAME,
-    CONF_HOST,
-    CONF_MAC,
-    CONF_NAME,
-    CONF_PASSWORD,
-    CONF_PORT,
-)
-from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.util import dt as dt_util
-
 from .const import (
     ATTR_MAC,
-    bus_full_where,
     CONF_BUS_INTERFACE,
     CONF_COMMAND_TIMEOUT_SEC,
     CONF_DEVICE_TYPE,
@@ -123,9 +121,10 @@ from .const import (
     LOGGER,
     PROTOCOL_CEN,
     PROTOCOL_CEN_PLUS,
-    scenario_control_key,
     SIGNAL_GATEWAY_CONNECTION,
     SIGNAL_GATEWAY_STATS,
+    bus_full_where,
+    scenario_control_key,
 )
 from .myhome_device import MyHOMEEntity
 from .own_session import (
@@ -397,7 +396,9 @@ class MyHOMEGatewayHandler:
         # Timing knobs: the four user-facing ones come from the entry options,
         # the rest are code constants (instance attributes so tests can shrink them).
         options = self._entry_options()
-        self.command_timeout = self._option(options, CONF_COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_RANGE)
+        self.command_timeout = self._option(
+            options, CONF_COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_RANGE
+        )
         self.command_ttl = self._option(options, CONF_QUEUE_TTL_SEC, COMMAND_TTL_SEC, QUEUE_TTL_RANGE)
         self.idle_timeout = self._option(options, CONF_IDLE_WATCHDOG_SEC, IDLE_TIMEOUT_SEC, IDLE_WATCHDOG_RANGE)
         self.probe_window = self._option(options, CONF_PROBE_WINDOW_SEC, PROBE_WINDOW_SEC, PROBE_WINDOW_RANGE)
@@ -723,7 +724,11 @@ class MyHOMEGatewayHandler:
     def _enqueue(self, message: OWNCommand, *, is_status_request: bool) -> bool:
         if self._closed or self._stop_command_workers:
             self._log_limited(
-                logging.WARNING, "queue-closed", "%s Cannot send `%s`: the gateway handler is closed", self.log_id, message
+                logging.WARNING,
+                "queue-closed",
+                "%s Cannot send `%s`: the gateway handler is closed",
+                self.log_id,
+                message,
             )
             self._commands_dropped += 1
             self._refresh_stats(publish=True, immediate=True)
@@ -968,7 +973,9 @@ class MyHOMEGatewayHandler:
                     self._event_session = None
                     if self._stop_event_listener:
                         break
-                    LOGGER.exception("%s Unexpected error in the listening loop; reconnecting in %.0f s", self.log_id, backoff)
+                    LOGGER.exception(
+                        "%s Unexpected error in the listening loop; reconnecting in %.0f s", self.log_id, backoff
+                    )
                     await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, self.max_backoff)
         finally:
@@ -999,7 +1006,11 @@ class MyHOMEGatewayHandler:
         Prefer a point-to-point actuator of the configuration; fall back to an
         energy meter, a thermo zone and finally the general lighting status.
         """
-        for platform, factory in ((LIGHT, OWNLightingCommand.status), (SWITCH, OWNLightingCommand.status), (COVER, OWNAutomationCommand.status)):
+        for platform, factory in (
+            (LIGHT, OWNLightingCommand.status),
+            (SWITCH, OWNLightingCommand.status),
+            (COVER, OWNAutomationCommand.status),
+        ):
             for device in self._platform_cfg(platform).values():
                 where = str(device.get(CONF_WHERE) or "")
                 if where.isdigit() and len(where) in (2, 4) and where != "00":
@@ -1037,7 +1048,9 @@ class MyHOMEGatewayHandler:
             try:
                 self.handle_discovery_message(message)
             except Exception:  # noqa: BLE001
-                self._log_limited(logging.WARNING, "discovery", "%s Discovery failed on `%s`", self.log_id, message, exc_info=True)
+                self._log_limited(
+                    logging.WARNING, "discovery", "%s Discovery failed on `%s`", self.log_id, message, exc_info=True
+                )
 
             if isinstance(message, OWNEnergyEvent):
                 self._handle_energy_event(message)
@@ -1060,7 +1073,11 @@ class MyHOMEGatewayHandler:
                 self._dispatch_to_entities(message)
                 return
 
-            if isinstance(message, OWNHeatingCommand) and message.dimension is not None and int(message.dimension) == 14:
+            if (
+                isinstance(message, OWNHeatingCommand)
+                and message.dimension is not None
+                and int(message.dimension) == 14
+            ):
                 where = message.where[1:] if str(message.where).startswith("#") else message.where
                 LOGGER.debug("%s Heating command seen, requesting status of zone %s", self.log_id, where)
                 await self.send_status_request(OWNHeatingCommand.status(where))
@@ -1173,7 +1190,12 @@ class MyHOMEGatewayHandler:
             await obj.async_update()
         except Exception:  # noqa: BLE001
             self._log_limited(
-                logging.ERROR, f"entity-{obj.unique_id}", "%s %s failed to refresh", self.log_id, obj.unique_id, exc_info=True
+                logging.ERROR,
+                f"entity-{obj.unique_id}",
+                "%s %s failed to refresh",
+                self.log_id,
+                obj.unique_id,
+                exc_info=True,
             )
 
     def _fire_light_pushbutton_event(self, message: OWNLightingEvent) -> None:
@@ -1352,7 +1374,8 @@ class MyHOMEGatewayHandler:
         count = self._energy_suppress_count.pop(entity_key, 0)
         self._last_energy_suppress_log_ts[entity_key] = now
         LOGGER.debug(
-            "%s Suppressed %d instant power frame(s) for %s (%s) in the last ~%.0f s (latest %s W, min_delta_w=%s, min_interval_sec=%s)",
+            "%s Suppressed %d instant power frame(s) for %s (%s) in the last ~%.0f s "
+            "(latest %s W, min_delta_w=%s, min_interval_sec=%s)",
             self.log_id,
             count,
             self._sensor_display_name(entity_key),

@@ -8,9 +8,9 @@ exactly how diagnostics.py reads them (``getattr`` + duck typing).
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr

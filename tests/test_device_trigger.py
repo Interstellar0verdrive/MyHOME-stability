@@ -12,14 +12,12 @@ from typing import Any
 
 import pytest
 import voluptuous as vol
-
 from homeassistant.components import automation
 from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.const import CONF_PLATFORM
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
-
 from pytest_homeassistant_custom_component.common import (
     async_get_device_automations,
     async_mock_service,

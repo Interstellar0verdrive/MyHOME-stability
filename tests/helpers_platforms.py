@@ -7,21 +7,19 @@ tests can assert the OpenWebNet frames each platform produces.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager, contextmanager
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-
 from OWNd.message import OWNEvent, OWNMessage
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import (
     CONF_ENTITIES,

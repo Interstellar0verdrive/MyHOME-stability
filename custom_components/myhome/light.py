@@ -19,7 +19,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from OWNd.message import (
     OWNLightingCommand,
     OWNLightingEvent,
@@ -104,7 +103,7 @@ def transition_to_speed(seconds: float | None) -> int | None:
     """
     if seconds is None:
         return None
-    return max(0, min(255, int(round(float(seconds)))))
+    return max(0, min(255, int(round(float(seconds)))))  # noqa: RUF046 - round() of a float is explicit here
 
 
 def message_is_on(message: OWNLightingEvent) -> bool | None:
@@ -196,7 +195,8 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the device on."""
-        if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:
+        if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:  # noqa: SIM102
+            # Collapsing the two conditions would make an already long line unreadable.
             if kwargs[ATTR_FLASH] in (FLASH_SHORT, FLASH_LONG):
                 await self._async_flash(kwargs[ATTR_FLASH])
                 return
@@ -229,7 +229,8 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the device off."""
-        if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:
+        if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:  # noqa: SIM102
+            # Collapsing the two conditions would make an already long line unreadable.
             if kwargs[ATTR_FLASH] in (FLASH_SHORT, FLASH_LONG):
                 await self._async_flash(kwargs[ATTR_FLASH])
                 return

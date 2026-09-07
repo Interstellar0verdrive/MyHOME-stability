@@ -286,17 +286,17 @@ def test_defaults_per_platform():
     )
     plat = platforms(out)
     light = plat["light"]["1-11"]
-    assert COMMON_KEYS <= set(light)
+    assert set(light) >= COMMON_KEYS
     assert light["dimmable"] is False and light["lock_buttons"] is False
     assert light["manufacturer"] == "BTicino S.p.A." and light["model"] is None
     assert light["entities"] == {} and light["icon"] is None and light["entity_name"] is None
 
     switch = plat["switch"]["1-12"]
-    assert COMMON_KEYS <= set(switch)
+    assert set(switch) >= COMMON_KEYS
     assert switch["class"] == validate.SwitchDeviceClass.SWITCH
 
     cover = plat["cover"]["2-81"]
-    assert COMMON_KEYS <= set(cover)
+    assert set(cover) >= COMMON_KEYS
     assert cover["advanced"] is False and cover["inverted"] is False
     assert cover["shutter_run"] == 20.0 and isinstance(cover["shutter_run"], float)
     assert cover["class"] == validate.CoverDeviceClass.SHUTTER
@@ -305,17 +305,29 @@ def test_defaults_per_platform():
     assert cover["opening_time"] == 20.0 and cover["closing_time"] == 20.0
 
     binary = plat["binary_sensor"]["25-301"]
-    assert COMMON_KEYS <= set(binary)
+    assert set(binary) >= COMMON_KEYS
     assert binary["class"] == validate.BinarySensorDeviceClass.OPENING and binary["inverted"] is False
 
     sensor = plat["sensor"]["18-51"]
-    assert COMMON_KEYS <= set(sensor)
+    assert set(sensor) >= COMMON_KEYS
     for key in ("min_delta_w", "min_interval_sec", "suppress_log_interval_sec", "keepalive_minutes"):
         assert key in sensor
 
     climate = plat["climate"]["4-3"]
     assert climate["zone"] == "3" and climate["name"] == "Zone 3"
-    for key in ("heat", "cool", "fan", "standalone", "central", "entities", "manufacturer", "model", "icon", "icon_on", "entity_name"):
+    for key in (
+        "heat",
+        "cool",
+        "fan",
+        "standalone",
+        "central",
+        "entities",
+        "manufacturer",
+        "model",
+        "icon",
+        "icon_on",
+        "entity_name",
+    ):
         assert key in climate
 
     # Each device dict has its own entities mapping.
@@ -374,7 +386,14 @@ def test_sensor_requires_class_and_matching_who():
     assert err.value.path == ["gateway", "sensor", "s", "class"]
     with pytest.raises(Invalid, match="requires who 18"):
         check(gw(sensor={"s": {"where": "51", "name": "S", "class": "power", "who": "4"}}))
-    out = check(gw(sensor={"t": {"where": "1", "name": "T", "class": "temperature"}, "i": {"where": "12", "name": "I", "class": "illuminance"}}))
+    out = check(
+        gw(
+            sensor={
+                "t": {"where": "1", "name": "T", "class": "temperature"},
+                "i": {"where": "12", "name": "I", "class": "illuminance"},
+            }
+        )
+    )
     assert set(platforms(out)["sensor"]) == {"4-1", "1-12"}
     assert platforms(out)["sensor"]["4-1"]["entities"] == {}
 
@@ -442,14 +461,26 @@ def test_duplicate_after_normalisation():
     with pytest.raises(Invalid, match="Duplicate"):
         check(gw(light={"a": {"where": "#1", "name": "A"}, "b": {"where": "#01", "name": "B"}}))
     with pytest.raises(Invalid, match="1-0115#4#01"):
-        check(gw(light={"a": {"where": "0115", "interface": 1, "name": "A"}, "b": {"where": "0115", "interface": "01", "name": "B"}}))
+        check(
+            gw(
+                light={
+                    "a": {"where": "0115", "interface": 1, "name": "A"},
+                    "b": {"where": "0115", "interface": "01", "name": "B"},
+                }
+            )
+        )
 
 
 def test_climate_zone_and_temperature_sensor_may_share_zone():
     out = check(gw(climate={"z": {"zone": 1}}, sensor={"t": {"where": "1", "name": "T", "class": "temperature"}}))
     assert "4-1" in platforms(out)["climate"] and "4-1" in platforms(out)["sensor"]
     with pytest.raises(Invalid, match="climate 'z2' collides with climate 'z1'"):
-        check(gw(climate={"z1": {"zone": 1}, "z2": {"zone": "1"}}, sensor={"t": {"where": "1", "name": "T", "class": "temperature"}}))
+        check(
+            gw(
+                climate={"z1": {"zone": 1}, "z2": {"zone": "1"}},
+                sensor={"t": {"where": "1", "name": "T", "class": "temperature"}},
+            )
+        )
 
 
 # --------------------------------------------------------------------------------------
@@ -682,7 +713,12 @@ def test_sensor_defaults_merge_and_overrides():
 def test_builtin_sensor_defaults():
     out = check(gw(sensor={"a": {"where": "51", "name": "A", "class": "power"}}))
     a = platforms(out)["sensor"]["18-51"]
-    assert (a["min_delta_w"], a["min_interval_sec"], a["suppress_log_interval_sec"], a["keepalive_minutes"]) == (5, 1.0, 60.0, 125)
+    assert (
+        a["min_delta_w"],
+        a["min_interval_sec"],
+        a["suppress_log_interval_sec"],
+        a["keepalive_minutes"],
+    ) == (5, 1.0, 60.0, 125)
 
 
 # --------------------------------------------------------------------------------------
@@ -762,7 +798,10 @@ def test_invalid_actuator_where(where):
         check(gw(light={"a": {"where": where, "name": "A"}}))
 
 
-@pytest.mark.parametrize(("where", "key"), [("0", "1-0"), ("00", "1-00"), ("9", "1-9"), ("#01", "1-#1"), ("0915", "1-0915"), ("1015", "1-1015")])
+@pytest.mark.parametrize(
+    ("where", "key"),
+    [("0", "1-0"), ("00", "1-00"), ("9", "1-9"), ("#01", "1-#1"), ("0915", "1-0915"), ("1015", "1-1015")],
+)
 def test_valid_actuator_where(where, key):
     assert list(platforms(check(gw(light={"a": {"where": where, "name": "A"}})))["light"]) == [key]
 
@@ -808,7 +847,8 @@ _ENGINE_SCRIPT = textwrap.dedent(
     import voluptuous as vol
     assert ("probatio" in vol.__file__) == (engine == "probatio"), vol.__file__
     parent = types.ModuleType("custom_components"); parent.__path__ = [os.path.join(root, "custom_components")]
-    pkg = types.ModuleType("custom_components.myhome"); pkg.__path__ = [os.path.join(root, "custom_components", "myhome")]
+    pkg = types.ModuleType("custom_components.myhome")
+    pkg.__path__ = [os.path.join(root, "custom_components", "myhome")]
     sys.modules["custom_components"] = parent; sys.modules["custom_components.myhome"] = pkg
     importlib.import_module("custom_components.myhome.const")
     validate = importlib.import_module("custom_components.myhome.validate")
@@ -826,18 +866,59 @@ _ENGINE_SCRIPT = textwrap.dedent(
 )
 
 _ENGINE_CASES = [
-    {"gateway": {"mac": MAC, "light": {"a": {"where": "15", "name": "A", "lock_buttons": True}, "b": {"where": "#01", "name": "B"}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "light": {"a": {"where": "15", "name": "A", "lock_buttons": True}, "b": {"where": "#01", "name": "B"}},
+        }
+    },
     {MAC: {"cover": {"c": {"where": 81, "name": "C", "device_class": "blind", "shutter_run": 25}}}},
-    {"gateway": {"mac": MAC, "energy": {"min_delta_w": 7}, "sensor_defaults": {"refresh_period": 3}, "sensor": {"s": {"where": "51", "name": "S", "device_class": "power", "min_delta_w": 1}}}},
-    {"gateway": {"mac": MAC, "binary_sensor": {"a": {"where": "302", "name": "A"}, "b": {"where": "303", "name": "B", "who": 1}}}},
-    {"gateway": {"mac": MAC, "climate": {"z": {"where": "4"}, "c": {"central": True, "zone": 2, "name": "X"}, "cu": {}}}},
-    {"gateway": {"mac": MAC, "light": {"a": {"where": "12", "name": "A"}}, "switch": {"b": {"where": "12", "name": "B"}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "energy": {"min_delta_w": 7},
+            "sensor_defaults": {"refresh_period": 3},
+            "sensor": {"s": {"where": "51", "name": "S", "device_class": "power", "min_delta_w": 1}},
+        }
+    },
+    {
+        "gateway": {
+            "mac": MAC,
+            "binary_sensor": {"a": {"where": "302", "name": "A"}, "b": {"where": "303", "name": "B", "who": 1}},
+        }
+    },
+    {
+        "gateway": {
+            "mac": MAC,
+            "climate": {"z": {"where": "4"}, "c": {"central": True, "zone": 2, "name": "X"}, "cu": {}},
+        }
+    },
+    {
+        "gateway": {
+            "mac": MAC,
+            "light": {"a": {"where": "12", "name": "A"}},
+            "switch": {"b": {"where": "12", "name": "B"}},
+        }
+    },
     {"gateway": {"mac": MAC, "light": {"a": {"where": 1, "name": "A"}}}},
     {"gateway": {"mac": 350}},
     {"gateway": {"mac": MAC, "energy": {"min_delta_w": -5}}},
-    {"gateway": {"mac": MAC, "cover": {"c": {"where": "81", "name": "C", "class": "shutter", "device_class": "blind"}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "cover": {"c": {"where": "81", "name": "C", "class": "shutter", "device_class": "blind"}},
+        }
+    },
     {"gateway": {"mac": MAC}, MAC: {}},
-    {"gateway": {"mac": MAC, "scenario_control": {"kp": {"object": 25, "name": "K"}, "cen": {"protocol": "cen", "where": "51", "name": "C", "buttons": [0, 1]}}}},
+    {
+        "gateway": {
+            "mac": MAC,
+            "scenario_control": {
+                "kp": {"object": 25, "name": "K"},
+                "cen": {"protocol": "cen", "where": "51", "name": "C", "buttons": [0, 1]},
+            },
+        }
+    },
     {"gateway": {"mac": MAC, "scenario_control": {"kp": {"protocol": "cen", "object": 25, "name": "K"}}}},
 ]
 

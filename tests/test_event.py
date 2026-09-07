@@ -13,7 +13,6 @@ from homeassistant.components.event import ATTR_EVENT_TYPE, ATTR_EVENT_TYPES, DO
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-
 from OWNd.message import OWNEvent
 
 from custom_components.myhome import expected_unique_ids

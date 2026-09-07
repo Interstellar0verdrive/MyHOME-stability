@@ -7,22 +7,20 @@ in ``handler.send_buffer``.
 from __future__ import annotations
 
 import pytest
-from OWNd.message import OWNHeatingEvent
-
 from homeassistant.components.climate import (
     ATTR_HVAC_ACTION,
     ATTR_HVAC_MODE,
+    DOMAIN as CLIMATE_DOMAIN,
     ClimateEntityFeature,
     HVACAction,
     HVACMode,
 )
-from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_SUPPORTED_FEATURES, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
-
+from OWNd.message import OWNHeatingEvent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome import expected_unique_ids

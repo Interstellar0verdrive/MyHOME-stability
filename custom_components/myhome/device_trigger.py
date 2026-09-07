@@ -13,7 +13,8 @@ protocol and the object number back out of its registry identifier
 (``{mac}-cenplus-{object}`` / ``{mac}-cen-{where}``, see ``const.scenario_control_key``)
 and the configured button list out of ``hass.data``.
 
-*Structure ported from ``fedem95/MyHOME`` (`device_trigger.py`), by fedem95, AGPL-3.0: the base-schema extension, the type/subtype split and
+*Structure ported from ``fedem95/MyHOME`` (`device_trigger.py`), by fedem95, AGPL-3.0:
+the base-schema extension, the type/subtype split and
 the delegation to ``homeassistant.components.homeassistant.triggers.event`` with
 ``platform_type="device"`` are theirs.  Adapted here to our per-protocol event names
 (including the long-press repeat and the four rotary events), to the YAML-declared
@@ -25,7 +26,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.components.device_automation import DEVICE_TRIGGER_BASE_SCHEMA
 from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.components.homeassistant.triggers import event as event_trigger

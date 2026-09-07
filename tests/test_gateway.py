@@ -19,13 +19,11 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from OWNd.message import OWNCommand, OWNLightingCommand, OWNMessage
-
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.climate import DOMAIN as CLIMATE
 from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import DOMAIN as SENSOR
+from OWNd.message import OWNCommand, OWNLightingCommand, OWNMessage
 
 from custom_components.myhome import gateway as gateway_module
 from custom_components.myhome.const import (
@@ -345,7 +343,10 @@ async def test_command_dropped_after_two_failures(caplog: pytest.LogCaptureFixtu
             await asyncio.wait_for(handler.send_buffer.join(), 2)
     assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"], ["*1*1*12##"]]
     assert handler.send_buffer.qsize() == 0
-    assert any("dropped after two attempts" in record.message and record.levelno == logging.WARNING for record in caplog.records)
+    assert any(
+        "dropped after two attempts" in record.message and record.levelno == logging.WARNING
+        for record in caplog.records
+    )
 
 
 async def test_command_ttl_expired_is_dropped_without_sending(caplog: pytest.LogCaptureFixture) -> None:
@@ -357,7 +358,10 @@ async def test_command_ttl_expired_is_dropped_without_sending(caplog: pytest.Log
         async with running(handler, listening=False):
             await asyncio.wait_for(handler.send_buffer.join(), 2)
     assert all(channel.sent == [] for channel in command.instances)
-    assert any("Dropping `*1*1*11##`" in record.message and record.levelno == logging.WARNING for record in caplog.records)
+    assert any(
+        "Dropping `*1*1*11##`" in record.message and record.levelno == logging.WARNING
+        for record in caplog.records
+    )
 
 
 async def test_command_auth_failure_starts_reauth() -> None:
@@ -514,7 +518,14 @@ async def test_light_translation_frames_become_pushbutton_events() -> None:
     have no other trace on a relay."""
     handler = make_handler()
     light = register(handler, LIGHT, "1-42")
-    for raw in ("*1*1000#1*42##", "*1*1000#30*42##", "*1*1000#31*42##", "*1*1000#0*42##", "*1*1000#7*42##", "*1*1000#11*42##"):
+    for raw in (
+        "*1*1000#1*42##",
+        "*1*1000#30*42##",
+        "*1*1000#31*42##",
+        "*1*1000#0*42##",
+        "*1*1000#7*42##",
+        "*1*1000#11*42##",
+    ):
         await handler._dispatch_message(frame(raw), from_monitor=True)  # noqa: SLF001
     events = fired(handler.hass, "myhome_light_pushbutton_event")
     assert [event["event"] for event in events] == ["on", "dim_up", "dim_down", "off", "dim_to_70", "what_11"]
@@ -751,7 +762,12 @@ async def test_options_configure_the_timing_knobs(caplog: pytest.LogCaptureFixtu
             CONF_QUEUE_TTL_SEC: 90,
         },
     )
-    assert (tuned.idle_timeout, tuned.probe_window, tuned.command_timeout, tuned.command_ttl) == (120.0, 15.0, 25.0, 90.0)
+    assert (tuned.idle_timeout, tuned.probe_window, tuned.command_timeout, tuned.command_ttl) == (
+        120.0,
+        15.0,
+        25.0,
+        90.0,
+    )
     assert tuned.session_parameters[CONF_IDLE_WATCHDOG_SEC] == 120.0
     assert tuned.session_parameters[CONF_QUEUE_TTL_SEC] == 90.0
     assert not caplog.records
@@ -935,7 +951,9 @@ class FakeOWNServer:
 def make_gateway(port: int, password: str | None = "12345") -> Any:
     from OWNd.connection import OWNGateway
 
-    return OWNGateway({"address": "127.0.0.1", "port": port, "password": password, "serialNumber": MAC, "modelName": "Fake"})
+    return OWNGateway(
+        {"address": "127.0.0.1", "port": port, "password": password, "serialNumber": MAC, "modelName": "Fake"}
+    )
 
 
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default

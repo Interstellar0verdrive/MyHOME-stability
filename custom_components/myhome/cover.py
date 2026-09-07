@@ -52,7 +52,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoredExtraData, RestoreEntity
 from homeassistant.util import dt as dt_util
-
 from OWNd.message import (
     OWNAutomationCommand,
     OWNAutomationEvent,
@@ -655,7 +654,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                     # that stop is an echo, not the end of the run.
                     elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
                     if elapsed < STOP_ECHO_WINDOW_SEC:
-                        LOGGER.debug("%s Ignoring the gateway stop echo %.2fs after our command", self._gateway_handler.log_id, elapsed)
+                        LOGGER.debug(
+                            "%s Ignoring the gateway stop echo %.2fs after our command",
+                            self._gateway_handler.log_id,
+                            elapsed,
+                        )
                         return
                 # "Stopped": freeze wherever the estimate got to.
                 self._finish_movement(*self._estimate())

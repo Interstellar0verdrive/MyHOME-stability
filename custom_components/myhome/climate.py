@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.climate import DOMAIN as PLATFORM
 from homeassistant.components.climate import (
+    DOMAIN as PLATFORM,
     ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
@@ -23,7 +23,6 @@ from homeassistant.const import ATTR_TEMPERATURE, CONF_MAC, CONF_NAME, UnitOfTem
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from OWNd.message import (
     CLIMATE_MODE_AUTO,
     CLIMATE_MODE_COOL,

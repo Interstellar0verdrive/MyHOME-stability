@@ -5,11 +5,6 @@ from __future__ import annotations
 from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
-from pytest_homeassistant_custom_component.common import (
-    async_fire_time_changed,
-    mock_restore_cache,
-)
-
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
     ATTR_CURRENT_TILT_POSITION,
@@ -28,6 +23,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import (
+    async_fire_time_changed,
+    mock_restore_cache,
+)
 
 from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
@@ -147,7 +146,10 @@ async def test_real_config_creates_every_cover(hass: HomeAssistant, tmp_path) ->
         assert state.attributes[ATTR_ASSUMED_STATE] is True
         assert state.attributes["Shutter run"] == 30.0
         assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP | CoverEntityFeature.SET_POSITION
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
         )
         assert device_config(hass, COVER, "2-91")["shutter_run"] == 30.0
 
@@ -229,7 +231,9 @@ async def test_stop_cancels_the_timer(hass: HomeAssistant, tmp_path, freezer: Fr
         assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 80
 
 
-async def test_inverted_flips_commands_and_events(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+async def test_inverted_flips_commands_and_events(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
     """`inverted: true` swaps the raise/lower semantics in both directions."""
     async with setup_myhome(hass, tmp_path, INVERTED_YAML) as (_entry, commands):
         entity_id = "cover.cover_inverted"
@@ -360,7 +364,10 @@ async def test_without_slat_time_nothing_changes(hass: HomeAssistant, tmp_path) 
         assert ATTR_CURRENT_TILT_POSITION not in state.attributes
         assert "Slat time" not in state.attributes
         assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP | CoverEntityFeature.SET_POSITION
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
         )
 
 
@@ -506,7 +513,9 @@ async def test_tilt_is_a_noop_while_the_curtain_is_up(hass: HomeAssistant, tmp_p
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
 
 
-async def test_keypad_movement_uses_the_same_model(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+async def test_keypad_movement_uses_the_same_model(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
     """A physical up press from closed only opens the slats for the first 3 s."""
     mock_restore_cache(hass, (_closed(),))
     async with setup_myhome(hass, tmp_path, SLAT_YAML):

@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from OWNd.message import OWNEnergyEvent, OWNHeatingEvent, OWNLightingEvent
-
 from homeassistant.components.sensor import DOMAIN as SENSOR, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, EntityCategory
@@ -18,7 +16,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
-
+from OWNd.message import OWNEnergyEvent, OWNHeatingEvent, OWNLightingEvent
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,

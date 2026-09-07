@@ -12,9 +12,6 @@ from urllib.parse import urlparse
 
 import aiohttp
 import voluptuous as vol
-from OWNd.connection import OWNGateway, OWNSession
-from OWNd.discovery import find_gateways, get_port
-
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
     ConfigEntry,
@@ -41,6 +38,8 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
+from OWNd.connection import OWNGateway, OWNSession
+from OWNd.discovery import find_gateways, get_port
 
 from .const import (
     CONF_ADDRESS,
@@ -92,7 +91,10 @@ _ABORT_REASONS = {
     "negotiation_failed": "negotiation_failed",
 }
 
-_HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+    r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+)
 
 PORT_VALIDATOR = vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))
 PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
@@ -248,7 +250,9 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
 
         choices = {
             **{
-                gateway[FIELD_SERIAL_NUMBER]: f"{gateway.get(FIELD_MODEL_NAME, 'MyHOME')} Gateway ({gateway.get('address')})"
+                gateway[FIELD_SERIAL_NUMBER]: (
+                    f"{gateway.get(FIELD_MODEL_NAME, 'MyHOME')} Gateway ({gateway.get('address')})"
+                )
                 for gateway in local_gateways
             },
             MANUAL_ENTRY: "Custom",
@@ -307,13 +311,22 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="custom",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_ADDRESS, description={"suggested_value": suggestions.get(CONF_ADDRESS, "192.168.1.135")}): str,
-                    vol.Required(CONF_PORT, description={"suggested_value": suggestions.get(CONF_PORT, DEFAULT_PORT)}): PORT_VALIDATOR,
+                    vol.Required(
+                        CONF_ADDRESS,
+                        description={"suggested_value": suggestions.get(CONF_ADDRESS, "192.168.1.135")},
+                    ): str,
+                    vol.Required(
+                        CONF_PORT,
+                        description={"suggested_value": suggestions.get(CONF_PORT, DEFAULT_PORT)},
+                    ): PORT_VALIDATOR,
                     vol.Required(
                         FIELD_SERIAL_NUMBER,
                         description={"suggested_value": suggestions.get(FIELD_SERIAL_NUMBER, "00:03:50:00:00:00")},
                     ): str,
-                    vol.Required(FIELD_MODEL_NAME, description={"suggested_value": suggestions.get(FIELD_MODEL_NAME, "F454")}): str,
+                    vol.Required(
+                        FIELD_MODEL_NAME,
+                        description={"suggested_value": suggestions.get(FIELD_MODEL_NAME, "F454")},
+                    ): str,
                 }
             ),
             errors=errors,
@@ -397,7 +410,9 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="port",
-            data_schema=vol.Schema({vol.Required(CONF_PORT, description={"suggested_value": DEFAULT_PORT}): PORT_VALIDATOR}),
+            data_schema=vol.Schema(
+                {vol.Required(CONF_PORT, description={"suggested_value": DEFAULT_PORT}): PORT_VALIDATOR}
+            ),
             description_placeholders=self._placeholders(),
             errors=errors,
         )
@@ -522,20 +537,35 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_ADDRESS, description={"suggested_value": suggestions.get(CONF_ADDRESS, entry.data[CONF_HOST])}): str,
-                    vol.Required(CONF_PORT, description={"suggested_value": suggestions.get(CONF_PORT, entry.data[CONF_PORT])}): PORT_VALIDATOR,
+                    vol.Required(
+                        CONF_ADDRESS,
+                        description={"suggested_value": suggestions.get(CONF_ADDRESS, entry.data[CONF_HOST])},
+                    ): str,
+                    vol.Required(
+                        CONF_PORT,
+                        description={"suggested_value": suggestions.get(CONF_PORT, entry.data[CONF_PORT])},
+                    ): PORT_VALIDATOR,
                     vol.Required(
                         CONF_OWN_PASSWORD,
-                        description={"suggested_value": suggestions.get(CONF_OWN_PASSWORD, entry.data.get(CONF_PASSWORD, ""))},
+                        description={
+                            "suggested_value": suggestions.get(CONF_OWN_PASSWORD, entry.data.get(CONF_PASSWORD, ""))
+                        },
                     ): PASSWORD_SELECTOR,
-                    vol.Required(CONF_FILE_PATH, description={"suggested_value": suggestions.get(CONF_FILE_PATH, options[CONF_FILE_PATH])}): str,
+                    vol.Required(
+                        CONF_FILE_PATH,
+                        description={
+                            "suggested_value": suggestions.get(CONF_FILE_PATH, options[CONF_FILE_PATH])
+                        },
+                    ): str,
                     vol.Required(
                         CONF_WORKER_COUNT,
                         description={"suggested_value": suggestions.get(CONF_WORKER_COUNT, options[CONF_WORKER_COUNT])},
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
                     vol.Required(
                         CONF_GENERATE_EVENTS,
-                        description={"suggested_value": suggestions.get(CONF_GENERATE_EVENTS, options[CONF_GENERATE_EVENTS])},
+                        description={
+                            "suggested_value": suggestions.get(CONF_GENERATE_EVENTS, options[CONF_GENERATE_EVENTS])
+                        },
                     ): bool,
                     **{
                         vol.Required(

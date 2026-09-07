@@ -5,12 +5,6 @@ from __future__ import annotations
 from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
-from pytest_homeassistant_custom_component.common import (
-    async_fire_time_changed,
-    mock_restore_cache,
-    mock_restore_cache_with_extra_data,
-)
-
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR, BinarySensorDeviceClass
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
@@ -22,6 +16,11 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    async_fire_time_changed,
+    mock_restore_cache,
+    mock_restore_cache_with_extra_data,
+)
 
 from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import (
@@ -156,7 +155,9 @@ async def test_motion_timeout_respects_inverted(hass: HomeAssistant, tmp_path, f
         assert hass.states.get("binary_sensor.sensore_invertito_motion").state == STATE_ON
 
 
-async def test_motion_timeout_frame_updates_the_timer(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
+async def test_motion_timeout_frame_updates_the_timer(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
     """The sensor's own timeout (+15 s margin) drives the expiry."""
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
         normal = entity_object(hass, BINARY_SENSOR, "1-11")

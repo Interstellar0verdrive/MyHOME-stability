@@ -26,9 +26,6 @@ from typing import Any
 
 import voluptuous as vol
 import yaml
-
-from OWNd.message import OWNCommand, OWNGatewayCommand
-
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.climate import DOMAIN as CLIMATE
@@ -54,6 +51,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.typing import ConfigType
+from OWNd.message import OWNCommand, OWNGatewayCommand
 
 from .const import (
     ATTR_GATEWAY,
@@ -251,7 +249,8 @@ async def _async_load_gateway_config(hass: HomeAssistant, entry: ConfigEntry, pa
         parsed = await hass.async_add_executor_job(_read_yaml_file, path)
     except FileNotFoundError:
         LOGGER.warning(
-            "Configuration file %s not found: creating an empty one. Add your devices to it and reload the integration.",
+            "Configuration file %s not found: creating an empty one. "
+            "Add your devices to it and reload the integration.",
             path,
         )
         try:
@@ -471,7 +470,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (OSError, TimeoutError) as err:
         hass.data[DOMAIN].pop(mac, None)
         raise ConfigEntryNotReady(
-            f"Gateway {handler.gateway.host}:{handler.gateway.port} cannot be reached ({type(err).__name__}), check its address"
+            f"Gateway {handler.gateway.host}:{handler.gateway.port} cannot be reached "
+            f"({type(err).__name__}), check its address"
         ) from err
 
     if not test_result:
@@ -555,7 +555,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         _async_clear_issue(hass, entry, issue)
 
 
-async def async_remove_config_entry_device(hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry) -> bool:
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
     """Allow deleting a device from the UI when it is no longer in myhome.yaml."""
     mac: str = entry.data[CONF_MAC]
     platforms = hass.data.get(DOMAIN, {}).get(mac, {}).get(CONF_PLATFORMS, {})
@@ -582,7 +584,9 @@ def _async_resolve_handler(hass: HomeAssistant, call: ServiceCall) -> MyHOMEGate
     mac = format_mac(gateway)
     if mac is None:
         raise ServiceValidationError(
-            translation_domain=DOMAIN, translation_key="invalid_gateway", translation_placeholders={"gateway": str(gateway)}
+            translation_domain=DOMAIN,
+            translation_key="invalid_gateway",
+            translation_placeholders={"gateway": str(gateway)},
         )
     if mac not in loaded:
         raise ServiceValidationError(
@@ -619,7 +623,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         message = _parse_raw_command(raw)
         if message is None or not message.is_valid:
             raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="invalid_message", translation_placeholders={"message": str(raw)}
+                translation_domain=DOMAIN,
+                translation_key="invalid_message",
+                translation_placeholders={"message": str(raw)},
             )
         LOGGER.debug("%s Sending OpenWebNet message `%s` (service call)", handler.log_id, message)
         await _async_send_or_raise(handler, message)

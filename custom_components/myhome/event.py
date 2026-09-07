@@ -163,7 +163,11 @@ class MyHOMEScenarioControl(MyHOMEEntity, EventEntity):
         """
         if event_type not in self._attr_event_types:
             LOGGER.debug(
-                "%s Ignoring %s event '%s' for %s", self._gateway_handler.log_id, self._protocol, event_type, self.unique_id
+                "%s Ignoring %s event '%s' for %s",
+                self._gateway_handler.log_id,
+                self._protocol,
+                event_type,
+                self.unique_id,
             )
             return
         self._trigger_event(event_type, {"pushbutton": int(pushbutton)})

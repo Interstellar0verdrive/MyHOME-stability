@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_SUPPORTED_COLOR_MODES,
@@ -76,7 +75,9 @@ async def test_real_config_creates_every_light(hass: HomeAssistant, tmp_path) ->
         entity_registry = er.async_get(hass)
         entries = [
             entry
-            for entry in er.async_entries_for_config_entry(entity_registry, next(iter(hass.config_entries.async_entries(DOMAIN))).entry_id)
+            for entry in er.async_entries_for_config_entry(
+                entity_registry, next(iter(hass.config_entries.async_entries(DOMAIN))).entry_id
+            )
             if entry.domain == LIGHT
         ]
         assert len(entries) == 20
