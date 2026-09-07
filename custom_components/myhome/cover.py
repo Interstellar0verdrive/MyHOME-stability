@@ -329,6 +329,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._stopped_direction: str | None = None
         # True while a free run to an end stop that we commanded is in progress.
         self._own_free_run = False
+        # True while a *continued* free run is inside the echo window it inherited
+        # from the movement command that began it (see `_continue_to_end_stop`): the
+        # one situation in which an ignored "stopped" frame may have been real.
+        self._echo_after_restart = False
         self._move_duration: float | None = None
         # Where the estimate settles when the pending timer fires.
         self._end_position: int | None = None
@@ -545,6 +549,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._own_command = None
         self._stopped_direction = None
         self._own_free_run = own_command and target_position is None
+        # A fresh movement is not a continued one; `_continue_to_end_stop` sets the
+        # flag again after it has called us.
+        self._echo_after_restart = False
 
         if target_position is None:
             # Free run to the end stop: fully open (slats open) or fully closed.
@@ -575,6 +582,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._end_position = None
         self._end_tilt = None
         self._own_free_run = False
+        self._echo_after_restart = False
         self._move_duration = None
         if position is not None:
             frozen_position, frozen_tilt = self._normalise(position, 100 if tilt is None else tilt)
@@ -654,6 +662,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         own_command_at, own_command = self._own_command_at, self._own_command
         self._start_movement(direction)
         self._own_command_at, self._own_command = own_command_at, own_command
+        # Set *after* the restart, which clears it. It marks the residual slice of
+        # that inherited window as the one place where an ignored "stopped" frame may
+        # have been a real stop - somebody at the keypad, or the actuator hitting an
+        # obstacle - rather than the gateway's echo. Nothing in the frame tells the
+        # two apart, so `_is_echo` still ignores it and asks the actuator instead
+        # (`_schedule_echo_recheck`); without this flag the frame was swallowed with
+        # no follow-up at all and the estimate ran on to the end stop while the
+        # shutter stood still.
+        self._echo_after_restart = own_command_at is not None
         # `_stopped_direction` stays None: we stopped nothing, so no movement frame
         # may be swallowed as the echo of a stop.
         # The movement itself is still the one *we* commanded, and it now ends where
@@ -687,6 +704,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # We commanded a movement: only a "stopped" frame can be its echo.
             if frame_direction is not None:
                 return False
+            # During a *continued* run this window was inherited, not just armed: the
+            # echo it was waiting for may already have gone by, and this frame may be
+            # a real stop. Ask the actuator, exactly as for the ambiguous keypad press
+            # below. Outside that case the window was armed a fraction of a second
+            # ago by our own movement command, and the "stopped" frame that follows it
+            # is the gateway's, so there is nothing to re-read.
+            recheck = self._echo_after_restart
         else:
             # We commanded a stop: only the direction it interrupted can be echoed.
             if frame_direction is None or frame_direction != self._stopped_direction:
@@ -727,7 +751,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # in which a bus frame could set `_moving` between the timer firing and this
         # line. The guard stays because that is a detail of how HA schedules jobs,
         # not a promise; it is excluded from coverage rather than chased.
-        if self._moving is not None:  # pragma: no cover - unreachable: eager tasks, see above
+        #
+        # A continued free run is the exception, and the reason for the second half of
+        # the condition: there the estimate is *deliberately* still running while we
+        # ask, because the whole question is whether the shutter is still running with
+        # it. The answer costs one status request and can only help - it either
+        # confirms the direction or delivers a real stop.
+        if self._moving is not None and not self._echo_after_restart:  # pragma: no cover - unreachable, see above
             return
         LOGGER.debug(
             "%s Cover %s: re-reading the status after an ignored movement frame",
