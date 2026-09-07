@@ -13,6 +13,11 @@ integration.
 - Start with `myhome.start_discovery`, stop early with `myhome.stop_discovery`
   (see [Services](services-and-events.md#services)); a run otherwise stops itself
   after 60 seconds. Both flush whatever was collected so far to the file.
+- A run opens with one general status request per subsystem that has one
+  (lighting, automation, thermoregulation, energy, auxiliary), then listens. Dry
+  contacts (WHO 25) have no general status request and CEN / CEN+ keypads never
+  answer one, so those devices are seen only when they emit a frame during the
+  window: open the contact, press a button.
 - A device already present in `myhome.yaml` (matched on WHO/WHERE) is not
   suggested again.
 - Progress fires `myhome_device_discovered` per device and

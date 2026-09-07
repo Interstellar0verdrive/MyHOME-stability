@@ -96,6 +96,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     the first correction of this round then turned every zone into a probe. A probe
     wired as a zone's main sensor is indistinguishable from the zone on the bus and
     is reported as a zone; the first WHO 4 frame decides and is never revised;
+  - discovery: the WHO 25 "scan" entry never left the machine (OWNd cannot build a
+    general dry-contact status request, and there is none on the bus); the entry is
+    gone and the docs now say that dry contacts and keypads are seen only when they
+    emit a frame during the run;
   - discovery: scenario controls report `platform: event`, not `button`, in
     `myhome_device_discovered`, and a device family with no `myhome.yaml` section
     (alarm devices) reports `platform: null` instead of `binary_sensor`, which the

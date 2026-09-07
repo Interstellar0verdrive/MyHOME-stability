@@ -74,8 +74,11 @@ _DISCOVERY_COMMANDS = (
     "*#2*0##",  # automation
     "*#4*0##",  # thermoregulation
     "*#18*0##",  # energy management (not every gateway answers)
-    "*#25*0##",  # CEN / dry contacts
     "*#9*0##",  # auxiliary (not every gateway answers)
+    # No WHO 25 entry on purpose. There is no general status request for dry
+    # contacts (OWNd refuses to build `*#25*0##`, and the bus has no such frame), and
+    # CEN / CEN+ keypads never answer a status request at all: both kinds of device
+    # are discovered only from the frames they emit during the run.
 )
 
 

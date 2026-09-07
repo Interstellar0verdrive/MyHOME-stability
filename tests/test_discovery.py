@@ -390,8 +390,8 @@ async def test_the_stop_service_ends_the_run_and_reports_what_was_found(
             # The broadcast status requests go out paced. The worker is a
             # config-entry *background* task, which `async_block_till_done` does not
             # wait for by design, so the queue is polled instead of assumed.
-            # `*#25*0##` is missing on purpose: OWNd 0.7.49 cannot parse it and
-            # `_send_discovery_commands` skips it - see
+            # There is no WHO 25 entry: there is no general status request for dry
+            # contacts and keypads never answer one - see
             # ``test_every_discovery_command_reaches_the_bus``.
             await wait_until(lambda: len(sleeps.delays) == 5)
             assert [str(item.message) for item in list(handler.send_buffer._queue)][-5:] == [  # noqa: SLF001
@@ -546,26 +546,13 @@ async def test_unloading_the_entry_cancels_the_worker_and_the_timer(
     assert [item["reason"] for item in completed] == ["stopped"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "BUG: `*#25*0##` never leaves the machine. `_DISCOVERY_COMMANDS` lists six "
-        "broadcast status requests, one of them the CEN / dry-contact scan, but "
-        "`OWNCommand.parse('*#25*0##')` returns None on OWNd 0.7.49, so "
-        "`_send_discovery_commands` logs a DEBUG line and skips it. A discovery run "
-        "therefore never asks WHO 25 anything: a scenario control is found only if "
-        "somebody happens to press one of its buttons inside the 60-second window, "
-        "which is exactly the device the user most needs discovery's help to declare. "
-        "Fix belongs in custom_components/ (build the command another way, or drop "
-        "the entry and say so), so this test is left failing on purpose."
-    ),
-)
 def test_every_discovery_command_reaches_the_bus() -> None:
     """Every entry of ``_DISCOVERY_COMMANDS`` must be a frame OWNd can build.
 
     The list is the definition of what a discovery run scans; an entry OWNd cannot
-    parse is a silent hole in that scan, visible to the user only as "discovery
-    never finds my keypad".
+    parse is a silent hole in that scan. `*#25*0##` used to be such a hole: OWNd
+    0.7.49 refuses to build it, so the WHO 25 "scan" never left the machine. The
+    entry is gone and the docs say what that means; this test keeps the list honest.
     """
     unparsable = [
         raw
