@@ -223,8 +223,8 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longest of `shutter_run` / `opening_time` / `closing_time`, plus 30 seconds, is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). The validator warns when the keys are set on an `advanced` cover, so the log line is expected and not a symptom. |
-| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls. |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the gateway's command timeout plus a couple of seconds; see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
+| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
 | `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
 | `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
 | `inverted` | boolean | `false` | The actuator is wired the other way round: `open_cover` sends *lower*, a bus "raising" frame is read as closing and an advanced actuator's reported level is mirrored. Home Assistant's own convention is unchanged: position `0` is still closed, `100` still open. |
@@ -249,22 +249,29 @@ pressing *up* on the keypad right after stopping a shutter that was going down, 
 honoured straight away. Pressing the **same** direction again within that second and
 a half cannot be told apart from the repeat, so it is ignored; the integration then
 re-reads the actuator's status, and the movement is picked up about two seconds late
-rather than lost. A stop the gateway did not accept — its command queue was full, or
-the connection was closing — changes nothing at all: no repeat can follow a command
-that was never sent, and the shutter is still running, so the estimate keeps running
-with it.
+rather than lost. A stop Home Assistant could not even send — the gateway's command
+queue was full, or the connection was closing — changes nothing at all: no repeat can
+follow a command that was never sent, and the shutter is still running, so the
+estimate keeps running with it. The same holds for the stop the integration sends by
+itself at the end of a *set position* or a tilt run: if that one cannot be sent, the
+shutter carries on to its end stop, and so does the estimate, which the actuator's own
+frame at the end of the run then puts back in step.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
 frame that says it stopped is lost, the state would otherwise stay that way for ever,
 so the integration re-reads the actuator's status after the longest configured travel
-time plus 30 seconds, and drops the direction only if nothing answers within about
-two seconds. An actuator that is still running answers, so it is never reported as
-stopped in the middle of a long run, and its answer starts the countdown again. The
-reported position is not affected either way: it is always the actuator's own value,
-never an estimate. This is also the one thing the timing keys still do on an
-`advanced:` cover — a shutter, awning or garage door whose run is longer than the 50
-seconds of the default needs `shutter_run` (or `opening_time` / `closing_time`) so
-that the safety timer stays out of its way.
+time plus 30 seconds, and drops the direction only if nothing answers. "Nothing
+answers" is measured against the command path itself, not against a fixed delay: the
+answer has to be queued, sent and acknowledged like any other command, so the wait is
+the gateway's own command timeout (`command_timeout_sec`, ten seconds by default)
+plus two seconds, and it grows with that option. An actuator that is still running
+answers well inside that, so it is never reported as stopped in the middle of a long
+run — not even while the bus is busy with a scene — and its answer starts the
+countdown again. The reported position is not affected either way: it is always the
+actuator's own value, never an estimate. This is also the one thing the timing keys
+still do on an `advanced:` cover — a shutter, awning or garage door whose run is
+longer than the 50 seconds of the default needs `shutter_run` (or `opening_time` /
+`closing_time`) so that the safety timer stays out of its way.
 
 ### The two-phase travel model (`slat_time`)
 
@@ -294,10 +301,11 @@ Consequences, all of them deliberate:
   `cover.set_cover_tilt_position`, `cover.stop_cover_tilt`) are only offered on a
   **basic** actuator with `slat_time` greater than `0`. On an `advanced:` cover
   there is no tilt control at all, and the timing keys never produce a position —
-  the actuator reports its own. They are not unused, though: they set the safety
-  timer described under [Keypad presses and gateway
+  the actuator reports its own. Two of them are not unused, though: the run times
+  set the safety timer described under [Keypad presses and gateway
   echoes](#keypad-presses-and-gateway-echoes), which is why the integration logs a
-  warning naming that as their only remaining effect.
+  warning naming, key by key, which of the ones you wrote still bounds that timer and
+  which does nothing there at all.
 - `cover.set_cover_position` computes the run through **both** phases: from fully
   closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
 - `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
@@ -386,7 +394,7 @@ Notes:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. |
+| `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. A leading zero is accepted and normalised (`'01'` is zone `1`); `"#0"` and `"#0#N"` are written exactly as shown. |
 | `name` | string | `Zone N` / `Central unit` | Optional. |
 | `heat` | boolean | `true` | Heating support. At least one of `heat` / `cool` must be `true`; a zone with both `false` is a configuration error (it could only be switched off). |
 | `cool` | boolean | `false` | Cooling support. |
@@ -395,13 +403,18 @@ Notes:
 | `central` | boolean | `false` | Zone driven through the central unit (`#0#N` addressing). |
 
 **Zones with more than one actuator.** A central unit that reports *actuator* status
-sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`), and the protocol layer
-does not expose the actuator number `n`. A zone with a valve and a pump, or one
-actuator per circuit, therefore reports *Idle* as soon as **any** one of them
-switches off, even if another is still running. The value is not stuck: the next
-frame, or the next temperature reading, puts the mode/temperature derivation back in
-charge. Zones with a single actuator — the usual case — and central units that report
-*valve* status (which carries the direction) are exact.
+sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`). The protocol layer
+parses the actuator number `n` but offers no public way to read it, and this
+integration will not reach into its internals for a value a future release could
+rename — so the frames of a zone's actuators are treated as one. A zone with a valve
+and a pump, or one actuator per circuit, therefore reports *Idle* as soon as **any**
+one of them switches off, even if another is still running. The value is not stuck:
+the actuator's next "on" frame hands the mode/temperature derivation back its job, and
+from then on the temperature readings drive `hvac_action` again. A central unit that
+also reports *valve* status is unaffected — the direction a valve frame carries is
+kept until another frame contradicts it. Zones with a single actuator — the usual
+case — and central units that report *valve* status (which carries the direction) are
+exact.
 
 ## Sensor
 

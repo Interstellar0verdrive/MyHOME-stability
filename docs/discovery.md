@@ -18,8 +18,8 @@ integration.
   contacts (WHO 25) have no general status request and CEN / CEN+ keypads never
   answer one, so those devices are seen only when they emit a frame during the
   window: open the contact, press a button.
-- A device already present in `myhome.yaml` (matched on WHO/WHERE) is not
-  suggested again.
+- A device already present in `myhome.yaml` (matched on WHO, WHERE and bus
+  interface) is not suggested again.
 - Progress fires `myhome_device_discovered` per device and
   `myhome_discovery_completed` when the run ends (see
   [Events → Device discovery events](services-and-events.md#device-discovery-events)).
@@ -40,6 +40,11 @@ entry:
 | Temperature probe | `sensor` (WHO 4, `class: temperature`) |
 | Dry contact / IR detector | `binary_sensor` (WHO 25, `class: motion`) |
 | Auxiliary channel | `binary_sensor` (`who: "9"`, no class) |
+
+A device behind an F422 local bus interface is suggested with its `interface:` key
+(`where: "11"` plus `interface: "3"` for the actuator addressed `11#4#3` on the bus),
+so it is a different suggestion from the main-bus device with the same WHERE. See
+[Configuration → Local bus interfaces](configuration.md#local-bus-interfaces-interface).
 
 A zone and a probe are told apart by the WHERE alone: a plain zone number is the
 zone reporting its own sensor (`climate`), a WHERE above 99 is a probe of its own
@@ -63,9 +68,23 @@ fires `myhome_device_discovered` and adds nothing to the file — that is expect
 not a failure. Declare scenario controls by hand, under
 [`scenario_control:`](configuration.md#scenario-control-cen--cen).
 
+A lighting or automation frame addressed to the whole plant (WHERE `0`), to an area
+(`00`, `1`–`9`, `100` — the bus spells area 10 with three digits) or to a group
+(`#1`–`#255`) is not a device and is not discovered: the integration reports it on the
+event bus as a general/area/group event instead. Such a block can still be written by
+hand if you want an entity that commands a whole area — see
+[Configuration → Common parameters](configuration.md#common-parameters-all-platforms) —
+but it is a choice, not something a run will offer you, and the schema spells area 10
+`10`, never `100`.
+
 Of the burglar-alarm traffic, the per-sensor frames are reported (their WHERE is
 `<zone><sensor>`); the zone-level frames, addressed `#<zone>`, are not, because an
 alarm zone has no entity and no `myhome.yaml` section to declare it under.
+
+What a run could not suggest is reported in its closing log line, in two clauses that
+say different things: *"N device(s) must be declared by hand under `scenario_control:`"*
+names the section to write them under, while *"N device(s) belong to a family this
+integration has no support for"* is the alarm case, which has no section anywhere.
 
 For debug-log examples of a discovery run, and what to check when no devices are
 found or suggestions are missing, see

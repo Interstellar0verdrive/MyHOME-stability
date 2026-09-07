@@ -107,12 +107,16 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
   `climate`), `event` for a CEN/CEN+ scenario control, which is reported but never
   suggested, or `null` for a device family this integration has no section for
   (alarm devices). A lighting actuator is always reported as `light`, never as
-  `switch`: nothing on the bus says which of the two you want.
+  `switch`: nothing on the bus says which of the two you want. `discovered_device`
+  carries an `interface` key as well — the F422 local bus interface of the device,
+  unpadded, and `null` for a device on the main bus.
 - `myhome_discovery_completed`: fired when a discovery run finishes (`myhome.stop_discovery`
   or the 60-second timeout). Data: `gateway_mac`, `reason` (`stopped` when the service
   ended the run, `timeout` when it ran out), `discovered_count` and
-  `discovered_devices` — the list of `{mac}-{who}-{where}` unique ids seen during the
-  run, suggested or not.
+  `discovered_devices` — the list of `{mac}-{device key}` unique ids seen during the
+  run, suggested or not (`00:03:50:11:22:33-1-11`, or
+  `00:03:50:11:22:33-1-11#4#03` behind a bus interface, `…-4-#0` for a
+  thermoregulation central unit).
 
 See [Discovery](discovery.md) for what triggers these and what they write.
 
