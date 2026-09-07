@@ -288,10 +288,14 @@ def _where_text(v: object) -> str:
     4-digit values, which existing configurations rely on - which means a value that
     *was* written with a leading zero inside those windows is taken at its decimal
     value and cannot be detected (``0115`` becomes WHERE ``77``, ``0000`` the General
-    WHERE ``0``).  The 3- and 5-digit shapes sensor addresses take are refused
-    outright, quoted or not: ``where: 301`` is a valid sensor address only as a
-    string, and ``docs/configuration.md`` says so.  That is why every message below
-    asks for quotes on the whole file rather than claiming this one value was caught.
+    WHERE ``0``).  Unquoted 3- and 5-digit *integers* - the shapes sensor addresses
+    take - are refused on every platform, because nothing here can tell ``where: 301``
+    from a mistyped actuator address.  Quoting is what makes them reachable: the text
+    then reaches the platform's own WHERE validator, which accepts ``where: '301'`` on
+    a sensor or a binary sensor and still refuses it on a light, a switch or a cover -
+    which is why the message must not promise that quoting will make the value valid.
+    That is also why every message below asks for quotes on the whole file rather than
+    claiming this one value was caught.
     """
     if isinstance(v, bool) or v is None:
         raise Invalid("WHERE is missing or not a string, quote it (e.g. where: '15')")
@@ -477,7 +481,19 @@ class ButtonList:
 
 
 class Zone:
-    """Thermoregulation zone: ``#0`` (central unit), ``1``..``99`` or ``#0#<zone>``."""
+    """Thermoregulation zone: ``#0`` (central unit), ``1``..``99`` or ``#0#<zone>``.
+
+    P4-BUG-1: a numeric zone is always returned **unpadded**, whether the user wrote
+    it as an integer (``zone: 1``) or as a string (``zone: '01'``, or the same value
+    under the ``where:`` alias).  The zone is the tail of the device key (``4-1``) and
+    every WHO 4 frame arrives keyed from ``int(zone)``, so a key built from ``'01'``
+    would be ``4-01`` and would never meet a single frame: the entity is created, is
+    available, and stays ``unknown`` for ever with no error anywhere.  The padded form
+    is exactly what a user writes after following the validator's own advice to quote
+    every ``where:`` value, so it has to be normalised rather than refused.  The
+    central-unit spellings ``#0`` and ``#0#N`` keep their own text (the regex below
+    already refuses a padded ``#0#01``).
+    """
 
     def __init__(self, msg: str | None = None) -> None:
         self.msg = msg
@@ -490,7 +506,7 @@ class Zone:
             if text == "#0" or re.fullmatch(r"#0#[1-9][0-9]?", text):
                 return text
             if text.isdigit() and 1 <= int(text) <= 99:
-                return text
+                return str(int(text))
         raise Invalid(self.msg or f"Invalid zone {v!r}, expected '#0' (central unit), '1'-'99' or '#0#<zone>'.")
 
     def __repr__(self) -> str:
@@ -738,15 +754,21 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
     ``opening_time`` / ``closing_time`` default to ``shutter_run`` (so a symmetric
     cover keeps needing one value only) and ``slat_time`` must leave at least one
     second of curtain travel in **both** directions, otherwise the position estimate
-    would be meaningless.
+    would be meaningless.  That cross-check is skipped on an ``advanced`` cover, which
+    produces no estimate at all (P4-NIT-1).
     """
     device.setdefault(CONF_DEVICE_CLASS, CoverDeviceClass.SHUTTER)
     shutter_run = device[CONF_SHUTTER_RUN]
     device.setdefault(CONF_OPENING_TIME, shutter_run)
     device.setdefault(CONF_CLOSING_TIME, shutter_run)
     slat_time = device[CONF_SLAT_TIME]
-    if slat_time <= 0:
-        # Two-phase model disabled: nothing to cross-check (0.3.x behaviour).
+    if slat_time <= 0 or device.get(CONF_ADVANCED_SHUTTER):
+        # Two-phase model disabled (0.3.x behaviour), or an advanced actuator, which
+        # estimates no position and has no tilt phase - so there is nothing for
+        # `slat_time` to be inconsistent *with*.  P4-NIT-1: cross-checking it there
+        # let a key the integration never reads abort the whole `myhome.yaml`, and it
+        # did so before `_warn_cover_timings_on_advanced` (which runs after every
+        # finalizer) could tell the user the key does nothing on this cover.
         return
     shortest = min(device[CONF_OPENING_TIME], device[CONF_CLOSING_TIME])
     if slat_time >= shortest - 1:
@@ -761,6 +783,26 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
 _COVER_TIMING_KEYS = (CONF_SHUTTER_RUN, CONF_SLAT_TIME, CONF_OPENING_TIME, CONF_CLOSING_TIME)
 
 
+def _keys_that_bound_the_advanced_timer(written: set[str]) -> list[str]:
+    """Of the run-time keys the user wrote, the ones that really reach the timer.
+
+    ``MyHOMECover._advanced_move_timeout`` is ``max(opening_time, closing_time)`` plus
+    ``ADVANCED_MOVE_MARGIN_SEC``, and the two directional keys default to
+    ``shutter_run``.  So ``shutter_run`` reaches the timer only through a directional
+    key the user left out: when both are written it has no effect on the deadline at
+    all (D4-1), and saying otherwise in the warning would be false.
+    """
+    keys = [key for key in (CONF_OPENING_TIME, CONF_CLOSING_TIME) if key in written]
+    if CONF_SHUTTER_RUN in written and len(keys) < 2:
+        keys.insert(0, CONF_SHUTTER_RUN)
+    return keys
+
+
+def _and_list(keys: list[str]) -> str:
+    """``"a"`` / ``"a and b"`` / ``"a, b and c"`` - the message has to read as English."""
+    return keys[0] if len(keys) == 1 else f"{', '.join(keys[:-1])} and {keys[-1]}"
+
+
 def _warn_cover_timings_on_advanced(device: Mapping, yaml_key: str, written: set[str]) -> None:
     """An advanced actuator reports its real position: the timing keys buy almost nothing.
 
@@ -768,25 +810,43 @@ def _warn_cover_timings_on_advanced(device: Mapping, yaml_key: str, written: set
     wait for tilt controls or a position estimate that will never appear.
 
     C3-4: the warning used to call the keys "ignored", which stopped being true in
-    round 2.  ``MyHOMECover`` now derives ``_advanced_move_timeout`` from
+    round 2.  ``MyHOMECover`` derives ``_advanced_move_timeout`` from
     ``max(opening_time, closing_time)`` - both defaulting to ``shutter_run`` - plus
     ``ADVANCED_MOVE_MARGIN_SEC``, the deadline after which a direction whose "stopped"
-    frame was lost is cleared and the actuator asked again.  So the run times do have
-    one effect on an advanced cover and the message says which.  ``slat_time`` really
-    is ignored: ``_has_tilt`` is False whenever the actuator is advanced.
+    frame was lost is cleared and the actuator asked again.
+
+    P4-UNCLEAR-2 / D4-1: the replacement then said, in one sentence, both that a key
+    did nothing and that it was still used, named three keys the user may never have
+    written, and agreed its verb with a list that usually has one item.  The message
+    below therefore names **only** what is in the file, splits "never estimates a
+    position" from "still bounds the safety timer", and puts each key on the side it
+    actually belongs to: ``slat_time`` never does anything here (``_has_tilt`` is
+    False whenever the actuator is advanced), and neither does a ``shutter_run`` that
+    both directional keys have already overridden.
     """
     if not device.get(CONF_ADVANCED_SHUTTER):
         return
     written_timings = [key for key in _COVER_TIMING_KEYS if key in written]
-    if written_timings:
-        LOGGER.warning(
-            "cover '%s': an advanced actuator reports its real position, so %s neither "
-            "estimate it nor enable tilt; shutter_run, opening_time and closing_time "
-            "are still used, but only to bound the safety timer that clears a movement "
-            "whose 'stopped' frame never arrived, and slat_time is ignored",
-            yaml_key,
-            ", ".join(written_timings),
+    if not written_timings:
+        return
+    bounding = _keys_that_bound_the_advanced_timer(written)
+    inert = [key for key in written_timings if key not in bounding]
+    clauses = []
+    if bounding:
+        verb = "is" if len(bounding) == 1 else "are"
+        clauses.append(
+            f"{_and_list(bounding)} {verb} still read, but only to bound the safety "
+            f"timer that clears a movement whose 'stopped' frame never arrived"
         )
+    if inert:
+        verb = "does" if len(inert) == 1 else "do"
+        clauses.append(f"{_and_list(inert)} {verb} nothing here")
+    LOGGER.warning(
+        "cover '%s': an advanced actuator reports its real position, so it never "
+        "estimates one and has no tilt phase; %s",
+        yaml_key,
+        ", and ".join(clauses),
+    )
 
 
 def _reject_unusable_interface(device: Mapping, yaml_key: str, section: str) -> None:

@@ -463,6 +463,60 @@ async def test_a_full_actuator_duty_cycle_is_followed_on_a_heat_and_cool_zone(
         assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
 
 
+async def test_a_valve_direction_survives_a_direction_less_actuator_frame(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P4-RISK-1: a bare "actuator on" must not overrule a valve that named a direction.
+
+    OWNd builds MESSAGE_TYPE_ACTION from two different dimensions. Dimension 19 (the
+    valve status, `*#4*<zone>*19*<cool>*<heat>##`) carries the direction and is the
+    authoritative one; dimension 20 (the actuator status) only says active or not.
+    A plant whose central unit mirrors both sends them in that order, and the
+    P3-BUG-1 fix - which drops `_action_reported` on any direction-less "active" -
+    used to throw the valve's answer away, so `hvac_action` fell back to the
+    temperature derivation and published `idle` while the valve was open. That
+    happens precisely when the room is at or above the set point and the valve is
+    modulating, and every automation keyed on `hvac_action` (a boiler relay, an "is
+    anything calling for heat" template) then reads `idle`.
+
+    Mutation caught: dropping the `if self._attr_hvac_action in (IDLE, OFF, None)`
+    guard, after which the second frame below reports `idle`.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0250##"))  # current 25.0, above
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
+        await hass.async_block_till_done()
+        # Nothing has reported yet, so the derivation answers: warm enough -> idle.
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*19*0*1##"))  # valve: heating
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        # The actuator confirms it is running but says nothing about the direction.
+        # It agrees with the valve; it must not silently replace it.
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*1##"))
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        # A frame that really does contradict the valve is still heard.
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*0##"))  # actuator off
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        # ...and from that `idle` the P3-BUG-1 duty cycle works exactly as before:
+        # the next direction-less "on" hands the derivation back its job.
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*1##"))
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0150##"))  # current 15.0, below
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+
 async def test_all_message_types_reach_the_entity(hass: HomeAssistant, tmp_path) -> None:
     """F10: humidity, local offset, local set point and MODE_TARGET were never fed.
 
@@ -656,6 +710,48 @@ async def test_central_unit_frame_is_not_applied_to_zone_1(hass: HomeAssistant, 
         assert zone_seen == ["*#4*1*0*0215##"]
         assert len(central_seen) == 1
         assert hass.states.get("climate.zone_one").attributes["current_temperature"] == 21.5
+
+
+# ------------------------------------------------------- a zero-padded zone (P4-BUG-1)
+PADDED_ZONE_YAML = f"""
+gateway:
+  mac: {MAC}
+  climate:
+    padded_zone:
+      where: '01'
+      name: Padded Zone
+      heat: true
+"""
+
+
+async def test_a_zone_written_with_a_padded_where_still_receives_its_frames(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P4-BUG-1: ``where: '01'`` used to key the device ``4-01`` and never hear a frame.
+
+    The validator's own advice is "always quote every 'where:' value", and every
+    actuator address in the documentation is written padded, so ``'01'`` is what a
+    careful user writes for zone 1. The entity was created, was named, was available
+    and stayed ``unknown`` for ever - the only trace being the dispatcher's DEBUG
+    line "No entity configured for 4-1".
+
+    Routed through ``_dispatch_message`` on purpose: this is a test about the *key*
+    the frame is looked up by, which calling ``handle_event`` directly would skip.
+    """
+    entry = make_entry(write_yaml(tmp_path, PADDED_ZONE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        # The key OWNd builds for every WHO 4 frame of zone 1, from ``int(zone)``.
+        assert OWNHeatingEvent("*4*110*1##").entity == "4-1"
+        assert list(hass.data[DOMAIN][MAC][CONF_PLATFORMS][CLIMATE_DOMAIN]) == ["4-1"]
+
+        await handler._dispatch_message(OWNHeatingEvent("*4*110*1##"), from_monitor=True)  # noqa: SLF001
+        await handler._dispatch_message(OWNHeatingEvent("*#4*1*0*0215##"), from_monitor=True)  # noqa: SLF001
+        await hass.async_block_till_done()
+        state = hass.states.get("climate.padded_zone")
+        assert state.state == HVACMode.HEAT
+        assert state.attributes["current_temperature"] == 21.5
 
 
 # ------------------------------------------------- climate + temperature probe (BUG-3)

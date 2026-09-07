@@ -9,14 +9,19 @@ unknown until a valve frame arrives (sc-19).
 Known limitation - a zone with several actuators (P3-RISK-1).  An actuator-status
 frame, ``*#4*<zone>#<n>*20*<state>##``, describes actuator ``n`` alone, and a zone
 commonly has more than one (a valve plus a pump, or one per circuit).  OWNd 0.7.49
-parses ``#n`` and then discards it: ``OWNHeatingEvent`` exposes no actuator index, so
-the three frames ``#0``, ``#1`` and ``#2`` are indistinguishable here.  An ``off`` from
-any one of them therefore reports ``hvac_action = idle`` for the whole zone, even while
-another actuator is running.  The value is not stuck: the next frame - or the next
-temperature reading, once a direction-less ``on`` has dropped ``_action_reported`` -
-puts the sc-19 derivation back in charge.  Doing better needs the index parsed out of
-the raw frame and one "seen" flag per actuator, which is not worth attempting without a
-real multi-actuator plant to test against.
+parses ``#n`` into the private ``OWNHeatingEvent._actuator`` (and into the
+human-readable log line this integration prints at DEBUG, "Zone 3's actuator 2 is
+off."), but exposes no public accessor for it, so telling the three frames ``#0``,
+``#1`` and ``#2`` apart here would mean reading an OWNd internal - which this
+integration deliberately does not do, because a private attribute can be renamed by
+any OWNd release without warning.  The three frames are therefore treated as one: an
+``off`` from any actuator reports ``hvac_action = idle`` for the whole zone, even while
+another actuator is running.  This is a documented limitation, not an oversight.  The
+value is not stuck: the next frame - or the next temperature reading, once a
+direction-less ``on`` has dropped ``_action_reported`` - puts the sc-19 derivation back
+in charge.  Doing better means either depending on ``_actuator`` or parsing the index
+out of the raw frame, plus one "seen" flag per actuator, and neither is worth
+attempting without a real multi-actuator plant to test against.
 """
 
 from __future__ import annotations
@@ -204,8 +209,13 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
 
         self._attr_hvac_mode = None
         self._attr_hvac_action = None
-        # True once the zone reported a valve/actuator state: from then on the reported
-        # action wins over the one derived from the mode (sc-19).
+        # True while the last frame that carried a real answer - a valve direction, an
+        # actuator "off", or any "active" on a zone that can only heat or only cool -
+        # is still the best one we have, in which case it wins over the action derived
+        # from the mode (sc-19).  It is *not* a latch: a direction-less actuator frame
+        # on a `heat: true, cool: true` zone drops it again and hands the derivation
+        # back its job, unless a valve frame has meanwhile named a direction
+        # (P3-BUG-1, P4-RISK-1 - see the MESSAGE_TYPE_ACTION arm of handle_event).
         self._action_reported = False
 
     async def async_update(self) -> None:
@@ -427,7 +437,18 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                     # of one actuator is off -> on -> off, and the "off" half does
                     # answer, so a flag that is only ever set would freeze hvac_action
                     # at `idle` from the first off/on pair onwards.
-                    self._action_reported = False
+                    #
+                    # P4-RISK-1: only when the standing answer is one this frame can
+                    # legitimately contradict, i.e. "the zone is doing nothing".  On a
+                    # plant that reports the valve status too, a dimension-19 frame has
+                    # already said *which* direction the zone is running in, and a bare
+                    # "active" must not overrule it - it agrees with it.  Overruling it
+                    # published `idle` while the valve was open, exactly when the valve
+                    # is modulating (room at or above the set point).  The P3-BUG-1
+                    # duty cycle is untouched: its previous answer is the actuator's
+                    # own "off", which is `idle` (or `off`), so the flag still drops.
+                    if self._attr_hvac_action in (HVACAction.IDLE, HVACAction.OFF, None):
+                        self._action_reported = False
             else:
                 # The zone can only heat or only cool, so "active" is a direction.
                 self._action_reported = True
