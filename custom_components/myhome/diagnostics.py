@@ -15,7 +15,13 @@ What goes in:
 - a *summary* of the validated ``myhome.yaml``: per platform the device count and
   the device keys (``who-where``), never the user's device names.  The per-device
   download adds that device's own validated config, with ``name`` /
-  ``entity_name`` redacted for the same reason;
+  ``entity_name`` redacted for the same reason.  One qualification, because it is
+  the difference between a promise kept and a name published: this is true of the
+  *contents* of the file.  The **file name** Home Assistant offers for a per-device
+  download is built by Home Assistant itself, out of the device name
+  (``myhome-<entry id>-<device name>-<device id>.json``), and no integration can
+  change it -- so rename the file before attaching it to a public issue, or attach
+  the entry-level download, whose file name carries no name at all;
 - the gateway handler statistics (Contract: ``handler.stats``, a ``GatewayStats``
   dataclass) and its session parameters;
 - the last frames of the ring buffer (``handler.recent_frames``).  OpenWebNet frames

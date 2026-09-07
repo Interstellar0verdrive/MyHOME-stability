@@ -242,10 +242,12 @@ ALL_DEVICE_SUPPORTED_TYPES: set[str] = {
     DEVICE_TYPE_BUS_AUX,
 }
 
-# Device type -> the Home Assistant platform the device ends up on, which for every
-# row but one is also the ``myhome.yaml`` section it is declared under.  The exception
-# is a CEN / CEN+ scenario control: it becomes an ``event`` entity, but it is written
-# under ``scenario_control:`` - there is no ``event:`` section in the file schema.
+# Device type -> the Home Assistant platform the device ends up on, which is also the
+# ``myhome.yaml`` section it is declared under except for the two CEN / CEN+ rows:
+# they become ``event`` entities but are written under ``scenario_control:``, because
+# there is no ``event:`` section in the file schema.  (The central unit is a milder
+# case: its section really is ``climate:``, it is only the key inside it that differs,
+# ``zone:`` rather than ``where:``.)
 # This is published verbatim as the ``platform`` key of ``myhome_device_discovered``
 # (see docs/services-and-events.md), so every value here is a promise that the
 # integration really builds that kind of entity for this WHO.  ``None`` means it
