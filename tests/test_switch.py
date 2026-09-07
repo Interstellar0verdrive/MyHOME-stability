@@ -23,14 +23,14 @@ SWITCH_YAML = f"""
 gateway:
   mac: {MAC}
   switch:
-    presa_bus:
+    bus_socket:
       where: '23'
       interface: '01'
-      name: Presa Bus
+      name: Bus Socket
       device_class: outlet
-    rele_test:
+    test_relay:
       where: '31'
-      name: Rele Test
+      name: Test Relay
 """
 
 # A second file: adding icons to SWITCH_YAML would change the entity count every other
@@ -69,10 +69,10 @@ async def test_switches_created(hass: HomeAssistant, tmp_path) -> None:
         # form is unpadded - existing entities must not be renamed.
         assert {item.unique_id for item in entries} == {f"{MAC}-1-23#4#01", f"{MAC}-1-31"}
 
-        outlet = hass.states.get("switch.presa_bus")
+        outlet = hass.states.get("switch.bus_socket")
         assert outlet.attributes[ATTR_DEVICE_CLASS] == SwitchDeviceClass.OUTLET
         assert outlet.attributes["Int"] == "1"
-        assert hass.states.get("switch.rele_test").attributes[ATTR_DEVICE_CLASS] == SwitchDeviceClass.SWITCH
+        assert hass.states.get("switch.test_relay").attributes[ATTR_DEVICE_CLASS] == SwitchDeviceClass.SWITCH
 
 
 async def test_status_request_uses_bus_interface(hass: HomeAssistant, tmp_path) -> None:
@@ -84,10 +84,10 @@ async def test_status_request_uses_bus_interface(hass: HomeAssistant, tmp_path) 
 
 async def test_turn_on_off(hass: HomeAssistant, tmp_path) -> None:
     async with setup_myhome(hass, tmp_path, SWITCH_YAML) as (_entry, commands):
-        await hass.services.async_call(SWITCH, "turn_on", {ATTR_ENTITY_ID: "switch.presa_bus"}, blocking=True)
+        await hass.services.async_call(SWITCH, "turn_on", {ATTR_ENTITY_ID: "switch.bus_socket"}, blocking=True)
         assert commands.sent_frames == ["*1*1*23#4#1##"]
         commands.clear()
-        await hass.services.async_call(SWITCH, "turn_off", {ATTR_ENTITY_ID: "switch.presa_bus"}, blocking=True)
+        await hass.services.async_call(SWITCH, "turn_off", {ATTR_ENTITY_ID: "switch.bus_socket"}, blocking=True)
         assert commands.sent_frames == ["*1*0*23#4#1##"]
 
 
@@ -96,20 +96,20 @@ async def test_handle_event_and_is_on_guard(hass: HomeAssistant, tmp_path) -> No
     async with setup_myhome(hass, tmp_path, SWITCH_YAML):
         switch = entity_object(hass, SWITCH, "1-31")
         await feed_event(hass, switch, "*1*1*31##")
-        assert hass.states.get("switch.rele_test").state == STATE_ON
+        assert hass.states.get("switch.test_relay").state == STATE_ON
 
         await feed_event(hass, switch, "*#1*31*2*0*1*0##")
-        assert hass.states.get("switch.rele_test").state == STATE_ON
+        assert hass.states.get("switch.test_relay").state == STATE_ON
 
         await feed_event(hass, switch, "*1*0*31##")
-        assert hass.states.get("switch.rele_test").state == STATE_OFF
+        assert hass.states.get("switch.test_relay").state == STATE_OFF
 
 
 async def test_availability_follows_connection_signal(hass: HomeAssistant, tmp_path) -> None:
     async with setup_myhome(hass, tmp_path, SWITCH_YAML):
-        assert hass.states.get("switch.rele_test").state != STATE_UNAVAILABLE
+        assert hass.states.get("switch.test_relay").state != STATE_UNAVAILABLE
         await set_connected(hass, False)
-        assert hass.states.get("switch.rele_test").state == STATE_UNAVAILABLE
+        assert hass.states.get("switch.test_relay").state == STATE_UNAVAILABLE
 
 
 async def test_icon_on_without_icon_is_applied(hass: HomeAssistant, tmp_path) -> None:

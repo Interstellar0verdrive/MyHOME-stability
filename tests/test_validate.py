@@ -635,10 +635,10 @@ def test_scenario_control_cen_uses_where():
     out = check(
         gw(
             scenario_control={
-                "ingresso": {
+                "entrance": {
                     "protocol": "cen",
                     "where": "051",
-                    "name": "Ingresso",
+                    "name": "Entrance",
                     "buttons": [0, 1, 2],
                     "model": "HD4652",
                     "entity_name": "Keypad",

@@ -197,9 +197,18 @@ def is_scenario_control_configured(hass: HomeAssistant, mac: str, device_info: M
     return isinstance(declared, dict) and scenario_control_key(protocol, address) in declared
 
 
-def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[str, Any]]]) -> int:
+def _merge_and_write(
+    path: str, mac: str, suggestions: dict[str, dict[str, dict[str, Any]]]
+) -> tuple[int, str]:
     """Executor job: merge `suggestions` into the YAML file at `path` and write it
-    atomically (temp file + os.replace). Returns the number of NEW entries."""
+    atomically (temp file + os.replace).
+
+    Returns ``(number of NEW entries, path actually written)``.  The second element is
+    ``path`` itself in the ordinary case and the ``<path>.new`` sibling when the target
+    could not be parsed: the caller closes the run with an INFO line in the imperative
+    ("copy the ones you want"), so it has to name the file the suggestions are really
+    in -- the one the user is about to open.
+    """
     existing: dict[str, Any] = {}
     try:
         with open(path, encoding="utf-8") as handle:
@@ -245,7 +254,7 @@ def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[
         except OSError:
             pass
         raise
-    return added
+    return added, path
 
 
 # How many device names the end-of-run report spells out before it summarises the rest.
@@ -385,15 +394,21 @@ class MyHOMEDiscoverySuggestions:
         pending, self._pending = self._pending, {}
         self._skipped, self._unsupported = [], []
         try:
-            added = await self.hass.async_add_executor_job(_merge_and_write, self.path, mac, pending)
+            added, written_to = await self.hass.async_add_executor_job(
+                _merge_and_write, self.path, mac, pending
+            )
         except OSError as err:
             LOGGER.error("Could not write discovery suggestions to %s: %s", self.path, err)
             return
+        # ``written_to`` is ``self.path`` unless the target could not be parsed, in which
+        # case the suggestions went to the ``.new`` sibling and this line has to say so --
+        # otherwise it contradicts the WARNING just above it and sends the user to a file
+        # that has not changed.
         LOGGER.info(
             "Discovery finished: %d suggestion(s) (%d new) written to %s - copy the ones you want "
             "into your myhome.yaml.%s",
             sum(len(d) for d in pending.values()),
             added,
-            self.path,
+            written_to,
             f" {report}." if report else "",
         )

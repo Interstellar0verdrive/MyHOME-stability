@@ -136,6 +136,15 @@ CONF_KEEPALIVE_MINUTES_DEFAULTED = "keepalive_minutes_default"
 # WHOs whose frames actually carry the F422 bus interface.  ``OWNMessage.interface``
 # (OWNd 0.7.49) returns the ``#4#N`` WHERE parameter only for these three, so an
 # ``interface:`` on any other WHO would build a device key no frame can ever match.
+#
+# The ``"15"`` documents the bus, not a reachable case: neither call site can ever see
+# it.  ``_check_interface_who`` runs over platform-section devices and no platform
+# schema accepts WHO 15 (a CEN keypad is declared under ``scenario_control:``, which is
+# keyed by protocol and has no ``interface:`` field at all), while
+# ``config_flow_discovery.generate_suggested_config`` only ever tests the WHOs of
+# ``_SUGGESTABLE`` (1, 2, 4, 9, 18, 25).  Kept because the tuple is a statement about
+# which frames carry ``#4#N``; do not read it as "an interfaced CEN keypad is
+# declarable" -- it is not.
 INTERFACE_CAPABLE_WHO: tuple[str, ...] = ("1", "2", "15")
 
 # Built-in defaults for the power/energy reporting filter and keep-alive.  Gateway level

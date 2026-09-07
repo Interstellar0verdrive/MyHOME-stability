@@ -335,16 +335,17 @@ def test_merge_and_write_creates_the_file_when_absent(tmp_path: Path) -> None:
 
     Mutation caught: removing the ``except FileNotFoundError: pass`` arm, or
     returning something other than the number of newly added keys (e.g. 0, or the
-    total).
+    total), or returning a path other than the one asked for on the ordinary path.
     """
     target = tmp_path / DISCOVERED_CONFIG_FILE
-    added = _merge_and_write(
+    added, written_to = _merge_and_write(
         str(target),
         MAC,
         {"light": {"discovered_1_11": {"who": "1", "where": "11", "name": "Hallway Lamp"}}},
     )
 
     assert added == 1
+    assert written_to == str(target)
     assert target.exists()
     assert _read_yaml(target) == {
         MAC: {"light": {"discovered_1_11": {"who": "1", "where": "11", "name": "Hallway Lamp"}}}
@@ -397,10 +398,11 @@ def test_merge_and_write_preserves_existing_entries_and_counts_only_new_keys(tmp
         },
         "switch": {"discovered_9_9": {"who": "9", "where": "9", "name": "Aux Line"}},
     }
-    added = _merge_and_write(str(target), MAC, suggestions)
+    added, written_to = _merge_and_write(str(target), MAC, suggestions)
 
     # discovered_1_11 already existed: only the dimmer and the aux switch are new.
     assert added == 2
+    assert written_to == str(target)
 
     merged = _read_yaml(target)
     # The other gateway is untouched...
@@ -415,7 +417,7 @@ def test_merge_and_write_preserves_existing_entries_and_counts_only_new_keys(tmp
     assert merged[MAC]["switch"] == suggestions["switch"]
 
     # Re-writing the very same suggestions adds nothing new.
-    assert _merge_and_write(str(target), MAC, suggestions) == 0
+    assert _merge_and_write(str(target), MAC, suggestions) == (0, str(target))
 
 
 def test_merge_and_write_replaces_non_mapping_nodes_instead_of_crashing(tmp_path: Path) -> None:
@@ -432,12 +434,16 @@ def test_merge_and_write_replaces_non_mapping_nodes_instead_of_crashing(tmp_path
     target = tmp_path / DISCOVERED_CONFIG_FILE
     target.write_text(f"'{MAC}': not-a-mapping\n'{MAC2}':\n  light: []\n", encoding="utf-8")
 
-    added = _merge_and_write(str(target), MAC, {"light": {"discovered_1_11": {"who": "1", "where": "11"}}})
+    added, _written_to = _merge_and_write(
+        str(target), MAC, {"light": {"discovered_1_11": {"who": "1", "where": "11"}}}
+    )
     assert added == 1
     assert _read_yaml(target)[MAC] == {"light": {"discovered_1_11": {"who": "1", "where": "11"}}}
 
     # Same guard, one level down: the gateway node is a mapping but the platform is a list.
-    added = _merge_and_write(str(target), MAC2, {"light": {"discovered_1_99": {"who": "1", "where": "99"}}})
+    added, _written_to = _merge_and_write(
+        str(target), MAC2, {"light": {"discovered_1_99": {"who": "1", "where": "99"}}}
+    )
     assert added == 1
     assert _read_yaml(target)[MAC2] == {"light": {"discovered_1_99": {"who": "1", "where": "99"}}}
 
@@ -453,14 +459,16 @@ def test_merge_and_write_never_overwrites_unparsable_yaml(tmp_path: Path) -> Non
 
     Mutation caught: removing the ``except yaml.YAMLError`` arm (the write then
     lands on the original path and the byte comparison fails); or keeping the arm
-    but forgetting ``path = f"{path}.new"``.
+    but forgetting ``path = f"{path}.new"``; or returning the path that was asked
+    for instead of the one that was written (the caller then names the wrong file,
+    see ``test_the_closing_line_names_the_new_sibling_when_the_target_was_unparsable``).
     """
     target = tmp_path / DISCOVERED_CONFIG_FILE
     broken = "gateway:\n  light: [unclosed\n    still broken:\n"
     target.write_bytes(broken.encode("utf-8"))
     before = target.read_bytes()
 
-    added = _merge_and_write(
+    added, written_to = _merge_and_write(
         str(target),
         MAC,
         {"light": {"discovered_1_11": {"who": "1", "where": "11", "name": "Hallway Lamp"}}},
@@ -468,6 +476,7 @@ def test_merge_and_write_never_overwrites_unparsable_yaml(tmp_path: Path) -> Non
 
     assert target.read_bytes() == before, "an unparsable target file must never be rewritten"
     assert added == 1
+    assert written_to == f"{target}.new"
 
     sibling = tmp_path / f"{DISCOVERED_CONFIG_FILE}.new"
     assert sibling.exists()
@@ -858,3 +867,71 @@ async def test_a_config_directory_it_cannot_write_is_reported_not_swallowed(
     assert "Read-only file system" in errors[0]
     # The queue was emptied before the write, so nothing is left to retry with.
     assert suggestions.pending_count == 0
+
+
+async def test_the_closing_line_names_the_file_the_suggestions_were_written_to(
+    hass: HomeAssistant, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The ordinary flush names ``suggestions.path``, the file it really wrote.
+
+    Why it matters in production: this INFO line is the whole user interface of a
+    discovery run. It is written in the imperative ("copy the ones you want"), so the
+    path in it is the one the user opens next; ``docs/troubleshooting.md`` sends them
+    to exactly this file to check that it "has grown after a discovery run".
+
+    Mutation caught: making ``_merge_and_write`` return the sibling unconditionally, or
+    logging something other than the path that was written.
+    """
+    entry = make_entry(tmp_path / "myhome.yaml")
+    _load_platforms(hass, MAC, {})
+    suggestions = MyHOMEDiscoverySuggestions(hass, entry)
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_ON_OFF_SWITCH, "11", "Hallway Lamp")) is True
+
+    with caplog.at_level(logging.INFO, logger="custom_components.myhome"):
+        await suggestions.async_flush()
+
+    target = tmp_path / DISCOVERED_CONFIG_FILE
+    finished = [record.message for record in caplog.records if "Discovery finished" in record.message]
+    assert len(finished) == 1
+    assert f"written to {target} -" in finished[0]
+    assert target.exists()
+    assert not (tmp_path / f"{DISCOVERED_CONFIG_FILE}.new").exists()
+
+
+async def test_the_closing_line_names_the_new_sibling_when_the_target_was_unparsable(
+    hass: HomeAssistant, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A diverted write must be diverted in the log line too (INC6-2).
+
+    Why it matters in production: ``myhome_discovered.yaml`` is the one file the
+    documentation invites the user to hand-edit, so a half-finished edit -- the state
+    that makes it unparsable -- is precisely the case the diversion guard exists for.
+    The WARNING above says the suggestions went to ``<path>.new``; if the closing INFO
+    still names ``<path>`` the two lines contradict each other and the imperative one
+    is the wrong one: the user opens a file that has not changed, concludes discovery
+    found nothing, and never looks at the sibling (which no document mentions).
+
+    Mutation caught: reverting the format argument to ``self.path``, or dropping the
+    second element of ``_merge_and_write``'s return value.
+    """
+    entry = make_entry(tmp_path / "myhome.yaml")
+    _load_platforms(hass, MAC, {})
+    target = tmp_path / DISCOVERED_CONFIG_FILE
+    target.write_bytes(b"gateway:\n  light: [unclosed\n    still broken:\n")
+    before = target.read_bytes()
+
+    suggestions = MyHOMEDiscoverySuggestions(hass, entry)
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_ON_OFF_SWITCH, "11", "Hallway Lamp")) is True
+
+    with caplog.at_level(logging.INFO, logger="custom_components.myhome"):
+        await suggestions.async_flush()
+
+    sibling = tmp_path / f"{DISCOVERED_CONFIG_FILE}.new"
+    assert target.read_bytes() == before, "the unparsable target must not be rewritten"
+    assert sibling.exists()
+
+    finished = [record.message for record in caplog.records if "Discovery finished" in record.message]
+    assert len(finished) == 1
+    # The line names the file that exists on disk, not the one that did not change.
+    assert f"written to {sibling} -" in finished[0]
+    assert f"written to {target} -" not in finished[0]

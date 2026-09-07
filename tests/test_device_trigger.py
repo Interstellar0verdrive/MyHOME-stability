@@ -54,10 +54,10 @@ gateway:
       object: 25
       name: Living Room Keypad
       buttons: [1, 2]
-    keypad_ingresso:
+    keypad_entrance:
       protocol: cen
       where: '51'
-      name: Keypad Ingresso
+      name: Entrance Keypad
       buttons: [0]
   light:
     light_test:
