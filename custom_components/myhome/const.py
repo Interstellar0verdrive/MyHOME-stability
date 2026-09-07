@@ -1,5 +1,11 @@
 """Constants for the MyHome component."""
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from OWNd.message import OWNMessage
 
 LOGGER = logging.getLogger(__package__)
 DOMAIN = "myhome"
@@ -362,6 +368,42 @@ def bus_full_where(where: str, interface: object) -> str:
     """WHERE as it must appear on the bus: ``11`` or ``11#4#3`` (never ``11#4#03``)."""
     normalised = normalise_bus_interface(interface)
     return f"{where}#4#{normalised}" if normalised is not None else str(where)
+
+
+# --------------------------------------------------------------------------------------
+# Plant-wide addresses (WHO 1 / WHO 2)
+# --------------------------------------------------------------------------------------
+def is_bus_scope_address(message: OWNMessage) -> bool:
+    """True when a lighting/automation frame addresses a *scope* and not one device.
+
+    OpenWebNet spells three plant-wide scopes in the WHERE of a WHO 1 or WHO 2 frame,
+    and OWNd 0.7.49 decodes all three (``OWNMessage.is_general`` / ``is_area`` /
+    ``is_group``):
+
+    - the **general** address ``0`` -- every lamp, or every shutter, of the plant;
+    - an **area** ``00``, ``1``-``9`` or ``100`` (``100`` is area 10: the bus spells
+      it with three digits, the configuration schema with two);
+    - a **group** ``#1``-``#255``.
+
+    None of them is a device, and this one predicate is what says so for the whole
+    integration.  ``gateway._handle_lighting_scope`` / ``_handle_automation_scope``
+    intercept such a frame, fire the matching ``myhome_*_light_event`` /
+    ``myhome_*_automation_event`` and never dispatch it to an entity; discovery must
+    refuse it for the same reason, because a device it announces is a block the user
+    pastes into ``myhome.yaml``:
+
+    - ``light: {where: '0'}`` builds an entity whose "turn on" sends ``*1*1*0##``,
+      i.e. switches every light in the house, and which can never show a state
+      (the dispatcher intercepts every frame that would update it);
+    - ``light: {where: '100'}`` is refused by the schema outright -- which does not
+      break one device, it makes the whole ``myhome.yaml`` fail to load, so every
+      device of that gateway disappears.
+
+    Two callers, one definition, so the dispatcher and the discovery service cannot
+    drift apart again.  ``is_general`` returns ``None`` (not ``False``) for every WHO
+    other than 1 and 2, hence the ``bool()``.
+    """
+    return bool(message.is_general or message.is_area or message.is_group)
 
 
 # Repairs issue ids (issue_registry), all prefixed with the entry id by the caller.

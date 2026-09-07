@@ -47,6 +47,7 @@ from .const import (
     DEVICE_TYPE_TO_PLATFORM,
     DOMAIN,
     LOGGER,
+    is_bus_scope_address,
 )
 
 if TYPE_CHECKING:
@@ -244,6 +245,17 @@ class MyHOMEDeviceDiscoveryService:
         if message_type not in self._message_to_device_type:
             return None
 
+        if is_bus_scope_address(message):
+            # A general (``0``), area (``00``, ``1``-``9``, ``100``) or group
+            # (``#N``) WHERE on WHO 1 / WHO 2.  The gateway intercepts these frames a
+            # few lines further down its own dispatcher and never gives them to an
+            # entity, so announcing them here would offer the user a block that
+            # commands the whole plant (or a whole area) and can never show a state
+            # -- and ``where: '100'`` is not even YAML the schema loads, because the
+            # bus spells area 10 with three digits and the schema with two.  One
+            # predicate for both decisions: see ``const.is_bus_scope_address``.
+            return None
+
         where = None
         for attr in ("where", "entity", "object", "address"):
             value = getattr(message, attr, None)
@@ -254,9 +266,10 @@ class MyHOMEDeviceDiscoveryService:
             return None
         where = str(where)
         if where.startswith("#"):
-            # Groups and general addresses are not devices.  This also drops the
-            # ``*5*<what>*#<zone>##`` frames of a burglar alarm, where ``#N`` is zone N
-            # and not a group -- deliberately: an alarm zone has no entity and no
+            # What is left of the ``#`` addresses once ``is_bus_scope_address`` above
+            # has taken the WHO 1 / WHO 2 groups: the ``*5*<what>*#<zone>##`` frames
+            # of a burglar alarm, where ``#N`` is zone N and not a group -- dropped
+            # deliberately, because an alarm zone has no entity and no
             # ``myhome.yaml`` section, so announcing it would only grow the
             # "must be declared by hand" count with something that cannot be declared
             # at all.  A real alarm *sensor* frame (``*5*<what>*<zone><sensor>##``,

@@ -308,6 +308,73 @@ def test_an_alarm_zone_address_is_not_taken_for_a_device(
     assert make_service(hass, tmp_path)._extract_device_info(message) is None  # noqa: SLF001
 
 
+# ------------------------------------------------------------------ plant-wide addresses
+# Every WHERE OWNd 0.7.49 decodes as a *scope* instead of a device, on both WHOs that
+# have them.  ``100`` is area 10: the bus spells it with three digits and
+# ``validate.py`` with two, which is why that one did not merely add a useless entity
+# but made the whole ``myhome.yaml`` unloadable.
+_SCOPE_FRAMES = [
+    "*1*1*0##",  # general: every light of the plant
+    "*1*1*00##",  # area 0
+    "*1*1*1##",  # area 1
+    "*1*1*9##",  # area 9
+    "*1*1*100##",  # area 10, spelled with three digits on the bus
+    "*1*1*#5##",  # group 5
+    "*2*1*0##",  # ...and the same five shapes on WHO 2
+    "*2*1*00##",
+    "*2*1*4##",
+    "*2*1*100##",
+    "*2*1*#7##",
+]
+
+
+@pytest.mark.parametrize("frame", _SCOPE_FRAMES)
+async def test_a_plant_wide_address_is_not_taken_for_a_device(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """A general, area or group WHERE is a scope, and discovery must ignore it.
+
+    Why it matters in production: any plant-wide or area button press during the
+    60-second run produces one of these frames, and discovery used to drop only the
+    ``#``-prefixed ones.  What the user was then handed, between their real
+    actuators:
+
+    * ``light: {where: '0'}`` -- an entity named "MyHOME Bus On Off Switch 0" whose
+      ``turn_on`` sends ``*1*1*0##``, i.e. switches on *every* light of the house,
+      and which can never show a state because ``gateway._handle_lighting_scope``
+      intercepts every frame that would update it;
+    * ``light: {where: '100'}`` -- area 10, which ``validate.py`` refuses ("expecting
+      a valid General ('0'), Area ('00', '1'-'9', '10') ... "), so pasting the block
+      does not break one device: the whole ``myhome.yaml`` fails to load and every
+      device of that gateway disappears.
+
+    The gateway already refuses to dispatch exactly these frames to an entity, one
+    ``if`` further down the same dispatcher, so the two now share one predicate
+    (``const.is_bus_scope_address``).
+
+    Mutation caught: dropping the ``is_bus_scope_address`` guard from
+    ``_extract_device_info`` (every frame here becomes a device again), or narrowing
+    the predicate to one of its three branches.
+    """
+    message = OWNEvent.parse(frame)
+    # The classification is OWNd's, not ours: assert it from the library's own
+    # properties so this test still means something if our helper changes.
+    assert message is not None
+    assert message.is_general or message.is_area or message.is_group
+
+    service = make_service(hass, tmp_path)
+    seen: list[dict[str, Any]] = []
+    hass.bus.async_listen(f"{DOMAIN}_device_discovered", lambda event: seen.append(dict(event.data)))
+
+    assert service._extract_device_info(message) is None  # noqa: SLF001
+    service.handle_discovery_message(message)
+    await hass.async_block_till_done()
+
+    assert seen == []
+    assert service.get_discovered_devices() == {}
+    assert service.suggestions.pending_count == 0
+
+
 def test_an_auxiliary_channel_is_published_as_a_binary_sensor(
     hass: HomeAssistant, tmp_path
 ) -> None:

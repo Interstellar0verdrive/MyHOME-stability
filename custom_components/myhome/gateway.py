@@ -125,6 +125,7 @@ from .const import (
     SIGNAL_GATEWAY_CONNECTION,
     SIGNAL_GATEWAY_STATS,
     bus_full_where,
+    is_bus_scope_address,
     scenario_control_key,
 )
 from .myhome_device import MyHOMEEntity
@@ -1183,6 +1184,11 @@ class MyHOMEGatewayHandler:
     async def _handle_lighting_scope(self, message: OWNLightingEvent) -> bool:
         """General / area / group lighting frames: fire the bus event and re-request
         the affected states (no sleep in the receive path, gw-18)."""
+        # Exactly the three branches below, in one predicate `discovery.py` shares:
+        # what this method refuses to dispatch to an entity is what discovery must
+        # refuse to announce as a device (const.is_bus_scope_address).
+        if not is_bus_scope_address(message):
+            return False
         state = _safe_is_on(message)
         event = "on" if state else "off"
         if message.is_general:
@@ -1205,6 +1211,9 @@ class MyHOMEGatewayHandler:
         return False
 
     def _handle_automation_scope(self, message: OWNAutomationEvent) -> bool:
+        # Same shared predicate as _handle_lighting_scope, same reason.
+        if not is_bus_scope_address(message):
+            return False
         if message.is_general:
             self.hass.bus.async_fire(
                 "myhome_general_automation_event", {"message": str(message), "event": _automation_event_name(message)}
