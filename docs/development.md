@@ -21,9 +21,12 @@ ruff check .
 # test plugin):
 pytest tests -q
 
-# The three tests that open real loopback sockets or spawn subprocesses carry the
-# `slow` marker; skipping them takes the run from ~13 s to ~8 s while leaving
-# every guarantee they cover pinned somewhere else as well:
+# The four tests that take about a second or more on their own carry the `slow`
+# marker (a real connect timeout, a negotiation left to time out, a full
+# config-entry setup against a loopback server, and two Home Assistant imports in
+# two subprocesses); skipping them takes the run from ~16 s to ~11 s. Most of the
+# other loopback-socket tests are fast and stay in both lanes, and every guarantee
+# the marked ones cover is pinned in the fast lane as well:
 pytest tests -q -m "not slow"
 ```
 
@@ -57,6 +60,20 @@ to it, which is why the documented command is the bare `ruff check .`.
 Keep `--strict-markers` and `--strict-config` in the **ini** keys, never moved into
 `addopts`: from `addopts` they are silently ignored on pytest 9, and the suite would
 go on passing while both guarantees were gone.
+
+Every entry of `requirements_test.txt` is pinned, `ruff` and `pytest` included. A
+floating `ruff` would turn a green build red with no change to the tree the day it
+stabilises a preview rule in one of the selected families (`ruff check . --preview`
+finds 250 such lines today), and `pytest.ini` depends on pytest-9 semantics. Bump
+either pin deliberately, in a commit that also fixes the fallout.
+
+Coverage is not part of the pinned set, because neither CI nor the two commands
+above ask for it. To reproduce the numbers quoted in the audits:
+
+```bash
+pip install pytest-cov
+pytest tests -q --cov=custom_components/myhome --cov-report=term-missing
+```
 
 The tests never talk to a real gateway: `tests/test_gateway.py` and
 `tests/test_init.py` spin up a loopback fake OpenWebNet server instead.
@@ -94,15 +111,28 @@ Then run the job:
    for everything that wants the bare version). Optional inputs: a release `name`
    and a `prerelease` flag.
 
-The workflow then, in order: refuses a tag that already exists; builds the release
-body from `CHANGELOG.md` with `python3 scripts/release_notes.py x.y.z` (the script
-opens `CHANGELOG.md` relatively, so it only works from the repository root — the
-workflow runs it there, and so should you if you preview it); creates and pushes the
-tag; zips `custom_components/myhome/` into `myhome.zip`; publishes the release with
-that asset; and finally bumps `"version"` in `custom_components/myhome/manifest.json`
-and pushes that commit back to the branch it ran on. **The manifest version is
-therefore set by the workflow, not by you** — if step 1's section is missing, the
-notes step fails before the tag is pushed and nothing is published.
+The workflow then, in order:
+
+1. refuses a tag that already exists;
+2. builds the release body from `CHANGELOG.md` with
+   `python3 scripts/release_notes.py x.y.z` (the script opens `CHANGELOG.md`
+   relatively, so it only works from the repository root — the workflow runs it
+   there, and so should you if you preview it);
+3. writes the version into `custom_components/myhome/manifest.json`, asserts that
+   the file really says it, commits it and pushes that commit to the branch it ran
+   on;
+4. creates and pushes the tag, which therefore points **at** that bumped commit;
+5. zips `custom_components/myhome/` into `myhome.zip` from the same bumped
+   checkout;
+6. publishes the release with that asset.
+
+**The manifest version is therefore set by the workflow, not by you**, and steps
+3-5 have to stay in that order: HACS reads `manifest.json` *from the tag*, so a tag
+created before the bump would ship and advertise the previous version — the user
+would install `vx.y.z`, be told they are running the version before it, and be
+offered the same update for ever. The asset has the same problem, since it is built
+from the checkout the tag covers. If step 1's changelog section is missing, the
+notes step fails before anything is written, committed, tagged or published.
 
 `scripts/release_notes.py` exists because GitHub renders every newline in a release
 body as a line break, so the hard-wrapped changelog would show ragged lines: the

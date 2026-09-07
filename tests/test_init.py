@@ -13,12 +13,19 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er, 
 from OWNd.message import OWNGatewayCommand
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myhome import expected_unique_ids, issue_id, normalise_entry_data
+from custom_components.myhome import (
+    async_migrate_entry,
+    async_remove_config_entry_device,
+    expected_unique_ids,
+    issue_id,
+    normalise_entry_data,
+)
 from custom_components.myhome.const import (
     CONF_ENTITY,
     CONF_FILE_PATH,
     CONF_PLATFORMS,
     CONF_WORKER_COUNT,
+    CONFIG_ENTRY_VERSION,
     DOMAIN,
     GATEWAY_DIAG_SUFFIXES,
     ISSUE_NO_DEVICES_FOR_GATEWAY,
@@ -714,3 +721,153 @@ async def test_failed_platform_unload_is_reported(
             assert await hass.config_entries.async_unload(entry.entry_id) is False
         assert "reload the integration to recover" in caplog.text
 
+
+# --------------------------------------------------------------------------- review 3: coverage
+async def test_the_delete_device_button_only_removes_what_the_yaml_no_longer_has(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`async_remove_config_entry_device` is the *Delete* button on a device page.
+
+    Home Assistant asks the integration before it lets a user delete one of its
+    devices. Answering `True` for a device that is still in `myhome.yaml` lets the
+    user delete a device that comes straight back on the next reload, with its
+    entity ids renumbered (`_2` suffixes) and every automation and dashboard card
+    pointing at the old ones; answering `False` for a device that was taken out of
+    the file leaves it in the registry for ever, unavailable, with no way to tidy it
+    up. Neither answer had a test, and `_configured_device_identifiers` exists only
+    to serve this function, so it was uncovered too.
+
+    Mutations caught: `return not any(...)` -> `return True` (the configured light
+    and the gateway become deletable) or -> `return False` (the stale device can
+    never be removed); dropping `{(DOMAIN, mac)}` from
+    `_configured_device_identifiers`, which makes the gateway device itself
+    deletable while the entry is loaded.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        registry = dr.async_get(hass)
+
+        configured = registry.async_get_device_by_identifier((DOMAIN, f"{MAC}-1-11"), entry.entry_id)
+        gateway = registry.async_get_device_by_identifier((DOMAIN, MAC), entry.entry_id)
+        assert configured is not None and gateway is not None
+        assert await async_remove_config_entry_device(hass, entry, configured) is False
+        assert await async_remove_config_entry_device(hass, entry, gateway) is False
+
+        # A device the user has just taken out of myhome.yaml: still in the registry
+        # (the prune only runs at setup), no longer configured, so it must go.
+        stale = registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{MAC}-1-99")},
+            name="Removed Light",
+        )
+        assert await async_remove_config_entry_device(hass, entry, stale) is True
+
+
+async def test_an_unreadable_configuration_file_is_reported_as_such(hass: HomeAssistant, tmp_path) -> None:
+    """A file that exists and cannot be read gets its own repair message.
+
+    The validation failure has a test; the *read* failure did not, although it is
+    what a user hits after a bad restore, a wrong owner on the config directory, or
+    a `myhome.yaml` that is somehow a directory. Without the `except OSError` arm the
+    exception escapes `async_setup_entry` as a traceback in the log and the config
+    entry retries for ever with nothing in the repairs panel.
+
+    Mutation caught: deleting the `except OSError` arm (the setup then fails with an
+    unhandled `IsADirectoryError` and no repair issue is created).
+    """
+    path = tmp_path / "myhome.yaml"
+    path.mkdir()  # exists, is not a file: open() raises IsADirectoryError, an OSError
+    entry = make_entry(path)
+    with mock_gateway():
+        assert not await _setup(hass, entry)
+
+    issue = _issue(hass, entry, ISSUE_YAML_INVALID)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    assert "cannot read the configuration file" in issue.translation_placeholders["message"]
+
+
+async def test_a_syntax_error_in_the_yaml_is_reported_as_a_yaml_error(hass: HomeAssistant, tmp_path) -> None:
+    """A hand-edited file with a typo must say "not valid YAML", not raise.
+
+    This is the most likely failure of all - the documentation asks the user to edit
+    `myhome.yaml` by hand - and it was the one arm of the loader with no test. The
+    schema-level failures are reported by `test_repair_invalid_yaml_created_then_cleared`;
+    this one never reaches the schema, because the file does not parse.
+
+    Mutation caught: deleting the `except yaml.YAMLError` arm, after which the
+    parser's exception escapes the setup and the user gets a traceback in the log
+    instead of a repair issue naming their file.
+    """
+    path = write_yaml(tmp_path, "gateway: [1, 2\n  mac: broken\n")  # unclosed flow sequence
+    entry = make_entry(path)
+    with mock_gateway():
+        assert not await _setup(hass, entry)
+
+    issue = _issue(hass, entry, ISSUE_YAML_INVALID)
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    assert "not valid YAML" in issue.translation_placeholders["message"]
+
+
+async def test_a_downgrade_refuses_to_migrate_rather_than_corrupt_the_entry(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """An entry written by a newer version must not be "migrated" backwards.
+
+    A user who installs a future release and rolls back keeps its config entry, whose
+    version is higher than this code knows. Running the migration on it would rewrite
+    fields this version does not understand - a one-way door on a real installation -
+    so `async_migrate_entry` refuses and Home Assistant shows the entry as needing a
+    newer version instead.
+
+    `async_migrate_entry` is called directly here, because Home Assistant has a guard
+    of its own in front of it (it refuses a downgraded entry before the integration is
+    asked) - which is exactly why this arm went uncovered, and why a mutation of it
+    passes an end-to-end test. Both halves are asserted: the function's own answer,
+    and the state the user actually sees.
+
+    Mutation caught: deleting the `if entry.version > CONFIG_ENTRY_VERSION: return
+    False` guard, after which the entry is accepted for migration and this version's
+    code writes its own shape over a newer one's data.
+    """
+    entry = make_entry(write_yaml(tmp_path), version=CONFIG_ENTRY_VERSION + 1)
+    entry.add_to_hass(hass)
+    data_before = dict(entry.data)
+
+    assert await async_migrate_entry(hass, entry) is False
+    assert entry.version == CONFIG_ENTRY_VERSION + 1  # untouched
+    assert dict(entry.data) == data_before
+
+    with mock_gateway():
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR
+
+
+async def test_an_unformatted_unique_id_is_normalised_at_setup(hass: HomeAssistant, tmp_path) -> None:
+    """A unique_id that is not in `dr.format_mac` form is rewritten once, at setup.
+
+    Entries created by the early versions of this fork stored the MAC as the SSDP
+    discovery reported it (upper case, or with no separators). Home Assistant compares
+    unique_ids verbatim when it decides whether a discovery is already configured, so
+    an unnormalised one makes the same gateway discoverable for ever: the user is
+    offered "MyHOMEServer1 Gateway" as a new device every time Home Assistant restarts,
+    and accepting it creates a duplicate entry.
+
+    Mutation caught: deleting the `if entry.unique_id != dr.format_mac(entry.unique_id)`
+    block from `async_setup_entry`.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="MyHOMEServer1 Gateway",
+        unique_id="000350AABBCC",  # as SSDP reports it: no separators, upper case
+        version=CONFIG_ENTRY_VERSION,
+        minor_version=1,
+        data={**ENTRY_DATA_V2, "mac": MAC, "id": MAC},
+        options={CONF_WORKER_COUNT: 1, CONF_FILE_PATH: str(write_yaml(tmp_path))},
+    )
+    with mock_gateway():
+        assert await _setup(hass, entry)
+    assert entry.unique_id == dr.format_mac("000350AABBCC") == MAC

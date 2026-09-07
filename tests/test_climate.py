@@ -723,3 +723,47 @@ async def test_no_platform_unload_entry(hass: HomeAssistant, tmp_path) -> None:
         await hass.async_block_till_done()
         assert entities == {}
     assert MAC not in hass.data[DOMAIN]
+
+
+async def test_a_zone_switched_back_on_does_not_stay_reported_as_off(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A zone that was off and is switched on must not keep publishing `hvac_action: off`.
+
+    An actuator frame received while the zone is off reports `off` and sets
+    `_action_reported`, which is right at that moment. When the wall unit then puts
+    the zone back on, no new actuator frame is due - the actuator has not changed
+    state - so the mode frame is the only thing that arrives, and `_action_reported`
+    sends the derivation home before it can look at the temperatures. The one line
+    that keeps the two attributes from contradicting each other is the `off -> idle`
+    correction in `_async_derive_hvac_action`.
+
+    Mutation caught: deleting `if self._attr_hvac_action == HVACAction.OFF:
+    self._attr_hvac_action = HVACAction.IDLE` from the `_action_reported` arm, after
+    which the zone reads `hvac_mode: heat` and `hvac_action: off` at the same time -
+    the thermostat card says the heating is off while the zone is asking for heat,
+    and every automation keyed on `hvac_action` (a boiler relay, an "is anything
+    calling for heat" template) reads `off` until the actuator next changes state.
+    Replacing the correction's `IDLE` with `HEATING` is caught too: the actuator
+    frame is still the authority, it just cannot mean "off" for a zone that is on.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0, below target
+        entity.handle_event(OWNHeatingEvent("*4*303*3##"))  # mode off
+        entity.handle_event(OWNHeatingEvent("*#4*3#2*20*0##"))  # the actuator confirms: off
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).state == HVACMode.OFF
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.OFF
+
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # back on, heat
+        await hass.async_block_till_done()
+        state = hass.states.get(FAN_ZONE)
+        assert state.state == HVACMode.HEAT
+        # `idle`, not a re-derived `heating`: the actuator frame is still the
+        # authority, it just cannot mean "off" for a zone that is on.
+        assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE

@@ -3,7 +3,15 @@
 # docs/development.md; keep the two in sync by editing only this file.
 homeassistant==2026.9.0
 OWNd==0.7.49
-pytest
-pytest-timeout
+# Pinned, not floating: `ruff check .` selects whole rule families (E/F/W/I/UP/
+# B/SIM/RUF), so a release that stabilises a preview rule turns a green build red
+# with no change to the tree - `ruff check . --preview` currently reports 250 such
+# findings. Bump this deliberately and fix the fallout in that commit.
+ruff==0.16.6
+# pytest.ini relies on pytest-9 semantics (the ini forms of strict_markers /
+# strict_config, which are silently ignored from addopts) and on strict_config
+# rejecting unknown keys, which makes a major-version jump a hard failure rather
+# than a warning nobody sees.
+pytest==9.0.3
+pytest-timeout==2.4.0
 pytest-homeassistant-custom-component==0.13.363
-ruff

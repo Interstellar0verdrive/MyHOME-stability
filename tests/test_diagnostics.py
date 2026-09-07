@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -437,3 +438,45 @@ async def test_a_non_ipv4_host_is_masked_too(
         data = await get_diagnostics_for_config_entry(hass, hass_client, entry)
     assert host not in json.dumps(data)
     assert data["entry"]["data"]["host"].endswith(REDACTED)
+
+
+async def test_diagnostics_for_an_entry_that_is_not_loaded(
+    hass: HomeAssistant, hass_client, tmp_path
+) -> None:
+    """The dump has to work when the integration is broken - that is when it is asked for.
+
+    Every other test here downloads diagnostics from a loaded entry, and both of them
+    assert `loaded is True`; nothing asserted the other way round, so the whole shape
+    of "diagnostics for a setup that failed" was unverified - including that it does
+    not raise, which would leave a user with nothing to attach to their issue at the
+    exact moment they need it. `handler_summary(None)` is the branch: no handler in
+    `hass.data`, so no stats, no session parameters and no ring buffer.
+
+    Everything that does not need the handler must still be there: the entry's own
+    state (the first thing a maintainer reads), the redacted identity, the effective
+    options - which come from `entry.options`, not from the handler - and the
+    versions.
+
+    Mutation caught: `return {"loaded": False}` -> `return {"loaded": True}` in
+    `handler_summary` (the report then claims a live handler for an entry that has
+    none), and dropping the `if handler is None` guard altogether, after which the
+    download fails with an AttributeError instead of producing a file.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        await _setup(hass, entry)
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert MAC not in hass.data[DOMAIN]
+
+    data = await get_diagnostics_for_config_entry(hass, hass_client, entry)
+
+    assert data["handler"] == {"loaded": False}
+    assert data["recent_frames"] == []
+    assert data["config"] == {"gateway_keys": [], "device_count": 0, "platforms": {}}
+    # Still a usable bug report: state, identity and the options in effect.
+    assert data["entry"]["state"] == str(ConfigEntryState.NOT_LOADED)
+    assert data["entry"]["data"]["mac"].endswith(REDACTED)
+    assert data["effective_options"]["config_file_name"] == "myhome.yaml"
+    assert data["versions"]["home_assistant"] == HA_VERSION
+    assert MAC not in json.dumps(data)

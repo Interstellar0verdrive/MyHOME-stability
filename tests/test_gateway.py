@@ -1022,6 +1022,33 @@ async def test_energy_delta_exactly_at_the_threshold_is_accepted() -> None:
     assert handler._should_process_active_power("18-51", 105) is True  # noqa: SLF001 - exactly 5 W
 
 
+async def test_energy_interval_exactly_at_the_threshold_is_accepted() -> None:
+    """The other half of Contract B: ``elapsed >= min_interval_sec`` is also a boundary.
+
+    The delta arm has its own boundary test above; this arm had none, so
+    ``or now - last_ts >= settings.min_interval_sec`` -> ``>`` passed the whole suite.
+    A meter under a perfectly steady load produces no delta at all, which makes the
+    interval arm the *only* thing that ever lets a sample through: on a poller that
+    fires on the period itself, the mutation freezes such a sensor at its first
+    reading and the energy dashboard flat-lines, with nothing logged above DEBUG.
+
+    ``min_delta_w: 1000`` against a constant 100 W keeps the delta arm out of the
+    decision, the mirror image of what the delta test does with ``min_interval_sec``.
+
+    Mutation caught: ``>=`` -> ``>`` on the interval arm.
+    """
+    clock = FakeClock()
+    handler = make_handler(sensor_defaults={"min_delta_w": 1000, "min_interval_sec": 60})
+    handler._now = clock  # noqa: SLF001 - the delta arm must never decide
+    register(handler, SENSOR, "18-51", **{"class": "power", "min_delta_w": 1000, "min_interval_sec": 60})
+
+    assert handler._should_process_active_power("18-51", 100) is True  # noqa: SLF001 - first sample
+    clock.value = 59.0  # set directly: nothing is polling this clock here
+    assert handler._should_process_active_power("18-51", 100) is False  # noqa: SLF001 - too soon
+    clock.value = 60.0
+    assert handler._should_process_active_power("18-51", 100) is True  # noqa: SLF001 - exactly 60 s
+
+
 async def test_throttle_reads_per_sensor_and_gateway_defaults() -> None:
     handler = make_handler(sensor_defaults={"min_delta_w": 5, "min_interval_sec": 5, "suppress_log_interval_sec": 60})
     register(handler, SENSOR, "18-51", **{"class": "power"})
@@ -1235,6 +1262,7 @@ class FakeOWNServer:
         flood_negotiation: bool = False,
         garbage_negotiation: bool = False,
         reset_after_initial: bool = False,
+        stall_negotiation: bool = False,
     ) -> None:
         self.replies = replies or {}
         self.nonce = nonce
@@ -1251,6 +1279,15 @@ class FakeOWNServer:
         self.flood_negotiation = flood_negotiation
         self.garbage_negotiation = garbage_negotiation
         self.reset_after_initial = reset_after_initial
+        # Pulled by `reset_now()`; the handler parks here instead of resetting
+        # blind, so the RST can never discard the initial frames the client has
+        # not read yet (an RST drops the peer's receive buffer).
+        self._reset_gate: asyncio.Event = asyncio.Event()
+        # Accept the connection and then say nothing at all: the client's
+        # `asyncio.timeout` in `open()` fires while a socket really is established,
+        # which is the only way to reach the `except (OSError, TimeoutError)` arm
+        # with something to close (a refused connect never gets that far).
+        self.stall_negotiation = stall_negotiation
         self.received: list[str] = []
         self.sessions: list[str] = []
         self.monitor_writers: list[asyncio.StreamWriter] = []
@@ -1259,6 +1296,11 @@ class FakeOWNServer:
         self.clients: list[asyncio.StreamWriter] = []
         self.server: asyncio.AbstractServer | None = None
         self.port = 0
+
+    async def reset_now(self) -> None:
+        """Send an RST on every connection now (the caller has read what it needed)."""
+        self._reset_gate.set()
+        await asyncio.sleep(0)
 
     async def push(self, frame: str) -> None:
         """Send ``frame`` on every open monitor (event) session."""
@@ -1294,6 +1336,12 @@ class FakeOWNServer:
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.clients.append(writer)
         try:
+            if self.stall_negotiation:
+                # Say nothing and hold the connection. `read()` (rather than an
+                # Event) so the handler ends the moment the client hangs up, which
+                # is what keeps the harness's lingering-task check happy.
+                await reader.read()
+                return
             writer.write(b"*#*1##")
             session = (await reader.readuntil(b"##")).decode()
             self.sessions.append(session)
@@ -1333,6 +1381,10 @@ class FakeOWNServer:
             if self.close_after_initial:
                 return
             if self.reset_after_initial:
+                # Wait to be asked: an RST discards whatever is still in the peer's
+                # receive buffer, so resetting as soon as the frames are drained out
+                # of *this* side races the client's own read of them.
+                await self._reset_gate.wait()
                 # SO_LINGER 0 makes close() send an RST instead of a FIN, so the
                 # client sees a connection *reset* rather than a clean EOF.
                 sock = writer.get_extra_info("socket")
@@ -1407,9 +1459,20 @@ async def test_command_channel_timeout_and_peer_close() -> None:
     assert server.sessions == ["*99*1##"]
 
 
-@pytest.mark.slow  # ~2 s: three real loopback sessions, one of them a real connect timeout
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
-async def test_channel_open_failures() -> None:
+async def test_a_wrong_password_is_an_authentication_error_by_reason() -> None:
+    """`password_error` must reach the user as a reauth dialog, not as a retry loop.
+
+    Deliberately NOT `slow`: this is the guarantee that decides whether a user with a
+    changed OPEN password is asked for the new one or watches the integration
+    reconnect for ever, and it costs about 60 ms. It used to share a test with the 2 s
+    connect-timeout case below, which put it behind the `slow` marker and out of the
+    `pytest -m "not slow"` lane entirely - the one guarantee that lane was losing.
+
+    Mutation caught: dropping `"password_error"` from `own_session.AUTH_FAILURE_MESSAGES`
+    (the refusal then comes back as a plain `SessionError`, which the gateway handler
+    treats as a transient failure and retries with backoff, for ever, silently).
+    """
     async with FakeOWNServer(nonce="603356072", password_ok=False) as server:
         channel = OWNCommandChannel(make_gateway(server.port), LOGGER)
         with pytest.raises(AuthenticationError) as excinfo:
@@ -1417,6 +1480,20 @@ async def test_channel_open_failures() -> None:
         assert excinfo.value.reason == "password_error"
         assert not channel.is_open
         assert channel._stream_writer is None  # noqa: SLF001 - closed on failure
+
+
+@pytest.mark.slow  # ~2 s: a real connect timeout against a bound but unlistened port
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_channel_open_failures() -> None:
+    """A nonce session opens, and a refused connection is an `OSError`, never a None.
+
+    OWNd's own session classes swallow both outcomes and return None; the point of
+    `own_session.py` is that the caller can tell them apart. The refusal arm is what
+    the gateway handler paces its reconnects on.
+
+    Mutations caught: returning instead of raising on a failed connect (the second
+    block then reports an open channel for a port nothing is listening on).
+    """
     async with FakeOWNServer(nonce="603356072", password_ok=True) as server:
         channel = OWNEventChannel(make_gateway(server.port), LOGGER)
         await channel.open(timeout=2)
@@ -1487,6 +1564,7 @@ async def test_negotiation_transport_failures_raise_session_errors() -> None:
         assert "during negotiation" in str(excinfo.value)
         assert isinstance(excinfo.value.__cause__, asyncio.IncompleteReadError)
         assert not channel.is_open
+        assert channel._stream_writer is None  # noqa: SLF001 - the socket is closed on failure
 
     async with FakeOWNServer(flood_negotiation=True) as server:
         channel = OWNEventChannel(make_gateway(server.port), LOGGER)
@@ -1495,6 +1573,33 @@ async def test_negotiation_transport_failures_raise_session_errors() -> None:
         assert "malformed negotiation frame" in str(excinfo.value)
         assert isinstance(excinfo.value.__cause__, asyncio.LimitOverrunError)
         assert not channel.is_open
+        assert channel._stream_writer is None  # noqa: SLF001 - the socket is closed on failure
+
+
+@pytest.mark.slow  # ~1 s: a real connection that is deliberately left to time out
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_a_negotiation_that_times_out_does_not_leak_the_socket() -> None:
+    """`open()` promises "the socket is always closed on failure"; this is the arm where
+    the promise costs something.
+
+    A gateway that accepts the connection and then says nothing - rebooting, or an
+    OpenWebNet port answered by something that is not a gateway - is a `TimeoutError`
+    with a live socket behind it, and the gateway handler retries with backoff for as
+    long as that lasts. Without the `await self.close()` in the
+    `except (OSError, TimeoutError)` arm every retry leaves one more `StreamWriter`
+    (and one more file descriptor) behind, and Home Assistant only notices when the
+    process hits its descriptor limit - at which point every integration in the
+    instance starts failing, not just this one.
+
+    Mutation caught: replacing `await self.close()` with `self._is_open = False` in
+    that arm - `is_open` then still reads False, which is all the other tests check.
+    """
+    async with FakeOWNServer(stall_negotiation=True) as server:
+        channel = OWNCommandChannel(make_gateway(server.port), LOGGER)
+        with pytest.raises(TimeoutError):
+            await channel.open(timeout=0.5)
+        assert not channel.is_open
+        assert channel._stream_writer is None  # noqa: SLF001 - closed, not merely marked
 
 
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
@@ -1548,7 +1653,12 @@ async def test_connection_reset_mid_session_closes_the_channel() -> None:
     async with FakeOWNServer(initial_frames=["*1*1*11##"], reset_after_initial=True) as server:
         channel = OWNEventChannel(make_gateway(server.port), LOGGER)
         await channel.open(timeout=2)
+        # Read the frame *before* asking for the RST: an RST discards whatever is
+        # still in the receive buffer, so resetting blind made this a race that a
+        # loaded CI runner lost about one run in twelve at four-way concurrency -
+        # and it failed inside `open()`, before a single assertion below ran.
         assert str(await channel.get_next()) == "*1*1*11##"
+        await server.reset_now()
         with pytest.raises(OSError) as excinfo:
             for _ in range(5):  # the RST may land after one more read on some stacks
                 await channel.get_next()

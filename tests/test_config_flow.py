@@ -573,6 +573,12 @@ async def test_options_flow_refuses_more_workers_than_the_setup_will_start(
     ``__init__.async_setup_entry`` clamps the worker count to MAX_COMMAND_WORKERS, so
     a form that accepted 1-10 let a user save 8, read 8 back at every visit and run 4,
     with nothing anywhere saying so.
+
+    Both ends of the range, not just the top: ``for worker_id in range(worker_count)``
+    starts no sending worker at all for 0, and ``clamp_worker_count``'s ``max(1, ...)``
+    is the only thing that rescues it at setup. Mutations caught:
+    ``vol.Range(min=1, max=MAX_COMMAND_WORKERS)`` -> ``min=0``, and dropping the
+    minimum altogether.
     """
     path = write_yaml(tmp_path)
     entry = make_entry(path)
@@ -596,6 +602,16 @@ async def test_options_flow_refuses_more_workers_than_the_setup_will_start(
     with pytest.raises(InvalidData):
         await hass.config_entries.options.async_configure(
             result["flow_id"], {**submission, CONF_WORKER_COUNT: MAX_COMMAND_WORKERS + 1}
+        )
+
+    # Both ends, not just the top: `range(0)` starts no sending worker at all, so a
+    # saved 0 would leave a gateway that connects, updates every entity from the
+    # monitor session, and silently never sends a single command - no error state and
+    # nothing above DEBUG. `clamp_worker_count` rescues it at setup, but the form must
+    # not accept a number it will then ignore: that asymmetry is what this test is for.
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {**submission, CONF_WORKER_COUNT: 0}
         )
 
     # The top of the range is still accepted.

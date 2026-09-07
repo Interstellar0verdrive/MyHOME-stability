@@ -22,6 +22,7 @@ from homeassistant.const import (
     ATTR_DEVICE_CLASS,
     ATTR_ENTITY_ID,
     ATTR_SUPPORTED_FEATURES,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import entity_registry as er
@@ -31,7 +32,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache,
 )
 
-from custom_components.myhome import expected_unique_ids
+from custom_components.myhome import cover as cover_module, expected_unique_ids
 from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
 
 from .helpers_core import MAC
@@ -1175,3 +1176,168 @@ async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
         await _advance(hass, freezer, 40)
         assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
         assert hass.states.get(ENTITY).state == CoverState.OPEN
+
+
+async def test_the_status_grace_outlives_a_bus_round_trip(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`ADVANCED_PROBE_GRACE_SEC` has to be long enough for the answer to come back.
+
+    The safety timer asks the actuator what it is doing and only then concludes; the
+    whole value of that (C3-2) is that a *slow* actuator answers in time. The answer
+    travels the command queue, which is serialised across the gateway and may already
+    hold other requests, so the grace is not free: too short and the entity publishes
+    `closed` mid-run again - an advanced cover is not `assumed_state` and reads
+    *closed* at position 0 - once per run longer than its bound.
+
+    The other advanced tests feed the answer without moving the clock at all, so they
+    pass for any grace whatsoever, and `test_a_slow_advanced_actuator_never_leaves_opening`
+    advances in one jump that straddles the whole sequence. Mutations caught:
+    `ADVANCED_PROBE_GRACE_SEC = 0.01` and `= 0.5`.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*0*0*0##")  # closed, on the floor
+        await feed_event(hass, cover, "*2*1*83##")  # it starts opening
+        commands.clear()
+
+        await _advance(hass, freezer, 55)  # past the 50 s bound: the actuator is asked
+        assert commands.status_frames == ["*#2*83##"]
+
+        # A round trip on a busy command queue is not instantaneous. The entity must
+        # still say `opening` while it waits, not flip to `closed` at position 0.
+        await _advance(hass, freezer, 1.0)
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        await feed_event(hass, cover, "*#2*83*10*11*60*0*0##")  # "still opening"
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+
+async def test_the_echo_recheck_waits_out_the_echo_window(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`ECHO_RECHECK_DELAY_SEC` must not fire while the gateway may still be echoing.
+
+    The re-request is what recovers a keypad press the echo guard swallowed; sending
+    it while our own command is still being echoed back asks the actuator a question
+    in the middle of the noise the guard exists to filter, and costs one command-queue
+    slot per swallowed frame.
+
+    `test_same_direction_echo_after_our_stop_is_ignored_then_rechecked` advances 2.5 s
+    in a single step, so it passes for any delay at all. Mutations caught:
+    `ECHO_RECHECK_DELAY_SEC = 1.0` and `= 0.01` (both inside `STOP_ECHO_WINDOW_SEC`).
+    """
+    assert cover_module.ECHO_RECHECK_DELAY_SEC > cover_module.STOP_ECHO_WINDOW_SEC
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        commands.clear()
+
+        await feed_event(hass, cover, "*2*2*81##")  # the ambiguous same-direction frame
+        # Still inside the echo window: the actuator must not be asked yet.
+        await _advance(hass, freezer, 1.0)
+        assert commands.status_frames == []
+        # Past `ECHO_RECHECK_DELAY_SEC`: now it is.
+        await _advance(hass, freezer, 1.5)
+        assert commands.status_frames == ["*#2*81##"]
+
+
+@pytest.mark.parametrize(
+    ("position", "expected"),
+    [(50, "*2*1*81##"), (49, "*2*2*81##")],  # 50 is the boundary and belongs to "open"
+)
+async def test_a_position_command_with_no_known_position_runs_to_the_nearer_end(
+    hass: HomeAssistant, tmp_path, position: int, expected: str
+) -> None:
+    """First use after a restart: `set_cover_position` still has to do something sensible.
+
+    A basic cover knows where it is only from its own estimate, and a fresh install -
+    or a restart with no restored state - has no estimate at all. Ignoring the command
+    would leave the user pressing a slider that does nothing; the honest approximation
+    is to run to the nearer end stop, which also re-calibrates the estimate for every
+    command after it. Nothing in the suite reached this branch: every position test
+    restores a position first.
+
+    Parametrised rather than sequential, because a second setup in the same test would
+    restore the position the first one left behind and never reach the branch at all.
+
+    Mutations caught: `if position >= 50` -> `> 50` (a target of exactly 50 then runs
+    the cover the wrong way), and deleting the `current is None` branch, after which
+    `position > current` raises a TypeError inside the service call and the slider
+    fails with a traceback.
+    """
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        assert ATTR_CURRENT_POSITION not in hass.states.get(ENTITY).attributes  # unknown
+
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: position}, blocking=True
+        )
+        assert commands.sent_frames == [expected]
+        assert hass.states.get(ENTITY).state == (
+            CoverState.OPENING if expected.startswith("*2*1") else CoverState.CLOSING
+        )
+
+
+async def test_a_tilt_command_with_no_known_position_is_ignored(
+    hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A tilt with no position must be dropped, not guessed.
+
+    Tilt only means anything with the curtain on the floor, so the slat phase cannot
+    be entered until the position is known. Guessing would send the shutter to an end
+    stop the user did not ask for - the opposite of what a tilt slider is for - and
+    the branch that prevents it (`position is None`) had no test, so deleting it left
+    the suite green while `position > 0` raised a TypeError inside the service call.
+
+    Mutation caught: deleting the `if position is None: return` guard of
+    `_async_move_tilt`.
+    """
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        assert ATTR_CURRENT_POSITION not in hass.states.get(SLAT_ENTITY).attributes  # unknown
+
+        with caplog.at_level("DEBUG"):
+            await hass.services.async_call(
+                COVER,
+                "set_cover_tilt_position",
+                {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40},
+                blocking=True,
+            )
+        assert commands.sent_frames == []  # nothing was sent to the bus
+        assert "the position is not known yet" in caplog.text
+        # And the entity is left alone: still unknown, not guessed into a state.
+        assert hass.states.get(SLAT_ENTITY).state == STATE_UNKNOWN
+
+
+async def test_an_advanced_actuator_reports_closing_as_well_as_opening(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Both halves of the advanced direction pair, not just the one that had a test.
+
+    An advanced actuator's plain WHAT frames (`*2*1*83##` / `*2*2*83##`) carry only the
+    direction - the position comes from its own status frames - and only the `opening`
+    half was ever fed to one. Its `closing` sibling three lines down was not: an
+    asymmetry, not a design decision. A shutter coming down at the keypad would show
+    as `open` for the whole run, so a dashboard shows no movement and an automation
+    waiting for `closing` never fires.
+
+    Mutation caught: deleting the `elif closing: self._set_advanced_direction(CLOSING)`
+    arm of the plain-frame branch (the cover then sits at `open` while it travels).
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*60*0*0##")  # stopped, at 60
+        assert hass.states.get(entity_id).state == CoverState.OPEN
+
+        await feed_event(hass, cover, "*2*2*83##")  # somebody presses DOWN
+        state = hass.states.get(entity_id)
+        assert state.state == CoverState.CLOSING
+        # The position stays the actuator's own: an advanced cover is never estimated.
+        assert state.attributes[ATTR_CURRENT_POSITION] == 60
+
+        await feed_event(hass, cover, "*2*1*83##")  # and UP again
+        assert hass.states.get(entity_id).state == CoverState.OPENING
