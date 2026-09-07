@@ -88,7 +88,8 @@ fires `myhome_device_discovered` and adds nothing to the file — that is expect
 not a failure. Declare scenario controls by hand, under
 [`scenario_control:`](configuration.md#scenario-control-cen--cen). If the keypad is
 already declared there, the run still sees it: it is logged as `Discovered …`,
-counted in *Discovery completed*, listed in that event's `discovered_devices`, and
+counted in the `Discovery completed: N device(s) seen` line, listed in
+`myhome_discovery_completed`'s `discovered_count` and `discovered_devices`, and
 published on `myhome_device_discovered` like every other device seen during the run.
 The one thing it is left out of is the closing *"must be declared by hand"* clause,
 because there is nothing left to do about it.
