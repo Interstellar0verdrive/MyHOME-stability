@@ -33,6 +33,23 @@ gateway:
       name: Rele Test
 """
 
+# A second file: adding icons to SWITCH_YAML would change the entity count every other
+# test in this module asserts.
+ICON_YAML = f"""
+gateway:
+  mac: {MAC}
+  switch:
+    boiler:
+      where: '41'
+      name: Boiler
+      icon_on: 'mdi:water-boiler'
+    pump:
+      where: '42'
+      name: Pump
+      icon: 'mdi:pump-off'
+      icon_on: 'mdi:pump'
+"""
+
 
 async def test_switches_created(hass: HomeAssistant, tmp_path) -> None:
     """Entities, device classes, address attributes and unique ids."""
@@ -93,3 +110,29 @@ async def test_availability_follows_connection_signal(hass: HomeAssistant, tmp_p
         assert hass.states.get("switch.rele_test").state != STATE_UNAVAILABLE
         await set_connected(hass, False)
         assert hass.states.get("switch.rele_test").state == STATE_UNAVAILABLE
+
+
+async def test_icon_on_without_icon_is_applied(hass: HomeAssistant, tmp_path) -> None:
+    """P3-NIT-1: the switch copy of the P2-INCONSISTENCY-1 change was covered by nothing.
+
+    `icon_on` alone used to be ignored. An absent `icon` means the icon Home Assistant
+    picks by itself while off, not "no icon swap at all".
+    """
+    async with setup_myhome(hass, tmp_path, ICON_YAML):
+        boiler = entity_object(hass, SWITCH, "1-41")
+        assert "icon" not in hass.states.get("switch.boiler").attributes
+        await feed_event(hass, boiler, "*1*1*41##")
+        assert hass.states.get("switch.boiler").attributes["icon"] == "mdi:water-boiler"
+        await feed_event(hass, boiler, "*1*0*41##")
+        assert "icon" not in hass.states.get("switch.boiler").attributes
+
+
+async def test_icon_and_icon_on_swap_on_a_switch(hass: HomeAssistant, tmp_path) -> None:
+    """The documented pair: `icon` while off, `icon_on` while on."""
+    async with setup_myhome(hass, tmp_path, ICON_YAML):
+        pump = entity_object(hass, SWITCH, "1-42")
+        assert hass.states.get("switch.pump").attributes["icon"] == "mdi:pump-off"
+        await feed_event(hass, pump, "*1*1*42##")
+        assert hass.states.get("switch.pump").attributes["icon"] == "mdi:pump"
+        await feed_event(hass, pump, "*1*0*42##")
+        assert hass.states.get("switch.pump").attributes["icon"] == "mdi:pump-off"

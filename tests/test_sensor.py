@@ -663,7 +663,7 @@ def test_keepalive_minutes_for_option_precedence(tmp_path) -> None:
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, plain) == 125
 
 
-@pytest.mark.parametrize("option", ["abc", "", "30.0", None])
+@pytest.mark.parametrize("option", ["abc", "", "30.0", None, "inf", "-inf", 1e400, float("nan")])
 def test_keepalive_option_that_is_not_an_int_never_breaks_the_platform(tmp_path, caplog, option) -> None:
     """P2-NIT-1: `int(option)` was the one TUNABLE_OPTIONS read without a defensive parse.
 
@@ -671,6 +671,11 @@ def test_keepalive_option_that_is_not_an_int_never_breaks_the_platform(tmp_path,
     taking the whole sensor platform - the four gateway diagnostic sensors included -
     down with it. `gateway._option()` and `__init__`'s `worker_count` both promise the
     opposite for this family of options.
+
+    P3-NIT-4: the infinities go through `float()` happily and only `int()` refuses
+    them, with `OverflowError` - which the first version of the parse did not catch,
+    so they escaped through the very gap it was written to close. `nan` raises
+    `ValueError` and was caught all along; it is here so the pair cannot drift apart.
     """
     entry = make_entry(tmp_path / "myhome.yaml", options={CONF_DEFAULT_KEEPALIVE_MINUTES: option})
     device = {CONF_KEEPALIVE_MINUTES: 125, CONF_KEEPALIVE_MINUTES_DEFAULTED: True}
