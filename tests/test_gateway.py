@@ -2075,14 +2075,18 @@ async def test_an_acked_ordinary_command_does_not_speak_for_the_watchdog() -> No
     )
     assert handler._command_ack_at is None  # noqa: SLF001
 
-    clock.value = 50.0
+    # The watchdog only wakes up every `read_poll_interval` (30 s in production), so
+    # the check that raises happens *after* the probe window has passed, not exactly
+    # on it: 80 s here against a 50 s window. C6-4 - the second clause must print
+    # what was really examined, so the two numbers are deliberately different.
+    clock.value = 80.0
     with pytest.raises(SessionError) as excinfo:
         await handler._check_idle()  # noqa: SLF001
-    # Each clause carries the window it was actually measured over: 200 s of monitor
-    # silence, but only the 50 s since the probe went out for the missing ACK (C5-6).
+    # Each clause carries the window it was actually measured over: 230 s of monitor
+    # silence, but only the 80 s since the probe went out for the missing ACK (C5-6).
     assert str(excinfo.value) == (
-        "nothing on the monitor for 200 s and no status request acknowledged "
-        "on the command session in the last 50 s"
+        "nothing on the monitor for 230 s and no status request acknowledged "
+        "on the command session in the last 80 s"
     )
 
 

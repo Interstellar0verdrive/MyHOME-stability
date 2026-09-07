@@ -1115,13 +1115,18 @@ class MyHOMEGatewayHandler:
                 self._probe_sent_at = None
                 return
             # Each clause carries its own window on purpose: `idle` is the monitor's
-            # silence, while the ACK is only looked for since the probe went out
-            # (`probe_window`). One trailing duration would read as if it qualified
-            # both, and send a user hunting for a gateway that has been dead for
-            # `idle` seconds while it was in fact answering their lights all along.
+            # silence, while the ACK is only looked for since the probe went out. One
+            # trailing duration would read as if it qualified both, and send a user
+            # hunting for a gateway that has been dead for `idle` seconds while it was
+            # in fact answering their lights all along.
+            # Both numbers are measurements, not options. This check only runs once
+            # every `read_poll_interval` (30 s), so the time since the probe is the
+            # **Probe window** option rounded up to the next poll - printing the
+            # option itself would understate the silence we actually looked at, by a
+            # factor of six with the smallest window the options allow.
             raise SessionError(
                 f"nothing on the monitor for {idle:.0f} s and no status request acknowledged "
-                f"on the command session in the last {self.probe_window:.0f} s"
+                f"on the command session in the last {now - self._probe_sent_at:.0f} s"
             )
 
     def _probe_command(self) -> OWNCommand:
