@@ -86,7 +86,7 @@
         },
         "data_description": {
           "idle_watchdog_sec": "Nessun frame ricevuto sulla sessione di monitoraggio per questo tempo: viene inviata una sonda innocua sulla sessione comandi. Predefinito 300 s (60-3600).",
-          "probe_window_sec": "Sonda inviata e ancora nulla sulla sessione di monitoraggio: riconnessione. Predefinito 30 s (5-300).",
+          "probe_window_sec": "Quanto tempo viene concesso alla sonda per ricevere risposta. Se entro questo tempo non risponde né la sessione di monitoraggio né quella comandi, il gateway viene considerato irraggiungibile e la connessione viene ricostruita. Predefinito 30 s (5-300).",
           "command_timeout_sec": "Tempo massimo per scrivere un comando e riceverne la conferma, prima di un unico nuovo tentativo e poi dello scarto. Predefinito 10 s (2-60).",
           "queue_ttl_sec": "I comandi ancora in coda dopo questo tempo vengono scartati invece di essere inviati in ritardo. Predefinito 60 s (10-600).",
           "default_keepalive_minutes": "Keep-alive richiesto ai contatori di energia quando un sensore non imposta keepalive_minutes in myhome.yaml. 0 lo disabilita. Predefinito 125 min (0-255)."

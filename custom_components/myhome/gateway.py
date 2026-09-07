@@ -4,10 +4,11 @@ One :class:`MyHOMEGatewayHandler` per gateway owns
 
 - the EVENT (monitor) session: :meth:`listening_loop` keeps it alive with TCP
   keepalive plus an idle watchdog (no frame for ``idle_timeout`` -> probe through
-  the command session -> still nothing on the monitor -> reconnect), verifies every
-  ``connect`` result, reconnects with exponential backoff (1..60 s) and never hot
-  loops; a password rejection sets ``auth_failed``, stops the loops and starts the
-  reauth flow;
+  the command session -> reconnect only if the command session did not answer
+  either, because a gateway that ACKs is alive even when it does not mirror its
+  replies onto the monitor), verifies every ``connect`` result, reconnects with
+  exponential backoff (1..60 s) and never hot loops; a password rejection sets
+  ``auth_failed``, stops the loops and starts the reauth flow;
 - the COMMAND session(s): :meth:`sending_loop` drains a bounded queue with a TTL,
   sends each command under a timeout, retries ONCE in place with a fresh session and
   then drops the command with a rate-limited WARNING - never "silently done";
@@ -200,7 +201,8 @@ class GatewayStats:
     (monitor frames and command-session replies alike): both prove the bus is alive.
     ``commands_sent`` counts the commands the gateway answered (ACK or NACK);
     ``commands_dropped`` counts the ones that never made it (queue full or closed,
-    TTL expired, two failed attempts, discarded on shutdown).
+    TTL expired, two failed attempts, a rejected password, an unexpected error in
+    the sending loop, discarded on shutdown).
     """
 
     connected: bool = False
@@ -220,10 +222,6 @@ class FrameRecord:
     direction: str  # FRAME_MONITOR | FRAME_REPLY | FRAME_COMMAND
     frame: str
     at: datetime  # UTC
-
-    def as_dict(self) -> dict[str, str]:
-        """JSON-serialisable form for the diagnostics download."""
-        return {"at": self.at.isoformat(), "direction": self.direction, "frame": self.frame}
 
 
 @dataclass(slots=True)
@@ -251,7 +249,11 @@ class _LogThrottle:
 
     ``MAX_KEYS`` bounds the map: some keys derive from bus addresses, so an
     unbounded key space would be an unbounded dict. When the cap is reached the
-    least recently used quarter is evicted (at worst one extra line gets logged).
+    quarter that was *logged* longest ago is dropped -- those keys log one line
+    early next time and lose the "suppressed N lines" count they had pending.
+    Note that the timestamp is the last line **emitted**, so a key that is being
+    suppressed continuously looks stale and goes first; both effects only ever
+    cost an extra log line, which is why the cheap rule is good enough.
     """
 
     MAX_KEYS = 256
@@ -402,9 +404,11 @@ class MyHOMEGatewayHandler:
         self._command_sessions: dict[int, OWNCommandChannel] = {}
         self._last_rx: float = 0.0
         self._probe_sent_at: float | None = None
-        # When the command session last ACKed a status request: proof the gateway is
-        # alive even if it does not mirror replies onto the monitor (see _check_idle).
-        self._probe_acked_at: float | None = None
+        # When the command session last ACKed *any* status request (not just the
+        # watchdog probe: a sensor re-arming or a heating follow-up sets it too).
+        # `_check_idle` reads it as "the gateway is reachable on the command port",
+        # which is weaker than "our probe was answered".
+        self._command_ack_at: float | None = None
 
         # Timing knobs: the four user-facing ones come from the entry options,
         # the rest are code constants (instance attributes so tests can shrink them).
@@ -911,7 +915,7 @@ class MyHOMEGatewayHandler:
         if result.acknowledged:
             LOGGER.debug("%s `%s` acknowledged (%d reply frame(s))", self.log_id, item.message, len(result.replies))
             if item.is_status_request:
-                self._probe_acked_at = self._now()
+                self._command_ack_at = self._now()
         else:
             self._log_limited(
                 logging.WARNING,
@@ -1028,8 +1032,14 @@ class MyHOMEGatewayHandler:
             LOGGER.info("%s Listening loop stopped", self.log_id)
 
     async def _check_idle(self) -> None:
-        """Idle watchdog (gw-03): probe after ``idle_timeout``, reconnect if the
-        probe produces nothing on the monitor within ``probe_window``."""
+        """Idle watchdog (gw-03): after ``idle_timeout`` without a monitor frame, probe
+        through the command session; reconnect only if that probe went unanswered on
+        *both* sessions within ``probe_window``.
+
+        A status request the gateway ACKed proves it is alive even when it does not
+        mirror command replies onto the monitor, so in that case the monitor is left
+        to TCP keepalive instead of being dropped and rebuilt (R7).
+        """
         now = self._now()
         idle = now - self._last_rx
         if idle < self.idle_timeout:
@@ -1050,10 +1060,11 @@ class MyHOMEGatewayHandler:
             self._probe_sent_at = now
             return
         if now - self._probe_sent_at >= self.probe_window:
-            if self._probe_acked_at is not None and self._probe_acked_at >= self._probe_sent_at:
-                # The gateway answered on the command session, so it is alive: this
-                # gateway simply does not mirror replies onto the monitor. The monitor
-                # socket itself is guarded by TCP keepalive; re-arm instead of churning.
+            if self._command_ack_at is not None and self._command_ack_at >= self._probe_sent_at:
+                # A status request was ACKed after the probe went out, so the gateway
+                # is reachable on the command port (it need not have been the probe
+                # itself). This gateway simply does not mirror replies onto the monitor;
+                # that socket is guarded by TCP keepalive, so re-arm instead of churning.
                 self._log_limited(
                     logging.DEBUG,
                     "probe-not-mirrored",

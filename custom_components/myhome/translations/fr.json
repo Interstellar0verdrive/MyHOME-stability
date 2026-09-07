@@ -86,7 +86,7 @@
         },
         "data_description": {
           "idle_watchdog_sec": "Aucune trame reçue sur la session de monitorage pendant cette durée : une sonde inoffensive est envoyée via la session de commande. Par défaut 300 s (60-3600).",
-          "probe_window_sec": "La sonde a été envoyée et rien n'est arrivé sur la session de monitorage : reconnexion. Par défaut 30 s (5-300).",
+          "probe_window_sec": "Délai accordé à la sonde pour obtenir une réponse. Si ni la session de monitorage ni la session de commande ne répond dans ce délai, la passerelle est considérée injoignable et la connexion est reconstruite. Par défaut 30 s (5-300).",
           "command_timeout_sec": "Durée maximale d'écriture et d'acquittement d'une commande avant un unique réessai puis son abandon. Par défaut 10 s (2-60).",
           "queue_ttl_sec": "Les commandes encore en file après cette durée sont abandonnées au lieu d'être envoyées en retard. Par défaut 60 s (10-600).",
           "default_keepalive_minutes": "Maintien demandé aux compteurs d'énergie quand un capteur ne définit pas keepalive_minutes dans myhome.yaml. 0 le désactive. Par défaut 125 min (0-255)."

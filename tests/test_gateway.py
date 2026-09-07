@@ -591,11 +591,16 @@ async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFix
 async def test_answered_probe_keeps_the_session() -> None:
     """gw-03: a probe that IS answered inside ``probe_window`` must not reconnect.
 
-    ``test_idle_watchdog_probes_then_reconnects`` only covers the unanswered case.
-    On a quiet bus the answered case is the normal one, so the mutation
-    ``if now - self._probe_sent_at >= self.probe_window:`` -> ``if True:`` would
-    drop and rebuild the monitor session on every single probe - a spurious
-    reconnect storm that nothing in the suite noticed.
+    ``test_idle_watchdog_probes_then_reconnects`` only covers the unanswered case;
+    on a quiet bus the answered case is the normal one.
+
+    This used to claim it caught the mutation
+    ``if now - self._probe_sent_at >= self.probe_window:`` -> ``if True:``. It does
+    not any more: the fake command channel ACKs the probe, so the R7 short-circuit
+    absorbs the mutation before the reconnect. What is pinned here is the *whole*
+    quiet-bus sequence (probe sent once, no second monitor session, the answer
+    clears the watchdog); the window boundary itself is pinned by
+    ``test_probe_window_is_a_boundary``, which keeps the command session mute.
 
     The handler's clock is replaced, so the whole scenario is decided by the
     values below and not by how fast the machine is.
@@ -1147,8 +1152,6 @@ async def test_recent_frames_ring_buffer() -> None:
     assert [record.direction for record in handler.recent_frames][:3] == [FRAME_MONITOR, FRAME_COMMAND, FRAME_REPLY]
     assert [record.frame for record in handler.recent_frames][:3] == ["*1*1*12##", "*1*1*11##", "*1*1*11##"]
     assert all(record.at.tzinfo is not None for record in handler.recent_frames)
-    first = handler.recent_frames[0]
-    assert first.as_dict() == {"at": first.at.isoformat(), "direction": FRAME_MONITOR, "frame": "*1*1*12##"}
     # Bounded: only the newest 50 survive.
     for index in range(60):
         handler._record_frame(FRAME_MONITOR, f"*1*1*{index}##")  # noqa: SLF001
@@ -1209,6 +1212,7 @@ class FakeOWNServer:
         negotiation_ok: bool = True,
         close_during_negotiation: bool = False,
         flood_negotiation: bool = False,
+        garbage_negotiation: bool = False,
         reset_after_initial: bool = False,
     ) -> None:
         self.replies = replies or {}
@@ -1224,6 +1228,7 @@ class FakeOWNServer:
         self.negotiation_ok = negotiation_ok
         self.close_during_negotiation = close_during_negotiation
         self.flood_negotiation = flood_negotiation
+        self.garbage_negotiation = garbage_negotiation
         self.reset_after_initial = reset_after_initial
         self.received: list[str] = []
         self.sessions: list[str] = []
@@ -1273,6 +1278,13 @@ class FakeOWNServer:
             self.sessions.append(session)
             if self.close_during_negotiation:
                 # EOF between the greeting and the negotiation reply.
+                return
+            if self.garbage_negotiation:
+                # A well-formed frame made of bytes that are not UTF-8: OWNd decodes
+                # the negotiation reply without guarding, so this raises *inside* it.
+                writer.write(b"\xff\xfe*#*1##")
+                await writer.drain()
+                await reader.readuntil(b"##")
                 return
             if self.flood_negotiation:
                 # A negotiation reply that never terminates: `readuntil` gives up
@@ -1662,9 +1674,88 @@ async def test_area_status_request_keeps_the_bus_where() -> None:
     assert queued(handler) == ["*#1*3##", "*#1*00##", "*#1*100##"]
 
 
-async def test_nack_throttle_keys_are_bounded() -> None:
+async def test_log_throttle_keys_are_bounded() -> None:
+    """``_LogThrottle`` never grows without a bound, whatever the keys look like."""
     handler = make_handler()
     for index in range(500):
         handler._log_limited(logging.WARNING, f"nack-{index}", "x")  # noqa: SLF001
     assert len(handler._throttle._last) <= gateway_module._LogThrottle.MAX_KEYS  # noqa: SLF001
 
+
+async def test_nack_lines_are_keyed_by_who_and_where() -> None:
+    """Two different commands to the same actuator share one throttle slot.
+
+    ``test_log_throttle_keys_are_bounded`` only proves ``MAX_KEYS`` bites; this is
+    what the NACK key itself is for. Mutation caught: keying the line on the whole
+    frame (``f"nack-{item.message}"``), which gives a broken actuator one WARNING
+    per distinct frame instead of one per actuator.
+    """
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        channel.responder = lambda message: CommandResult(False, [])  # every command NACKed
+
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"))
+            assert await handler.send(OWNLightingCommand.switch_off("11"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert len(handler._throttle._last) == 1  # noqa: SLF001
+    key = next(iter(handler._throttle._last))  # noqa: SLF001
+    assert key.startswith("nack-") and key.endswith("-11")
+
+
+async def test_probe_window_is_a_boundary() -> None:
+    """``probe_window`` decides when an unanswered probe becomes a reconnect.
+
+    The reconnect path is only reachable when the command session is mute as well
+    (a gateway that ACKs short-circuits it, see
+    ``test_idle_watchdog_keeps_the_session_when_the_probe_is_acked``), so nothing
+    drains the command queue here and ``_check_idle`` is driven by hand on a fake
+    clock. Mutations caught: ``if now - self._probe_sent_at >= self.probe_window:``
+    -> ``if True:`` (every probe becomes a reconnect) and ``>=`` -> ``>`` (the
+    boundary itself).
+    """
+    handler = make_handler()
+    register(handler, LIGHT, "1-11")
+    clock = FakeClock()
+    handler._now = clock  # noqa: SLF001 - shadows the static clock on this instance
+    handler.idle_timeout = 100.0
+    handler.probe_window = 50.0
+    handler._last_rx = -150.0  # noqa: SLF001 - silent for 150 s at clock 0
+
+    await handler._check_idle()  # noqa: SLF001 - queues the probe and arms the window
+    assert handler._probe_sent_at == 0.0  # noqa: SLF001
+    assert queued(handler) == ["*#1*11##"]
+
+    clock.value = 49.0
+    await handler._check_idle()  # noqa: SLF001 - still inside the window: no reconnect
+
+    clock.value = 50.0
+    with pytest.raises(SessionError):
+        await handler._check_idle()  # noqa: SLF001 - window elapsed, nothing answered
+
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_a_crash_inside_ownd_negotiation_is_a_session_error() -> None:
+    """sess-01 (review 2 / G5): OWNd's ``_negotiate()`` is not exception-safe.
+
+    It builds ``OWNSignaling(raw_response.decode())`` with no error handling, so any
+    non-OpenWebNet peer listening on port 20000 makes it raise (here a
+    ``UnicodeDecodeError``). Before the catch-all in ``own_session.open`` that
+    exception escaped ``open()`` and reached ``sending_loop``; it must come back as
+    a plain, reconnectable ``SessionError`` - never an ``AuthenticationError``,
+    which would pop a reauth dialog at the user - and the socket must be closed.
+
+    Mutation caught: narrowing ``except Exception`` in ``own_session.open`` to any
+    other exception type.
+    """
+    async with FakeOWNServer(garbage_negotiation=True) as server:
+        channel = OWNCommandChannel(make_gateway(server.port), LOGGER)
+        with pytest.raises(SessionError) as excinfo:
+            await channel.open(timeout=2)
+        assert "negotiation crashed" in str(excinfo.value)
+        assert not isinstance(excinfo.value, AuthenticationError)
+        assert channel.is_open is False
+        assert channel._stream_writer is None  # noqa: SLF001 - closed on failure
