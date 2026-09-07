@@ -7,9 +7,10 @@ attached to a bug report.
 What goes in:
 
 - the config entry data/options with the password removed and the identifying
-  fields (MAC, entry id, host, UDN, SSDP location) partially masked, and the
-  ``config_file_path`` reduced to its file name -- enough to correlate frames, not
-  enough to identify the installation or its operating-system user;
+  fields (MAC, entry id, host, UDN, SSDP location) partially masked, the
+  ``config_file_path`` reduced to its file name and the entry title (which the user
+  may have renamed) dropped -- enough to correlate frames, not enough to identify
+  the installation or its operating-system user;
 - the effective tunables (options merged with the 0.2.x defaults);
 - a *summary* of the validated ``myhome.yaml``: per platform the device count and
   the device keys (``who-where``), never the user's device names.  The per-device
@@ -315,7 +316,13 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "home_assistant": HA_VERSION,
         },
         "entry": {
-            "title": entry.title,
+            # The title defaults to "<model> Gateway", but Home Assistant lets a user
+            # rename a config entry from the integrations page, and a renamed gateway
+            # commonly carries a household, street or family name.  It is a free-form
+            # string the user wrote, so it goes the way the device names go -- this is
+            # the one file users are told to attach to a public issue, and the model
+            # the title usually carries is in ``entry.data`` regardless.
+            "title": REDACTED,
             "version": entry.version,
             "minor_version": entry.minor_version,
             "source": entry.source,
