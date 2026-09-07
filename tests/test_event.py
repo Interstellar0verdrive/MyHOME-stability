@@ -36,9 +36,9 @@ SCENARIO_YAML = f"""
 gateway:
   mac: {MAC}
   scenario_control:
-    keypad_soggiorno:
+    keypad_living_room:
       object: 25
-      name: Keypad Soggiorno
+      name: Living Room Keypad
       buttons: [1, 2, 3, 4]
     keypad_ingresso:
       protocol: cen
@@ -113,7 +113,7 @@ gateway:
 async def test_event_types_and_static_attributes(hass: HomeAssistant, tmp_path) -> None:
     """Each protocol advertises exactly the event names gateway.py can produce."""
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
-        cenplus = hass.states.get("event.keypad_soggiorno_scenario_control")
+        cenplus = hass.states.get("event.living_room_keypad_scenario_control")
         cen = hass.states.get("event.keypad_ingresso_scenario_control")
         assert cenplus is not None and cen is not None
         assert cenplus.state == STATE_UNKNOWN
@@ -137,11 +137,11 @@ async def test_a_declared_icon_reaches_the_entity(hass: HomeAssistant, tmp_path)
     value, or hit an unsupported feature.  Unset still means the device-class icon.
     """
     yaml_text = SCENARIO_YAML.replace(
-        "      name: Keypad Soggiorno\n", "      name: Keypad Soggiorno\n      icon: mdi:gesture-tap-button\n"
+        "      name: Living Room Keypad\n", "      name: Living Room Keypad\n      icon: mdi:gesture-tap-button\n"
     )
     async with setup_myhome(hass, tmp_path, yaml_text):
         assert (
-            hass.states.get("event.keypad_soggiorno_scenario_control").attributes["icon"]
+            hass.states.get("event.living_room_keypad_scenario_control").attributes["icon"]
             == "mdi:gesture-tap-button"
         )
         # The control that declares no icon keeps the EventDeviceClass.BUTTON default.
@@ -155,18 +155,18 @@ async def test_cenplus_frames_fire_the_entity(hass: HomeAssistant, tmp_path) -> 
         payloads = _capture(hass, EVENT_CENPLUS)
 
         await feed_frame(hass, "*25*21#3*225##")
-        state = hass.states.get("event.keypad_soggiorno_scenario_control")
+        state = hass.states.get("event.living_room_keypad_scenario_control")
         assert state.attributes[ATTR_EVENT_TYPE] == "pushbutton_short_press"
         assert state.attributes["pushbutton"] == 3
         first = state.state
 
         await feed_frame(hass, "*25*22#3*225##")
-        state = hass.states.get("event.keypad_soggiorno_scenario_control")
+        state = hass.states.get("event.living_room_keypad_scenario_control")
         assert state.attributes[ATTR_EVENT_TYPE] == "pushbutton_long_press"
         assert state.state != first  # the state is the timestamp of the last press
 
         await feed_frame(hass, "*25*25#2*225##")
-        state = hass.states.get("event.keypad_soggiorno_scenario_control")
+        state = hass.states.get("event.living_room_keypad_scenario_control")
         assert state.attributes[ATTR_EVENT_TYPE] == "rotate_cw_slow"
         assert state.attributes["pushbutton"] == 2
 
@@ -192,7 +192,7 @@ async def test_cen_frames_fire_the_entity(hass: HomeAssistant, tmp_path) -> None
 
         assert [p["object"] for p in payloads] == [51, 51]
         # The CEN+ entity is untouched by CEN traffic.
-        assert hass.states.get("event.keypad_soggiorno_scenario_control").state == STATE_UNKNOWN
+        assert hass.states.get("event.living_room_keypad_scenario_control").state == STATE_UNKNOWN
 
 
 async def test_the_cen_press_sequence_is_the_documented_one(hass: HomeAssistant, tmp_path) -> None:
@@ -242,14 +242,14 @@ async def test_undeclared_control_fires_the_bus_event_only(hass: HomeAssistant, 
         await feed_frame(hass, "*25*21#1*299##")
         assert payloads == [{"object": 99, "pushbutton": 1, "event": "pushbutton_short_press", "mac": MAC}]
         # No entity was created for object 99, and the declared one did not move.
-        assert hass.states.get("event.keypad_soggiorno_scenario_control").state == STATE_UNKNOWN
+        assert hass.states.get("event.living_room_keypad_scenario_control").state == STATE_UNKNOWN
 
 
 async def test_button_outside_the_declared_list_still_reported(hass: HomeAssistant, tmp_path) -> None:
     """`buttons` drives the trigger picker, it is not a filter on the bus."""
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
         await feed_frame(hass, "*25*21#9*225##")
-        state = hass.states.get("event.keypad_soggiorno_scenario_control")
+        state = hass.states.get("event.living_room_keypad_scenario_control")
         assert state.attributes["pushbutton"] == 9
 
 

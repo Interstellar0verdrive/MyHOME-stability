@@ -50,9 +50,9 @@ SCENARIO_YAML = f"""
 gateway:
   mac: {MAC}
   scenario_control:
-    keypad_soggiorno:
+    keypad_living_room:
       object: 25
-      name: Keypad Soggiorno
+      name: Living Room Keypad
       buttons: [1, 2]
     keypad_ingresso:
       protocol: cen

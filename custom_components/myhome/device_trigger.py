@@ -4,7 +4,7 @@ A scenario control is a wall keypad: it commands the bus directly and Home Assis
 only ever sees that a button *was* pressed.  Those presses reach the bus as
 ``myhome_cenplus_event`` / ``myhome_cen_event``, which have always been usable from
 YAML; this module makes the same presses selectable from the automation **editor**,
-as "Button 2 long press on Keypad Soggiorno", by attaching the core ``event`` trigger
+as "Button 2 long press on Living Room Keypad", by attaching the core ``event`` trigger
 under the hood.
 
 The device the triggers hang off is created by ``event.py`` from the
