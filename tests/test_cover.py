@@ -1173,6 +1173,46 @@ async def test_an_advanced_stop_disarms_the_safety_timer(
         assert commands.status_frames == []
 
 
+async def test_a_stop_on_an_advanced_cover_leaves_the_model_to_the_actuator(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Review 4 / C4-5: `stop_cover` on an advanced cover only sends the command.
+
+    An advanced actuator's position *and* direction come from its own frames, so
+    there is nothing to end here: the entity stays *Opening* until the actuator says
+    it stopped, and the safety timer that bounds that direction stays armed. This is
+    the arm of `async_stop_cover` that used to share one comment with the
+    refused-command one - a reader who took that comment at face value would have
+    read this as a refusal path and "fixed" it by freezing the estimate.
+
+    Mutation caught: dropping the `if self._advanced: return`, after which the cover
+    is published as *open* at 42 % the moment the stop is sent, before the actuator
+    has stopped at all.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*42*0*0##")
+        await feed_event(hass, cover, "*2*1*83##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        commands.clear()
+
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: entity_id}, blocking=True)
+        assert commands.sent_frames == ["*2*0*83##"]
+        # The command is on its way: only the actuator's own frame ends the movement.
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        assert hass.states.get(entity_id).attributes[ATTR_CURRENT_POSITION] == 42
+
+        await feed_event(hass, cover, "*#2*83*10*10*55*0*0##")  # "stopped at 55 %"
+        state = hass.states.get(entity_id)
+        assert state.state == CoverState.OPEN
+        assert state.attributes[ATTR_CURRENT_POSITION] == 55
+        # ... and that frame took the safety timer with it: no stray status request.
+        commands.clear()
+        await _advance(hass, freezer, 90)
+        assert commands.status_frames == []
+
+
 async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
