@@ -23,10 +23,11 @@ ruff check .
 # test plugin):
 pytest tests -q
 
-# The four tests that take half a second or more on their own carry the `slow`
-# marker (a real connect timeout, a negotiation left to time out, a full
-# config-entry setup against a loopback server, and two Home Assistant imports in
-# two subprocesses); skipping them takes the run from ~16 s to ~11 s. Most of the
+# The five tests that take half a second or more on their own carry the `slow`
+# marker (a real connect timeout, a negotiation left to time out, the idle
+# watchdog's probe window, a full config-entry setup against a loopback server,
+# and two Home Assistant imports in two subprocesses); skipping them takes the run
+# from ~16 s to ~11 s. Most of the
 # other loopback-socket tests are fast and stay in both lanes, and every guarantee
 # the marked ones cover is pinned in the fast lane as well:
 pytest tests -q -m "not slow"
@@ -56,7 +57,7 @@ to it, which is why the documented command is the bare `ruff check .`.
 | `pytest.ini` | Value |
 |---|---|
 | `asyncio_mode` | `auto`, required by the Home Assistant test plugin |
-| `markers` | a `slow` marker for the four long-running socket/subprocess tests, which `pytest.ini` describes as "about a second or more on its own" — the shortest is a deterministic half second — and which CI can split out with `-m "not slow"`, plus `strict_markers = true`: a misspelled mark is a **collection error**, not a silent no-op |
+| `markers` | a `slow` marker for the five long-running socket/subprocess tests, which `pytest.ini` describes as "half a second or more on its own" and which CI can split out with `-m "not slow"`, plus `strict_markers = true`: a misspelled mark is a **collection error**, not a silent no-op |
 | `strict_config` | `true` — an unknown ini key fails the run |
 | `timeout` | `60` seconds per test, which needs `pytest-timeout` (it is in `requirements_test.txt`) |
 
@@ -72,11 +73,13 @@ semantics. Bump either pin deliberately, in a commit that also fixes the fallout
 The exact count drifts with every `ruff` release, which is the whole point of the
 pin, so it is not quoted here or in `requirements_test.txt`.
 
-Coverage is not part of the pinned set, because neither CI nor the commands above
-ask for it. To reproduce the numbers quoted in the audits:
+Coverage is not asked for by CI or by either command above, and its version is not
+pinned here: `pytest-cov` arrives as a dependency of
+`pytest-homeassistant-custom-component`, so the documented setup already has it and the
+numbers may move a little when that pin is bumped. To reproduce the ones quoted in the
+audits:
 
 ```bash
-pip install pytest-cov
 pytest tests -q --cov=custom_components/myhome --cov-report=term-missing
 ```
 

@@ -210,6 +210,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   asserted and committed, and the tag and the zip cover it. No shipped release is
   affected: every existing tag was made by hand with the bump already committed, so
   nothing needs re-installing.
+- The release job's "tag already exists" guard asked only the local checkout, so on
+  a checkout without the tags it would have bumped `manifest.json` and pushed that
+  commit to the branch before dying on the tag push. The guard now asks the remote
+  and keeps the local check for a tag made but never pushed. Every `uses:` of the
+  job must also name a version tag or a commit SHA, which the suite checks, so a
+  job holding the repository token can never run a third party's moving branch.
 
 ### Added
 
