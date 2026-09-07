@@ -40,10 +40,10 @@ gateway:
       object: 25
       name: Living Room Keypad
       buttons: [1, 2, 3, 4]
-    keypad_ingresso:
+    keypad_entrance:
       protocol: cen
       where: '51'
-      name: Keypad Ingresso
+      name: Entrance Keypad
       buttons: [0, 1]
   light:
     light_test:
@@ -114,7 +114,7 @@ async def test_event_types_and_static_attributes(hass: HomeAssistant, tmp_path) 
     """Each protocol advertises exactly the event names gateway.py can produce."""
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
         cenplus = hass.states.get("event.living_room_keypad_scenario_control")
-        cen = hass.states.get("event.keypad_ingresso_scenario_control")
+        cen = hass.states.get("event.entrance_keypad_scenario_control")
         assert cenplus is not None and cen is not None
         assert cenplus.state == STATE_UNKNOWN
         assert cenplus.attributes[ATTR_EVENT_TYPES] == list(SCENARIO_CONTROL_EVENT_TYPES["cen_plus"])
@@ -145,7 +145,7 @@ async def test_a_declared_icon_reaches_the_entity(hass: HomeAssistant, tmp_path)
             == "mdi:gesture-tap-button"
         )
         # The control that declares no icon keeps the EventDeviceClass.BUTTON default.
-        assert "icon" not in hass.states.get("event.keypad_ingresso_scenario_control").attributes
+        assert "icon" not in hass.states.get("event.entrance_keypad_scenario_control").attributes
 
 
 # --------------------------------------------------------------------------- events
@@ -182,12 +182,12 @@ async def test_cen_frames_fire_the_entity(hass: HomeAssistant, tmp_path) -> None
         payloads = _capture(hass, EVENT_CEN)
 
         await feed_frame(hass, "*15*1*51##")
-        state = hass.states.get("event.keypad_ingresso_scenario_control")
+        state = hass.states.get("event.entrance_keypad_scenario_control")
         assert state.attributes[ATTR_EVENT_TYPE] == "pushbutton_short_press"
         assert state.attributes["pushbutton"] == 1
 
         await feed_frame(hass, "*15*1#2*51##")
-        state = hass.states.get("event.keypad_ingresso_scenario_control")
+        state = hass.states.get("event.entrance_keypad_scenario_control")
         assert state.attributes[ATTR_EVENT_TYPE] == "pushbutton_long_release"
 
         assert [p["object"] for p in payloads] == [51, 51]
@@ -220,7 +220,7 @@ async def test_the_cen_press_sequence_is_the_documented_one(hass: HomeAssistant,
             "pushbutton_long_release",
             "pushbutton_short_release",
         ]
-        state = hass.states.get("event.keypad_ingresso_scenario_control")
+        state = hass.states.get("event.entrance_keypad_scenario_control")
         assert state.attributes[ATTR_EVENT_TYPE] == "pushbutton_short_release"
 
 
@@ -269,7 +269,7 @@ async def test_unknown_event_name_is_ignored(hass: HomeAssistant, tmp_path) -> N
     press the user's automations are bound to.
     """
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
-        entity_id = "event.keypad_ingresso_scenario_control"
+        entity_id = "event.entrance_keypad_scenario_control"
         assert hass.states.get(entity_id).state == STATE_UNKNOWN
 
         # A real CEN short press on WHERE 51, through the gateway dispatcher.

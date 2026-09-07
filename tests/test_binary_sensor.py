@@ -56,20 +56,20 @@ SENSORS_YAML = f"""
 gateway:
   mac: {MAC}
   binary_sensor:
-    contatto_finestra:
+    window_contact:
       who: '25'
       where: '31'
-      name: Contatto Finestra
+      name: Window Contact
       device_class: window
-    contatto_porta:
+    door_contact:
       who: '25'
       where: '32'
-      name: Contatto Porta
+      name: Door Contact
       entity_name: Left Wing
-    aux_allarme:
+    alarm_aux:
       who: '9'
       where: '1'
-      name: Aux Allarme
+      name: Alarm Aux
 """
 
 # `inverted` on the two flavours that never had a test for it (F7), plus the icon pair
@@ -103,15 +103,15 @@ MOTION_YAML = f"""
 gateway:
   mac: {MAC}
   binary_sensor:
-    sensore_movimento:
+    motion_sensor:
       who: '1'
       where: '11'
-      name: Sensore Movimento
+      name: Motion Sensor
       class: motion
-    sensore_invertito:
+    inverted_sensor:
       who: '1'
       where: '12'
-      name: Sensore Invertito
+      name: Inverted Sensor
       class: motion
       inverted: true
 """
@@ -149,19 +149,19 @@ async def test_sensors_created_with_and_without_class(hass: HomeAssistant, tmp_p
 
         # INCONSISTENCY-3: the binary sensor is the main entity of its device, like a
         # light or a cover, so it is named after the device - not after a hardcoded
-        # English class label ("Contatto Finestra Window", id ..._window).
-        window = hass.states.get("binary_sensor.contatto_finestra")
+        # English class label appended to it ("Window Contact Window", id ..._window).
+        window = hass.states.get("binary_sensor.window_contact")
         assert window.attributes[ATTR_DEVICE_CLASS] == BinarySensorDeviceClass.WINDOW
-        assert window.attributes["friendly_name"] == "Contatto Finestra"
+        assert window.attributes["friendly_name"] == "Window Contact"
 
-        aux = hass.states.get("binary_sensor.aux_allarme")
+        aux = hass.states.get("binary_sensor.alarm_aux")
         assert aux is not None
         assert ATTR_DEVICE_CLASS not in aux.attributes
-        assert aux.attributes["friendly_name"] == "Aux Allarme"
+        assert aux.attributes["friendly_name"] == "Alarm Aux"
 
         # An explicit entity_name still names the entity inside its device.
-        named = hass.states.get("binary_sensor.contatto_porta_left_wing")
-        assert named.attributes["friendly_name"] == "Contatto Porta Left Wing"
+        named = hass.states.get("binary_sensor.door_contact_left_wing")
+        assert named.attributes["friendly_name"] == "Door Contact Left Wing"
 
 
 async def test_dry_contact_events(hass: HomeAssistant, tmp_path) -> None:
@@ -170,9 +170,9 @@ async def test_dry_contact_events(hass: HomeAssistant, tmp_path) -> None:
 
         sensor = entity_object(hass, BINARY_SENSOR, "25-31")
         await feed_event(hass, sensor, "*25*31#31*31##")
-        assert hass.states.get("binary_sensor.contatto_finestra").state == STATE_ON
+        assert hass.states.get("binary_sensor.window_contact").state == STATE_ON
         await feed_event(hass, sensor, "*25*32#31*31##")
-        assert hass.states.get("binary_sensor.contatto_finestra").state == STATE_OFF
+        assert hass.states.get("binary_sensor.window_contact").state == STATE_OFF
 
 
 async def test_inverted_dry_contact_and_auxiliary(hass: HomeAssistant, tmp_path) -> None:
@@ -238,12 +238,12 @@ async def test_motion_timeout_respects_inverted(hass: HomeAssistant, tmp_path, f
 
         await feed_event(hass, normal, "*1*34*11##")
         await feed_event(hass, inverted, "*1*34*12##")
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
-        assert hass.states.get("binary_sensor.sensore_invertito").state == STATE_OFF
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
+        assert hass.states.get("binary_sensor.inverted_sensor").state == STATE_OFF
 
         await _advance(hass, freezer, 316)
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_OFF
-        assert hass.states.get("binary_sensor.sensore_invertito").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_OFF
+        assert hass.states.get("binary_sensor.inverted_sensor").state == STATE_ON
 
 
 async def test_motion_timeout_frame_updates_the_timer(
@@ -253,14 +253,14 @@ async def test_motion_timeout_frame_updates_the_timer(
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
         normal = entity_object(hass, BINARY_SENSOR, "1-11")
         await feed_event(hass, normal, "*#1*11*7*0*1*0##")
-        assert hass.states.get("binary_sensor.sensore_movimento").attributes["Timeout"] == 75.0
+        assert hass.states.get("binary_sensor.motion_sensor").attributes["Timeout"] == 75.0
 
         await feed_event(hass, normal, "*1*34*11##")
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
         await _advance(hass, freezer, 60)
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
         await _advance(hass, freezer, 20)
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_OFF
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_OFF
 
 
 async def test_motion_sensitivity_and_unknown_frames(hass: HomeAssistant, tmp_path) -> None:
@@ -287,7 +287,7 @@ async def test_motion_sensitivity_and_unknown_frames(hass: HomeAssistant, tmp_pa
     The guard is defensive against a future OWNd that widens that mapping; it is
     deliberately not what this test pins.
     """
-    entity_id = "binary_sensor.sensore_movimento"
+    entity_id = "binary_sensor.motion_sensor"
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
         normal = entity_object(hass, BINARY_SENSOR, "1-11")
         await feed_event(hass, normal, "*#1*11*5*3##")
@@ -307,19 +307,19 @@ async def test_motion_sensitivity_and_unknown_frames(hass: HomeAssistant, tmp_pa
 
 async def test_motion_state_restored(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
     """A restart keeps the motion state and re-arms the remaining timeout."""
-    mock_restore_cache(hass, (State("binary_sensor.sensore_movimento", STATE_ON),))
+    mock_restore_cache(hass, (State("binary_sensor.motion_sensor", STATE_ON),))
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
         await _advance(hass, freezer, 316)
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_OFF
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_OFF
 
 
 async def test_availability_follows_connection_signal(hass: HomeAssistant, tmp_path) -> None:
     async with setup_myhome(hass, tmp_path, SENSORS_YAML):
         await set_connected(hass, False)
-        assert hass.states.get("binary_sensor.contatto_finestra").state == STATE_UNAVAILABLE
+        assert hass.states.get("binary_sensor.window_contact").state == STATE_UNAVAILABLE
         await set_connected(hass, True)
-        assert hass.states.get("binary_sensor.contatto_finestra").state != STATE_UNAVAILABLE
+        assert hass.states.get("binary_sensor.window_contact").state != STATE_UNAVAILABLE
 
 
 # ------------------------------------------------------------------ motion restore
@@ -334,19 +334,19 @@ async def test_motion_survives_entry_reload(
     """
     async with setup_myhome(hass, tmp_path, MOTION_YAML) as (entry, _commands):
         await feed_event(hass, entity_object(hass, BINARY_SENSOR, "1-11"), "*1*34*11##")
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
 
         await _advance(hass, freezer, 100)  # 215 s left of the 315 s timeout
         await hass.config_entries.async_reload(entry.entry_id)
         await hass.async_block_till_done()
         await set_connected(hass, True)
 
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
         # The timeout is not restarted from scratch: what was left of it still applies.
         await _advance(hass, freezer, 200)
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_ON
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_ON
         await _advance(hass, freezer, 20)
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_OFF
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_OFF
 
 
 async def test_motion_extra_data_restores_expired_state(hass: HomeAssistant, tmp_path) -> None:
@@ -355,7 +355,7 @@ async def test_motion_extra_data_restores_expired_state(hass: HomeAssistant, tmp
         hass,
         (
             (
-                State("binary_sensor.sensore_movimento", STATE_UNAVAILABLE),
+                State("binary_sensor.motion_sensor", STATE_UNAVAILABLE),
                 {
                     "is_on": True,
                     "expires_at": (dt_util.utcnow() - timedelta(seconds=5)).isoformat(),
@@ -364,7 +364,7 @@ async def test_motion_extra_data_restores_expired_state(hass: HomeAssistant, tmp
         ),
     )
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
-        assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_OFF
+        assert hass.states.get("binary_sensor.motion_sensor").state == STATE_OFF
 
 
 # ------------------------------------------------------------------ WHO 9 auxiliary
@@ -445,7 +445,7 @@ async def test_gateway_connected_entity_stays_available(hass: HomeAssistant, tmp
         await dispatch_stats(hass, connected=True, session_state="connected")
         await set_connected(hass, False)
 
-        assert hass.states.get("binary_sensor.contatto_finestra").state == STATE_UNAVAILABLE
+        assert hass.states.get("binary_sensor.window_contact").state == STATE_UNAVAILABLE
         assert hass.states.get(entity_id).state == STATE_ON
 
         await dispatch_stats(hass, connected=False, session_state="disconnected")

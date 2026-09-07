@@ -77,13 +77,13 @@ gateway:
       name: Oven
       device_class: power
       min_delta_w: 1
-    sonda_salotto:
+    living_room_probe:
       where: '2'
-      name: Sonda Salotto
+      name: Living Room Probe
       device_class: temperature
-    luminosita_ingresso:
+    entrance_brightness:
       where: '31'
-      name: Luminosita Ingresso
+      name: Entrance Brightness
       device_class: illuminance
 """
 
@@ -140,9 +140,9 @@ PADDED_PROBE_YAML = f"""
 gateway:
   mac: {MAC}
   sensor:
-    sonda_uno:
+    probe_one:
       where: '01'
-      name: Sonda Uno
+      name: Probe One
       device_class: temperature
 """
 
@@ -150,8 +150,8 @@ POWER_ENTITY = "sensor.mains_power_power"
 TOTAL_ENTITY = "sensor.mains_power_energy"
 DAILY_ENTITY = "sensor.mains_power_energy_today"
 MONTHLY_ENTITY = "sensor.mains_power_energy_this_month"
-TEMPERATURE_ENTITY = "sensor.sonda_salotto"
-ILLUMINANCE_ENTITY = "sensor.luminosita_ingresso"
+TEMPERATURE_ENTITY = "sensor.living_room_probe"
+ILLUMINANCE_ENTITY = "sensor.entrance_brightness"
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry, *, connect: bool = True) -> None:
@@ -382,7 +382,7 @@ async def test_names_do_not_repeat_the_device_name(hass: HomeAssistant, tmp_path
         assert hass.states.get(POWER_ENTITY).attributes["friendly_name"] == "Mains Power Power"
         assert hass.states.get(TOTAL_ENTITY).attributes["friendly_name"] == "Mains Power Energy"
         # Single-entity devices keep the device name (Contract C).
-        assert hass.states.get(TEMPERATURE_ENTITY).attributes["friendly_name"] == "Sonda Salotto"
+        assert hass.states.get(TEMPERATURE_ENTITY).attributes["friendly_name"] == "Living Room Probe"
 
         assert _entity_object(hass, "18-51", "power").translation_key == "power"
         assert _entity_object(hass, "18-51", "total-energy").translation_key == "energy_total"
@@ -603,7 +603,7 @@ async def test_a_padded_temperature_probe_receives_its_frames(hass: HomeAssistan
     with mock_gateway():
         await _setup(hass, entry)
         await feed_frame(hass, "*#4*1*0*0215##")
-        assert hass.states.get("sensor.sonda_uno").state == "21.5"
+        assert hass.states.get("sensor.probe_one").state == "21.5"
 
 
 async def test_pending_refresh_does_not_outlive_the_entity(hass: HomeAssistant, tmp_path) -> None:

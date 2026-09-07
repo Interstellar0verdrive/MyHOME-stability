@@ -49,9 +49,9 @@ gateway:
       heat: true
       cool: true
       fan: true
-    centrale:
+    central_unit:
       zone: '#0'
-      name: Centrale
+      name: Central Unit
       heat: true
       cool: true
       central: true
@@ -78,7 +78,7 @@ gateway:
 
 ZONE = "climate.zone_living"
 FAN_ZONE = "climate.zone_bathroom"
-CENTRAL = "climate.centrale"
+CENTRAL = "climate.central_unit"
 COOLING_ZONE = "climate.study_cooling"
 STANDALONE_ZONE = "climate.guest_room"
 
@@ -663,9 +663,9 @@ gateway:
       zone: '1'
       name: Zone One
       heat: true
-    centrale:
+    central_unit:
       zone: '#0'
-      name: Centrale
+      name: Central Unit
       heat: true
       central: true
 """
