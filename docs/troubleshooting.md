@@ -43,7 +43,9 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
    a healthy run logs, in order:
    - `Starting device discovery (60s)` (INFO)
    - ``Discovery status request `*#1*0##` `` — then the same for `*#2*0##`,
-     `*#4*0##`, `*#18*0##`, `*#25*0##` and `*#9*0##`, half a second apart
+     `*#4*0##`, `*#18*0##` and `*#9*0##`, half a second apart. There is no WHO 25
+     request: dry contacts and CEN/CEN+ keypads are only seen when they emit a frame
+     during the run (see [Discovery](discovery.md))
    - `Discovered bus_dimmer at WHO=1 WHERE=11` (INFO), once per new device
    - `Discovery completed: N device(s) seen` (INFO)
 
@@ -127,10 +129,10 @@ What is inside:
 | Section | Content |
 | --- | --- |
 | `versions` | Integration, OWNd and Home Assistant versions. |
-| `entry` | The config entry, **without the password**, with MAC, host, UDN, SSDP location and the entry's own `unique_id` partially masked; the configuration file is reported by its file name only, never with its directory. |
-| `effective_options` | The tunables actually in effect (see [Configuration → Options](configuration.md#options)), including `config_file_name` and `config_file_is_default_location` — whether `myhome.yaml` sits where the integration would look for it by default. An entry that never set the option reports the default file name and `config_file_is_default_location: true`, which is what that entry actually uses. |
+| `entry` | The config entry, **without the password** and **without its title** (you may have renamed it), with MAC, host, UDN, SSDP location and the entry's own `unique_id` partially masked; the configuration file is reported by its file name only, never with its directory. |
+| `effective_options` | The tunables actually in effect (see [Configuration → Options](configuration.md#options)), including `config_file_name` and `config_file_is_default_location` — whether `myhome.yaml` sits where the integration would look for it by default. An entry that never set the option reports the default file name and `config_file_is_default_location: true`, which is what that entry actually uses. `command_worker_count` is the number of command sessions really opened: the setup clamps a stored value above the maximum, and this is the clamped one. |
 | `config` | A *summary* of the validated `myhome.yaml`: `gateway_keys` (the sorted list of gateway-level keys present in the file, such as `mac` or `sensor_defaults`), then per platform the device count and the `who-where` device keys. Your device names are not included — in the per-device download either, where the device's own `name` and `entity_name` are replaced by `**REDACTED**`. |
-| `handler` | Gateway statistics (connected, frames received, last frame, reconnects, commands sent/dropped, queue length, session state) and the session timings in effect. |
+| `handler` | Gateway statistics (connected, frames received, last frame, reconnects, commands sent/dropped, queue length, session state), whether the listening and sending loops are running and how many there are, whether authentication failed, whether raw events are generated, and the session timings in effect. |
 | `recent_frames` | The last 50 bus frames with their timestamps and direction — usually the fastest way to see what the gateway is actually saying. |
 
 Session-negotiation frames (`*99*…##` and the nonce/password-hash exchange) are

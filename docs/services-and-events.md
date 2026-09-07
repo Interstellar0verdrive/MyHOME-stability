@@ -103,10 +103,11 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
 
 - `myhome_device_discovered`: fired when a new device is found. Data: `platform`,
   `discovered_device`, `config_entry_id`, `gateway_mac`. `platform` is the section the
-  device would be declared under (`light`, `cover`, `switch`, `sensor`,
-  `binary_sensor`, `climate`), `event` for a CEN/CEN+ scenario control, which is
-  reported but never suggested, or `null` for a device family this integration has
-  no section for (alarm devices).
+  device would be declared under (`light`, `cover`, `sensor`, `binary_sensor`,
+  `climate`), `event` for a CEN/CEN+ scenario control, which is reported but never
+  suggested, or `null` for a device family this integration has no section for
+  (alarm devices). A lighting actuator is always reported as `light`, never as
+  `switch`: nothing on the bus says which of the two you want.
 - `myhome_discovery_completed`: fired when a discovery run finishes (`myhome.stop_discovery`
   or the 60-second timeout). Data: `gateway_mac`, `reason` (`stopped` when the service
   ended the run, `timeout` when it ran out), `discovered_count` and
