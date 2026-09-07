@@ -147,7 +147,7 @@ Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_se
 Rules worth knowing:
 
 - **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads unquoted numbers with leading zeros as decimal/octal integers and the address is lost; the validator rejects ambiguous values with a message telling you to quote them.
-- **Each WHO/WHERE may appear only once per gateway**, across all platforms (a duplicate `where` used to silently drop one of the two devices). The error names both YAML keys. The only tolerated overlap is a `climate` zone plus a `sensor` of class `temperature` on the same zone.
+- **Each WHO/WHERE may appear only once per gateway**, across all platforms (a duplicate `where` used to silently drop one of the two devices). The error names both YAML keys. The only tolerated overlap is a `climate` zone plus a `sensor` of class `temperature` on the same zone: the two share one device, which keeps the **climate** name, and the probe's own `name` becomes the sensor's `entity_name` (device "Living Zone", sensor "Living Zone Living Probe").
 - **Unknown keys do not break the configuration**: they are kept and reported once at WARNING level with a "did you mean" hint (e.g. `dimable` → `dimmable`). Check the log after editing the file.
 - `device_class` is accepted as an alias of `class` on every platform (they must not both be given with different values).
 
@@ -158,12 +158,12 @@ Rules worth knowing:
 | `where` | string | Yes | – | OpenWebNet WHERE address (see the platform notes for the accepted forms). Climate uses `zone` instead. |
 | `name` | string | Yes | – | Device name in Home Assistant (optional for climate). |
 | `entity_name` | string | No | device name | Name of the main entity when it must differ from the device name. On a `class: power` meter it renames the **Power** entity; the daily/monthly/total energy entities of a `power` or `energy` meter keep their own translated names ("Energy today", "Energy this month", "Energy"). |
-| `icon` | string | No | – | Icon of the main entity (`mdi:...` or any registered icon set). |
-| `icon_on` | string | No | – | Icon used while the entity is on (light, switch). |
+| `icon` | string | No | – | Icon of the main entity (`mdi:...` or any registered icon set). Not applied to the optional Lock/Unlock buttons, which keep their fixed padlock icons. |
+| `icon_on` | string | No | – | Icon used while the entity is on (light, switch, binary sensor). |
 | `manufacturer` | string | No | `BTicino S.p.A.` | Cosmetic, shown in the device page. |
 | `model` | string | No | – | Cosmetic, shown in the device page. |
 | `who` | string | No | per platform | OpenWebNet WHO; only needed for sensors/binary sensors that support several. |
-| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface (light, switch, cover, binary sensor, sensor; not climate, which is addressed by zone, and not `scenario_control`). Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
+| `interface` | string or int | No | – | Local bus interface (F422) of a device behind a bus interface: light, switch, cover, WHO 1 motion binary sensors and WHO 1 illuminance sensors. **Refused** on the other sensor WHOs (4 temperature, 9 auxiliary, 18 energy, 25 dry contact) because their frames never carry the interface, so such a device could never receive an update; not accepted on climate (addressed by zone) or `scenario_control`. Accepted as an integer or as a 1-2 digit string: `3`, `"3"` and `"03"` all mean the same interface. |
 | `class` / `device_class` | string | No | per platform | Home Assistant device class (see the platform tables). |
 
 Accepted actuator WHERE forms (light, switch, cover): General `"0"`, Area `"00"`, `"1"`..`"10"`, Group `"#1"`..`"#255"`, Point-to-Point 2 digits (`"15"`, A=1 PL=5) or 4 digits (`"0115"`, A=01 PL=15). Sensors and binary sensors accept any string of digits (energy meters are usually `"51"`..`"5N"`). Climate is different: its `zone` (and its `where` alias) accepts only `"#0"` for the central unit, `"1"`..`"99"` for a zone, or `"#0#<zone>"` for a zone driven through the central unit.
@@ -186,6 +186,11 @@ A device behind an F422 bus interface is addressed on the bus as
 - Incoming frames are matched against both spellings, so a gateway that reports
   `11#4#3` and a configuration written `interface: "03"` resolve to the same
   entity.
+- **Only WHO 1, 2 and 15 frames carry the interface.** `interface:` is therefore
+  accepted on lights, switches, covers, WHO 1 motion binary sensors and WHO 1
+  illuminance sensors, and rejected with a validation error on WHO 4, 9, 18 and 25
+  sensors: declared there, the device would be keyed `18-51#4#03` while its frames
+  always arrive as `18-51`, and it would stay `unknown` forever.
 
 > Devices behind a bus interface received **no state updates at all** before
 > 0.3.1: the `OWNd` version we shipped never extracted the interface from the
@@ -327,7 +332,7 @@ Notes:
 |-----------|------|---------|-------------|
 | `zone` | string | `"#0"` | Thermo zone `"1"`..`"99"`, or `"#0"` for the central unit. `where` is accepted as an alias. |
 | `name` | string | `Zone N` / `Central unit` | Optional. |
-| `heat` | boolean | `true` | Heating support. |
+| `heat` | boolean | `true` | Heating support. At least one of `heat` / `cool` must be `true`; a zone with both `false` is a configuration error (it could only be switched off). |
 | `cool` | boolean | `false` | Cooling support. |
 | `fan` | boolean | `false` | Fan support. |
 | `standalone` | boolean | `false` | Standalone thermostat (no central unit). |
@@ -385,8 +390,8 @@ gateway:
 | `name` | string | Yes | – | Device name in Home Assistant. |
 | `protocol` | `cen_plus` \| `cen` | No | `cen_plus` | Which of the two protocols the control speaks. |
 | `object` | integer 1-2047 | Yes for `cen_plus` | – | CEN+ object number: the frame's WHERE without its leading `#` (WHERE `#25` → `object: 25`), i.e. the number the bus event reports as `object`. Not allowed for `cen`. |
-| `where` | string of digits | Yes for `cen` | – | CEN address, as it appears in the `*15*…*<where>##` frame. Not allowed for `cen_plus`. |
-| `buttons` | list of integers | No | `[1, 2, 3, 4]` | Which pushbuttons the automation editor should offer. CEN+ buttons are `1`-`32`, CEN buttons are `0`-`31`. |
+| `where` | string of digits | Yes for `cen` | – | CEN address `1`-`2047`, as it appears in the `*15*…*<where>##` frame (`0` is the CEN general address and is refused). Not allowed for `cen_plus`. |
+| `buttons` | list of integers | No | `[1, 2, 3, 4]` | Which pushbuttons the automation editor should offer. CEN+ buttons are `1`-`32`, CEN buttons are `0`-`31`; the default is the same for both protocols, so a CEN keypad whose first key is number `0` should declare its `buttons` explicitly. |
 | `entity_name`, `icon`, `manufacturer`, `model` | string | No | see below | The common cosmetic keys; `model` defaults to `CEN+ scenario control` / `CEN scenario control`. |
 
 Notes:
@@ -485,6 +490,9 @@ gateway:
 - **a WHO 1 `binary_sensor` with a `class` other than `motion`**: WHO 1 inputs are modelled as motion sensors only. Drop the class, or move the device to `who: "25"` if it is a dry contact.
 - **`scenario_control 'x' is missing the required 'object'`** / **`a CEN control is addressed by 'where', not by 'object'`**: a CEN+ control needs `object`, a CEN control needs `where`; never both.
 - **`scenario_control 'x': pushbutton N is out of range for protocol …`**: CEN+ buttons are 1-32, CEN buttons are 0-31.
+- **`scenario_control 'x': CEN address '0' is out of range (1-2047)`**: a CEN `where` must be 1-2047, like a CEN+ `object`.
+- **`'interface' is only supported for WHO 1/2/15 devices`**: the F422 interface was written on a temperature, auxiliary, energy or dry-contact sensor, whose frames never carry it. Remove the key; see [Local bus interfaces](#local-bus-interfaces-interface).
+- **`climate 'x': at least one of 'heat' / 'cool' must be true`**: a zone that can neither heat nor cool has nothing to control.
 - **`gateway 'x' needs a 'mac'`** / **`configured twice`**: every root entry needs a MAC (as `mac:` or as the root key) and each MAC may appear once.
 - **`unknown key 'dimable' in light.x is ignored (did you mean 'dimmable'?)`** (WARNING): a typo or an unsupported key; the device is still created without it.
 

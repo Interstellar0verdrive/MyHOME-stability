@@ -52,8 +52,7 @@
       "password_error": "Ongeldig wachtwoord",
       "password_retry": "De gateway weigert de wachtwoordonderhandeling, wacht 60 s voordat u het opnieuw probeert.",
       "password_numeric": "Deze gateway gebruikt het oude OPEN-algoritme en vereist een numeriek wachtwoord.",
-      "cannot_connect": "Kan geen verbinding maken met de gateway, controleer adres en poort.",
-      "gateway_vanished": "De geselecteerde gateway antwoordt niet meer, kies hem opnieuw of gebruik \"Custom\"."
+      "cannot_connect": "Kan geen verbinding maken met de gateway, controleer adres en poort."
     },
     "abort": {
       "cannot_connect": "Kan niet verbinden met de gateway",

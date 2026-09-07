@@ -52,8 +52,7 @@
       "password_error": "Password non valida",
       "password_retry": "Il gateway non ha accettato la password, aspetta 60 s prima di riprovare.",
       "password_numeric": "Questo gateway usa l'algoritmo OPEN legacy e richiede una password numerica.",
-      "cannot_connect": "Impossibile connettersi al gateway, controlla indirizzo e porta.",
-      "gateway_vanished": "Il gateway selezionato non risponde più, selezionalo di nuovo o usa \"Custom\"."
+      "cannot_connect": "Impossibile connettersi al gateway, controlla indirizzo e porta."
     },
     "abort": {
       "cannot_connect": "Impossibile connettersi al gateway",

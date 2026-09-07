@@ -102,7 +102,10 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
 ### Device discovery events
 
 - `myhome_device_discovered`: fired when a new device is found. Data: `platform`,
-  `discovered_device`, `config_entry_id`, `gateway_mac`.
+  `discovered_device`, `config_entry_id`, `gateway_mac`. `platform` is the section the
+  device would be declared under (`light`, `cover`, `switch`, `sensor`,
+  `binary_sensor`, `climate`) or `event` for a CEN/CEN+ scenario control, which is
+  reported but never suggested.
 - `myhome_discovery_completed`: fired when a discovery run finishes (`myhome.stop_discovery`
   or the 60-second timeout).
 

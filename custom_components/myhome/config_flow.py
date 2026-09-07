@@ -224,19 +224,19 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
             serial = user_input[FIELD_SERIAL]
             if serial == MANUAL_ENTRY:
                 return await self.async_step_custom()
-            info = self.discovered_gateways.get(serial)
-            if info is None:
-                errors["base"] = "gateway_vanished"
-            else:
-                mac = format_mac(info.get(FIELD_SERIAL_NUMBER))
-                await self.async_set_unique_id(mac, raise_on_progress=False)
-                self._abort_if_unique_id_configured(updates={CONF_HOST: info.get("address")})
-                self.gateway_handler = OWNGateway(dict(info))
-                self._source_step = "user"
-                self._update_context()
-                if self.gateway_handler.port is None:
-                    return await self.async_step_port()
-                return await self.async_step_test_connection()
+            # The form's dropdown is built from ``self.discovered_gateways`` itself, so
+            # Home Assistant's schema validation already refuses a serial that is not
+            # in it: no "gateway vanished" branch is reachable here.
+            info = self.discovered_gateways[serial]
+            mac = format_mac(info.get(FIELD_SERIAL_NUMBER))
+            await self.async_set_unique_id(mac, raise_on_progress=False)
+            self._abort_if_unique_id_configured(updates={CONF_HOST: info.get("address")})
+            self.gateway_handler = OWNGateway(dict(info))
+            self._source_step = "user"
+            self._update_context()
+            if self.gateway_handler.port is None:
+                return await self.async_step_port()
+            return await self.async_step_test_connection()
 
         already_configured = self._async_current_ids(include_ignore=False)
         local_gateways = [

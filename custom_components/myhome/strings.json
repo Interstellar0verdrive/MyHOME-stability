@@ -52,8 +52,7 @@
       "password_error": "Invalid password",
       "password_retry": "Gateway refusing password negotiation, wait 60s before retrying.",
       "password_numeric": "This gateway uses the legacy OPEN algorithm and requires a numeric password.",
-      "cannot_connect": "Cannot connect to the gateway, check the address and the port.",
-      "gateway_vanished": "The selected gateway is no longer answering, pick it again or use \"Custom\"."
+      "cannot_connect": "Cannot connect to the gateway, check the address and the port."
     },
     "abort": {
       "cannot_connect": "Cannot connect to the gateway",

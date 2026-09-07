@@ -102,7 +102,10 @@ gateway:
 | `info_log_interval_sec` | `0.0` (off) | If greater than 0, write an INFO line with the accepted value at most this often. |
 | `keepalive_minutes` | `125` | See [Instant power keep-alive](#instant-power-keep-alive) above. |
 
-Precedence: per-sensor key → `sensor_defaults`/`energy` → built-in default. Legacy
+Precedence: per-sensor key → `sensor_defaults`/`energy` → (for `keepalive_minutes`
+only) the *Default instant-power keep-alive* option of the integration → built-in
+default. A value written in the file always wins over the option, even when it equals
+the built-in `125`. Legacy
 spellings `energy_min_delta_w`, `energy_min_interval_sec`,
 `energy_suppress_log_interval_sec`, `energy_info_log_interval_sec`,
 `refresh_period` and `refresh_period_sec` are still accepted; the canonical key

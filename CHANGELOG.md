@@ -29,9 +29,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing keys (`shutter_run`, `slat_time`, `opening_time`, `closing_time`) written
   on an `advanced` cover are now reported as ignored with a warning instead of
   silently dropped.
-- (platforms)
-- (events/flows)
-- (tests/CI)
+- Sensors, binary sensors and climate, found by the same review:
+  - `icon` was documented as a common key but ignored by sensors, binary sensors
+    and climate zones, and `icon_on` by binary sensors; they now work (the Lock/Unlock
+    buttons keep their fixed icons);
+  - `entity_name` on a `class: power` meter now renames the Power entity;
+  - in a plant with a central unit, every nameless zone was called "Central unit";
+    only the bare `#0` is, `#0#5` is "Zone 5" again;
+  - a `climate` zone paired with a temperature `sensor` on the same zone lost the
+    zone's name to the probe: the shared device keeps the climate name and the probe
+    name becomes the sensor's `entity_name`;
+  - an explicit `keepalive_minutes` equal to the built-in default (125) was overridden
+    by the *Default instant-power keep-alive* option; the file value now always wins;
+  - a WHO 1 illuminance sensor behind an F422 interface never received its interface
+    and matched no reply;
+  - a dimmer switched on with `transition:` kept a stale brightness;
+  - the sensor refresh tasks are cancelled when the entity is removed, so a pending
+    one cannot outlive a config entry reload;
+  - the energy throttle resolves a sensor key whichever way its bus interface is
+    spelled (`31#4#3` / `31#4#03`), like the frame dispatcher;
+  - an unquoted 3- or 5-digit `where` (the shape sensor addresses take) is no longer
+    blamed on lost leading zeros and octal; the message quotes the user's own value.
+- Device triggers, blueprints, flows and diagnostics:
+  - a device trigger on a device that is not a scenario control (a light, a cover,
+    the gateway) is now refused with a readable error; it used to be accepted and the
+    automation showed as *on* without ever firing. The shipped blueprints' device
+    picker now only offers scenario controls;
+  - the per-device diagnostics download no longer contains the device's `name` /
+    `entity_name`, the HMAC password frame is redacted like the other negotiation
+    frames, and the configuration file is reported by name only, never with its
+    directory;
+  - the options flow no longer turns a gateway configured *without* a password into
+    one with an empty password (which OWNd reports as "invalid password" instead of
+    asking for one);
+  - discovery: temperature probes are suggested as `class: temperature` sensors
+    (they were misclassified as zones), and scenario controls report
+    `platform: event`, not `button`, in `myhome_device_discovered`.
+- Tests and CI: see below.
+
+### Changed
+
+- **Binary sensors are named after their device** ("Window Contact", not "Window
+  Contact Window"): they are now the main entity of their device like every other
+  platform. Entity ids and history are unaffected; only the displayed name changes.
+- Four configurations that used to load are now rejected with the key path of the
+  offending device, because they could never work: `interface:` on a WHO 4/9/18/25
+  sensor (their frames never carry it), a WHO 1 `binary_sensor` with a class other
+  than `motion`, a `climate` zone with `heat: false` and `cool: false`, and a CEN
+  `scenario_control` whose `where` is outside 1-2047.
+- A CEN scenario control used to accept trigger types only CEN+ can fire
+  (`rotate_cw_slow`, `pushbutton_long_press_repeat`); such a trigger now fails
+  validation. It never fired; it used to fail quietly.
+- `strings.json` added as the source of the translations; the dead `invalid_port`
+  and `gateway_vanished` translation keys were removed (no code path could set them).
 
 ## [0.4.0] - 2026-09-07
 

@@ -52,8 +52,7 @@
       "password_error": "Mot de passe invalide",
       "password_retry": "Le serveur refuse la négociation, attendez 60 s avant de réessayer.",
       "password_numeric": "Ce serveur utilise l'algorithme OPEN historique et exige un mot de passe numérique.",
-      "cannot_connect": "Connexion au serveur impossible, vérifiez l'adresse et le port.",
-      "gateway_vanished": "Le serveur sélectionné ne répond plus, sélectionnez-le à nouveau ou utilisez \"Custom\"."
+      "cannot_connect": "Connexion au serveur impossible, vérifiez l'adresse et le port."
     },
     "abort": {
       "cannot_connect": "Connexion au serveur impossible",
