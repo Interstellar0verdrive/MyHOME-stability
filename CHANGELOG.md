@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-08
+
+A stabilisation release: no new feature and no new configuration key. Six rounds of
+independent code review (each round re-reviewing the fixes of the previous one, with
+every fix pinned by a test that fails without it) went over the gateway session, the
+cover model, the platforms, the validator, discovery, the flows and the docs. The
+suite runs in CI on every push. Read *Changed* before upgrading: a few configurations
+that could never work are now refused at load, and one entity-identity effect is
+listed there.
+
 ### Fixed
 
 - Covers, found by the 2026-09-07 code review (all reproduced with tests):
@@ -749,7 +759,8 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
 
-[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.0
 [0.3.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.3.0
