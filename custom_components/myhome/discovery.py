@@ -254,7 +254,10 @@ class MyHOMEDeviceDiscoveryService:
             "device_type": device_type,
             "who": who,
             "where": where,
-            "platform": DEVICE_TYPE_TO_PLATFORM.get(device_type, "sensor"),
+            # Published verbatim (``None`` included): the table is exhaustive over
+            # ALL_DEVICE_SUPPORTED_TYPES, and inventing a fallback section here is
+            # exactly what made an alarm device look like a ``binary_sensor``.
+            "platform": DEVICE_TYPE_TO_PLATFORM.get(device_type),
             "category": _DEVICE_CATEGORY.get(device_type, "generic"),
             "properties": {
                 "ownId": f"{who}*{where}" if who else where,

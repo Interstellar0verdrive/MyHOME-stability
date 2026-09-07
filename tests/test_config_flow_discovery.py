@@ -57,6 +57,7 @@ from custom_components.myhome.const import (
     DISCOVERED_CONFIG_FILE,
     DOMAIN,
 )
+from custom_components.myhome.validate import config_schema
 
 from .helpers_core import MAC, MAC2, make_entry
 
@@ -106,10 +107,11 @@ _SUGGESTION_CASES: dict[str, tuple[str, str, str, dict[str, Any]]] = {
         "binary_sensor",
         {"who": "25", "where": "31", "name": "Garage Sensor", "class": "motion"},
     ),
+    # WHO 9 only validates under ``binary_sensor``; ``switch`` is WHO 1.
     DEVICE_TYPE_BUS_AUX: (
         "9",
         "Aux Line",
-        "switch",
+        "binary_sensor",
         {"who": "9", "where": "9", "name": "Aux Line"},
     ),
 }
@@ -183,15 +185,47 @@ def test_suggestion_table_covers_every_suggestable_type() -> None:
     assert set(_SUGGESTION_CASES) == set(_SUGGESTABLE)
 
 
-@pytest.mark.parametrize("device_type", _NOT_SUGGESTABLE)
-def test_generate_suggested_config_returns_none_for_non_entity_devices(device_type: str) -> None:
-    """Pins that device types with no entity representation yield no suggestion.
+# WHEREs used by the round-trip test below instead of the ones in _SUGGESTION_CASES.
+# The energy meter's ``5#1`` is a synthetic value that exists there only to exercise
+# the ``#`` -> ``_`` sanitisation of the suggestion key: OWNd reports the WHERE of an
+# energy frame without its interface part (``*#18*5#1*113*1234##`` -> ``where == '5'``),
+# so discovery cannot produce it, and ``SENSOR_WHERE`` rightly refuses it.
+_VALIDATOR_WHERE: dict[str, str] = {DEVICE_TYPE_BUS_ENERGY_METER: "51"}
 
-    Why it matters in production: CEN/CEN+ pushbuttons, the alarm system, light
-    groups and the thermo central unit have no standalone YAML device form. A
-    suggestion for one of them would be an entry the user pastes in and that then
-    fails validation, or worse creates a duplicate of a device configured
-    elsewhere.
+
+@pytest.mark.parametrize("device_type", list(_SUGGESTION_CASES), ids=list(_SUGGESTION_CASES))
+def test_every_suggestion_survives_the_real_validator(device_type: str) -> None:
+    """Pins that every suggested block is YAML ``validate.py`` actually accepts.
+
+    Why it matters in production: the previous test pins the dict, this one pins that
+    the dict is *usable*. An auxiliary channel used to be suggested as
+    ``switch: {who: '9'}``, and ``SWITCH_FIELDS`` is ``_who("1")``: pasting the
+    suggestion did not create a broken switch, it made the whole ``myhome.yaml``
+    unloadable, so every other device of that gateway disappeared too.
+
+    Mutation caught: pointing a suggestion at a platform whose schema refuses its
+    WHO, dropping a required key (a cover without ``shutter_run``), or emitting a
+    class the platform does not allow.
+    """
+    where = _VALIDATOR_WHERE.get(device_type, _SUGGESTION_CASES[device_type][0])
+    platform, cfg = generate_suggested_config(_device_info(device_type, where, "Discovered Device"))
+    result = config_schema({MAC: {platform: {f"discovered_{where}": dict(cfg)}}})
+    assert list(result[MAC.lower()][CONF_PLATFORMS]) == [platform]
+
+
+@pytest.mark.parametrize("device_type", _NOT_SUGGESTABLE)
+def test_generate_suggested_config_returns_none_for_devices_it_cannot_write(device_type: str) -> None:
+    """Pins that a device type the writer cannot express yields no suggestion.
+
+    "Not suggested" is not the same as "not supported": since 0.4.0 a CEN/CEN+
+    scenario control *does* have an entity representation (the ``event`` platform),
+    but it is declared under ``scenario_control:`` rather than under a platform
+    section, which this writer cannot emit. The alarm system, light groups and the
+    thermo central unit have no standalone YAML device form at all.
+
+    Why it matters in production: a suggestion for one of them would be an entry the
+    user pastes in and that then fails validation, or worse creates a duplicate of a
+    device configured elsewhere.
 
     Mutation caught: adding any of these types to ``_SUGGESTABLE``, or replacing
     the ``not in`` guard with a fallback that invents a platform.

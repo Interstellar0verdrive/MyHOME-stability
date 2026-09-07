@@ -18,6 +18,8 @@ from OWNd.message import OWNEvent
 
 from custom_components.myhome.config_flow_discovery import generate_suggested_config
 from custom_components.myhome.const import (
+    DEVICE_TYPE_BUS_ALARM_ZONE,
+    DEVICE_TYPE_BUS_AUX,
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
@@ -161,6 +163,47 @@ async def test_the_discovered_event_names_the_event_platform(hass: HomeAssistant
 
     assert [item["platform"] for item in seen] == ["event"]
     assert seen[0]["gateway_mac"] == MAC
+
+
+# ------------------------------------------------------------------ no YAML section
+@pytest.mark.parametrize(
+    ("frame", "device_type"),
+    [
+        # WHO 5, an alarm zone: there is no alarm platform, and every section that
+        # exists refuses WHO 5 (binary_sensor is WHO 1/9/25).
+        ("*5*17*0##", DEVICE_TYPE_BUS_ALARM_ZONE),
+    ],
+)
+def test_a_device_with_no_yaml_section_publishes_platform_none(
+    hass: HomeAssistant, tmp_path, frame: str, device_type: str
+) -> None:
+    """``platform`` is "the section the device would be declared under" (public payload).
+
+    An alarm device was published as ``binary_sensor``, which is the same stale-value
+    bug the round-1 fix removed for scenario controls: it sends the reader to a
+    section that would reject the device.  ``None`` says what is true.
+    """
+    info = device_info(hass, tmp_path, frame)
+    assert info["device_type"] == device_type
+    assert info["platform"] is None
+    assert generate_suggested_config(info) is None
+
+
+def test_an_auxiliary_channel_is_published_as_a_binary_sensor(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """WHO 9 is accepted by the binary_sensor schema only, never by ``switch``.
+
+    The published hint and the YAML suggestion must name the same section, or the
+    user pastes a block that makes the whole ``myhome.yaml`` unloadable.
+    """
+    info = device_info(hass, tmp_path, "*9*1*3##")
+    assert info["device_type"] == DEVICE_TYPE_BUS_AUX
+    assert info["platform"] == "binary_sensor"
+    assert generate_suggested_config(info) == (
+        "binary_sensor",
+        {"who": "9", "where": "3", "name": info["name"]},
+    )
 
 
 def test_a_scenario_control_is_still_not_suggested_in_yaml(hass: HomeAssistant, tmp_path) -> None:

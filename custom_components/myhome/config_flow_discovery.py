@@ -52,7 +52,9 @@ _SUGGESTABLE: dict[str, tuple[str, str]] = {
     DEVICE_TYPE_BUS_THERMO_ZONE: ("climate", "4"),
     DEVICE_TYPE_BUS_THERMO_SENSOR: ("sensor", "4"),
     DEVICE_TYPE_BUS_DRY_CONTACT_IR: ("binary_sensor", "25"),
-    DEVICE_TYPE_BUS_AUX: ("switch", "9"),
+    # WHO 9 is accepted by the binary_sensor schema only (_who("1", "9", "25"));
+    # ``switch`` is WHO 1, so the suggestion used to be unusable YAML.
+    DEVICE_TYPE_BUS_AUX: ("binary_sensor", "9"),
 }
 
 
