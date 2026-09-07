@@ -352,8 +352,9 @@ class MyHOMEGatewayHandler:
 
     - ``idle_watchdog_sec``: silence on the monitor session for this long triggers
       a harmless status request through the command session;
-    - ``probe_window_sec``: if that probe produces nothing on the monitor within
-      this window the event session is closed and reconnected with backoff;
+    - ``probe_window_sec``: if that probe is answered on neither session within
+      this window the event session is closed and reconnected with backoff; a
+      status request ACKed on the command session re-arms the watchdog instead;
     - ``command_timeout_sec``: how long one command may take to be written and
       acknowledged (NACK included) before the session is considered broken;
     - ``queue_ttl_sec``: commands still queued after this long are dropped instead

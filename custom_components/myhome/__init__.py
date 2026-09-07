@@ -81,11 +81,11 @@ from .const import (
     ISSUE_UNKNOWN_KEYS,
     ISSUE_YAML_INVALID,
     LOGGER,
-    MAX_COMMAND_WORKERS,
     SERVICE_SEND_MESSAGE,
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
     SERVICE_SYNC_TIME,
+    clamp_worker_count,
 )
 from .gateway import MyHOMEGatewayHandler
 from .validate import collect_unknown_keys, config_schema, format_mac
@@ -440,14 +440,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     generate_events = bool(entry.options.get(CONF_GENERATE_EVENTS, False))
     # Same contract as the gateway timing knobs: a hand-edited entry must never
     # crash the setup or open more sessions than the gateway can hold.
+    raw_worker_count = entry.options.get(CONF_WORKER_COUNT, 1)
     try:
-        worker_count = int(entry.options.get(CONF_WORKER_COUNT, 1))
+        int(raw_worker_count)
     except (TypeError, ValueError):
-        LOGGER.warning(
-            "Option `%s` is not a number (%r): using 1", CONF_WORKER_COUNT, entry.options.get(CONF_WORKER_COUNT)
-        )
-        worker_count = 1
-    worker_count = min(max(1, worker_count), MAX_COMMAND_WORKERS)
+        LOGGER.warning("Option `%s` is not a number (%r): using 1", CONF_WORKER_COUNT, raw_worker_count)
+    # ``clamp_worker_count`` is the one definition shared with the options form
+    # and the diagnostics, so the three never disagree on the number in effect.
+    worker_count = clamp_worker_count(raw_worker_count)
 
     gateway_config = await _async_load_gateway_config(hass, entry, config_file_path, mac)
     # Fresh per-gateway dict: never merge into leftovers of a previous setup.

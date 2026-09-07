@@ -415,15 +415,3 @@ class MyHOMEDeviceDiscoveryService:
             await self.gateway_handler.send_status_request(own_command)
             await asyncio.sleep(0.5)
 
-    async def discover_device_by_address(self, where: str) -> dict[str, Any] | None:
-        """Probe a single WHERE on the common subsystems and return what answered."""
-        for who in (1, 2, 4, 18, 25, 9):
-            own_command = OWNCommand.parse(f"*#{who}*{where}##")
-            if own_command is not None and own_command.is_valid:
-                await self.gateway_handler.send_status_request(own_command)
-                await asyncio.sleep(0.2)
-        for who in (1, 2, 4, 18, 25, 9):
-            found = self._discovered_devices.get(f"{self._mac}-{who}-{where}")
-            if found:
-                return found
-        return None
