@@ -90,7 +90,7 @@
           "probe_window_sec": "Quanto tempo viene concesso alla sonda per ricevere risposta. Se entro questo tempo non arriva nulla sulla sessione di monitoraggio e il gateway non conferma alcuna richiesta di stato sulla sessione comandi, la connessione viene ricostruita. Predefinito 30 s (5-300).",
           "command_timeout_sec": "Tempo massimo per scrivere un comando e riceverne la conferma, prima di un unico nuovo tentativo e poi dello scarto. Predefinito 10 s (2-60).",
           "queue_ttl_sec": "I comandi ancora in coda dopo questo tempo vengono scartati invece di essere inviati in ritardo. Predefinito 60 s (10-600).",
-          "default_keepalive_minutes": "Keep-alive richiesto ai contatori di energia quando né il sensore né sensor_defaults: imposta keepalive_minutes in myhome.yaml. 0 lo disabilita. Predefinito 125 min (0-255)."
+          "default_keepalive_minutes": "Keep-alive richiesto ai contatori di energia quando keepalive_minutes non è impostato né sul sensore né nel blocco sensor_defaults: (alias energy:) del gateway in myhome.yaml. 0 lo disabilita. Predefinito 125 min (0-255)."
         }
       }
     },

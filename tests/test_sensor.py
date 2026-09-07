@@ -133,6 +133,21 @@ gateway:
       keepalive_minutes: 125
 """
 
+# P6-INCONSISTENCY-2: the same meter, with the value written under the legacy `energy:`
+# spelling of `sensor_defaults:` instead.  It is the user's own value either way, so the
+# `default_keepalive_minutes` option must not replace it.
+KEEPALIVE_ENERGY_ALIAS_YAML = f"""
+gateway:
+  mac: {MAC}
+  energy:
+    keepalive_minutes: 60
+  sensor:
+    mains_power:
+      where: '51'
+      name: Mains Power
+      device_class: power
+"""
+
 # P5-BUG-1: the WHERE of a thermo probe is a zone, written here the way a careful user
 # writes it - quoted and padded, as the validator's own advice and the documented
 # actuator addresses both suggest.
@@ -754,6 +769,27 @@ async def test_default_keepalive_option_is_used(
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
         assert "*#18*51*#1200#1*30##" in _drain(hass)
+
+
+async def test_a_keepalive_under_the_energy_alias_also_beats_the_option(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P6-INCONSISTENCY-2: `energy:` is a documented alias of `sensor_defaults:`.
+
+    `_merge_sensor_defaults` reads both block names and records both in `from_file`, so
+    a value written under `energy:` is never marked as defaulted and the option cannot
+    replace it - which is what the option's description in the five JSON files now says.
+    Only `sensor_defaults:` was covered by a test, so the alias could have been dropped
+    from `_merge_sensor_defaults` with the suite green.
+    """
+    entry = make_entry(
+        write_yaml(tmp_path, KEEPALIVE_ENERGY_ALIAS_YAML),
+        options={CONF_DEFAULT_KEEPALIVE_MINUTES: 200},
+    )
+    with mock_gateway():
+        await _setup(hass, entry, connect=False)
+        armed = {f for f in _drain(hass) if "#1200#1" in f}
+        assert armed == {"*#18*51*#1200#1*60##"}
 
 
 # --------------------------------------------------- temperature / illuminance (E)
