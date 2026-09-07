@@ -623,10 +623,22 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._gateway_handler.log_id,
             self._where,
         )
-        # No `own_command`: we sent nothing just now, so there is no echo to expect
-        # and no window to arm. The restart is seamless - `_start_movement` picks the
-        # current estimate up as its starting point.
+        # No `own_command`: we sent nothing just now, so there is no *new* echo to
+        # expect and no window to arm. But the movement command that started this run
+        # may still be inside its own window, and `_start_movement` clears that
+        # bookkeeping - so save it across the restart and put it back. Otherwise the
+        # gateway's late "stopped" copy of the command we sent when the run began is
+        # taken for a real stop and ends the run, which is exactly the failure this
+        # method exists to prevent. It only bites when the whole timed run is shorter
+        # than the echo window (1.5 s) - an ordinary case: a 40 % tilt on a 3 s slat
+        # time, or a slider nudge of a couple of percent.
+        # The restart is seamless - `_start_movement` picks the current estimate up as
+        # its starting point.
+        own_command_at, own_command = self._own_command_at, self._own_command
         self._start_movement(direction)
+        self._own_command_at, self._own_command = own_command_at, own_command
+        # `_stopped_direction` stays None: we stopped nothing, so no movement frame
+        # may be swallowed as the echo of a stop.
         # The movement itself is still the one *we* commanded, and it now ends where
         # the motor ends it: that is what makes the actuator's `stopped` frame at the
         # end count as the end stop instead of a stop half way.

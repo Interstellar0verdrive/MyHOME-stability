@@ -1494,3 +1494,51 @@ async def test_an_advanced_actuator_reports_closing_as_well_as_opening(
 
         await feed_event(hass, cover, "*2*1*83##")  # and UP again
         assert hass.states.get(entity_id).state == CoverState.OPENING
+
+
+async def test_a_short_refused_timed_run_survives_the_gateway_echo(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """C5-2: the continued run keeps the echo protection of the command that began it.
+
+    `_continue_to_end_stop` restarts the estimate through `_start_movement`, which
+    clears the "we just sent this" bookkeeping. For a run longer than the echo window
+    (1.5 s) that is harmless - the window had expired anyway. For a *short* run it is
+    not: the gateway's own late "stopped" copy of the movement command we sent when
+    the run began is then taken at face value and ends the continued run, which is
+    precisely the failure C4-2 set out to remove.
+
+    Short timed runs are ordinary: this one is a 40 % tilt on a 3 s slat time, i.e.
+    1.2 s; a slider nudge from 50 % to 52 % on a 30 s run is 0.54 s.
+
+    Mutation caught: dropping the save/restore of `_own_command_at` / `_own_command`
+    around the `_start_movement` call in `_continue_to_end_stop`, after which the
+    cover freezes at the tilt it had reached and never sees the end stop.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(
+            COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40}, blocking=True
+        )
+        assert commands.sent_frames == ["*2*1*85##"]
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        # The 1.2 s tilt run is over and its stop is refused: the slats keep going.
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await _advance(hass, freezer, 1.25)
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        # Still inside the 1.5 s window of `*2*1*85##`: this "stopped" frame is the
+        # gateway repeating our own movement command, not the actuator stopping.
+        await feed_event(hass, cover, "*2*0*85##")
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        # So the run carries on to the end stop, as `_continue_to_end_stop` promises.
+        await _advance(hass, freezer, 40)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state == CoverState.OPEN
+        assert state.attributes[ATTR_CURRENT_POSITION] == 100
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
