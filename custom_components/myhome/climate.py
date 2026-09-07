@@ -447,6 +447,14 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                     # is modulating (room at or above the set point).  The P3-BUG-1
                     # duty cycle is untouched: its previous answer is the actuator's
                     # own "off", which is `idle` (or `off`), so the flag still drops.
+                    #
+                    # P5-NIT-1: the `None` in that tuple is defensive only, and no test
+                    # can reach it: `_action_reported` is never True while
+                    # `_attr_hvac_action` is still unset, because every one of the four
+                    # places that raises the flag assigns an action in the same breath.
+                    # It is kept rather than dropped so that a future frame handler
+                    # which raises the flag without deciding a direction still hands the
+                    # derivation its job back, instead of freezing at `unknown`.
                     if self._attr_hvac_action in (HVACAction.IDLE, HVACAction.OFF, None):
                         self._action_reported = False
             else:

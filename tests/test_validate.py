@@ -1028,6 +1028,86 @@ def test_a_zero_padded_zone_still_shares_its_device_with_the_temperature_probe(c
     assert any("both address zone 4-1" in rec.getMessage() for rec in caplog.records)
 
 
+@pytest.mark.parametrize(
+    ("written", "key"),
+    [("1", "4-1"), ("01", "4-1"), ("007", "4-7"), ("32", "4-32"), ("302", "4-302"), ("0302", "4-302")],
+)
+def test_a_zero_padded_temperature_probe_address_is_normalised(written, key):
+    """P5-BUG-1: the other half of P4-BUG-1, on the WHO 4 *temperature probe*.
+
+    The WHERE of a ``class: temperature`` sensor is a thermo zone, and OWNd builds the
+    key of every WHO 4 frame from ``int(where)``: ``where: '01'`` used to key ``4-01``,
+    which no frame can ever carry, so the probe was created, was available and stayed
+    ``unknown`` for ever - exactly the failure the zone had before round 4. A secondary
+    probe address keeps its own number (``'302'`` stays ``'302'``), because OWNd applies
+    ``int()`` to the whole WHERE and reports ``4-302``.
+
+    Mutation caught: dropping the normalisation from ``_finalize_sensor``.
+    """
+    out = check(gw(sensor={"probe": {"where": written, "name": "Probe", "class": "temperature"}}))
+    assert list(platforms(out)["sensor"]) == [key]
+    # The stored WHERE is what every status request and ``_full_where`` is built from.
+    assert platforms(out)["sensor"][key]["where"] == key.removeprefix("4-")
+
+
+def test_a_zero_padded_temperature_probe_is_still_a_duplicate_of_the_unpadded_one():
+    """P5-BUG-1, second consequence: ``4-01`` and ``4-1`` used to be two devices.
+
+    Two probes on the same zone are a configuration error the validator is supposed to
+    catch; before the normalisation the padded spelling walked straight past it and
+    produced a second, permanently dead entity.
+    """
+    with pytest.raises(Invalid, match="sensor 'p2' collides with sensor 'p1'"):
+        check(
+            gw(
+                sensor={
+                    "p1": {"where": "1", "name": "P1", "class": "temperature"},
+                    "p2": {"where": "01", "name": "P2", "class": "temperature"},
+                }
+            )
+        )
+
+
+def test_a_padded_zone_and_a_padded_probe_still_share_their_device(caplog):
+    """P5-BUG-1, third consequence: the BUG-3 pairing needs *both* sides normalised.
+
+    A user who padded the zone almost certainly padded the probe too, out of the same
+    habit. Between round 4 and this fix those two landed on ``4-1`` and ``4-01``, so the
+    reconciliation stopped running for them and the probe was dead on top of that; this
+    is also what made the CHANGELOG's third consequence only half true
+    (P5-INCONSISTENCY-1).
+    """
+    with caplog.at_level(logging.INFO, logger="custom_components.myhome"):
+        out = check(
+            gw(
+                climate={"living": {"zone": "01", "name": "Living Zone"}},
+                sensor={"probe": {"where": "01", "name": "Living Probe", "class": "temperature"}},
+            )
+        )
+    assert list(platforms(out)["sensor"]) == ["4-1"]
+    assert platforms(out)["sensor"]["4-1"]["name"] == "Living Zone"
+    assert platforms(out)["sensor"]["4-1"]["entity_name"] == "Living Probe"
+    assert any("both address zone 4-1" in rec.getMessage() for rec in caplog.records)
+
+
+def test_a_padded_where_on_a_non_who_4_sensor_keeps_its_spelling():
+    """The normalisation is WHO 4 only: WHO 18 and WHO 1 frames keep the text as written.
+
+    OWNd keys an energy frame ``18-051`` and an illuminance frame ``1-031`` from the
+    WHERE exactly as the bus wrote it, so padding is self-consistent there and
+    normalising it would break configurations that work today.
+    """
+    out = check(
+        gw(
+            sensor={
+                "meter": {"where": "051", "name": "Meter", "class": "power"},
+                "lux": {"where": "031", "name": "Lux", "class": "illuminance"},
+            }
+        )
+    )
+    assert set(platforms(out)["sensor"]) == {"18-051", "1-031"}
+
+
 def test_nameless_zones_behind_a_central_unit_keep_their_number():
     """BUG-2: only the bare ``#0`` is "Central unit".
 
