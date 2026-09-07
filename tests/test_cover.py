@@ -31,7 +31,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache,
 )
 
-from custom_components.myhome import expected_unique_ids
+from custom_components.myhome import cover as cover_module, expected_unique_ids
 from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
 
 from .helpers_core import MAC
@@ -1175,3 +1175,71 @@ async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
         await _advance(hass, freezer, 40)
         assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
         assert hass.states.get(ENTITY).state == CoverState.OPEN
+
+
+async def test_the_status_grace_outlives_a_bus_round_trip(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`ADVANCED_PROBE_GRACE_SEC` has to be long enough for the answer to come back.
+
+    The safety timer asks the actuator what it is doing and only then concludes; the
+    whole value of that (C3-2) is that a *slow* actuator answers in time. The answer
+    travels the command queue, which is serialised across the gateway and may already
+    hold other requests, so the grace is not free: too short and the entity publishes
+    `closed` mid-run again - an advanced cover is not `assumed_state` and reads
+    *closed* at position 0 - once per run longer than its bound.
+
+    The other advanced tests feed the answer without moving the clock at all, so they
+    pass for any grace whatsoever, and `test_a_slow_advanced_actuator_never_leaves_opening`
+    advances in one jump that straddles the whole sequence. Mutations caught:
+    `ADVANCED_PROBE_GRACE_SEC = 0.01` and `= 0.5`.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*0*0*0##")  # closed, on the floor
+        await feed_event(hass, cover, "*2*1*83##")  # it starts opening
+        commands.clear()
+
+        await _advance(hass, freezer, 55)  # past the 50 s bound: the actuator is asked
+        assert commands.status_frames == ["*#2*83##"]
+
+        # A round trip on a busy command queue is not instantaneous. The entity must
+        # still say `opening` while it waits, not flip to `closed` at position 0.
+        await _advance(hass, freezer, 1.0)
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        await feed_event(hass, cover, "*#2*83*10*11*60*0*0##")  # "still opening"
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+
+async def test_the_echo_recheck_waits_out_the_echo_window(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`ECHO_RECHECK_DELAY_SEC` must not fire while the gateway may still be echoing.
+
+    The re-request is what recovers a keypad press the echo guard swallowed; sending
+    it while our own command is still being echoed back asks the actuator a question
+    in the middle of the noise the guard exists to filter, and costs one command-queue
+    slot per swallowed frame.
+
+    `test_same_direction_echo_after_our_stop_is_ignored_then_rechecked` advances 2.5 s
+    in a single step, so it passes for any delay at all. Mutations caught:
+    `ECHO_RECHECK_DELAY_SEC = 1.0` and `= 0.01` (both inside `STOP_ECHO_WINDOW_SEC`).
+    """
+    assert cover_module.ECHO_RECHECK_DELAY_SEC > cover_module.STOP_ECHO_WINDOW_SEC
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        await _advance(hass, freezer, 5)
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+        commands.clear()
+
+        await feed_event(hass, cover, "*2*2*81##")  # the ambiguous same-direction frame
+        # Still inside the echo window: the actuator must not be asked yet.
+        await _advance(hass, freezer, 1.0)
+        assert commands.status_frames == []
+        # Past `ECHO_RECHECK_DELAY_SEC`: now it is.
+        await _advance(hass, freezer, 1.5)
+        assert commands.status_frames == ["*#2*81##"]
