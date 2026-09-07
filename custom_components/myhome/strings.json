@@ -85,6 +85,7 @@
           "default_keepalive_minutes": "Default instant-power keep-alive"
         },
         "data_description": {
+          "command_worker_count": "How many command sessions the integration opens to the gateway. More sessions send queued commands in parallel, but gateways hold only a handful. Default 1 (1-4).",
           "idle_watchdog_sec": "No frame received on the monitor session for this long: a harmless probe is sent through the command session. Default 300 s (60-3600).",
           "probe_window_sec": "How long the probe is given to be answered. If neither the monitor session nor the command session answers within this time, the gateway is considered unreachable and the connection is rebuilt. Default 30 s (5-300).",
           "command_timeout_sec": "How long a single command may take to be written and acknowledged before it is retried once and then dropped. Default 10 s (2-60).",

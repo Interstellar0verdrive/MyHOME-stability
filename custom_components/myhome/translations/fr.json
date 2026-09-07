@@ -85,6 +85,7 @@
           "default_keepalive_minutes": "Maintien de la puissance instantanée par défaut"
         },
         "data_description": {
+          "command_worker_count": "Nombre de sessions de commande que l'intégration ouvre vers la passerelle. Plusieurs sessions envoient les commandes en attente en parallèle, mais une passerelle n'en accepte qu'un petit nombre. Par défaut 1 (1-4).",
           "idle_watchdog_sec": "Aucune trame reçue sur la session de monitorage pendant cette durée : une sonde inoffensive est envoyée via la session de commande. Par défaut 300 s (60-3600).",
           "probe_window_sec": "Délai accordé à la sonde pour obtenir une réponse. Si ni la session de monitorage ni la session de commande ne répond dans ce délai, la passerelle est considérée injoignable et la connexion est reconstruite. Par défaut 30 s (5-300).",
           "command_timeout_sec": "Durée maximale d'écriture et d'acquittement d'une commande avant un unique réessai puis son abandon. Par défaut 10 s (2-60).",

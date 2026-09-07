@@ -71,6 +71,7 @@ from .const import (
     DOMAIN,
     GATEWAY_TEST_TIMEOUT_SEC,
     LOGGER,
+    MAX_COMMAND_WORKERS,
 )
 from .validate import format_mac
 
@@ -220,8 +221,6 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
     # ------------------------------------------------------------------ user
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Pick a discovered gateway or go to manual entry."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
             serial = user_input[FIELD_SERIAL]
             if serial == MANUAL_ENTRY:
@@ -260,7 +259,6 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({vol.Required(FIELD_SERIAL): vol.In(choices)}),
-            errors=errors,
         )
 
     # ------------------------------------------------------------------ manual
@@ -564,10 +562,14 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                             "suggested_value": suggestions.get(CONF_FILE_PATH, options[CONF_FILE_PATH])
                         },
                     ): str,
+                    # MAX_COMMAND_WORKERS is the single source of truth for this range:
+                    # ``__init__.async_setup_entry`` clamps to it, so a wider form only
+                    # let the user save a number the integration silently ignored for
+                    # ever -- and read it back unchanged at every visit.
                     vol.Required(
                         CONF_WORKER_COUNT,
                         description={"suggested_value": suggestions.get(CONF_WORKER_COUNT, options[CONF_WORKER_COUNT])},
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_COMMAND_WORKERS)),
                     vol.Required(
                         CONF_GENERATE_EVENTS,
                         description={

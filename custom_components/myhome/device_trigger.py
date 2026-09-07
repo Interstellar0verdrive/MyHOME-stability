@@ -56,6 +56,7 @@ from .const import (
     PROTOCOL_CEN,
     PROTOCOL_CEN_PLUS,
     SCENARIO_CONTROL_BUS_EVENT,
+    SCENARIO_CONTROL_BUTTON_RANGE,
     SCENARIO_CONTROL_EVENT_TYPES,
     SCENARIO_SUBTYPE_PREFIX,
     scenario_control_key,
@@ -69,8 +70,17 @@ CONF_SUBTYPE = "subtype"
 ALL_TRIGGER_TYPES: set[str] = {
     event_type for types in SCENARIO_CONTROL_EVENT_TYPES.values() for event_type in types
 }
-# Subtypes must be a closed set for the schema: CEN+ buttons are 1-32, CEN 0-31.
-ALL_SUBTYPES: list[str] = [f"{SCENARIO_SUBTYPE_PREFIX}{button}" for button in range(0, 33)]
+# Subtypes must be a closed set for the schema, and the schema does not know which
+# device (hence which protocol) the trigger names, so it is the union of both ranges:
+# CEN+ buttons are 1-32, CEN buttons 0-31.  ``async_validate_trigger_config`` narrows
+# it to the device's own range.
+ALL_SUBTYPES: list[str] = [
+    f"{SCENARIO_SUBTYPE_PREFIX}{button}"
+    for button in range(
+        min(low for low, _high in SCENARIO_CONTROL_BUTTON_RANGE.values()),
+        max(high for _low, high in SCENARIO_CONTROL_BUTTON_RANGE.values()) + 1,
+    )
+]
 
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
     {
@@ -165,6 +175,18 @@ async def async_validate_trigger_config(hass: HomeAssistant, config: ConfigType)
         raise InvalidDeviceAutomationConfig(
             f"'{config[CONF_TYPE]}' is not an event a MyHOME {protocol} scenario "
             f"control can fire (device {config[CONF_DEVICE_ID]})"
+        )
+    # Same reasoning one axis further: ``button_0`` on CEN+ and ``button_32`` on CEN
+    # are in ALL_SUBTYPES (it is the union of both ranges) but address a pushbutton
+    # the protocol has no frame for, so the event-data filter could never match.
+    # The declared ``buttons:`` list is deliberately NOT checked: event.py reports
+    # undeclared buttons on purpose, that list only drives what the editor offers.
+    low, high = SCENARIO_CONTROL_BUTTON_RANGE[protocol]
+    button = int(config[CONF_SUBTYPE].removeprefix(SCENARIO_SUBTYPE_PREFIX))
+    if not low <= button <= high:
+        raise InvalidDeviceAutomationConfig(
+            f"pushbutton {button} is outside the {low}-{high} range of a MyHOME {protocol} "
+            f"scenario control (device {config[CONF_DEVICE_ID]})"
         )
     return config
 

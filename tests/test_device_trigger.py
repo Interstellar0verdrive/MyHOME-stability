@@ -27,6 +27,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.myhome.const import (
+    CONF_SHORT_PRESS,
     DOMAIN,
     EVENT_CENPLUS,
     SCENARIO_CONTROL_EVENT_TYPES,
@@ -291,6 +292,47 @@ async def test_an_event_the_protocol_cannot_fire_is_refused(hass: HomeAssistant,
         assert validated["type"] == "pushbutton_short_release"
 
 
+@pytest.mark.parametrize(
+    ("device_key", "subtype", "message"),
+    [
+        # CEN+ pushbuttons are 1-32: button 0 does not exist on that protocol.
+        ("cenplus-25", "button_0", "pushbutton 0 is outside the 1-32 range"),
+        # CEN pushbuttons are 0-31: button 32 does not exist on that protocol.
+        ("cen-51", "button_32", "pushbutton 32 is outside the 0-31 range"),
+    ],
+)
+async def test_a_pushbutton_the_protocol_cannot_address_is_refused(
+    hass: HomeAssistant, tmp_path, device_key: str, subtype: str, message: str
+) -> None:
+    """``ALL_SUBTYPES`` is the union of both ranges, so the schema cannot do this.
+
+    Each protocol has exactly one button the other one has and it does not; a trigger
+    on it builds an ``event_data`` filter no frame can ever match, i.e. an automation
+    that shows as ``on`` and never fires -- the failure mode this validator exists to
+    remove.  Only hand-written YAML can reach it (the editor offers the declared
+    buttons, the blueprints offer 1-8), which is exactly when nobody is watching.
+    """
+    async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
+        from custom_components.myhome import device_trigger
+
+        config = {
+            CONF_PLATFORM: "device",
+            "domain": DOMAIN,
+            "device_id": device_id_of(hass, entry.entry_id, device_key),
+            "type": "pushbutton_short_press",
+            CONF_SUBTYPE: subtype,
+        }
+        with pytest.raises(InvalidDeviceAutomationConfig, match=message):
+            await device_trigger.async_validate_trigger_config(hass, config)
+
+        # The button at the other end of the same protocol's range still validates.
+        in_range = "button_1" if subtype == "button_0" else "button_31"
+        validated = await device_trigger.async_validate_trigger_config(
+            hass, {**config, CONF_SUBTYPE: in_range}
+        )
+        assert validated[CONF_SUBTYPE] == in_range
+
+
 async def test_an_automation_on_a_light_device_fails_to_set_up(
     hass: HomeAssistant, tmp_path, calls, caplog
 ) -> None:
@@ -351,7 +393,16 @@ def test_shipped_blueprints_are_valid(name: str) -> None:
     assert selector["entity"] == [{"domain": ["event"]}]
 
     # Both dropdowns stop at button 8, so both descriptions must say so.
-    assert "buttons 1-8" in blueprint.metadata["description"]
+    description = blueprint.metadata["description"]
+    assert "buttons 1-8" in description
+
+    # The picker offers CEN controls too (they own an ``event`` entity), and on CEN
+    # ``pushbutton_short_press`` is also sent at the start of a long press
+    # (SCENARIO_CONTROL_EVENT_TYPES["cen"], gateway.py), so a hold triggers the
+    # short-press branch first.  The blueprints keep the wide filter on purpose, so
+    # the description is the only place that can warn about it.
+    assert CONF_SHORT_PRESS in SCENARIO_CONTROL_EVENT_TYPES["cen"]
+    assert "CEN" in description and "myhome_cen_event" in description
 
     # Substitute the inputs the way Home Assistant does and check the triggers we get.
     inputs = {"scenario_control": "0123456789abcdef0123456789abcdef"}

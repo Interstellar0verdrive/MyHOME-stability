@@ -52,7 +52,9 @@ _SUGGESTABLE: dict[str, tuple[str, str]] = {
     DEVICE_TYPE_BUS_THERMO_ZONE: ("climate", "4"),
     DEVICE_TYPE_BUS_THERMO_SENSOR: ("sensor", "4"),
     DEVICE_TYPE_BUS_DRY_CONTACT_IR: ("binary_sensor", "25"),
-    DEVICE_TYPE_BUS_AUX: ("switch", "9"),
+    # WHO 9 is accepted by the binary_sensor schema only (_who("1", "9", "25"));
+    # ``switch`` is WHO 1, so the suggestion used to be unusable YAML.
+    DEVICE_TYPE_BUS_AUX: ("binary_sensor", "9"),
 }
 
 
@@ -63,8 +65,10 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
     "Not suggested" is not the same as "not supported": since 0.4.0 a CEN/CEN+
     scenario control *does* have an entity representation (the `event` platform),
     but it is declared under `scenario_control:` rather than under a platform
-    section, which this writer cannot emit yet, so keypad presses seen during a run
-    still land in `self._skipped`. Alarm devices have no entity support at all."""
+    section, which this writer cannot emit yet, so a keypad seen during a run is
+    counted in `MyHOMEDiscoverySuggestions._skipped` and reported in the
+    "must be declared by hand" log line. Alarm devices have no entity support at
+    all."""
     device_type = device_info["device_type"]
     if device_type not in _SUGGESTABLE:
         return None

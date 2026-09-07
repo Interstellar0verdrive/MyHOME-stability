@@ -21,8 +21,19 @@ from pytest_homeassistant_custom_component.components.diagnostics import (
     get_diagnostics_for_device,
 )
 
-from custom_components.myhome.const import CONF_ENTITY, CONF_FILE_PATH, DOMAIN
-from custom_components.myhome.diagnostics import REDACTED, REDACTED_FRAME, redact_frame
+from custom_components.myhome.const import (
+    CONF_ENTITY,
+    CONF_FILE_PATH,
+    CONF_WORKER_COUNT,
+    DEFAULT_CONFIG_FILE,
+    DOMAIN,
+)
+from custom_components.myhome.diagnostics import (
+    REDACTED,
+    REDACTED_FRAME,
+    effective_options,
+    redact_frame,
+)
 from custom_components.myhome.gateway import FRAME_MONITOR, FRAME_REPLY, FrameRecord
 
 from .helpers_core import (
@@ -294,6 +305,45 @@ async def test_the_config_file_path_never_carries_the_directory(
     assert data["effective_options"]["config_file_name"] == "myhome.yaml"
     assert data["effective_options"]["config_file_is_default_location"] is False
     assert data["entry"]["options"][CONF_FILE_PATH] == "myhome.yaml"
+
+
+@pytest.mark.parametrize(
+    ("options", "expected_name", "expected_default"),
+    [
+        # The state of every entry that has never had its options dialog opened:
+        # async_setup_entry falls back to hass.config.path(DEFAULT_CONFIG_FILE).
+        ({}, "myhome.yaml", True),
+        ({CONF_WORKER_COUNT: 1}, "myhome.yaml", True),
+    ],
+    ids=["no-options", "only-the-worker-count"],
+)
+def test_an_unset_file_path_reports_the_default_file_not_no_file(
+    hass: HomeAssistant, options: dict, expected_name: str, expected_default: bool
+) -> None:
+    """``config_file_path`` is absent until the user opens the options dialog once.
+
+    Reporting the raw option answered ``config_file_name: null`` /
+    ``config_file_is_default_location: false`` for that (majority) case -- the one
+    combination a maintainer reads as "this user moved their file somewhere we cannot
+    see", in the section they read first when devices did not appear.
+    """
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MAC, data=ENTRY_DATA_V2, options=options)
+    reported = effective_options(hass, entry)
+    assert reported["config_file_name"] == expected_name
+    assert reported["config_file_is_default_location"] is expected_default
+
+
+def test_a_file_path_option_that_is_the_default_is_reported_as_such(hass: HomeAssistant) -> None:
+    """The explicit form of the same thing must not disagree with the implicit one."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=MAC,
+        data=ENTRY_DATA_V2,
+        options={CONF_FILE_PATH: hass.config.path(DEFAULT_CONFIG_FILE)},
+    )
+    reported = effective_options(hass, entry)
+    assert reported["config_file_name"] == DEFAULT_CONFIG_FILE
+    assert reported["config_file_is_default_location"] is True
 
 
 @pytest.mark.parametrize("host", ["gateway.lan", "fd00::1"])

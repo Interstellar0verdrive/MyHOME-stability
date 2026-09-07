@@ -236,8 +236,14 @@ ALL_DEVICE_SUPPORTED_TYPES: set[str] = {
     DEVICE_TYPE_BUS_AUX,
 }
 
-# Device type to platform mapping
-DEVICE_TYPE_TO_PLATFORM: dict[str, str] = {
+# Device type -> the ``myhome.yaml`` section the device would be declared under.
+# This is published verbatim as the ``platform`` key of ``myhome_device_discovered``
+# (see docs/services-and-events.md), so every value here is a promise that such a
+# section exists and accepts this device's WHO.  ``None`` means "no section can hold
+# it": the honest answer for a family the integration has no platform for, and the
+# reason the round-1 "button" -> "event" fix was needed for scenario controls (a stale
+# value sends users looking for a ``button.*`` entity that will never exist).
+DEVICE_TYPE_TO_PLATFORM: dict[str, str | None] = {
     DEVICE_TYPE_BUS_ON_OFF_SWITCH: "light",
     DEVICE_TYPE_BUS_DIMMER: "light",
     DEVICE_TYPE_BUS_LIGHT_GROUP: "light",
@@ -246,19 +252,25 @@ DEVICE_TYPE_TO_PLATFORM: dict[str, str] = {
     DEVICE_TYPE_BUS_THERMO_SENSOR: "sensor",
     DEVICE_TYPE_BUS_THERMO_ZONE: "climate",
     DEVICE_TYPE_BUS_THERMO_CU: "climate",
-    # Since 0.4.0 a declared scenario control is an ``event`` entity, never a
-    # ``button``; this value is published to users as the ``platform`` key of
-    # ``myhome_device_discovered``, so a stale "button" sends them looking for a
-    # ``button.*`` entity that will never exist.  ``DEVICE_TYPE_BUS_SCENARIO``
-    # below is a different thing (WHO 0 scenario modules) and stays a button.
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL: "event",
     DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL: "event",
     DEVICE_TYPE_BUS_DRY_CONTACT_IR: "binary_sensor",
-    DEVICE_TYPE_BUS_SCENARIO: "button",
-    DEVICE_TYPE_BUS_ALARM_SYSTEM: "alarm_control_panel",
-    DEVICE_TYPE_BUS_ALARM_ZONE: "binary_sensor",
-    DEVICE_TYPE_BUS_AUX: "switch",
-    DEVICE_TYPE_GENERIC: "sensor"
+    # An auxiliary channel is WHO 9, and ``binary_sensor`` is the only section whose
+    # schema accepts WHO 9 (validate.BINARY_SENSOR_FIELDS: _who("1", "9", "25"));
+    # ``switch`` is WHO 1 only, so the old "switch" hint produced YAML that refused
+    # to load.
+    DEVICE_TYPE_BUS_AUX: "binary_sensor",
+    # WHO 5.  There is no alarm platform in this integration, and a WHO 5 device is
+    # rejected by every section that exists (``binary_sensor`` is WHO 1/9/25), so
+    # naming one would be the same lie the scenario controls used to tell.
+    DEVICE_TYPE_BUS_ALARM_ZONE: None,
+    # The rows below are never produced by ``discovery._message_to_device_type``
+    # today; they exist so the table stays exhaustive over ALL_DEVICE_SUPPORTED_TYPES.
+    # WHO 0 scenario modules have no section either (``button.py`` only builds the
+    # Lock/Unlock entities of an actuator, never a scenario button).
+    DEVICE_TYPE_BUS_SCENARIO: None,
+    DEVICE_TYPE_BUS_ALARM_SYSTEM: None,
+    DEVICE_TYPE_GENERIC: None,
 }
 
 # --- 0.3.0 shared contract (observability + tunables) --------------------------

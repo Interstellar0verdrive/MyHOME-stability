@@ -12,6 +12,14 @@ blueprint:
     reference) so that it exists as a device and its buttons appear in the picker
     below. Only buttons 1-8 are offered here; higher buttons are reachable with a
     plain event trigger on `myhome_cenplus_event`.
+
+
+    This blueprint is written for CEN+ controls. The picker also shows CEN
+    controls, because they own the same kind of device, but a CEN keypad sends the
+    short press at the *start* of every press, long ones included: holding a button
+    would stop the cover before starting to move it. On a CEN control build the
+    automation on the `myhome_cen_event` event trigger instead, filtering on
+    `pushbutton_short_release` and `pushbutton_long_press`.
   domain: automation
   homeassistant:
     min_version: 2026.8.0
@@ -19,7 +27,9 @@ blueprint:
   input:
     scenario_control:
       name: Scenario control
-      description: The CEN+ keypad the two buttons belong to.
+      description: >-
+        The CEN+ keypad the two buttons belong to. CEN keypads appear here too,
+        but see the note above before picking one.
       selector:
         device:
           filter:

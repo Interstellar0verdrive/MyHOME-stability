@@ -47,6 +47,7 @@ from .const import (
     CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
+    CONF_ICON,
     CONF_MANUFACTURER,
     CONF_OBJECT,
     CONF_PLATFORMS,
@@ -84,6 +85,7 @@ async def async_setup_entry(
             buttons=cfg[CONF_BUTTONS],
             name=cfg[CONF_NAME],
             entity_name=cfg[CONF_ENTITY_NAME],
+            icon=cfg[CONF_ICON],
             manufacturer=cfg[CONF_MANUFACTURER],
             model=cfg[CONF_DEVICE_MODEL],
             gateway=gateway_handler,
@@ -121,6 +123,7 @@ class MyHOMEScenarioControl(MyHOMEEntity, EventEntity):
         protocol: str,
         object_id: int,
         buttons: list[int],
+        icon: str | None,
         manufacturer: str | None,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
@@ -137,6 +140,11 @@ class MyHOMEScenarioControl(MyHOMEEntity, EventEntity):
             gateway=gateway,
             entity_name=entity_name,
         )
+        # ``icon`` is one of the common cosmetic keys _COMMON_FIELDS gives every
+        # platform, so the schema accepts it here too; without this it validated and
+        # was then silently dropped.  Unset leaves the device-class (button) icon.
+        if icon is not None:
+            self._attr_icon = icon
         # Unique ids must stay exactly as ``__init__.expected_unique_ids()`` builds them.
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-event"
         self._protocol = protocol

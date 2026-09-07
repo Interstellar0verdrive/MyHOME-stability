@@ -134,6 +134,25 @@ async def test_event_types_and_static_attributes(hass: HomeAssistant, tmp_path) 
         assert "object" not in cen.attributes
 
 
+async def test_a_declared_icon_reaches_the_entity(hass: HomeAssistant, tmp_path) -> None:
+    """``icon:`` is a common cosmetic key, accepted by SCENARIO_CONTROL_FIELDS.
+
+    It validated without a warning and was then dropped, so a user who set it saw the
+    generic button icon and had no way to tell whether they had mistyped the key, the
+    value, or hit an unsupported feature.  Unset still means the device-class icon.
+    """
+    yaml_text = SCENARIO_YAML.replace(
+        "      name: Keypad Soggiorno\n", "      name: Keypad Soggiorno\n      icon: mdi:gesture-tap-button\n"
+    )
+    async with setup_myhome(hass, tmp_path, yaml_text):
+        assert (
+            hass.states.get("event.keypad_soggiorno_scenario_control").attributes["icon"]
+            == "mdi:gesture-tap-button"
+        )
+        # The control that declares no icon keeps the EventDeviceClass.BUTTON default.
+        assert "icon" not in hass.states.get("event.keypad_ingresso_scenario_control").attributes
+
+
 # --------------------------------------------------------------------------- events
 async def test_cenplus_frames_fire_the_entity(hass: HomeAssistant, tmp_path) -> None:
     """*25*<what>#<button>*2<object>## (OWNd puts the object in WHERE[1:]) drives the CEN+ entity and the bus event."""
