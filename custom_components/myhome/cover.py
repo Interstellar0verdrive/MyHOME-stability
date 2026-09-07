@@ -524,8 +524,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # which movement this stop interrupts.
         interrupted = self._moving
         self._finish_movement(end_position, end_tilt)
-        if needs_stop:
-            await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
+        # Same rule as `async_stop_cover`: only a stop the gateway accepted can come
+        # back as an echo, so a refused one must not arm the window - it could then
+        # only swallow a real frame from somebody else.
+        if needs_stop and await self._gateway_handler.send(
+            OWNAutomationCommand.stop_shutter(self._full_where)
+        ):
             self._mark_own_stop(interrupted)
         self.async_write_ha_state()
 
@@ -708,16 +712,25 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self.async_write_ha_state()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
-        """Stop the cover and freeze the estimated position and tilt."""
+        """Stop the cover and freeze the estimated position and tilt.
+
+        A stop the gateway did not accept leaves everything as it was: the shutter
+        is still running, so the estimate must keep running with it.
+        """
         sent = await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
-        if not self._advanced:
-            interrupted = self._moving
-            self._finish_movement(*self._estimate())
-            if sent:
-                # A stop the gateway never took cannot be echoed back, so arming the
-                # echo window on it would only swallow somebody else's frame.
-                self._mark_own_stop(interrupted)
-            self.async_write_ha_state()
+        if not sent or self._advanced:
+            # The command never reached the bus (queue full, or the handler is
+            # closing), so the shutter is still running: touching the model here
+            # would freeze the position at wherever the estimate had got to and
+            # leave it there for good. Change nothing, exactly as `open`, `close`
+            # and `set_position` do when their own command is refused.
+            return
+        interrupted = self._moving
+        self._finish_movement(*self._estimate())
+        # A stop the gateway never took cannot be echoed back, so arming the echo
+        # window on it would only swallow somebody else's frame.
+        self._mark_own_stop(interrupted)
+        self.async_write_ha_state()
 
     async def async_stop_cover_tilt(self, **kwargs: Any) -> None:
         """Stop the slats: the same bus command as `stop_cover`."""

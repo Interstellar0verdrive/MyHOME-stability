@@ -892,10 +892,19 @@ async def test_same_direction_echo_after_our_stop_is_ignored_then_rechecked(
         assert hass.states.get(ENTITY).state == CoverState.CLOSED
 
 
-async def test_a_stop_the_gateway_refused_does_not_arm_the_echo_window(
+async def test_a_stop_the_gateway_refused_changes_nothing(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A stop that never reached the bus cannot be echoed back, so nothing is swallowed."""
+    """A stop that never reached the bus leaves the shutter running - and the estimate.
+
+    Review 3 / C3-1: the round-2 fix used the `send()` result to skip arming the echo
+    window, but still ended the estimate. On a refused stop (the command queue is
+    full, or the handler is closing) the shutter goes on to its end stop while Home
+    Assistant froze the position half way and stopped ticking - permanently, because
+    the actuator's own `stopped` frame at the end of the run then re-freezes the same
+    stale value. Mutation caught: calling `_finish_movement(*self._estimate())` before
+    the `sent` check, after which the cover reads *open* at ~83 % for ever.
+    """
     mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
     async with setup_myhome(hass, tmp_path, BASIC_YAML):
         cover = entity_object(hass, COVER, "2-81")
@@ -908,8 +917,46 @@ async def test_a_stop_the_gateway_refused_does_not_arm_the_echo_window(
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
             await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
 
+        # The shutter never stopped: the estimate must keep running to the floor.
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
         await _advance(hass, freezer, 0.5)
-        await feed_event(hass, cover, "*2*2*81##")  # the shutter never stopped
+        # And nothing was armed either, so a frame inside the window is still honoured.
+        await feed_event(hass, cover, "*2*2*81##")
+        assert hass.states.get(ENTITY).state == CoverState.CLOSING
+        await _advance(hass, freezer, 30)
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
+
+
+async def test_a_timed_stop_the_gateway_refused_does_not_arm_the_echo_window(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Review 3 / C3-3: the same rule on the stop that ends a `set_cover_position`.
+
+    That stop is sent by the movement deadline, and its `send()` result used to be
+    discarded: a refused stop armed the echo window anyway, and the window then
+    swallowed the first frame in the interrupted direction - which, the stop having
+    never reached the bus, can only be a real one. Mutation caught: calling
+    `_mark_own_stop(interrupted)` without looking at the result, after which the
+    keypad frame below is ignored and the cover stays *open* at 50 %.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        # 100 -> 50 on a 30 s run: the auto-stop is due after 15 s, and refused.
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await _advance(hass, freezer, 16)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+
+        await feed_event(hass, cover, "*2*2*81##")  # the shutter is still going down
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
 
 
