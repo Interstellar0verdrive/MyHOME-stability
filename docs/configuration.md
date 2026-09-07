@@ -98,7 +98,7 @@ misbehaviour, and change one at a time.
 | Option | Default | Range | What it does |
 | --- | --- | --- | --- |
 | Idle watchdog | 300 s | 60–3600 | No frame received on the monitor session for this long: a harmless status request is sent through the command session to check the gateway is still alive. Lower it on a gateway that dies silently; raise it on a very quiet plant that produces false probes. |
-| Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session — the probe or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
+| Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session after the probe went out — the probe itself, or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
 | Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
 | Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
 | Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` block. `0` disables it. Any value written in the file — per sensor or under `sensor_defaults:` — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
@@ -222,7 +222,7 @@ A device behind an F422 bus interface is addressed on the bus as
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
+| `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). Get this key wrong in the *other* direction — an actuator that does report its own position, left at `false` — and those position frames are ignored: the timed estimate is what the cover was configured for, and mixing the two would leave the entity reading *Opening* at a frozen percentage. The log says so once per frame, at debug level, and names `advanced: true`. |
 | `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
 | `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
 | `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
@@ -260,7 +260,12 @@ which the actuator's own frame at the end of the run then puts back in step. Tha
 holds however short the run was: a two-percent nudge of the position slider takes
 well under the second and a half in which the gateway may still be repeating the
 command that started it, and the repeat is recognised as one rather than being read
-as the shutter stopping.
+as the shutter stopping. The price of recognising it is that a *real* stop in that
+same second and a half — somebody at the keypad, or the shutter meeting an obstacle —
+cannot be told apart from it either. So that one is handled the same way as the
+ambiguous keypad press: the frame is ignored, the actuator is asked what it is really
+doing, and its answer ends the run about two seconds late instead of letting the
+estimate run on to the end stop and settle there.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
 frame that says it stopped is lost, the state would otherwise stay that way for
@@ -273,24 +278,36 @@ wait for the acknowledgement (the **Command timeout** option, ten seconds by def
 see [Session tunables](#session-tunables)), and which gives the whole attempt one
 retry before giving up. So the wait is **twice the sum of those two, plus two
 seconds — about 42 seconds with the defaults** — and it grows with the **Command
-timeout** option: setting that to 30 seconds makes the wait 82. The re-opened
-connection is the normal case here rather than the exception: the actuator has been
-moving for the best part of a minute without Home Assistant sending anything, and an
-unused command connection is closed after sixty seconds.
+timeout** option: setting that to 30 seconds makes the wait 82. Is a re-opened
+connection really the case to size that wait on? Not certainly, but plausibly enough.
+Home Assistant keeps **one** command connection per gateway — shared by every entity,
+service call and background check, not one per cover — and closes it after a minute
+in which it sent nothing at all. In a quiet house at three in the morning, which is
+exactly when a shutter runs on a schedule with nobody watching, that connection
+usually is closed. And the wait is sized on the worst case on purpose: being wrong
+the cheap way leaves *Opening* on screen a little longer, while being wrong the other
+way publishes a moving shutter as *closed* and wakes every automation watching for
+it.
 
 An actuator that is still running answers well inside that, so it is not reported as
-stopped in the middle of a long run — including while the bus is busy with a scene,
-which is exactly when the command path needs its full budget. The one case that can
-still get through is a status re-read stuck behind a long queue of other commands:
-those are dropped only after the **Command queue TTL** option (sixty seconds by
-default), and waiting that long before clearing a genuinely lost direction would be
-worse than the problem. The reported position is not affected either way: it is
-always the actuator's own value, never an estimate.
+stopped in the middle of a long run; an ordinary scene is comfortably inside it too —
+a dozen commands the gateway acknowledges in well under a second. What is *not*
+covered is a queue whose own backlog outlasts the wait: queued commands are dropped
+only after the **Command queue TTL** option, sixty seconds by default, and holding
+*Opening* for a whole minute after a genuinely lost frame would be worse than the
+problem the deadline exists for. The reported position is not affected either way: it
+is always the actuator's own value, never an estimate.
 
 This is also the one thing the timing keys still do on an `advanced:` cover — a
 shutter, awning or garage door whose run is longer than the 50 seconds of the default
 needs `shutter_run` (or `opening_time` / `closing_time`) so that the safety timer
 stays out of its way.
+
+The two models are never mixed. A cover left at `advanced: false` ignores any frame
+carrying a position — an advanced actuator that was not declared as one — and keeps
+its timed estimate running; a cover declared `advanced: true` never estimates a
+position at all. If a shutter reads *Opening* at a percentage that does not move, the
+debug log will have said which of the two you are missing.
 
 ### The two-phase travel model (`slat_time`)
 
