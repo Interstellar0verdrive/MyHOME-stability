@@ -5,6 +5,18 @@ but unimplemented FAN_MODE (sc-07), AUTO also on the central unit (sc-08), HEAT/
 selectable before a target temperature is known (sc-10), a safe ``async_set_temperature``
 (sc-16) and an ``hvac_action`` that is derived from the MODE frames instead of staying
 unknown until a valve frame arrives (sc-19).
+
+Known limitation - a zone with several actuators (P3-RISK-1).  An actuator-status
+frame, ``*#4*<zone>#<n>*20*<state>##``, describes actuator ``n`` alone, and a zone
+commonly has more than one (a valve plus a pump, or one per circuit).  OWNd 0.7.49
+parses ``#n`` and then discards it: ``OWNHeatingEvent`` exposes no actuator index, so
+the three frames ``#0``, ``#1`` and ``#2`` are indistinguishable here.  An ``off`` from
+any one of them therefore reports ``hvac_action = idle`` for the whole zone, even while
+another actuator is running.  The value is not stuck: the next frame - or the next
+temperature reading, once a direction-less ``on`` has dropped ``_action_reported`` -
+puts the sc-19 derivation back in charge.  Doing better needs the index parsed out of
+the raw frame and one "seen" flag per actuator, which is not worth attempting without a
+real multi-actuator plant to test against.
 """
 
 from __future__ import annotations
@@ -323,8 +335,10 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             return
         if self._action_reported:
             # A frame that actually carried a direction (or a zone that can only do one
-            # thing) is authoritative; a bare actuator-status frame is not, and does not
-            # set the flag - see the MESSAGE_TYPE_ACTION arm of handle_event (P2-RISK-1).
+            # thing) is authoritative; a bare actuator-status frame is not.  The flag is
+            # per frame, not per message type: such a frame does not set it and, on a
+            # heat+cool zone, drops it again so that the derivation below resumes - see
+            # the MESSAGE_TYPE_ACTION arm of handle_event (P2-RISK-1, P3-BUG-1).
             if self._attr_hvac_action == HVACAction.OFF:
                 self._attr_hvac_action = HVACAction.IDLE
             return
@@ -390,6 +404,11 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             # off for good on a `heat: true, cool: true` zone while assigning no action
             # of its own, freezing hvac_action - at `unknown` when it arrived first.
             if not message.is_active():
+                # P3-RISK-1: on a multi-actuator zone this "off" may be one actuator of
+                # several, and nothing in the frame says which - see the module
+                # docstring.  It is still taken as the zone's answer: on the single
+                # actuator most zones have it is the correct one, and the derivation
+                # takes over again on the next frame.
                 self._action_reported = True
                 self._attr_hvac_action = (
                     HVACAction.OFF if self._attr_hvac_mode == HVACMode.OFF else HVACAction.IDLE
@@ -401,8 +420,14 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 elif message.is_cooling():
                     self._action_reported = True
                     self._attr_hvac_action = HVACAction.COOLING
-                # else: the frame says "active" and nothing more, which on a heat+cool
-                # zone is not an answer; leave the mode/temperature derivation in charge.
+                else:
+                    # The frame says "active" and nothing more, which on a heat+cool
+                    # zone is not an answer.  Hand the derivation back its job *even if
+                    # an earlier frame had answered* (P3-BUG-1): the ordinary duty cycle
+                    # of one actuator is off -> on -> off, and the "off" half does
+                    # answer, so a flag that is only ever set would freeze hvac_action
+                    # at `idle` from the first off/on pair onwards.
+                    self._action_reported = False
             else:
                 # The zone can only heat or only cool, so "active" is a direction.
                 self._action_reported = True

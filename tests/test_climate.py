@@ -360,6 +360,11 @@ async def test_actuator_status_does_not_freeze_a_heat_and_cool_zone(
         await hass.async_block_till_done()
         assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
 
+        # P3-NIT-2: the other direction of the same frame, which no test reached.
+        entity.handle_event(OWNHeatingEvent("*#4*3*19*1*0##"))  # valve: cooling
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.COOLING
+
 
 async def test_actuator_status_first_does_not_leave_hvac_action_unknown(
     hass: HomeAssistant, tmp_path
@@ -393,6 +398,67 @@ async def test_actuator_off_is_authoritative_on_any_zone(hass: HomeAssistant, tm
         entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0, below
         entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
         entity.handle_event(OWNHeatingEvent("*#4*3#2*20*0##"))  # actuator 2 off
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
+async def test_an_actuator_that_switches_back_on_does_not_freeze_the_zone(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P3-BUG-1: off then on is the ordinary duty cycle of a single actuator.
+
+    The "off" frame answers (idle) and used to latch `_action_reported` for ever, so
+    the "on" frame that followed - which carries no direction on dimension 20, and
+    therefore assigns nothing on a `heat: true, cool: true` zone - left hvac_action
+    frozen at `idle` whatever the temperatures did afterwards.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*0##"))  # actuator off -> idle
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        # Set point reached, room cools down again: the actuator restarts and says only
+        # "active". The temperature derivation has to be back in charge from here.
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*1##"))  # actuator on, no direction
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0150##"))  # current 15.0
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+
+async def test_a_full_actuator_duty_cycle_is_followed_on_a_heat_and_cool_zone(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """P3-BUG-1: off -> on -> off, the sequence a thermostat repeats all day."""
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*#4*3*0*0200##"))  # current 20.0, below
+        entity.handle_event(OWNHeatingEvent("*4*110*3##"))  # mode heat
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*0##"))  # off: set point reached
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*1##"))  # on again, no direction
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*0##"))  # off again: still heard
         await hass.async_block_till_done()
         assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
 
