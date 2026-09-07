@@ -20,7 +20,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.restore_state import (
     ExtraStoredData,
@@ -46,6 +46,8 @@ from .const import (
     CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
+    CONF_ICON,
+    CONF_ICON_ON,
     CONF_INVERTED,
     CONF_MANUFACTURER,
     CONF_PLATFORMS,
@@ -74,7 +76,7 @@ MOTION_TIMEOUT_MARGIN = timedelta(seconds=15)
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the binary sensor entities of this gateway.
 
@@ -116,6 +118,8 @@ async def async_setup_entry(
                 interface=cfg.get(CONF_BUS_INTERFACE),
                 name=cfg[CONF_NAME],
                 entity_name=cfg[CONF_ENTITY_NAME],
+                icon=cfg[CONF_ICON],
+                icon_on=cfg[CONF_ICON_ON],
                 inverted=cfg[CONF_INVERTED],
                 device_class=device_class,
                 manufacturer=cfg[CONF_MANUFACTURER],
@@ -127,19 +131,6 @@ async def async_setup_entry(
     async_add_entities(binary_sensors)
 
 
-def entity_name_for(entity_name: str | None, device_class: BinarySensorDeviceClass | None) -> str:
-    """Name of the sensor entity inside its device.
-
-    `class` may be None (WHO 9 auxiliary channels have no HA device class), so the
-    device class can never be dereferenced blindly (plat-01).
-    """
-    if entity_name:
-        return entity_name
-    if device_class is None:
-        return "Sensor"
-    return str(device_class).replace("_", " ").capitalize()
-
-
 class MyHOMEBinarySensor(MyHOMEEntity, BinarySensorEntity):
     """Shared behaviour of the three binary sensor flavours."""
 
@@ -148,6 +139,8 @@ class MyHOMEBinarySensor(MyHOMEEntity, BinarySensorEntity):
         hass: HomeAssistant,
         name: str,
         entity_name: str | None,
+        icon: str | None,
+        icon_on: str | None,
         device_id: str,
         who: str,
         where: str,
@@ -168,6 +161,13 @@ class MyHOMEBinarySensor(MyHOMEEntity, BinarySensorEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            # INCONSISTENCY-3: a binary sensor is the only entity of its device, like a
+            # light or a cover, so it takes the device name (the base class sets
+            # `_attr_name = None`).  It used to be named after a hardcoded English
+            # device-class label, which gave friendly names such as "Window Contact
+            # Window", stuttering entity ids, and contradicted both Contract C and
+            # docs/configuration.md.  The unique id is unchanged.
+            entity_name=entity_name,
         )
 
         self._inverted = bool(inverted)
@@ -177,7 +177,14 @@ class MyHOMEBinarySensor(MyHOMEEntity, BinarySensorEntity):
         self._full_where = bus_full_where(self._where, self._interface)
 
         self._attr_device_class = device_class
-        self._attr_name = entity_name_for(entity_name, device_class)
+
+        # INCONSISTENCY-1: `icon` / `icon_on` are documented as common keys (the
+        # "Custom icons and device classes" example in docs/configuration.md sets one
+        # on a binary sensor) but were read by light/switch/cover only.
+        self._on_icon = icon_on
+        self._off_icon = icon
+        if self._off_icon is not None:
+            self._attr_icon = self._off_icon
 
         # KNOWN LIMITATION (plat-12): the device class is part of the unique id, so
         # changing `class:` in the YAML orphans the registry entry (and the pruning in
@@ -188,8 +195,15 @@ class MyHOMEBinarySensor(MyHOMEEntity, BinarySensorEntity):
         self._attr_is_on = False
 
     def _apply_state(self, is_on: bool) -> None:
-        """Apply the `inverted` option to a raw contact state."""
+        """Apply the `inverted` option to a raw contact state, then the on/off icon."""
         self._attr_is_on = is_on != self._inverted
+        self._update_icon()
+
+    @callback
+    def _update_icon(self) -> None:
+        """Swap `icon` / `icon_on` when the configuration gives both (as switch.py does)."""
+        if self._off_icon is not None and self._on_icon is not None:
+            self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
 
 
 class MyHOMEDryContact(MyHOMEBinarySensor):
@@ -197,7 +211,15 @@ class MyHOMEDryContact(MyHOMEBinarySensor):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._attr_extra_state_attributes = {"Sensor": f"({self._where[0]}){self._where[1:]}"}
+        # A WHO 25 WHERE is `<type><number>`: 3 = dry contact, 4 = IR detector, then the
+        # sensor number (OWNd reads it the same way, ``OWNDryContactEvent._sensor =
+        # where[1:]``).  So "301" really is contact 01 of type 3, and A/PL - which the
+        # motion sensor exposes - would be meaningless here (NIT-2).  A WHERE of any
+        # other shape is reported verbatim rather than split at a meaningless place.
+        if len(self._where) > 1 and self._where[0] in ("3", "4"):
+            self._attr_extra_state_attributes = {"Sensor": f"({self._where[0]}){self._where[1:]}"}
+        else:
+            self._attr_extra_state_attributes = {"Sensor": self._where}
 
     async def async_update(self) -> None:
         """Ask the gateway for the current state (also called on entity add)."""
@@ -300,6 +322,7 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
                 self._schedule_timeout(remaining)
             else:
                 self._attr_is_on = not self._motion_detected
+        self._update_icon()
         self.async_write_ha_state()
 
     async def _async_restore_from_extra_data(self) -> bool:
@@ -323,6 +346,7 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
                 self._schedule_timeout(remaining)
             else:
                 self._attr_is_on = not self._motion_detected
+        self._update_icon()
         self.async_write_ha_state()
         return True
 
@@ -356,6 +380,7 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
         self._timeout_timer = None
         self._expires_at = None
         self._attr_is_on = not self._motion_detected
+        self._update_icon()
         self.async_write_ha_state()
 
     def handle_event(self, message: OWNLightingEvent) -> None:
@@ -371,6 +396,7 @@ class MyHOMEMotionSensor(MyHOMEBinarySensor, RestoreEntity):
             LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
             if message.message_type == MESSAGE_TYPE_MOTION and message.motion:
                 self._attr_is_on = self._motion_detected
+                self._update_icon()
                 self._schedule_timeout()
             elif message.message_type == MESSAGE_TYPE_MOTION_TIMEOUT:
                 self._timeout = message.motion_timeout + MOTION_TIMEOUT_MARGIN

@@ -7,8 +7,10 @@ sending loop is idle, so every command the entities produce stays in
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 
+from freezegun.api import FrozenDateTimeFactory
 from OWNd.message import OWNEnergyEvent, OWNHeatingEvent, OWNLightingEvent
 
 from homeassistant.components.sensor import DOMAIN as SENSOR, SensorDeviceClass
@@ -102,8 +104,10 @@ gateway:
       name: Light Test
 """
 
-# One meter without `keepalive_minutes` (validate.py injects the built-in 125, so the
-# `default_keepalive_minutes` option wins) and one that sets it explicitly (YAML wins).
+# One meter without `keepalive_minutes` (validate.py injects the built-in 125 and marks
+# it, so the `default_keepalive_minutes` option wins), one that sets a different value
+# and one that writes the built-in default itself: the last two are the user's choice
+# and the option must not touch them (RISK-1).
 KEEPALIVE_OPTION_YAML = f"""
 gateway:
   mac: {MAC}
@@ -117,6 +121,11 @@ gateway:
       name: Kitchen
       device_class: power
       keepalive_minutes: 60
+    garden:
+      where: '53'
+      name: Garden
+      device_class: power
+      keepalive_minutes: 125
 """
 
 POWER_ENTITY = "sensor.mains_power_power"
@@ -163,6 +172,18 @@ def _drain(hass: HomeAssistant) -> list[str]:
         message = item["message"] if isinstance(item, dict) else item.message
         frames.append(str(message))
     return frames
+
+
+async def _advance(hass: HomeAssistant, freezer: FrozenDateTimeFactory, **delta) -> None:
+    """Move the frozen clock and fire the timers due at the new time.
+
+    F16: these tests used to pass ``dt_util.utcnow() + timedelta(...)`` to
+    ``async_fire_time_changed`` while the clock kept running, so a run started a few
+    minutes before local midnight also fired the daily/monthly boundary callback.
+    """
+    freezer.tick(timedelta(**delta))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
 
 
 def _entity_object(hass: HomeAssistant, device_key: str, slot: str):
@@ -214,6 +235,85 @@ async def test_entities_and_unique_ids(hass: HomeAssistant, tmp_path) -> None:
         assert _entity_object(hass, "18-51", "total-energy").should_poll is False
 
 
+ENERGY_ONLY_YAML = f"""
+gateway:
+  mac: {MAC}
+  sensor:
+    garden_meter:
+      where: '54'
+      name: Garden Meter
+      class: energy
+"""
+
+# `entity_name` on a power meter, an `icon` on a probe, and an illuminance sensor
+# behind an F422 local bus.
+NAMED_SENSOR_YAML = f"""
+gateway:
+  mac: {MAC}
+  sensor:
+    mains_power:
+      where: '51'
+      name: Mains Power
+      class: power
+      entity_name: Mains
+    study_probe:
+      where: '2'
+      name: Study Probe
+      class: temperature
+      icon: 'mdi:thermometer-lines'
+    hall_light_level:
+      where: '31'
+      name: Hall Light Level
+      class: illuminance
+      interface: 3
+"""
+
+
+async def test_class_energy_creates_only_the_three_totalisers(hass: HomeAssistant, tmp_path) -> None:
+    """INCONSISTENCY-6: `class: energy` is not a lighter `class: power`.
+
+    It creates the three totalisers and nothing else - no Power entity, no instant
+    power stream - so the keep-alive and filter keys have no effect on such a device.
+    """
+    entry = make_entry(write_yaml(tmp_path, ENERGY_ONLY_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        registry = er.async_get(hass)
+        created = {
+            e.unique_id for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+        }
+        for suffix in ("daily-energy", "monthly-energy", "total-energy"):
+            assert f"{MAC}-18-54-{suffix}" in created
+        assert f"{MAC}-18-54-power" not in created
+        # Only the total is enabled by default; nothing arms the instant power stream.
+        assert hass.states.get("sensor.garden_meter_energy") is not None
+        assert [f for f in _drain(hass) if "#1200#1" in f] == []
+
+
+async def test_entity_name_icon_and_interface_on_sensors(hass: HomeAssistant, tmp_path) -> None:
+    """INCONSISTENCY-1 / INCONSISTENCY-2 / BUG-1 on the sensor platform."""
+    entry = make_entry(write_yaml(tmp_path, NAMED_SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+
+        # INCONSISTENCY-2: `entity_name` reaches the Power entity (the meter's main
+        # entity); the totalisers keep their own translated names.
+        power = hass.states.get("sensor.mains_power_mains")
+        assert power is not None
+        assert power.attributes["friendly_name"] == "Mains Power Mains"
+        assert hass.states.get("sensor.mains_power_energy").attributes["friendly_name"] == (
+            "Mains Power Energy"
+        )
+
+        # INCONSISTENCY-1: `icon` was accepted, documented and ignored on this platform.
+        assert hass.states.get("sensor.study_probe").attributes["icon"] == "mdi:thermometer-lines"
+
+        # BUG-1: a WHO 1 sensor behind a bus interface must query `31#4#3`, not `31`.
+        lux = hass.states.get("sensor.hall_light_level")
+        assert lux.attributes["Int"] == "3"
+        assert "*#1*31#4#3*6##" in _drain(hass)
+
+
 async def test_names_do_not_repeat_the_device_name(hass: HomeAssistant, tmp_path) -> None:
     """sc-05: 'Mains Power Mains Power Power' is gone; translation keys are used."""
     entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
@@ -234,28 +334,30 @@ async def test_names_do_not_repeat_the_device_name(hass: HomeAssistant, tmp_path
 
 
 # ------------------------------------------------------------------- keep-alive (E)
-async def test_instant_power_keepalive(hass: HomeAssistant, tmp_path) -> None:
-    """Contract E: armed at add, on every connection signal and on the interval."""
+async def test_instant_power_keepalive(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Contract E: armed at add, on every connection signal and on the interval.
+
+    F16: the three meters arm through independent tasks, so the *set* of frames is the
+    contract, not their order.
+    """
+    armed_frames = {
+        "*#18*51*#1200#1*125##",
+        "*#18*52*#1200#1*125##",
+        "*#18*53*#1200#1*125##",
+    }
     entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
     with mock_gateway():
         await _setup(hass, entry, connect=False)
 
         # Armed once for each meter when the entities were added.
-        armed = [f for f in _drain(hass) if "#1200#1" in f]
-        assert armed == [
-            "*#18*51*#1200#1*125##",
-            "*#18*52*#1200#1*125##",
-            "*#18*53*#1200#1*125##",
-        ]
+        assert {f for f in _drain(hass) if "#1200#1" in f} == armed_frames
 
         # Reconnect -> re-arm.
         _connect(hass)
         await hass.async_block_till_done()
-        assert [f for f in _drain(hass) if "#1200#1" in f] == [
-            "*#18*51*#1200#1*125##",
-            "*#18*52*#1200#1*125##",
-            "*#18*53*#1200#1*125##",
-        ]
+        assert {f for f in _drain(hass) if "#1200#1" in f} == armed_frames
 
         # A disconnection must not send anything.
         _connect(hass, False)
@@ -263,20 +365,20 @@ async def test_instant_power_keepalive(hass: HomeAssistant, tmp_path) -> None:
         assert [f for f in _drain(hass) if "#1200#1" in f] == []
 
         # keepalive_minutes (125) - 5 -> re-armed every 120 minutes.
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=121))
-        await hass.async_block_till_done()
+        await _advance(hass, freezer, minutes=121)
         assert len([f for f in _drain(hass) if "#1200#1" in f]) == 3
 
 
-async def test_keepalive_can_be_disabled(hass: HomeAssistant, tmp_path) -> None:
+async def test_keepalive_can_be_disabled(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
     """keepalive_minutes: 0 disables the automatic arming entirely."""
     entry = make_entry(write_yaml(tmp_path, NO_KEEPALIVE_YAML))
     with mock_gateway():
         await _setup(hass, entry)
         assert [f for f in _drain(hass) if "#1200#1" in f] == []
 
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=300))
-        await hass.async_block_till_done()
+        await _advance(hass, freezer, minutes=300)
         assert [f for f in _drain(hass) if "#1200#1" in f] == []
 
         # The service still works and falls back to the built-in default.
@@ -326,7 +428,9 @@ async def test_power_value_from_event(hass: HomeAssistant, tmp_path) -> None:
 
 
 # ------------------------------------------------------------------------- energy
-async def test_energy_requests_and_updates(hass: HomeAssistant, tmp_path) -> None:
+async def test_energy_requests_and_updates(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
     """sc-01/sc-18: totals are requested at add, refreshed, and only own frames apply."""
     entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
     with mock_gateway():
@@ -360,8 +464,7 @@ async def test_energy_requests_and_updates(hass: HomeAssistant, tmp_path) -> Non
 
         # Periodic refresh (5 minutes) and the midnight boundary for daily/monthly.
         _drain(hass)
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
-        await hass.async_block_till_done()
+        await _advance(hass, freezer, minutes=6)
         refreshed = _drain(hass)
         assert "*#18*51*51##" in refreshed
         assert "*#18*51*54##" in refreshed
@@ -402,7 +505,9 @@ async def test_energy_ignores_implausible_values(hass: HomeAssistant, tmp_path) 
 
 
 # ------------------------------------------------------- temperature / illuminance
-async def test_temperature_and_illuminance(hass: HomeAssistant, tmp_path) -> None:
+async def test_temperature_and_illuminance(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
     """sc-15: both are requested at add and re-requested on a timer, never polled."""
     entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
     with mock_gateway():
@@ -411,8 +516,7 @@ async def test_temperature_and_illuminance(hass: HomeAssistant, tmp_path) -> Non
         assert "*#4*2*0##" in initial
         assert "*#1*31*6##" in initial
 
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=6))
-        await hass.async_block_till_done()
+        await _advance(hass, freezer, minutes=6)
         refreshed = _drain(hass)
         assert "*#4*2*0##" in refreshed
         assert "*#1*31*6##" in refreshed
@@ -426,6 +530,42 @@ async def test_temperature_and_illuminance(hass: HomeAssistant, tmp_path) -> Non
         await hass.async_block_till_done()
         assert hass.states.get(TEMPERATURE_ENTITY).state == "25.0"
         assert hass.states.get(ILLUMINANCE_ENTITY).state == "450"
+
+
+async def test_pending_refresh_does_not_outlive_the_entity(hass: HomeAssistant, tmp_path) -> None:
+    """RISK-4: the refresh tasks were tied to neither the entity nor the config entry.
+
+    A refresh still in flight when the entry is reloaded could call
+    ``send_status_request`` on a handler ``close_listener()`` had already torn down.
+    The entity now keeps the handle and cancels it on the way out.
+    """
+    entry = make_entry(write_yaml(tmp_path, SENSOR_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        sensor = _entity_object(hass, "4-2", "temperature")
+        _drain(hass)
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+        late_requests: list[str] = []
+
+        async def _blocking_update() -> None:
+            started.set()
+            await release.wait()
+            late_requests.append("request sent after removal")
+
+        sensor.async_update = _blocking_update
+        sensor._async_periodic_refresh(dt_util.utcnow())  # the timer callback
+        await started.wait()
+        (task,) = sensor._pending_updates  # the handle is the fix
+
+        await sensor.async_will_remove_from_hass()
+        release.set()
+        await hass.async_block_till_done()
+
+        assert task.cancelled()
+        assert late_requests == []
+        assert not sensor._pending_updates
 
 
 async def test_unload_removes_entities_from_the_registry_dict(hass: HomeAssistant, tmp_path) -> None:
@@ -456,27 +596,41 @@ def test_keepalive_minutes_for_option_precedence(tmp_path) -> None:
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 60, CONF_KEEPALIVE_MINUTES_DEFAULTED: True}, entry) == 30
     # Explicitly marked as user-provided -> YAML wins.
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 60, CONF_KEEPALIVE_MINUTES_DEFAULTED: False}, entry) == 60
-    # No marker: a value equal to the built-in default counts as "not chosen".
-    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, entry) == 30
+    # RISK-1: without the marker the value is the user's, whatever it is.  The old
+    # fallback (value == DEFAULT_KEEPALIVE_MINUTES) silently overrode an explicit
+    # `keepalive_minutes: 125`, which docs/configuration.md promises never happens.
+    assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, entry) == 125
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 60}, entry) == 60
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 0}, entry) == 0
     # Without the option nothing changes at all.
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, plain) == 125
 
 
-async def test_default_keepalive_option_is_used(hass: HomeAssistant, tmp_path) -> None:
-    """G1-D: `default_keepalive_minutes` replaces the injected default, not a YAML value."""
+async def test_default_keepalive_option_is_used(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """G1-D: `default_keepalive_minutes` replaces the injected default, not a YAML value.
+
+    RISK-1: `garden` writes exactly the built-in default (125).  It used to be
+    indistinguishable from a meter with no `keepalive_minutes` at all, so the option
+    replaced it and the user lost that meter's stream without a single log line.
+    """
     entry = make_entry(
         write_yaml(tmp_path, KEEPALIVE_OPTION_YAML),
         options={CONF_DEFAULT_KEEPALIVE_MINUTES: 30},
     )
     with mock_gateway():
         await _setup(hass, entry, connect=False)
-        armed = [f for f in _drain(hass) if "#1200#1" in f]
-        assert armed == ["*#18*51*#1200#1*30##", "*#18*52*#1200#1*60##"]
+        armed = {f for f in _drain(hass) if "#1200#1" in f}
+        assert armed == {
+            "*#18*51*#1200#1*30##",
+            "*#18*52*#1200#1*60##",
+            "*#18*53*#1200#1*125##",
+        }
 
         # The re-arm interval follows the effective value (30 - 5 = 25 minutes).
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=26))
+        freezer.tick(timedelta(minutes=26))
+        async_fire_time_changed(hass)
         await hass.async_block_till_done()
         assert "*#18*51*#1200#1*30##" in _drain(hass)
 

@@ -22,7 +22,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, CONF_MAC, CONF_NAME, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from OWNd.message import (
     CLIMATE_MODE_AUTO,
@@ -42,13 +42,13 @@ from OWNd.message import (
 )
 
 from .const import (
-    CONF_CENTRAL,
     CONF_COOLING_SUPPORT,
     CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_FAN_SUPPORT,
     CONF_HEATING_SUPPORT,
+    CONF_ICON,
     CONF_MANUFACTURER,
     CONF_PLATFORMS,
     CONF_STANDALONE,
@@ -76,7 +76,7 @@ _OWN_MODE_TO_HVAC: dict[str, HVACMode] = {
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the climate entities of one gateway."""
     gateway_data = hass.data[DOMAIN][config_entry.data[CONF_MAC]]
@@ -94,11 +94,11 @@ async def async_setup_entry(
             zone=device[CONF_ZONE],
             name=device[CONF_NAME],
             entity_name=device.get(CONF_ENTITY_NAME),
+            icon=device[CONF_ICON],
             heating=device[CONF_HEATING_SUPPORT],
             cooling=device[CONF_COOLING_SUPPORT],
             fan=device[CONF_FAN_SUPPORT],
             standalone=device[CONF_STANDALONE],
-            central=device[CONF_CENTRAL],
             manufacturer=device[CONF_MANUFACTURER],
             model=device[CONF_DEVICE_MODEL],
             gateway=gateway,
@@ -127,11 +127,11 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
         cooling: bool,
         fan: bool,
         standalone: bool,
-        central: bool,
         manufacturer: str,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
         entity_name: str | None = None,
+        icon: str | None = None,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -146,8 +146,15 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             entity_name=entity_name,
         )
 
+        # INCONSISTENCY-1: `icon` is documented as a common key of every platform but
+        # was read by light/switch/cover only.
+        if icon is not None:
+            self._attr_icon = icon
+
         self._standalone = standalone
-        self._central = True if self._where.startswith("#0") else central
+        # NIT-1: ``central`` is consumed by the validator, which rewrites the zone to
+        # its ``#0#N`` form; the entity only ever needs ``_standalone`` and the zone
+        # itself, so the ``_central`` attribute it used to keep was never read.
         self._heating = heating
         self._cooling = cooling
 

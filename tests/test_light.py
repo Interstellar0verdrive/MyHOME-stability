@@ -6,6 +6,7 @@ import pytest
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
+    ATTR_FLASH,
     ATTR_SUPPORTED_COLOR_MODES,
     ATTR_TRANSITION,
     DOMAIN as LIGHT,
@@ -46,6 +47,8 @@ gateway:
       where: '23'
       interface: '01'
       name: Relay Bus
+      icon: 'mdi:lightbulb-outline'
+      icon_on: 'mdi:lightbulb'
 """
 
 
@@ -134,6 +137,93 @@ async def test_turn_on_off_and_brightness(hass: HomeAssistant, tmp_path) -> None
         commands.clear()
         await hass.services.async_call(LIGHT, "turn_on", {ATTR_ENTITY_ID: "light.relay_bus"}, blocking=True)
         assert commands.sent_frames == ["*1*1*23#4#1##"]
+
+
+@pytest.mark.parametrize(
+    ("flash", "frame"),
+    [("short", "*1*20*23#4#1##"), ("long", "*1*22*23#4#1##")],
+)
+async def test_flash_uses_the_blinking_whats(hass: HomeAssistant, tmp_path, flash, frame) -> None:
+    """F8: only the FLASH *feature bit* was asserted, never a frame.
+
+    The two frequencies (0.5 s / 1.5 s) map to the OpenWebNet blinking WHATs 20 and 22;
+    swapping them - or dropping the whole dispatch, so that flash degrades to a plain
+    on/off - used to leave the suite green.
+    """
+    async with setup_myhome(hass, tmp_path, DIMMER_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            LIGHT, "turn_on", {ATTR_ENTITY_ID: "light.relay_bus", ATTR_FLASH: flash}, blocking=True
+        )
+        assert commands.sent_frames == [frame]
+
+        # turn_off with a flash blinks too, it does not switch the light off.
+        commands.clear()
+        await hass.services.async_call(
+            LIGHT, "turn_off", {ATTR_ENTITY_ID: "light.relay_bus", ATTR_FLASH: flash}, blocking=True
+        )
+        assert commands.sent_frames == [frame]
+
+
+async def test_transition_and_brightness_zero(hass: HomeAssistant, tmp_path) -> None:
+    """F8 / NIT-3: the transition paths of a dimmer, none of which had a test."""
+    async with setup_myhome(hass, tmp_path, DIMMER_YAML) as (_entry, commands):
+        # ON with a transition and no brightness: the level is not part of the reply,
+        # so the dimmer must ask for it (NIT-3: this path used to return right away and
+        # keep a stale brightness).
+        await hass.services.async_call(
+            LIGHT,
+            "turn_on",
+            {ATTR_ENTITY_ID: "light.dimmer_test", ATTR_TRANSITION: 4},
+            blocking=True,
+        )
+        assert commands.sent_frames == ["*1*1#4*11##"]
+        assert commands.status_frames == ["*#1*11*1##"]
+
+        # A plain ON asks for the level as well (the only way HA learns a dimmer's
+        # brightness); the non-dimmable relay does not.
+        commands.clear()
+        await hass.services.async_call(
+            LIGHT, "turn_on", {ATTR_ENTITY_ID: "light.dimmer_test"}, blocking=True
+        )
+        assert commands.sent_frames == ["*1*1*11##"]
+        assert commands.status_frames == ["*#1*11*1##"]
+
+        commands.clear()
+        await hass.services.async_call(
+            LIGHT, "turn_on", {ATTR_ENTITY_ID: "light.relay_bus"}, blocking=True
+        )
+        assert commands.status_frames == []
+
+        # OFF with a transition.
+        commands.clear()
+        await hass.services.async_call(
+            LIGHT,
+            "turn_off",
+            {ATTR_ENTITY_ID: "light.dimmer_test", ATTR_TRANSITION: 2},
+            blocking=True,
+        )
+        assert commands.sent_frames == ["*1*0#2*11##"]
+
+        # brightness 0 means "off", not "dim to 0 %".
+        commands.clear()
+        await hass.services.async_call(
+            LIGHT,
+            "turn_on",
+            {ATTR_ENTITY_ID: "light.dimmer_test", ATTR_BRIGHTNESS: 0},
+            blocking=True,
+        )
+        assert commands.sent_frames == ["*1*0*11##"]
+
+
+async def test_icon_on_is_swapped_with_the_state(hass: HomeAssistant, tmp_path) -> None:
+    """F8: `icon_on` had no fixture anywhere in the test suite."""
+    async with setup_myhome(hass, tmp_path, DIMMER_YAML):
+        relay = entity_object(hass, LIGHT, "1-23#4#01")
+        assert hass.states.get("light.relay_bus").attributes["icon"] == "mdi:lightbulb-outline"
+        await feed_event(hass, relay, "*1*1*23#4#1##")
+        assert hass.states.get("light.relay_bus").attributes["icon"] == "mdi:lightbulb"
+        await feed_event(hass, relay, "*1*0*23#4#1##")
+        assert hass.states.get("light.relay_bus").attributes["icon"] == "mdi:lightbulb-outline"
 
 
 async def test_supported_features(hass: HomeAssistant, tmp_path) -> None:
