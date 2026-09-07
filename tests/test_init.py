@@ -87,6 +87,12 @@ async def test_setup_and_unload(hass: HomeAssistant, tmp_path) -> None:
         for service in SERVICES:
             assert hass.services.has_service(DOMAIN, service)
 
+        # Held on to across the unload: nulling the handler's two fields proves
+        # nothing about the tasks themselves.  Under `mock_gateway` both loops are
+        # `await asyncio.Event().wait()`, so they can only ever end by cancellation.
+        workers = [handler.listening_worker, *handler.sending_workers]
+        assert not any(task.done() for task in workers)
+
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
 
@@ -94,6 +100,13 @@ async def test_setup_and_unload(hass: HomeAssistant, tmp_path) -> None:
     assert MAC not in hass.data[DOMAIN]
     assert handler.listening_worker is None
     assert handler.sending_workers == []
+    # core-10: every loop task is really finished, not merely forgotten, so none of
+    # them can run against the `hass.data` entry that has just been popped.  Two
+    # independent mechanisms guarantee it - `close_listener` cancels and awaits
+    # them, and they are `entry.async_create_background_task`s, which Home
+    # Assistant cancels on unload - which is exactly why the third pass that used
+    # to live in `_async_cancel_workers` could never do anything.
+    assert all(task.done() for task in workers)
     for service in SERVICES:
         assert not hass.services.has_service(DOMAIN, service)
 
@@ -245,16 +258,25 @@ async def test_services_validation(hass: HomeAssistant, tmp_path) -> None:
         )
         assert handler.send_buffer.qsize() == before + 2
 
-        with pytest.raises(ServiceValidationError):
+        # Each refusal is pinned to its own `translation_key`: a bare
+        # `pytest.raises(ServiceValidationError)` cannot tell the four apart, so
+        # deleting any one branch leaves the user with a different (wrong) message
+        # and a green suite.  `invalid_gateway` is the clearest case: without it
+        # "zz" falls through to `gateway_not_found`, which also raises.
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "send_message", {"message": "not a frame"}, blocking=True)
-        with pytest.raises(ServiceValidationError):
+        assert err.value.translation_key == "invalid_message"
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(
                 DOMAIN, "send_message", {"gateway": "zz", "message": "*1*0*11##"}, blocking=True
             )
-        with pytest.raises(ServiceValidationError):
+        assert err.value.translation_key == "invalid_gateway"
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
-        with pytest.raises(ServiceValidationError):  # cv.string coerces 1 -> "1", which is not a frame
+        assert err.value.translation_key == "gateway_not_found"
+        with pytest.raises(ServiceValidationError) as err:  # cv.string coerces 1 -> "1", not a frame
             await hass.services.async_call(DOMAIN, "send_message", {"message": 1}, blocking=True)
+        assert err.value.translation_key == "invalid_message"
 
 
 async def test_sync_time_builds_the_command_off_the_event_loop(hass: HomeAssistant, tmp_path) -> None:
@@ -303,8 +325,11 @@ gateway:
         assert await _setup(hass, entry2)
         assert set(hass.data[DOMAIN]) == {MAC, MAC2}
 
-        with pytest.raises(ServiceValidationError):
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "sync_time", {}, blocking=True)
+        # Two gateways loaded and none named: `gateway` stops being optional.
+        assert err.value.translation_key == "gateway_required"
+        assert err.value.translation_placeholders == {"count": "2"}
         await hass.services.async_call(DOMAIN, "sync_time", {"gateway": MAC2}, blocking=True)
 
         # Services survive the unload of ONE entry.
@@ -620,5 +645,6 @@ async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant,
         before = handler.send_buffer.qsize()
         await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2##"}, blocking=True)
         assert handler.send_buffer.qsize() == before + 1
-        with pytest.raises(ServiceValidationError):
+        with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2"}, blocking=True)
+        assert err.value.translation_key == "invalid_message"

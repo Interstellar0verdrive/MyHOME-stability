@@ -376,23 +376,6 @@ def _async_prune_registries(hass: HomeAssistant, entry: ConfigEntry, mac: str, g
         device_registry.async_remove_device(device_entry.id)
 
 
-async def _async_cancel_workers(handler: MyHOMEGatewayHandler) -> None:
-    """Cancel and await the loop tasks started by async_setup_entry.
-
-    Contract B makes ``close_listener`` authoritative (F3); until then, and as a
-    belt-and-braces measure afterwards, make sure nothing runs against a torn-down
-    ``hass.data`` (core-10).
-    """
-    tasks = [task for task in (handler.listening_worker, *handler.sending_workers) if task is not None]
-    handler.listening_worker = None
-    handler.sending_workers = []
-    for task in tasks:
-        if not task.done():
-            task.cancel()
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-
 _OWN_FRAME_RE = re.compile(r"^\*#?\d+(\*[^*]*)*##$")
 
 
@@ -534,8 +517,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if handler is not None:
         await handler.stop_device_discovery()
+        # ``close_listener`` is authoritative (Contract B): it cancels and awaits both
+        # loop tasks and nulls the two fields before it returns, so nothing runs
+        # against a torn-down ``hass.data`` (core-10).  A second pass over the same
+        # tasks used to follow here; it could only ever see an empty list.
         await handler.close_listener()
-        await _async_cancel_workers(handler)
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unload_ok:

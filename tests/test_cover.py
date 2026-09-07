@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
@@ -629,3 +630,54 @@ async def test_keypad_stop_is_not_mistaken_for_an_echo(
         assert state.state == CoverState.OPEN
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert 0 < state.attributes[ATTR_CURRENT_TILT_POSITION] < 100
+
+
+@pytest.mark.parametrize(
+    ("delay", "expected_state", "expected_position"),
+    [
+        (1.0, CoverState.CLOSING, 40),  # inside the window: the gateway echo is ignored
+        (1.6, CoverState.OPEN, 95),  # outside it: a real keypad stop wins
+    ],
+)
+async def test_stop_echo_window_boundary(
+    hass: HomeAssistant,
+    tmp_path,
+    freezer: FrozenDateTimeFactory,
+    delay: float,
+    expected_state: str,
+    expected_position: int,
+) -> None:
+    """`STOP_ECHO_WINDOW_SEC` is a boundary, not a "swallow every stop" rule.
+
+    Inside the window the gateway's own echo must not cancel the timed target;
+    just outside it, someone pressing STOP on the keypad must freeze the estimate
+    where it got to and cancel the pending auto-stop.
+
+    Mutations caught: `STOP_ECHO_WINDOW_SEC = 0.2` (the 1.0 s case stops honouring
+    the echo, so the shutter runs on to the end stop - the bug seen live on
+    2026-09-05) and `STOP_ECHO_WINDOW_SEC = 5.0` (the 1.6 s case swallows a real
+    keypad STOP two seconds into a `set_cover_position` run and keeps going).
+    Both values are accepted by every other test in this file, because the echo
+    test feeds its echo at 0.1 s and nothing ever feeds a stop just outside the
+    window.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+        )
+        # 100 -> 40 on a 30 s run: closing, and the auto-stop is due after 18 s.
+        assert commands.sent_frames == ["*2*2*81##"]
+        cover = entity_object(hass, COVER, "2-81")
+
+        await _advance(hass, freezer, delay)
+        await feed_event(hass, cover, "*2*0*81##")
+        assert hass.states.get(ENTITY).state == expected_state
+
+        await _advance(hass, freezer, 20)
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == expected_position
+        # Only a run that was never stopped reaches its timed auto-stop.
+        assert commands.sent_frames == (
+            ["*2*2*81##", "*2*0*81##"] if expected_state == CoverState.CLOSING else ["*2*2*81##"]
+        )
