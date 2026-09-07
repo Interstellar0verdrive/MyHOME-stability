@@ -49,16 +49,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     shutter never reached, while the shutter itself ran on to the end stop. That run
     is now carried on to the end stop in the model too, so the actuator's own frame
     at the end of it puts the position back in step instead of confirming a wrong
-    one.
+    one. That now holds for short runs as well: a run that finished before the
+    gateway repeated the command which started it used to be ended by that repeat,
+    so a small tilt or a nudge of the position slider still froze on a value the
+    shutter had already left behind.
 - Covers, an advanced actuator whose `stopped` frame is lost: it no longer stays
   *Opening* / *Closing* for ever. After the longest configured travel time plus 30 s
   the actuator's status is re-read, and the direction is dropped only if nothing
-  answers within the time the command path is allowed to take (the
-  **Command timeout** option, ten seconds by default, plus a two-second margin).
-  An actuator whose real run is longer than that timer is therefore never reported as
-  *closed* (or *open*) in the middle of it, waking every automation watching for it —
-  not even while the bus is busy with a scene, which is exactly when the command path
-  needs its full budget. The reported position is never estimated.
+  answers within the time a single command may really take. That is not the
+  **Command timeout** option alone: the request usually has to re-open a connection
+  to the gateway first, and the whole attempt is retried once, so the wait is twice
+  the connection timeout plus twice the command timeout plus a two-second margin —
+  about 42 seconds with the defaults — and it grows with the **Command timeout**
+  option. An actuator whose real run is longer than that timer is therefore not
+  reported as *closed* (or *open*) in the middle of it, waking every automation
+  watching for it — including while the bus is busy with a scene, which is when the
+  command path needs its full budget. The one case that still gets through is a
+  status re-read stuck behind a queue of commands, which are only dropped after the
+  **Command queue TTL** option. The reported position is never estimated.
 - Sensors, binary sensors and climate, found by the same review:
   - a platform section written as a YAML list or a scalar (`light: [...]`) is
     reported as a normal validation error with its key path instead of crashing the
@@ -202,6 +210,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - a platform that refuses to unload is now logged as an error instead of passing
     unnoticed; the sockets are already closed at that point, so the entry has to be
     reloaded.
+- A key called `platforms:` written at gateway level in `myhome.yaml` was reported as
+  unknown and ignored, and was not ignored: it replaced the integration's own list of
+  platforms, so every light, cover, sensor and button of that gateway failed to be
+  created and the integration entry ended in *Failed to set up*, with only
+  `'str' object has no attribute 'get'` in the log to go on. The key is now genuinely
+  ignored, and a platform list of the wrong shape can no longer take a gateway down.
 - The release job tagged and packaged the *previous* version number: it created the
   tag and built `myhome.zip` before writing the new version into `manifest.json`,
   then committed the bump in a commit no tag pointed at. HACS reads `manifest.json`
@@ -267,9 +281,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   port now re-arms the watchdog instead (it need not be the probe's own ACK), and
   only a status request answered on *neither* session reconnects. The monitor socket
   itself is still guarded by TCP keepalive. The log line says exactly what was
-  checked — *"no status request acknowledged on the command session and nothing on
-  the monitor for N s"* — instead of claiming the gateway answered nothing while it
-  was demonstrably ACKing the user's lights.
+  checked, each half with the window it was measured over — *"nothing on the monitor
+  for N s and no status request acknowledged on the command session in the last
+  M s"*, N being the monitor's silence and M the *Probe window* option — instead of
+  claiming the gateway answered nothing while it was demonstrably ACKing the user's
+  lights, or letting one trailing duration read as if it qualified both halves.
 - **The Number of concurrent command sessions option is capped at 4** (gateways hold
   only a handful of concurrent sessions), and the options form now offers 1-4 rather
   than 1-10, explained in the dialog itself (*Default 1 (1-4)*). An entry saved with

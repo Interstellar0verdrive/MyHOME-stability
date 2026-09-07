@@ -133,11 +133,12 @@ in `myhome.yaml`. Tests override them on the handler instance; nothing else does
 | Parameter | Value | Where | What it does |
 |---|---|---|---|
 | `IDLE_TIMEOUT_SEC` | `300.0` s | `gateway.py` | No frame on the monitor session for this long → send a probe status request. |
-| `PROBE_WINDOW_SEC` | `30.0` s | `gateway.py` | Probe sent, nothing on the monitor and no status request acknowledged on the command session → treat the monitor session as dead and reconnect, with that sentence as the log line. A status request the gateway ACKed on the **command** session (the probe, or any other) proves it is alive and simply does not mirror replies onto the monitor: the watchdog then re-arms instead of reconnecting, and the monitor socket is left to TCP keepalive. |
+| `PROBE_WINDOW_SEC` | `30.0` s | `gateway.py` | Probe sent, nothing on the monitor and no status request acknowledged on the command session → treat the monitor session as dead and reconnect, logged as `nothing on the monitor for N s and no status request acknowledged on the command session in the last M s` (N is the monitor's silence, M this window). A status request the gateway ACKed on the **command** session (the probe, or any other) proves it is alive and simply does not mirror replies onto the monitor: the watchdog then re-arms instead of reconnecting, and the monitor socket is left to TCP keepalive. |
 | `READ_POLL_SEC` | `30.0` s | `gateway.py` | Wake-up cadence of the listening loop; the granularity of the idle watchdog. |
 | `INITIAL_BACKOFF_SEC` | `1.0` s | `gateway.py` | First reconnect delay. |
 | `MAX_BACKOFF_SEC` | `60.0` s | `gateway.py` | Backoff ceiling; it doubles on each consecutive failure and resets once the session proves alive. |
 | `CONNECT_TIMEOUT_SEC` | `10.0` s | `gateway.py` | TCP connect + negotiation, one attempt. |
+| `COMMAND_ATTEMPTS` | `2` | `gateway.py` | Attempts per command: one, then a retry with a fresh session, then the command is dropped. Together with `CONNECT_TIMEOUT_SEC` and the **Command timeout** option this fixes the longest a single command may take (40 s with the defaults), which is what the cover safety timer's grace is sized on. |
 | `COMMAND_TIMEOUT_SEC` | `10.0` s | `gateway.py` | Write a command and wait for the gateway's ACK/NACK. |
 | `COMMAND_QUEUE_MAXSIZE` | `200` | `gateway.py` | Bounded command queue. When full, new commands are refused (the service call raises; entity commands log a rate-limited warning). |
 | `COMMAND_TTL_SEC` | `60.0` s | `gateway.py` | A command dequeued more than this long after being queued is dropped, not sent. |
