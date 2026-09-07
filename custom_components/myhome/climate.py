@@ -322,7 +322,9 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             self._attr_hvac_action = HVACAction.OFF
             return
         if self._action_reported:
-            # A real valve/actuator frame is authoritative.
+            # A frame that actually carried a direction (or a zone that can only do one
+            # thing) is authoritative; a bare actuator-status frame is not, and does not
+            # set the flag - see the MESSAGE_TYPE_ACTION arm of handle_event (P2-RISK-1).
             if self._attr_hvac_action == HVACAction.OFF:
                 self._attr_hvac_action = HVACAction.IDLE
             return
@@ -379,21 +381,34 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 self._local_target_temperature = self._target_temperature + self._local_offset
         elif message.message_type == MESSAGE_TYPE_ACTION:
             LOGGER.debug("%s %s", self._gateway_handler.log_id, message.human_readable_log)
-            self._action_reported = True
-            if message.is_active():
-                if self._heating and self._cooling:
-                    if message.is_heating():
-                        self._attr_hvac_action = HVACAction.HEATING
-                    elif message.is_cooling():
-                        self._attr_hvac_action = HVACAction.COOLING
-                elif self._heating:
+            # P2-RISK-1: OWNd builds MESSAGE_TYPE_ACTION from two different dimensions.
+            # Dimension 19 (valve status, `*#4*<zone>*19*<cool>*<heat>##`) carries the
+            # direction; dimension 20 (actuator status, `*#4*<zone>#<n>*20*<state>##`)
+            # sets `is_active()` only and leaves `is_heating()`/`is_cooling()` at None.
+            # `_action_reported` therefore has to be set per frame, not per message
+            # type: an actuator frame used to switch the sc-19 temperature derivation
+            # off for good on a `heat: true, cool: true` zone while assigning no action
+            # of its own, freezing hvac_action - at `unknown` when it arrived first.
+            if not message.is_active():
+                self._action_reported = True
+                self._attr_hvac_action = (
+                    HVACAction.OFF if self._attr_hvac_mode == HVACMode.OFF else HVACAction.IDLE
+                )
+            elif self._heating and self._cooling:
+                if message.is_heating():
+                    self._action_reported = True
                     self._attr_hvac_action = HVACAction.HEATING
-                elif self._cooling:
+                elif message.is_cooling():
+                    self._action_reported = True
                     self._attr_hvac_action = HVACAction.COOLING
-            elif self._attr_hvac_mode == HVACMode.OFF:
-                self._attr_hvac_action = HVACAction.OFF
+                # else: the frame says "active" and nothing more, which on a heat+cool
+                # zone is not an answer; leave the mode/temperature derivation in charge.
             else:
-                self._attr_hvac_action = HVACAction.IDLE
+                # The zone can only heat or only cool, so "active" is a direction.
+                self._action_reported = True
+                self._attr_hvac_action = (
+                    HVACAction.HEATING if self._heating else HVACAction.COOLING
+                )
         else:
             return
 
