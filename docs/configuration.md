@@ -98,10 +98,10 @@ misbehaviour, and change one at a time.
 | Option | Default | Range | What it does |
 | --- | --- | --- | --- |
 | Idle watchdog | 300 s | 60–3600 | No frame received on the monitor session for this long: a harmless status request is sent through the command session to check the gateway is still alive. Lower it on a gateway that dies silently; raise it on a very quiet plant that produces false probes. |
-| Probe window | 30 s | 5–300 | The probe was sent and neither the monitor session nor the command session answered: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). If the gateway acknowledged the probe on the **command** session it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
+| Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session — the probe or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
 | Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
 | Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
-| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors that do not set `keepalive_minutes` themselves in `myhome.yaml`. `0` disables it. A per-sensor value in the file always wins. See [Energy monitoring](energy.md). |
+| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` block. `0` disables it. Any value written in the file — per sensor or under `sensor_defaults:` — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
 
 A [diagnostics download](troubleshooting.md#diagnostics-download) always reports the
 values actually in effect, under `effective_options`.
@@ -223,7 +223,7 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the **Command timeout** option plus a couple of seconds; see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
+| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
 | `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
 | `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
 | `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
@@ -243,36 +243,54 @@ basic (timed) cover, the second to every `advanced:` one.
 The gateway repeats commands back to Home Assistant a moment after it accepts them,
 and those repeats look exactly like a keypad press. A frame arriving within 1.5 s of
 a command sent by Home Assistant is ignored as such a repeat only when it can be one:
-a `stopped` frame right after a movement we asked for, or a copy of the movement our
-own `cover.stop_cover` interrupted. A movement in any other direction, such as
-pressing *up* on the keypad right after stopping a shutter that was going down, is
-honoured straight away. Pressing the **same** direction again within that second and
-a half cannot be told apart from the repeat, so it is ignored; the integration then
-re-reads the actuator's status, and the movement is picked up about two seconds late
-rather than lost. A stop Home Assistant could not even send — the gateway's command
-queue was full, or the connection was closing — changes nothing at all: no repeat can
-follow a command that was never sent, and the shutter is still running, so the
-estimate keeps running with it. The same holds for the stop the integration sends by
-itself at the end of a *set position* or a tilt run: if that one cannot be sent, the
-shutter carries on to its end stop, and so does the estimate, which the actuator's own
-frame at the end of the run then puts back in step.
+a `stopped` frame right after a movement we asked for, or a copy of the movement a
+stop of ours interrupted — a `cover.stop_cover`, or the stop the integration sends by
+itself at the end of a *set position* or a tilt run. A movement in any other
+direction, such as pressing *up* on the keypad right after stopping a shutter that
+was going down, is honoured straight away. Pressing the **same** direction again
+within that second and a half cannot be told apart from the repeat, so it is ignored;
+the integration then re-reads the actuator's status, and the movement is picked up
+about two seconds late rather than lost. A stop Home Assistant could not even send —
+the gateway's command queue was full, or the connection was closing — changes nothing
+at all: no repeat can follow a command that was never sent, and the shutter is still
+running, so the estimate keeps running with it. The same holds for the stop the
+integration sends by itself at the end of a *set position* or a tilt run: if that one
+cannot be sent, the shutter carries on to its end stop, and so does the estimate,
+which the actuator's own frame at the end of the run then puts back in step. That
+holds however short the run was: a two-percent nudge of the position slider takes
+well under the second and a half in which the gateway may still be repeating the
+command that started it, and the repeat is recognised as one rather than being read
+as the shutter stopping.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
 frame that says it stopped is lost, the state would otherwise stay that way for
 ever, so the integration re-reads the actuator's status after the longest configured
 travel time plus 30 seconds, and drops the direction only if nothing answers.
 "Nothing answers" is measured against the command path itself, not against a fixed
-delay: the answer has to be queued, sent and acknowledged like any other command, so
-the wait is the gateway's own **Command timeout** option (ten seconds by default,
-see [Session tunables](#session-tunables)) plus two seconds, and it grows with that option.
-An actuator that is still running answers well inside that, so it is never reported
-as stopped in the middle of a long run — not even while the bus is busy with a scene
-— and its answer starts the countdown again. The reported position is not affected
-either way: it is always the actuator's own value, never an estimate. This is also
-the one thing the timing keys still do on an `advanced:` cover — a shutter, awning
-or garage door whose run is longer than the 50 seconds of the default needs
-`shutter_run` (or `opening_time` / `closing_time`) so that the safety timer stays
-out of its way.
+delay: that answer has to travel the ordinary command queue, which may have to
+re-open a connection to the gateway first (ten seconds), then write the request and
+wait for the acknowledgement (the **Command timeout** option, ten seconds by default,
+see [Session tunables](#session-tunables)), and which gives the whole attempt one
+retry before giving up. So the wait is **twice the sum of those two, plus two
+seconds — about 42 seconds with the defaults** — and it grows with the **Command
+timeout** option: setting that to 30 seconds makes the wait 82. The re-opened
+connection is the normal case here rather than the exception: the actuator has been
+moving for the best part of a minute without Home Assistant sending anything, and an
+unused command connection is closed after sixty seconds.
+
+An actuator that is still running answers well inside that, so it is not reported as
+stopped in the middle of a long run — including while the bus is busy with a scene,
+which is exactly when the command path needs its full budget. The one case that can
+still get through is a status re-read stuck behind a long queue of other commands:
+those are dropped only after the **Command queue TTL** option (sixty seconds by
+default), and waiting that long before clearing a genuinely lost direction would be
+worse than the problem. The reported position is not affected either way: it is
+always the actuator's own value, never an estimate.
+
+This is also the one thing the timing keys still do on an `advanced:` cover — a
+shutter, awning or garage door whose run is longer than the 50 seconds of the default
+needs `shutter_run` (or `opening_time` / `closing_time`) so that the safety timer
+stays out of its way.
 
 ### The two-phase travel model (`slat_time`)
 
@@ -403,6 +421,14 @@ Notes:
 | `standalone` | boolean | `false` | Standalone thermostat (no central unit). |
 | `central` | boolean | `false` | Zone driven through the central unit (`#0#N` addressing). |
 
+> **Entity identity.** An address written with a leading zero used to be keyed `4-01`
+> while every frame for it arrives as `4-1`: the entity was created, was named, was
+> available and stayed `unknown` for ever. Normalising it gives the device key,
+> `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
+> worked is renamed — the padded entity never received a frame — and the old, empty
+> entity and device are pruned on the first load; an automation that referenced the
+> old `entity_id` has to be pointed at the new one.
+
 **Zones with more than one actuator.** A central unit that reports *actuator* status
 sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`). The protocol layer
 parses the actuator number `n` but offers no public way to read it, and this
@@ -412,16 +438,18 @@ and a pump, or one actuator per circuit, therefore reports *Idle* as soon as **a
 one of them switches off, even if another is still running. The value is not stuck:
 the actuator's next "on" frame hands the mode/temperature derivation back its job, and
 from then on the temperature readings drive `hvac_action` again. A central unit that
-also reports *valve* status is unaffected — the direction a valve frame carries is
-kept until another frame contradicts it. Zones with a single actuator — the usual
-case — and central units that report *valve* status (which carries the direction) are
-exact.
+also reports *valve* status keeps the direction the valve named through an actuator
+frame that only says *active* — that one no longer overrules it. An actuator **off** is
+still taken as the zone's answer there too, so the *Idle*-on-any-off limitation above
+applies to such a plant as well, until the next valve frame restores the direction.
+Only two cases are exact: a zone with a single actuator — the usual one — and a
+central unit that reports *valve* status and no per-actuator status at all.
 
 ## Sensor
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. |
+| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. A temperature probe is addressed by zone, so a leading zero in its `where` is accepted and normalised (`'01'` is `1`, `'0302'` is `302`) — see the note below. |
 | `who` | string | from `class` | Only needed to override the WHO implied by the class (must match). |
 | `keepalive_minutes` | integer 0-255 | `125` | Power meters only: the integration asks the meter to push instant power for this many minutes and renews the request by itself. `0` disables the automatic keep-alive. |
 | `min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`, `info_log_interval_sec` | number | see [Energy monitoring](energy.md) | Per-sensor overrides of the power filtering defaults. |
@@ -429,6 +457,17 @@ exact.
 
 Units are fixed by the class (W, Wh, °C, lx). Energy filtering, totals and
 `keepalive_minutes` are covered in full in [Energy monitoring](energy.md).
+
+> **Entity identity.** An address written with a leading zero used to be keyed `4-01`
+> while every frame for it arrives as `4-1`: the entity was created, was named, was
+> available and stayed `unknown` for ever. Normalising it gives the device key,
+> `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
+> worked is renamed — the padded entity never received a frame — and the old, empty
+> entity and device are pruned on the first load; an automation that referenced the
+> old `entity_id` has to be pointed at the new one.
+
+Only WHO 4 addresses are normalised this way. A WHO 18, WHO 9, WHO 25 or WHO 1
+sensor keeps whatever text the bus writes, so padding is self-consistent there.
 
 ## Scenario control (CEN / CEN+)
 

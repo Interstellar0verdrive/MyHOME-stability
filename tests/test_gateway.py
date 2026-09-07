@@ -1614,7 +1614,7 @@ async def test_negotiation_transport_failures_raise_session_errors() -> None:
         assert channel._stream_writer is None  # noqa: SLF001 - the socket is closed on failure
 
 
-@pytest.mark.slow  # ~1 s: a real connection that is deliberately left to time out
+@pytest.mark.slow  # ~0.5 s: a real connection that is deliberately left to time out
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
 async def test_a_negotiation_that_times_out_does_not_leak_the_socket() -> None:
     """`open()` promises "the socket is always closed on failure"; this is the arm where

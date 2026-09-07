@@ -49,16 +49,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     shutter never reached, while the shutter itself ran on to the end stop. That run
     is now carried on to the end stop in the model too, so the actuator's own frame
     at the end of it puts the position back in step instead of confirming a wrong
-    one.
+    one. That now holds for short runs as well: a run that finished before the
+    gateway repeated the command which started it used to be ended by that repeat,
+    so a small tilt or a nudge of the position slider still froze on a value the
+    shutter had already left behind.
 - Covers, an advanced actuator whose `stopped` frame is lost: it no longer stays
   *Opening* / *Closing* for ever. After the longest configured travel time plus 30 s
   the actuator's status is re-read, and the direction is dropped only if nothing
-  answers within the time the command path is allowed to take (the
-  **Command timeout** option, ten seconds by default, plus a two-second margin).
-  An actuator whose real run is longer than that timer is therefore never reported as
-  *closed* (or *open*) in the middle of it, waking every automation watching for it —
-  not even while the bus is busy with a scene, which is exactly when the command path
-  needs its full budget. The reported position is never estimated.
+  answers within the time a single command may really take. That is not the
+  **Command timeout** option alone: the request usually has to re-open a connection
+  to the gateway first, and the whole attempt is retried once, so the wait is twice
+  the connection timeout plus twice the command timeout plus a two-second margin —
+  about 42 seconds with the defaults — and it grows with the **Command timeout**
+  option. An actuator whose real run is longer than that timer is therefore not
+  reported as *closed* (or *open*) in the middle of it, waking every automation
+  watching for it — including while the bus is busy with a scene, which is when the
+  command path needs its full budget. The one case that still gets through is a
+  status re-read stuck behind a queue of commands, which are only dropped after the
+  **Command queue TTL** option. The reported position is never estimated.
 - Sensors, binary sensors and climate, found by the same review:
   - a platform section written as a YAML list or a scalar (`light: [...]`) is
     reported as a normal validation error with its key path instead of crashing the
@@ -79,7 +87,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     entity was created, was available and stayed `unknown` for ever, with nothing in
     the log but a debug line. The same mismatch hid a duplicate zone from the
     duplicate check and stopped a zone from sharing its device with the WHO 4
-    temperature probe on the same zone;
+    temperature probe on the same zone. A WHO 4 temperature **sensor** written the
+    same way (`where: '01'`) had the identical defect and is normalised with it: it is
+    keyed `4-1` like its frames, is detected as a duplicate of the unpadded spelling
+    and shares the zone's device like an unpadded probe;
   - a `climate` zone paired with a temperature `sensor` on the same zone lost the
     zone's name to the probe: the shared device keeps the climate name and the probe
     name becomes the sensor's `entity_name`;
@@ -170,14 +181,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `myhome_device_discovered` carries the interface too (unpadded, `null` on the
     main bus), and the `unique_id` of a device behind one now includes it
     (`{mac}-1-11#4#03`) — which is also the form `discovered_devices` reports in
-    `myhome_discovery_completed`;
+    `myhome_discovery_completed`. A frame carrying an F422 interface outside the
+    0-15 range (`…#4#16`) is now ignored rather than announced as the main-bus device
+    with the same WHERE: such a frame should not exist on real hardware, and no
+    suggestion is better than one that drives the wrong actuator. **If you ran
+    discovery before this version and your plant has an F422 local bus interface,
+    delete `myhome_discovered.yaml` before your next run**: the old file may hold two
+    blocks for the same physical device, one without an `interface:` key, written by
+    the earlier version, which is wrong, and one with it, which is right. That file is
+    only ever added to, never cleaned up, so both survive and both are accepted by the
+    schema. Nothing is lost by deleting it — a run rewrites it;
   - discovery: the line a run logs about devices it could not suggest counted every
     previous run as well — three runs reported "3 device(s)" for one keypad. It now
     reports what that run saw, and in two clauses rather than one: a CEN / CEN+
     scenario control really can be declared by hand, under `scenario_control:`, while
     a burglar-alarm device belongs to a family this integration has no section for
     anywhere. The old line sent a reader hunting for an alarm chapter that has never
-    existed.
+    existed. It no longer names a CEN / CEN+ keypad you have already declared,
+    either: such a control can never be written into `myhome_discovered.yaml`, and it
+    was reported as one to "declare by hand" on every run, months after it was
+    configured — it is now looked up under the key it is really stored by
+    (`cenplus-<object>` / `cen-<where>`). Each device is named by its full bus
+    address, interface included (`bus_cen_scenario_control@11#4#3`), so a keypad on
+    the main bus and one on a private riser are no longer the same name twice; and a
+    list cut at ten names ends with `, ... and N more` instead of showing ten names
+    next to a count of eleven.
 - Gateway, sessions and setup, found by the same review:
   - one unexpected exception inside the command sending loop used to kill the
     command path for the life of the process: the loop now survives it, the command
@@ -202,6 +230,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - a platform that refuses to unload is now logged as an error instead of passing
     unnoticed; the sockets are already closed at that point, so the entry has to be
     reloaded.
+- A key called `platforms:` written at gateway level in `myhome.yaml` was reported as
+  unknown and ignored, and was not ignored: it replaced the integration's own list of
+  platforms, so every light, cover, sensor and button of that gateway failed to be
+  created and the integration entry ended in *Failed to set up*, with only
+  `'str' object has no attribute 'get'` in the log to go on. The key is now genuinely
+  ignored, and a platform list of the wrong shape can no longer take a gateway down.
 - The release job tagged and packaged the *previous* version number: it created the
   tag and built `myhome.zip` before writing the new version into `manifest.json`,
   then committed the bump in a commit no tag pointed at. HACS reads `manifest.json`
@@ -240,7 +274,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - The *Probe window* option description now says what the watchdog does: the
-  connection is rebuilt only when *neither* session answers the probe.
+  connection is rebuilt only when nothing arrived on the monitor session **and** the
+  gateway acknowledged no status request — the probe or any other — on the command
+  session. The *Default instant-power keep-alive* description says which values it
+  gives way to: any `keepalive_minutes` written in `myhome.yaml`, under
+  `sensor_defaults:` as much as on the sensor itself.
+- **A climate zone or a temperature sensor written with a zero-padded address**
+  (`zone: '01'`, `where: '01'`) now gets the device key, `unique_id`, device and
+  `entity_id` of the unpadded spelling (`4-1`). The old entity never received a frame
+  — it was permanently `unknown` — so nothing that worked is renamed; the old, empty
+  entity and device are pruned on the first load, and an automation that referenced
+  the old `entity_id` has to be pointed at the new one.
 - **Binary sensors are named after their device** ("Window Contact", not "Window
   Contact Window"): they are now the main entity of their device like every other
   platform. Entity ids and history are unaffected; only the displayed name changes.
@@ -261,11 +305,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   session without mirroring the reply onto the monitor, and those were reconnected
   every `idle watchdog + probe window` seconds for no reason: an ACK on the command
   port now re-arms the watchdog instead (it need not be the probe's own ACK), and
-  only a status request answered on *neither* session reconnects. The monitor socket
+  only silence on the monitor together with no status-request ACK on the command
+  session reconnects. The monitor socket
   itself is still guarded by TCP keepalive. The log line says exactly what was
-  checked — *"no status request acknowledged on the command session and nothing on
-  the monitor for N s"* — instead of claiming the gateway answered nothing while it
-  was demonstrably ACKing the user's lights.
+  checked, each half with the window it was measured over — *"nothing on the monitor
+  for N s and no status request acknowledged on the command session in the last
+  M s"*, N being the monitor's silence and M the *Probe window* option — instead of
+  claiming the gateway answered nothing while it was demonstrably ACKing the user's
+  lights, or letting one trailing duration read as if it qualified both halves.
 - **The Number of concurrent command sessions option is capped at 4** (gateways hold
   only a handful of concurrent sessions), and the options form now offers 1-4 rather
   than 1-10, explained in the dialog itself (*Default 1 (1-4)*). An entry saved with
