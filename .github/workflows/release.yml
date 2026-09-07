@@ -68,7 +68,38 @@ jobs:
           } > /tmp/notes.md
           cat /tmp/notes.md
 
+      - name: Set the manifest version and commit it
+        # BEFORE the tag, on purpose: HACS reads manifest.json *from the tag*, and
+        # the zip below is built from this same checkout. Bumping afterwards (as
+        # this job used to) tags and ships a manifest that still says the previous
+        # version, so HACS installs vX.Y.Z and reports X.Y.Z-1 for ever.
+        run: |
+          VERSION="${{ github.event.inputs.tag }}"
+          VERSION="${VERSION#v}"
+          export VERSION
+          sed -i 's/"version": "[^"]*"/"version": "'"$VERSION"'"/' \
+            custom_components/myhome/manifest.json
+          # An assertion, not the warning nobody reads: if the sed missed, stop
+          # here - before the tag exists and before anything is published.
+          python3 - <<'PY'
+          import json, os, sys
+
+          version = os.environ["VERSION"]
+          got = json.load(open("custom_components/myhome/manifest.json"))["version"]
+          sys.exit(0 if got == version else f"manifest.json says {got}, expected {version}")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet custom_components/myhome/manifest.json; then
+            echo "manifest.json already at $VERSION"
+          else
+            git add custom_components/myhome/manifest.json
+            git commit -m "Update manifest version to $VERSION"
+            git push origin HEAD:"${{ github.ref_name }}"
+          fi
+
       - name: Create and push tag
+        # HEAD is now the bumped commit, so the tag covers it.
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -76,6 +107,7 @@ jobs:
           git push origin "${{ github.event.inputs.tag }}"
 
       - name: Create myhome.zip
+        # Built from the bumped checkout, so the asset carries the right version too.
         run: |
           cd custom_components/myhome
           zip -r ../../myhome.zip .
@@ -94,23 +126,3 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update manifest version
-        if: success()
-        run: |
-          # Extract version number without 'v' prefix
-          VERSION="${{ github.event.inputs.tag }}"
-          VERSION="${VERSION#v}"
-
-          # Update manifest.json
-          sed -i 's/"version": "[^"]*"/"version": "'$VERSION'"/' custom_components/myhome/manifest.json
-
-          # Check if version was updated
-          if git diff --quiet custom_components/myhome/manifest.json; then
-            echo "Warning: manifest.json was not updated"
-          else
-            echo "Updated manifest.json version to $VERSION"
-            git add custom_components/myhome/manifest.json
-            git commit -m "Update manifest version to $VERSION"
-            git push origin HEAD:"${{ github.ref_name }}"
-          fi

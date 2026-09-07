@@ -94,15 +94,28 @@ Then run the job:
    for everything that wants the bare version). Optional inputs: a release `name`
    and a `prerelease` flag.
 
-The workflow then, in order: refuses a tag that already exists; builds the release
-body from `CHANGELOG.md` with `python3 scripts/release_notes.py x.y.z` (the script
-opens `CHANGELOG.md` relatively, so it only works from the repository root — the
-workflow runs it there, and so should you if you preview it); creates and pushes the
-tag; zips `custom_components/myhome/` into `myhome.zip`; publishes the release with
-that asset; and finally bumps `"version"` in `custom_components/myhome/manifest.json`
-and pushes that commit back to the branch it ran on. **The manifest version is
-therefore set by the workflow, not by you** — if step 1's section is missing, the
-notes step fails before the tag is pushed and nothing is published.
+The workflow then, in order:
+
+1. refuses a tag that already exists;
+2. builds the release body from `CHANGELOG.md` with
+   `python3 scripts/release_notes.py x.y.z` (the script opens `CHANGELOG.md`
+   relatively, so it only works from the repository root — the workflow runs it
+   there, and so should you if you preview it);
+3. writes the version into `custom_components/myhome/manifest.json`, asserts that
+   the file really says it, commits it and pushes that commit to the branch it ran
+   on;
+4. creates and pushes the tag, which therefore points **at** that bumped commit;
+5. zips `custom_components/myhome/` into `myhome.zip` from the same bumped
+   checkout;
+6. publishes the release with that asset.
+
+**The manifest version is therefore set by the workflow, not by you**, and steps
+3-5 have to stay in that order: HACS reads `manifest.json` *from the tag*, so a tag
+created before the bump would ship and advertise the previous version — the user
+would install `vx.y.z`, be told they are running the version before it, and be
+offered the same update for ever. The asset has the same problem, since it is built
+from the checkout the tag covers. If step 1's changelog section is missing, the
+notes step fails before anything is written, committed, tagged or published.
 
 `scripts/release_notes.py` exists because GitHub renders every newline in a release
 body as a line break, so the hard-wrapped changelog would show ragged lines: the
