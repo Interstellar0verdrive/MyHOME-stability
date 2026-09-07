@@ -33,7 +33,13 @@ entry:
 | Thermoregulation zone | `climate` (WHO 4) |
 | Temperature probe | `sensor` (WHO 4, `class: temperature`) |
 | Dry contact / IR detector | `binary_sensor` (WHO 25, `class: motion`) |
-| Auxiliary channel | `switch` (WHO 9) |
+| Auxiliary channel | `binary_sensor` (`who: "9"`, no class) |
+
+An auxiliary channel is suggested as a `binary_sensor` with an explicit
+`who: "9"`, never as a `switch`: WHO 9 is read-only on this integration (the bus
+reports the channel, nothing commands it) and the `switch` platform only accepts
+`who: "1"`. See [Configuration → Binary sensor](configuration.md#binary-sensor)
+for what the entity does once declared.
 
 Everything else is seen and reported on the event bus but **never** written to
 `myhome_discovered.yaml`: CEN and CEN+ scenario controls, alarm devices, and any

@@ -127,9 +127,9 @@ What is inside:
 | Section | Content |
 | --- | --- |
 | `versions` | Integration, OWNd and Home Assistant versions. |
-| `entry` | The config entry, **without the password**, with MAC, host, UDN and SSDP location partially masked; the configuration file is reported by its file name only (`myhome.yaml`, plus whether it sits in the default location), never with its directory. |
-| `effective_options` | The tunables actually in effect (see [Configuration → Options](configuration.md#options)). |
-| `config` | A *summary* of the validated `myhome.yaml`: per platform the device count and the `who-where` device keys. Your device names are not included — in the per-device download either, where the device's own `name` and `entity_name` are replaced by `**REDACTED**`. |
+| `entry` | The config entry, **without the password**, with MAC, host, UDN, SSDP location and the entry's own `unique_id` partially masked; the configuration file is reported by its file name only, never with its directory. |
+| `effective_options` | The tunables actually in effect (see [Configuration → Options](configuration.md#options)), including `config_file_name` and `config_file_is_default_location` — whether `myhome.yaml` sits where the integration would look for it by default. An entry that never set the option reports the default file name and `config_file_is_default_location: true`, which is what that entry actually uses. |
+| `config` | A *summary* of the validated `myhome.yaml`: `gateway_keys` (the sorted list of gateway-level keys present in the file, such as `mac` or `sensor_defaults`), then per platform the device count and the `who-where` device keys. Your device names are not included — in the per-device download either, where the device's own `name` and `entity_name` are replaced by `**REDACTED**`. |
 | `handler` | Gateway statistics (connected, frames received, last frame, reconnects, commands sent/dropped, queue length, session state) and the session timings in effect. |
 | `recent_frames` | The last 50 bus frames with their timestamps and direction — usually the fastest way to see what the gateway is actually saying. |
 

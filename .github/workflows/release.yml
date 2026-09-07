@@ -26,7 +26,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
+        with:
+          # Full history and tags: the guard below needs `git rev-parse` to see
+          # the existing tags, and the release notes come from CHANGELOG.md.
+          fetch-depth: 0
 
       - name: Check if tag already exists
         run: |
@@ -34,6 +37,36 @@ jobs:
             echo "Error: Tag ${{ github.event.inputs.tag }} already exists"
             exit 1
           fi
+
+      - name: Generate release notes from CHANGELOG.md
+        run: |
+          # Tags are `v` + version; the script takes the bare version and must run
+          # from the repository root (it opens "CHANGELOG.md" relatively).
+          VERSION="${{ github.event.inputs.tag }}"
+          VERSION="${VERSION#v}"
+          python3 scripts/release_notes.py "$VERSION" > /tmp/notes-body.md
+          {
+            echo "# MyHOME Integration Release ${{ github.event.inputs.tag }}"
+            echo
+            echo "## Installation"
+            echo
+            echo "### HACS (recommended)"
+            echo "1. Add this repository as a custom repository in HACS"
+            echo "2. Install the MyHOME integration"
+            echo "3. Restart Home Assistant"
+            echo
+            echo "### Manual installation"
+            echo "1. Download \`myhome.zip\` from the assets below"
+            echo "2. Extract it into \`custom_components/myhome/\` in your Home Assistant"
+            echo "   configuration directory (the archive holds the integration's files"
+            echo "   themselves, with no top-level folder)"
+            echo "3. Restart Home Assistant"
+            echo
+            echo "## Changelog"
+            echo
+            cat /tmp/notes-body.md
+          } > /tmp/notes.md
+          cat /tmp/notes.md
 
       - name: Create and push tag
         run: |
@@ -49,55 +82,12 @@ jobs:
           cd ../..
           ls -la myhome.zip
 
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get the previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
-          # Generate changelog
-          if [ -z "$PREV_TAG" ]; then
-            echo "changelog=Initial release" >> $GITHUB_OUTPUT
-          else
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            echo "## Changes since $PREV_TAG" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
           name: ${{ github.event.inputs.name || github.event.inputs.tag }}
-          body: |
-            # MyHOME Integration Release ${{ github.event.inputs.tag }}
-
-            ## Installation
-
-            ### HACS (Recommended)
-            1. Add this repository as a custom repository in HACS
-            2. Install the MyHOME integration
-            3. Restart Home Assistant
-
-            ### Manual Installation
-            1. Download `myhome.zip` from the assets below
-            2. Extract the contents to your `custom_components` directory
-            3. Restart Home Assistant
-
-            ## Changelog
-
-            ${{ steps.changelog.outputs.changelog }}
-
-            ---
-
-            🚀 **Installation Path**: `custom_components/myhome/`
-
-            📋 **Requirements**: Home Assistant 2026.8.0+
-
-            🔧 **Dependencies**: OWNd==0.7.49
+          body_path: /tmp/notes.md
           files: |
             myhome.zip
           prerelease: ${{ github.event.inputs.prerelease }}
@@ -122,5 +112,5 @@ jobs:
             echo "Updated manifest.json version to $VERSION"
             git add custom_components/myhome/manifest.json
             git commit -m "Update manifest version to $VERSION"
-            git push origin master
+            git push origin HEAD:"${{ github.ref_name }}"
           fi

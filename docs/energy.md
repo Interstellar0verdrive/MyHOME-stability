@@ -24,7 +24,7 @@ gateway reconnection, and then on a timer set to `keepalive_minutes − 5` minut
 | `keepalive_minutes` | Effect |
 |---|---|
 | `125` (default) | Arm for 125 minutes, re-arm every 120 minutes. |
-| `1`–`255` | Any other duration. Values are clamped to this range. |
+| `1`–`255` | Any other duration. A value outside `0`–`255` is **not** clamped: it is a configuration error and blocks the load, with the key path of the offending sensor. |
 | `0` | Disables the automatic keep-alive entirely — nothing is armed, and `async_update` on the power entity does nothing. |
 
 ```yaml

@@ -12,6 +12,14 @@ The domain is still `myhome`, the configuration file is still `myhome.yaml`, and
 the OpenWebNet library is still `OWNd` (pinned to 0.7.49 since 0.3.1). This fork is a
 continuation, not a rewrite of the configuration surface.
 
+## Contents
+
+- [Before you start](#before-you-start)
+- [What stays compatible](#what-stays-compatible)
+- [What changed](#what-changed)
+- [Step-by-step](#step-by-step)
+- [Known limitations](#known-limitations)
+
 ## Before you start
 
 - **Minimum Home Assistant version is 2026.8.0.** Earlier versions will not run
@@ -40,8 +48,12 @@ continuation, not a rewrite of the configuration surface.
 | Entity unique ids | Unchanged patterns (see below), so `entity_id`s survive the upgrade. |
 
 The unique id patterns the integration builds are, for gateway MAC `M` and a
-device key `{who}-{where}` (or `{who}-{where}#4#{interface}`, or `{who}-{zone}`
-for climate):
+device key `{who}-{where}` (or `{who}-{zone}` for climate). Behind an F422 bus
+interface the key is `{who}-{where}#4#{interface}` with the interface **zero
+padded to two digits** — `1-11#4#03`, whatever you wrote in the file — because
+that is the tail of every `unique_id` and it must not move; commands go out
+unpadded, which is a different thing (see
+[Configuration → Local bus interfaces](configuration.md#local-bus-interfaces-interface)):
 
 | Platform | Unique id |
 |---|---|
@@ -50,6 +62,7 @@ for climate):
 | `sensor` (temperature, illuminance) | `M-{who}-{where}-{class}` |
 | `sensor` (power meter) | `M-{who}-{where}-power`, `-daily-energy`, `-monthly-energy`, `-total-energy` |
 | `button` (opt-in) | `M-{who}-{where}-disable` and `M-{who}-{where}-enable` |
+| `event` (`scenario_control:`, 0.4.0) | `M-cenplus-{object}-event` / `M-cen-{where}-event` — keyed by protocol and address, not by `who-where` |
 
 If you want to be certain nothing moved, note down a few `entity_id`s from
 **Developer tools → States** before upgrading and compare afterwards.
@@ -120,6 +133,12 @@ A power sensor used to be called "Kitchen Oven Kitchen Oven Power"; it is now
 The affected names are `Power`, `Energy today`, `Energy this month`, `Energy`,
 `Lock` and `Unlock`.
 
+**Binary sensors changed the other way round.** They used to append the
+device-class word to the device name ("Window Contact Window"); they are now the
+main entity of their device like every other platform, so the friendly name is
+just the device `name` ("Window Contact"). Entity ids and history are unaffected
+here too.
+
 ### Discovery no longer rewrites `myhome.yaml`
 
 `myhome.start_discovery` used to edit your configuration file. It now writes
@@ -133,7 +152,7 @@ suggested again.
 
 **Settings → Devices & services → MyHOME → Configure** now lets you change,
 without removing the integration: address, port, password, the path of
-`myhome.yaml`, the number of concurrent command sessions (1–10, default 1), and
+`myhome.yaml`, the number of concurrent command sessions (1–4, default 1), and
 *"Generate events in Home Assistant for each message received"* (the
 `myhome_message_event` switch). Saving the options reloads the integration.
 

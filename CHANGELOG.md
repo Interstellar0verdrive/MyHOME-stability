@@ -30,9 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on an `advanced` cover are now reported as ignored with a warning instead of
   silently dropped.
 - Sensors, binary sensors and climate, found by the same review:
-  - `icon` was documented as a common key but ignored by sensors, binary sensors
-    and climate zones, and `icon_on` by binary sensors; they now work (the Lock/Unlock
-    buttons keep their fixed icons);
+  - `icon` was documented as a common key but ignored by sensors, binary sensors,
+    climate zones and the scenario-control event entity, and `icon_on` by binary
+    sensors; they now work (the Lock/Unlock buttons keep their fixed icons, and the
+    validator knows `icon_on` on a binary sensor, so it no longer reports it as an
+    unknown key);
   - `entity_name` on a `class: power` meter now renames the Power entity;
   - in a plant with a central unit, every nameless zone was called "Central unit";
     only the bare `#0` is, `#0#5` is "Zone 5" again;
@@ -49,7 +51,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - the energy throttle resolves a sensor key whichever way its bus interface is
     spelled (`31#4#3` / `31#4#03`), like the frame dispatcher;
   - an unquoted 3- or 5-digit `where` (the shape sensor addresses take) is no longer
-    blamed on lost leading zeros and octal; the message quotes the user's own value.
+    blamed on lost leading zeros and octal; the message quotes the user's own value;
+  - a WHO 9 auxiliary binary sensor claimed to be `off` from the moment it was
+    created. The bus never answers a status request for an auxiliary channel, so
+    there was nothing behind that `off`: the entity now starts `unknown` and
+    restores its last known state across a restart or a reload.
 - Device triggers, blueprints, flows and diagnostics:
   - a device trigger on a device that is not a scenario control (a light, a cover,
     the gateway) is now refused with a readable error; it used to be accepted and the
@@ -62,9 +68,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - the options flow no longer turns a gateway configured *without* a password into
     one with an empty password (which OWNd reports as "invalid password" instead of
     asking for one);
+  - a gateway that never set the **Configuration file path** option showed no file
+    name at all in the diagnostics download, and `config_file_is_default_location:
+    false` — the opposite of the truth. Both now report the default: `myhome.yaml`,
+    in the default location;
   - discovery: temperature probes are suggested as `class: temperature` sensors
     (they were misclassified as zones), and scenario controls report
     `platform: event`, not `button`, in `myhome_device_discovered`.
+- Gateway, sessions and setup, found by the same review:
+  - one unexpected exception inside the command sending loop used to kill the
+    command path for the life of the process: the loop now survives it, the command
+    is dropped and counted, and the worker backs off;
+  - a command session whose `open()` was cancelled while the worker was being shut
+    down leaked the socket instead of closing it — gateways only hold a handful of
+    concurrent sessions;
+  - a crash inside `OWNd`'s session negotiation escaped as an unhandled exception;
+    it is now a reconnectable session error like every other connection failure;
+  - a command lost to an authentication failure was not counted: it now shows up in
+    the **Commands dropped** diagnostic entity like the other lost commands;
+  - the rate-limited log keys are bounded, and a NACK line is keyed by WHO/WHERE
+    instead of by the whole frame, so a busy plant could no longer grow that table
+    one entry per distinct frame;
+  - an area lighting frame (`*1*0*3##`) re-requested the status of the *decoded*
+    area number instead of the WHERE the frame carried, so `*#1*10##` asked actuator
+    A=1 PL=0 rather than area 10, and the lights of areas `00` and `100` did not
+    follow a physical area button;
+  - the idle watchdog no longer arms itself when its probe could not even be queued
+    (a full or closed command queue): reconnecting the monitor cannot help, so it
+    simply retries on the next poll;
+  - a platform that refuses to unload is now logged as an error instead of passing
+    unnoticed; the sockets are already closed at that point, so the entry has to be
+    reloaded.
 - Tests: service-call refusals are pinned to their own translation key (a wrong
   message could pass before), and the suite covers the gateway failure surface
   (refused commands, general/area/group WHO 2 frames, the complete CEN/CEN+ press
@@ -77,6 +111,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`.github/workflows/tests.yml`), with the rule set pinned in `ruff.toml`; the
   suite used to run only on a developer's machine.
 - `strings.json` as the source of the translations.
+- `requirements_test.txt` (the one dependency list CI and the development docs
+  install), `scripts/release_notes.py` (the CHANGELOG section of a version,
+  unwrapped for the GitHub release page) and a `.gitattributes` pinning LF line
+  endings, so the CRLF-to-LF rewrite of `__init__.py` / `config_flow.py` cannot
+  happen again file by file.
 
 ### Changed
 
@@ -91,6 +130,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A CEN scenario control used to accept trigger types only CEN+ can fire
   (`rotate_cw_slow`, `pushbutton_long_press_repeat`); such a trigger now fails
   validation. It never fired; it used to fail quietly.
+- A device trigger whose **button number** is outside the protocol's range (CEN+
+  buttons are 1-32, CEN buttons are 0-31) is now refused when the automation loads,
+  like a wrong event type. It used to validate and never fire.
+- **The idle watchdog no longer reconnects a gateway that answered the probe.** It
+  used to close and rebuild the event session whenever the probe produced nothing on
+  the monitor within *Probe window* seconds. Some gateways answer on the command
+  session without mirroring the reply onto the monitor, and those were reconnected
+  every `idle watchdog + probe window` seconds for no reason: an acknowledged probe
+  now re-arms the watchdog instead, and only a probe answered on *neither* session
+  reconnects. The monitor socket itself is still guarded by TCP keepalive.
+- **The Number of concurrent command sessions option is capped at 4** (gateways hold
+  only a handful of concurrent sessions), and the options form now offers 1-4 rather
+  than 1-10. An entry saved with more than 4 opens 4; a non-numeric value left by a
+  hand-edited entry falls back to 1 with a warning instead of failing the setup.
+- Discovery suggests a **WHO 9 auxiliary channel as a `binary_sensor`** with
+  `who: "9"`, not as a `switch`. The switch platform only accepts `who: "1"`, so
+  copying the old suggestion into `myhome.yaml` blocked the whole setup.
 - The dead `invalid_port` and `gateway_vanished` translation keys were removed (no
   code path could set them), and so was an unload helper that could never cancel
   anything (the session close already does).

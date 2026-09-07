@@ -107,7 +107,10 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
   `binary_sensor`, `climate`) or `event` for a CEN/CEN+ scenario control, which is
   reported but never suggested.
 - `myhome_discovery_completed`: fired when a discovery run finishes (`myhome.stop_discovery`
-  or the 60-second timeout).
+  or the 60-second timeout). Data: `gateway_mac`, `reason` (`stopped` when the service
+  ended the run, `timeout` when it ran out), `discovered_count` and
+  `discovered_devices` — the list of `{mac}-{who}-{where}` unique ids seen during the
+  run, suggested or not.
 
 See [Discovery](discovery.md) for what triggers these and what they write.
 
@@ -118,7 +121,7 @@ exactly four keys:
 
 | Key | Type | Value |
 |---|---|---|
-| `object` | integer | The CEN+ object address: the frame's WHERE without its leading `#` (WHERE `#25` → `object: 25`). |
+| `object` | integer | The CEN+ object address: the frame's WHERE without its leading `2` (WHERE `225` → `object: 25`, WHERE `2100` → `object: 100`). A CEN+ *command* addresses the same control as `#25`, but an event never carries that form. |
 | `pushbutton` | integer | The button number on that object. |
 | `event` | string | One of the values in the table below. |
 | `mac` | string | MAC address of the gateway that saw the frame, normalised (`00:03:50:aa:bb:cc`). **Added in 0.4.0.** |
@@ -183,8 +186,23 @@ also becomes a **device** with:
   events above and match on `mac`, `object`, `pushbutton` and `event`, so they are
   exactly as reliable as a hand-written event trigger, with the gateway filter added.
 
-Both are strictly additive: an undeclared control fires the bus events and nothing
-else, as in 0.3.x. See
+A device trigger is **validated when the automation is loaded**, and refused with a
+message naming the device when it can never fire:
+
+| Refused | Message | Previously |
+|---|---|---|
+| The device is not a declared scenario control (a light, a cover, the gateway) | *Device `<id>` is not a MyHOME CEN/CEN+ scenario control* | Accepted; the automation showed as *on* and never fired. |
+| The event name is not one this control's protocol can fire — the four rotary events and `pushbutton_long_press_repeat` on a **CEN** control | *`<type>` is not an event a MyHOME `<protocol>` scenario control can fire (device `<id>`)* | Accepted silently. |
+| The button number is outside the protocol's range — CEN+ buttons are `1`-`32`, CEN buttons are `0`-`31` | The same shape of message, naming the button and the protocol | Accepted silently. |
+
+All three used to validate and stay quiet, so a hand-written trigger with the wrong
+type or button number now turns the automation red on the next reload instead of
+never running. The button is checked against the **protocol's** range, not against
+the control's `buttons:` list: `buttons:` only decides what the picker offers, and a
+press on an undeclared button is still delivered.
+
+Both the event entity and the device triggers are strictly additive: an undeclared
+control fires the bus events and nothing else, as in 0.3.x. See
 [Recipes → Device triggers and blueprints](recipes.md#device-triggers-and-blueprints).
 
 ### General/area/group bus events
@@ -198,8 +216,22 @@ Fired when a General/Area/Group lighting or automation command is seen on the bu
 - `myhome_general_automation_event`, `myhome_area_automation_event`, `myhome_group_automation_event`
   (WHO 2, automation/covers)
 
-The integration also re-requests the affected entity states when it sees these
-frames, so `light`/`cover` entities follow along on their own. See
+| Event | Keys |
+|---|---|
+| `myhome_general_light_event` | `message`, `event` (`on` / `off`) |
+| `myhome_area_light_event` | `message`, `area`, `event` |
+| `myhome_group_light_event` | `message`, `group`, `event` |
+| `myhome_general_automation_event` | `message`, `event` (`open` / `close` / `stop`) |
+| `myhome_area_automation_event` | `message`, `area`, `event` |
+| `myhome_group_automation_event` | `message`, `group`, `event` |
+
+The two `general` events carry no address key at all: a general frame addresses the
+whole plant, so there is nothing to report beyond the raw `message`.
+
+For **lighting** general and area frames the integration also re-requests the
+affected states, so `light` entities follow along on their own. A **group** frame
+fires the event only — a group has no WHERE to poll — and so do all three
+**automation** events, because covers report their own movement as it happens. See
 [Recipes → Raw OpenWebNet commands](recipes.md#raw-openwebnet-commands) for a
 `myhome.send_message` example that triggers one of these.
 
@@ -216,7 +248,7 @@ can be acted on. Data:
 | `mac`     | gateway MAC (as in the CEN/CEN+ events)                               |
 | `where`   | the WHERE the button is addressed to, exactly as it appears on the bus, as a string: `"42"` on the main bus, `"11#4#3"` behind a local bus interface, `"0"` / `"3"` for a general or area button. Compare with `startswith` if the interface does not matter to you. |
 | `what`    | the original WHAT, as an integer                                      |
-| `event`   | `on`, `off`, `dim_up` (WHAT 30), `dim_down` (31), `dim_to_<pct>` (2-10), otherwise `what_<n>` |
+| `event`   | `on`, `off`, `dim_up` (WHAT 30), `dim_down` (31), `dim_to_<pct>` for WHAT 2-10, where `<pct>` is WHAT × 10 (`dim_to_20` … `dim_to_100`), otherwise `what_<n>` |
 | `message` | the raw frame                                                         |
 
 The event is fired whether or not "Generate events for every bus message" is
