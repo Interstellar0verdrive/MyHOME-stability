@@ -21,7 +21,7 @@ from homeassistant.components.button import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from OWNd.message import OWNCommand
 
@@ -44,7 +44,7 @@ from .myhome_device import MyHOMEEntity, address_attributes
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the Lock/Unlock buttons of this gateway (none when unconfigured)."""
     configured_buttons = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS].get(PLATFORM, {})

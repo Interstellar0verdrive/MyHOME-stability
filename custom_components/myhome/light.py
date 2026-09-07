@@ -18,7 +18,7 @@ from homeassistant.components.light import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from OWNd.message import (
     OWNLightingCommand,
@@ -48,7 +48,7 @@ from .myhome_device import MyHOMEEntity, address_attributes
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the light entities of this gateway (none when unconfigured)."""
     configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS].get(PLATFORM, {})
@@ -220,6 +220,11 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
         if transition is not None:
             await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where, transition))
+            if ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
+                # NIT-3: this path returned straight away, so a dimmer switched on with
+                # a `transition:` kept whatever brightness it had before - the level
+                # only ever arrives in reply to the request below.
+                await self.async_update()
             return
 
         await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where))

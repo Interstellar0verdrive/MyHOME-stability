@@ -40,7 +40,7 @@ from homeassistant.components.event import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (
     CONF_BUTTONS,
@@ -65,7 +65,7 @@ from .myhome_device import MyHOMEEntity
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create one event entity per declared CEN/CEN+ scenario control."""
     configured = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS].get(PLATFORM, {})

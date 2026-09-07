@@ -18,6 +18,7 @@ Contract C (entity base) and Contract E (instant-power keep-alive) apply here:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -42,7 +43,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_time_change,
     async_track_time_interval,
@@ -66,12 +67,14 @@ from OWNd.message import (
 
 from .const import (
     ATTR_DURATION,
+    CONF_BUS_INTERFACE,
     CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
     CONF_ENTITIES,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
+    CONF_ICON,
     CONF_KEEPALIVE_MINUTES,
     CONF_MANUFACTURER,
     CONF_PLATFORMS,
@@ -85,6 +88,7 @@ from .const import (
     GATEWAY_DIAG_RECONNECTS,
     LOGGER,
     SERVICE_START_SENDING_INSTANT_POWER,
+    bus_full_where,
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import (
@@ -92,6 +96,7 @@ from .myhome_device import (
     MyHOMEGatewayDiagnosticEntity,
     address_attributes,
 )
+from .validate import CONF_KEEPALIVE_MINUTES_DEFAULTED
 
 # Keys of the sub-entity slots pre-seeded by validate.py in ``device[CONF_ENTITIES]``.
 POWER_SLOT = f"{SensorDeviceClass.POWER}"
@@ -113,12 +118,6 @@ MAX_KEEPALIVE_MINUTES = 255
 
 SERVICE_SEND_INSTANT_POWER = SERVICE_START_SENDING_INSTANT_POWER
 
-# Marker validate.py may add to a sensor config to say that `keepalive_minutes` was
-# not written by the user but injected as the built-in default; when it is there (or
-# when the value still equals the built-in default) the `default_keepalive_minutes`
-# option of the config entry wins.  YAML values chosen by the user always win.
-CONF_KEEPALIVE_MINUTES_DEFAULTED = "keepalive_minutes_default"
-
 INSTANT_POWER_SERVICE_SCHEMA = {
     vol.Optional(ATTR_DURATION): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_KEEPALIVE_MINUTES)),
 }
@@ -128,25 +127,27 @@ def keepalive_minutes_for(device: dict[str, Any], config_entry: ConfigEntry) -> 
     """Keep-alive of one power sensor: YAML first, then the config entry option.
 
     The YAML value always wins when the user actually wrote one.  validate.py injects
-    the built-in default (``DEFAULT_KEEPALIVE_MINUTES``) into every sensor, so a
-    "defaulted" value is recognised either by the ``keepalive_minutes_default`` marker
-    (when validate.py sets it) or by the value being exactly the built-in default.
-    In that case the ``default_keepalive_minutes`` option of the gateway takes over.
+    the built-in default (``DEFAULT_KEEPALIVE_MINUTES``) into every sensor and marks it
+    with ``keepalive_minutes_default``; only such a marked value is replaced by the
+    ``default_keepalive_minutes`` option of the gateway.
+
+    RISK-1: the marker used to be documented but never written, so the fallback was a
+    comparison with ``DEFAULT_KEEPALIVE_MINUTES`` - which made a user who wrote
+    ``keepalive_minutes: 125`` indistinguishable from one who wrote nothing, and lost
+    her the stream as soon as the option was set (docs/configuration.md promises the
+    opposite: "a per-sensor value in the file always wins").
     """
     configured = int(device.get(CONF_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES))
     option = config_entry.options.get(CONF_DEFAULT_KEEPALIVE_MINUTES)
     if option is None:
         return configured
-    defaulted = device.get(CONF_KEEPALIVE_MINUTES_DEFAULTED)
-    if defaulted is None:
-        defaulted = configured == DEFAULT_KEEPALIVE_MINUTES
-    return int(option) if defaulted else configured
+    return int(option) if device.get(CONF_KEEPALIVE_MINUTES_DEFAULTED) else configured
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the sensor entities of one gateway.
 
@@ -174,6 +175,7 @@ async def async_setup_entry(
             "who": device[CONF_WHO],
             "where": device[CONF_WHERE],
             "name": device[CONF_NAME],
+            "icon": device[CONF_ICON],
             "manufacturer": device[CONF_MANUFACTURER],
             "model": device[CONF_DEVICE_MODEL],
             "gateway": gateway,
@@ -186,6 +188,10 @@ async def async_setup_entry(
                 sensors.append(
                     MyHOMEPowerSensor(
                         keepalive_minutes=keepalive_minutes_for(device, config_entry),
+                        # INCONSISTENCY-2: the Power entity is the main entity of the
+                        # meter, so an explicit ``entity_name`` applies to it.  The
+                        # energy totalisers keep their translation keys (Contract C).
+                        entity_name=device.get(CONF_ENTITY_NAME),
                         **common,
                     )
                 )
@@ -201,7 +207,13 @@ async def async_setup_entry(
 
         elif sensor_class == SensorDeviceClass.ILLUMINANCE:
             sensors.append(
-                MyHOMEIlluminanceSensor(entity_name=device.get(CONF_ENTITY_NAME), **common)
+                MyHOMEIlluminanceSensor(
+                    entity_name=device.get(CONF_ENTITY_NAME),
+                    # WHO 1 frames do carry the F422 interface, so it must be part of
+                    # both the address we query and the attributes (BUG-1).
+                    interface=device.get(CONF_BUS_INTERFACE),
+                    **common,
+                )
             )
 
     if power_devices_configured:
@@ -226,17 +238,43 @@ class _MyHOMESensorEntity(MyHOMEEntity):
 
     _entity_slot = PLATFORM
 
+    def __init__(self, icon: str | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        # INCONSISTENCY-1: ``icon`` is documented as a common key of every platform and
+        # was read by light/switch/cover only.  HA still falls back to the device-class
+        # icon when the configuration gives none.
+        if icon is not None:
+            self._attr_icon = icon
+        # RISK-4: handles of the refresh tasks started from the callbacks below.  They
+        # used to be tied to nothing, so a task pending across a config entry reload
+        # could still talk to a handler ``close_listener()`` had already torn down.
+        self._pending_updates: set[asyncio.Task[None]] = set()
+
+    @callback
+    def _async_request_update(self) -> None:
+        """Run ``async_update`` in a task this entity keeps a handle on (RISK-4)."""
+        task = self.hass.async_create_task(self.async_update())
+        self._pending_updates.add(task)
+        task.add_done_callback(self._pending_updates.discard)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Drop any refresh still in flight before the entity goes away."""
+        for task in list(self._pending_updates):
+            task.cancel()
+        self._pending_updates.clear()
+        await super().async_will_remove_from_hass()
+
     @callback
     def _async_on_connection_change(self, connected: bool) -> None:
         """Availability changed; on reconnection re-issue our bus request."""
         super()._async_on_connection_change(connected)
         if connected:
-            self.hass.async_create_task(self.async_update())
+            self._async_request_update()
 
     @callback
     def _async_periodic_refresh(self, now: datetime) -> None:
         """Timer callback: re-issue the bus request."""
-        self.hass.async_create_task(self.async_update())
+        self._async_request_update()
 
 
 class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
@@ -258,6 +296,8 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
         manufacturer: str,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
+        icon: str | None = None,
+        entity_name: str | None = None,
         keepalive_minutes: int = DEFAULT_KEEPALIVE_MINUTES,
     ) -> None:
         super().__init__(
@@ -270,6 +310,10 @@ class MyHOMEPowerSensor(_MyHOMESensorEntity, SensorEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            icon=icon,
+            # Main entity of the meter: an explicit entity_name replaces the "Power"
+            # translation, the base class keeps the translation otherwise (Contract C).
+            entity_name=entity_name,
         )
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{POWER_SLOT}"
         self._attr_native_value = None
@@ -352,6 +396,7 @@ class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
         manufacturer: str,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
+        icon: str | None = None,
     ) -> None:
         translation_key, message_type, enabled_default = self._SLOTS[entity_specific_id]
         # Before super().__init__(): the base class names the entity by the
@@ -367,6 +412,7 @@ class MyHOMEEnergySensor(_MyHOMESensorEntity, RestoreSensor):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            icon=icon,
         )
         self._entity_slot = entity_specific_id
         self._entity_specific_id = entity_specific_id
@@ -455,6 +501,7 @@ class MyHOMETemperatureSensor(_MyHOMESensorEntity, SensorEntity):
         manufacturer: str,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
+        icon: str | None = None,
         entity_name: str | None = None,
     ) -> None:
         super().__init__(
@@ -467,6 +514,7 @@ class MyHOMETemperatureSensor(_MyHOMESensorEntity, SensorEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            icon=icon,
             # Only entity of its device: it takes the device name (Contract C)
             # unless the configuration gives it an explicit entity name.
             entity_name=entity_name,
@@ -520,7 +568,9 @@ class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
         manufacturer: str,
         model: str | None,
         gateway: MyHOMEGatewayHandler,
+        icon: str | None = None,
         entity_name: str | None = None,
+        interface: str | None = None,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -532,13 +582,19 @@ class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
             manufacturer=manufacturer,
             model=model,
             gateway=gateway,
+            icon=icon,
             entity_name=entity_name,
         )
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self.entity_slot}"
         self._attr_native_value = None
+        self._interface = interface
+        # BUG-1: WHO 1 frames do carry the F422 interface, so the status request must
+        # too - a sensor behind a local bus was never armed and never matched a reply.
+        # The interface goes on the bus unpadded (``31#4#3``), as OWNd parses it back.
+        self._full_where = bus_full_where(self._where, self._interface)
         # A/PL is meaningful for a WHO=1 point-to-point WHERE (sc-17: the same split
         # was applied to WHO=18/WHO=4 wheres, where it means nothing).
-        self._attr_extra_state_attributes = address_attributes(where, None)
+        self._attr_extra_state_attributes = address_attributes(where, self._interface)
 
     async def async_added_to_hass(self) -> None:
         """Schedule the slow refresh (sc-15: the sensor was requested only once)."""
@@ -552,7 +608,7 @@ class MyHOMEIlluminanceSensor(_MyHOMESensorEntity, SensorEntity):
     async def async_update(self) -> None:
         """Request the illuminance value."""
         await self._gateway_handler.send_status_request(
-            OWNLightingCommand.get_illuminance(self._where)
+            OWNLightingCommand.get_illuminance(self._full_where)
         )
 
     def handle_event(self, message: OWNLightingEvent) -> None:
