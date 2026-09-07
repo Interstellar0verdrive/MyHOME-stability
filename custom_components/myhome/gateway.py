@@ -876,7 +876,7 @@ class MyHOMEGatewayHandler:
     async def _deliver(
         self, session: OWNCommandChannel | None, worker_id: int, item: _QueuedCommand
     ) -> tuple[OWNCommandChannel | None, bool]:
-        """Send one command: retry ONCE in place with a fresh session, then drop it.
+        """Send one command: `COMMAND_ATTEMPTS` tries in place, a fresh session each time.
 
         Returns the (possibly new) session and whether the gateway answered
         (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
@@ -913,7 +913,7 @@ class MyHOMEGatewayHandler:
                 self._command_sessions.pop(worker_id, None)
                 if attempt < COMMAND_ATTEMPTS:
                     LOGGER.debug(
-                        "%s Sending `%s` failed (%s: %s); retrying once with a fresh session",
+                        "%s Sending `%s` failed (%s: %s); retrying with a fresh session",
                         self.log_id,
                         item.message,
                         type(err).__name__,
@@ -923,9 +923,12 @@ class MyHOMEGatewayHandler:
                 self._log_limited(
                     logging.WARNING,
                     "cmd-dropped",
-                    "%s Command `%s` dropped after two attempts: %s: %s",
+                    # The count comes from the constant, not from the prose: if the
+                    # retry loop is ever allowed another attempt the message follows.
+                    "%s Command `%s` dropped after %s attempts: %s: %s",
                     self.log_id,
                     item.message,
+                    COMMAND_ATTEMPTS,
                     type(err).__name__,
                     err,
                 )

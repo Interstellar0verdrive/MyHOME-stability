@@ -49,6 +49,7 @@ from custom_components.myhome.const import (
     SIGNAL_GATEWAY_STATS,
 )
 from custom_components.myhome.gateway import (
+    COMMAND_ATTEMPTS,
     EVENT_LONG_PRESS_REPEAT,
     EVENT_ROTATE_CCW_FAST,
     EVENT_ROTATE_CCW_SLOW,
@@ -398,7 +399,7 @@ async def test_command_dropped_after_two_failures(caplog: pytest.LogCaptureFixtu
     assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"], ["*1*1*12##"]]
     assert handler.send_buffer.qsize() == 0
     assert any(
-        "dropped after two attempts" in record.message and record.levelno == logging.WARNING
+        f"dropped after {COMMAND_ATTEMPTS} attempts" in record.message and record.levelno == logging.WARNING
         for record in caplog.records
     )
 
