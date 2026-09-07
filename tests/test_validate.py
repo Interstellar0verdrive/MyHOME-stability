@@ -1386,6 +1386,10 @@ def test_probatio_and_voluptuous_agree():
     assert compared, "no invalid case in the corpus"
 
 
+def _cover(**extra) -> dict:
+    return gw(cover={"shutter": {"where": "83", "name": "S", **extra}})
+
+
 def test_advanced_cover_timing_keys_are_reported(caplog: pytest.LogCaptureFixture) -> None:
     """Review 2026-09-07 / C3-4: timing keys on an advanced actuator are reported...
 
@@ -1393,21 +1397,92 @@ def test_advanced_cover_timing_keys_are_reported(caplog: pytest.LogCaptureFixtur
     bound the safety timer that clears a direction whose "stopped" frame was lost
     (`cover.py`, `_advanced_move_timeout`). Only `slat_time` does nothing.
     """
-    config = check(
-        gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True, "slat_time": 3, "shutter_run": 30}})
-    )
+    config = check(_cover(advanced=True, slat_time=3, shutter_run=30))
     assert config is not None
     assert "cover 'shutter': an advanced actuator reports its real position" in caplog.text
-    assert "so shutter_run, slat_time neither estimate it nor enable tilt" in caplog.text
-    assert "only to bound the safety timer" in caplog.text
-    assert "slat_time is ignored" in caplog.text
+    assert "shutter_run is still read, but only to bound the safety timer" in caplog.text
+    assert "slat_time does nothing here" in caplog.text
     # The old wording claimed the run times did nothing at all.
     assert "shutter_run, slat_time ignored" not in caplog.text
     caplog.clear()
-    check(gw(cover={"shutter": {"where": "83", "name": "S", "advanced": True}}))
+    check(_cover(advanced=True))
     assert "advanced actuator reports its real position" not in caplog.text
     caplog.clear()
     # A basic cover uses every one of them, so it is never warned about.
-    check(gw(cover={"shutter": {"where": "83", "name": "S", "slat_time": 3, "shutter_run": 30}}))
+    check(_cover(slat_time=3, shutter_run=30))
     assert "advanced actuator reports its real position" not in caplog.text
 
+
+@pytest.mark.parametrize("key", ["shutter_run", "slat_time", "opening_time", "closing_time"])
+def test_every_cover_timing_key_is_reported_on_an_advanced_cover(
+    key: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """P4-NIT-2: nothing pinned ``opening_time`` / ``closing_time`` into the tuple.
+
+    The old test wrote `shutter_run` and `slat_time` only, so dropping the two keys
+    0.4.0 added to `_COVER_TIMING_KEYS` left the suite green - while an advanced
+    cover carrying only `opening_time:` (an ordinary asymmetric configuration) got no
+    warning at all.
+
+    Mutation caught: `_COVER_TIMING_KEYS = (CONF_SHUTTER_RUN, CONF_SLAT_TIME)`.
+    """
+    check(_cover(advanced=True, **{key: 20}))
+    assert "advanced actuator reports its real position" in caplog.text
+    assert key in caplog.text
+
+
+def test_the_advanced_cover_warning_names_only_the_keys_the_user_wrote(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """P4-UNCLEAR-2: one sentence used to say a key did nothing *and* was still used.
+
+    It also lectured about three keys unconditionally - so a file containing only
+    `slat_time` was told about `shutter_run`, `opening_time` and `closing_time`,
+    none of which are in it - and agreed its verb with a list that has one item in
+    the common case ("so shutter_run neither estimate it").
+
+    This is a WARNING the user meets in the log on every reload, with nothing else
+    attached to explain it, so each half has to be true on its own.
+    """
+    check(_cover(advanced=True, slat_time=3))
+    assert "slat_time does nothing here" in caplog.text
+    for absent in ("shutter_run", "opening_time", "closing_time"):
+        assert absent not in caplog.text
+    # One key, singular verb - the old message read "so shutter_run neither estimate it".
+    assert "neither estimate" not in caplog.text
+
+    caplog.clear()
+    check(_cover(advanced=True, opening_time=20))
+    assert "opening_time is still read, but only to bound the safety timer" in caplog.text
+    assert "does nothing here" not in caplog.text
+
+    # D4-1: the deadline is `max(opening_time, closing_time)`, and the two directional
+    # keys default to `shutter_run` - so once both are written, `shutter_run` does not
+    # reach the timer at all and the message must not claim it is "still read".
+    caplog.clear()
+    check(_cover(advanced=True, shutter_run=30, opening_time=20, closing_time=25))
+    assert "opening_time and closing_time are still read" in caplog.text
+    assert "shutter_run does nothing here" in caplog.text
+
+
+def test_slat_time_is_not_cross_checked_on_an_advanced_cover(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """P4-NIT-1: a key the validator itself calls inert could abort the whole file.
+
+    `_finalize_cover` cross-checked `slat_time` against the shorter run for every
+    cover, advanced included, and runs *before* `_warn_cover_timings_on_advanced` -
+    so pasting a `slat_time` onto an advanced cover did not break one device, it made
+    the whole `myhome.yaml` fail to load, with a message about a position estimate
+    that this cover never produces. The user never even saw the warning that would
+    have told them the key does nothing there.
+
+    Mutation caught: dropping `or device.get(CONF_ADVANCED_SHUTTER)` from the early
+    return, after which this raises Invalid.
+    """
+    config = check(_cover(advanced=True, shutter_run=5, slat_time=10))
+    assert config is not None
+    assert "advanced actuator reports its real position" in caplog.text
+    # A basic cover is still protected: there the estimate really would be nonsense.
+    with pytest.raises(Invalid, match=r"slat_time=10\.0 must be smaller than"):
+        check(_cover(shutter_run=5, slat_time=10))
