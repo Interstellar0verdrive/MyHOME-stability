@@ -100,6 +100,12 @@ PLATFORMS: list[str] = [LIGHT, SWITCH, COVER, CLIMATE, BINARY_SENSOR, SENSOR, BU
 # OWNd test_connection() messages that mean "the password is wrong/missing".
 _AUTH_FAILURE_MESSAGES = ("password_error", "password_required", "password_retry")
 
+# Sentinel for "this option is not a number at all".  ``clamp_worker_count`` never
+# returns anything below 1 for a value it could read, so asking it twice - once for
+# the number in effect, once with this default - tells a nonsense value ("abc") apart
+# from a number simply out of range (99), without parsing the option ourselves.
+_NOT_A_NUMBER = -1
+
 # Entry-data keys that the pre-0.2.0 manual config flow stored as 1-tuples (persisted
 # as JSON lists).  ``async_migrate_entry`` unwraps them; ``_as_str`` is the last line
 # of defence for the device registry (strings only, D1 / core-06).
@@ -441,13 +447,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Same contract as the gateway timing knobs: a hand-edited entry must never
     # crash the setup or open more sessions than the gateway can hold.
     raw_worker_count = entry.options.get(CONF_WORKER_COUNT, 1)
-    try:
-        int(raw_worker_count)
-    except (TypeError, ValueError):
-        LOGGER.warning("Option `%s` is not a number (%r): using 1", CONF_WORKER_COUNT, raw_worker_count)
     # ``clamp_worker_count`` is the one definition shared with the options form
     # and the diagnostics, so the three never disagree on the number in effect.
     worker_count = clamp_worker_count(raw_worker_count)
+    # Only a value that is not a number at all is worth a line in the log (an
+    # out-of-range number is clamped, silently, by the same function the options form
+    # uses).  The message names ``worker_count`` itself, so it can never claim a
+    # fallback the code does not actually use.
+    if clamp_worker_count(raw_worker_count, default=_NOT_A_NUMBER) == _NOT_A_NUMBER:
+        LOGGER.warning(
+            "Option `%s` is not a number (%r): using %s", CONF_WORKER_COUNT, raw_worker_count, worker_count
+        )
 
     gateway_config = await _async_load_gateway_config(hass, entry, config_file_path, mac)
     # Fresh per-gateway dict: never merge into leftovers of a previous setup.

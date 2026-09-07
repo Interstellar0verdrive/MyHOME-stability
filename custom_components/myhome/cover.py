@@ -479,9 +479,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if self._advanced_timer is not None:
             self._advanced_timer()
             self._advanced_timer = None
-        # Every frame from the actuator goes through `_set_advanced_direction`, which
-        # comes here first: an answer to the safety timer's status request therefore
-        # always clears the flag below, whatever the answer says.
+        # Both routes an actuator frame can take reach this method before anything
+        # else: a frame carrying a position through `_finish_movement` (which calls
+        # `_cancel_timers`), a plain direction frame through
+        # `_set_advanced_direction`. So an answer to the safety timer's status
+        # request always clears the flag below, whatever the answer says - including
+        # the commonest one of all, "stopped at N %", which never reaches
+        # `_set_advanced_direction` at all.
         self._advanced_probe_pending = False
 
     @callback
@@ -571,9 +575,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         A free run needs no command: the actuator stops by itself at the end stop,
         and all we do is settle the estimate there. A timed run (`set_cover_position`
-        or a tilt) has to be stopped by us, and the gateway can refuse that command
-        (its queue is full, or the connection is closing) - in which case the shutter
-        does *not* stop and the run turns into a free one, see
+        or a tilt) has to be stopped by us, and the command path can refuse to take
+        that command (its queue is full, or the connection is closing) - in which
+        case the shutter does *not* stop and the run turns into a free one, see
         `_continue_to_end_stop`.
         """
         self._stop_timer = None
@@ -586,9 +590,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._finish_movement(end_position, end_tilt)
         elif await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where)):
             self._finish_movement(end_position, end_tilt)
-            # Only a stop the gateway accepted can come back as an echo, so a refused
-            # one must not arm the window - it could then only swallow a real frame
-            # from somebody else.
+            # The gateway only echoes what it was actually given, so a stop that
+            # never left the queue must not arm the window: it could then only
+            # swallow a real frame from somebody else.
             self._mark_own_stop(interrupted)
         else:
             self._continue_to_end_stop()
@@ -607,7 +611,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         frame re-calibrates it (`_reached_end_stop`), exactly as it does for an
         `open_cover` / `close_cover` we sent ourselves.
 
-        Same rule as `async_stop_cover`: a stop the command path could not take
+        Same rule as `async_stop_cover`: a stop the command path could not even take
         changes nothing about the movement that is still going on.
         """
         direction = self._moving
@@ -732,8 +736,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._advanced_move_timeout,
         )
         self._advanced_probe_pending = True
-        # Armed before the request goes out, so an answer that lands while we are
-        # still queueing it cancels the grace instead of racing it.
+        # Armed before the request goes out so the ordering stays correct if
+        # `send_status_request` ever becomes genuinely awaiting; today it only puts
+        # the command on the queue and never suspends, so no frame can arrive in
+        # between and there is no race to lose.
         self._advanced_timer = async_call_later(
             self.hass, self._advanced_probe_grace, self._async_advanced_probe_grace
         )
@@ -841,16 +847,25 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover and freeze the estimated position and tilt.
 
-        A stop the gateway did not accept leaves everything as it was: the shutter
-        is still running, so the estimate must keep running with it.
+        A stop the command path could not even take leaves everything as it was: the
+        shutter is still running, so the estimate must keep running with it. Note
+        that `send()` answers as soon as the command is *queued*, not when the
+        gateway accepts it - a queued stop that later expires on `command_ttl` or is
+        NACKed still ends the estimate here. Only the refusal below is knowable at
+        this point.
         """
         sent = await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
-        if not sent or self._advanced:
-            # The command never reached the bus (queue full, or the handler is
-            # closing), so the shutter is still running: touching the model here
-            # would freeze the position at wherever the estimate had got to and
-            # leave it there for good. Change nothing, exactly as `open`, `close`
-            # and `set_position` do when their own command is refused.
+        if self._advanced:
+            # An advanced actuator reports its own position and its own direction:
+            # there is no estimate here to end, and its `stopped` frame will do the
+            # work. (This is *not* a refusal path - the command went out fine.)
+            return
+        if not sent:
+            # The command never even reached the queue (it is full, or the handler is
+            # closing), so the shutter is still running: touching the model here would
+            # freeze the position at wherever the estimate had got to and leave it
+            # there for good. Change nothing, exactly as `open`, `close` and
+            # `set_position` do when their own command is refused.
             return
         interrupted = self._moving
         self._finish_movement(*self._estimate())
