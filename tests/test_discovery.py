@@ -37,6 +37,7 @@ from custom_components.myhome.const import (
     SERVICE_STOP_DISCOVERY,
 )
 from custom_components.myhome.discovery import (
+    _DEVICE_CATEGORY,
     DISCOVERY_TIMEOUT_SEC,
     MyHOMEDeviceDiscoveryService,
 )
@@ -255,6 +256,59 @@ def test_the_published_platform_values_are_exactly_the_documented_ones() -> None
         "climate",
         "event",
         "binary_sensor",
+    }
+
+
+@pytest.mark.parametrize(
+    ("frame", "category"),
+    [
+        ("*1*1*11##", "lighting"),
+        ("*#1*11*1*180*255##", "lighting"),
+        ("*2*1*81##", "automation"),
+        ("*#18*51*113*613##", "energy"),
+        ("*#4*1*0*0235##", "thermoregulation"),
+        ("*4*1*0##", "thermoregulation"),
+        ("*15*1*51##", "scenario"),
+        ("*25*21#3*225##", "scenario"),
+        ("*9*1*3##", "auxiliary"),
+        ("*5*11*12##", "alarm"),
+    ],
+)
+def test_the_discovery_event_carries_the_category_of_the_device(
+    hass: HomeAssistant, tmp_path, frame: str, category: str
+) -> None:
+    """``category`` is published verbatim in ``myhome_device_discovered``.
+
+    ``handle_discovery_message`` fires the whole ``device_info`` dict as
+    ``discovered_device``, so every key in it is a value automations can switch on -
+    ``category`` included, even though it is only a grouping for the notification.
+    Nothing asserted it: the key could be renamed, re-valued or deleted outright and
+    the suite stayed green, which is how a published payload quietly loses a field.
+
+    Mutation caught: changing any ``_DEVICE_CATEGORY`` value, or dropping the
+    ``"category"`` key from ``_extract_device_info``.
+    """
+    assert device_info(hass, tmp_path, frame)["category"] == category
+
+
+def test_the_published_category_values_are_the_ones_discovery_can_produce() -> None:
+    """The value set is small and closed, so state it once.
+
+    ``DEVICE_TYPE_GENERIC`` and ``DEVICE_TYPE_BUS_LIGHT_GROUP`` are the two supported
+    types with no row here; neither can reach ``_extract_device_info``
+    (``_determine_lighting_device_type`` returns only dimmer/on-off, and a group WHERE
+    is dropped by the ``#`` guard above), so the ``"generic"`` default is defensive.
+
+    Mutation caught: adding a category without deciding what it means, or renaming one.
+    """
+    assert set(_DEVICE_CATEGORY.values()) == {
+        "lighting",
+        "automation",
+        "energy",
+        "thermoregulation",
+        "scenario",
+        "auxiliary",
+        "alarm",
     }
 
 

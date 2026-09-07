@@ -1109,6 +1109,27 @@ def test_every_unquoted_where_message_asks_to_quote_the_whole_file(where):
     assert "0115 as 77" in message
 
 
+@pytest.mark.parametrize("where", [1, 5, 9])
+def test_an_unquoted_single_digit_where_is_told_both_readings(where):
+    """P2-BUG-3: `where: 5` is the one unquoted shape with two plausible meanings.
+
+    A bare single digit is either area 5 or point-to-point A=0 PL=5, and nothing in
+    the file says which - so this branch is the only message in the module that spells
+    out both readings instead of just asking for quotes. Falling through to the
+    generic 3-/5-digit message would still refuse the value but would tell the user to
+    write `where: '5'`, i.e. pick one of the two readings blind.
+
+    Mutation caught: making the `if 1 <= v <= 9:` arm unreachable (the value is still
+    refused by the generic arm below, so nothing else in the suite notices).
+    """
+    with pytest.raises(Invalid, match="quote it") as err:
+        check(gw(light={"a": {"where": where, "name": "A"}}))
+    message = str(err.value)
+    assert f"quote it as '0{where}' for A=0 PL={where} or as '{where}' for area {where}" in message
+    # That is a different mistake from an unquoted sensor address.
+    assert "not a valid address for this platform" not in message
+
+
 @pytest.mark.parametrize("where", [301, 12345])
 def test_unquoted_sensor_where_is_not_blamed_on_octal(where):
     """INCONSISTENCY-5: `301` lost no leading zero and is not octal.

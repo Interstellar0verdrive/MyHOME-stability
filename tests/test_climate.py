@@ -6,6 +6,8 @@ in ``handler.send_buffer``.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from homeassistant.components.climate import (
     ATTR_HVAC_ACTION,
@@ -863,3 +865,73 @@ async def test_a_zone_switched_back_on_does_not_stay_reported_as_off(
         # `idle`, not a re-derived `heating`: the actuator frame is still the
         # authority, it just cannot mean "off" for a zone that is on.
         assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
+async def test_an_actuator_off_before_the_mode_is_known_reports_idle_not_off(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """An inactive actuator seen before any MODE frame means "idle", never "off".
+
+    `hvac_action: off` is the entity saying *the user turned this zone off*, and the
+    zone has not said anything of the kind yet: only a MODE frame can. A central unit
+    that pushes actuator status at connection time (before the zone's mode) would
+    otherwise leave the zone reading `off` until the first MODE frame arrives, which
+    on a zone that is in fact heating is the opposite of what it does.
+
+    `_async_derive_hvac_action` cannot repair this one: it returns immediately while
+    `_attr_hvac_mode` is still None, so the ternary in the MESSAGE_TYPE_ACTION arm is
+    the only thing that gets it right.
+
+    Mutation caught: replacing that ternary with a bare `HVACAction.OFF`.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*0##"))  # actuator off, first
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
+async def test_a_mode_the_zone_cannot_do_leaves_the_entity_on_its_last_one(
+    hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """sc-08: an unsupported mode is ignored, and "ignored" means the state is kept.
+
+    A heat-only zone on a plant that has just been switched to summer receives
+    `*4*210*<zone>##`. There is no honest `hvac_mode` for it - the entity was declared
+    `heat: true` alone, so `cool` is not one of its `hvac_modes` and Home Assistant
+    would refuse the value anyway - and the two wrong answers are both worse than
+    keeping the last one: writing `None` blanks a thermostat card that was reading
+    *Heat*, and coercing it to `off` says the user turned the zone off.
+
+    The zone's temperatures and its action are untouched too: the frame said nothing
+    about them. Only a DEBUG line records that something was dropped, which is what
+    makes this diagnosable without making it noisy.
+
+    Mutation caught: replacing the `return` in the unsupported-mode arm with
+    `self._attr_hvac_mode = hvac_mode` (or with a fall-through to the assignment
+    below), after which the entity publishes a mode it does not support.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-2")  # zone_living: heat only
+        assert HVACMode.COOL not in hass.states.get(ZONE).attributes["hvac_modes"]
+
+        entity.handle_event(OWNHeatingEvent("*#4*2*0*0180##"))  # current 18.0
+        entity.handle_event(OWNHeatingEvent("*#4*2*14*0220*3##"))  # target 22.0
+        entity.handle_event(OWNHeatingEvent("*4*110*2##"))  # mode heat
+        await hass.async_block_till_done()
+        assert hass.states.get(ZONE).state == HVACMode.HEAT
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.myhome"):
+            entity.handle_event(OWNHeatingEvent("*4*210*2##"))  # the plant is now cooling
+            await hass.async_block_till_done()
+
+        state = hass.states.get(ZONE)
+        assert state.state == HVACMode.HEAT  # not `cool`, not `unknown`, not `off`
+        assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.HEATING
+        assert state.attributes["current_temperature"] == 18.0
+        assert any("reported unsupported mode cool" in record.message for record in caplog.records)

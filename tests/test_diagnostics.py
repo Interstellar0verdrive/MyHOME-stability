@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -522,3 +523,40 @@ async def test_diagnostics_for_an_entry_that_is_not_loaded(
     assert data["effective_options"]["config_file_name"] == "myhome.yaml"
     assert data["versions"]["home_assistant"] == HA_VERSION
     assert MAC not in json.dumps(data)
+
+
+async def test_a_version_lookup_that_fails_still_produces_a_report(
+    hass: HomeAssistant, hass_client, tmp_path
+) -> None:
+    """The one value in the dump that is fetched rather than read must not be able to sink it.
+
+    `async_get_integration` reads the manifest off disk through Home Assistant's
+    integration loader, which is the only I/O in the whole diagnostics module - a
+    custom component installed half way, a corrupted `manifest.json`, a loader that
+    changes its exceptions between releases. Diagnostics are asked for precisely when
+    the installation is unwell, so this lookup failing must cost the version field and
+    nothing else: the frames, the stats and the options are what the maintainer
+    actually needs, and they are already in hand by then.
+
+    `"unknown"` rather than a missing key, so the report has the same shape either way
+    and the reader is told the version could not be determined instead of being left
+    to guess whether the field was ever written.
+
+    Mutation caught: narrowing `except Exception` (an `ImportError` from the loader
+    then escapes and the download fails), or dropping the fallback assignment, which
+    leaves `integration_version` unbound.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        await _setup(hass, entry)
+        with patch(
+            "custom_components.myhome.diagnostics.async_get_integration",
+            side_effect=ImportError("Integration 'myhome' not found"),
+        ):
+            data = await get_diagnostics_for_config_entry(hass, hass_client, entry)
+
+    assert data["versions"]["myhome"] == "unknown"
+    # Everything else is still there: this is a usable bug report.
+    assert data["versions"]["home_assistant"] == HA_VERSION
+    assert data["versions"]["ownd"].startswith("0.7.")
+    assert data["handler"]["loaded"] is True

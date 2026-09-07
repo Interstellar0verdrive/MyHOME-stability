@@ -558,6 +558,7 @@ async def test_transport_error_reconnects_and_signals_availability() -> None:
     assert handler.is_connected is False
 
 
+@pytest.mark.slow  # ~0.6 s: six real 0.05 s gaps, to keep the monitor from going idle
 async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFixture) -> None:
     """gw-03: silence -> probe on the command session -> probe undeliverable -> reconnect."""
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
@@ -702,6 +703,39 @@ async def test_event_auth_failure_stops_loop_and_starts_reauth() -> None:
     handler.config_entry.async_start_reauth.assert_called_once_with(handler.hass)
     assert not any(connection_calls(dispatch))
     assert stats_calls(dispatch)[-1].session_state == SESSION_STATE_AUTH_FAILED
+
+
+async def test_a_password_rejected_on_both_sessions_asks_for_reauth_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A wrong password fails *both* sessions, and that is one problem, not two.
+
+    The command session and the event session authenticate independently, so a
+    rejected password reaches `_handle_auth_failure` twice in the ordinary case - the
+    two existing auth tests each drive one session and cannot see the difference. The
+    guard makes only the first call speak: one ERROR line telling the user to
+    reconfigure, and one reauth flow. Without it the user gets the same error twice in
+    the log for a single wrong password, and `async_start_reauth` is called again for a
+    repair that is already open.
+
+    The session state is set *before* the guard on purpose, so the second failure
+    still leaves the entry reading `auth_failed` rather than `disconnected`.
+
+    Mutation caught: dropping the `if self.auth_failed: return` guard from
+    `_handle_auth_failure`.
+    """
+    handler = make_handler()
+    err = AuthenticationError("password_error")
+
+    with caplog.at_level(logging.ERROR, logger=LOGGER_NAME):
+        handler._handle_auth_failure(err, "command")  # noqa: SLF001
+        handler._handle_auth_failure(err, "event")  # noqa: SLF001
+
+    assert handler.auth_failed is True
+    assert handler._session_state == SESSION_STATE_AUTH_FAILED  # noqa: SLF001
+    handler.config_entry.async_start_reauth.assert_called_once_with(handler.hass)
+    rejected = [record for record in caplog.records if "rejected the password" in record.message]
+    assert len(rejected) == 1, [record.message for record in rejected]
 
 
 async def test_dispatch_errors_never_tear_down_the_session(caplog: pytest.LogCaptureFixture) -> None:
@@ -1802,6 +1836,75 @@ async def test_log_throttle_keys_are_bounded() -> None:
     for index in range(500):
         handler._log_limited(logging.WARNING, f"nack-{index}", "x")  # noqa: SLF001
     assert len(handler._throttle._last) <= gateway_module._LogThrottle.MAX_KEYS  # noqa: SLF001
+
+
+async def test_a_rate_limited_warning_says_how_much_it_hid(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A throttled line has to carry the count, or the log understates the fault.
+
+    `_log_limited` is what keeps one broken actuator from filling the log: one
+    WARNING a minute per key. The suffix is the other half of that bargain - without
+    it the user reading the log sees two lines an hour apart and concludes the
+    actuator answered in between, when it may have refused two hundred commands. It
+    is what turns "this happens sometimes" into "this happened 4 times in the last
+    minute", which is the difference between a shrug and a callout.
+
+    `test_log_throttle_keys_are_bounded` and `test_nack_lines_are_keyed_by_who_and_where`
+    pin the keying and the bound; the count `_LogThrottle.check` returns reached
+    nothing.
+
+    Mutation caught: dropping the `if suppressed:` suffix, or reporting the count of
+    the wrong key.
+    """
+    handler = make_handler()
+    clock = FakeClock()
+    handler._now = clock  # noqa: SLF001 - shadows the static clock on this instance
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        for _ in range(5):  # one emitted, four swallowed
+            handler._log_limited(logging.WARNING, "nack-1-11", "actuator 11 did not answer")  # noqa: SLF001
+        # A different actuator keeps its own count, so the suffix cannot come from
+        # a global counter.
+        handler._log_limited(logging.WARNING, "nack-1-12", "actuator 12 did not answer")  # noqa: SLF001
+        clock.value += gateway_module.LOG_RATE_LIMIT_SEC
+        handler._log_limited(logging.WARNING, "nack-1-11", "actuator 11 did not answer")  # noqa: SLF001
+
+    assert [record.message for record in caplog.records if record.levelno == logging.WARNING] == [
+        "actuator 11 did not answer",
+        "actuator 12 did not answer",
+        "actuator 11 did not answer (4 similar message(s) suppressed)",
+    ]
+
+
+async def test_start_discovery_before_the_service_exists_is_a_warning_not_a_crash(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """`myhome.start_discovery` is a service the user can call at any moment.
+
+    `initialize_discovery_service` runs at the end of `async_setup_entry`, so there
+    is a window - a setup that failed half way, an entry still loading, an automation
+    firing on `homeassistant_start` - in which the handler exists and the discovery
+    service does not. Calling the service then must say so and return: an
+    `AttributeError` on `None` would surface as an unrelated traceback in the user's
+    log with the service call named nowhere near it.
+
+    The stop half is the same shape, and does not even warn: stopping a run that was
+    never started is not a mistake worth a line.
+
+    Mutation caught: dropping the `if self.discovery_service:` guard from
+    `start_device_discovery`, or making the else-arm silent.
+    """
+    handler = make_handler()
+    assert handler.discovery_service is None
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        await handler.start_device_discovery()
+        await handler.stop_device_discovery()  # silent by design
+
+    warnings = [record.message for record in caplog.records if record.levelno >= logging.WARNING]
+    assert len(warnings) == 1
+    assert "Discovery service not initialized" in warnings[0]
 
 
 async def test_nack_lines_are_keyed_by_who_and_where() -> None:

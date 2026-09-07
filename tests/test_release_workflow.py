@@ -13,6 +13,7 @@ notice if the steps are shuffled again.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ import yaml
 WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 RELEASE = WORKFLOWS / "release.yml"
 
+CHECKOUT = "Checkout repository"
 BUMP = "Set the manifest version and commit it"
 TAG = "Create and push tag"
 ZIP = "Create myhome.zip"
@@ -106,3 +108,69 @@ def test_the_job_bumps_the_manifest_exactly_once(steps) -> None:
     """
     writers = [step for step in steps if "manifest.json" in step.get("run", "")]
     assert [step["name"] for step in writers] == [BUMP]
+
+
+def test_the_checkout_fetches_the_history_the_tag_guard_needs(steps, order) -> None:
+    """The tag guard's local half is `git rev-parse`, which only sees fetched tags.
+
+    `actions/checkout` fetches one commit and no tags by default, so on a shallow
+    checkout `git rev-parse v0.4.1` fails for a tag that exists on the remote. The
+    guard now asks the remote as well (see the test below), but the release notes are
+    read from `CHANGELOG.md` and the rest of the job assumes a real history, so the
+    full fetch is still part of what makes this job correct.
+
+    Mutation caught: dropping `fetch-depth: 0` from the checkout step, or setting it
+    to 1.
+    """
+    assert steps[order[CHECKOUT]]["with"]["fetch-depth"] == 0
+
+
+def test_the_tag_guard_asks_the_remote_and_not_only_the_checkout(steps, order) -> None:
+    """A tag that exists only on GitHub has to stop the job *before* anything is written.
+
+    `git rev-parse` answers from the local object store, so a checkout that did not
+    bring the tags down (a `fetch-depth` regression, a future `filter:`/`sparse`
+    checkout, a re-run on a runner cache) makes the guard say "no such tag" for a tag
+    that already exists. The job then bumps `manifest.json`, commits it and **pushes
+    the commit to the branch**, and dies only afterwards on `git push origin <tag>` -
+    leaving exactly the stray commit that
+    `test_the_release_notes_and_the_tag_guard_run_before_anything_is_written` exists to
+    prevent, reached by a different door. `git ls-remote` asks the remote itself and
+    does not depend on what was fetched.
+
+    Mutation caught: reverting the guard to `git rev-parse` alone (or dropping the
+    `--exit-code`, without which `ls-remote` succeeds whether or not it found the tag).
+    """
+    # The shell comments explain all of this, so read the commands only: an
+    # assertion satisfied by the prose above the command would pin nothing.
+    command = "\n".join(
+        line for line in steps[order[GUARD]]["run"].splitlines() if not line.strip().startswith("#")
+    )
+
+    assert 'git ls-remote --exit-code --tags origin "refs/tags/$TAG"' in command
+    assert 'git rev-parse "$TAG"' in command  # the local half is still there
+    assert command.count("exit 1") == 2
+
+
+def test_no_action_is_pinned_to_a_moving_ref(steps) -> None:
+    """A release job with `contents: write` must not run whatever a branch says today.
+
+    `softprops/action-gh-release` is third-party and gets the `GITHUB_TOKEN`; GitHub's
+    hardening guide asks for a full commit SHA, and a version tag is the weaker form
+    this repository accepts for now. A branch ref - `@master`, `@main` - is neither:
+    it is a third party's HEAD, executed with write access to this repository.
+
+    A 40-character SHA pin passes this test as well as a version tag does, so it does
+    not stand in the way of finishing round 3's SHA-pin item.
+
+    This covers `release.yml` only. `hassfest.yml` and `validate.yml` deliberately use
+    `@master` / `@main`, as their own comments explain, and neither job has write
+    permissions.
+
+    Mutation caught: re-pointing any `uses:` at a branch.
+    """
+    refs = {step["uses"] for step in steps if "uses" in step}
+    assert refs, "the release job runs no actions at all?"
+    for action in sorted(refs):
+        ref = action.rsplit("@", 1)[-1]
+        assert re.fullmatch(r"v\d+(?:\.\d+)*|[0-9a-f]{40}", ref), action

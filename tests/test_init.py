@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from OWNd.message import OWNGatewayCommand
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -880,3 +880,81 @@ async def test_an_unformatted_unique_id_is_normalised_at_setup(hass: HomeAssista
     with mock_gateway():
         assert await _setup(hass, entry)
     assert entry.unique_id == dr.format_mac("000350AABBCC") == MAC
+
+
+async def test_a_gateway_that_answers_but_refuses_the_test_is_retried_not_abandoned(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A negotiation that fails for a reason that is not the password is transient.
+
+    The three outcomes of the connection test are told apart on purpose: no answer at
+    all is `ConfigEntryNotReady` (`test_connection_refused_is_not_ready`), a rejected
+    password is `ConfigEntryAuthFailed` so the user is asked to reconfigure
+    (`test_auth_failure_starts_reauth`), and *everything else* - a gateway that is
+    still booting, a busy MyHOMEServer1 that answers `*#*0##`, an OpenWebNet port
+    answered by something that is not a gateway - is `ConfigEntryNotReady` again: Home
+    Assistant retries with backoff instead of parking the entry on a repair the user
+    cannot act on. This third arm was the one nothing drove.
+
+    The message carries the gateway's own words, because that is all the user has to
+    go on in the log while the retries run.
+
+    Mutation caught: widening `_AUTH_FAILURE_MESSAGES` to catch every failure (the
+    entry then goes to SETUP_ERROR and opens a reauth flow the password cannot fix),
+    or dropping `{message}` from the reason.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway(test_result={"Success": False, "Message": "gateway_busy"}):
+        assert not await _setup(hass, entry)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY  # not SETUP_ERROR
+    assert "test failed" in (entry.reason or "")
+    assert "gateway_busy" in (entry.reason or "")
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)  # no reauth
+    assert MAC not in hass.data[DOMAIN]
+
+
+@pytest.mark.parametrize(
+    ("service", "data"),
+    [("send_message", {"message": "*1*0*11##"}), ("sync_time", {})],
+    ids=["send_message", "sync_time"],
+)
+async def test_a_service_call_the_queue_refuses_is_reported_to_the_caller(
+    hass: HomeAssistant, tmp_path, service: str, data: dict
+) -> None:
+    """A command that was never queued must not look like one that was sent.
+
+    `handler.send` returns False rather than raising when the send buffer is closed or
+    full (Contract B) - which happens while the entry is unloading, and on a gateway
+    slow enough for the queue to fill. A service that swallowed that would tell the
+    script it succeeded and the light would simply not come on, with nothing in the
+    log tying the two together; `_async_send_or_raise` turns it into a
+    `HomeAssistantError` the automation can catch and the UI shows, with the frame
+    named in it. The message is translated in every `translations/*.json`.
+
+    Both services that queue a frame are driven: the failure lives in the shared
+    helper, so a `send`ing service added without it would be the regression.
+
+    Mutation caught: `if await handler.send(message) is False:` -> `if False:` (the
+    caller is told a dropped frame was sent), raising `ServiceValidationError` instead
+    (which would blame the caller's input for the gateway's queue), or renaming the
+    `send_failed` translation key at the raise, after which Home Assistant shows the
+    untranslated key. That the key also *exists* in every `translations/*.json` is
+    hassfest's job, not this test's.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+
+        with (
+            patch.object(handler, "send", return_value=False),
+            pytest.raises(HomeAssistantError) as err,
+        ):
+            await hass.services.async_call(DOMAIN, service, data, blocking=True)
+
+    assert not isinstance(err.value, ServiceValidationError)  # a failure, not bad input
+    assert err.value.translation_key == "send_failed"
+    assert err.value.translation_domain == DOMAIN
+    assert "message" in err.value.translation_placeholders
