@@ -5,8 +5,8 @@ homeassistant==2026.9.0
 OWNd==0.7.49
 # Pinned, not floating: `ruff check .` selects whole rule families (E/F/W/I/UP/
 # B/SIM/RUF), so a release that stabilises a preview rule turns a green build red
-# with no change to the tree - `ruff check . --preview` currently reports 250 such
-# findings. Bump this deliberately and fix the fallout in that commit.
+# with no change to the tree - `ruff check . --preview` currently reports a few
+# hundred such findings. Bump this deliberately and fix the fallout in that commit.
 ruff==0.16.6
 # pytest.ini relies on pytest-9 semantics (the ini forms of strict_markers /
 # strict_config, which are silently ignored from addopts) and on strict_config

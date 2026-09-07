@@ -2,8 +2,10 @@
 
 Setting up a development environment, running the test suite, and linting.
 
-Home Assistant 2026.9 needs **Python 3.13 or newer** (`ruff.toml` pins
-`target-version = "py313"`); CI runs 3.14.
+Home Assistant 2026.9 needs **Python 3.14.2 or newer** (`homeassistant==2026.9.0`,
+the version `requirements_test.txt` installs, declares
+`Requires-Python: >=3.14.2`), which is what CI runs. `ruff.toml` still targets
+`py313` because nothing in the tree uses 3.14-only syntax.
 
 ```bash
 # Set up a virtual environment with the same Home Assistant / OWNd versions this
@@ -21,7 +23,7 @@ ruff check .
 # test plugin):
 pytest tests -q
 
-# The four tests that take about a second or more on their own carry the `slow`
+# The four tests that take half a second or more on their own carry the `slow`
 # marker (a real connect timeout, a negotiation left to time out, a full
 # config-entry setup against a loopback server, and two Home Assistant imports in
 # two subprocesses); skipping them takes the run from ~16 s to ~11 s. Most of the
@@ -30,9 +32,10 @@ pytest tests -q
 pytest tests -q -m "not slow"
 ```
 
-Both commands run in CI on every push and pull request
+The first two of those commands run in CI on every push and pull request
 (`.github/workflows/tests.yml`, Python 3.14 on `ubuntu-latest`): a change that
-fails `ruff check .` or `pytest tests` is a red build. Two of the other three
+fails `ruff check .` or `pytest tests` is a red build. No workflow uses the
+`not slow` lane; it is there for a local edit-run loop. Two of the other three
 workflows validate the integration manifest (`hassfest.yml`) and the HACS metadata
 (`validate.yml`); `release.yml` is the manual release job — see
 [Releasing](#releasing) below.
@@ -42,7 +45,7 @@ What the two configuration files pin, so that a local run matches the build:
 | `ruff.toml` | Value |
 |---|---|
 | `target-version` | `py313` |
-| `line-length` | `120` (measured on this tree: the median line is 38 characters and the 99th percentile 112, so 100 would have meant rewrapping ~400 working lines) |
+| `line-length` | `120` (measured, not chosen: no line in the tree exceeds 120 characters, while 100 would have meant rewrapping several hundred working lines) |
 | `select` | `E`, `F`, `W`, `I`, `UP`, `B`, `SIM`, `RUF` |
 | `ignore` | `RUF100` only — the tree carries `noqa` codes for rule families this selection does not enable |
 | isort | `known-first-party` plus `combine-as-imports` |
@@ -53,7 +56,7 @@ to it, which is why the documented command is the bare `ruff check .`.
 | `pytest.ini` | Value |
 |---|---|
 | `asyncio_mode` | `auto`, required by the Home Assistant test plugin |
-| `markers` | a `slow` marker (a test that takes about a second or more on its own — CI can split these out with `-m "not slow"`), plus `strict_markers = true`: a misspelled mark is a **collection error**, not a silent no-op |
+| `markers` | a `slow` marker for the four long-running socket/subprocess tests, which `pytest.ini` describes as "about a second or more on its own" — the shortest is a deterministic half second — and which CI can split out with `-m "not slow"`, plus `strict_markers = true`: a misspelled mark is a **collection error**, not a silent no-op |
 | `strict_config` | `true` — an unknown ini key fails the run |
 | `timeout` | `60` seconds per test, which needs `pytest-timeout` (it is in `requirements_test.txt`) |
 
@@ -64,11 +67,13 @@ go on passing while both guarantees were gone.
 Every entry of `requirements_test.txt` is pinned, `ruff` and `pytest` included. A
 floating `ruff` would turn a green build red with no change to the tree the day it
 stabilises a preview rule in one of the selected families (`ruff check . --preview`
-finds 250 such lines today), and `pytest.ini` depends on pytest-9 semantics. Bump
-either pin deliberately, in a commit that also fixes the fallout.
+finds a few hundred such lines today), and `pytest.ini` depends on pytest-9
+semantics. Bump either pin deliberately, in a commit that also fixes the fallout.
+The exact count drifts with every `ruff` release, which is the whole point of the
+pin, so it is not quoted here or in `requirements_test.txt`.
 
-Coverage is not part of the pinned set, because neither CI nor the two commands
-above ask for it. To reproduce the numbers quoted in the audits:
+Coverage is not part of the pinned set, because neither CI nor the commands above
+ask for it. To reproduce the numbers quoted in the audits:
 
 ```bash
 pip install pytest-cov
@@ -122,8 +127,8 @@ The workflow then, in order:
    the file really says it, commits it and pushes that commit to the branch it ran
    on;
 4. creates and pushes the tag, which therefore points **at** that bumped commit;
-5. zips `custom_components/myhome/` into `myhome.zip` from the same bumped
-   checkout;
+5. zips the *contents* of `custom_components/myhome/` into `myhome.zip` (no
+   top-level folder in the archive) from the same bumped checkout;
 6. publishes the release with that asset.
 
 **The manifest version is therefore set by the workflow, not by you**, and steps
@@ -136,12 +141,17 @@ notes step fails before anything is written, committed, tagged or published.
 
 `scripts/release_notes.py` exists because GitHub renders every newline in a release
 body as a line break, so the hard-wrapped changelog would show ragged lines: the
-script unwraps each paragraph and rewrites relative `docs/...` links as absolute
-repository URLs. To preview what the release will say:
+script unwraps each paragraph and rewrites relative `docs/`, `blueprints/`,
+`README` and `CHANGELOG` links as absolute repository URLs, leaving external links
+and anchors alone. To preview what the release will say:
 
 ```bash
 python3 scripts/release_notes.py x.y.z | less
 ```
 
-5. In Home Assistant, HACS → the repository → "Update information", then download
-   the new version and restart.
+### After the job
+
+- `git pull` — the job pushed the manifest bump to the branch you ran it on, so
+  your local `master` is one commit behind until you do.
+- In Home Assistant, HACS → the repository → **Update information**, then download
+  the new version and restart.

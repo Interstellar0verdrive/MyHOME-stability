@@ -4,13 +4,13 @@
 # developer's laptop and in `.github/workflows/tests.yml`, whatever global or
 # editor configuration happens to be installed.
 
-# Home Assistant 2026.9 requires Python 3.13+; the integration is developed and
-# tested on 3.14, and nothing in the tree uses 3.14-only syntax.
+# `homeassistant==2026.9.0` (the version requirements_test.txt installs) declares
+# `Requires-Python: >=3.14.2`, and CI runs 3.14. The target below stays at 3.13
+# because nothing in the tree uses 3.14-only syntax.
 target-version = "py313"
 
-# Measured, not chosen: at 120 characters 99 % of the tree already fits (the
-# median line is 38 characters, the 99th percentile 112). 100 would have meant
-# rewrapping ~400 lines of working code.
+# Measured, not chosen: no line in the tree exceeds 120 characters, while 100
+# would have meant rewrapping several hundred lines of working code.
 line-length = 120
 
 exclude = [".venv", "venv", "__pycache__"]
