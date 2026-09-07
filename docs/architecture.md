@@ -465,6 +465,7 @@ sets `asyncio_mode = auto`, which the Home Assistant test plugin requires).
 | `test_discovery.py` | The discovery service: message classification (zone vs probe vs central unit, dimmer vs on/off, auxiliary, alarm), the start/stop service lifecycle, the 60 s timeout, the `myhome_device_discovered` / `myhome_discovery_completed` payloads and worker cancellation on unload. |
 | `test_config_flow_discovery.py` | The YAML suggestion writer: what each device type becomes, de-duplication against `myhome.yaml`, the atomic merge into `myhome_discovered.yaml`, and a round-trip of every suggestion through the real `validate.config_schema`. |
 | `test_translations.py` | That `strings.json` and the four locales carry the same keys and the same `{placeholders}`, that every options tunable has a `data_description` naming its real range, and that the device-automation strings cover every trigger. |
+| `test_release_notes.py`, `test_release_workflow.py` | `scripts/release_notes.py` (section extraction, unwrapping, link absolutization) and the order of the steps in `.github/workflows/release.yml` — the manifest bump has to be committed before the tag is created. |
 
 ### The fake OpenWebNet server
 

@@ -98,10 +98,11 @@ until it is fixed. Previously some of these were silent.
 
 - **Quote every `where`.** Unquoted YAML numbers lose leading zeros (`where: 01`
   becomes `1`) and `0…` is read as octal. Ambiguous values are rejected with a
-  message telling you exactly how to quote them — but only the ones the validator
-  can still see. `where: 01` reaches it as `1` and `where: 0115` as `77`: those
-  load, silently, as a different device. Quote the whole file rather than waiting
-  for an error.
+  message that echoes what you actually wrote — but only the ones the validator can
+  still see, and quoting is not always the fix: a 3- or 5-digit address is a sensor
+  address and stays invalid on a light, a switch or a cover. `where: 01` reaches the
+  validator as `1` and `where: 0115` as `77`: those load, silently, as a different
+  device. Quote the whole file rather than waiting for an error.
 
 - **A `sensor` must declare its class** (`power`, `energy`, `temperature` or
   `illuminance`); if `who` is also given it must match the class.
@@ -148,8 +149,8 @@ here too.
 suggestions to **`myhome_discovered.yaml`**, in the same folder as your
 `myhome.yaml`, for you to review and copy in by hand. A run stops itself after
 60 seconds, or when you call `myhome.stop_discovery`; both flush what was
-collected. Devices already present in `myhome.yaml` (matched on WHO/WHERE) are not
-suggested again.
+collected. Devices already present in `myhome.yaml` (matched on WHO, WHERE and bus
+interface) are not suggested again.
 
 ### There is an options flow
 

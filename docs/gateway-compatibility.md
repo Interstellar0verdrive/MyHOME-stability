@@ -133,7 +133,7 @@ in `myhome.yaml`. Tests override them on the handler instance; nothing else does
 | Parameter | Value | Where | What it does |
 |---|---|---|---|
 | `IDLE_TIMEOUT_SEC` | `300.0` s | `gateway.py` | No frame on the monitor session for this long → send a probe status request. |
-| `PROBE_WINDOW_SEC` | `30.0` s | `gateway.py` | Probe sent and answered on neither session → treat the monitor session as dead and reconnect. A status request the gateway ACKed on the **command** session (the probe, or any other) proves it is alive and simply does not mirror replies onto the monitor: the watchdog then re-arms instead of reconnecting, and the monitor socket is left to TCP keepalive. |
+| `PROBE_WINDOW_SEC` | `30.0` s | `gateway.py` | Probe sent, nothing on the monitor and no status request acknowledged on the command session → treat the monitor session as dead and reconnect, with that sentence as the log line. A status request the gateway ACKed on the **command** session (the probe, or any other) proves it is alive and simply does not mirror replies onto the monitor: the watchdog then re-arms instead of reconnecting, and the monitor socket is left to TCP keepalive. |
 | `READ_POLL_SEC` | `30.0` s | `gateway.py` | Wake-up cadence of the listening loop; the granularity of the idle watchdog. |
 | `INITIAL_BACKOFF_SEC` | `1.0` s | `gateway.py` | First reconnect delay. |
 | `MAX_BACKOFF_SEC` | `60.0` s | `gateway.py` | Backoff ceiling; it doubles on each consecutive failure and resets once the session proves alive. |

@@ -48,6 +48,10 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
      during the run (see [Discovery](discovery.md))
    - `Discovered bus_dimmer at WHO=1 WHERE=11` (INFO), once per new device
    - `Discovery completed: N device(s) seen` (INFO)
+   - `Discovery finished: N suggestion(s) (M new) written to <path>` (INFO),
+     followed, when a run saw something it could not suggest, by
+     `N device(s) must be declared by hand under scenario_control: (...)` and/or
+     `N device(s) belong to a family this integration has no support for (...)`
 
    The suggestions are then flushed to `myhome_discovered.yaml`. Nothing is ever
    written to `myhome.yaml`.
@@ -76,8 +80,9 @@ See [Discovery](discovery.md) — since 0.2.0, suggestions go to `myhome_discove
 3. Discovery only runs for the duration of `myhome.start_discovery` (default
    60 s) or until `myhome.stop_discovery` is called; both flush whatever was
    collected so far to the file.
-4. A device already present in `myhome.yaml` (matched on WHO/WHERE) is not
-   suggested again.
+4. A device already present in `myhome.yaml` (matched on WHO, WHERE and bus
+   interface) is not suggested again — a device behind an F422 interface and the
+   main-bus device with the same WHERE are two different devices.
 
 ## Configuration issues
 
@@ -129,9 +134,9 @@ What is inside:
 | Section | Content |
 | --- | --- |
 | `versions` | Integration, OWNd and Home Assistant versions. |
-| `entry` | The config entry, **without the password** and **without its title** (you may have renamed it), with MAC, host, UDN, SSDP location and the entry's own `unique_id` partially masked; the configuration file is reported by its file name only, never with its directory. |
+| `entry` | The config entry, **without the password**, with its **title redacted** (you may have renamed it, and a renamed gateway commonly carries a household or family name), with MAC, host, UDN, SSDP location and the entry's own `unique_id` partially masked; the configuration file is reported by its file name only, never with its directory. |
 | `effective_options` | The tunables actually in effect (see [Configuration → Options](configuration.md#options)), including `config_file_name` and `config_file_is_default_location` — whether `myhome.yaml` sits where the integration would look for it by default. An entry that never set the option reports the default file name and `config_file_is_default_location: true`, which is what that entry actually uses. `command_worker_count` is the number of command sessions really opened: the setup clamps a stored value above the maximum, and this is the clamped one. |
-| `config` | A *summary* of the validated `myhome.yaml`: `gateway_keys` (the sorted list of gateway-level keys present in the file, such as `mac` or `sensor_defaults`), then per platform the device count and the `who-where` device keys. Your device names are not included — in the per-device download either, where the device's own `name` and `entity_name` are replaced by `**REDACTED**`. |
+| `config` | A *summary* of the validated `myhome.yaml`: `gateway_keys` (the sorted list of gateway-level keys present in the file, such as `mac` or `sensor_defaults`), then per platform the device count and the `who-where` device keys. Your device names are not included — in the per-device download either, where the device's own `name` and `entity_name` are replaced by `**REDACTED**`. That is true of the file's **contents**. The **file name** Home Assistant proposes for a per-device download is built by Home Assistant out of the device name (`myhome-<entry id>-<device name>-<device id>.json`) and no integration can change it, so rename the file before attaching it to a public issue — or attach the entry-level download instead, whose file name carries no name at all. |
 | `handler` | Gateway statistics (connected, frames received, last frame, reconnects, commands sent/dropped, queue length, session state), whether the listening and sending loops are running and how many there are, whether authentication failed, whether raw events are generated, and the session timings in effect. |
 | `recent_frames` | The last 50 bus frames with their timestamps and direction — usually the fastest way to see what the gateway is actually saying. |
 
