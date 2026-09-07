@@ -27,14 +27,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          # Full history and tags: the guard below needs `git rev-parse` to see
-          # the existing tags, and the release notes come from CHANGELOG.md.
+          # Full history and tags: the release notes come from CHANGELOG.md, and
+          # the local half of the tag guard below is `git rev-parse`, which can
+          # only see tags that were fetched. (The guard also asks the remote, so
+          # it no longer *depends* on this - but a shallow checkout would still
+          # leave the history the rest of the job assumes out of the runner.)
           fetch-depth: 0
 
       - name: Check if tag already exists
         run: |
-          if git rev-parse "${{ github.event.inputs.tag }}" >/dev/null 2>&1; then
-            echo "Error: Tag ${{ github.event.inputs.tag }} already exists"
+          TAG="${{ github.event.inputs.tag }}"
+          # Ask the remote first. `git rev-parse` answers from the local object
+          # store, so on a checkout that did not bring the tags down it says "no
+          # such tag" for a tag that already exists on GitHub - and the job would
+          # then go on to bump the version, commit it and *push the commit to the
+          # branch*, dying only afterwards on `git push origin <tag>`.
+          # `git ls-remote` asks the remote itself and does not depend on the
+          # fetch depth. `--exit-code` is what makes a miss non-zero.
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Error: Tag $TAG already exists on the remote"
+            exit 1
+          fi
+          # And the local checkout, for a tag created here but never pushed.
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Error: Tag $TAG already exists"
             exit 1
           fi
 
