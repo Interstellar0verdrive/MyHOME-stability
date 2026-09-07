@@ -23,8 +23,9 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_SUPPORTED_FEATURES,
 )
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_state_change_event
 from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
     mock_restore_cache,
@@ -966,8 +967,13 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
     """Review 2 / C2: one lost "stopped" frame must not pin the entity on `opening`.
 
     Nothing times an advanced actuator, so before the safety timer the direction was
-    only ever cleared by another bus frame. Mutation caught: removing the timer from
-    `_set_advanced_direction`, after which the entity reads *Opening* for ever.
+    only ever cleared by another bus frame. Mutations caught: removing the timer from
+    `_set_advanced_direction` (the entity then reads *Opening* for ever) and dropping
+    the `self._moving = None` from the grace callback (same).
+
+    Review 3 / C3-2: the bound asks before it concludes. Nothing answers here, so the
+    direction goes - but only after `ADVANCED_PROBE_GRACE_SEC`, never at the moment
+    the status request goes out.
     """
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
         entity_id = "cover.cover_advanced"
@@ -980,11 +986,123 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
 
         commands.clear()
         await _advance(hass, freezer, 15)  # 55 s: the "stopped" frame is never coming
+        # The actuator is asked first, and is still reported as moving until it
+        # answers - or fails to.
+        assert commands.status_frames == ["*#2*83##"]
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        await _advance(hass, freezer, 3)  # the grace runs out unanswered
         state = hass.states.get(entity_id)
         assert state.state == CoverState.OPEN
         # The real position is still the actuator's own, never an estimate.
         assert state.attributes[ATTR_CURRENT_POSITION] == 42
         assert commands.status_frames == ["*#2*83##"]
+
+
+async def test_a_slow_advanced_actuator_never_leaves_opening(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Review 3 / C3-2: the safety timer must not publish a false "stopped" mid-run.
+
+    An advanced cover is not `assumed_state` and is *closed* at position 0, so a
+    shutter opening from the floor whose real run is longer than the bound used to be
+    published as **closed** for as long as the status re-read took - once per run,
+    firing every automation watching for `closed` or for the end of `opening`.
+
+    Mutation caught: clearing `self._moving` and writing the state in
+    `_async_advanced_movement_timeout` before the re-read (the round-2 shape), after
+    which `closed` shows up in the recorded states below.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced"
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*0*0*0##")  # closed, on the floor
+        assert hass.states.get(entity_id).state == CoverState.CLOSED
+
+        seen: list[str] = []
+
+        @callback
+        def _record(event) -> None:
+            seen.append(event.data["new_state"].state)
+
+        unsub = async_track_state_change_event(hass, [entity_id], _record)
+        await feed_event(hass, cover, "*2*1*83##")  # it starts opening
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        commands.clear()
+        await _advance(hass, freezer, 55)  # past the 50 s bound, still running
+        assert commands.status_frames == ["*#2*83##"]
+        # It answers "still opening, started from 60": the direction survives.
+        await feed_event(hass, cover, "*#2*83*10*11*60*0*0##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        # The answer re-armed the full bound, so the run is not cut short either.
+        await _advance(hass, freezer, 40)
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        unsub()
+        assert CoverState.CLOSED not in seen
+        assert set(seen) == {CoverState.OPENING}
+
+
+# 90 s of travel: the bound becomes 120 s instead of the 50 s default.
+ADVANCED_LONG_RUN_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_advanced_long:
+      where: '87'
+      name: Cover Advanced Long
+      advanced: true
+      shutter_run: 90
+"""
+
+
+async def test_the_timing_keys_of_an_advanced_cover_size_the_safety_timer(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Review 3 / C3-4: on an advanced cover the timing keys do exactly one thing.
+
+    They never produce a position (that is always the actuator's own value), but they
+    are the only way to move the safety bound of `_set_advanced_direction` - which a
+    shutter, awning or garage door whose run is longer than 50 s needs. Mutation
+    caught: reading a fixed constant instead of `max(opening_time, closing_time)`,
+    after which this cover is dropped out of *Opening* at 52 s.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_LONG_RUN_YAML) as (_entry, commands):
+        entity_id = "cover.cover_advanced_long"
+        cover = entity_object(hass, COVER, "2-87")
+        await feed_event(hass, cover, "*#2*87*10*10*42*0*0##")
+        await feed_event(hass, cover, "*2*1*87##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        await _advance(hass, freezer, 60)  # long past the 50 s default bound
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+        assert commands.status_frames == []
+
+        await _advance(hass, freezer, 65)  # 125 s: past 90 + 30
+        assert commands.status_frames == ["*#2*87##"]
+        await _advance(hass, freezer, 3)
+        assert hass.states.get(entity_id).state == CoverState.OPEN
+
+
+async def test_an_unload_during_the_status_grace_leaves_no_timer(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The grace armed by the safety timer must die with the entity.
+
+    It lives in the same slot as the bound itself, so `_cancel_timers()` (and with it
+    `async_will_remove_from_hass`) takes both; the Home Assistant test harness raises
+    a *lingering timer* error on unload if it does not. Mutation caught: forgetting
+    the handle (`self._advanced_timer = None` right after arming the grace).
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-83")
+        await feed_event(hass, cover, "*#2*83*10*10*42*0*0##")
+        await feed_event(hass, cover, "*2*1*83##")
+        await _advance(hass, freezer, 55)  # the bound fires, the grace is armed
+        assert commands.status_frames == ["*#2*83##"]
+        assert hass.states.get("cover.cover_advanced").state == CoverState.OPENING
+    # The context manager unloads the entry inside the grace.
 
 
 async def test_an_advanced_stop_disarms_the_safety_timer(
