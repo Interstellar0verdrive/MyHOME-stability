@@ -192,14 +192,19 @@ def effective_options(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]
     location?": that answers every question a bug report asks of it (which file, and
     whether the user moved it) without publishing the directory it sits in, which on a
     non-HAOS install carries the operating-system user name.
+
+    The option is only written once the user has opened the options dialog, so the
+    effective path is resolved exactly the way ``__init__.async_setup_entry`` resolves
+    it -- unset means the default location, not "no configuration file".  Reporting
+    the raw option instead used to answer ``null`` / ``false`` for the majority case,
+    which reads as "this user moved their file somewhere we cannot see".
     """
     options = entry.options
-    configured_path = str(options.get(CONF_FILE_PATH) or "")
+    default_path = hass.config.path(DEFAULT_CONFIG_FILE)
+    configured_path = str(options.get(CONF_FILE_PATH) or "") or default_path
     return {
         "config_file_name": _redact_path(configured_path) or None,
-        "config_file_is_default_location": bool(
-            configured_path and configured_path == hass.config.path(DEFAULT_CONFIG_FILE)
-        ),
+        "config_file_is_default_location": configured_path == default_path,
         CONF_WORKER_COUNT: options.get(CONF_WORKER_COUNT, 1),
         CONF_GENERATE_EVENTS: bool(options.get(CONF_GENERATE_EVENTS, False)),
         CONF_IDLE_WATCHDOG_SEC: options.get(CONF_IDLE_WATCHDOG_SEC, DEFAULT_IDLE_WATCHDOG_SEC),

@@ -221,8 +221,6 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
     # ------------------------------------------------------------------ user
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Pick a discovered gateway or go to manual entry."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
             serial = user_input[FIELD_SERIAL]
             if serial == MANUAL_ENTRY:
@@ -261,7 +259,6 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({vol.Required(FIELD_SERIAL): vol.In(choices)}),
-            errors=errors,
         )
 
     # ------------------------------------------------------------------ manual
