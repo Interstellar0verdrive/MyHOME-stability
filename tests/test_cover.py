@@ -1044,7 +1044,9 @@ async def test_advanced_movement_is_bounded_by_a_safety_timer(
         assert commands.status_frames == ["*#2*83##"]
         assert hass.states.get(entity_id).state == CoverState.OPENING
 
-        await _advance(hass, freezer, 13)  # the grace (10 s + 2 s) runs out unanswered
+        # The grace is the command path's whole worst case for one request plus a
+        # margin: two attempts of (connect + write/ACK), i.e. 40 + 2 s by default.
+        await _advance(hass, freezer, 43)  # the grace runs out unanswered
         state = hass.states.get(entity_id)
         assert state.state == CoverState.OPEN
         # The real position is still the actuator's own, never an estimate.
@@ -1134,7 +1136,7 @@ async def test_the_timing_keys_of_an_advanced_cover_size_the_safety_timer(
 
         await _advance(hass, freezer, 65)  # 125 s: past 90 + 30
         assert commands.status_frames == ["*#2*87##"]
-        await _advance(hass, freezer, 13)  # nothing answers within the grace
+        await _advance(hass, freezer, 43)  # nothing answers within the grace
         assert hass.states.get(entity_id).state == CoverState.OPEN
 
 
@@ -1312,8 +1314,9 @@ async def test_the_status_grace_outlives_a_bus_round_trip(
     whole value of that (C3-2) is that a *slow* actuator answers in time. The answer
     travels the ordinary command queue - one sending worker by default, a scene's
     worth of commands possibly ahead of it, an idle command session that has to be
-    re-opened first - and how long all that may legitimately take is the user's own
-    `command_timeout_sec` option, 10 s by default.
+    re-opened first - and how long that costs is not one option but the handler's
+    whole worst case for a single command: a connect, a write-and-ACK, and one retry
+    of both (`MyHOMEGatewayHandler.command_budget`, 40 s with the defaults).
 
     Review 4 / C4-1: the round-3 grace was a fixed 2 s, which expires well inside
     that budget. On a merely busy bus (the "close everything at sunset" scene is the
@@ -1321,20 +1324,32 @@ async def test_the_status_grace_outlives_a_bus_round_trip(
     in the middle of the run again - an advanced cover is not `assumed_state` and
     reads *closed* at position 0 - which is the symptom C3-2 was about.
 
+    Review 5 / C5-3: sizing it on `command_timeout` alone left out the reconnect the
+    comment itself named, and the reconnect is the likely case here - this entity has
+    sent nothing for at least the whole safety bound, and an unused command session is
+    closed after a minute. 13 s of silence, less than a single connect plus write,
+    still flipped the entity to *closed*.
+
     The other advanced tests feed the answer without moving the clock at all, so they
     pass for any grace whatsoever, and `test_a_slow_advanced_actuator_never_leaves_opening`
     advances in one jump that straddles the whole sequence. Mutations caught: any
-    fixed grace shorter than the command timeout (`2.0`, the round-3 value, or `0.5`),
-    and a hard-coded `12.0` that would stop following the option.
+    fixed grace shorter than the command budget (`2.0`, the round-3 value, or `0.5`),
+    a hard-coded `42.0` that would stop following the option, and the round-4 sizing
+    on `command_timeout` alone, which the 13 s wait below defeats.
     """
     async with setup_myhome(hass, tmp_path, ADVANCED_YAML) as (_entry, commands):
         entity_id = "cover.cover_advanced"
         cover = entity_object(hass, COVER, "2-83")
         handler = cover._gateway_handler  # noqa: SLF001 - the real handler, default options
-        # The grace is the command path's own budget plus a margin, never a constant.
+        # The grace is the command path's own worst case plus a margin, never a
+        # constant - and that worst case counts the reconnect and the retry, not just
+        # the write (C5-3).
+        assert handler.command_budget == 2 * (handler.connect_timeout + handler.command_timeout)
+        assert handler.command_budget == 40.0  # the defaults, spelled out
         assert cover._advanced_probe_grace == (  # noqa: SLF001
-            handler.command_timeout + cover_module.ADVANCED_PROBE_GRACE_MARGIN_SEC
+            handler.command_budget + cover_module.ADVANCED_PROBE_GRACE_MARGIN_SEC
         )
+        assert cover._advanced_probe_grace == 42.0  # noqa: SLF001
 
         await feed_event(hass, cover, "*#2*83*10*10*0*0*0##")  # closed, on the floor
 
@@ -1351,10 +1366,12 @@ async def test_the_status_grace_outlives_a_bus_round_trip(
         await _advance(hass, freezer, 55)  # past the 50 s bound: the actuator is asked
         assert commands.status_frames == ["*#2*83##"]
 
-        # A round trip on a busy command queue is not instantaneous, and four seconds
-        # is well inside what the command path is allowed to take. The entity must
-        # still say `opening` while it waits, not flip to `closed` at position 0.
-        await _advance(hass, freezer, 4.0)
+        # A round trip on a busy command queue is not instantaneous. Thirteen seconds
+        # is not even one connect plus one write-and-ACK, so the request is still
+        # perfectly in time; the entity must still say `opening` while it waits, not
+        # flip to `closed` at position 0. (It is also more than the round-4 grace of
+        # `command_timeout` + 2 s, so this is the wait that pins C5-3.)
+        await _advance(hass, freezer, 13.0)
         assert hass.states.get(entity_id).state == CoverState.OPENING
 
         await feed_event(hass, cover, "*#2*83*10*11*60*0*0##")  # "still opening"
@@ -1362,9 +1379,10 @@ async def test_the_status_grace_outlives_a_bus_round_trip(
         unsub()
         assert CoverState.CLOSED not in seen
 
-        # And the grace follows the option: a gateway given 30 s to answer gets 32.
+        # And the grace follows the option: a gateway given 30 s per write gets
+        # 2 * (10 + 30) + 2.
         handler.command_timeout = 30.0
-        assert cover._advanced_probe_grace == 32.0  # noqa: SLF001
+        assert cover._advanced_probe_grace == 82.0  # noqa: SLF001
 
 
 async def test_the_echo_recheck_waits_out_the_echo_window(
@@ -1494,3 +1512,51 @@ async def test_an_advanced_actuator_reports_closing_as_well_as_opening(
 
         await feed_event(hass, cover, "*2*1*83##")  # and UP again
         assert hass.states.get(entity_id).state == CoverState.OPENING
+
+
+async def test_a_short_refused_timed_run_survives_the_gateway_echo(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """C5-2: the continued run keeps the echo protection of the command that began it.
+
+    `_continue_to_end_stop` restarts the estimate through `_start_movement`, which
+    clears the "we just sent this" bookkeeping. For a run longer than the echo window
+    (1.5 s) that is harmless - the window had expired anyway. For a *short* run it is
+    not: the gateway's own late "stopped" copy of the movement command we sent when
+    the run began is then taken at face value and ends the continued run, which is
+    precisely the failure C4-2 set out to remove.
+
+    Short timed runs are ordinary: this one is a 40 % tilt on a 3 s slat time, i.e.
+    1.2 s; a slider nudge from 50 % to 52 % on a 30 s run is 0.54 s.
+
+    Mutation caught: dropping the save/restore of `_own_command_at` / `_own_command`
+    around the `_start_movement` call in `_continue_to_end_stop`, after which the
+    cover freezes at the tilt it had reached and never sees the end stop.
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-85")
+        await hass.services.async_call(
+            COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40}, blocking=True
+        )
+        assert commands.sent_frames == ["*2*1*85##"]
+
+        async def _refuse(self, message) -> bool:
+            return False
+
+        # The 1.2 s tilt run is over and its stop is refused: the slats keep going.
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
+            await _advance(hass, freezer, 1.25)
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        # Still inside the 1.5 s window of `*2*1*85##`: this "stopped" frame is the
+        # gateway repeating our own movement command, not the actuator stopping.
+        await feed_event(hass, cover, "*2*0*85##")
+        assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
+
+        # So the run carries on to the end stop, as `_continue_to_end_stop` promises.
+        await _advance(hass, freezer, 40)
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.state == CoverState.OPEN
+        assert state.attributes[ATTR_CURRENT_POSITION] == 100
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100

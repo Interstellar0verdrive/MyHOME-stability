@@ -1374,9 +1374,16 @@ class MyHomeConfigSchema(Schema):
 
             # Keep the remaining (non-platform) gateway-level keys for backward
             # compatibility; __init__.py merges them into hass.data[DOMAIN][mac].
+            # CONF_PLATFORMS is in the skip list because it is *our own* key in this
+            # dict (the platform map built above).  The gateway schema is ALLOW_EXTRA,
+            # so a user who writes `platforms: something` in their gateway block is
+            # told the key is unknown and ignored - and it must really be ignored:
+            # copying it here would replace the platform map with the user's value and
+            # take every platform of that gateway down with an unreadable
+            # `'str' object has no attribute 'get'` (val-C5-1).
             for key, value in gateway.items():
                 if (
-                    key in (CONF_MAC, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS, SCENARIO_SECTION)
+                    key in (CONF_MAC, CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS, SCENARIO_SECTION, CONF_PLATFORMS)
                     or key in DEVICE_PLATFORMS
                 ):
                     continue

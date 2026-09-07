@@ -133,19 +133,29 @@ ADVANCED_MOVE_MARGIN_SEC = 30.0
 # running up, firing every automation watching for it.
 #
 # That grace cannot be a fixed number of seconds. The status request travels the
-# ordinary command path, and how long that path may legitimately take is the user's
-# own `command_timeout_sec` option (10 s by default, up to 60): a queue that already
-# holds a scene's worth of commands, a command session that has to be re-opened
-# first, one sending worker. A grace shorter than that budget expires while the
-# request it is waiting for is still perfectly in time - which is exactly the
-# mid-run *closed* the re-read was added to prevent, only now on a busy bus instead
-# of on every run. So the grace is the handler's own command timeout plus the margin
-# below (the answer still has to travel back and be dispatched once the gateway has
-# ACKed it), and it follows the option if the user changes it.
+# ordinary command path, and that path has a budget of its own: the command session
+# may have to be re-opened first (`connect_timeout`, 10 s), the write and the ACK are
+# allowed `command_timeout` (10 s by default, up to 60), and the whole thing gets one
+# retry with a fresh session before the command is dropped. That is
+# `MyHOMEGatewayHandler.command_budget` - 40 s with the defaults - and it is not a
+# corner case here: this entity has sent nothing for at least the whole safety bound,
+# and an unused command session is closed after a minute, so the re-read very
+# probably pays for a reconnect. A grace shorter than that budget expires while the
+# request it is waiting for is still perfectly in time - which is exactly the mid-run
+# *closed* the re-read was added to prevent. So the grace is the handler's own
+# command budget plus the margin below (the answer still has to travel back and be
+# dispatched once the gateway has ACKed it), read live, so it follows the option if
+# the user changes it.
 #
-# A gateway that is dead rather than slow still ends the movement: nothing answers,
-# and the direction is dropped one command timeout after the bound instead of two
-# seconds after it.
+# It is a long wait - 42 s by default, against a default bound of 50 s - and it is
+# meant to be: it is the price of never publishing a moving shutter as *closed*. A
+# gateway that is dead rather than slow still ends the movement, one command budget
+# after the bound instead of two seconds after it; and while it is dead the entity is
+# unavailable anyway (the connection signal), so nobody is watching a stale direction.
+#
+# What the grace does *not* cover is a status request stuck behind a long queue: the
+# queue's own bound is `command_ttl` (60 s by default), and holding *Opening* for
+# that long after a lost frame is worse than the failure the bound exists for.
 ADVANCED_PROBE_GRACE_MARGIN_SEC = 2.0
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
@@ -335,10 +345,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """How long the safety timer waits for the actuator's answer, in seconds.
 
         Read from the handler on every use rather than stored: it is the command
-        path's own budget plus a margin, so it must move with the option the user
-        tunes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`).
+        path's own worst case for one request (`command_budget`: a session to open,
+        a write to ACK, and one retry of both) plus a margin, so it must move with
+        the option the user tunes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`).
         """
-        return float(self._gateway_handler.command_timeout) + ADVANCED_PROBE_GRACE_MARGIN_SEC
+        return float(self._gateway_handler.command_budget) + ADVANCED_PROBE_GRACE_MARGIN_SEC
 
     # ------------------------------------------------------------------ state
     @property
@@ -623,10 +634,22 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._gateway_handler.log_id,
             self._where,
         )
-        # No `own_command`: we sent nothing just now, so there is no echo to expect
-        # and no window to arm. The restart is seamless - `_start_movement` picks the
-        # current estimate up as its starting point.
+        # No `own_command`: we sent nothing just now, so there is no *new* echo to
+        # expect and no window to arm. But the movement command that started this run
+        # may still be inside its own window, and `_start_movement` clears that
+        # bookkeeping - so save it across the restart and put it back. Otherwise the
+        # gateway's late "stopped" copy of the command we sent when the run began is
+        # taken for a real stop and ends the run, which is exactly the failure this
+        # method exists to prevent. It only bites when the whole timed run is shorter
+        # than the echo window (1.5 s) - an ordinary case: a 40 % tilt on a 3 s slat
+        # time, or a slider nudge of a couple of percent.
+        # The restart is seamless - `_start_movement` picks the current estimate up as
+        # its starting point.
+        own_command_at, own_command = self._own_command_at, self._own_command
         self._start_movement(direction)
+        self._own_command_at, self._own_command = own_command_at, own_command
+        # `_stopped_direction` stays None: we stopped nothing, so no movement frame
+        # may be swallowed as the echo of a stop.
         # The movement itself is still the one *we* commanded, and it now ends where
         # the motor ends it: that is what makes the actuator's `stopped` frame at the
         # end count as the end stop instead of a stop half way.
@@ -721,10 +744,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         The direction is *not* cleared here. An actuator whose real run is longer
         than the bound is still moving, and publishing "not moving" in the middle of
-        it would flip the entity to *Closed* / *Open* for as long as the answer takes
-        (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`). So the status is re-read first; the answer
-        goes through `_set_advanced_direction`, which cancels the grace below and
-        re-arms the full bound if the actuator says it is still running.
+        it would flip the entity to *Closed* / *Open* for as long as the answer
+        takes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`). So the status is re-read
+        first. Whatever comes back cancels the grace below - through
+        `_cancel_advanced_timer`, which `_finish_movement` reaches for the commonest
+        answer of all, "stopped at N %", and `_set_advanced_direction` reaches for a
+        plain direction frame - and a "still running" answer re-arms the full bound.
         """
         self._advanced_timer = None
         if self._moving is None:

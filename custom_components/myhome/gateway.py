@@ -141,6 +141,10 @@ from .own_session import (
 # Command path (Contract B).
 COMMAND_TIMEOUT_SEC = float(DEFAULT_COMMAND_TIMEOUT_SEC)  # write + wait for ACK/NACK
 CONNECT_TIMEOUT_SEC = 10.0  # TCP connect + negotiation, one attempt
+# `_deliver` gives every command one fresh-session retry and then drops it. Named so
+# that the worst case one command may take (`command_budget`) is derived from the
+# retry loop itself instead of being written down twice.
+COMMAND_ATTEMPTS = 2
 COMMAND_QUEUE_MAXSIZE = 200
 COMMAND_TTL_SEC = float(DEFAULT_QUEUE_TTL_SEC)  # commands older than this are dropped when dequeued
 COMMAND_SESSION_IDLE_SEC = 60.0  # close an unused command session (gateway session limit)
@@ -353,9 +357,10 @@ class MyHOMEGatewayHandler:
 
     - ``idle_watchdog_sec``: silence on the monitor session for this long triggers
       a harmless status request through the command session;
-    - ``probe_window_sec``: if that probe is answered on neither session within
-      this window the event session is closed and reconnected with backoff; a
-      status request ACKed on the command session re-arms the watchdog instead;
+    - ``probe_window_sec``: if nothing arrives on the monitor and no status request
+      is acknowledged on the command session within this window, the event session
+      is closed and reconnected with backoff; any ACKed status request re-arms the
+      watchdog, it need not be the probe;
     - ``command_timeout_sec``: how long one command may take to be written and
       acknowledged (NACK included) before the session is considered broken;
     - ``queue_ttl_sec``: commands still queued after this long are dropped instead
@@ -480,6 +485,25 @@ class MyHOMEGatewayHandler:
     @property
     def firmware(self) -> str:
         return self.gateway.firmware
+
+    @property
+    def command_budget(self) -> float:
+        """Longest one command may legitimately take, from dequeue to answer, in seconds.
+
+        `_deliver` may have to open a command session before it can write - the
+        sending worker closes an unused one after `command_session_idle`, so an entity
+        that has been quiet for a minute nearly always pays for a fresh connection -
+        and it gives the whole thing one retry with a new session before dropping the
+        command. So the bound is `COMMAND_ATTEMPTS` times a connect plus a write-and-
+        ACK, i.e. 40 s with the default options.
+
+        It is *not* the whole wait a caller sees: commands queued ahead of this one
+        add their own time (bounded only by `command_ttl`). It is what a single
+        command may cost once it reaches the front of the queue, and it is what
+        cover.py sizes its status grace on - read live, so it follows the user's
+        `command_timeout_sec` option.
+        """
+        return COMMAND_ATTEMPTS * (float(self.connect_timeout) + float(self.command_timeout))
 
     @property
     def session_parameters(self) -> dict[str, float]:
@@ -858,7 +882,7 @@ class MyHOMEGatewayHandler:
         (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
         stale command is never replayed later.
         """
-        for attempt in (1, 2):
+        for attempt in range(1, COMMAND_ATTEMPTS + 1):
             try:
                 if session is None:
                     new_session = OWNCommandChannel(self.gateway, LOGGER)
@@ -887,7 +911,7 @@ class MyHOMEGatewayHandler:
                 await self._close_session(session)
                 session = None
                 self._command_sessions.pop(worker_id, None)
-                if attempt == 1:
+                if attempt < COMMAND_ATTEMPTS:
                     LOGGER.debug(
                         "%s Sending `%s` failed (%s: %s); retrying once with a fresh session",
                         self.log_id,
@@ -1087,9 +1111,14 @@ class MyHOMEGatewayHandler:
                 self._last_rx = now
                 self._probe_sent_at = None
                 return
+            # Each clause carries its own window on purpose: `idle` is the monitor's
+            # silence, while the ACK is only looked for since the probe went out
+            # (`probe_window`). One trailing duration would read as if it qualified
+            # both, and send a user hunting for a gateway that has been dead for
+            # `idle` seconds while it was in fact answering their lights all along.
             raise SessionError(
-                f"no status request acknowledged on the command session "
-                f"and nothing on the monitor for {idle:.0f} s"
+                f"nothing on the monitor for {idle:.0f} s and no status request acknowledged "
+                f"on the command session in the last {self.probe_window:.0f} s"
             )
 
     def _probe_command(self) -> OWNCommand:
