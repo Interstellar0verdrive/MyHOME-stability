@@ -505,10 +505,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Make sure the sessions are closed even when setup fails half way (core-10).
     entry.async_on_unload(handler.close_listener)
 
-    unknown_platforms = [p for p in hass.data[DOMAIN][mac][CONF_PLATFORMS] if p not in PLATFORMS]
-    if unknown_platforms:
-        LOGGER.warning("Ignoring unknown platform keys in %s: %s", config_file_path, unknown_platforms)
-
+    # No "unknown platform keys" check here: `MyHomeConfigSchema.__call__` builds
+    # CONF_PLATFORMS from its own list (DEVICE_PLATFORMS, plus `event` for the
+    # scenario section and `button` for the lock buttons), which is exactly
+    # PLATFORMS, and `warn_unknown_keys((root_key,), gateway, _GATEWAY_KNOWN_KEYS)`
+    # has already told the user about every section the schema does not know -
+    # `validate.py:194` / `:1273`, covered by test_repair_unknown_keys_created_then_cleared.
+    # A misspelled `lights:` therefore never reaches this dict, and the warning that
+    # used to stand here could not fire.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Loops start AFTER the entities exist so no frame is dispatched into a half-built map.
