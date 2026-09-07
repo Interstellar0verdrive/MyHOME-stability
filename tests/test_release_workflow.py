@@ -157,9 +157,11 @@ def test_no_action_is_pinned_to_a_moving_ref(steps) -> None:
 
     `softprops/action-gh-release` is third-party and gets the `GITHUB_TOKEN`; GitHub's
     hardening guide asks for a full commit SHA, and a version tag is the weaker form
-    this repository accepts for now (see the *Releasing* section of
-    docs/development.md). A branch ref - `@master`, `@main` - is neither: it is a
-    third party's HEAD, executed with write access to this repository.
+    this repository accepts for now. A branch ref - `@master`, `@main` - is neither:
+    it is a third party's HEAD, executed with write access to this repository.
+
+    A 40-character SHA pin passes this test as well as a version tag does, so it does
+    not stand in the way of finishing round 3's SHA-pin item.
 
     This covers `release.yml` only. `hassfest.yml` and `validate.yml` deliberately use
     `@master` / `@main`, as their own comments explain, and neither job has write
