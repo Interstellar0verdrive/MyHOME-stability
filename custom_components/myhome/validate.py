@@ -127,6 +127,16 @@ from .const import (
 # --------------------------------------------------------------------------------------
 CONF_ENERGY_DEFAULTS = "energy"  # legacy alias of sensor_defaults
 DEVICE_CLASS_ALIAS = "device_class"  # YAML alias of CONF_DEVICE_CLASS ("class")
+# Marker injected into a sensor config when ``keepalive_minutes`` was not written by
+# the user but filled in from the built-in defaults.  ``sensor.keepalive_minutes_for``
+# lets the ``default_keepalive_minutes`` option of the config entry replace a value
+# that carries the marker, and only such a value (Contract E / RISK-1).
+CONF_KEEPALIVE_MINUTES_DEFAULTED = "keepalive_minutes_default"
+
+# WHOs whose frames actually carry the F422 bus interface.  ``OWNMessage.interface``
+# (OWNd 0.7.49) returns the ``#4#N`` WHERE parameter only for these three, so an
+# ``interface:`` on any other WHO would build a device key no frame can ever match.
+INTERFACE_CAPABLE_WHO: tuple[str, ...] = ("1", "2", "15")
 
 # Built-in defaults for the power/energy reporting filter and keep-alive.  Gateway level
 # ``sensor_defaults`` (alias ``energy``) override these, per-sensor keys override both.
@@ -278,6 +288,15 @@ def _where_text(v: object) -> str:
             raise Invalid(
                 f"WHERE {v} was read by YAML as a number and is ambiguous: quote it as "
                 f"'0{v}' for A=0 PL={v} or as '{v}' for area {v}"
+            )
+        if v > 0:
+            # 3-digit and 5+ digit values are the shape sensor/binary_sensor addresses
+            # take (``where: 301``).  They lost no leading zero and are not octal, so
+            # the octal wording below would be misleading and its ``'0115'`` example is
+            # an actuator address a sensor would reject (INCONSISTENCY-5).
+            raise Invalid(
+                f"WHERE {v} was read by YAML as a number; quote it (where: '{v}') so the "
+                f"address is preserved exactly"
             )
         raise Invalid(
             f"WHERE {v} was read by YAML as a number (leading zeros are lost, '0…' is octal): quote it, e.g. where: '0115'"
@@ -610,6 +629,10 @@ SENSOR_FIELDS: dict = {
     Optional(CONF_WHO): _who("1", "4", "18"),
     Required(CONF_WHERE): SENSOR_WHERE,
     Optional(CONF_BUS_INTERFACE): BusInterface(),
+    # The validator's own marker (RISK-1).  It is never written by a user, but a config
+    # that has already been through the validator must not be reported as carrying an
+    # unknown key when it is validated again.
+    Optional(CONF_KEEPALIVE_MINUTES_DEFAULTED): Boolean(),
     Optional(CONF_DEVICE_CLASS): _device_class(SensorDeviceClass, _SENSOR_CLASSES),
     Optional(DEVICE_CLASS_ALIAS): _device_class(SensorDeviceClass, _SENSOR_CLASSES),
 }
@@ -707,9 +730,41 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
         )
 
 
+def _reject_unusable_interface(device: Mapping, yaml_key: str, section: str) -> None:
+    """Refuse ``interface:`` on a WHO whose frames never carry it (BUG-1).
+
+    ``OWNMessage.interface`` reports the ``#4#N`` WHERE parameter for WHO 1, 2 and 15
+    only, so a WHO 18 meter, a WHO 4 probe, a WHO 25 dry contact or a WHO 9 auxiliary
+    declared with an ``interface:`` would be keyed ``18-51#4#03`` while its frames
+    always arrive as ``18-51``: the entity would be created and then stay ``unknown``
+    forever, with no error anywhere.  Better to say so while reading the file.
+    """
+    if device.get(CONF_BUS_INTERFACE) is None:
+        return
+    if device[CONF_WHO] in INTERFACE_CAPABLE_WHO:
+        return
+    raise Invalid(
+        f"{section} '{yaml_key}': 'interface' is only supported for WHO "
+        f"{'/'.join(INTERFACE_CAPABLE_WHO)} devices; WHO {device[CONF_WHO]} frames never "
+        f"carry the F422 bus interface, so the device would never receive an update",
+        path=[yaml_key, CONF_BUS_INTERFACE],
+    )
+
+
 def _finalize_binary_sensor(device: MutableMapping, yaml_key: str) -> None:
     if CONF_DEVICE_CLASS not in device:
         device[CONF_DEVICE_CLASS] = _BINARY_SENSOR_DEFAULT_CLASS.get(device[CONF_WHO])
+    # NIT-4: the platform only knows how to build a WHO 1 binary sensor as a motion
+    # sensor; anything else used to be dropped at setup with a log line only, leaving
+    # a device in the configuration and an orphan id in ``expected_unique_ids``.
+    if device[CONF_WHO] == "1" and device[CONF_DEVICE_CLASS] != BinarySensorDeviceClass.MOTION:
+        raise Invalid(
+            f"binary_sensor '{yaml_key}': a WHO 1 binary sensor is only supported with "
+            f"class 'motion' (got {str(device[CONF_DEVICE_CLASS])!r}); use who '25' for a dry "
+            f"contact or who '9' for an auxiliary channel",
+            path=[yaml_key, CONF_DEVICE_CLASS],
+        )
+    _reject_unusable_interface(device, yaml_key, BINARY_SENSOR)
 
 
 def _finalize_climate(device: MutableMapping, yaml_key: str) -> None:
@@ -726,7 +781,19 @@ def _finalize_climate(device: MutableMapping, yaml_key: str) -> None:
     if device[CONF_CENTRAL] and not device[CONF_ZONE].startswith("#0"):
         device[CONF_ZONE] = f"#0#{device[CONF_ZONE]}"
     if CONF_NAME not in device:
-        device[CONF_NAME] = "Central unit" if device[CONF_ZONE].startswith("#0") else f"Zone {device[CONF_ZONE]}"
+        # BUG-2: the central-unit rewrite above turns zone 5 into ``#0#5``, so a plain
+        # ``startswith("#0")`` here would call *every* zone of a plant with a central
+        # unit "Central unit".  Only the bare ``#0`` is the central unit itself.
+        zone = device[CONF_ZONE]
+        device[CONF_NAME] = "Central unit" if zone == "#0" else f"Zone {zone.removeprefix('#0#')}"
+    if not device[CONF_HEATING_SUPPORT] and not device[CONF_COOLING_SUPPORT]:
+        # RISK-3: the entity would advertise OFF only - no set point, no TURN_ON, no
+        # HEAT/COOL - which is never what the user meant by writing ``heat: false``.
+        raise Invalid(
+            f"climate '{yaml_key}': at least one of 'heat' / 'cool' must be true, "
+            f"otherwise the zone can only be switched off and nothing else",
+            path=[yaml_key, CONF_HEATING_SUPPORT],
+        )
 
 
 def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
@@ -746,6 +813,7 @@ def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
             f"sensor '{yaml_key}': class {sensor_class} requires who {expected_who}, got who {device[CONF_WHO]}",
             path=[yaml_key, CONF_WHO],
         )
+    _reject_unusable_interface(device, yaml_key, SENSOR)
     if sensor_class in (SensorDeviceClass.POWER, SensorDeviceClass.ENERGY):
         device[CONF_ENTITIES][f"daily-{SensorDeviceClass.ENERGY}"] = {}
         device[CONF_ENTITIES][f"monthly-{SensorDeviceClass.ENERGY}"] = {}
@@ -804,6 +872,16 @@ def _finalize_scenario_control(device: MutableMapping, yaml_key: str) -> None:
         # The bus writes the address unpadded; normalising here keeps the device key,
         # the registry identifier and the dispatcher lookup on one single spelling.
         address = int(where)
+        # RISK-2: ``SENSOR_WHERE`` accepts any digit string, so a typo used to become a
+        # control that never fires - and ``where: '0'`` is the CEN *general* address,
+        # which would match the frames of every keypad of the plant.
+        low, high = SCENARIO_OBJECT_RANGE
+        if not low <= address <= high:
+            raise Invalid(
+                f"scenario_control '{yaml_key}': CEN address {where!r} is out of range "
+                f"({low}-{high})",
+                path=[yaml_key, CONF_WHERE],
+            )
 
     device[CONF_OBJECT] = int(address)
     device[CONF_WHERE] = str(int(address))
@@ -960,21 +1038,70 @@ def _resolve_filter_block(block: Mapping) -> dict:
     return resolved
 
 
-def _merge_sensor_defaults(gateway: Mapping, root_key: str) -> dict:
-    """Built-in defaults <- ``energy`` <- ``sensor_defaults`` (per key)."""
+def _merge_sensor_defaults(gateway: Mapping, root_key: str) -> tuple[dict, set[str]]:
+    """Built-in defaults <- ``energy`` <- ``sensor_defaults`` (per key).
+
+    Also returns the set of keys the *file* provided (in one of the two gateway-level
+    blocks), so ``_apply_sensor_defaults`` can tell a value the user chose from one it
+    only inherited from ``SENSOR_FILTER_DEFAULTS``.
+    """
     merged = dict(SENSOR_FILTER_DEFAULTS)
+    from_file: set[str] = set()
     for block_key in (CONF_ENERGY_DEFAULTS, CONF_SENSOR_DEFAULTS):
         block = gateway.get(block_key)
         if isinstance(block, Mapping):
             warn_unknown_keys((root_key, block_key), block, _known_keys(ENERGY_DEFAULTS_FIELDS))
-            merged.update(_resolve_filter_block(block))
-    return merged
+            resolved = _resolve_filter_block(block)
+            merged.update(resolved)
+            from_file.update(resolved)
+    return merged, from_file
 
 
-def _apply_sensor_defaults(device: MutableMapping, defaults: Mapping) -> None:
-    """Per-sensor keys win, then the merged gateway defaults, then the built-in ones."""
+def _apply_sensor_defaults(device: MutableMapping, defaults: Mapping, from_file: set[str]) -> None:
+    """Per-sensor keys win, then the merged gateway defaults, then the built-in ones.
+
+    RISK-1: ``sensor.keepalive_minutes_for`` must be able to tell "the user wrote
+    ``keepalive_minutes: 125``" from "nobody wrote anything and 125 is the built-in
+    default", because the ``default_keepalive_minutes`` option of the config entry may
+    only replace the second one.  The value alone cannot say, so the marker is written
+    here - the only place that knows where the value came from.
+    """
     for key, value in defaults.items():
-        device.setdefault(key, value)
+        if key in device:
+            continue
+        device[key] = value
+        if key == CONF_KEEPALIVE_MINUTES and key not in from_file:
+            device[CONF_KEEPALIVE_MINUTES_DEFAULTED] = True
+
+
+def _reconcile_climate_sensor_overlap(
+    platforms: Mapping[str, Mapping], key: str, climate_key: str, sensor_key: str
+) -> None:
+    """Keep both names when a climate zone and a temperature probe share a device (BUG-3).
+
+    ``device_key()`` returns ``4-N`` for both, and that key is also the device registry
+    identifier, so the two entities land on one device entry.  ``PLATFORMS`` sets the
+    sensor up after the climate zone, so the sensor's ``name`` used to overwrite the
+    device name - and since the climate entity is the device's main entity (its
+    friendly name *is* the device name) the ``name:`` written under ``climate:`` was
+    silently lost.  The device keeps the climate name; the sensor keeps its own name as
+    an explicit ``entity_name`` so nothing is thrown away.
+    """
+    climate_device = platforms.get(CLIMATE, {}).get(key)
+    sensor_device = platforms.get(SENSOR, {}).get(key)
+    if climate_device is None or sensor_device is None:  # pragma: no cover - defensive
+        return
+    if not sensor_device.get(CONF_ENTITY_NAME):
+        sensor_device[CONF_ENTITY_NAME] = sensor_device[CONF_NAME]
+    sensor_device[CONF_NAME] = climate_device[CONF_NAME]
+    LOGGER.info(
+        "climate '%s' and sensor '%s' both address zone %s: they share one device, named "
+        "after the climate zone; the temperature entity is named '%s'",
+        climate_key,
+        sensor_key,
+        key,
+        sensor_device[CONF_ENTITY_NAME],
+    )
 
 
 def _resolve_gateway_mac(root_key: str, gateway: Mapping) -> str:
@@ -1015,7 +1142,7 @@ class MyHomeConfigSchema(Schema):
 
             platforms: dict[str, dict] = {}
             entry: dict = {CONF_PLATFORMS: platforms}
-            sensor_defaults = _merge_sensor_defaults(gateway, root_key)
+            sensor_defaults, defaults_from_file = _merge_sensor_defaults(gateway, root_key)
             # Merged canonical defaults, published once under ``sensor_defaults``
             # (``energy`` is folded into it; gateway.py falls back to sensor_defaults).
             entry[CONF_SENSOR_DEFAULTS] = sensor_defaults
@@ -1026,6 +1153,9 @@ class MyHomeConfigSchema(Schema):
             # sensor on the same zone (both legitimately address zone N; they live in
             # different platform dicts so nothing collides at run time).
             origins_of_key: dict[str, list[tuple[str, str]]] = {}
+            # (device key, climate yaml key, sensor yaml key) of every tolerated pair;
+            # reconciled after the loop, when both platform dicts exist.
+            climate_sensor_pairs: list[tuple[str, str, str]] = []
             for platform in DEVICE_PLATFORMS:
                 section = gateway.get(platform)
                 if section is None:
@@ -1035,6 +1165,11 @@ class MyHomeConfigSchema(Schema):
                     key = device_key(device)
                     for other_platform, other_key in origins_of_key.get(key, ()):
                         if {other_platform, platform} == {CLIMATE, SENSOR}:
+                            climate_sensor_pairs.append(
+                                (key, yaml_key, other_key)
+                                if platform == CLIMATE
+                                else (key, other_key, yaml_key)
+                            )
                             continue
                         address = device.get(CONF_WHERE, device.get(CONF_ZONE))
                         raise Invalid(
@@ -1046,9 +1181,12 @@ class MyHomeConfigSchema(Schema):
                         )
                     origins_of_key.setdefault(key, []).append((platform, yaml_key))
                     if platform == SENSOR:
-                        _apply_sensor_defaults(device, sensor_defaults)
+                        _apply_sensor_defaults(device, sensor_defaults, defaults_from_file)
                     rekeyed[key] = device
                 platforms[platform] = rekeyed
+
+            for key, climate_key, sensor_key in climate_sensor_pairs:
+                _reconcile_climate_sensor_overlap(platforms, key, climate_key, sensor_key)
 
             # CEN / CEN+ scenario controls (0.4.0): keyed ``cenplus-<object>`` /
             # ``cen-<where>`` instead of ``who-where``, because they are addressed by

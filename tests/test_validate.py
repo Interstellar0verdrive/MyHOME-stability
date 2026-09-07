@@ -345,6 +345,19 @@ def test_binary_sensor_class_default_by_who():
     assert all("device_class" not in dev for dev in platforms(out)["binary_sensor"].values())
 
 
+@pytest.mark.parametrize("device_class", ["window", "door", "occupancy"])
+def test_who_1_binary_sensor_must_be_a_motion_sensor(device_class):
+    """NIT-4: the platform can only build a WHO 1 binary sensor as a motion sensor.
+
+    It used to log a WARNING and create nothing, while ``expected_unique_ids()`` still
+    listed the id, so the entity silently disappeared from a configuration that
+    validated cleanly.
+    """
+    with pytest.raises(Invalid, match="only supported with class 'motion'") as err:
+        check(gw(binary_sensor={"pir": {"where": "11", "who": "1", "class": device_class, "name": "P"}}))
+    assert [str(p) for p in err.value.path] == ["gateway", "binary_sensor", "pir", "class"]
+
+
 @pytest.mark.parametrize(
     ("platform", "device", "expected"),
     [
@@ -408,6 +421,41 @@ def test_invalid_bus_interface_is_rejected(given):
         check(gw(light={"a": {"where": "11", "interface": given, "name": "A"}}))
 
 
+@pytest.mark.parametrize(
+    ("section", "device"),
+    [
+        ("sensor", {"where": "51", "name": "M", "class": "power", "interface": 3}),
+        ("sensor", {"where": "52", "name": "M", "class": "energy", "interface": "03"}),
+        ("sensor", {"where": "1", "name": "T", "class": "temperature", "interface": 3}),
+        ("binary_sensor", {"where": "31", "name": "B", "interface": 3}),
+        ("binary_sensor", {"where": "1", "name": "B", "who": "9", "interface": 3}),
+    ],
+)
+def test_interface_is_rejected_when_the_frames_never_carry_it(section, device):
+    """BUG-1: `OWNMessage.interface` only exists for WHO 1/2/15.
+
+    A WHO 18/4/25/9 device declared behind an F422 used to be keyed ``18-51#4#03``
+    while its frames always arrive as ``18-51``: the entity was created and stayed
+    ``unknown`` forever, with nothing in the log above DEBUG.
+    """
+    with pytest.raises(Invalid, match="never carry the F422 bus interface") as err:
+        check(gw(**{section: {"d": device}}))
+    assert [str(p) for p in err.value.path] == ["gateway", section, "d", "interface"]
+
+
+def test_interface_is_accepted_on_the_who_1_sensors():
+    """The two WHO 1 flavours (motion sensor, illuminance probe) do get the interface."""
+    out = check(
+        gw(
+            binary_sensor={"m": {"where": "11", "who": "1", "class": "motion", "interface": 3, "name": "M"}},
+            sensor={"lux": {"where": "31", "class": "illuminance", "interface": "03", "name": "Lux"}},
+        )
+    )
+    assert set(platforms(out)["binary_sensor"]) == {"1-11#4#03"}
+    assert set(platforms(out)["sensor"]) == {"1-31#4#03"}
+    assert platforms(out)["sensor"]["1-31#4#03"]["interface"] == "3"
+
+
 def test_normalise_bus_interface_helper():
     from custom_components.myhome import const
 
@@ -450,6 +498,40 @@ def test_climate_zone_and_temperature_sensor_may_share_zone():
     assert "4-1" in platforms(out)["climate"] and "4-1" in platforms(out)["sensor"]
     with pytest.raises(Invalid, match="climate 'z2' collides with climate 'z1'"):
         check(gw(climate={"z1": {"zone": 1}, "z2": {"zone": "1"}}, sensor={"t": {"where": "1", "name": "T", "class": "temperature"}}))
+
+
+def test_climate_and_temperature_sensor_share_one_device_without_losing_a_name(caplog):
+    """BUG-3: the shared device keeps the climate name, the probe keeps its own.
+
+    Both devices key as ``4-1``, which is also the device registry identifier, so the
+    two entities end up on one device.  The sensor platform is set up last, so without
+    the reconciliation its ``name`` overwrote the device name - and with it the
+    friendly name of the climate entity, which *is* the device name.
+    """
+    with caplog.at_level(logging.INFO, logger="custom_components.myhome"):
+        out = check(
+            gw(
+                climate={"living": {"zone": "1", "name": "Living Zone"}},
+                sensor={"probe": {"where": "1", "name": "Living Probe", "class": "temperature"}},
+            )
+        )
+    climate = platforms(out)["climate"]["4-1"]
+    sensor = platforms(out)["sensor"]["4-1"]
+    assert climate["name"] == "Living Zone"
+    # The device name the sensor publishes is now the climate one, so nothing overwrites
+    # anything; the probe's own name survives as its entity name.
+    assert sensor["name"] == "Living Zone"
+    assert sensor["entity_name"] == "Living Probe"
+    assert any("both address zone 4-1" in rec.getMessage() for rec in caplog.records)
+
+    # An explicit entity_name on the sensor is never replaced.
+    out = check(
+        gw(
+            climate={"living": {"zone": "1", "name": "Living Zone"}},
+            sensor={"probe": {"where": "1", "name": "Living Probe", "class": "temperature", "entity_name": "Probe"}},
+        )
+    )
+    assert platforms(out)["sensor"]["4-1"]["entity_name"] == "Probe"
 
 
 # --------------------------------------------------------------------------------------
@@ -561,6 +643,18 @@ def test_scenario_control_address_must_match_protocol(device, path_tail):
 def test_scenario_control_object_out_of_range(object_id):
     with pytest.raises(Invalid):
         check(gw(scenario_control={"kp": {"object": object_id, "name": "X"}}))
+
+
+@pytest.mark.parametrize("where", ["0", "999999", "2048"])
+def test_scenario_control_cen_where_out_of_range(where):
+    """RISK-2: the CEN branch used to accept any digit string.
+
+    ``where: '0'`` is the CEN *general* address (``*15*WHAT*0##``), so such a control
+    would react to the frames of every keypad instead of one.
+    """
+    with pytest.raises(Invalid, match="out of range") as err:
+        check(gw(scenario_control={"kp": {"protocol": "cen", "where": where, "name": "X"}}))
+    assert [str(p) for p in err.value.path] == ["gateway", "scenario_control", "kp", "where"]
 
 
 @pytest.mark.parametrize("protocol", ["cenplus", "CEN", "", 1])
@@ -685,6 +779,38 @@ def test_builtin_sensor_defaults():
     assert (a["min_delta_w"], a["min_interval_sec"], a["suppress_log_interval_sec"], a["keepalive_minutes"]) == (5, 1.0, 60.0, 125)
 
 
+def test_keepalive_minutes_marker_says_where_the_value_came_from():
+    """RISK-1: only an injected keep-alive may be replaced by the config entry option.
+
+    The value alone cannot say: ``keepalive_minutes: 125`` written by the user is
+    indistinguishable from the built-in default.  The marker is written here, the only
+    place that knows.
+    """
+    marker = validate.CONF_KEEPALIVE_MINUTES_DEFAULTED
+    out = check(
+        gw(
+            sensor={
+                "injected": {"where": "51", "name": "A", "class": "power"},
+                "chosen": {"where": "52", "name": "B", "class": "power", "keepalive_minutes": 125},
+                "other": {"where": "53", "name": "C", "class": "power", "keepalive_minutes": 60},
+            }
+        )
+    )
+    sensors = platforms(out)["sensor"]
+    assert sensors["18-51"]["keepalive_minutes"] == 125 and sensors["18-51"][marker] is True
+    assert sensors["18-52"]["keepalive_minutes"] == 125 and marker not in sensors["18-52"]
+    assert sensors["18-53"]["keepalive_minutes"] == 60 and marker not in sensors["18-53"]
+
+    # A gateway-level sensor_defaults value is the user's choice too, marker or not.
+    out = check(
+        gw(
+            sensor_defaults={"keepalive_minutes": 125},
+            sensor={"a": {"where": "51", "name": "A", "class": "power"}},
+        )
+    )
+    assert marker not in platforms(out)["sensor"]["18-51"]
+
+
 # --------------------------------------------------------------------------------------
 # Unknown keys (val-07)
 # --------------------------------------------------------------------------------------
@@ -740,6 +866,40 @@ def test_climate_where_is_treated_as_zone():
         check(gw(climate={"z": {"zone": "abc"}}))
 
 
+def test_nameless_zones_behind_a_central_unit_keep_their_number():
+    """BUG-2: only the bare ``#0`` is "Central unit".
+
+    The central-unit rewrite (zone 5 -> ``#0#5``) runs before the name default, so a
+    plain ``startswith('#0')`` used to name *every* nameless zone of a plant with a
+    central unit "Central unit" (N identical device names, entity ids suffixed _2, _3…).
+    """
+    out = check(
+        gw(
+            climate={
+                "z5": {"zone": "5", "central": True},
+                "z6": {"zone": "#0#6"},
+                "z7": {"zone": "7"},
+                "cu": {},
+            }
+        )
+    )
+    climate = platforms(out)["climate"]
+    assert climate["4-5"]["name"] == "Zone 5" and climate["4-5"]["zone"] == "#0#5"
+    assert climate["4-6"]["name"] == "Zone 6"
+    assert climate["4-7"]["name"] == "Zone 7"
+    assert climate["4-#0"]["name"] == "Central unit"
+
+
+def test_climate_needs_heating_or_cooling():
+    """RISK-3: ``heat: false`` alone leaves an entity that can only be switched off."""
+    with pytest.raises(Invalid, match="at least one of 'heat' / 'cool'") as err:
+        check(gw(climate={"z": {"zone": "1", "heat": False}}))
+    assert [str(p) for p in err.value.path] == ["gateway", "climate", "z", "heat"]
+    # Cooling only is a legitimate configuration.
+    out = check(gw(climate={"z": {"zone": "1", "heat": False, "cool": True}}))
+    assert platforms(out)["climate"]["4-1"]["cool"] is True
+
+
 # --------------------------------------------------------------------------------------
 # WHERE handling (val-11)
 # --------------------------------------------------------------------------------------
@@ -754,6 +914,20 @@ def test_unquoted_where_ints():
         check(gw(light={"a": {"where": 8, "name": "A"}}))  # YAML `where: 010` (octal)
     with pytest.raises(Invalid, match="WHERE"):
         check(gw(light={"a": {"where": None, "name": "A"}}))
+
+
+@pytest.mark.parametrize("where", [301, 12345])
+def test_unquoted_sensor_where_is_not_blamed_on_octal(where):
+    """INCONSISTENCY-5: `301` lost no leading zero and is not octal.
+
+    Sensor and binary_sensor WHEREs have exactly these shapes, and the old message
+    suggested quoting them as ``'0115'`` - an actuator address a sensor would reject.
+    """
+    with pytest.raises(Invalid, match="quote it") as err:
+        check(gw(binary_sensor={"b": {"where": where, "name": "B"}}))
+    message = str(err.value)
+    assert "octal" not in message
+    assert f"where: '{where}'" in message
 
 
 @pytest.mark.parametrize("where", ["abc", "123", "1116", "#0", "#256", "", " "])
