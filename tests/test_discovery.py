@@ -27,6 +27,7 @@ from custom_components.myhome.const import (
     DEVICE_TYPE_BUS_AUX,
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL,
+    DEVICE_TYPE_BUS_THERMO_CU,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
     DEVICE_TYPE_BUS_THERMO_ZONE,
     DOMAIN,
@@ -37,6 +38,7 @@ from custom_components.myhome.discovery import (
     DISCOVERY_TIMEOUT_SEC,
     MyHOMEDeviceDiscoveryService,
 )
+from custom_components.myhome.validate import config_schema
 
 from .helpers_core import MAC, make_entry, mock_gateway, wait_until, write_yaml
 
@@ -139,6 +141,62 @@ def test_a_discovered_zone_is_suggested_as_a_climate_block(hass: HomeAssistant, 
     platform, cfg = generate_suggested_config(device_info(hass, tmp_path, "*#4*1*0*0235##"))
     assert platform == "climate"
     assert cfg == {"who": "4", "zone": "1", "name": cfg["name"]}
+
+
+# The three shapes a thermoregulation central unit really puts on the bus: a
+# plant-wide mode change, the plant temperature and the CU's own actuator status.
+# All three carry ``where == '0'`` on OWNd 0.7.49 (``entity`` is ``4-#0`` for the
+# first two and, for the third, the zone of the first WHERE parameter - which is why
+# gateway.py keys these frames itself instead of trusting ``entity``).
+_CENTRAL_UNIT_FRAMES = ("*4*1*0##", "*#4*0*0*0235##", "*#4*0#1*20*1##")
+
+
+@pytest.mark.parametrize("frame", _CENTRAL_UNIT_FRAMES)
+def test_the_central_unit_is_not_discovered_as_zone_zero(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """WHERE ``0`` on WHO 4 is the central unit, and its zone is spelled ``#0``.
+
+    Why it matters in production: ``validate.Zone`` accepts ``#0``, ``1``-``99`` and
+    ``#0#<zone>`` and refuses a bare ``0``.  Classifying these frames as
+    ``bus_thermo_zone`` produced ``climate: {zone: '0'}`` in
+    ``myhome_discovered.yaml``; pasting that block does not break one device, it makes
+    the whole ``myhome.yaml`` fail to load, so every other device of the gateway
+    disappears -- the exact failure the WHO 9 fix removed one round earlier.  Any
+    plant with a thermo central unit emits these frames.
+
+    Mutations caught: dropping the WHERE-``0`` branch of
+    ``_determine_thermo_device_type`` (the device becomes a zone again), or reporting
+    the WHERE verbatim instead of re-spelling it ``#0`` (the unique id stops matching
+    the ``4-#0`` key gateway.py and validate.py use for the same device).
+    """
+    info = device_info(hass, tmp_path, frame)
+    assert info["device_type"] == DEVICE_TYPE_BUS_THERMO_CU
+    assert info["device_type"] != DEVICE_TYPE_BUS_THERMO_ZONE
+    assert info["where"] == "#0"
+    assert info["unique_id"] == f"{MAC}-4-#0"
+    assert info["platform"] == "climate"
+
+
+@pytest.mark.parametrize("frame", _CENTRAL_UNIT_FRAMES)
+def test_a_central_unit_frame_produces_yaml_the_validator_accepts(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """The whole chain for the central unit: frame -> suggestion -> validate.py.
+
+    Why it matters in production: the round-trip test in
+    ``test_config_flow_discovery.py`` feeds the classifier's *output*; this one starts
+    from the frame, so it also fails if the classifier ever hands the writer a WHERE
+    the schema refuses.  ``climate.py`` really builds a central-unit entity for
+    ``zone: '#0'`` (AUTO included), so the suggestion is worth pasting.
+
+    Mutation caught: emitting ``zone: '0'`` -- ``config_schema`` raises instead of
+    returning a platform.
+    """
+    platform, cfg = generate_suggested_config(device_info(hass, tmp_path, frame))
+    assert (platform, cfg["zone"]) == ("climate", "#0")
+    result = config_schema({MAC: {platform: {"discovered_4__0": dict(cfg)}}})
+    assert list(result[MAC.lower()]["platforms"]) == ["climate"]
 
 
 # ------------------------------------------------------------------ scenario controls
