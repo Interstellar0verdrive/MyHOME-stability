@@ -664,3 +664,39 @@ async def test_options_flow_keeps_no_password_as_none(hass: HomeAssistant, mock_
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.data[CONF_PASSWORD] is None
+
+
+async def test_a_discovered_gateway_that_stops_answering_aborts_the_flow(
+    hass: HomeAssistant, mock_test_connection
+) -> None:
+    """cf-07's third arm: a flow with no form to go back to has to abort, not crash.
+
+    `_async_cannot_connect` routes a connectivity failure back to the form the user
+    can fix, and for an SSDP-discovered gateway there is none: the host, the port and
+    the serial all came from the announcement, so re-showing `ssdp_confirm` would ask
+    the user to confirm the same unreachable address again, for ever. The remaining
+    honest answer is `abort(reason="cannot_connect")` - Home Assistant then keeps the
+    discovery around and re-offers it when the gateway announces itself again.
+
+    This is a gateway that announced itself and went away between the announcement and
+    the click: rebooting, or on a Wi-Fi link that dropped. The `custom` and `reauth`
+    arms of the same helper are covered by `test_manual_flow_cannot_connect` and
+    `test_reauth_against_an_unreachable_gateway`.
+
+    Mutation caught: dropping the final `return self.async_abort(reason=...)` (the
+    helper then returns None and the flow raises), or falling through to one of the
+    two form arms.
+    """
+    with patch("custom_components.myhome.config_flow.get_port", AsyncMock(return_value=20001)):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=_ssdp_info()
+        )
+        assert result["step_id"] == "ssdp_confirm"
+
+        mock_test_connection.return_value = None  # OWNd gives up after three refusals
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
+    assert not hass.config_entries.async_entries(DOMAIN)

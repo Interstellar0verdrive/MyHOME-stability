@@ -22,6 +22,7 @@ runs against ``tmp_path`` and the addresses are the fictional ones from
 from __future__ import annotations
 
 import glob
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -662,3 +663,45 @@ async def test_add_queues_only_new_suggestable_devices(hass: HomeAssistant, tmp_
         "discovered_18_5_1": {"who": "18", "where": "5#1", "name": "Main Meter", "class": "power"}
     }
     assert pending["climate"] == {"discovered_4_3": {"who": "4", "zone": "3", "name": "Bedroom Zone"}}
+
+
+async def test_a_config_directory_it_cannot_write_is_reported_not_swallowed(
+    hass: HomeAssistant, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A discovery run that finds devices and writes nothing must say so.
+
+    ``async_flush`` empties the queue *before* the write, so when the write fails the
+    suggestions are gone: an unwritable ``/config`` (a read-only mount, a
+    root-owned ``myhome_discovered.yaml`` left by an earlier container) would
+    otherwise end the run with the usual "Discovery finished" INFO missing and
+    nothing at all in its place, and the user would go looking for a file that was
+    never created. The ERROR is the only trace, so it has to name the path.
+
+    It must also stay an ERROR rather than an exception: ``async_flush`` runs from the
+    stop service and from the discovery timeout, and a raise there would abort the
+    run's teardown.
+
+    Mutation caught: dropping the ``except OSError`` arm (the error escapes into the
+    caller), or logging it without ``self.path``.
+    """
+    entry = make_entry(tmp_path / "myhome.yaml")
+    _load_platforms(hass, MAC, {})
+    suggestions = MyHOMEDiscoverySuggestions(hass, entry)
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_ON_OFF_SWITCH, "11", "Hallway Lamp")) is True
+
+    with (
+        caplog.at_level(logging.ERROR, logger="custom_components.myhome"),
+        patch(
+            "custom_components.myhome.config_flow_discovery._merge_and_write",
+            side_effect=OSError("Read-only file system"),
+        ),
+    ):
+        await suggestions.async_flush()  # must not raise
+
+    errors = [record.message for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "Could not write discovery suggestions" in errors[0]
+    assert suggestions.path in errors[0]
+    assert "Read-only file system" in errors[0]
+    # The queue was emptied before the write, so nothing is left to retry with.
+    assert suggestions.pending_count == 0
