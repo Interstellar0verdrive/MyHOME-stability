@@ -133,19 +133,29 @@ ADVANCED_MOVE_MARGIN_SEC = 30.0
 # running up, firing every automation watching for it.
 #
 # That grace cannot be a fixed number of seconds. The status request travels the
-# ordinary command path, and how long that path may legitimately take is the user's
-# own `command_timeout_sec` option (10 s by default, up to 60): a queue that already
-# holds a scene's worth of commands, a command session that has to be re-opened
-# first, one sending worker. A grace shorter than that budget expires while the
-# request it is waiting for is still perfectly in time - which is exactly the
-# mid-run *closed* the re-read was added to prevent, only now on a busy bus instead
-# of on every run. So the grace is the handler's own command timeout plus the margin
-# below (the answer still has to travel back and be dispatched once the gateway has
-# ACKed it), and it follows the option if the user changes it.
+# ordinary command path, and that path has a budget of its own: the command session
+# may have to be re-opened first (`connect_timeout`, 10 s), the write and the ACK are
+# allowed `command_timeout` (10 s by default, up to 60), and the whole thing gets one
+# retry with a fresh session before the command is dropped. That is
+# `MyHOMEGatewayHandler.command_budget` - 40 s with the defaults - and it is not a
+# corner case here: this entity has sent nothing for at least the whole safety bound,
+# and an unused command session is closed after a minute, so the re-read very
+# probably pays for a reconnect. A grace shorter than that budget expires while the
+# request it is waiting for is still perfectly in time - which is exactly the mid-run
+# *closed* the re-read was added to prevent. So the grace is the handler's own
+# command budget plus the margin below (the answer still has to travel back and be
+# dispatched once the gateway has ACKed it), read live, so it follows the option if
+# the user changes it.
 #
-# A gateway that is dead rather than slow still ends the movement: nothing answers,
-# and the direction is dropped one command timeout after the bound instead of two
-# seconds after it.
+# It is a long wait - 42 s by default, against a default bound of 50 s - and it is
+# meant to be: it is the price of never publishing a moving shutter as *closed*. A
+# gateway that is dead rather than slow still ends the movement, one command budget
+# after the bound instead of two seconds after it; and while it is dead the entity is
+# unavailable anyway (the connection signal), so nobody is watching a stale direction.
+#
+# What the grace does *not* cover is a status request stuck behind a long queue: the
+# queue's own bound is `command_ttl` (60 s by default), and holding *Opening* for
+# that long after a lost frame is worse than the failure the bound exists for.
 ADVANCED_PROBE_GRACE_MARGIN_SEC = 2.0
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
@@ -335,10 +345,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """How long the safety timer waits for the actuator's answer, in seconds.
 
         Read from the handler on every use rather than stored: it is the command
-        path's own budget plus a margin, so it must move with the option the user
-        tunes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`).
+        path's own worst case for one request (`command_budget`: a session to open,
+        a write to ACK, and one retry of both) plus a margin, so it must move with
+        the option the user tunes (see `ADVANCED_PROBE_GRACE_MARGIN_SEC`).
         """
-        return float(self._gateway_handler.command_timeout) + ADVANCED_PROBE_GRACE_MARGIN_SEC
+        return float(self._gateway_handler.command_budget) + ADVANCED_PROBE_GRACE_MARGIN_SEC
 
     # ------------------------------------------------------------------ state
     @property

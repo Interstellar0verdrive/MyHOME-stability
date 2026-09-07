@@ -141,6 +141,10 @@ from .own_session import (
 # Command path (Contract B).
 COMMAND_TIMEOUT_SEC = float(DEFAULT_COMMAND_TIMEOUT_SEC)  # write + wait for ACK/NACK
 CONNECT_TIMEOUT_SEC = 10.0  # TCP connect + negotiation, one attempt
+# `_deliver` gives every command one fresh-session retry and then drops it. Named so
+# that the worst case one command may take (`command_budget`) is derived from the
+# retry loop itself instead of being written down twice.
+COMMAND_ATTEMPTS = 2
 COMMAND_QUEUE_MAXSIZE = 200
 COMMAND_TTL_SEC = float(DEFAULT_QUEUE_TTL_SEC)  # commands older than this are dropped when dequeued
 COMMAND_SESSION_IDLE_SEC = 60.0  # close an unused command session (gateway session limit)
@@ -480,6 +484,25 @@ class MyHOMEGatewayHandler:
     @property
     def firmware(self) -> str:
         return self.gateway.firmware
+
+    @property
+    def command_budget(self) -> float:
+        """Longest one command may legitimately take, from dequeue to answer, in seconds.
+
+        `_deliver` may have to open a command session before it can write - the
+        sending worker closes an unused one after `command_session_idle`, so an entity
+        that has been quiet for a minute nearly always pays for a fresh connection -
+        and it gives the whole thing one retry with a new session before dropping the
+        command. So the bound is `COMMAND_ATTEMPTS` times a connect plus a write-and-
+        ACK, i.e. 40 s with the default options.
+
+        It is *not* the whole wait a caller sees: commands queued ahead of this one
+        add their own time (bounded only by `command_ttl`). It is what a single
+        command may cost once it reaches the front of the queue, and it is what
+        cover.py sizes its status grace on - read live, so it follows the user's
+        `command_timeout_sec` option.
+        """
+        return COMMAND_ATTEMPTS * (float(self.connect_timeout) + float(self.command_timeout))
 
     @property
     def session_parameters(self) -> dict[str, float]:
@@ -858,7 +881,7 @@ class MyHOMEGatewayHandler:
         (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
         stale command is never replayed later.
         """
-        for attempt in (1, 2):
+        for attempt in range(1, COMMAND_ATTEMPTS + 1):
             try:
                 if session is None:
                     new_session = OWNCommandChannel(self.gateway, LOGGER)
@@ -887,7 +910,7 @@ class MyHOMEGatewayHandler:
                 await self._close_session(session)
                 session = None
                 self._command_sessions.pop(worker_id, None)
-                if attempt == 1:
+                if attempt < COMMAND_ATTEMPTS:
                     LOGGER.debug(
                         "%s Sending `%s` failed (%s: %s); retrying once with a fresh session",
                         self.log_id,
