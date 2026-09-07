@@ -4,12 +4,11 @@ Setting up a development environment, running the test suite, and linting.
 
 ```bash
 # Set up a virtual environment with the same Home Assistant / OWNd versions this
-# integration targets, plus the test tooling. These are the versions CI installs
-# (.github/workflows/tests.yml); keep the two in sync:
+# integration targets, plus the test tooling. requirements_test.txt is the single
+# list CI installs too (.github/workflows/tests.yml):
 python3 -m venv .venv
 source .venv/bin/activate
-pip install "homeassistant==2026.9.0" "OWNd==0.7.49" pytest pytest-timeout \
-  "pytest-homeassistant-custom-component==0.13.363" ruff
+pip install -r requirements_test.txt
 
 # Lint (ruff.toml at the repository root pins the rule set and the line length,
 # so the result does not depend on a global or editor configuration):

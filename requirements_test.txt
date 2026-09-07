@@ -1,0 +1,9 @@
+# The versions this integration targets and the test tooling.
+# Installed by .github/workflows/tests.yml and by the local setup in
+# docs/development.md; keep the two in sync by editing only this file.
+homeassistant==2026.9.0
+OWNd==0.7.49
+pytest
+pytest-timeout
+pytest-homeassistant-custom-component==0.13.363
+ruff
