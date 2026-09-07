@@ -576,7 +576,10 @@ async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFix
                 event.instances[1].feed("*1*1*11##")
                 await asyncio.sleep(0.05)
             assert len(event.instances) == 2
-    assert any("no answer on either session" in record.message for record in caplog.records)
+    assert any(
+        "no status request acknowledged on the command session and nothing on the monitor" in record.message
+        for record in caplog.records
+    )
 
 
 async def test_answered_probe_keeps_the_session() -> None:
@@ -1931,6 +1934,48 @@ async def test_only_a_command_ack_newer_than_the_probe_keeps_the_session() -> No
     await alive._check_idle()  # noqa: SLF001 - must not raise
     assert alive._probe_sent_at is None  # noqa: SLF001 - disarmed
     assert alive._last_rx == 50.0  # noqa: SLF001 - the silence clock restarts
+
+
+async def test_an_acked_ordinary_command_does_not_speak_for_the_watchdog() -> None:
+    """Review 4 / C4-3: the log line has to say exactly what was checked.
+
+    Only a *status request* stamps ``_command_ack_at`` (``_on_command_result``),
+    because only a status request is a question we know the gateway had to answer.
+    So a gateway that is ACKing the user's lamps the whole time still loses and
+    rebuilds its monitor session when the probe itself goes unanswered - which is
+    correct, but the round-3 message called it "no answer on either session" and sent
+    the reader looking for a dead gateway while their lights were demonstrably
+    working.
+
+    Mutation caught: stamping ``_command_ack_at`` for every acknowledged command (the
+    wider condition the docstring used to describe), after which the reconnect below
+    never happens and the R7 short-circuit has no upper bound at all.
+    """
+    handler = make_handler()
+    register(handler, LIGHT, "1-11")
+    clock = FakeClock()
+    handler._now = clock  # noqa: SLF001 - shadows the static clock on this instance
+    handler.idle_timeout = 100.0
+    handler.probe_window = 50.0
+    handler._last_rx = -150.0  # noqa: SLF001 - silent for 150 s at clock 0
+
+    await handler._check_idle()  # noqa: SLF001 - queues the probe and arms the window
+    assert handler._probe_sent_at == 0.0  # noqa: SLF001
+
+    # One second later the gateway ACKs an ordinary command: alive on the command
+    # port, but that is not the question the watchdog asked.
+    clock.value = 1.0
+    await handler._on_command_result(  # noqa: SLF001
+        _QueuedCommand(OWNLightingCommand.switch_on("11"), False, 0.0), CommandResult(True, [])
+    )
+    assert handler._command_ack_at is None  # noqa: SLF001
+
+    clock.value = 50.0
+    with pytest.raises(SessionError) as excinfo:
+        await handler._check_idle()  # noqa: SLF001
+    assert str(excinfo.value) == (
+        "no status request acknowledged on the command session and nothing on the monitor for 200 s"
+    )
 
 
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
