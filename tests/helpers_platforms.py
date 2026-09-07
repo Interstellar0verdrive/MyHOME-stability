@@ -124,6 +124,19 @@ def entity_object(hass: HomeAssistant, platform: str, device_key: str, slot: str
     return device_config(hass, platform, device_key)[CONF_ENTITIES][slot or platform]
 
 
+async def feed_frame(hass: HomeAssistant, frame: str) -> None:
+    """Push a raw frame through the gateway dispatcher, as the monitor session does.
+
+    The counterpart of ``feed_event`` one level up: this one *does* go through
+    ``gateway._dispatch_message``, so it exercises the routing as well.
+    """
+    handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+    message = OWNEvent.parse(frame)
+    assert message is not None, frame
+    await handler._dispatch_message(message, from_monitor=True)  # noqa: SLF001
+    await hass.async_block_till_done()
+
+
 async def feed_event(hass: HomeAssistant, entity, frame: str) -> None:
     """Dispatch a bus frame to one entity, the way gateway.listening_loop does.
 

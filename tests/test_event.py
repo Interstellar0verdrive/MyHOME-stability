@@ -13,11 +13,9 @@ from homeassistant.components.event import ATTR_EVENT_TYPE, ATTR_EVENT_TYPES, DO
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from OWNd.message import OWNEvent
 
 from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import (
-    CONF_ENTITY,
     CONF_PLATFORMS,
     DOMAIN,
     EVENT_CEN,
@@ -26,7 +24,13 @@ from custom_components.myhome.const import (
 )
 
 from .helpers_core import MAC
-from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, device_config, entity_object, setup_myhome
+from .helpers_platforms import (
+    GATEWAY_DIAG_UNIQUE_IDS,
+    device_config,
+    entity_object,
+    feed_frame,
+    setup_myhome,
+)
 
 SCENARIO_YAML = f"""
 gateway:
@@ -53,15 +57,6 @@ def _capture(hass: HomeAssistant, event_type: str) -> list[dict[str, Any]]:
     seen: list[dict[str, Any]] = []
     hass.bus.async_listen(event_type, lambda event: seen.append(dict(event.data)))
     return seen
-
-
-async def feed_frame(hass: HomeAssistant, frame: str) -> None:
-    """Push a raw frame through the gateway dispatcher, as the monitor session does."""
-    handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
-    message = OWNEvent.parse(frame)
-    assert message is not None, frame
-    await handler._dispatch_message(message, from_monitor=True)  # noqa: SLF001
-    await hass.async_block_till_done()
 
 
 # --------------------------------------------------------------------------- creation
