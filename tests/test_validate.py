@@ -855,14 +855,25 @@ _ENGINE_SCRIPT = textwrap.dedent(
     importlib.import_module("custom_components.myhome.const")
     validate = importlib.import_module("custom_components.myhome.validate")
     assert validate.Schema is vol.Schema
+    def tagged(value):
+        # A bare `default=str` would let two engines returning DIFFERENT TYPES with
+        # the same repr still "agree"; the type name travels with the value.
+        return {"__type__": type(value).__name__, "__str__": str(value)}
     cases = json.load(sys.stdin)
     results = []
     for case in cases:
         try:
             out = validate.config_schema(copy.deepcopy(case))
-            results.append({"ok": json.loads(json.dumps(out, default=str, sort_keys=True))})
+            results.append({"ok": json.loads(json.dumps(out, default=tagged, sort_keys=True))})
         except vol.Invalid as err:
-            results.append({"invalid": [str(p) for p in err.path]})
+            # `error_message` is the text validate.py authored; `str(err)` is that
+            # text plus the engine's OWN rendering of the path, which the two
+            # engines spell differently (see the test below).
+            results.append({
+                "invalid": [str(p) for p in err.path],
+                "message": err.error_message,
+                "rendered": str(err),
+            })
     json.dump(results, sys.stdout, sort_keys=True)
     '''
 )
@@ -925,10 +936,22 @@ _ENGINE_CASES = [
 ]
 
 
-def _run_engine(engine: str) -> list:
+def _engine_cases() -> list:
+    """The 13 frozen literals plus the reference configuration itself.
+
+    The literals are small and adversarial; the fixture is the only case with the
+    real shape and size of a user's file (two gateways, every platform), and it is
+    what `test_end_to_end_with_fake_gateway` and half the platform tests are built
+    on. An engine difference that only shows up at that scale used to be outside
+    the agreement contract entirely.
+    """
+    return [*_ENGINE_CASES, yaml.safe_load(USER_YAML.read_text(encoding="utf-8"))]
+
+
+def _run_engine(engine: str, cases: list) -> list:
     proc = subprocess.run(
         [sys.executable, "-c", _ENGINE_SCRIPT, engine, str(REPO_ROOT)],
-        input=json.dumps(_ENGINE_CASES),
+        input=json.dumps(cases),
         capture_output=True,
         text=True,
         check=False,
@@ -937,10 +960,52 @@ def _run_engine(engine: str) -> list:
     return json.loads(proc.stdout)
 
 
+@pytest.mark.slow  # ~1.3 s: two full Home Assistant imports in two subprocesses
 def test_probatio_and_voluptuous_agree():
-    probatio_results = _run_engine("probatio")
-    voluptuous_results = _run_engine("voluptuous")
-    assert len(probatio_results) == len(_ENGINE_CASES)
+    """val-00: HA 2026.9's probatio shim and real voluptuous must decide identically.
+
+    Guards the `_section()` lambda-wrapping workaround in validate.py. The test is
+    not self-fulfilling: the in-script `assert ("probatio" in vol.__file__) ==
+    (engine == "probatio")` and `assert validate.Schema is vol.Schema` make a
+    subprocess that loaded the wrong engine exit non-zero, which `_run_engine`
+    turns into a failure.
+
+    Agreement covers the accepted output, the error path AND the error message
+    (`__init__.py` puts that text in front of the user in a repair issue, and
+    `test_init.py` asserts on it, so an engine that reworded it would otherwise
+    pass here and break there), over a corpus that now includes the reference
+    configuration and not only the 13 hand-written literals.
+    """
+    cases = _engine_cases()
+    probatio_results = _run_engine("probatio", cases)
+    voluptuous_results = _run_engine("voluptuous", cases)
+    assert len(probatio_results) == len(cases)
+
+    # `rendered` is compared separately, below: it is the only part the two engines
+    # legitimately disagree on.
+    renderings = [
+        (probatio.pop("rendered", None), voluptuous.pop("rendered", None))
+        for probatio, voluptuous in zip(probatio_results, voluptuous_results, strict=True)
+    ]
     assert probatio_results == voluptuous_results
-    # Sanity: the case list covers both outcomes.
+    # Sanity: the case list covers both outcomes, and the fixture is an accepted one.
     assert any("ok" in r for r in probatio_results) and any("invalid" in r for r in probatio_results)
+    assert "ok" in probatio_results[-1], probatio_results[-1]
+
+    # Documented divergence, not a bug in validate.py: both engines append their own
+    # notation for the offending path to the authored message - probatio writes
+    # "... at 'gateway.switch.b.where'", voluptuous "... @ data['gateway'][...]".
+    # `__init__.py` puts `str(err)` verbatim into the repair issue the user reads, so
+    # that one sentence IS engine-dependent while everything validate.py controls is
+    # not. Pinned here so a future engine change that touches the authored half
+    # (rather than only the suffix) fails instead of silently reaching users.
+    compared = 0
+    for result, (probatio_text, voluptuous_text) in zip(probatio_results, renderings, strict=True):
+        if "invalid" not in result:
+            assert probatio_text is None and voluptuous_text is None
+            continue
+        compared += 1
+        assert probatio_text.startswith(result["message"])
+        assert voluptuous_text.startswith(result["message"])
+        assert probatio_text != voluptuous_text or "@" not in voluptuous_text
+    assert compared, "no invalid case in the corpus"
