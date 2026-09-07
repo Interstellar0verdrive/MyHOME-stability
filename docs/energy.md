@@ -104,8 +104,9 @@ gateway:
 
 Precedence: per-sensor key → `sensor_defaults`/`energy` → (for `keepalive_minutes`
 only) the *Default instant-power keep-alive* option of the integration → built-in
-default. A value written in the file always wins over the option, even when it equals
-the built-in `125`. Legacy
+default. A value written in the file always wins over the option — under
+`sensor_defaults:` as much as on the sensor itself — even when it equals the built-in
+`125`, so the option only ever replaces the built-in default. Legacy
 spellings `energy_min_delta_w`, `energy_min_interval_sec`,
 `energy_suppress_log_interval_sec`, `energy_info_log_interval_sec`,
 `refresh_period` and `refresh_period_sec` are still accepted; the canonical key

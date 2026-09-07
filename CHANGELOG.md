@@ -240,7 +240,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - The *Probe window* option description now says what the watchdog does: the
-  connection is rebuilt only when *neither* session answers the probe.
+  connection is rebuilt only when nothing arrived on the monitor session **and** the
+  gateway acknowledged no status request — the probe or any other — on the command
+  session. The *Default instant-power keep-alive* description says which values it
+  gives way to: any `keepalive_minutes` written in `myhome.yaml`, under
+  `sensor_defaults:` as much as on the sensor itself.
 - **Binary sensors are named after their device** ("Window Contact", not "Window
   Contact Window"): they are now the main entity of their device like every other
   platform. Entity ids and history are unaffected; only the displayed name changes.

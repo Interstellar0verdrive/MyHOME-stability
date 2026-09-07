@@ -98,10 +98,10 @@ misbehaviour, and change one at a time.
 | Option | Default | Range | What it does |
 | --- | --- | --- | --- |
 | Idle watchdog | 300 s | 60–3600 | No frame received on the monitor session for this long: a harmless status request is sent through the command session to check the gateway is still alive. Lower it on a gateway that dies silently; raise it on a very quiet plant that produces false probes. |
-| Probe window | 30 s | 5–300 | The probe was sent and neither the monitor session nor the command session answered: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). If the gateway acknowledged the probe on the **command** session it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
+| Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session — the probe or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
 | Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
 | Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
-| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors that do not set `keepalive_minutes` themselves in `myhome.yaml`. `0` disables it. A per-sensor value in the file always wins. See [Energy monitoring](energy.md). |
+| Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` block. `0` disables it. Any value written in the file — per sensor or under `sensor_defaults:` — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
 
 A [diagnostics download](troubleshooting.md#diagnostics-download) always reports the
 values actually in effect, under `effective_options`.
