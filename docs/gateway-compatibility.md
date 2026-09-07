@@ -36,16 +36,21 @@ WHO 2 shutter actuators and CEN+ scenario controls.
 
 ## Energy, events and sessions
 
-| Gateway | Instant power (`*#18*<where>*#1200#1*<minutes>##`) | Energy totals (`*#18*<where>*51/53/54##`) | CEN+ events | CEN events | Concurrent session limit |
-|---|---|---|---|---|---|
-| MyHOMEServer1 | **verified** (F520/F521) | **verified not to work**: the requests are ACKed with no data frame, so the daily/monthly/total sensors stay `unknown` | **verified** | **please report** | **please report** (see note 3) |
-| F454 | *expected* | **please report** | *expected* | *expected* | **please report** |
-| F455 | *expected* | **please report** | *expected* | *expected* | **please report** |
-| F453AV | *expected* | **please report** | *expected* | *expected* | **please report** |
-| MH200N | *expected* | **please report** | *expected* | *expected* | **please report** |
-| MH202 | *expected* | **please report** | *expected* | *expected* | **please report** |
-| MH201 | *expected* | **please report** | *expected* | *expected* | **please report** |
-| Other | *expected* | **please report** | *expected* | *expected* | **please report** |
+| Gateway | Instant power (`*#18*<where>*#1200#1*<minutes>##`) | Energy totals (`*#18*<where>*51/53/54##`) | CEN+ events | CEN events | Two-phase covers (`slat_time`) | Wall pushbutton events | Concurrent session limit |
+|---|---|---|---|---|---|---|---|
+| MyHOMEServer1 | **verified** (F520/F521) | **verified not to work**: the requests are ACKed with no data frame, so the daily/monthly/total sensors stay `unknown` | **verified** | **please report** | **verified** | **verified** | **please report** (see note 3) |
+| F454 | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+| F455 | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+| F453AV | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+| MH200N | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+| MH202 | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+| MH201 | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+| Other | *expected* | **please report** | *expected* | *expected* | *expected* | *expected* | **please report** |
+
+The two 0.4.0 columns record what 0.4.0 was developed against: the two-phase cover
+model was calibrated on a basic WHO 2 shutter actuator, and the wall pushbutton
+event on a dimmer-mode pushbutton wired to a relay, both on the MyHOMEServer1
+above. Everything else follows from the protocol.
 
 ### Note 1 — the two discovery paths
 
@@ -105,9 +110,14 @@ or immediate disconnects after a reload, that is the symptom to report.
 
 ## Watchdog, keep-alive and queue parameters
 
-Since 0.3.0 the first four are configurable from the integration's **Configure** dialog (see [Configuration reference](configuration.md)); the defaults below are the values used when nothing is set. They live in `custom_components/myhome/gateway.py` and
-`custom_components/myhome/own_session.py`. They are not exposed in the UI or in
-`myhome.yaml`. Tests override them on the handler instance; nothing else does.
+Since 0.3.0, five of these are editable from the integration's **Configure**
+dialog: `IDLE_TIMEOUT_SEC`, `PROBE_WINDOW_SEC`, `COMMAND_TIMEOUT_SEC`,
+`COMMAND_TTL_SEC` and the default instant-power keep-alive (see
+[Configuration → Session tunables](configuration.md#session-tunables)); the
+values in the table are the defaults used when nothing is set. **Every other row
+is a code constant**, living in `custom_components/myhome/gateway.py` and
+`custom_components/myhome/own_session.py`, and is exposed neither in the UI nor
+in `myhome.yaml`. Tests override them on the handler instance; nothing else does.
 
 | Parameter | Value | Where | What it does |
 |---|---|---|---|

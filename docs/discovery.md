@@ -19,6 +19,29 @@ integration.
   `myhome_discovery_completed` when the run ends (see
   [Events → Device discovery events](services-and-events.md#device-discovery-events)).
 
+## What discovery can suggest
+
+Discovery only writes the device types it knows how to turn into a `myhome.yaml`
+entry:
+
+| Seen on the bus | Suggested as |
+|---|---|
+| Lighting actuator, ON/OFF | `light` (WHO 1, `dimmable: false`) |
+| Lighting actuator answering with a brightness or a preset level | `light` (WHO 1, `dimmable: true`) |
+| Automation actuator | `cover` (WHO 2, `shutter_run: 20`) |
+| Energy meter | `sensor` (WHO 18, `class: power`) |
+| Thermoregulation zone | `climate` (WHO 4) |
+| Temperature probe | `sensor` (WHO 4, `class: temperature`) |
+| Dry contact / IR detector | `binary_sensor` (WHO 25, `class: motion`) |
+| Auxiliary channel | `switch` (WHO 9) |
+
+Everything else is seen and reported on the event bus but **never** written to
+`myhome_discovered.yaml`: CEN and CEN+ scenario controls, alarm devices, and any
+frame the classifier cannot place. Pressing keypad buttons during a run therefore
+fires `myhome_device_discovered` and adds nothing to the file — that is expected,
+not a failure. Declare scenario controls by hand, under
+[`scenario_control:`](configuration.md#scenario-control-cen--cen).
+
 For debug-log examples of a discovery run, and what to check when no devices are
 found or suggestions are missing, see
 [Troubleshooting → Device discovery issues](troubleshooting.md#device-discovery-issues).

@@ -90,7 +90,7 @@ sequenceDiagram
     Init->>HA: device_registry.async_get_or_create(gateway device)
     Init->>GW: handler.device_id = <registry id>
     Init->>HA: entry.async_on_unload(handler.close_listener)
-    Init->>Plat: async_forward_entry_setups(all 7 platforms)
+    Init->>Plat: async_forward_entry_setups(all 8 platforms)
     Note over Plat: each platform returns early<br/>when it has no devices
     Init->>GW: initialize_discovery_service()
     Init->>GW: start listening_loop() as background task
@@ -116,7 +116,7 @@ stop_device_discovery()
   -> close_listener()          # stop the loops, close sessions, drop the queue,
                                # publish is_connected = False
   -> _async_cancel_workers()   # belt and braces
-  -> async_unload_platforms(all 7)
+  -> async_unload_platforms(all 8)
   -> hass.data[DOMAIN].pop(mac)
   -> unregister services if this was the last loaded entry
 ```
@@ -306,7 +306,9 @@ raises**. Its order is:
 5. A heating **command** with dimension 14 seen on the bus → request that zone's
    status.
 6. `OWNCENPlusEvent` / `OWNCENEvent` → fire `myhome_cenplus_event` /
-   `myhome_cen_event`.
+   `myhome_cen_event`, then hand the same press to the control's event entity
+   through `_dispatch_scenario_event()` when the control is declared under
+   `scenario_control:` (an undeclared control produces the bus event only).
 7. Gateway events/commands → DEBUG.
 8. Anything else → DEBUG.
 
@@ -390,10 +392,11 @@ Platform specific guarantees:
 |---|---|
 | `light` | `where`, `dimmable` (default `false`), `lock_buttons` (default `false`). |
 | `switch` | `where`, `class` (default `switch`), `lock_buttons`. |
-| `cover` | `where`, `class` (default `shutter`), `advanced` (`false`), `shutter_run` (`20.0`, minimum 1), `inverted` (`false`), `lock_buttons`. |
+| `cover` | `where`, `class` (default `shutter`), `advanced` (`false`), `shutter_run` (`20.0`, minimum 1), `slat_time` (`0.0`), `opening_time` and `closing_time` (both defaulting to `shutter_run`, minimum 1), `inverted` (`false`), `lock_buttons`. |
 | `binary_sensor` | `where`, `inverted`, `class` — **which may legitimately be `None`** (the default for WHO 9). |
 | `sensor` | `where`, `class` (**required**, one of power/energy/temperature/illuminance), the merged filter keys, and the `entities` slots. |
 | `climate` | `zone` (default `#0`), `heat`, `cool`, `fan`, `standalone`, `central`. |
+| `event` (`scenario_control:`) | `protocol` (default `cen_plus`), `object` (int) **and** `where` (the same address as a string) — both are written whichever key was given, `who` (`25` for CEN+, `15` for CEN), `buttons` (default `[1, 2, 3, 4]`), `model` (defaults to `CEN+ scenario control` / `CEN scenario control`). Keyed `cenplus-<object>` / `cen-<where>` instead of `who-where`. |
 
 ### Rekeying and duplicate detection
 
@@ -421,8 +424,8 @@ keys, in contrast, are strict: only strings are accepted as gateway roots.
 
 ## Test strategy
 
-163 tests, run with `pytest tests` (`pytest.ini` sets `asyncio_mode = auto`, which
-the Home Assistant test plugin requires).
+The suite runs in CI on every push, and locally with `pytest tests` (`pytest.ini`
+sets `asyncio_mode = auto`, which the Home Assistant test plugin requires).
 
 | File | Covers |
 |---|---|
@@ -430,6 +433,7 @@ the Home Assistant test plugin requires).
 | `test_gateway.py` | The handler against fake channels *and* against a real loopback OpenWebNet server: queue bounds, TTL, retry-once, drop, idle watchdog, auth failure, dispatcher isolation, the energy throttle, idempotent shutdown. |
 | `test_init.py` | Setup and unload, entry migration, `ConfigEntryNotReady` / `ConfigEntryAuthFailed` paths, registry pruning that preserves user-disabled entities, service validation, two-gateway resolution — and the end-to-end test. |
 | `test_config_flow.py` | Picker, manual entry, SSDP, port, password, reauth, options. |
+| `test_diagnostics.py` | The diagnostics payload: redaction of the password, MAC/host/UDN masking, the session-negotiation marker, and the shape of `config` / `handler` / `recent_frames`. |
 | `test_light.py`, `test_switch.py`, `test_cover.py`, `test_climate.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`, `test_event.py` | Per-platform behaviour. |
 | `test_device_trigger.py` | What the automation editor is offered per protocol, an attached trigger firing on a real bus frame, and the shipped blueprints against Home Assistant's blueprint schema. |
 
@@ -446,8 +450,9 @@ open monitor session, and can drop all monitor sessions to simulate a dead link.
 ### What the end-to-end test covers
 
 `test_end_to_end_with_fake_gateway` runs a **real** config entry setup against
-that server with **no `OWNd` mock at all**, using the author's own redacted
-configuration from `tests/fixtures/myhome.yaml`. It asserts, in order:
+that server with **no `OWNd` mock at all**, using the fictional-home
+configuration from `tests/fixtures/myhome.yaml` — invented names and addresses
+over the layout of a typical MyHOMEServer1 install. It asserts, in order:
 
 1. the entry reaches `LOADED` and the entities exist with their expected unique
    ids (`…-1-11` light, `…-2-81` cover, `…-18-51-total-energy` meter);

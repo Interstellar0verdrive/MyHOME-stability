@@ -156,16 +156,23 @@ the CEN WHERE. See
 for the event data contract; CEN controls support the same
 [device triggers](#device-triggers-and-blueprints) with `protocol: cen`.
 
+Match a tap on **`pushbutton_short_release`**, not on `pushbutton_short_press`:
+on CEN the "press" frame is sent at the start of every press, long ones included,
+so a short-press trigger also fires when the user starts holding the button.
+`pushbutton_long_press` repeats while the button is held, so give a long-press
+automation `mode: queued` (or `max_exceeded: silent`) rather than the default
+`mode: single`.
+
 ```yaml
 automation:
-  - alias: "CEN 5/3 pressed"
+  - alias: "CEN 5/3 tapped"
     triggers:
       - trigger: event
         event_type: myhome_cen_event
         event_data:
           object: 5
           pushbutton: 3
-          event: pushbutton_short_press
+          event: pushbutton_short_release
     actions:
       - action: script.turn_on
         target:
@@ -246,7 +253,10 @@ https://github.com/Interstellar0verdrive/MyHOME-stability/blob/master/blueprints
 
 Both ask for the scenario-control device, the button(s) and the target entity;
 the control must be declared in `myhome.yaml` first, otherwise there is no device
-to pick.
+to pick — the picker lists the declared scenario controls of this integration and
+nothing else. Both offer **buttons 1-8** only — for a higher button number on a
+large keypad, use a device trigger or a plain `myhome_cenplus_event` trigger as
+shown above.
 
 ## Wall pushbuttons in dimmer mode
 
@@ -312,6 +322,10 @@ automation:
         data:
           brightness_step_pct: "{{ 10 if trigger.id == 'up' else -10 }}"
 ```
+
+If the pushbutton sits behind an F422 local bus interface, the event's `where`
+carries the full bus form (`"42#4#3"`), not `"42"` — check a live event in
+**Developer tools → Events** before writing the match.
 
 #### Example 2: hold on any light = the whole room
 
@@ -457,11 +471,13 @@ Map a button to a scene instead of a group if you prefer. The LEDs on every keyp
 follow the actuators, so whatever Home Assistant switches on the bus is reflected on
 the wall without extra work.
 
-One limit of the example above: it keeps a single "last frame / last WHERE" pair, so
-two buttons held at the same time (their frames arrive interleaved, 24, 18, 24, 18…)
-reset each other and never reach the threshold. If that matters to you, keep the
-per-button counters in one `input_text` as JSON keyed by WHERE, and add a short
-per-room lock so two holds on the same room do not undo each other.
+One limit of the example above: it keeps a single "last frame / last WHERE" pair,
+so two buttons held at the same time defeat it. Their frames arrive interleaved
+(WHERE `11`, then `13`, then `11`, then `13`…), each one looks to the automation
+like "a different WHERE from last time", `new_hold` is true every time, and the
+counter resets before either hold reaches the threshold. If that matters to you,
+keep the per-button counters in one `input_text` as JSON keyed by WHERE, and add
+a short per-room lock so two holds on the same room do not undo each other.
 
 ## Raw OpenWebNet commands
 
