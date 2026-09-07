@@ -48,10 +48,11 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
      during the run (see [Discovery](discovery.md))
    - `Discovered bus_dimmer at WHO=1 WHERE=11` (INFO), once per new device
    - `Discovery completed: N device(s) seen` (INFO)
-   - `Discovery finished: N suggestion(s) (M new) written to <path>` (INFO),
-     followed, when a run saw something it could not suggest, by
+   - `Discovery finished: N suggestion(s) (M new) written to <path>` (INFO). When
+     the run saw something it could not suggest, the same line ends with
      `N device(s) must be declared by hand under scenario_control: (...)` and/or
-     `N device(s) belong to a family this integration has no support for (...)`
+     `N device(s) belong to a family this integration has no support for (...)`;
+     a run that suggested nothing at all logs those clauses on their own
 
    The suggestions are then flushed to `myhome_discovered.yaml`. Nothing is ever
    written to `myhome.yaml`.

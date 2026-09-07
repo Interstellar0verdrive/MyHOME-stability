@@ -109,7 +109,10 @@ needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gatewa
   (alarm devices). A lighting actuator is always reported as `light`, never as
   `switch`: nothing on the bus says which of the two you want. `discovered_device`
   carries an `interface` key as well — the F422 local bus interface of the device,
-  unpadded, and `null` for a device on the main bus.
+  unpadded, and `null` for a device on the main bus. It also carries a `category` — a
+  coarse grouping of the device family, one of `lighting`, `automation`, `energy`,
+  `thermoregulation`, `scenario`, `auxiliary`, `alarm`, or `generic` for a frame the
+  classifier could not place.
 - `myhome_discovery_completed`: fired when a discovery run finishes (`myhome.stop_discovery`
   or the 60-second timeout). Data: `gateway_mac`, `reason` (`stopped` when the service
   ended the run, `timeout` when it ran out), `discovered_count` and

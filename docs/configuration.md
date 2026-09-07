@@ -243,13 +243,14 @@ basic (timed) cover, the second to every `advanced:` one.
 The gateway repeats commands back to Home Assistant a moment after it accepts them,
 and those repeats look exactly like a keypad press. A frame arriving within 1.5 s of
 a command sent by Home Assistant is ignored as such a repeat only when it can be one:
-a `stopped` frame right after a movement we asked for, or a copy of the movement our
-own `cover.stop_cover` interrupted. A movement in any other direction, such as
-pressing *up* on the keypad right after stopping a shutter that was going down, is
-honoured straight away. Pressing the **same** direction again within that second and
-a half cannot be told apart from the repeat, so it is ignored; the integration then
-re-reads the actuator's status, and the movement is picked up about two seconds late
-rather than lost. A stop Home Assistant could not even send — the gateway's command
+a `stopped` frame right after a movement we asked for, or a copy of the movement a
+stop of ours interrupted — a `cover.stop_cover`, or the stop the integration sends by
+itself at the end of a *set position* or a tilt run. A movement in any other
+direction, such as pressing *up* on the keypad right after stopping a shutter that
+was going down, is honoured straight away. Pressing the **same** direction again
+within that second and a half cannot be told apart from the repeat, so it is ignored;
+the integration then re-reads the actuator's status, and the movement is picked up
+about two seconds late rather than lost. A stop Home Assistant could not even send — the gateway's command
 queue was full, or the connection was closing — changes nothing at all: no repeat can
 follow a command that was never sent, and the shutter is still running, so the
 estimate keeps running with it. The same holds for the stop the integration sends by
@@ -412,10 +413,12 @@ and a pump, or one actuator per circuit, therefore reports *Idle* as soon as **a
 one of them switches off, even if another is still running. The value is not stuck:
 the actuator's next "on" frame hands the mode/temperature derivation back its job, and
 from then on the temperature readings drive `hvac_action` again. A central unit that
-also reports *valve* status is unaffected — the direction a valve frame carries is
-kept until another frame contradicts it. Zones with a single actuator — the usual
-case — and central units that report *valve* status (which carries the direction) are
-exact.
+also reports *valve* status keeps the direction the valve named through an actuator
+frame that only says *active* — that one no longer overrules it. An actuator **off** is
+still taken as the zone's answer there too, so the *Idle*-on-any-off limitation above
+applies to such a plant as well, until the next valve frame restores the direction.
+Only two cases are exact: a zone with a single actuator — the usual one — and a
+central unit that reports *valve* status and no per-actuator status at all.
 
 ## Sensor
 
