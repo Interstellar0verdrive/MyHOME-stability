@@ -952,7 +952,31 @@ def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
         # deliberately left alone: their keys keep whatever text the bus writes, so
         # padding is self-consistent there and normalising it would rename entities that
         # work today.
+        as_written = device[CONF_WHERE]
         device[CONF_WHERE] = str(int(device[CONF_WHERE]))
+        # P6-RISK-1: normalising is not enough, because a whole family of addresses can
+        # never meet a frame at all.  OWNd reads the zone of a WHO 4 frame out of its
+        # WHERE (``zone = int(where)``; a zone above 99 is split into ``sensor`` = the
+        # first digit and ``zone`` = the rest) and, whenever that zone is 0, reports the
+        # frame under the *central unit's* key ``4-#0``.  So ``'0'``, ``'00'``, ``'100'``,
+        # ``'200'``..``'900'`` and ``'1000'`` would build a probe that is created, named,
+        # available and ``unknown`` for ever - while its readings are delivered to the
+        # central unit's climate entity - which is exactly the failure the normalisation
+        # above exists to prevent.  There is nothing to normalise them to, because the
+        # central unit is a ``climate:`` device (``zone: '#0'``) and never a probe, so
+        # they are refused instead.  The rule is OWNd's own, not a list of values, so it
+        # keeps holding for longer addresses (``'10000'``) too.
+        number = int(device[CONF_WHERE])
+        zone_part = number if number <= 99 else int(str(number)[1:])
+        if zone_part == 0:
+            raise Invalid(
+                f"sensor '{yaml_key}': WHERE '{as_written}' is the central unit's address, not a "
+                f"probe's - every WHO 4 frame whose zone part is 0 is reported as '4-#0'. A "
+                f"temperature probe must be a zone ('1'-'99') or a secondary probe written "
+                f"'<sensor><zone>' (e.g. '302' = probe 3 of zone 2); the central unit itself is a "
+                f"climate device with zone '#0', not a temperature sensor",
+                path=[yaml_key, CONF_WHERE],
+            )
     if sensor_class in (SensorDeviceClass.POWER, SensorDeviceClass.ENERGY):
         device[CONF_ENTITIES][f"daily-{SensorDeviceClass.ENERGY}"] = {}
         device[CONF_ENTITIES][f"monthly-{SensorDeviceClass.ENERGY}"] = {}
