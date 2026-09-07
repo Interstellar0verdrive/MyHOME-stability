@@ -248,7 +248,14 @@ class _EnergySettings:
 
 
 class _LogThrottle:
-    """Per-key rate limiter for repeated log lines (counts what it suppressed)."""
+    """Per-key rate limiter for repeated log lines (counts what it suppressed).
+
+    ``MAX_KEYS`` bounds the map: some keys derive from bus addresses, so an
+    unbounded key space would be an unbounded dict. When the cap is reached the
+    least recently used quarter is evicted (at worst one extra line gets logged).
+    """
+
+    MAX_KEYS = 256
 
     def __init__(self) -> None:
         self._last: dict[str, float] = {}
@@ -260,6 +267,9 @@ class _LogThrottle:
         if last is not None and interval > 0 and now - last < interval:
             self._suppressed[key] = self._suppressed.get(key, 0) + 1
             return False, 0
+        if last is None and len(self._last) >= self.MAX_KEYS:
+            for stale in sorted(self._last, key=self._last.get)[: self.MAX_KEYS // 4]:
+                self.reset(stale)
         self._last[key] = now
         return True, self._suppressed.pop(key, 0)
 
@@ -393,6 +403,9 @@ class MyHOMEGatewayHandler:
         self._command_sessions: dict[int, OWNCommandChannel] = {}
         self._last_rx: float = 0.0
         self._probe_sent_at: float | None = None
+        # When the command session last ACKed a status request: proof the gateway is
+        # alive even if it does not mirror replies onto the monitor (see _check_idle).
+        self._probe_acked_at: float | None = None
 
         # Timing knobs: the four user-facing ones come from the entry options,
         # the rest are code constants (instance attributes so tests can shrink them).
@@ -693,7 +706,7 @@ class MyHOMEGatewayHandler:
         return self._enqueue(message, is_status_request=False)
 
     async def send_status_request(self, message: OWNCommand) -> bool:
-        """Queue a status request (logged at DEBUG only); same semantics as ``send``.
+        """Queue a status request; same semantics as ``send``, plus coalescing.
 
         An identical status frame already waiting in the queue is *coalesced*: the
         request is reported as accepted without queueing a second copy.  Asking the
@@ -801,6 +814,23 @@ class MyHOMEGatewayHandler:
                     elif not self._stop_command_workers:
                         await asyncio.sleep(backoff)
                         backoff = min(backoff * 2, self.max_backoff)
+                except Exception:  # noqa: BLE001 - a bug here must not kill the worker
+                    # Same contract as the listening loop: the task survives, the
+                    # command is dropped and counted, the worker backs off.
+                    LOGGER.exception(
+                        "%s Unexpected error while sending `%s`; dropping it and retrying in %.0f s",
+                        self.log_id,
+                        item.message,
+                        backoff,
+                    )
+                    await self._close_session(session)
+                    session = None
+                    self._command_sessions.pop(worker_id, None)
+                    self._commands_dropped += 1
+                    self._refresh_stats(publish=True, immediate=True)
+                    if not self._stop_command_workers:
+                        await asyncio.sleep(backoff)
+                        backoff = min(backoff * 2, self.max_backoff)
                 finally:
                     self.send_buffer.task_done()
         finally:
@@ -820,8 +850,16 @@ class MyHOMEGatewayHandler:
         for attempt in (1, 2):
             try:
                 if session is None:
-                    session = OWNCommandChannel(self.gateway, LOGGER)
-                    await session.open(self.connect_timeout)
+                    new_session = OWNCommandChannel(self.gateway, LOGGER)
+                    try:
+                        await new_session.open(self.connect_timeout)
+                    except BaseException:
+                        # Includes CancelledError (close_listener during a reload): a
+                        # channel we opened must never outlive this frame, gateways
+                        # limit the number of concurrent sessions.
+                        await self._close_session(new_session)
+                        raise
+                    session = new_session
                     self._command_sessions[worker_id] = session
                     LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
                 self._record_frame(FRAME_COMMAND, item.frame)
@@ -830,6 +868,9 @@ class MyHOMEGatewayHandler:
                 await self._close_session(session)
                 self._command_sessions.pop(worker_id, None)
                 self._handle_auth_failure(err, "command")
+                # The command is abandoned like any other undeliverable one.
+                self._commands_dropped += 1
+                self._refresh_stats(publish=True, immediate=True)
                 return None, False
             except _TRANSPORT_ERRORS as err:
                 await self._close_session(session)
@@ -864,10 +905,12 @@ class MyHOMEGatewayHandler:
         """Log the outcome and dispatch every reply frame like a monitor event (sc-01, gw-13)."""
         if result.acknowledged:
             LOGGER.debug("%s `%s` acknowledged (%d reply frame(s))", self.log_id, item.message, len(result.replies))
+            if item.is_status_request:
+                self._probe_acked_at = self._now()
         else:
             self._log_limited(
                 logging.WARNING,
-                f"nack-{item.message}",
+                f"nack-{getattr(item.message, 'who', '?')}-{getattr(item.message, 'where', '?')}",
                 "%s The gateway refused `%s` (NACK)",
                 self.log_id,
                 item.message,
@@ -987,10 +1030,32 @@ class MyHOMEGatewayHandler:
         if self._probe_sent_at is None:
             probe = self._probe_command()
             LOGGER.debug("%s No event for %.0f s: probing the bus with `%s`", self.log_id, idle, probe)
+            if not await self.send_status_request(probe):
+                # The command path refused it (queue full or closed): reconnecting
+                # the monitor cannot help. Leave the watchdog unarmed, retry next poll.
+                self._log_limited(
+                    logging.WARNING,
+                    "probe-not-queued",
+                    "%s Idle watchdog could not queue its probe; the event session is left alone",
+                    self.log_id,
+                )
+                return
             self._probe_sent_at = now
-            await self.send_status_request(probe)
             return
         if now - self._probe_sent_at >= self.probe_window:
+            if self._probe_acked_at is not None and self._probe_acked_at >= self._probe_sent_at:
+                # The gateway answered on the command session, so it is alive: this
+                # gateway simply does not mirror replies onto the monitor. The monitor
+                # socket itself is guarded by TCP keepalive; re-arm instead of churning.
+                self._log_limited(
+                    logging.DEBUG,
+                    "probe-not-mirrored",
+                    "%s The probe was answered on the command session but not mirrored on the monitor; not reconnecting",
+                    self.log_id,
+                )
+                self._last_rx = now
+                self._probe_sent_at = None
+                return
             raise SessionError(f"no event for {idle:.0f} s and the probe went unanswered")
 
     def _probe_command(self) -> OWNCommand:
@@ -1097,7 +1162,9 @@ class MyHOMEGatewayHandler:
             self.hass.bus.async_fire(
                 "myhome_area_light_event", {"message": str(message), "area": message.area, "event": event}
             )
-            await self.send_status_request(OWNLightingCommand.status(message.area))
+            # The WHERE as it came off the bus, not the decoded area: OWNd turns "00"
+            # into 0 and "100" into 10, and *#1*10## is the actuator A=1 PL=0.
+            await self.send_status_request(OWNLightingCommand.status(str(message.where)))
             return True
         if message.is_group:
             self.hass.bus.async_fire(
@@ -1189,7 +1256,7 @@ class MyHOMEGatewayHandler:
         """
         match = _LIGHT_TRANSLATION_RE.match(str(message))
         if match is None:
-            LOGGER.debug("%s Ignoring translation message `%s`", self.log_id, message)
+            LOGGER.debug("%s Could not read the WHAT of light translation `%s`", self.log_id, message)
             return
         what = int(match.group("what"))
         where = match.group("where")

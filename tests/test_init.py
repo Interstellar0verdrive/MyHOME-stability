@@ -18,7 +18,9 @@ from custom_components.myhome import expected_unique_ids, issue_id, normalise_en
 from custom_components.myhome.const import (
     CONF_ENTITY,
     CONF_FILE_PATH,
+    CONF_WORKER_COUNT,
     DOMAIN,
+    MAX_COMMAND_WORKERS,
     GATEWAY_DIAG_SUFFIXES,
     ISSUE_NO_DEVICES_FOR_GATEWAY,
     ISSUE_UNKNOWN_KEYS,
@@ -510,3 +512,32 @@ async def test_send_message_accepts_frames_ownd_cannot_type(hass: HomeAssistant,
         assert handler.send_buffer.qsize() == before + 1
         with pytest.raises(ServiceValidationError):
             await hass.services.async_call(DOMAIN, "send_message", {"message": "*25*21#1*#2"}, blocking=True)
+
+
+# --------------------------------------------------------------------------- review 2026-09-07
+async def test_worker_count_option_is_guarded(hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+    """A hand-edited option must neither crash the setup nor flood the gateway with sessions."""
+    entry = make_entry(write_yaml(tmp_path), options={CONF_WORKER_COUNT: "abc"})
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        assert len(handler.sending_workers) == 1
+        assert "is not a number" in caplog.text
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+    entry = make_entry(write_yaml(tmp_path), options={CONF_WORKER_COUNT: 99}, mac="00:03:50:aa:bb:dd")
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        handler = hass.data[DOMAIN]["00:03:50:aa:bb:dd"][CONF_ENTITY]
+        assert len(handler.sending_workers) == MAX_COMMAND_WORKERS
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_failed_platform_unload_is_reported(hass: HomeAssistant, tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=False):
+            assert await hass.config_entries.async_unload(entry.entry_id) is False
+        assert "reload the integration to recover" in caplog.text
+

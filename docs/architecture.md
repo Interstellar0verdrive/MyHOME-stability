@@ -240,8 +240,12 @@ unknown number of late frames may still be in flight: the caller must discard it
 | Auth failure | immediate stop | `AuthenticationError` on a command session stops both loops and starts the reauth flow. |
 | Backoff | `1 s → 60 s` | Applied inside the sending loop after a failed delivery, reset on the first success. |
 
-Queued items carry an `is_status_request` flag (set by `send_status_request`); it
-is currently recorded but not read anywhere — both kinds are logged identically.
+Queued items carry an `is_status_request` flag (set by `send_status_request`). It
+is what lets `_has_pending_status()` coalesce an identical status frame that is
+still waiting in the queue (ordinary commands are never coalesced), and an ACKed
+status request is what tells the idle watchdog that the gateway is alive even
+when it does not mirror the reply onto the monitor session. Both kinds are logged
+identically at DEBUG.
 
 `close_listener()` drains whatever is left and logs the discarded commands (up to
 the first ten by name).
@@ -290,10 +294,15 @@ raises**. Its order is:
    `OWNd`'s `event_content` can choke on odd frames.
 2. Feed the discovery service (wrapped).
 3. `OWNEnergyEvent` → the instant-power throttle, then the entities.
-4. Lighting / automation / dry contact / aux / heating events → skip command
-   translations, handle general/area/group scope by firing the matching bus event
-   and re-requesting the affected states, handle dimmer preset levels by asking the
-   light for its real brightness, otherwise deliver to the entities.
+4. Lighting / automation / dry contact / aux / heating events → a WHO 1 command
+   translation (`*1*1000#WHAT*WHERE##`, the echo of a physical pushbutton) is
+   republished as `myhome_light_pushbutton_event` and goes no further; other
+   translations are skipped. General/area/group scope fires the matching bus event;
+   **lighting** general and area frames also re-request the affected states (groups
+   do not: a group has no WHERE to poll), while automation frames fire the event
+   only, because covers report their own movement as it happens. Dimmer preset
+   levels ask the light for its real brightness; everything else is delivered to
+   the entities.
 5. A heating **command** with dimension 14 seen on the bus → request that zone's
    status.
 6. `OWNCENPlusEvent` / `OWNCENEvent` → fire `myhome_cenplus_event` /

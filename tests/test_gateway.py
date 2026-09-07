@@ -374,6 +374,7 @@ async def test_command_auth_failure_starts_reauth() -> None:
     assert handler.auth_failed is True
     handler.config_entry.async_start_reauth.assert_called_once_with(handler.hass)
     assert len(command.instances) == 1
+    assert handler.stats.commands_dropped == 1  # the lost command is counted
 
 
 async def test_idle_command_session_is_closed() -> None:
@@ -426,14 +427,17 @@ async def test_transport_error_reconnects_and_signals_availability() -> None:
 
 
 async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFixture) -> None:
-    """gw-03: silence -> probe on the command session -> still silent -> reconnect."""
+    """gw-03: silence -> probe on the command session -> probe undeliverable -> reconnect."""
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
     handler = make_handler()
     register(handler, LIGHT, "1-11")
-    with fake_channels() as (event, command, _):
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        channel.open_error = OSError("gateway down")  # the probe never reaches the gateway
+
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (event, command, _):
         async with running(handler):
-            await wait_until(lambda: command.instances and command.instances[0].sent, timeout=3)
-            assert command.instances[0].sent == ["*#1*11##"]  # point-to-point probe
+            await wait_until(lambda: len(command.instances) >= 1, timeout=3)
             await wait_until(lambda: len(event.instances) == 2, timeout=3)
             # A live monitor keeps the second session: frames faster than idle_timeout.
             for _ in range(6):
@@ -520,9 +524,14 @@ async def test_light_translation_frames_become_pushbutton_events() -> None:
     assert [event["event"] for event in events] == ["on", "dim_up", "dim_down", "off", "dim_to_70", "what_11"]
     assert events[1] == {"mac": MAC, "where": "42", "what": 30, "event": "dim_up", "message": "*1*1000#30*42##"}
     assert light.events == []
+    # A local-bus WHERE is passed through verbatim; a translation without a WHAT is dropped.
+    await handler._dispatch_message(frame("*1*1000#30*11#4#3##"), from_monitor=True)  # noqa: SLF001
+    assert fired(handler.hass, "myhome_light_pushbutton_event")[-1]["where"] == "11#4#3"
+    await handler._dispatch_message(frame("*1*1000*11##"), from_monitor=True)  # noqa: SLF001
+    assert len(fired(handler.hass, "myhome_light_pushbutton_event")) == 7
     # Translations of other WHOs are still dropped silently.
     await handler._dispatch_message(frame("*2*1000#1*85##"), from_monitor=True)  # noqa: SLF001
-    assert len(fired(handler.hass, "myhome_light_pushbutton_event")) == 6
+    assert len(fired(handler.hass, "myhome_light_pushbutton_event")) == 7
 
 
 async def test_generate_events_never_fires_none(caplog: pytest.LogCaptureFixture) -> None:
@@ -1010,3 +1019,76 @@ def test_parse_frame_never_raises() -> None:
     assert frame("*25*21*21##") == "*25*21*21##"  # OWNd raises IndexError
     assert frame("*#13**22*1##") == "*#13**22*1##"  # OWNd raises IndexError
     assert frame("garbage##") == "garbage##"
+
+
+# --------------------------------------------------------------------------- review 2026-09-07
+async def test_sending_worker_survives_an_unexpected_exception() -> None:
+    """The command path must be as crash-proof as the event path."""
+    handler = make_handler()
+
+    class Boom(FakeCommandChannel):
+        async def open(self, timeout: float) -> None:
+            raise ValueError("gateway sent garbage during negotiation")
+
+    with fake_channels(command=Factory(Boom)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11")) is True
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            await asyncio.sleep(0.05)
+            assert not handler.sending_workers[0].done()
+            assert handler.stats.commands_dropped >= 1
+
+
+async def test_close_listener_closes_a_session_being_opened() -> None:
+    """A channel whose open() is cancelled by close_listener must not leak."""
+    handler = make_handler()
+    opened: list[Any] = []
+
+    class Slow(FakeCommandChannel):
+        async def open(self, timeout: float) -> None:
+            opened.append(self)
+            await asyncio.sleep(5)
+
+    with fake_channels(command=Factory(Slow)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11")) is True
+            await wait_until(lambda: bool(opened))
+    assert opened and all(channel.closed for channel in opened)
+
+
+async def test_idle_watchdog_does_not_reconnect_when_the_probe_cannot_be_queued() -> None:
+    handler = make_handler()
+    handler._stop_command_workers = True  # noqa: SLF001 - the queue refuses everything
+    handler.idle_timeout = 0.0
+    handler._last_rx = handler._now() - 1000  # noqa: SLF001
+    await handler._check_idle()  # noqa: SLF001
+    assert handler._probe_sent_at is None  # noqa: SLF001
+    await handler._check_idle()  # noqa: SLF001 - must not raise
+
+
+async def test_idle_watchdog_keeps_the_session_when_the_probe_is_acked() -> None:
+    """A gateway that ACKs the probe but does not mirror it on the monitor is alive."""
+    handler = make_handler()
+    register(handler, LIGHT, "1-11")
+    with fake_channels() as (event, command, dispatch):
+        async with running(handler):
+            await wait_until(lambda: command.instances and command.instances[0].sent, timeout=3)
+            assert command.instances[0].sent == ["*#1*11##"]
+            await asyncio.sleep(handler.idle_timeout + handler.probe_window + 0.3)
+            assert len(event.instances) == 1  # no reconnect
+    assert handler.stats.reconnects == 0
+
+
+async def test_area_status_request_keeps_the_bus_where() -> None:
+    handler = make_handler()
+    for raw in ("*1*1*3##", "*1*1*00##", "*1*1*100##"):
+        await handler._dispatch_message(frame(raw), from_monitor=True)  # noqa: SLF001
+    assert queued(handler) == ["*#1*3##", "*#1*00##", "*#1*100##"]
+
+
+async def test_nack_throttle_keys_are_bounded() -> None:
+    handler = make_handler()
+    for index in range(500):
+        handler._log_limited(logging.WARNING, f"nack-{index}", "x")  # noqa: SLF001
+    assert len(handler._throttle._last) <= gateway_module._LogThrottle.MAX_KEYS  # noqa: SLF001
+

@@ -190,10 +190,13 @@ can be acted on. Data:
 | key       | value                                                                 |
 |-----------|-----------------------------------------------------------------------|
 | `mac`     | gateway MAC (as in the CEN/CEN+ events)                               |
-| `where`   | the WHERE the button is addressed to, as a string (e.g. `"42"`)      |
+| `where`   | the WHERE the button is addressed to, exactly as it appears on the bus, as a string: `"42"` on the main bus, `"11#4#3"` behind a local bus interface, `"0"` / `"3"` for a general or area button. Compare with `startswith` if the interface does not matter to you. |
 | `what`    | the original WHAT, as an integer                                      |
 | `event`   | `on`, `off`, `dim_up` (WHAT 30), `dim_down` (31), `dim_to_<pct>` (2-10), otherwise `what_<n>` |
 | `message` | the raw frame                                                         |
+
+The event is fired whether or not "Generate events for every bus message" is
+enabled (that option only concerns `myhome_message_event`).
 
 The interesting case is a pushbutton configured in **dimmer mode** and wired to a
 relay: a short press gives `on`/`off` (and the light entity follows on its own), a

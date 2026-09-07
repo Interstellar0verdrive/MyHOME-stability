@@ -54,6 +54,8 @@ CONF_MANUFACTURER = "manufacturer"
 CONF_MANUFACTURER_URL = "manufacturerURL"
 CONF_UDN = "UDN"
 CONF_WORKER_COUNT = "command_worker_count"
+# Upper bound for the option: gateways hold only a handful of concurrent sessions.
+MAX_COMMAND_WORKERS = 4
 CONF_FILE_PATH = "config_file_path"
 CONF_GENERATE_EVENTS = "generate_events"
 CONF_WHO = "who"

@@ -156,6 +156,12 @@ class OWNChannel(OWNSession):
         except (OSError, TimeoutError):
             await self.close()
             raise
+        except Exception as err:  # noqa: BLE001 - OWNd's _negotiate() is not exception-safe
+            # A non-numeric OPEN password, a non-OpenWebNet peer on port 20000 or an
+            # unexpected greeting raise ValueError / UnicodeDecodeError / AttributeError
+            # inside OWNd: report them as a normal, reconnectable session failure.
+            await self.close()
+            raise SessionError(f"{self._type} session negotiation crashed ({type(err).__name__}: {err})") from err
 
         if not result or not result.get("Success"):
             reason = str((result or {}).get("Message") or "unknown")

@@ -72,6 +72,7 @@ from .const import (
     CONF_SSDP_ST,
     CONF_UDN,
     CONF_WORKER_COUNT,
+    MAX_COMMAND_WORKERS,
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
     DEFAULT_CONFIG_FILE,
@@ -455,7 +456,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mac: str = entry.data[CONF_MAC]
     config_file_path = str(entry.options.get(CONF_FILE_PATH) or hass.config.path(DEFAULT_CONFIG_FILE))
     generate_events = bool(entry.options.get(CONF_GENERATE_EVENTS, False))
-    worker_count = max(1, int(entry.options.get(CONF_WORKER_COUNT, 1)))
+    # Same contract as the gateway timing knobs: a hand-edited entry must never
+    # crash the setup or open more sessions than the gateway can hold.
+    try:
+        worker_count = int(entry.options.get(CONF_WORKER_COUNT, 1))
+    except (TypeError, ValueError):
+        LOGGER.warning(
+            "Option `%s` is not a number (%r): using 1", CONF_WORKER_COUNT, entry.options.get(CONF_WORKER_COUNT)
+        )
+        worker_count = 1
+    worker_count = min(max(1, worker_count), MAX_COMMAND_WORKERS)
 
     gateway_config = await _async_load_gateway_config(hass, entry, config_file_path, mac)
     # Fresh per-gateway dict: never merge into leftovers of a previous setup.
@@ -539,6 +549,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unload_ok:
+        # The sessions are already closed and cannot be reopened on this handler:
+        # the entry is unusable until it is reloaded.
+        LOGGER.error(
+            "Could not unload the MyHOME platforms for %s; the gateway connection is already closed, "
+            "reload the integration to recover",
+            mac,
+        )
         return False
 
     hass.data.get(DOMAIN, {}).pop(mac, None)
