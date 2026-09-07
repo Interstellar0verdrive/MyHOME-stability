@@ -29,7 +29,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Timing keys (`shutter_run`, `slat_time`, `opening_time`, `closing_time`) written
   on an `advanced` cover are now reported as ignored with a warning instead of
   silently dropped.
+- Covers, second review round:
+  - a keypad press within 1.5 s of a stop sent by Home Assistant is no longer
+    discarded. Only a frame that can actually be the gateway echoing our own command
+    is ignored: a `stopped` frame after a movement we commanded, or a copy of the
+    movement our own stop interrupted. A movement in any other direction is honoured
+    immediately, a press in the same direction is recovered by a status re-read about
+    two seconds later, and a stop the gateway refused no longer arms the window at
+    all. Without this a shutter driven from the wall could run fully open while Home
+    Assistant reported it closed, until the next command from Home Assistant;
+  - an advanced actuator no longer stays *Opening* / *Closing* for ever when its
+    `stopped` frame is lost: the direction is dropped after the longest configured
+    travel time plus 30 s and the actuator's status is re-read; the reported position
+    is never estimated.
 - Sensors, binary sensors and climate, found by the same review:
+  - a platform section written as a YAML list or a scalar (`light: [...]`) is
+    reported as a normal validation error with its key path instead of crashing the
+    setup with a traceback;
+  - `icon_on` given without `icon` now works on lights, switches and binary sensors
+    (the entity's default icon is used while off);
   - `icon` was documented as a common key but ignored by sensors, binary sensors,
     climate zones and the scenario-control event entity, and `icon_on` by binary
     sensors; they now work (the Lock/Unlock buttons keep their fixed icons, and the
@@ -119,6 +137,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The *Probe window* option description now says what the watchdog does: the
+  connection is rebuilt only when *neither* session answers the probe.
 - **Binary sensors are named after their device** ("Window Contact", not "Window
   Contact Window"): they are now the main entity of their device like every other
   platform. Entity ids and history are unaffected; only the displayed name changes.

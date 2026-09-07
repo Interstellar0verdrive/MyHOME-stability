@@ -275,6 +275,21 @@ Consequences, all of them deliberate:
   estimate has a reference from then on.
 - Movements started from a physical keypad (or by a scenario) are tracked through the
   very same model, from the `opening` / `closing` / `stopped` frames on the bus.
+- The gateway repeats commands back to Home Assistant a moment after it accepts
+  them, and those repeats look exactly like a keypad press. A frame arriving within
+  1.5 s of a command sent by Home Assistant is ignored as such a repeat only when it
+  can be one: a `stopped` frame right after a movement we asked for, or a copy of
+  the movement our own `cover.stop_cover` interrupted. A movement in any other
+  direction, such as pressing *up* on the keypad right after stopping a shutter that
+  was going down, is honoured straight away. Pressing the **same** direction again
+  within that second and a half cannot be told apart from the repeat, so it is
+  ignored; the integration then re-reads the actuator's status, and the movement is
+  picked up about two seconds late rather than lost.
+- An advanced actuator's *Opening* / *Closing* state comes from its own frames. If
+  the frame that says it stopped is lost, the state would otherwise stay that way
+  for ever, so it is dropped automatically after the longest configured travel time
+  plus 30 seconds, and the actuator's status is re-read. The reported position is
+  not affected: it is always the actuator's own value.
 - `slat_time: 0` (the default) is exactly the 0.3.x linear behaviour, tilt included:
   no tilt feature, no extra attribute.
 
