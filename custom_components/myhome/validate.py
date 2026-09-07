@@ -943,12 +943,15 @@ def _finalize_sensor(device: MutableMapping, yaml_key: str) -> None:
         # rather than refused - it is what a careful user writes after following the
         # validator's own advice to quote every ``where:`` value.
         #
-        # ``str(int(...))`` is right for a secondary probe too (``'302'`` stays ``'302'``
-        # and ``'0302'`` becomes ``'302'``), because OWNd applies ``int()`` to the whole
-        # WHERE.  ``SENSOR_WHERE`` has already guaranteed a string of digits here, so the
-        # conversion cannot fail.  WHO 18 and WHO 1 sensors are deliberately left alone:
-        # their keys keep whatever text the bus writes, so padding is self-consistent
-        # there and normalising it would rename entities that work today.
+        # ``str(int(...))`` is right for a secondary probe too (``'302'`` stays ``'302'``,
+        # ``'0302'`` becomes ``'302'``): OWNd int-normalises the WHERE of a *zone* frame
+        # and reports a *probe* frame's WHERE verbatim, and a bus writes a probe address
+        # unpadded - so ``'302'`` is the only spelling a frame can carry either way
+        # (P6-INCONSISTENCY-1).  ``SENSOR_WHERE`` has already guaranteed a string of
+        # digits here, so the conversion cannot fail.  WHO 18 and WHO 1 sensors are
+        # deliberately left alone: their keys keep whatever text the bus writes, so
+        # padding is self-consistent there and normalising it would rename entities that
+        # work today.
         device[CONF_WHERE] = str(int(device[CONF_WHERE]))
     if sensor_class in (SensorDeviceClass.POWER, SensorDeviceClass.ENERGY):
         device[CONF_ENTITIES][f"daily-{SensorDeviceClass.ENERGY}"] = {}

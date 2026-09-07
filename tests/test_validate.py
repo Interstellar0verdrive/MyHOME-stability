@@ -1055,8 +1055,10 @@ def test_a_zero_padded_temperature_probe_address_is_normalised(written, key):
     key of every WHO 4 frame from ``int(where)``: ``where: '01'`` used to key ``4-01``,
     which no frame can ever carry, so the probe was created, was available and stayed
     ``unknown`` for ever - exactly the failure the zone had before round 4. A secondary
-    probe address keeps its own number (``'302'`` stays ``'302'``), because OWNd applies
-    ``int()`` to the whole WHERE and reports ``4-302``.
+    probe address keeps its own number (``'302'`` stays ``'302'``): OWNd int-normalises
+    the WHERE of a *zone* frame and reports a *probe* frame's WHERE verbatim, and a bus
+    writes a probe address unpadded, so ``'302'`` is the only spelling a frame can carry
+    either way (P6-INCONSISTENCY-1).
 
     Mutation caught: dropping the normalisation from ``_finalize_sensor``.
     """
