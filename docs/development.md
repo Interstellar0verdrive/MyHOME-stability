@@ -21,9 +21,12 @@ ruff check .
 # test plugin):
 pytest tests -q
 
-# The three tests that open real loopback sockets or spawn subprocesses carry the
-# `slow` marker; skipping them takes the run from ~13 s to ~8 s while leaving
-# every guarantee they cover pinned somewhere else as well:
+# The tests that take about a second or more on their own carry the `slow` marker
+# (a real connect timeout, a negotiation left to time out, a full config-entry
+# setup against a loopback server, and two Home Assistant imports in two
+# subprocesses); skipping them takes the run from ~14 s to ~10 s. Most of the
+# other loopback-socket tests are fast and stay in both lanes, and every
+# guarantee the marked ones cover is pinned in the fast lane as well:
 pytest tests -q -m "not slow"
 ```
 
@@ -57,6 +60,20 @@ to it, which is why the documented command is the bare `ruff check .`.
 Keep `--strict-markers` and `--strict-config` in the **ini** keys, never moved into
 `addopts`: from `addopts` they are silently ignored on pytest 9, and the suite would
 go on passing while both guarantees were gone.
+
+Every entry of `requirements_test.txt` is pinned, `ruff` and `pytest` included. A
+floating `ruff` would turn a green build red with no change to the tree the day it
+stabilises a preview rule in one of the selected families (`ruff check . --preview`
+finds 250 such lines today), and `pytest.ini` depends on pytest-9 semantics. Bump
+either pin deliberately, in a commit that also fixes the fallout.
+
+Coverage is not part of the pinned set, because neither CI nor the two commands
+above ask for it. To reproduce the numbers quoted in the audits:
+
+```bash
+pip install pytest-cov
+pytest tests -q --cov=custom_components/myhome --cov-report=term-missing
+```
 
 The tests never talk to a real gateway: `tests/test_gateway.py` and
 `tests/test_init.py` spin up a loopback fake OpenWebNet server instead.
