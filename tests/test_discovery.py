@@ -476,6 +476,37 @@ def test_the_two_spellings_of_an_interface_are_the_same_device(hass: HomeAssista
     assert list(service.get_discovered_devices()) == [f"{MAC}-1-11#4#03"]
 
 
+def test_a_bus_interface_out_of_range_is_not_a_main_bus_device(hass: HomeAssistant, tmp_path) -> None:
+    """A ``#4#`` value the integration cannot use must drop the frame, not the interface.
+
+    Why it matters in production: ``normalise_bus_interface`` answers ``None`` for
+    anything outside 0-15, and ``None`` is also how this module spells "on the main
+    bus".  A ``*1*1*11#4#16##`` frame was therefore discovered as ``{mac}-1-11`` and
+    suggested with no ``interface:`` at all -- the exact wrong suggestion reading the
+    interface was added to remove, this time for a device that is certainly not on the
+    main bus.  ``validate.BusInterface`` refuses the same value outright ("it must be
+    1 or 2 digits between 0 and 15"), so discovery refuses the frame too: no
+    suggestion is better than a wrong one.
+
+    An F422 local bus is a 0-15 field on the wire, so such a frame should not exist on
+    real hardware; what is pinned here is the failure mode, not the frame.
+
+    Mutation caught: dropping the ``if raw_interface and interface is None`` guard -
+    the device comes back as the main-bus ``{mac}-1-11``.
+    """
+    service = make_service(hass, tmp_path)
+    for frame in ("*1*1*11#4#16##", "*15*1*11#4#16##"):
+        service.handle_discovery_message(OWNEvent.parse(frame))
+
+    assert service.get_discovered_devices() == {}
+    assert service.suggestions.pending_count == 0
+    assert service.suggestions._skipped == []  # noqa: SLF001
+    # The two values on either side of the range boundary are still real devices.
+    for frame, unique_id in (("*1*1*11#4#0##", f"{MAC}-1-11#4#00"), ("*1*1*12#4#15##", f"{MAC}-1-12#4#15")):
+        service.handle_discovery_message(OWNEvent.parse(frame))
+        assert unique_id in service.get_discovered_devices(), frame
+
+
 async def test_the_main_bus_and_the_riser_are_two_devices(
     hass: HomeAssistant, tmp_path, caplog
 ) -> None:

@@ -300,7 +300,23 @@ class MyHOMEDeviceDiscoveryService:
         # the two shared one unique id, so whichever answered second was silently
         # never announced at all.  ``normalise_bus_interface`` unpads it, because the
         # bus sends ``#4#3`` and ``#4#03`` for the same interface.
-        interface = normalise_bus_interface(getattr(message, "interface", None))
+        raw_interface = getattr(message, "interface", None)
+        interface = normalise_bus_interface(raw_interface)
+        if raw_interface and interface is None:
+            # The frame carries an interface this integration cannot use (an F422 local
+            # bus is a 0-15 field, so ``#4#16`` should not exist on real hardware).
+            # ``None`` here would mean "on the main bus", and the device would be
+            # announced and suggested as the main-bus device of the same address --
+            # which is the very defect reading the interface was added to fix.
+            # ``validate.BusInterface`` refuses such a value outright, so discovery
+            # refuses the frame rather than inventing an identity for it.
+            LOGGER.debug(
+                "%s Discovery ignoring `%s`: bus interface %r is not usable (expected 0-15)",
+                self.gateway_handler.log_id,
+                message,
+                raw_interface,
+            )
+            return None
 
         if device_type == DEVICE_TYPE_BUS_THERMO_CU:
             # The central unit is addressed ``#0``, never ``0`` (see
