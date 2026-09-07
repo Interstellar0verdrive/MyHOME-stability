@@ -567,22 +567,66 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def _async_movement_deadline(self, now: datetime) -> None:
-        """The cover reached its target (or the end of its run)."""
+        """The cover reached its target (or the end of its run).
+
+        A free run needs no command: the actuator stops by itself at the end stop,
+        and all we do is settle the estimate there. A timed run (`set_cover_position`
+        or a tilt) has to be stopped by us, and the gateway can refuse that command
+        (its queue is full, or the connection is closing) - in which case the shutter
+        does *not* stop and the run turns into a free one, see
+        `_continue_to_end_stop`.
+        """
         self._stop_timer = None
         needs_stop = self._target_position is not None
         end_position, end_tilt = self._end_position, self._end_tilt
         # Read before `_finish_movement` clears it: `_mark_own_stop` needs to know
         # which movement this stop interrupts.
         interrupted = self._moving
-        self._finish_movement(end_position, end_tilt)
-        # Same rule as `async_stop_cover`: only a stop the gateway accepted can come
-        # back as an echo, so a refused one must not arm the window - it could then
-        # only swallow a real frame from somebody else.
-        if needs_stop and await self._gateway_handler.send(
-            OWNAutomationCommand.stop_shutter(self._full_where)
-        ):
+        if not needs_stop:
+            self._finish_movement(end_position, end_tilt)
+        elif await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where)):
+            self._finish_movement(end_position, end_tilt)
+            # Only a stop the gateway accepted can come back as an echo, so a refused
+            # one must not arm the window - it could then only swallow a real frame
+            # from somebody else.
             self._mark_own_stop(interrupted)
+        else:
+            self._continue_to_end_stop()
         self.async_write_ha_state()
+
+    @callback
+    def _continue_to_end_stop(self) -> None:
+        """Turn a timed run whose stop was refused into a free run to the end stop.
+
+        The command never reached the bus, so the shutter is still running and will
+        only stop when it hits the end of its travel. Settling the estimate on the
+        target would freeze it on a position the cover never reached and leave it
+        there for good - the actuator's own `stopped` frame at the end of the
+        physical run would then simply re-freeze the same stale value. So the
+        estimate keeps running instead, now towards the end stop, and that final
+        frame re-calibrates it (`_reached_end_stop`), exactly as it does for an
+        `open_cover` / `close_cover` we sent ourselves.
+
+        Same rule as `async_stop_cover`: a stop the command path could not take
+        changes nothing about the movement that is still going on.
+        """
+        direction = self._moving
+        if direction is None:  # pragma: no cover - the deadline only fires while moving
+            return
+        LOGGER.debug(
+            "%s Cover %s: the stop that should have ended this run was refused; "
+            "the shutter runs on to its end stop",
+            self._gateway_handler.log_id,
+            self._where,
+        )
+        # No `own_command`: we sent nothing just now, so there is no echo to expect
+        # and no window to arm. The restart is seamless - `_start_movement` picks the
+        # current estimate up as its starting point.
+        self._start_movement(direction)
+        # The movement itself is still the one *we* commanded, and it now ends where
+        # the motor ends it: that is what makes the actuator's `stopped` frame at the
+        # end count as the end stop instead of a stop half way.
+        self._own_free_run = True
 
     @callback
     def _mark_own_stop(self, interrupted: str | None) -> None:

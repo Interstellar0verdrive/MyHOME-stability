@@ -957,17 +957,28 @@ async def test_a_stop_the_gateway_refused_changes_nothing(
         assert state.state == CoverState.CLOSED
 
 
-async def test_a_timed_stop_the_gateway_refused_does_not_arm_the_echo_window(
+async def test_a_timed_stop_the_gateway_refused_runs_on_to_the_end_stop(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Review 3 / C3-3: the same rule on the stop that ends a `set_cover_position`.
+    """The refused-stop rule on the stop that ends a `set_cover_position`.
 
-    That stop is sent by the movement deadline, and its `send()` result used to be
-    discarded: a refused stop armed the echo window anyway, and the window then
-    swallowed the first frame in the interrupted direction - which, the stop having
-    never reached the bus, can only be a real one. Mutation caught: calling
-    `_mark_own_stop(interrupted)` without looking at the result, after which the
-    keypad frame below is ignored and the cover stays *open* at 50 %.
+    Review 3 / C3-3 made that stop look at its `send()` result, but only to decide
+    whether to arm the echo window: the estimate was still settled on the target
+    first, unconditionally. Review 4 / C4-2: a stop that never reached the bus does
+    not stop anything, so the shutter runs on to its end stop while Home Assistant
+    reported it parked at a position it never reached - and the actuator's own
+    `stopped` frame at the end of the physical run then re-froze that same stale
+    value, for good.
+
+    The timed run is now converted into a free run instead: the estimate keeps
+    running, and the frame at the end of it re-calibrates the position exactly as it
+    does for an `open_cover` / `close_cover` we sent ourselves.
+
+    Mutations caught: settling the estimate before the send (the round-3 shape),
+    after which the cover reads *open* at 50 % for ever; and dropping
+    `self._own_free_run = True` from `_continue_to_end_stop`, after which the frame
+    at the floor freezes the estimate wherever it happened to be instead of snapping
+    it to closed.
     """
     mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
     async with setup_myhome(hass, tmp_path, BASIC_YAML):
@@ -982,10 +993,24 @@ async def test_a_timed_stop_the_gateway_refused_does_not_arm_the_echo_window(
         # 100 -> 50 on a 30 s run: the auto-stop is due after 15 s, and refused.
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
             await _advance(hass, freezer, 16)
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
 
-        await feed_event(hass, cover, "*2*2*81##")  # the shutter is still going down
+        # The shutter never got the stop: it is still going down, already past the
+        # target, and the estimate goes down with it.
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.CLOSING
+        assert state.attributes[ATTR_CURRENT_POSITION] < 50
+
+        # Nothing was armed either: a real frame in that direction is still honoured.
+        await feed_event(hass, cover, "*2*2*81##")
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
+
+        # 12 s into the ~14 s of travel that were left: the actuator's own frame is
+        # the end stop, and re-calibrates the estimate on the floor.
+        await _advance(hass, freezer, 12)
+        await feed_event(hass, cover, "*2*0*81##")
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.state == CoverState.CLOSED
 
 
 async def test_advanced_movement_is_bounded_by_a_safety_timer(
