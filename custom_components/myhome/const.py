@@ -159,7 +159,7 @@ SCENARIO_CONTROL_BUTTON_RANGE: dict[str, tuple[int, int]] = {
     PROTOCOL_CEN: (0, 31),
 }
 DEFAULT_SCENARIO_BUTTONS: tuple[int, ...] = (1, 2, 3, 4)
-# CEN+ object numbers are 1-2047 (WHERE ``#0`` + object).
+# CEN+ object numbers are 1-2047; the bus WHERE is "2" + object (e.g. object 25 -> WHERE 225).
 SCENARIO_OBJECT_RANGE: tuple[int, int] = (1, 2047)
 
 SCENARIO_CONTROL_MODELS: dict[str, str] = {
@@ -246,8 +246,13 @@ DEVICE_TYPE_TO_PLATFORM: dict[str, str] = {
     DEVICE_TYPE_BUS_THERMO_SENSOR: "sensor",
     DEVICE_TYPE_BUS_THERMO_ZONE: "climate",
     DEVICE_TYPE_BUS_THERMO_CU: "climate",
-    DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL: "button",
-    DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL: "button",
+    # Since 0.4.0 a declared scenario control is an ``event`` entity, never a
+    # ``button``; this value is published to users as the ``platform`` key of
+    # ``myhome_device_discovered``, so a stale "button" sends them looking for a
+    # ``button.*`` entity that will never exist.  ``DEVICE_TYPE_BUS_SCENARIO``
+    # below is a different thing (WHO 0 scenario modules) and stays a button.
+    DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL: "event",
+    DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL: "event",
     DEVICE_TYPE_BUS_DRY_CONTACT_IR: "binary_sensor",
     DEVICE_TYPE_BUS_SCENARIO: "button",
     DEVICE_TYPE_BUS_ALARM_SYSTEM: "alarm_control_panel",

@@ -15,6 +15,9 @@ import voluptuous as vol
 
 from homeassistant.components import automation
 from homeassistant.components.device_automation import DeviceAutomationType
+from homeassistant.components.device_automation.exceptions import (
+    InvalidDeviceAutomationConfig,
+)
 from homeassistant.const import CONF_PLATFORM
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
@@ -219,27 +222,101 @@ async def test_attached_cen_trigger_fires_on_a_real_frame(hass: HomeAssistant, t
         assert len(calls) == 1
 
 
-async def test_trigger_survives_a_removed_device(hass: HomeAssistant, tmp_path) -> None:
-    """An automation pointing at a device that is gone must not raise on setup."""
+async def test_trigger_on_a_removed_device_is_reported(hass: HomeAssistant, tmp_path) -> None:
+    """A device that is gone must be reported, not silently swallowed.
+
+    Returning ``None`` from ``async_attach_trigger`` makes Home Assistant log its own
+    "Unknown error while setting up trigger (empty result)", which names neither the
+    integration nor the device, and leaves the automation enabled but inert.
+    """
     async with setup_myhome(hass, tmp_path, SCENARIO_YAML):
         from custom_components.myhome import device_trigger
 
+        config = {
+            CONF_PLATFORM: "device",
+            "domain": DOMAIN,
+            "device_id": "does-not-exist",
+            "type": "pushbutton_short_press",
+            CONF_SUBTYPE: "button_1",
+        }
         assert await device_trigger.async_get_triggers(hass, "does-not-exist") == []
-        assert (
+        with pytest.raises(InvalidDeviceAutomationConfig, match="does-not-exist"):
+            await device_trigger.async_validate_trigger_config(hass, config)
+        with pytest.raises(InvalidDeviceAutomationConfig, match="scenario control"):
             await device_trigger.async_attach_trigger(
+                hass,
+                config,
+                lambda *args, **kwargs: None,
+                {"domain": DOMAIN, "name": "test", "home_assistant_start": False, "variables": {}, "trigger_data": {}},
+            )
+
+
+async def test_a_light_device_is_refused_as_a_scenario_control(hass: HomeAssistant, tmp_path) -> None:
+    """The failure mode finding 1 describes: a picked light must break loudly.
+
+    The device exists and belongs to a ``myhome`` config entry, so Home Assistant's own
+    validation passes it; only our validator can tell that it can never fire.
+    """
+    async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
+        from custom_components.myhome import device_trigger
+
+        device_id = device_id_of(hass, entry.entry_id, "1-11")
+        with pytest.raises(InvalidDeviceAutomationConfig, match="MyHOME CEN/CEN. scenario control"):
+            await device_trigger.async_validate_trigger_config(
                 hass,
                 {
                     CONF_PLATFORM: "device",
                     "domain": DOMAIN,
-                    "device_id": "does-not-exist",
+                    "device_id": device_id,
                     "type": "pushbutton_short_press",
                     CONF_SUBTYPE: "button_1",
                 },
-                lambda *args, **kwargs: None,
-                {"domain": DOMAIN, "name": "test", "home_assistant_start": False, "variables": {}, "trigger_data": {}},
             )
-            is None
+
+
+async def test_an_event_the_protocol_cannot_fire_is_refused(hass: HomeAssistant, tmp_path) -> None:
+    """A CEN control can never rotate or repeat a long press: refuse those triggers."""
+    async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
+        from custom_components.myhome import device_trigger
+
+        cen_device = device_id_of(hass, entry.entry_id, "cen-51")
+        base = {CONF_PLATFORM: "device", "domain": DOMAIN, "device_id": cen_device}
+        for bad_type in ("pushbutton_long_press_repeat", "rotate_cw_slow"):
+            with pytest.raises(InvalidDeviceAutomationConfig, match=bad_type):
+                await device_trigger.async_validate_trigger_config(
+                    hass, {**base, "type": bad_type, CONF_SUBTYPE: "button_0"}
+                )
+        # A CEN event on the same device still validates.
+        validated = await device_trigger.async_validate_trigger_config(
+            hass, {**base, "type": "pushbutton_short_release", CONF_SUBTYPE: "button_0"}
         )
+        assert validated["type"] == "pushbutton_short_release"
+
+
+async def test_an_automation_on_a_light_device_fails_to_set_up(
+    hass: HomeAssistant, tmp_path, calls, caplog
+) -> None:
+    """End to end: the automation must be disabled, with the device named (finding 1).
+
+    Before the fix it came up as ``on`` -- no visible error on its card -- and never
+    fired, which is the worst failure mode a blueprint can produce.
+    """
+    async with setup_myhome(hass, tmp_path, SCENARIO_YAML) as (entry, _commands):
+        device_id = device_id_of(hass, entry.entry_id, "1-11")
+        await _load_automation(
+            hass,
+            {
+                CONF_PLATFORM: "device",
+                "domain": DOMAIN,
+                "device_id": device_id,
+                "type": "pushbutton_short_press",
+                CONF_SUBTYPE: "button_1",
+            },
+            "on_a_light",
+        )
+        states = [hass.states.get(entity_id) for entity_id in hass.states.async_entity_ids(automation.DOMAIN)]
+        assert all(state.state != "on" for state in states)
+        assert f"Device {device_id} is not a MyHOME CEN/CEN+ scenario control" in caplog.text
 
 
 async def test_buttons_default_when_the_entry_is_not_loaded(hass: HomeAssistant, tmp_path) -> None:
@@ -267,6 +344,16 @@ def test_shipped_blueprints_are_valid(name: str) -> None:
         schema=schemas.BLUEPRINT_SCHEMA,
     )
     assert "scenario_control" in blueprint.inputs
+
+    # The device picker must offer scenario controls only: the ``event`` platform is
+    # used by nothing else in this integration, and a trigger on any other MyHOME
+    # device is refused by ``async_validate_trigger_config``, i.e. a dead automation.
+    selector = blueprint.inputs["scenario_control"]["selector"]["device"]
+    assert selector["filter"] == [{"integration": DOMAIN}]
+    assert selector["entity"] == [{"domain": ["event"]}]
+
+    # Both dropdowns stop at button 8, so both descriptions must say so.
+    assert "buttons 1-8" in blueprint.metadata["description"]
 
     # Substitute the inputs the way Home Assistant does and check the triggers we get.
     inputs = {"scenario_control": "0123456789abcdef0123456789abcdef"}

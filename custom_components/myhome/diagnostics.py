@@ -7,11 +7,14 @@ attached to a bug report.
 What goes in:
 
 - the config entry data/options with the password removed and the identifying
-  fields (MAC, entry id, host, UDN, SSDP location) partially masked -- enough to
-  correlate frames, not enough to identify the installation;
+  fields (MAC, entry id, host, UDN, SSDP location) partially masked, and the
+  ``config_file_path`` reduced to its file name -- enough to correlate frames, not
+  enough to identify the installation or its operating-system user;
 - the effective tunables (options merged with the 0.2.x defaults);
 - a *summary* of the validated ``myhome.yaml``: per platform the device count and
-  the device keys (``who-where``), never the user's device names;
+  the device keys (``who-where``), never the user's device names.  The per-device
+  download adds that device's own validated config, with ``name`` /
+  ``entity_name`` redacted for the same reason;
 - the gateway handler statistics (Contract: ``handler.stats``, a ``GatewayStats``
   dataclass) and its session parameters;
 - the last frames of the ring buffer (``handler.recent_frames``).  OpenWebNet frames
@@ -24,6 +27,7 @@ be the reason a bug report cannot be produced.
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -38,6 +42,7 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_ID,
     CONF_MAC,
+    CONF_NAME,
     CONF_PASSWORD,
     __version__ as HA_VERSION,
 )
@@ -50,6 +55,7 @@ from .const import (
     CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_ENTITIES,
     CONF_ENTITY,
+    CONF_ENTITY_NAME,
     CONF_FILE_PATH,
     CONF_GENERATE_EVENTS,
     CONF_IDLE_WATCHDOG_SEC,
@@ -61,6 +67,7 @@ from .const import (
     CONF_UDN,
     CONF_WORKER_COUNT,
     DEFAULT_COMMAND_TIMEOUT_SEC,
+    DEFAULT_CONFIG_FILE,
     DEFAULT_IDLE_WATCHDOG_SEC,
     DEFAULT_KEEPALIVE_MINUTES,
     DEFAULT_PROBE_WINDOW_SEC,
@@ -73,6 +80,8 @@ from .const import (
 TO_REDACT: set[str] = {CONF_PASSWORD, CONF_OWN_PASSWORD}
 # Shown truncated: they identify the installation but are needed to read the frames.
 PARTIALLY_REDACTED: set[str] = {CONF_MAC, CONF_ID, CONF_UDN, CONF_HOST, CONF_SSDP_LOCATION}
+# Free-form names the user wrote: never shown (see _device_summary).
+_NAME_KEYS: set[str] = {CONF_NAME, CONF_ENTITY_NAME}
 
 REDACTED = "**REDACTED**"
 REDACTED_FRAME = "**REDACTED (session negotiation)**"
@@ -83,6 +92,12 @@ MAX_FRAMES = 50
 # do not match: the character after ``*#`` is a ``*``, not a digit.
 _NEGOTIATION_RE = re.compile(r"^\*#?99\*")
 _AUTH_HASH_RE = re.compile(r"^\*#\d+##$")
+# The HMAC (SHA-1/SHA-256) variant OWNd sends instead of the legacy nonce is
+# ``*#<Rb>*<hmac>##`` (OWNd/connection.py), i.e. two numbers separated by a ``*``.
+# Both halves are a hex digest written two decimal digits per hex character, so they
+# are 80 (SHA-1) or 128 (SHA-256) digits long; requiring at least 16 digits is what
+# keeps an ordinary dimension request such as ``*#1*11##`` out of this pattern.
+_AUTH_HMAC_RE = re.compile(r"^\*#\d{16,}\*\d{16,}##$")
 _IPV4_RE = re.compile(r"^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$")
 
 # Handler attributes that describe the live session behaviour (Contract B knobs).
@@ -119,6 +134,20 @@ def _redact_host(value: Any) -> Any:
     return _redact_tail(value)
 
 
+def _redact_path(value: Any) -> Any:
+    """Keep the file name of a path, drop the directories it lives in.
+
+    ``config_file_path`` is free-form: on a HAOS install it is ``/config/myhome.yaml``
+    and harmless, but on a container or core install it is often ``/home/<user>/...``
+    or ``/Users/<user>/...``, i.e. the operating-system user name -- more identifying
+    than the MAC octets that *are* masked next to it.  The file name is what every
+    diagnostic use of the value actually needs.
+    """
+    if not isinstance(value, str) or not value:
+        return value
+    return os.path.basename(value) or REDACTED
+
+
 def _redact_identity(data: Mapping[str, Any]) -> dict[str, Any]:
     """Remove the password and partially mask the identifying fields."""
     redacted = async_redact_data(dict(data), TO_REDACT)
@@ -126,12 +155,14 @@ def _redact_identity(data: Mapping[str, Any]) -> dict[str, Any]:
         if key not in redacted or redacted[key] is None:
             continue
         redacted[key] = _redact_host(redacted[key]) if key == CONF_HOST else _redact_tail(redacted[key])
+    if redacted.get(CONF_FILE_PATH):
+        redacted[CONF_FILE_PATH] = _redact_path(redacted[CONF_FILE_PATH])
     return redacted
 
 
 def redact_frame(frame: str) -> str:
     """Replace a session-negotiation frame with a marker, pass anything else through."""
-    if _NEGOTIATION_RE.match(frame) or _AUTH_HASH_RE.match(frame):
+    if _NEGOTIATION_RE.match(frame) or _AUTH_HASH_RE.match(frame) or _AUTH_HMAC_RE.match(frame):
         return REDACTED_FRAME
     return frame
 
@@ -155,11 +186,21 @@ def _jsonable(value: Any) -> Any:
 
 
 # --------------------------------------------------------------------------- sections
-def effective_options(entry: ConfigEntry) -> dict[str, Any]:
-    """The tunables actually in effect (options merged with the 0.2.x hard-coded values)."""
+def effective_options(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+    """The tunables actually in effect (options merged with the 0.2.x hard-coded values).
+
+    ``config_file_path`` is reported as its file name plus "is this the default
+    location?": that answers every question a bug report asks of it (which file, and
+    whether the user moved it) without publishing the directory it sits in, which on a
+    non-HAOS install carries the operating-system user name.
+    """
     options = entry.options
+    configured_path = str(options.get(CONF_FILE_PATH) or "")
     return {
-        CONF_FILE_PATH: options.get(CONF_FILE_PATH) or None,
+        "config_file_name": _redact_path(configured_path) or None,
+        "config_file_is_default_location": bool(
+            configured_path and configured_path == hass.config.path(DEFAULT_CONFIG_FILE)
+        ),
         CONF_WORKER_COUNT: options.get(CONF_WORKER_COUNT, 1),
         CONF_GENERATE_EVENTS: bool(options.get(CONF_GENERATE_EVENTS, False)),
         CONF_IDLE_WATCHDOG_SEC: options.get(CONF_IDLE_WATCHDOG_SEC, DEFAULT_IDLE_WATCHDOG_SEC),
@@ -171,8 +212,19 @@ def effective_options(entry: ConfigEntry) -> dict[str, Any]:
 
 
 def _device_summary(device: Mapping[str, Any]) -> dict[str, Any]:
-    """A single device's validated config without the live entity objects."""
-    return {key: _jsonable(value) for key, value in device.items() if key != CONF_ENTITIES}
+    """A single device's validated config, without the live entity objects or names.
+
+    ``name`` / ``entity_name`` are free-form strings the user wrote, and they are
+    usually room or family names -- exactly what nobody expects to publish by
+    attaching a diagnostics file to a public issue.  The module docstring and
+    ``docs/troubleshooting.md`` both promise they are never included, so redact them
+    here too and not only in the entry-level ``config`` summary.
+    """
+    return {
+        key: (REDACTED if key in _NAME_KEYS and value else _jsonable(value))
+        for key, value in device.items()
+        if key != CONF_ENTITIES
+    }
 
 
 def config_summary(gateway_data: Mapping[str, Any]) -> dict[str, Any]:
@@ -260,7 +312,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "data": _redact_identity(entry.data),
             "options": _redact_identity(entry.options),
         },
-        "effective_options": effective_options(entry),
+        "effective_options": effective_options(hass, entry),
         "config": config_summary(gateway_data),
         "handler": handler_summary(handler),
         "recent_frames": recent_frames(handler),

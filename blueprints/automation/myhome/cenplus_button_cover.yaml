@@ -8,7 +8,10 @@ blueprint:
 
     This is the behaviour of a physical shutter rocker, so it fits a keypad whose
     two buttons are already labelled up/down. The control must be declared under
-    `scenario_control:` in `myhome.yaml` so that it exists as a device.
+    `scenario_control:` in `myhome.yaml` (see the MyHOME-stability configuration
+    reference) so that it exists as a device and its buttons appear in the picker
+    below. Only buttons 1-8 are offered here; higher buttons are reachable with a
+    plain event trigger on `myhome_cenplus_event`.
   domain: automation
   homeassistant:
     min_version: 2026.8.0
@@ -21,6 +24,11 @@ blueprint:
         device:
           filter:
             - integration: myhome
+          # Only scenario controls own an `event` entity in this integration, so this
+          # keeps lights, covers, climate zones and the gateway out of the picker: a
+          # device trigger on any of them would validate and then never fire.
+          entity:
+            - domain: event
     button_up:
       name: Up button
       description: Hold this button to open the cover.

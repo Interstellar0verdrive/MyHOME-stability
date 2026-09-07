@@ -47,7 +47,6 @@
       }
     },
     "error": {
-      "invalid_port": "Porta non valida",
       "invalid_host": "Indirizzo IP o hostname non valido",
       "invalid_mac": "Indirizzo MAC non valido",
       "password_error": "Password non valida",
@@ -97,7 +96,6 @@
     },
     "error": {
       "invalid_host": "Indirizzo IP o hostname non valido",
-      "invalid_port": "Porta non valida",
       "invalid_config_path": "Il file di configurazione non esiste in questo percorso"
     }
   },
