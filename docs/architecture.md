@@ -7,6 +7,20 @@ them on trust.
 Everything below is from `custom_components/myhome/*.py` at version 0.4.0 and
 `OWNd` 0.7.49.
 
+## Contents
+
+- [Module map](#module-map)
+- [`hass.data` layout](#hassdata-layout)
+- [Config entry lifecycle](#config-entry-lifecycle)
+- [The two OpenWebNet sessions](#the-two-openwebnet-sessions)
+- [The command queue](#the-command-queue)
+- [Availability](#availability)
+- [Statistics and diagnostics (0.3.0)](#statistics-and-diagnostics-030)
+- [The dispatcher](#the-dispatcher)
+- [The instant-power throttle](#the-instant-power-throttle)
+- [The validator contract](#the-validator-contract)
+- [Test strategy](#test-strategy)
+
 ## Module map
 
 | File | Responsibility |
@@ -29,7 +43,8 @@ Everything below is from `custom_components/myhome/*.py` at version 0.4.0 and
 | `button.py` | The opt-in WHO 14 Lock/Unlock buttons. |
 | `event.py` | WHO 15 / WHO 25 CEN and CEN+ scenario controls: one stateless `EventEntity` per declared keypad, fed by the gateway dispatcher. |
 | `device_trigger.py` | The device-automation platform: per-button, per-event-name triggers for those keypads, delegated to Home Assistant's own event trigger. |
-| `services.yaml`, `manifest.json`, `translations/{en,fr,it,nl}.json` | Service schemas for the UI, integration metadata and SSDP matchers, translated strings. |
+| `diagnostics.py` | The Download-diagnostics payload: identity masking, the config summary, the handler snapshot and the redacted frame ring buffer. |
+| `services.yaml`, `manifest.json`, `strings.json`, `translations/{en,fr,it,nl}.json` | Service schemas for the UI, integration metadata and SSDP matchers, the source strings and their translations. |
 
 ## `hass.data` layout
 
@@ -115,11 +130,14 @@ leftovers from a previous one.
 stop_device_discovery()
   -> close_listener()          # stop the loops, close sessions, drop the queue,
                                # publish is_connected = False
-  -> _async_cancel_workers()   # belt and braces
   -> async_unload_platforms(all 8)
   -> hass.data[DOMAIN].pop(mac)
   -> unregister services if this was the last loaded entry
 ```
+
+If a platform refuses to unload, the failure is logged as an error and the entry is
+left unloaded: the sockets are already closed by then, so the entry has to be
+reloaded to work again.
 
 `close_listener()` is idempotent and is also registered through
 `entry.async_on_unload`, so a setup that fails half way still closes its sockets.
@@ -161,7 +179,8 @@ stateDiagram-v2
     Idle --> Connected: frame received
     Idle --> Probing: idle >= 300 s<br/>queue a status request
     Probing --> Connected: any frame arrives on the monitor
-    Probing --> Closed: no frame within 30 s<br/>SessionError -> reconnect
+    Probing --> Connected: probe ACKed on the command session<br/>(re-arm, do not reconnect)
+    Probing --> Closed: no frame within 30 s<br/>and no ACK either<br/>SessionError -> reconnect
     Connected --> Closed: transport error<br/>is_connected = False
     AuthFailed --> [*]: loops stopped,<br/>reauth flow started
     Connected --> [*]: close_listener()
@@ -408,6 +427,13 @@ overwrite. The single tolerated overlap is a `climate` zone plus a WHO 4
 `temperature` sensor on the same zone: both legitimately address zone N, and they
 live in different platform dicts.
 
+That overlap is not merely tolerated, it is reconciled:
+`_reconcile_climate_sensor_overlap` keeps the **climate** name on the shared device
+and moves the probe's own `name` into the sensor's `entity_name`, logging what it did
+at INFO. Without it the device took whichever of the two names the platform loop
+reached last. See
+[Configuration → The `myhome.yaml` file](configuration.md#the-myhomeyaml-file).
+
 ### Button generation
 
 After rekeying, the validator walks `light`, `switch` and `cover` and, for every
@@ -476,5 +502,10 @@ Point 6 is the one that matters most: it is a direct, automated check that the
 ### Lint
 
 ```bash
-ruff check custom_components tests --select F,E9,B,UP,ASYNC
+ruff check .        # rule set, ignores and line length are pinned in ruff.toml
 ```
+
+`ruff.toml` exists so that this gives the same answer on a laptop and in
+`.github/workflows/tests.yml`; passing `--select` on the command line *replaces* the
+pinned rule set instead of adding to it. See
+[Development](development.md) for the full local setup.
