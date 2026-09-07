@@ -47,7 +47,6 @@
       }
     },
     "error": {
-      "invalid_port": "Port invalide",
       "invalid_host": "Adresse IP ou nom d'hôte invalide",
       "invalid_mac": "Adresse MAC invalide",
       "password_error": "Mot de passe invalide",
@@ -97,7 +96,6 @@
     },
     "error": {
       "invalid_host": "Adresse IP ou nom d'hôte invalide",
-      "invalid_port": "Port invalide",
       "invalid_config_path": "Fichier de configuration inexistant à ce chemin"
     }
   },

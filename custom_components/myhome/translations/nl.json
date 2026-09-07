@@ -47,7 +47,6 @@
       }
     },
     "error": {
-      "invalid_port": "Ongeldig poortnummer",
       "invalid_host": "Ongeldig IP-adres of hostnaam",
       "invalid_mac": "Ongeldig MAC-adres",
       "password_error": "Ongeldig wachtwoord",
@@ -97,7 +96,6 @@
     },
     "error": {
       "invalid_host": "Ongeldig IP-adres of hostnaam",
-      "invalid_port": "Ongeldig poortnummer",
       "invalid_config_path": "Het configuratiebestand bestaat niet op dit pad"
     }
   },
