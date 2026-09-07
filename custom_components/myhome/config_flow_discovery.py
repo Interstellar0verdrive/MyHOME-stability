@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Mapping
 from typing import Any
 
 import yaml
@@ -22,6 +23,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_BUS_INTERFACE,
     CONF_DEVICE_CLASS,
     CONF_DIMMABLE,
     CONF_FILE_PATH,
@@ -39,10 +41,12 @@ from .const import (
     DEVICE_TYPE_BUS_THERMO_CU,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
     DEVICE_TYPE_BUS_THERMO_ZONE,
+    DEVICE_TYPE_TO_PLATFORM,
     DISCOVERED_CONFIG_FILE,
     DOMAIN,
     LOGGER,
 )
+from .validate import INTERFACE_CAPABLE_WHO, device_key
 
 # device_type -> (platform, WHO)
 _SUGGESTABLE: dict[str, tuple[str, str]] = {
@@ -68,13 +72,14 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
     """Return `(platform, device_cfg)` for a discovered device, or None when this
     device type is not suggested.
 
-    "Not suggested" is not the same as "not supported": since 0.4.0 a CEN/CEN+
-    scenario control *does* have an entity representation (the `event` platform),
-    but it is declared under `scenario_control:` rather than under a platform
-    section, which this writer cannot emit yet, so a keypad seen during a run is
-    counted in `MyHOMEDiscoverySuggestions._skipped` and reported in the
-    "must be declared by hand" log line. Alarm devices have no entity support at
-    all."""
+    "Not suggested" is not the same as "not supported", and the end-of-run report
+    keeps the two apart. Since 0.4.0 a CEN/CEN+ scenario control *does* have an
+    entity representation (the `event` platform), but it is declared under
+    `scenario_control:` rather than under a platform section, which this writer
+    cannot emit yet: a keypad seen during a run lands in
+    `MyHOMEDiscoverySuggestions._skipped` and is reported as one the user can
+    declare by hand. An alarm device has no entity support at all and no section to
+    declare it under, so it lands in `_unsupported` instead."""
     device_type = device_info["device_type"]
     if device_type not in _SUGGESTABLE:
         return None
@@ -85,6 +90,15 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
         cfg[CONF_ZONE] = where
     else:
         cfg[CONF_WHERE] = where
+    # A device behind an F422 local bus interface: ``where`` is its address on the
+    # riser (``11``) and the interface says which riser (``3``), so the two keys must
+    # travel together or the block addresses the main-bus device of the same number.
+    # Only WHO 1, 2 and 15 frames carry an interface, and ``validate.py`` refuses the
+    # key on any other WHO, so a value that somehow reached us on, say, a WHO 18
+    # meter is dropped rather than written into YAML that will not load.
+    interface = device_info.get(CONF_BUS_INTERFACE)
+    if interface is not None and who in INTERFACE_CAPABLE_WHO:
+        cfg[CONF_BUS_INTERFACE] = str(interface)
     cfg["name"] = device_info["name"]
 
     if platform == "light":
@@ -100,19 +114,23 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
     return platform, cfg
 
 
-def is_device_configured(hass: HomeAssistant, mac: str, who: str, where: str) -> bool:
-    """True when `{who}-{where}` is already a device key of ANY loaded platform
-    of this gateway (validated config in hass.data)."""
-    key = f"{who}-{where}"
+def is_device_configured(hass: HomeAssistant, mac: str, device_cfg: Mapping[str, Any]) -> bool:
+    """True when this device is already declared under ANY loaded platform of the
+    gateway (validated config in ``hass.data``).
+
+    The comparison is on the full device key ``validate.device_key`` builds -- the
+    same function that keyed the loaded configuration -- so ``1-11`` and
+    ``1-11#4#03`` are the two different devices they really are.  Until discovery
+    learned to read the F422 interface it only knew ``who``/``where``, and this
+    function had to accept a configured ``1-11#4#03`` as an answer to a discovered
+    ``1-11``; that made a riser device and a main-bus device suppress each other,
+    which is a suggestion silently missing rather than a duplicate one.
+    """
+    key = device_key(device_cfg)
     platforms = hass.data.get(DOMAIN, {}).get(mac, {}).get(CONF_PLATFORMS, {})
-    for devices in platforms.values():
-        if not isinstance(devices, dict):
-            continue
-        for device_key in devices:
-            # interface-qualified keys look like "1-11#4#01"
-            if device_key == key or device_key.split("#", 1)[0] == key:
-                return True
-    return False
+    return any(
+        key in devices for devices in platforms.values() if isinstance(devices, dict)
+    )
 
 
 def _merge_and_write(path: str, mac: str, suggestions: dict[str, dict[str, dict[str, Any]]]) -> int:
@@ -173,7 +191,10 @@ class MyHOMEDiscoverySuggestions:
         self.hass = hass
         self.config_entry = config_entry
         self._pending: dict[str, dict[str, dict[str, Any]]] = {}
+        # Two different answers, kept apart on purpose (see _skipped_report): what the
+        # user can write by hand, and what this integration simply does not support.
         self._skipped: list[str] = []
+        self._unsupported: list[str] = []
 
     def reset(self) -> None:
         """Forget what an earlier run collected. Called when a run starts.
@@ -187,6 +208,7 @@ class MyHOMEDiscoverySuggestions:
         """
         self._pending.clear()
         self._skipped.clear()
+        self._unsupported.clear()
 
     @property
     def path(self) -> str:
@@ -207,33 +229,65 @@ class MyHOMEDiscoverySuggestions:
         mac = self.config_entry.data["mac"]
         suggestion = generate_suggested_config(device_info)
         if suggestion is None:
-            self._skipped.append(f"{device_info['device_type']}@{device_info['where']}")
+            device_type = device_info["device_type"]
+            # A device type with a platform is one the integration really builds an
+            # entity for; the writer just cannot express its section yet (a CEN/CEN+
+            # keypad goes under ``scenario_control:``), so the user *can* write it by
+            # hand.  A device type with no platform -- an alarm device is the one that
+            # occurs in practice -- has no section anywhere in the file schema, and
+            # telling its owner to "declare it by hand" sent them looking through
+            # docs/configuration.md for a chapter that does not exist.
+            target = self._skipped if DEVICE_TYPE_TO_PLATFORM.get(device_type) else self._unsupported
+            target.append(f"{device_type}@{device_info['where']}")
             LOGGER.debug("Discovery: no YAML suggestion for %s", device_info["unique_id"])
             return False
         platform, cfg = suggestion
-        who = cfg[CONF_WHO]
-        where = cfg.get(CONF_WHERE, cfg.get(CONF_ZONE))
-        if is_device_configured(self.hass, mac, who, where):
-            LOGGER.debug("Discovery: %s-%s already configured, skipping", who, where)
+        if is_device_configured(self.hass, mac, cfg):
+            LOGGER.debug("Discovery: %s already configured, skipping", device_key(cfg))
             return False
-        key = f"discovered_{who}_{where}".replace("#", "_")
+        # The YAML key is cosmetic, but it has to be unique and typeable: derived from
+        # the device key so an interfaced device (``1-11#4#03``) cannot collide with
+        # the main-bus device of the same address, with the characters YAML would
+        # rather not see in a mapping key replaced by "_".
+        key = f"discovered_{device_key(cfg)}".replace("-", "_").replace("#", "_")
         self._pending.setdefault(platform, {})[key] = cfg
         return True
 
+    def _skipped_report(self) -> str:
+        """What a run saw and could not suggest, in the words that fit each case.
+
+        The two lists say different things to the reader.  ``_skipped`` is a device
+        this integration supports and the writer cannot express: a CEN / CEN+
+        scenario control, which the user really can add under ``scenario_control:``
+        (docs/configuration.md).  ``_unsupported`` is a device family with no section
+        at all -- burglar-alarm devices, which reach a run because a sensor frame
+        carries a plain WHERE.  They used to be counted in the same sentence, so
+        "1 device(s) ... must be declared by hand (bus_alarm_zone@12)" sent a careful
+        reader hunting for an alarm chapter that has never existed.
+        """
+        clauses = []
+        if self._skipped:
+            clauses.append(
+                f"{len(self._skipped)} device(s) must be declared by hand under "
+                f"`scenario_control:` ({', '.join(self._skipped[:10])})"
+            )
+        if self._unsupported:
+            clauses.append(
+                f"{len(self._unsupported)} device(s) belong to a family this integration "
+                f"has no support for ({', '.join(self._unsupported[:10])})"
+            )
+        return "; ".join(clauses)
+
     async def async_flush(self) -> None:
         """Write pending suggestions to DISCOVERED_CONFIG_FILE (executor, atomic)."""
+        report = self._skipped_report()
         if not self._pending:
-            if self._skipped:
-                LOGGER.info(
-                    "Discovery finished: %d device(s) were not suggested and must be "
-                    "declared by hand (%s)",
-                    len(self._skipped),
-                    ", ".join(self._skipped[:10]),
-                )
+            if report:
+                LOGGER.info("Discovery finished: %s", report)
             return
         mac = self.config_entry.data["mac"]
         pending, self._pending = self._pending, {}
-        skipped, self._skipped = self._skipped, []
+        self._skipped, self._unsupported = [], []
         try:
             added = await self.hass.async_add_executor_job(_merge_and_write, self.path, mac, pending)
         except OSError as err:
@@ -241,9 +295,9 @@ class MyHOMEDiscoverySuggestions:
             return
         LOGGER.info(
             "Discovery finished: %d suggestion(s) (%d new) written to %s - copy the ones you want "
-            "into your myhome.yaml. %d device(s) were not suggested and must be declared by hand.",
+            "into your myhome.yaml.%s",
             sum(len(d) for d in pending.values()),
             added,
             self.path,
-            len(skipped),
+            f" {report}." if report else "",
         )

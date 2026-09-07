@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.diagnostics import (
     get_diagnostics_for_config_entry,
@@ -245,6 +246,47 @@ async def test_device_diagnostics(hass: HomeAssistant, hass_client, tmp_path) ->
         gateway_data = await get_diagnostics_for_device(hass, hass_client, entry, gateway_device)
         assert gateway_data["device"]["is_gateway"] is True
         assert gateway_data["device"]["config"] == {}
+
+
+async def test_the_device_download_carries_the_device_name_in_its_file_name(
+    hass: HomeAssistant, hass_client, tmp_path
+) -> None:
+    """The JSON hides the device name; the file name Home Assistant proposes does not.
+
+    Why it matters in production: ``docs/troubleshooting.md`` and this module's
+    docstring tell the user their device names are not in the download, and a user
+    who reads that drags the file straight onto a public GitHub issue.  The contents
+    really are redacted (the test above pins that), but Home Assistant builds the
+    download's file name itself, as
+    ``{domain}-{entry_id}-{device.name}-{device.id}.json``
+    (``homeassistant/components/diagnostics/__init__.py``), from the ``name:`` the
+    user wrote in ``myhome.yaml``.  No integration can change that, so the docs carry
+    the qualification instead -- and this test is what tells us the day it stops
+    being true: if Home Assistant ever drops the name from the file name, this fails
+    and the qualification can be removed.
+
+    The entry-level download is the anonymous alternative the docs point at, so its
+    file name is checked here too.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        await _setup(hass, entry)
+        assert await async_setup_component(hass, "diagnostics", {})
+        await hass.async_block_till_done()
+
+        device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, f"{MAC}-1-11"), entry.entry_id)
+        assert device is not None and device.name == "Light Test"
+
+        client = await hass_client()
+        response = await client.get(f"/api/diagnostics/config_entry/{entry.entry_id}/device/{device.id}")
+        assert response.status == 200
+        assert "Light Test" in response.headers["Content-Disposition"]
+        # ...while nothing in the file itself names the device.
+        assert "Light Test" not in json.dumps(await response.json())
+
+        entry_response = await client.get(f"/api/diagnostics/config_entry/{entry.entry_id}")
+        assert entry_response.status == 200
+        assert "Light Test" not in entry_response.headers["Content-Disposition"]
 
 
 async def test_recent_frames_are_redacted_through_the_real_record_type(

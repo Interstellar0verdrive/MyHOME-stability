@@ -133,11 +133,12 @@ _NOT_SUGGESTABLE = [
 ]
 
 
-def _device_info(device_type: str, where: Any, name: str) -> dict[str, Any]:
+def _device_info(device_type: str, where: Any, name: str, interface: str | None = None) -> dict[str, Any]:
     """The subset of a discovered-device payload the suggestion code reads."""
     return {
         "device_type": device_type,
         "where": where,
+        "interface": interface,
         "name": name,
         "unique_id": f"{MAC}-{where}",
     }
@@ -241,6 +242,53 @@ def test_generate_suggested_config_returns_none_for_devices_it_cannot_write(devi
     the ``not in`` guard with a fallback that invents a platform.
     """
     assert generate_suggested_config(_device_info(device_type, "11", "Nothing To Suggest")) is None
+
+
+def test_a_device_behind_a_bus_interface_is_suggested_with_its_interface() -> None:
+    """Pins the ``interface:`` key of the suggested block, and that it validates.
+
+    Why it matters in production: ``where: '11'`` and ``where: '11', interface: '3'``
+    are two different actuators. Without the key the pasted block commands the
+    main-bus device (``light.turn_on`` sends ``*1*1*11##`` instead of
+    ``*1*1*11#4#3##``) and never receives an update, because the gateway dispatches
+    the riser's frames by ``1-11#4#03``. The value is written unpadded, which is the
+    form ``validate.BusInterface`` stores and every ``_full_where`` the platforms
+    build is made of.
+
+    Mutations caught: dropping the ``interface`` key from the suggestion; writing it
+    padded (``'03'`` would be normalised by the schema but is not what the bus
+    sends); or emitting it on a WHO whose frames never carry one, which
+    ``validate._reject_unusable_interface`` refuses outright.
+    """
+    platform, cfg = generate_suggested_config(
+        _device_info(DEVICE_TYPE_BUS_ON_OFF_SWITCH, "11", "Riser Lamp", interface="3")
+    )
+    assert (platform, cfg) == (
+        "light",
+        {"who": "1", "where": "11", "interface": "3", "name": "Riser Lamp", "dimmable": False},
+    )
+
+    result = config_schema({MAC: {platform: {"discovered_1_11_4_03": dict(cfg)}}})
+    assert list(result[MAC.lower()][CONF_PLATFORMS]["light"]) == ["1-11#4#03"]
+
+
+def test_an_interface_is_never_suggested_for_a_who_that_cannot_carry_one() -> None:
+    """Pins the ``INTERFACE_CAPABLE_WHO`` guard on the way *out* of discovery.
+
+    Why it matters in production: only WHO 1, 2 and 15 frames carry the ``#4#N``
+    WHERE parameter, and ``validate.py`` rejects the whole file if any other WHO
+    declares an ``interface:``. Discovery cannot produce one today (OWNd returns
+    ``None`` for every other WHO), so this guard exists to keep a future classifier
+    from writing YAML that refuses to load.
+
+    Mutation caught: writing ``cfg["interface"]`` unconditionally - ``config_schema``
+    then raises for the meter below.
+    """
+    _, cfg = generate_suggested_config(
+        _device_info(DEVICE_TYPE_BUS_ENERGY_METER, "51", "Main Meter", interface="3")
+    )
+    assert "interface" not in cfg
+    config_schema({MAC: {"sensor": {"discovered_18_51": dict(cfg)}}})
 
 
 def test_generate_suggested_config_stringifies_where() -> None:
@@ -460,36 +508,41 @@ def _load_platforms(hass: HomeAssistant, mac: str, platforms: dict[str, Any]) ->
     hass.data.setdefault(DOMAIN, {})[mac] = {CONF_PLATFORMS: platforms}
 
 
-async def test_is_device_configured_matches_plain_and_interface_qualified_keys(hass: HomeAssistant) -> None:
-    """Pins that an already-configured device is recognised through both device-key
-    forms, across every loaded platform of the gateway.
+async def test_is_device_configured_compares_the_whole_device_key(hass: HomeAssistant) -> None:
+    """Pins that the filter matches on ``validate.device_key``, interface included.
 
-    Why it matters in production: this is the only filter that keeps discovery from
-    suggesting devices the user already has. A device behind a bus interface is
-    keyed ``"1-11#4#01"`` while discovery only knows ``who``/``where``, so without
-    the ``split("#", 1)`` the user would be handed a duplicate suggestion for every
-    interfaced device - and pasting it in yields two entities for one physical
-    actuator.
+    Why it matters in production: this is the only thing that keeps discovery from
+    suggesting devices the user already has, and the interface is part of a device's
+    identity. ``1-11`` (the actuator 11 on the main bus) and ``1-11#4#03`` (the
+    actuator 11 on the riser behind bus interface 3) are two different physical
+    devices; a filter that reduced one to the other suppressed a suggestion for a
+    device the user does *not* have configured, which is worse than a duplicate
+    because nothing says it happened.
 
-    Mutation caught: dropping the ``device_key.split("#", 1)[0] == key`` arm (the
-    interfaced switch stops matching); or making the split greedy/right-hand so
-    ``"1-11#4#01"`` no longer reduces to ``"1-11"``.
+    The suggestion carries the interface unpadded (``3``), as ``myhome.yaml`` spells
+    it, and ``device_key`` pads it (``#4#03``) exactly as it did when the user's own
+    configuration was loaded, so the two strings meet.
+
+    Mutations caught: comparing ``f"{who}-{where}"`` instead of the device key (the
+    interfaced switch stops matching); re-introducing a ``split("#", 1)`` fallback
+    (the main-bus lamp of the second gateway starts matching the riser one).
     """
     _load_platforms(hass, MAC, {"light": {"1-11": {}}, "climate": {"4-3": {}}})
-    # Second gateway: its ONLY device is behind a bus interface, so a match here can
-    # only come from the "#"-stripping arm.
+    # Second gateway: its ONLY device is behind a bus interface.
     _load_platforms(hass, MAC2, {"switch": {"1-23#4#01": {}}})
 
-    assert is_device_configured(hass, MAC, "1", "11") is True
-    assert is_device_configured(hass, MAC, "4", "3") is True
-    assert is_device_configured(hass, MAC2, "1", "23") is True
+    assert is_device_configured(hass, MAC, {"who": "1", "where": "11"}) is True
+    assert is_device_configured(hass, MAC, {"who": "4", "zone": "3"}) is True
+    assert is_device_configured(hass, MAC2, {"who": "1", "where": "23", "interface": "1"}) is True
 
+    # The same WHERE without the interface is the main-bus device: a different one.
+    assert is_device_configured(hass, MAC2, {"who": "1", "where": "23"}) is False
+    assert is_device_configured(hass, MAC, {"who": "1", "where": "11", "interface": "3"}) is False
     # Prefix-only collisions must NOT match: "1-1" is a different WHERE than "1-11".
-    assert is_device_configured(hass, MAC, "1", "1") is False
-    assert is_device_configured(hass, MAC, "2", "11") is False
-    assert is_device_configured(hass, MAC2, "1", "2") is False
+    assert is_device_configured(hass, MAC, {"who": "1", "where": "1"}) is False
+    assert is_device_configured(hass, MAC, {"who": "2", "where": "11"}) is False
     # ...and a gateway with nothing loaded knows nothing.
-    assert is_device_configured(hass, "00:03:50:00:00:03", "1", "11") is False
+    assert is_device_configured(hass, "00:03:50:00:00:03", {"who": "1", "where": "11"}) is False
 
 
 async def test_is_device_configured_ignores_non_dict_platform_payloads(hass: HomeAssistant) -> None:
@@ -506,8 +559,8 @@ async def test_is_device_configured_ignores_non_dict_platform_payloads(hass: Hom
     """
     _load_platforms(hass, MAC, {"light": ["1-11"], "cover": {"2-54": {}}})
 
-    assert is_device_configured(hass, MAC, "1", "11") is False
-    assert is_device_configured(hass, MAC, "2", "54") is True
+    assert is_device_configured(hass, MAC, {"who": "1", "where": "11"}) is False
+    assert is_device_configured(hass, MAC, {"who": "2", "where": "54"}) is True
 
 
 # --------------------------------------------------------------------------------------
@@ -573,12 +626,14 @@ async def test_add_queues_only_new_suggestable_devices(hass: HomeAssistant, tmp_
     the file. Queueing an unsupported device type would emit an entry that fails
     validation; queueing an already-configured one would hand the user a duplicate;
     and the key must be a valid YAML identifier, so the ``#`` of an interfaced or
-    composite WHERE has to become ``_`` (``discovered_1_11#4#01`` would be a
-    confusing key and collides with nothing the user can safely retype).
+    composite WHERE has to become ``_`` (``discovered_1-11#4#01`` would be a
+    confusing key and collides with nothing the user can safely retype).  It is
+    derived from ``validate.device_key``, so the riser lamp below cannot land on the
+    key of the main-bus lamp with the same WHERE.
 
     Mutation caught: returning True unconditionally; dropping the
     ``is_device_configured`` check; removing ``.replace("#", "_")``; or keying on
-    something other than ``discovered_<who>_<where>``.
+    ``who``/``where`` alone, which loses the interface.
     """
     entry = make_entry(tmp_path / "myhome.yaml")
     _load_platforms(hass, MAC, {"light": {"1-11": {}}})
@@ -596,8 +651,13 @@ async def test_add_queues_only_new_suggestable_devices(hass: HomeAssistant, tmp_
     assert suggestions.add(_device_info(DEVICE_TYPE_BUS_THERMO_ZONE, "3", "Bedroom Zone")) is True
     assert suggestions.pending_count == 2
 
+    # Same WHERE as the configured lamp above, but on a riser: a different device,
+    # so it *is* queued, under a key of its own.
+    assert suggestions.add(_device_info(DEVICE_TYPE_BUS_ON_OFF_SWITCH, "11", "Riser Lamp", "3")) is True
+
     pending = suggestions._pending  # noqa: SLF001 - the queue is the unit under test
-    assert set(pending) == {"sensor", "climate"}
+    assert set(pending) == {"sensor", "climate", "light"}
+    assert list(pending["light"]) == ["discovered_1_11_4_03"]
     assert pending["sensor"] == {
         "discovered_18_5_1": {"who": "18", "where": "5#1", "name": "Main Meter", "class": "power"}
     }

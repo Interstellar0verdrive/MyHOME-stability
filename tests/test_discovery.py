@@ -23,6 +23,7 @@ from custom_components.myhome import discovery as discovery_module
 from custom_components.myhome.config_flow_discovery import generate_suggested_config
 from custom_components.myhome.const import (
     CONF_ENTITY,
+    CONF_PLATFORMS,
     DEVICE_TYPE_BUS_ALARM_ZONE,
     DEVICE_TYPE_BUS_AUX,
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
@@ -308,6 +309,205 @@ def test_an_alarm_zone_address_is_not_taken_for_a_device(
     assert make_service(hass, tmp_path)._extract_device_info(message) is None  # noqa: SLF001
 
 
+# ------------------------------------------------------------------ plant-wide addresses
+# Every WHERE OWNd 0.7.49 decodes as a *scope* instead of a device, on both WHOs that
+# have them.  ``100`` is area 10: the bus spells it with three digits and
+# ``validate.py`` with two, which is why that one did not merely add a useless entity
+# but made the whole ``myhome.yaml`` unloadable.
+_SCOPE_FRAMES = [
+    "*1*1*0##",  # general: every light of the plant
+    "*1*1*00##",  # area 0
+    "*1*1*1##",  # area 1
+    "*1*1*9##",  # area 9
+    "*1*1*100##",  # area 10, spelled with three digits on the bus
+    "*1*1*#5##",  # group 5
+    "*2*1*0##",  # ...and the same five shapes on WHO 2
+    "*2*1*00##",
+    "*2*1*4##",
+    "*2*1*100##",
+    "*2*1*#7##",
+]
+
+
+@pytest.mark.parametrize("frame", _SCOPE_FRAMES)
+async def test_a_plant_wide_address_is_not_taken_for_a_device(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """A general, area or group WHERE is a scope, and discovery must ignore it.
+
+    Why it matters in production: any plant-wide or area button press during the
+    60-second run produces one of these frames, and discovery used to drop only the
+    ``#``-prefixed ones.  What the user was then handed, between their real
+    actuators:
+
+    * ``light: {where: '0'}`` -- an entity named "MyHOME Bus On Off Switch 0" whose
+      ``turn_on`` sends ``*1*1*0##``, i.e. switches on *every* light of the house,
+      and which can never show a state because ``gateway._handle_lighting_scope``
+      intercepts every frame that would update it;
+    * ``light: {where: '100'}`` -- area 10, which ``validate.py`` refuses ("expecting
+      a valid General ('0'), Area ('00', '1'-'9', '10') ... "), so pasting the block
+      does not break one device: the whole ``myhome.yaml`` fails to load and every
+      device of that gateway disappears.
+
+    The gateway already refuses to dispatch exactly these frames to an entity, one
+    ``if`` further down the same dispatcher, so the two now share one predicate
+    (``const.is_bus_scope_address``).
+
+    Mutation caught: dropping the ``is_bus_scope_address`` guard from
+    ``_extract_device_info`` (every frame here becomes a device again), or narrowing
+    the predicate to one of its three branches.
+    """
+    message = OWNEvent.parse(frame)
+    # The classification is OWNd's, not ours: assert it from the library's own
+    # properties so this test still means something if our helper changes.
+    assert message is not None
+    assert message.is_general or message.is_area or message.is_group
+
+    service = make_service(hass, tmp_path)
+    seen: list[dict[str, Any]] = []
+    hass.bus.async_listen(f"{DOMAIN}_device_discovered", lambda event: seen.append(dict(event.data)))
+
+    assert service._extract_device_info(message) is None  # noqa: SLF001
+    service.handle_discovery_message(message)
+    await hass.async_block_till_done()
+
+    assert seen == []
+    assert service.get_discovered_devices() == {}
+    assert service.suggestions.pending_count == 0
+
+
+# ------------------------------------------------------------------ bus interface (F422)
+def test_a_device_behind_a_bus_interface_keeps_its_interface(hass: HomeAssistant, tmp_path) -> None:
+    """OWNd keeps the F422 interface in ``entity``, not in ``where`` -- read it there.
+
+    Why it matters in production: ``*1*1*11#4#3##`` is the actuator 11 of a private
+    riser behind an F422, a different physical device from the main-bus actuator 11.
+    OWNd 0.7.49 parses it as ``where == '11'`` and ``entity == '1-11#4#3'``, and
+    discovery read ``where``.  The suggestion was therefore ``light: {where: '11'}``
+    with no ``interface:``, which (1) drives the wrong actuator, since ``turn_on``
+    sends ``*1*1*11##``, and (2) never updates, because the gateway dispatches these
+    frames by ``1-11#4#03`` / ``1-11#4#3`` and never by the bare ``1-11``.
+
+    The unique id keeps the interface zero padded, like ``validate.device_key``: it
+    is the tail of the entity ``unique_id`` and the device registry identifier, so
+    the two must agree character for character.
+
+    Mutations caught: reading ``where`` without the interface (the unique id becomes
+    the main-bus one and the ``interface`` key disappears), or emitting the padded
+    ``03`` in the YAML value, which ``validate.BusInterface`` normalises but
+    ``bus_full_where`` would then spell ``11#4#03`` -- a WHERE no bus sends.
+    """
+    info = device_info(hass, tmp_path, "*1*1*11#4#3##")
+
+    assert info["unique_id"] == f"{MAC}-1-11#4#03"
+    assert info["unique_id"] != f"{MAC}-1-11"
+    assert (info["where"], info["interface"]) == ("11", "3")
+    assert info["properties"]["ownId"] == "1*11#4#3"
+
+    platform, cfg = generate_suggested_config(info)
+    assert (platform, cfg["where"], cfg["interface"]) == ("light", "11", "3")
+
+
+def test_the_two_spellings_of_an_interface_are_the_same_device(hass: HomeAssistant, tmp_path) -> None:
+    """``#4#3`` and ``#4#03`` come off the same bus and must not be two devices.
+
+    OWNd reports the interface exactly as the frame spells it, and both spellings
+    occur; ``gateway._entity_key_candidates`` already resolves them to one entity, so
+    discovery must not announce the same actuator twice, once per spelling.
+    """
+    service = make_service(hass, tmp_path)
+    for frame in ("*1*1*11#4#3##", "*1*1*11#4#03##"):
+        service.handle_discovery_message(OWNEvent.parse(frame))
+
+    assert list(service.get_discovered_devices()) == [f"{MAC}-1-11#4#03"]
+
+
+async def test_the_main_bus_and_the_riser_are_two_devices(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """A plant with actuator 11 on the main bus *and* at ``11#4#3`` has two devices.
+
+    Why it matters in production: ``handle_discovery_message`` keeps the first
+    ``unique_id`` it sees and discards every repeat.  While the interface was dropped
+    both actuators were keyed ``{mac}-1-11``, so whichever answered second was never
+    announced and never suggested -- silently, with the user left believing the run
+    saw everything on the bus.
+
+    Mutation caught: building the unique id from ``message.where`` alone; the second
+    frame is then swallowed as a duplicate and this test sees one device.
+    """
+    service = make_service(hass, tmp_path)
+    seen: list[dict[str, Any]] = []
+    hass.bus.async_listen(f"{DOMAIN}_device_discovered", lambda event: seen.append(dict(event.data)))
+
+    for frame in ("*1*1*11##", "*1*1*11#4#3##"):
+        service.handle_discovery_message(OWNEvent.parse(frame))
+    await hass.async_block_till_done()
+
+    assert sorted(service.get_discovered_devices()) == [f"{MAC}-1-11", f"{MAC}-1-11#4#03"]
+    assert len(seen) == 2
+    assert service.suggestions.pending_count == 2
+    # ...and the INFO line the user reads tells them apart, which "WHERE=11" twice
+    # would not.
+    announced = [line for line in caplog.text.splitlines() if "Discovered" in line]
+    assert len(announced) == 2
+    assert announced[0].endswith("WHERE=11")
+    assert announced[1].endswith("WHERE=11#4#3")
+
+
+# Frames a real 60-second run can see, in one list: the devices worth suggesting, the
+# scopes that are not devices, and the families that have no YAML section.  The WHEREs
+# are the documentation-range ones used everywhere in this suite.
+_RUN_FRAMES = (
+    "*1*1*11##",  # a lamp on the main bus
+    "*1*5*12##",  # a dimmer (brightness preset)
+    "*1*1*11#4#3##",  # the same address on a private riser behind an F422
+    "*2*1*54##",  # a shutter
+    "*2*1*31#4#2##",  # ...and one behind an interface
+    "*#18*51*113*613##",  # an energy meter
+    "*#4*1*0*0235##",  # a thermoregulation zone
+    "*#4*112*0*0198##",  # a temperature probe
+    "*4*1*0##",  # the thermoregulation central unit
+    "*25*21#3*225##",  # a CEN+ keypad: announced, never suggested
+    "*9*1*3##",  # an auxiliary channel
+    *_SCOPE_FRAMES,  # ...and every plant-wide address, which must produce nothing
+)
+
+
+async def test_a_whole_run_produces_yaml_the_validator_accepts(hass: HomeAssistant, tmp_path) -> None:
+    """End to end: every frame of a run -> the suggestions file -> ``validate.py``.
+
+    Why it matters in production: ``myhome_discovered.yaml`` is copied into
+    ``myhome.yaml`` as a block, so a *single* suggestion the schema refuses takes the
+    whole file down with it -- every device of that gateway disappears, and the error
+    the user sees names the pasted line, not discovery.  The per-type tests feed the
+    classifier's output; this one starts from raw frames and ends in
+    ``config_schema``, so it also fails when the classifier hands the writer a WHERE
+    the schema never accepts (``where: '100'``, ``zone: '0'``, an unpadded interface
+    the schema refuses...).
+
+    Mutations caught: any of the above, plus letting a scope frame through -- the
+    area-10 suggestion alone makes ``config_schema`` raise here.
+    """
+    service = make_service(hass, tmp_path)
+    for frame in _RUN_FRAMES:
+        service.handle_discovery_message(OWNEvent.parse(frame))
+    await hass.async_block_till_done()
+
+    pending = {platform: dict(devices) for platform, devices in service.suggestions._pending.items()}  # noqa: SLF001
+    assert pending, "the run must have produced suggestions, or this test proves nothing"
+
+    result = config_schema({MAC: pending})
+    assert sorted(result[MAC.lower()][CONF_PLATFORMS]) == sorted(pending)
+
+    # No scope address survived into the file the user is told to copy.  Only WHO 1
+    # and WHO 2 have them: "1" is a perfectly ordinary thermoregulation zone.
+    lighting_wheres = {
+        cfg["where"] for platform in ("light", "cover") for cfg in pending.get(platform, {}).values()
+    }
+    assert lighting_wheres.isdisjoint({"0", "00", "1", "9", "100"})
+
+
 def test_an_auxiliary_channel_is_published_as_a_binary_sensor(
     hass: HomeAssistant, tmp_path
 ) -> None:
@@ -576,6 +776,55 @@ async def test_the_declare_by_hand_count_is_the_count_of_one_run(
         assert len(counts) == 3, caplog.text
         for line in counts:
             assert "1 device(s)" in line, line
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_a_device_that_cannot_be_declared_is_reported_apart_from_one_that_can(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """"Declare it by hand" must not be said of a device that cannot be declared.
+
+    Why it matters in production: this line is the entire user-facing output of a
+    run for everything the writer cannot express, and it lumped two opposite answers
+    together.  A CEN/CEN+ keypad really can be added by hand, under
+    ``scenario_control:`` -- that is what ``docs/discovery.md`` tells the user to do.
+    A burglar-alarm device cannot: there is no alarm section anywhere in the file
+    schema, and every existing section refuses WHO 5.  Reading "1 device(s) ... must
+    be declared by hand (bus_alarm_zone@12)", a careful maintainer goes looking
+    through ``docs/configuration.md`` for a chapter that does not exist.
+
+    Both frames are real: ``*25*21#3*225##`` is button 21 of a CEN+ keypad, and
+    ``*5*11*12##`` is sensor 2 of alarm zone 1, whose plain WHERE is exactly why it
+    survives discovery's address guards.
+
+    Mutation caught: appending every non-suggestable device to one list again - the
+    two device types then share a clause and the alarm one is described as
+    declarable.
+    """
+    async with running_gateway(hass, tmp_path) as entry:
+        service = hass.data[DOMAIN][MAC][CONF_ENTITY].discovery_service
+
+        with no_discovery_sleep():
+            await hass.services.async_call(DOMAIN, SERVICE_START_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+            service.handle_discovery_message(OWNEvent.parse("*25*21#3*225##"))
+            service.handle_discovery_message(OWNEvent.parse("*5*11*12##"))
+            caplog.clear()
+            await hass.services.async_call(DOMAIN, SERVICE_STOP_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+
+        reported = [line for line in caplog.text.splitlines() if "Discovery finished" in line]
+        assert len(reported) == 1, caplog.text
+        line = reported[0]
+        # The keypad: declarable, and the line says where.
+        assert "1 device(s) must be declared by hand under `scenario_control:`" in line
+        assert "bus_cenplus_scenario_control@225" in line
+        # The alarm sensor: not declarable, and not described as if it were.
+        assert "1 device(s) belong to a family this integration has no support for" in line
+        assert "bus_alarm_zone@12" in line
+        assert line.index("scenario_control") < line.index("no support for")
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
