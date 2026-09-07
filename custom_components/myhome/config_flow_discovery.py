@@ -175,6 +175,19 @@ class MyHOMEDiscoverySuggestions:
         self._pending: dict[str, dict[str, dict[str, Any]]] = {}
         self._skipped: list[str] = []
 
+    def reset(self) -> None:
+        """Forget what an earlier run collected. Called when a run starts.
+
+        This collector lives for the life of the config entry, while
+        ``MyHOMEDeviceDiscoveryService._discovered_devices`` is cleared at the start of
+        every run: without this, the same keypad was appended to ``_skipped`` again on
+        every run and the "must be declared by hand" line counted it once per run.
+        That line is the only report a user gets about a CEN/CEN+ control, so "3
+        device(s)" for one keypad sent them looking for two devices that do not exist.
+        """
+        self._pending.clear()
+        self._skipped.clear()
+
     @property
     def path(self) -> str:
         """Target file: DISCOVERED_CONFIG_FILE next to the configured myhome.yaml.

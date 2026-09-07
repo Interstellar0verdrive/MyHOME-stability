@@ -139,6 +139,9 @@ class MyHOMEDeviceDiscoveryService:
         self._discovery_active = True
         self._stopped.clear()
         self._discovered_devices.clear()
+        # A run reports what *this* run saw: the suggestion collector outlives the run
+        # (it is created once per config entry), so it is cleared alongside.
+        self.suggestions.reset()
 
         # Tracked task + tracked timer: both are cancelled by stop_discovery(),
         # which __init__.async_unload_entry awaits before closing the gateway.

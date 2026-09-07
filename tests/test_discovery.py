@@ -490,6 +490,46 @@ async def test_the_stop_service_ends_the_run_and_reports_what_was_found(
         await hass.async_block_till_done()
 
 
+async def test_the_declare_by_hand_count_is_the_count_of_one_run(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """Two runs, one keypad: the second run must still report ``1 device(s)``.
+
+    Why it matters in production: the "must be declared by hand" line is the only
+    report a user gets about a CEN/CEN+ control (there is no status request a keypad
+    answers, so it is discovered only from the frames it emits, and the writer cannot
+    express a ``scenario_control:`` block).  ``MyHOMEDiscoverySuggestions`` is created
+    once per config entry and outlives the run, while ``_discovered_devices`` is
+    cleared at the start of every run, so the same keypad used to be appended to
+    ``_skipped`` again on every run: a count of "3 device(s)" for one keypad sends the
+    user looking for two devices that do not exist.
+
+    Mutation caught: dropping ``self.suggestions.reset()`` from ``start_discovery``
+    (or the ``_skipped.clear()`` inside it) - the second run reports 2.
+    """
+    async with running_gateway(hass, tmp_path) as entry:
+        service = hass.data[DOMAIN][MAC][CONF_ENTITY].discovery_service
+
+        counts: list[str] = []
+        for _ in range(3):
+            with no_discovery_sleep():
+                await hass.services.async_call(DOMAIN, SERVICE_START_DISCOVERY, {}, blocking=True)
+                await hass.async_block_till_done()
+                # A CEN+ keypad: discovered, announced, and impossible to suggest.
+                service.handle_discovery_message(OWNEvent.parse("*25*21#3*225##"))
+                caplog.clear()
+                await hass.services.async_call(DOMAIN, SERVICE_STOP_DISCOVERY, {}, blocking=True)
+                await hass.async_block_till_done()
+            counts += [line for line in caplog.text.splitlines() if "declared by hand" in line]
+
+        assert len(counts) == 3, caplog.text
+        for line in counts:
+            assert "1 device(s)" in line, line
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_a_second_start_does_not_restart_the_run(hass: HomeAssistant, tmp_path) -> None:
     """Calling ``myhome.start_discovery`` twice must not lose what the first found.
 
