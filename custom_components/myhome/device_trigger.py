@@ -27,6 +27,9 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components.device_automation import DEVICE_TRIGGER_BASE_SCHEMA
+from homeassistant.components.device_automation.exceptions import (
+    InvalidDeviceAutomationConfig,
+)
 from homeassistant.components.event import DOMAIN as EVENT
 from homeassistant.components.homeassistant.triggers import event as event_trigger
 from homeassistant.const import (
@@ -135,12 +138,43 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
     ]
 
 
+async def async_validate_trigger_config(hass: HomeAssistant, config: ConfigType) -> ConfigType:
+    """Refuse a trigger the device can never fire, with a message the user can read.
+
+    Home Assistant only checks by itself that the device exists and belongs to a
+    ``myhome`` config entry -- both true for a light, a cover or the gateway -- and
+    ``TRIGGER_SCHEMA`` accepts every ``type``/``subtype`` because they are a closed set
+    that does not depend on the device.  Without this hook such a trigger would be
+    accepted, the automation would show up as "on", and it would simply never fire.
+
+    Raising ``InvalidDeviceAutomationConfig`` is what core integrations do: the
+    automation is then reported as broken with *this* text, instead of Home Assistant
+    logging its own "Unknown error while setting up trigger (empty result)", which
+    names neither the integration nor the device.
+    """
+    config = TRIGGER_SCHEMA(config)
+    control = _control_from_device(hass, config[CONF_DEVICE_ID])
+    if control is None:
+        raise InvalidDeviceAutomationConfig(
+            f"Device {config[CONF_DEVICE_ID]} is not a MyHOME CEN/CEN+ scenario control"
+        )
+    protocol = control[1]
+    if config[CONF_TYPE] not in SCENARIO_CONTROL_EVENT_TYPES[protocol]:
+        # e.g. a rotary or long-press-repeat event asked of a CEN control: the bus
+        # never produces it, so the trigger would validate and stay silent forever.
+        raise InvalidDeviceAutomationConfig(
+            f"'{config[CONF_TYPE]}' is not an event a MyHOME {protocol} scenario "
+            f"control can fire (device {config[CONF_DEVICE_ID]})"
+        )
+    return config
+
+
 async def async_attach_trigger(
     hass: HomeAssistant,
     config: ConfigType,
     action: TriggerActionType,
     trigger_info: TriggerInfo,
-) -> CALLBACK_TYPE | None:
+) -> CALLBACK_TYPE:
     """Attach the trigger to the CEN/CEN+ bus event it stands for.
 
     Delegating to the core ``event`` trigger with ``platform_type="device"`` keeps the
@@ -149,7 +183,12 @@ async def async_attach_trigger(
     """
     control = _control_from_device(hass, config[CONF_DEVICE_ID])
     if control is None:
-        return None
+        # Validated above, so this only happens when the device disappeared between
+        # validation and attach; ``None`` is not a legal return value for a trigger
+        # platform (core treats it as an internal error), so say what went wrong.
+        raise InvalidDeviceAutomationConfig(
+            f"Device {config[CONF_DEVICE_ID]} is not a MyHOME CEN/CEN+ scenario control"
+        )
     mac, protocol, object_id = control
     pushbutton = int(config[CONF_SUBTYPE].removeprefix(SCENARIO_SUBTYPE_PREFIX))
 

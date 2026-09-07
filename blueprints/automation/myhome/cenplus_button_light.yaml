@@ -22,6 +22,11 @@ blueprint:
         device:
           filter:
             - integration: myhome
+          # Only scenario controls own an `event` entity in this integration, so this
+          # keeps lights, covers, climate zones and the gateway out of the picker: a
+          # device trigger on any of them would validate and then never fire.
+          entity:
+            - domain: event
     button:
       name: Button
       description: Which pushbutton of that keypad.
