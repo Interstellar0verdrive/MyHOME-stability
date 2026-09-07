@@ -278,24 +278,35 @@ class MyHOMEDeviceDiscoveryService:
 
     @staticmethod
     def _determine_thermo_device_type(message: OWNMessage) -> str:
-        """Tell a bare temperature probe from a thermoregulation zone.
+        """Tell a standalone temperature probe from a thermoregulation zone.
 
-        ``OWNHeatingEvent`` has no ``temperature`` attribute in OWNd 0.7.49 (it
-        exposes ``main_temperature`` / ``secondary_temperature`` / ``set_temperature``
-        / ``mode``), so the previous ``getattr(message, "temperature")`` was always
-        ``None`` and every WHO 4 frame was classified as a zone: a plant full of
-        probes got a ``climate:`` suggestion for each of them.
+        OWNd 0.7.49 already makes the distinction, in the WHERE and not in the
+        payload (``OWNd/message.py``, ``OWNHeatingEvent.__init__``): a WHERE of 99 or
+        less is a plain zone number, the reading lands in ``main_temperature`` and the
+        message type is ``MESSAGE_TYPE_MAIN_TEMPERATURE``; a WHERE above 99 is
+        ``<sensor digit><zone>``, the reading lands in ``secondary_temperature`` and
+        the type is ``MESSAGE_TYPE_SECONDARY_TEMPERATURE``.  So *only* the secondary
+        type identifies a probe that is not the zone itself: a main-temperature frame
+        is **the zone** reporting its own sensor and must keep its ``climate:``
+        suggestion, or the user is told to write a read-only ``sensor:`` block and
+        loses the thermostat for that room.
 
-        A probe only ever reports a measured temperature; a zone also reports a mode
-        and/or a set point.  A frame that carries a mode is therefore a zone even when
-        it also carries a temperature.
+        Two things this classifier deliberately does not attempt:
+
+        - it never looks at ``mode``.  ``OWNMessage`` fills ``_what`` *or*
+          ``_dimension``, never both, so a temperature frame cannot carry a mode; and
+          since ``handle_discovery_message`` keeps the first classification for a
+          given unique id -- a zone's mode frame and its temperature frame share one,
+          and a zone broadcasts its temperature far more often than it changes mode --
+          the answer has to be right from a single frame anyway.
+        - a probe wired as the *main* sensor of a zone is indistinguishable from that
+          zone on the bus.  Such a device is reported as a zone, which is the safer
+          default: a ``climate:`` block nobody needs is one line to delete, a missing
+          one costs a thermostat.  ``validate.py`` also tolerates a climate zone and a
+          WHO 4 temperature sensor on the same zone, so both can be kept.
         """
         # ``OWNHeatingCommand`` has no ``message_type`` at all, hence the getattr.
-        if (
-            getattr(message, "message_type", None)
-            in (MESSAGE_TYPE_MAIN_TEMPERATURE, MESSAGE_TYPE_SECONDARY_TEMPERATURE)
-            and getattr(message, "mode", None) is None
-        ):
+        if getattr(message, "message_type", None) == MESSAGE_TYPE_SECONDARY_TEMPERATURE:
             return DEVICE_TYPE_BUS_THERMO_SENSOR
         return DEVICE_TYPE_BUS_THERMO_ZONE
 

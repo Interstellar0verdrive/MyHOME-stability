@@ -53,41 +53,80 @@ def device_info(hass: HomeAssistant, tmp_path, frame: str) -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("frame", "device_type", "platform"),
     [
-        # A bare probe: it only ever reports a measured temperature.
-        ("*#4*1*0*0235##", DEVICE_TYPE_BUS_THERMO_SENSOR, "sensor"),
-        # A zone: it reports a mode and/or a set point.
+        # WHERE above 99 is "<sensor digit><zone>": a probe of its own, and the only
+        # shape OWNd reports as ``secondary_temperature``.
+        ("*#4*112*0*0198##", DEVICE_TYPE_BUS_THERMO_SENSOR, "sensor"),
+        # A plain zone number: this is the zone's own main sensor, i.e. the zone.
+        ("*#4*1*0*0235##", DEVICE_TYPE_BUS_THERMO_ZONE, "climate"),
         ("*4*1*1##", DEVICE_TYPE_BUS_THERMO_ZONE, "climate"),
         ("*#4*1*14*0220*3##", DEVICE_TYPE_BUS_THERMO_ZONE, "climate"),
     ],
 )
-def test_a_temperature_probe_is_not_a_thermo_zone(
+def test_only_a_secondary_sensor_is_a_probe_and_not_a_zone(
     hass: HomeAssistant, tmp_path, frame: str, device_type: str, platform: str
 ) -> None:
-    """``OWNHeatingEvent`` has no ``temperature`` attribute in OWNd 0.7.49.
+    """``main_temperature`` is a *zone* reporting its own sensor, not a bare probe.
 
-    The old ``getattr(message, "temperature")`` test was therefore always ``None``
-    and every WHO 4 frame came out as a zone, so a plant full of probes was suggested
-    as a pile of ``climate:`` entries the user had to sort out by hand.
+    OWNd sets ``MESSAGE_TYPE_MAIN_TEMPERATURE`` whenever the WHERE is a plain zone
+    number and ``MESSAGE_TYPE_SECONDARY_TEMPERATURE`` only for the ``<sensor><zone>``
+    form, so classifying every temperature frame as a probe told the user to write a
+    read-only ``sensor:`` block for a room that needs a ``climate:`` one.
     """
     info = device_info(hass, tmp_path, frame)
     assert info["device_type"] == device_type
     assert info["platform"] == platform
 
 
+@pytest.mark.parametrize(
+    "frames",
+    [
+        ("*#4*1*0*0235##", "*4*1*1##"),
+        ("*4*1*1##", "*#4*1*0*0235##"),
+    ],
+    ids=["temperature-first", "mode-first"],
+)
+def test_a_zone_is_classified_the_same_whichever_frame_arrives_first(
+    hass: HomeAssistant, tmp_path, frames: tuple[str, str]
+) -> None:
+    """The first WHO 4 frame of a WHERE wins and is never revised.
+
+    Both frames of zone 1 produce the same ``unique_id``, and
+    ``handle_discovery_message`` returns early for a unique id it has already seen,
+    so a classifier that needed the mode frame would give a different answer
+    depending on which frame the 60-second window happened to catch first -- and a
+    zone broadcasts its temperature far more often than it changes mode.
+    """
+    service = make_service(hass, tmp_path)
+    for frame in frames:
+        service.handle_discovery_message(OWNEvent.parse(frame))
+
+    discovered = list(service.get_discovered_devices().values())
+    assert len(discovered) == 1
+    assert discovered[0]["device_type"] == DEVICE_TYPE_BUS_THERMO_ZONE
+    assert discovered[0]["platform"] == "climate"
+
+
 def test_the_probe_reading_reaches_the_discovery_properties(hass: HomeAssistant, tmp_path) -> None:
     """The value is in ``main_temperature`` / ``secondary_temperature``, as in sensor.py."""
-    info = device_info(hass, tmp_path, "*#4*1*0*0235##")
-    assert info["properties"]["temperature"] == 23.5
+    assert device_info(hass, tmp_path, "*#4*1*0*0235##")["properties"]["temperature"] == 23.5
+    assert device_info(hass, tmp_path, "*#4*112*0*0198##")["properties"]["temperature"] == 19.8
 
 
 def test_a_discovered_probe_is_suggested_as_a_temperature_sensor(
     hass: HomeAssistant, tmp_path
 ) -> None:
     """End of the chain: the YAML block the user is told to copy."""
-    platform, cfg = generate_suggested_config(device_info(hass, tmp_path, "*#4*1*0*0235##"))
+    platform, cfg = generate_suggested_config(device_info(hass, tmp_path, "*#4*112*0*0198##"))
     assert platform == "sensor"
     assert cfg["who"] == "4"
     assert cfg["class"] == "temperature"
+
+
+def test_a_discovered_zone_is_suggested_as_a_climate_block(hass: HomeAssistant, tmp_path) -> None:
+    """The other end of R1: a zone must not be suggested as a read-only sensor."""
+    platform, cfg = generate_suggested_config(device_info(hass, tmp_path, "*#4*1*0*0235##"))
+    assert platform == "climate"
+    assert cfg == {"who": "4", "zone": "1", "name": cfg["name"]}
 
 
 # ------------------------------------------------------------------ scenario controls
