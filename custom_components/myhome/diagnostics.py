@@ -7,9 +7,10 @@ attached to a bug report.
 What goes in:
 
 - the config entry data/options with the password removed and the identifying
-  fields (MAC, entry id, host, UDN, SSDP location) partially masked, and the
-  ``config_file_path`` reduced to its file name -- enough to correlate frames, not
-  enough to identify the installation or its operating-system user;
+  fields (MAC, entry id, host, UDN, SSDP location) partially masked, the
+  ``config_file_path`` reduced to its file name and the entry title (which the user
+  may have renamed) dropped -- enough to correlate frames, not enough to identify
+  the installation or its operating-system user;
 - the effective tunables (options merged with the 0.2.x defaults);
 - a *summary* of the validated ``myhome.yaml``: per platform the device count and
   the device keys (``who-where``), never the user's device names.  The per-device
@@ -73,6 +74,7 @@ from .const import (
     DEFAULT_QUEUE_TTL_SEC,
     DOMAIN,
     LOGGER,
+    clamp_worker_count,
 )
 
 # Never shown, in any form.
@@ -198,6 +200,9 @@ def effective_options(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]
     it -- unset means the default location, not "no configuration file".  Reporting
     the raw option instead used to answer ``null`` / ``false`` for the majority case,
     which reads as "this user moved their file somewhere we cannot see".
+
+    ``command_worker_count`` is resolved the same way and for the same reason: it is
+    the number of command sessions really opened, not the stored option.
     """
     options = entry.options
     default_path = hass.config.path(DEFAULT_CONFIG_FILE)
@@ -205,7 +210,11 @@ def effective_options(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]
     return {
         "config_file_name": _redact_path(configured_path) or None,
         "config_file_is_default_location": configured_path == default_path,
-        CONF_WORKER_COUNT: options.get(CONF_WORKER_COUNT, 1),
+        # The value in force, not the stored one: the setup clamps it to
+        # MAX_COMMAND_WORKERS, and ``handler.sending_workers`` is a few lines below in
+        # the same file -- an entry saved under the old 1-10 form used to report
+        # ``command_worker_count: 8`` next to a handler running 4.
+        CONF_WORKER_COUNT: clamp_worker_count(options.get(CONF_WORKER_COUNT, 1)),
         CONF_GENERATE_EVENTS: bool(options.get(CONF_GENERATE_EVENTS, False)),
         CONF_IDLE_WATCHDOG_SEC: options.get(CONF_IDLE_WATCHDOG_SEC, DEFAULT_IDLE_WATCHDOG_SEC),
         CONF_PROBE_WINDOW_SEC: options.get(CONF_PROBE_WINDOW_SEC, DEFAULT_PROBE_WINDOW_SEC),
@@ -307,7 +316,13 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "home_assistant": HA_VERSION,
         },
         "entry": {
-            "title": entry.title,
+            # The title defaults to "<model> Gateway", but Home Assistant lets a user
+            # rename a config entry from the integrations page, and a renamed gateway
+            # commonly carries a household, street or family name.  It is a free-form
+            # string the user wrote, so it goes the way the device names go -- this is
+            # the one file users are told to attach to a public issue, and the model
+            # the title usually carries is in ``entry.data`` regardless.
+            "title": REDACTED,
             "version": entry.version,
             "minor_version": entry.minor_version,
             "source": entry.source,

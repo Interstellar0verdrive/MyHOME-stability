@@ -254,6 +254,9 @@ DEVICE_TYPE_TO_PLATFORM: dict[str, str | None] = {
     DEVICE_TYPE_BUS_ENERGY_METER: "sensor",
     DEVICE_TYPE_BUS_THERMO_SENSOR: "sensor",
     DEVICE_TYPE_BUS_THERMO_ZONE: "climate",
+    # WHO 4 with WHERE ``0``: the thermoregulation central unit, declared as
+    # ``climate: {zone: '#0'}`` (discovery.py re-spells the WHERE; a bare ``0`` is
+    # refused by validate.Zone).
     DEVICE_TYPE_BUS_THERMO_CU: "climate",
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL: "event",
     DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL: "event",
@@ -265,7 +268,10 @@ DEVICE_TYPE_TO_PLATFORM: dict[str, str | None] = {
     DEVICE_TYPE_BUS_AUX: "binary_sensor",
     # WHO 5.  There is no alarm platform in this integration, and a WHO 5 device is
     # rejected by every section that exists (``binary_sensor`` is WHO 1/9/25), so
-    # naming one would be the same lie the scenario controls used to tell.
+    # naming one would be the same lie the scenario controls used to tell.  This row
+    # is reached in practice: a burglar-alarm *sensor* frame
+    # (``*5*<what>*<zone><sensor>##``) carries a plain WHERE and survives discovery's
+    # group-address guard, so ``platform: null`` really is published.
     DEVICE_TYPE_BUS_ALARM_ZONE: None,
     # The rows below are never produced by ``discovery._message_to_device_type``
     # today; they exist so the table stays exhaustive over ALL_DEVICE_SUPPORTED_TYPES.
@@ -331,6 +337,25 @@ def normalise_bus_interface(value: object) -> str | None:
     if isinstance(value, str) and value.isdigit() and len(value) <= 2 and int(value) <= 15:
         return str(int(value))
     return None
+
+
+def clamp_worker_count(value: object, default: int = 1) -> int:
+    """How many command sessions an option value really opens.
+
+    Three places need the same answer and used to compute it apart: the setup
+    (``__init__.async_setup_entry``, which acts on it), the options form (which
+    pre-fills it -- an entry saved under the old 1-10 form otherwise opened on a
+    number its own schema then refused, so *every* save failed, including one that
+    only meant to change the IP address), and the diagnostics "effective options"
+    section (which reports it next to ``handler.sending_workers``, and used to
+    contradict it).  A hand-edited entry may hold anything at all, hence the
+    non-numeric fallback.
+    """
+    try:
+        number = int(value)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return default
+    return min(max(1, number), MAX_COMMAND_WORKERS)
 
 
 def bus_full_where(where: str, interface: object) -> str:

@@ -72,6 +72,7 @@ from .const import (
     GATEWAY_TEST_TIMEOUT_SEC,
     LOGGER,
     MAX_COMMAND_WORKERS,
+    clamp_worker_count,
 )
 from .validate import format_mac
 
@@ -567,9 +568,20 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                     # ``__init__.async_setup_entry`` clamps to it, so a wider form only
                     # let the user save a number the integration silently ignored for
                     # ever -- and read it back unchanged at every visit.
+                    # The pre-filled value is clamped as well, and not only validated:
+                    # an entry saved under the old 1-10 form still holds 5-10, and a
+                    # dialog that opens on a number its own schema refuses cannot be
+                    # submitted at all -- not even by a user who came here to change the
+                    # IP address.  Opening on the clamped value shows the number the
+                    # integration has been running all along, and the first save writes
+                    # it down.
                     vol.Required(
                         CONF_WORKER_COUNT,
-                        description={"suggested_value": suggestions.get(CONF_WORKER_COUNT, options[CONF_WORKER_COUNT])},
+                        description={
+                            "suggested_value": clamp_worker_count(
+                                suggestions.get(CONF_WORKER_COUNT, options[CONF_WORKER_COUNT])
+                            )
+                        },
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_COMMAND_WORKERS)),
                     vol.Required(
                         CONF_GENERATE_EVENTS,

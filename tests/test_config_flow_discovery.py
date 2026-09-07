@@ -95,6 +95,15 @@ _SUGGESTION_CASES: dict[str, tuple[str, str, str, dict[str, Any]]] = {
         "climate",
         {"who": "4", "zone": "3", "name": "Bedroom Zone"},
     ),
+    # The central unit.  ``discovery.py`` reports its WHERE as ``#0`` -- the bare
+    # ``0`` OWNd puts on the frame is refused by ``validate.Zone``, so a suggestion
+    # built from it made the whole myhome.yaml unloadable.
+    DEVICE_TYPE_BUS_THERMO_CU: (
+        "#0",
+        "Central Unit",
+        "climate",
+        {"who": "4", "zone": "#0", "name": "Central Unit"},
+    ),
     DEVICE_TYPE_BUS_THERMO_SENSOR: (
         "3",
         "Bedroom Probe",
@@ -121,7 +130,6 @@ _NOT_SUGGESTABLE = [
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_ALARM_SYSTEM,
     DEVICE_TYPE_BUS_LIGHT_GROUP,
-    DEVICE_TYPE_BUS_THERMO_CU,
 ]
 
 
@@ -220,8 +228,10 @@ def test_generate_suggested_config_returns_none_for_devices_it_cannot_write(devi
     "Not suggested" is not the same as "not supported": since 0.4.0 a CEN/CEN+
     scenario control *does* have an entity representation (the ``event`` platform),
     but it is declared under ``scenario_control:`` rather than under a platform
-    section, which this writer cannot emit. The alarm system, light groups and the
-    thermo central unit have no standalone YAML device form at all.
+    section, which this writer cannot emit. The alarm system and light groups have no
+    standalone YAML device form at all. (The thermo central unit used to be in this
+    list; it *is* suggestable -- as ``climate: {zone: '#0'}`` -- and is covered by
+    ``_SUGGESTION_CASES`` instead.)
 
     Why it matters in production: a suggestion for one of them would be an entry the
     user pastes in and that then fails validation, or worse creates a duplicate of a

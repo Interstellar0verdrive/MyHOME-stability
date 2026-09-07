@@ -28,6 +28,7 @@ from custom_components.myhome.const import (
     CONF_WORKER_COUNT,
     DEFAULT_CONFIG_FILE,
     DOMAIN,
+    MAX_COMMAND_WORKERS,
 )
 from custom_components.myhome.diagnostics import (
     REDACTED,
@@ -354,6 +355,36 @@ def test_an_unset_file_path_reports_the_default_file_not_no_file(
     assert reported["config_file_is_default_location"] is expected_default
 
 
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (MAX_COMMAND_WORKERS + 4, MAX_COMMAND_WORKERS),
+        (0, 1),
+        ("many", 1),
+        (2, 2),
+    ],
+    ids=["above-the-clamp", "below-the-clamp", "not-a-number", "in-range"],
+)
+def test_the_worker_count_reported_is_the_one_in_effect(
+    hass: HomeAssistant, stored: object, expected: int
+) -> None:
+    """``effective_options`` reports the sessions really opened, not the stored option.
+
+    Why it matters in production: the section exists precisely to answer "what is in
+    force", and ``handler.sending_workers`` sits a few lines below it in the same
+    diagnostics file.  An entry saved under the old 1-10 form reported
+    ``command_worker_count: 8`` next to a handler running 4, so the two sections of
+    the file a maintainer reads first contradicted each other.
+
+    Mutation caught: reading ``entry.options`` straight through again, or clamping
+    with a different bound than ``__init__.async_setup_entry`` uses.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=MAC, data=ENTRY_DATA_V2, options={CONF_WORKER_COUNT: stored}
+    )
+    assert effective_options(hass, entry)[CONF_WORKER_COUNT] == expected
+
+
 def test_a_file_path_option_that_is_the_default_is_reported_as_such(hass: HomeAssistant) -> None:
     """The explicit form of the same thing must not disagree with the implicit one."""
     entry = MockConfigEntry(
@@ -365,6 +396,34 @@ def test_a_file_path_option_that_is_the_default_is_reported_as_such(hass: HomeAs
     reported = effective_options(hass, entry)
     assert reported["config_file_name"] == DEFAULT_CONFIG_FILE
     assert reported["config_file_is_default_location"] is True
+
+
+async def test_a_renamed_config_entry_does_not_publish_its_new_name(
+    hass: HomeAssistant, hass_client, tmp_path
+) -> None:
+    """The entry title is a free-form string the user wrote, so it is redacted.
+
+    Why it matters in production: the title defaults to "<model> Gateway", but Home
+    Assistant lets a user rename a config entry from the integrations page, and a
+    renamed gateway commonly carries a household, street or family name.  Every other
+    free-form string is already redacted -- device ``name`` / ``entity_name``, the
+    directory of the configuration file, the MAC and the host -- and the module
+    docstring plus ``docs/troubleshooting.md`` both promise the download identifies
+    nothing.  This is the one file users are told to attach to a public GitHub issue.
+
+    Mutation caught: publishing ``entry.title`` verbatim again.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        await _setup(hass, entry)
+        hass.config_entries.async_update_entry(entry, title="Rosewood Cottage")
+        await hass.async_block_till_done()
+        data = await get_diagnostics_for_config_entry(hass, hass_client, entry)
+
+    assert "Rosewood Cottage" not in json.dumps(data)
+    assert data["entry"]["title"] == REDACTED
+    # The unique_id keeps its own (partial) masking: it is the MAC, not a user string.
+    assert data["entry"]["unique_id"].endswith(REDACTED)
 
 
 @pytest.mark.parametrize("host", ["gateway.lan", "fd00::1"])

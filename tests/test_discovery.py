@@ -27,8 +27,10 @@ from custom_components.myhome.const import (
     DEVICE_TYPE_BUS_AUX,
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL,
     DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL,
+    DEVICE_TYPE_BUS_THERMO_CU,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
     DEVICE_TYPE_BUS_THERMO_ZONE,
+    DEVICE_TYPE_TO_PLATFORM,
     DOMAIN,
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
@@ -37,6 +39,7 @@ from custom_components.myhome.discovery import (
     DISCOVERY_TIMEOUT_SEC,
     MyHOMEDeviceDiscoveryService,
 )
+from custom_components.myhome.validate import config_schema
 
 from .helpers_core import MAC, make_entry, mock_gateway, wait_until, write_yaml
 
@@ -141,6 +144,62 @@ def test_a_discovered_zone_is_suggested_as_a_climate_block(hass: HomeAssistant, 
     assert cfg == {"who": "4", "zone": "1", "name": cfg["name"]}
 
 
+# The three shapes a thermoregulation central unit really puts on the bus: a
+# plant-wide mode change, the plant temperature and the CU's own actuator status.
+# All three carry ``where == '0'`` on OWNd 0.7.49 (``entity`` is ``4-#0`` for the
+# first two and, for the third, the zone of the first WHERE parameter - which is why
+# gateway.py keys these frames itself instead of trusting ``entity``).
+_CENTRAL_UNIT_FRAMES = ("*4*1*0##", "*#4*0*0*0235##", "*#4*0#1*20*1##")
+
+
+@pytest.mark.parametrize("frame", _CENTRAL_UNIT_FRAMES)
+def test_the_central_unit_is_not_discovered_as_zone_zero(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """WHERE ``0`` on WHO 4 is the central unit, and its zone is spelled ``#0``.
+
+    Why it matters in production: ``validate.Zone`` accepts ``#0``, ``1``-``99`` and
+    ``#0#<zone>`` and refuses a bare ``0``.  Classifying these frames as
+    ``bus_thermo_zone`` produced ``climate: {zone: '0'}`` in
+    ``myhome_discovered.yaml``; pasting that block does not break one device, it makes
+    the whole ``myhome.yaml`` fail to load, so every other device of the gateway
+    disappears -- the exact failure the WHO 9 fix removed one round earlier.  Any
+    plant with a thermo central unit emits these frames.
+
+    Mutations caught: dropping the WHERE-``0`` branch of
+    ``_determine_thermo_device_type`` (the device becomes a zone again), or reporting
+    the WHERE verbatim instead of re-spelling it ``#0`` (the unique id stops matching
+    the ``4-#0`` key gateway.py and validate.py use for the same device).
+    """
+    info = device_info(hass, tmp_path, frame)
+    assert info["device_type"] == DEVICE_TYPE_BUS_THERMO_CU
+    assert info["device_type"] != DEVICE_TYPE_BUS_THERMO_ZONE
+    assert info["where"] == "#0"
+    assert info["unique_id"] == f"{MAC}-4-#0"
+    assert info["platform"] == "climate"
+
+
+@pytest.mark.parametrize("frame", _CENTRAL_UNIT_FRAMES)
+def test_a_central_unit_frame_produces_yaml_the_validator_accepts(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """The whole chain for the central unit: frame -> suggestion -> validate.py.
+
+    Why it matters in production: the round-trip test in
+    ``test_config_flow_discovery.py`` feeds the classifier's *output*; this one starts
+    from the frame, so it also fails if the classifier ever hands the writer a WHERE
+    the schema refuses.  ``climate.py`` really builds a central-unit entity for
+    ``zone: '#0'`` (AUTO included), so the suggestion is worth pasting.
+
+    Mutation caught: emitting ``zone: '0'`` -- ``config_schema`` raises instead of
+    returning a platform.
+    """
+    platform, cfg = generate_suggested_config(device_info(hass, tmp_path, frame))
+    assert (platform, cfg["zone"]) == ("climate", "#0")
+    result = config_schema({MAC: {platform: {"discovered_4__0": dict(cfg)}}})
+    assert list(result[MAC.lower()]["platforms"]) == ["climate"]
+
+
 # ------------------------------------------------------------------ scenario controls
 @pytest.mark.parametrize(
     ("frame", "device_type"),
@@ -176,13 +235,39 @@ async def test_the_discovered_event_names_the_event_platform(hass: HomeAssistant
 
 
 # ------------------------------------------------------------------ no YAML section
+def test_the_published_platform_values_are_exactly_the_documented_ones() -> None:
+    """``platform`` is a public event payload, so its value set is a contract.
+
+    Why it matters in production: ``docs/services-and-events.md`` enumerates the
+    values an automation may switch on.  It still listed ``switch``, and after the
+    WHO 9 fix (an auxiliary channel is a ``binary_sensor``; ``switch`` is WHO 1 only)
+    no row can produce it -- the mirror image of the bug that fix removed, which was
+    naming a section that would reject the device.
+
+    Mutation caught: adding a value here without the docs sentence catching up, or
+    re-introducing a section this integration does not build entities for.
+    """
+    assert set(DEVICE_TYPE_TO_PLATFORM.values()) - {None} == {
+        "light",
+        "cover",
+        "sensor",
+        "climate",
+        "event",
+        "binary_sensor",
+    }
+
+
 @pytest.mark.parametrize(
     ("frame", "device_type"),
     [
-        # WHO 5, an alarm zone: there is no alarm platform, and every section that
-        # exists refuses WHO 5 (binary_sensor is WHO 1/9/25).
+        # A real burglar-alarm sensor frame: WHERE is "<zone><sensor>", so this is
+        # sensor 2 of zone 1 (OWNd's OWNAlarmEvent reads it that way).  It carries no
+        # "#", so it is not taken for a group address and really reaches this code.
+        ("*5*11*12##", DEVICE_TYPE_BUS_ALARM_ZONE),
+        # The control panel itself: a single-character WHERE.
         ("*5*17*0##", DEVICE_TYPE_BUS_ALARM_ZONE),
     ],
+    ids=["zone-sensor", "control-panel"],
 )
 def test_a_device_with_no_yaml_section_publishes_platform_none(
     hass: HomeAssistant, tmp_path, frame: str, device_type: str
@@ -191,12 +276,36 @@ def test_a_device_with_no_yaml_section_publishes_platform_none(
 
     An alarm device was published as ``binary_sensor``, which is the same stale-value
     bug the round-1 fix removed for scenario controls: it sends the reader to a
-    section that would reject the device.  ``None`` says what is true.
+    section that would reject the device (``binary_sensor`` is WHO 1/9/25).  ``None``
+    says what is true.
+
+    The first case is the reason this is an observable behaviour and not only a table
+    entry: a burglar alarm reports its sensors with a plain WHERE.
     """
     info = device_info(hass, tmp_path, frame)
     assert info["device_type"] == device_type
     assert info["platform"] is None
     assert generate_suggested_config(info) is None
+
+
+@pytest.mark.parametrize("frame", ["*5*1*#1##", "*5*5*#2##"])
+def test_an_alarm_zone_address_is_not_taken_for_a_device(
+    hass: HomeAssistant, tmp_path, frame: str
+) -> None:
+    """``*5*<what>*#<zone>##`` is dropped by the group-address guard, on purpose.
+
+    Why it matters in production: on WHO 5 a leading ``#`` is zone N, not a group, so
+    this guard is wider than its name.  Letting these frames through would announce a
+    device the integration has no entity and no ``myhome.yaml`` section for, and add
+    it to the "must be declared by hand" count -- which promises the user something
+    that cannot be done for an alarm zone.  This test states the choice so the next
+    reader does not "fix" the guard by accident.
+
+    Mutation caught: narrowing the guard to let ``#``-prefixed WHO 5 WHEREs through.
+    """
+    message = OWNEvent.parse(frame)
+    assert message is not None and message.where.startswith("#")
+    assert make_service(hass, tmp_path)._extract_device_info(message) is None  # noqa: SLF001
 
 
 def test_an_auxiliary_channel_is_published_as_a_binary_sensor(
@@ -427,6 +536,46 @@ async def test_the_stop_service_ends_the_run_and_reports_what_was_found(
         suggested = tmp_path / "myhome_discovered.yaml"
         assert suggested.is_file()
         assert "discovered_1_12" in suggested.read_text(encoding="utf-8")
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_the_declare_by_hand_count_is_the_count_of_one_run(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """Two runs, one keypad: the second run must still report ``1 device(s)``.
+
+    Why it matters in production: the "must be declared by hand" line is the only
+    report a user gets about a CEN/CEN+ control (there is no status request a keypad
+    answers, so it is discovered only from the frames it emits, and the writer cannot
+    express a ``scenario_control:`` block).  ``MyHOMEDiscoverySuggestions`` is created
+    once per config entry and outlives the run, while ``_discovered_devices`` is
+    cleared at the start of every run, so the same keypad used to be appended to
+    ``_skipped`` again on every run: a count of "3 device(s)" for one keypad sends the
+    user looking for two devices that do not exist.
+
+    Mutation caught: dropping ``self.suggestions.reset()`` from ``start_discovery``
+    (or the ``_skipped.clear()`` inside it) - the second run reports 2.
+    """
+    async with running_gateway(hass, tmp_path) as entry:
+        service = hass.data[DOMAIN][MAC][CONF_ENTITY].discovery_service
+
+        counts: list[str] = []
+        for _ in range(3):
+            with no_discovery_sleep():
+                await hass.services.async_call(DOMAIN, SERVICE_START_DISCOVERY, {}, blocking=True)
+                await hass.async_block_till_done()
+                # A CEN+ keypad: discovered, announced, and impossible to suggest.
+                service.handle_discovery_message(OWNEvent.parse("*25*21#3*225##"))
+                caplog.clear()
+                await hass.services.async_call(DOMAIN, SERVICE_STOP_DISCOVERY, {}, blocking=True)
+                await hass.async_block_till_done()
+            counts += [line for line in caplog.text.splitlines() if "declared by hand" in line]
+
+        assert len(counts) == 3, caplog.text
+        for line in counts:
+            assert "1 device(s)" in line, line
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()

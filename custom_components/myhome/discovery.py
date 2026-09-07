@@ -40,6 +40,7 @@ from .const import (
     DEVICE_TYPE_BUS_DRY_CONTACT_IR,
     DEVICE_TYPE_BUS_ENERGY_METER,
     DEVICE_TYPE_BUS_ON_OFF_SWITCH,
+    DEVICE_TYPE_BUS_THERMO_CU,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
     DEVICE_TYPE_BUS_THERMO_ZONE,
     DEVICE_TYPE_GENERIC,
@@ -53,6 +54,13 @@ if TYPE_CHECKING:
 
 DISCOVERY_TIMEOUT_SEC = 60
 
+# How the thermoregulation central unit is addressed everywhere else in the
+# integration: ``gateway.py._message_entity_key`` keys its frames as ``4-#0``,
+# ``validate.Zone`` accepts ``#0`` (and refuses a bare ``0``) and ``climate.py``
+# builds a real entity for it.  Discovery uses the same spelling so the suggestion
+# it writes is YAML the schema loads.
+CENTRAL_UNIT_ZONE = "#0"
+
 # Cosmetic grouping of device types (was device_factory.get_device_category)
 _DEVICE_CATEGORY: dict[str, str] = {
     DEVICE_TYPE_BUS_ON_OFF_SWITCH: "lighting",
@@ -61,6 +69,7 @@ _DEVICE_CATEGORY: dict[str, str] = {
     DEVICE_TYPE_BUS_ENERGY_METER: "energy",
     DEVICE_TYPE_BUS_THERMO_ZONE: "thermoregulation",
     DEVICE_TYPE_BUS_THERMO_SENSOR: "thermoregulation",
+    DEVICE_TYPE_BUS_THERMO_CU: "thermoregulation",
     DEVICE_TYPE_BUS_CEN_SCENARIO_CONTROL: "scenario",
     DEVICE_TYPE_BUS_CENPLUS_SCENARIO_CONTROL: "scenario",
     DEVICE_TYPE_BUS_DRY_CONTACT_IR: "scenario",
@@ -130,6 +139,9 @@ class MyHOMEDeviceDiscoveryService:
         self._discovery_active = True
         self._stopped.clear()
         self._discovered_devices.clear()
+        # A run reports what *this* run saw: the suggestion collector outlives the run
+        # (it is created once per config entry), so it is cleared alongside.
+        self.suggestions.reset()
 
         # Tracked task + tracked timer: both are cancelled by stop_discovery(),
         # which __init__.async_unload_entry awaits before closing the gateway.
@@ -242,18 +254,38 @@ class MyHOMEDeviceDiscoveryService:
             return None
         where = str(where)
         if where.startswith("#"):
-            # groups / general addresses are not devices
+            # Groups and general addresses are not devices.  This also drops the
+            # ``*5*<what>*#<zone>##`` frames of a burglar alarm, where ``#N`` is zone N
+            # and not a group -- deliberately: an alarm zone has no entity and no
+            # ``myhome.yaml`` section, so announcing it would only grow the
+            # "must be declared by hand" count with something that cannot be declared
+            # at all.  A real alarm *sensor* frame (``*5*<what>*<zone><sensor>##``,
+            # e.g. ``*5*11*12##`` = sensor 2 of zone 1) carries a plain WHERE, gets
+            # through, and is what makes ``platform: null`` a value the public
+            # discovery event really publishes.
             return None
 
         device_type = self._message_to_device_type[message_type](message)
         if not device_type or device_type not in ALL_DEVICE_SUPPORTED_TYPES:
             device_type = DEVICE_TYPE_GENERIC
 
+        if device_type == DEVICE_TYPE_BUS_THERMO_CU:
+            # The central unit is addressed ``#0``, never ``0`` (see
+            # _determine_thermo_device_type): re-spell the WHERE before it reaches the
+            # unique id, the properties and the YAML suggestion, so the key matches the
+            # ``4-#0`` key gateway.py and validate.py use for the same device.
+            where = CENTRAL_UNIT_ZONE
+            # The generic formula would produce "MyHOME Bus Thermo Cu #0", and this
+            # name is copied verbatim into the user's myhome.yaml.
+            name = "MyHOME Thermoregulation Central Unit"
+        else:
+            name = f"MyHOME {device_type.replace('_', ' ').title()} {where}"
+
         who = str(getattr(message, "who", "") or "")
         device_info: dict[str, Any] = {
             # unique per gateway AND WHO (a light and a shutter may share a WHERE)
             "unique_id": f"{self._mac}-{who}-{where}",
-            "name": f"MyHOME {device_type.replace('_', ' ').title()} {where}",
+            "name": name,
             "device_type": device_type,
             "who": who,
             "where": where,
@@ -284,9 +316,21 @@ class MyHOMEDeviceDiscoveryService:
 
     @staticmethod
     def _determine_thermo_device_type(message: OWNMessage) -> str:
-        """Tell a standalone temperature probe from a thermoregulation zone.
+        """Tell the central unit, a standalone temperature probe and a zone apart.
 
-        OWNd 0.7.49 already makes the distinction, in the WHERE and not in the
+        A WHO 4 frame whose WHERE is ``0`` is the **central unit**, not zone 0: a
+        plant-wide mode change (``*4*1*0##``), the plant temperature
+        (``*#4*0*0*0235##``) and the CU's own actuator status (``*#4*0#1*20*1##``)
+        all report ``where == '0'`` on OWNd 0.7.49, and ``gateway.py``'s
+        ``_message_entity_key`` already keys them as ``4-#0``.  Calling that a zone
+        produced a ``climate: {zone: '0'}`` suggestion, and ``validate.Zone`` accepts
+        ``#0``, ``1``-``99`` and ``#0#<zone>`` but never ``0`` -- so pasting it did
+        not break one device, it made the whole ``myhome.yaml`` fail to load and every
+        other device of that gateway disappear.  ``#0`` is a device the integration
+        really builds (``climate.py`` models the central unit, AUTO included), so it
+        is classified and suggested rather than dropped.
+
+        OWNd 0.7.49 also makes the probe/zone distinction, in the WHERE and not in the
         payload (``OWNd/message.py``, ``OWNHeatingEvent.__init__``): a WHERE of 99 or
         less is a plain zone number, the reading lands in ``main_temperature`` and the
         message type is ``MESSAGE_TYPE_MAIN_TEMPERATURE``; a WHERE above 99 is
@@ -311,6 +355,8 @@ class MyHOMEDeviceDiscoveryService:
           one costs a thermostat.  ``validate.py`` also tolerates a climate zone and a
           WHO 4 temperature sensor on the same zone, so both can be kept.
         """
+        if str(getattr(message, "where", "") or "") == "0":
+            return DEVICE_TYPE_BUS_THERMO_CU
         # ``OWNHeatingCommand`` has no ``message_type`` at all, hence the getattr.
         if getattr(message, "message_type", None) == MESSAGE_TYPE_SECONDARY_TEMPERATURE:
             return DEVICE_TYPE_BUS_THERMO_SENSOR

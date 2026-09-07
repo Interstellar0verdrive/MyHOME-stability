@@ -514,6 +514,57 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     assert mock_setup_entry.await_count == 3
 
 
+def form_suggested_values(schema) -> dict[str, object]:
+    """What Home Assistant pre-fills the options dialog with, key by key."""
+    return {
+        str(marker): marker.description["suggested_value"]
+        for marker in schema.schema
+        if isinstance(getattr(marker, "description", None), dict)
+        and "suggested_value" in marker.description
+    }
+
+
+async def test_a_stored_worker_count_the_form_refuses_is_pre_filled_clamped(
+    hass: HomeAssistant, mock_setup_entry, tmp_path
+) -> None:
+    """An entry saved under the old 1-10 form must still be savable.
+
+    Why it matters in production: nothing migrates or clamps the *stored* option, so
+    every entry saved through the previous form still holds 5-10.  Validating the
+    range but pre-filling the stale value opened the dialog on a number its own schema
+    refuses, and then *every* submit failed - including one from a user who came here
+    only to change the IP address after a router swap.  All they were told was
+    "value must be at most 4", on a field they never touched and whose value the
+    integration had been ignoring since setup.
+
+    The form now opens on the clamped value, which is the number really running, so
+    pressing Submit unchanged works and quietly writes it down.
+
+    Mutations caught: dropping ``clamp_worker_count`` from the ``suggested_value``
+    (the pre-filled 8 comes back and the resubmit raises ``InvalidData``), or clamping
+    to a bound other than MAX_COMMAND_WORKERS.
+    """
+    path = write_yaml(tmp_path)
+    entry = make_entry(path, options={CONF_WORKER_COUNT: MAX_COMMAND_WORKERS + 4})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    prefilled = form_suggested_values(result["data_schema"])
+    assert prefilled[CONF_WORKER_COUNT] == MAX_COMMAND_WORKERS
+
+    # Submitting the dialog exactly as it opened is the user's "I only wanted to
+    # change something else" gesture; it used to be impossible.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**prefilled, CONF_FILE_PATH: str(path)}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_WORKER_COUNT] == MAX_COMMAND_WORKERS
+
+
 async def test_options_flow_refuses_more_workers_than_the_setup_will_start(
     hass: HomeAssistant, mock_setup_entry, tmp_path
 ) -> None:

@@ -36,6 +36,7 @@ from .const import (
     DEVICE_TYPE_BUS_DRY_CONTACT_IR,
     DEVICE_TYPE_BUS_ENERGY_METER,
     DEVICE_TYPE_BUS_ON_OFF_SWITCH,
+    DEVICE_TYPE_BUS_THERMO_CU,
     DEVICE_TYPE_BUS_THERMO_SENSOR,
     DEVICE_TYPE_BUS_THERMO_ZONE,
     DISCOVERED_CONFIG_FILE,
@@ -50,6 +51,11 @@ _SUGGESTABLE: dict[str, tuple[str, str]] = {
     DEVICE_TYPE_BUS_AUTOMATION: ("cover", "2"),
     DEVICE_TYPE_BUS_ENERGY_METER: ("sensor", "18"),
     DEVICE_TYPE_BUS_THERMO_ZONE: ("climate", "4"),
+    # The thermoregulation central unit. ``discovery.py`` reports its WHERE as
+    # ``#0`` (never the bare ``0`` OWNd puts on the frame), which is the only
+    # spelling ``validate.Zone`` accepts for it and the one ``climate.py`` builds
+    # a central-unit entity from.
+    DEVICE_TYPE_BUS_THERMO_CU: ("climate", "4"),
     DEVICE_TYPE_BUS_THERMO_SENSOR: ("sensor", "4"),
     DEVICE_TYPE_BUS_DRY_CONTACT_IR: ("binary_sensor", "25"),
     # WHO 9 is accepted by the binary_sensor schema only (_who("1", "9", "25"));
@@ -168,6 +174,19 @@ class MyHOMEDiscoverySuggestions:
         self.config_entry = config_entry
         self._pending: dict[str, dict[str, dict[str, Any]]] = {}
         self._skipped: list[str] = []
+
+    def reset(self) -> None:
+        """Forget what an earlier run collected. Called when a run starts.
+
+        This collector lives for the life of the config entry, while
+        ``MyHOMEDeviceDiscoveryService._discovered_devices`` is cleared at the start of
+        every run: without this, the same keypad was appended to ``_skipped`` again on
+        every run and the "must be declared by hand" line counted it once per run.
+        That line is the only report a user gets about a CEN/CEN+ control, so "3
+        device(s)" for one keypad sent them looking for two devices that do not exist.
+        """
+        self._pending.clear()
+        self._skipped.clear()
 
     @property
     def path(self) -> str:
