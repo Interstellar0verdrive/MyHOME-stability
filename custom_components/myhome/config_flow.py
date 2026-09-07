@@ -502,7 +502,13 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                     **entry.data,
                     CONF_HOST: host,
                     CONF_PORT: int(user_input[CONF_PORT]),
-                    CONF_PASSWORD: str(user_input[CONF_OWN_PASSWORD]).strip(),
+                    # "no password" must stay None, not "".  The field is Required and
+                    # pre-filled with "", so simply opening this dialog and pressing
+                    # Submit used to rewrite a password-less gateway's None into "" --
+                    # and OWNd treats the two differently: None asks for a password
+                    # (which triggers our reauth flow), "" hashes the empty string and
+                    # comes back as "Invalid password".
+                    CONF_PASSWORD: str(user_input[CONF_OWN_PASSWORD]).strip() or None,
                 }
                 new_options = {
                     CONF_WORKER_COUNT: int(user_input[CONF_WORKER_COUNT]),
@@ -526,7 +532,8 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                     vol.Required(CONF_PORT, description={"suggested_value": suggestions.get(CONF_PORT, entry.data[CONF_PORT])}): PORT_VALIDATOR,
                     vol.Required(
                         CONF_OWN_PASSWORD,
-                        description={"suggested_value": suggestions.get(CONF_OWN_PASSWORD, entry.data.get(CONF_PASSWORD, ""))},
+                        # ``or ""``: a gateway configured without a password stores None.
+                        description={"suggested_value": suggestions.get(CONF_OWN_PASSWORD, entry.data.get(CONF_PASSWORD) or "")},
                     ): PASSWORD_SELECTOR,
                     vol.Required(CONF_FILE_PATH, description={"suggested_value": suggestions.get(CONF_FILE_PATH, options[CONF_FILE_PATH])}): str,
                     vol.Required(

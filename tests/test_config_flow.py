@@ -42,6 +42,19 @@ def no_ssdp_discovery():
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def no_port_lookup():
+    """The gateway's description.xml is never fetched in tests.
+
+    ``get_port`` was patched only inside the two SSDP happy-path tests, so any
+    regression letting another test reach ``ssdp_confirm`` would have issued a real
+    HTTP request from the suite.  Tests that care about the port patch it themselves;
+    their ``with patch(...)`` wins over this one.
+    """
+    with patch("custom_components.myhome.config_flow.get_port", AsyncMock(return_value=None)) as mock:
+        yield mock
+
+
 @pytest.fixture
 def mock_test_connection():
     """Mock OWNSession.test_connection used by the flow."""
@@ -283,6 +296,120 @@ async def test_reauth_flow(hass: HomeAssistant, mock_test_connection, mock_setup
     assert mock_setup_entry.await_count == 1  # reloaded once
 
 
+async def test_reauth_against_an_unreachable_gateway(
+    hass: HomeAssistant, mock_test_connection, mock_setup_entry, tmp_path
+) -> None:
+    """cf-07 for the reauth path: the user must land back on the password form.
+
+    This is the path someone hits after changing the gateway password while the
+    gateway is also unreachable; aborting instead would leave them with no form to
+    correct anything in.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    entry.add_to_hass(hass)
+    entry.async_start_reauth(hass)
+    await hass.async_block_till_done()
+    flow = hass.config_entries.flow.async_progress_by_handler(DOMAIN)[0]
+
+    mock_test_connection.side_effect = [None]
+    result = await hass.config_entries.flow.async_configure(flow["flow_id"], {"password": "54321"})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_legacy_open_auth_asks_for_a_numeric_password(
+    hass: HomeAssistant, mock_test_connection, mock_setup_entry
+) -> None:
+    """cf-13: OWNd raises ValueError when the nonce algorithm gets a non-numeric password."""
+    mock_test_connection.side_effect = [ValueError("not numeric"), TEST_OK]
+    result = await _start_manual(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CUSTOM_INPUT)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "password"
+    assert result["errors"] == {"password": "password_numeric"}
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"password": PASSWORD})
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_a_discovered_gateway_without_a_port_asks_for_one(
+    hass: HomeAssistant, no_ssdp_discovery, mock_test_connection, mock_setup_entry
+) -> None:
+    """OWNd multicast discovery does not always report the OpenWebNet port."""
+    no_ssdp_discovery.return_value = [
+        {
+            "address": HOST,
+            "port": None,
+            "serialNumber": "00:03:50:AA:BB:CC",
+            "modelName": "MyHomeServer1",
+            "manufacturer": "BTicino S.p.A.",
+        }
+    ]
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"serial": "00:03:50:AA:BB:CC"})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "port"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_PORT: 20005})
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PORT] == 20005
+
+
+async def test_discovery_never_raises(hass: HomeAssistant, no_ssdp_discovery, mock_test_connection) -> None:
+    """cf-16: a failing multicast discovery must still show the manual-entry form."""
+    no_ssdp_discovery.side_effect = OSError("no route to host")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
+    # Only the "Custom" entry is offered, and it still works.
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"serial": MANUAL_ENTRY})
+    assert result["step_id"] == "custom"
+
+
+async def test_ssdp_takes_the_host_from_the_location_when_the_header_is_missing(
+    hass: HomeAssistant, mock_test_connection, mock_setup_entry
+) -> None:
+    """``_host`` is a convenience header; the location URL is the real source."""
+    info = _ssdp_info()
+    info.ssdp_headers = {}
+    with patch("custom_components.myhome.config_flow.get_port", AsyncMock(return_value=20001)):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=info
+        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_HOST] == HOST
+
+
+@pytest.mark.parametrize(
+    ("message", "reason"),
+    [
+        ("connection_refused", "cannot_connect"),
+        ("negotiation_refused", "negotiation_refused"),
+        ("negociation_error", "negotiation_error"),  # OWNd's own spelling
+        ("negotiation_failed", "negotiation_failed"),
+        ("something_new", "unknown"),
+    ],
+)
+async def test_every_ownd_failure_message_maps_to_an_abort_reason(
+    hass: HomeAssistant, mock_test_connection, message: str, reason: str
+) -> None:
+    """The keys are OWNd's strings, typo included: pin them, they are not ours.
+
+    Only ``negotiation_refused`` was asserted, so a renamed OWNd message would have
+    silently degraded every abort to "unknown" with the suite green.
+    """
+    mock_test_connection.side_effect = [{"Success": False, "Message": message}]
+    result = await _start_manual(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CUSTOM_INPUT)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == reason
+
+
 def _suggested(result) -> dict:
     """Suggested values of the tunable number selectors shown by the options form."""
     keys = (
@@ -368,3 +495,37 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     assert entry.data[CONF_HOST] == "10.0.0.2"
     assert entry.data[CONF_PASSWORD] == "999"
     assert mock_setup_entry.await_count == 3
+
+
+async def test_options_flow_keeps_no_password_as_none(hass: HomeAssistant, mock_setup_entry, tmp_path) -> None:
+    """A gateway configured without a password must not gain an empty-string one.
+
+    The password field is Required and pre-filled with "", so opening the options
+    dialog and pressing Submit used to rewrite None into "".  OWNd treats the two
+    differently: None makes it ask for a password (which surfaces as our reauth
+    flow), "" makes it hash the empty string and report "Invalid password".
+    """
+    path = write_yaml(tmp_path)
+    entry = make_entry(path, data={**ENTRY_DATA_V2, CONF_PASSWORD: None})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    unchanged = {
+        "address": HOST,
+        CONF_PORT: 20000,
+        "password": "",  # what the pre-filled form hands back untouched
+        CONF_FILE_PATH: str(path),
+        CONF_WORKER_COUNT: 1,
+        CONF_GENERATE_EVENTS: False,
+        CONF_IDLE_WATCHDOG_SEC: float(DEFAULT_IDLE_WATCHDOG_SEC),
+        CONF_PROBE_WINDOW_SEC: float(DEFAULT_PROBE_WINDOW_SEC),
+        CONF_COMMAND_TIMEOUT_SEC: float(DEFAULT_COMMAND_TIMEOUT_SEC),
+        CONF_QUEUE_TTL_SEC: float(DEFAULT_QUEUE_TTL_SEC),
+        CONF_DEFAULT_KEEPALIVE_MINUTES: float(DEFAULT_KEEPALIVE_MINUTES),
+    }
+    result = await hass.config_entries.options.async_configure(result["flow_id"], unchanged)
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_PASSWORD] is None
