@@ -13,7 +13,7 @@ Assistant releases** — sessions that detect a dead connection and reconnect on
 their own, commands that are never silently dropped, strict configuration
 validation, and closed deprecations.
 
-- Current release: **0.3.1** — see [CHANGELOG.md](CHANGELOG.md)
+- Current release: **0.4.0** (7 September 2026) — see [CHANGELOG.md](CHANGELOG.md)
 - Requires **Home Assistant 2026.8.0 or newer**
 - Devices are declared in a YAML file (`myhome.yaml`); the gateway is added from the UI
 
@@ -49,8 +49,8 @@ does not mean a ten-line prompt and a "done": it meant hundreds of hours of
 reading the original code and the OpenWebNet protocol, running structured
 multi-agent audits of every module, deciding what to fix and how, writing shared
 contracts between modules before touching them, reviewing every diff, running the
-automated test suite (163 tests, including an end-to-end test against a fake
-OpenWebNet server), and then testing each release against my real gateway and my
+automated test suite (which runs in CI on every push and includes an end-to-end
+test against a fake OpenWebNet server), and then testing each release against my
 real house — lights, shutters, power meters, reloads and restarts — before
 publishing it. When something did not work in the real world (for example, a
 cover position that was lost on reload), it was found by testing, fixed, tested

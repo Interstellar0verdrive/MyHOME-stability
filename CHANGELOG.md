@@ -3,6 +3,14 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- (platforms)
+- (events/flows)
+- (tests/CI)
+
 ## [0.4.0] - 2026-09-07
 
 Three additions: a two-phase travel model for covers, CEN/CEN+ scenario controls as
@@ -41,13 +49,14 @@ did: the cover model and the scenario controls are opt-in through new keys.
   invisible everywhere else. Declaring the control under the new `scenario_control:`
   block in `myhome.yaml` now creates a **device** on the gateway carrying one
   **event entity** (`event.<name>_scenario_control`, state = timestamp of the last
-  press, attributes `event_type`, `pushbutton`, `protocol`, `object`/`where`) and a
-  set of **device triggers**, so "Button 2 held down on Living Room Keypad" can be
-  picked in the automation editor instead of hand-written event triggers. Both CEN+
-  (`object`, buttons 1-32, including the long-press repeat and the four rotary
-  events) and CEN (`where`, buttons 0-31) are supported; `buttons` decides which
-  combinations the picker offers, never what reaches the bus. Controls that are *not*
-  declared keep firing the bus events and create nothing, exactly as in 0.3.x.
+  press, attributes `event_type`, `pushbutton`, `protocol`, `object`/`where` and
+  `buttons`) and a set of **device triggers**, so "Button 2 held down on Living Room
+  Keypad" can be picked in the automation editor instead of hand-written event
+  triggers. Both CEN+ (`object`, buttons 1-32, including the long-press repeat and
+  the four rotary events) and CEN (`where`, buttons 0-31) are supported; `buttons`
+  decides which combinations the picker offers, never what reaches the bus. Controls
+  that are *not* declared keep firing the bus events and create nothing, exactly as
+  in 0.3.x.
 
   *The device-trigger module is ported from [fedem95/MyHOME](https://github.com/fedem95/MyHOME) by fedem95 (AGPL-3.0): the base-schema extension, the type/subtype split and the delegation to Home Assistant's own event trigger are theirs; the concept was also explored by [mantovanellimatteo/MyHOME](https://github.com/mantovanellimatteo/MyHOME). The event-entity model is ported from [adrael/MyHOME](https://github.com/adrael/MyHOME) by raphael (AGPL-3.0), whose `event.py` implements the same shape for a doorbell.*
 
@@ -136,8 +145,8 @@ interface keep the exact ids they had in 0.3.0.
   `zone 0` frame to the zone in the first WHERE parameter, so `*#4*0#1*20*1##` — the
   central unit's actuator — was reported as entity `4-1` and drove zone 1's climate
   entity with the central unit's state. Such frames are now routed to the
-  central-unit entity (`4-#0`). *Fix contributed by Jacopo Jannone, via michnovka's
-  fork.*
+  central-unit entity (`4-#0`). *Fix contributed by jacopo-j, via
+  [michnovka's fork](https://github.com/michnovka/HomeAssistant-MyHOME).*
 - **`myhome.sync_time` blocked the event loop.** Building the command calls
   `pytz.timezone()`, which reads the timezone database from disk; it now runs in an
   executor, so Home Assistant no longer logs a blocking-call warning when the service
@@ -346,3 +355,12 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 `min_interval_sec`, `suppress_log_interval_sec`) with global sensor defaults in
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
+
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.0
+[0.3.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.3.1
+[0.3.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.3.0
+[0.2.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.2.1
+[0.2.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.2.0
+[0.1.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.1.1
+[0.1.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.1.0
