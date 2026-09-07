@@ -1138,6 +1138,65 @@ async def test_the_timing_keys_of_an_advanced_cover_size_the_safety_timer(
         assert hass.states.get(entity_id).state == CoverState.OPEN
 
 
+# Two slow awnings, each slower in one direction: 120 s one way, 40 s the other.
+# `max` bounds both at 150 s; `min`, `opening_time` alone and `closing_time` alone
+# each get one of the two wrong.
+ADVANCED_ASYMMETRIC_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_adv_slow_open:
+      where: '88'
+      name: Cover Adv Slow Open
+      advanced: true
+      opening_time: 120
+      closing_time: 40
+    cover_adv_slow_close:
+      where: '89'
+      name: Cover Adv Slow Close
+      advanced: true
+      opening_time: 40
+      closing_time: 120
+"""
+
+
+@pytest.mark.parametrize(
+    ("where", "entity_id"),
+    [("88", "cover.cover_adv_slow_open"), ("89", "cover.cover_adv_slow_close")],
+    ids=["slower-opening", "slower-closing"],
+)
+async def test_the_safety_bound_of_an_advanced_cover_takes_the_longer_direction(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, where: str, entity_id: str
+) -> None:
+    """One bound for both directions, so it has to be the *longer* of the two.
+
+    `opening_time` and `closing_time` are per-direction everywhere else
+    (`test_asymmetric_opening_and_closing_times`), but an advanced cover has a single
+    `_advanced_move_timeout`. Sizing it from the shorter direction cuts every long run
+    short: an awning that takes 120 s to open, bounded at 40 + 30, has its status
+    re-read fired mid-run and leaves *Opening* if the actuator does not answer inside
+    the grace. Every other advanced fixture declares `shutter_run` alone, where the two
+    times are equal and `max`, `min`, `opening_time` and `closing_time` all agree.
+
+    Both orderings are exercised, so reading either key on its own fails on one of
+    them. Mutation caught: `max(self._opening_time, self._closing_time)` ->
+    `min(...)`, `self._opening_time`, or `self._closing_time`.
+    """
+    async with setup_myhome(hass, tmp_path, ADVANCED_ASYMMETRIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, f"2-{where}")
+        await feed_event(hass, cover, f"*#2*{where}*10*10*42*0*0##")
+        await feed_event(hass, cover, f"*2*1*{where}##")
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        # 100 s: past every wrong bound (40 + 30), well inside the right one (150 s).
+        await _advance(hass, freezer, 100)
+        assert commands.status_frames == []
+        assert hass.states.get(entity_id).state == CoverState.OPENING
+
+        await _advance(hass, freezer, 55)  # 155 s: past 120 + 30
+        assert commands.status_frames == [f"*#2*{where}##"]
+
+
 async def test_an_unload_during_the_status_grace_leaves_no_timer(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:

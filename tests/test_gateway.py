@@ -704,6 +704,39 @@ async def test_event_auth_failure_stops_loop_and_starts_reauth() -> None:
     assert stats_calls(dispatch)[-1].session_state == SESSION_STATE_AUTH_FAILED
 
 
+async def test_a_password_rejected_on_both_sessions_asks_for_reauth_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A wrong password fails *both* sessions, and that is one problem, not two.
+
+    The command session and the event session authenticate independently, so a
+    rejected password reaches `_handle_auth_failure` twice in the ordinary case - the
+    two existing auth tests each drive one session and cannot see the difference. The
+    guard makes only the first call speak: one ERROR line telling the user to
+    reconfigure, and one reauth flow. Without it the user gets the same error twice in
+    the log for a single wrong password, and `async_start_reauth` is called again for a
+    repair that is already open.
+
+    The session state is set *before* the guard on purpose, so the second failure
+    still leaves the entry reading `auth_failed` rather than `disconnected`.
+
+    Mutation caught: dropping the `if self.auth_failed: return` guard from
+    `_handle_auth_failure`.
+    """
+    handler = make_handler()
+    err = AuthenticationError("password_error")
+
+    with caplog.at_level(logging.ERROR, logger=LOGGER_NAME):
+        handler._handle_auth_failure(err, "command")  # noqa: SLF001
+        handler._handle_auth_failure(err, "event")  # noqa: SLF001
+
+    assert handler.auth_failed is True
+    assert handler._session_state == SESSION_STATE_AUTH_FAILED  # noqa: SLF001
+    handler.config_entry.async_start_reauth.assert_called_once_with(handler.hass)
+    rejected = [record for record in caplog.records if "rejected the password" in record.message]
+    assert len(rejected) == 1, [record.message for record in rejected]
+
+
 async def test_dispatch_errors_never_tear_down_the_session(caplog: pytest.LogCaptureFixture) -> None:
     """gw-08 / plat-02 / plat-03: entity bugs and odd frames are isolated."""
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)

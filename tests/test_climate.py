@@ -863,3 +863,30 @@ async def test_a_zone_switched_back_on_does_not_stay_reported_as_off(
         # `idle`, not a re-derived `heating`: the actuator frame is still the
         # authority, it just cannot mean "off" for a zone that is on.
         assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+
+
+async def test_an_actuator_off_before_the_mode_is_known_reports_idle_not_off(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """An inactive actuator seen before any MODE frame means "idle", never "off".
+
+    `hvac_action: off` is the entity saying *the user turned this zone off*, and the
+    zone has not said anything of the kind yet: only a MODE frame can. A central unit
+    that pushes actuator status at connection time (before the zone's mode) would
+    otherwise leave the zone reading `off` until the first MODE frame arrives, which
+    on a zone that is in fact heating is the opposite of what it does.
+
+    `_async_derive_hvac_action` cannot repair this one: it returns immediately while
+    `_attr_hvac_mode` is still None, so the ternary in the MESSAGE_TYPE_ACTION arm is
+    the only thing that gets it right.
+
+    Mutation caught: replacing that ternary with a bare `HVACAction.OFF`.
+    """
+    entry = make_entry(write_yaml(tmp_path, CLIMATE_YAML))
+    with mock_gateway():
+        await _setup(hass, entry)
+        entity = _entity(hass, "4-3")  # heat + cool
+
+        entity.handle_event(OWNHeatingEvent("*#4*3#1*20*0##"))  # actuator off, first
+        await hass.async_block_till_done()
+        assert hass.states.get(FAN_ZONE).attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
