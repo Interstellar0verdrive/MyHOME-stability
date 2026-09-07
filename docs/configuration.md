@@ -250,16 +250,17 @@ direction, such as pressing *up* on the keypad right after stopping a shutter th
 was going down, is honoured straight away. Pressing the **same** direction again
 within that second and a half cannot be told apart from the repeat, so it is ignored;
 the integration then re-reads the actuator's status, and the movement is picked up
-about two seconds late rather than lost. A stop Home Assistant could not even send — the gateway's command
-queue was full, or the connection was closing — changes nothing at all: no repeat can
-follow a command that was never sent, and the shutter is still running, so the
-estimate keeps running with it. The same holds for the stop the integration sends by
-itself at the end of a *set position* or a tilt run: if that one cannot be sent, the
-shutter carries on to its end stop, and so does the estimate, which the actuator's own
-frame at the end of the run then puts back in step. That holds however short the run
-was: a two-percent nudge of the position slider takes well under the second and a half
-in which the gateway may still be repeating the command that started it, and the
-repeat is recognised as one rather than being read as the shutter stopping.
+about two seconds late rather than lost. A stop Home Assistant could not even send —
+the gateway's command queue was full, or the connection was closing — changes nothing
+at all: no repeat can follow a command that was never sent, and the shutter is still
+running, so the estimate keeps running with it. The same holds for the stop the
+integration sends by itself at the end of a *set position* or a tilt run: if that one
+cannot be sent, the shutter carries on to its end stop, and so does the estimate,
+which the actuator's own frame at the end of the run then puts back in step. That
+holds however short the run was: a two-percent nudge of the position slider takes
+well under the second and a half in which the gateway may still be repeating the
+command that started it, and the repeat is recognised as one rather than being read
+as the shutter stopping.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
 frame that says it stopped is lost, the state would otherwise stay that way for
