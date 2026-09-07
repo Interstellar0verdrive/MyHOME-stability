@@ -25,7 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - a `slat_time` on an `advanced` cover could make the whole `myhome.yaml` fail to
     load. The key does nothing on an advanced actuator (it has no tilt phase), but it
     was still cross-checked against the run times, and that check ran before the
-    warning that explains the key is inert there.
+    warning that explains the key is inert there;
+  - an actuator that reports its own position but was left at the default
+    `advanced: false` broke its own entity on the first such frame: the timed
+    estimate was stopped, the direction was set again without restarting it, and the
+    cover read *Opening* at a percentage that never moved for the best part of two
+    minutes, with nothing in the log to explain it — and no later frame could repair
+    it. Position frames are now ignored on a cover declared basic, the estimate keeps
+    running, and the debug log names `advanced: true` as the missing key.
 - Covers, the frames we cannot tell apart from our own commands:
   - after a timed run short enough to finish before the gateway's late copy of our
     movement command arrives (a small tilt target on a short `slat_time`), that copy
@@ -52,21 +59,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     one. That now holds for short runs as well: a run that finished before the
     gateway repeated the command which started it used to be ended by that repeat,
     so a small tilt or a nudge of the position slider still froze on a value the
-    shutter had already left behind.
+    shutter had already left behind. Keeping that repeat window has a cost of its
+    own, and it is now paid: a *real* stop arriving in the same second and a half — a
+    keypad press, an obstacle — cannot be told apart from the repeat either, so it is
+    still ignored, but the actuator is then asked what it is doing and its answer
+    ends the run about two seconds late. Before, such a stop was swallowed with no
+    follow-up at all and the shutter was published as fully open while it stood still
+    half way.
 - Covers, an advanced actuator whose `stopped` frame is lost: it no longer stays
   *Opening* / *Closing* for ever. After the longest configured travel time plus 30 s
   the actuator's status is re-read, and the direction is dropped only if nothing
   answers within the time a single command may really take. That is not the
-  **Command timeout** option alone: the request usually has to re-open a connection
-  to the gateway first, and the whole attempt is retried once, so the wait is twice
-  the connection timeout plus twice the command timeout plus a two-second margin —
-  about 42 seconds with the defaults — and it grows with the **Command timeout**
-  option. An actuator whose real run is longer than that timer is therefore not
-  reported as *closed* (or *open*) in the middle of it, waking every automation
-  watching for it — including while the bus is busy with a scene, which is when the
-  command path needs its full budget. The one case that still gets through is a
-  status re-read stuck behind a queue of commands, which are only dropped after the
-  **Command queue TTL** option. The reported position is never estimated.
+  **Command timeout** option alone: the request may have to re-open a connection to
+  the gateway first — there is one command connection per gateway, shared by
+  everything Home Assistant sends to it, and it is closed after a minute in which
+  nothing at all was sent — and the whole attempt is retried once, so the wait is
+  twice the connection timeout plus twice the command timeout plus a two-second
+  margin — about 42 seconds with the defaults — and it grows with the **Command
+  timeout** option. An actuator whose real run is longer than that timer is therefore
+  not reported as *closed* (or *open*) in the middle of it, waking every automation
+  watching for it. An ordinary scene — a dozen commands acknowledged in well under a
+  second — is comfortably inside that. What is not covered is a queue whose backlog
+  outlasts the wait: queued commands are dropped only after the **Command queue TTL**
+  option, sixty seconds by default, and holding *Opening* for a whole minute after a
+  genuinely lost frame would be worse than the problem. The reported position is
+  never estimated.
 - Sensors, binary sensors and climate, found by the same review:
   - a platform section written as a YAML list or a scalar (`light: [...]`) is
     reported as a normal validation error with its key path instead of crashing the
@@ -91,6 +108,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     same way (`where: '01'`) had the identical defect and is normalised with it: it is
     keyed `4-1` like its frames, is detected as a duplicate of the unpadded spelling
     and shares the zone's device like an unpadded probe;
+  - a `sensor` of class `temperature` whose address resolves to zone `0` —
+    `where: '0'`, `'00'`, `'100'`, `'200'`…`'900'`, `'1000'` — is now **refused**
+    with the key path of the device instead of loading. The bus reports every one of
+    those frames under the central unit's key (`4-#0`), so the entity was created,
+    was named, was available and stayed `unknown` for ever while its readings were
+    delivered to the central unit's `climate` entity — the same silent dead entity
+    the zero-padding fix above removes. The central unit is a `climate:` device
+    (`zone: "#0"`) and never a probe, so there is nothing to normalise these to;
   - a `climate` zone paired with a temperature `sensor` on the same zone lost the
     zone's name to the probe: the shared device keeps the climate name and the probe
     name becomes the sensor's `entity_name`;
@@ -205,7 +230,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     address, interface included (`bus_cen_scenario_control@11#4#3`), so a keypad on
     the main bus and one on a private riser are no longer the same name twice; and a
     list cut at ten names ends with `, ... and N more` instead of showing ten names
-    next to a count of eleven.
+    next to a count of eleven;
+  - discovery: when `myhome_discovered.yaml` could not be parsed, the run kept the
+    file untouched and wrote its suggestions to a `myhome_discovered.yaml.new`
+    sibling — but the closing `Discovery finished: N suggestion(s) (M new) written
+    to …` line still named the original file, contradicting the warning just above
+    it and sending the user to a file that had not changed. That line now names the
+    file the suggestions were actually written to.
 - Gateway, sessions and setup, found by the same review:
   - one unexpected exception inside the command sending loop used to kill the
     command path for the life of the process: the loop now survives it, the command
@@ -278,13 +309,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gateway acknowledged no status request — the probe or any other — on the command
   session. The *Default instant-power keep-alive* description says which values it
   gives way to: any `keepalive_minutes` written in `myhome.yaml`, under
-  `sensor_defaults:` as much as on the sensor itself.
+  `sensor_defaults:` (alias `energy:`) as much as on the sensor itself.
 - **A climate zone or a temperature sensor written with a zero-padded address**
   (`zone: '01'`, `where: '01'`) now gets the device key, `unique_id`, device and
   `entity_id` of the unpadded spelling (`4-1`). The old entity never received a frame
   — it was permanently `unknown` — so nothing that worked is renamed; the old, empty
-  entity and device are pruned on the first load, and an automation that referenced
-  the old `entity_id` has to be pointed at the new one.
+  entity and device are pruned on the first load. The new entity is created before
+  that prune, so it takes the old id with a `_2` suffix (`climate.my_zone` →
+  `climate.my_zone_2`); the freed id can be given back to it from *Settings → Devices
+  & services → Entities*. Either way, an automation that referenced the old
+  `entity_id` has to be pointed at the new one. If the file happens to contain
+  **both** spellings of the same zone — a padded entry written first and an unpadded
+  one added later, which is what debugging the old bug produced — they are now the
+  same device, so the duplicate check refuses the file and the **whole gateway does
+  not load** (every entity of that gateway, not only the two sensors) until one of
+  the two entries is removed. The message names both YAML keys and both spellings as
+  written.
 - **Binary sensors are named after their device** ("Window Contact", not "Window
   Contact Window"): they are now the main entity of their device like every other
   platform. Entity ids and history are unaffected; only the displayed name changes.
@@ -310,9 +350,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   itself is still guarded by TCP keepalive. The log line says exactly what was
   checked, each half with the window it was measured over — *"nothing on the monitor
   for N s and no status request acknowledged on the command session in the last
-  M s"*, N being the monitor's silence and M the *Probe window* option — instead of
+  M s"*, N being the monitor's silence and M the time since the probe went out — at
+  least the *Probe window* option, rounded up to the next wake-up of the watchdog —
+  instead of
   claiming the gateway answered nothing while it was demonstrably ACKing the user's
   lights, or letting one trailing duration read as if it qualified both halves.
+- The warning for a command the gateway would not take now reads `dropped after 2
+  attempts` instead of `dropped after two attempts`: the count is formatted from the
+  constant that bounds the retry loop, so raising that constant can no longer make
+  the message lie. A log filter matching the old wording has to be updated.
 - **The Number of concurrent command sessions option is capped at 4** (gateways hold
   only a handful of concurrent sessions), and the options form now offers 1-4 rather
   than 1-10, explained in the dialog itself (*Default 1 (1-4)*). An entry saved with
