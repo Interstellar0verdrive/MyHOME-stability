@@ -21,12 +21,12 @@ ruff check .
 # test plugin):
 pytest tests -q
 
-# The tests that take about a second or more on their own carry the `slow` marker
-# (a real connect timeout, a negotiation left to time out, a full config-entry
-# setup against a loopback server, and two Home Assistant imports in two
-# subprocesses); skipping them takes the run from ~14 s to ~10 s. Most of the
-# other loopback-socket tests are fast and stay in both lanes, and every
-# guarantee the marked ones cover is pinned in the fast lane as well:
+# The four tests that take about a second or more on their own carry the `slow`
+# marker (a real connect timeout, a negotiation left to time out, a full
+# config-entry setup against a loopback server, and two Home Assistant imports in
+# two subprocesses); skipping them takes the run from ~16 s to ~11 s. Most of the
+# other loopback-socket tests are fast and stay in both lanes, and every guarantee
+# the marked ones cover is pinned in the fast lane as well:
 pytest tests -q -m "not slow"
 ```
 
