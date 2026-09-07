@@ -48,6 +48,10 @@ gateway:
       name: Relay Bus
       icon: 'mdi:lightbulb-outline'
       icon_on: 'mdi:lightbulb'
+    porch:
+      where: '24'
+      name: Porch
+      icon_on: 'mdi:lightbulb-on'
 """
 
 
@@ -225,6 +229,22 @@ async def test_icon_on_is_swapped_with_the_state(hass: HomeAssistant, tmp_path) 
         assert hass.states.get("light.relay_bus").attributes["icon"] == "mdi:lightbulb"
         await feed_event(hass, relay, "*1*0*23#4#1##")
         assert hass.states.get("light.relay_bus").attributes["icon"] == "mdi:lightbulb-outline"
+
+
+async def test_icon_on_without_icon_is_applied(hass: HomeAssistant, tmp_path) -> None:
+    """P2-INCONSISTENCY-1: `icon_on` alone was silently ignored on every platform.
+
+    docs/configuration.md lists it as an independent key, so the pair is now read as
+    "`icon_on` while on, `icon` otherwise" - and an absent `icon` means the icon Home
+    Assistant would pick by itself, not "no icon swap at all".
+    """
+    async with setup_myhome(hass, tmp_path, DIMMER_YAML):
+        porch = entity_object(hass, LIGHT, "1-24")
+        assert "icon" not in hass.states.get("light.porch").attributes
+        await feed_event(hass, porch, "*1*1*24##")
+        assert hass.states.get("light.porch").attributes["icon"] == "mdi:lightbulb-on"
+        await feed_event(hass, porch, "*1*0*24##")
+        assert "icon" not in hass.states.get("light.porch").attributes
 
 
 async def test_supported_features(hass: HomeAssistant, tmp_path) -> None:

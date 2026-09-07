@@ -11,6 +11,7 @@ from homeassistant.const import (
     STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
     EntityCategory,
 )
 from homeassistant.core import HomeAssistant, State
@@ -90,6 +91,12 @@ gateway:
       where: '2'
       name: Alarm Relay
       inverted: true
+    back_door:
+      who: '25'
+      where: '34'
+      name: Back Door
+      class: door
+      icon_on: 'mdi:door-open'
 """
 
 MOTION_YAML = f"""
@@ -199,6 +206,28 @@ async def test_icon_and_icon_on_are_honoured(hass: HomeAssistant, tmp_path) -> N
         assert hass.states.get("binary_sensor.garden_gate").attributes["icon"] == "mdi:gate"
         await feed_event(hass, gate, "*25*32#31*33##")
         assert hass.states.get("binary_sensor.garden_gate").attributes["icon"] == "mdi:gate-open"
+
+
+async def test_icon_on_alone_is_applied(hass: HomeAssistant, tmp_path) -> None:
+    """P2-INCONSISTENCY-1: `icon_on` is documented as an independent key.
+
+    Without an `icon` next to it the pair was skipped entirely, so a configuration that
+    sets only `icon_on` got no icon at all - and no way to tell whether the key had
+    been rejected or mis-spelled. While off the entity falls back to what HA would
+    show on its own (the `door` device-class icon), which is the point of leaving
+    `icon` out.
+    """
+    async with setup_myhome(hass, tmp_path, INVERTED_YAML):
+        door = entity_object(hass, BINARY_SENSOR, "25-34")
+        assert "icon" not in hass.states.get("binary_sensor.back_door").attributes
+
+        await feed_event(hass, door, "*25*31#31*34##")
+        assert hass.states.get("binary_sensor.back_door").state == STATE_ON
+        assert hass.states.get("binary_sensor.back_door").attributes["icon"] == "mdi:door-open"
+
+        await feed_event(hass, door, "*25*32#31*34##")
+        assert hass.states.get("binary_sensor.back_door").state == STATE_OFF
+        assert "icon" not in hass.states.get("binary_sensor.back_door").attributes
 
 
 async def test_motion_timeout_respects_inverted(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
@@ -336,6 +365,48 @@ async def test_motion_extra_data_restores_expired_state(hass: HomeAssistant, tmp
     )
     async with setup_myhome(hass, tmp_path, MOTION_YAML):
         assert hass.states.get("binary_sensor.sensore_movimento").state == STATE_OFF
+
+
+# ------------------------------------------------------------------ WHO 9 auxiliary
+async def test_auxiliary_channel_starts_unknown(hass: HomeAssistant, tmp_path) -> None:
+    """P2-RISK-2: a WHO 9 channel cannot be queried, so it does not know its state.
+
+    It used to report a hard `off` (or `on` when `inverted`) from the moment it was
+    created, whatever the bus actually held - an automation saw a transition that never
+    happened. OWNd 0.7.49 has no auxiliary command class at all, so `unknown` until the
+    first spontaneous frame is the only honest answer.
+    """
+    async with setup_myhome(hass, tmp_path, INVERTED_YAML):
+        assert hass.states.get("binary_sensor.alarm_relay").state == STATE_UNKNOWN
+
+        # `*9*2*2##` is WHAT 2 (toggle, `is_on` False); the channel is `inverted`.
+        await feed_event(hass, entity_object(hass, BINARY_SENSOR, "9-2"), "*9*2*2##")
+        assert hass.states.get("binary_sensor.alarm_relay").state == STATE_ON
+
+
+async def test_auxiliary_channel_survives_a_reload(hass: HomeAssistant, tmp_path) -> None:
+    """P2-RISK-2: the channel used to silently fall back to `off` on every reload.
+
+    On unload the gateway connection is closed before the entities are removed, so HA
+    snapshots them as ``unavailable``: the value has to travel through
+    ``extra_restore_state_data`` (same pattern as the motion sensor).
+    """
+    async with setup_myhome(hass, tmp_path, INVERTED_YAML) as (entry, _commands):
+        await feed_event(hass, entity_object(hass, BINARY_SENSOR, "9-2"), "*9*2*2##")
+        assert hass.states.get("binary_sensor.alarm_relay").state == STATE_ON
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        assert hass.states.get("binary_sensor.alarm_relay").state == STATE_ON
+
+
+async def test_auxiliary_channel_restored_after_a_restart(hass: HomeAssistant, tmp_path) -> None:
+    """A restart leaves a usable state snapshot rather than extra data."""
+    mock_restore_cache(hass, (State("binary_sensor.alarm_relay", STATE_ON),))
+    async with setup_myhome(hass, tmp_path, INVERTED_YAML):
+        assert hass.states.get("binary_sensor.alarm_relay").state == STATE_ON
 
 
 # -------------------------------------------------------------- gateway diagnostics

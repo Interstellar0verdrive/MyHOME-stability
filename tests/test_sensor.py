@@ -8,8 +8,10 @@ sending loop is idle, so every command the entities produce stays in
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import timedelta
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.sensor import DOMAIN as SENSOR, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntryState
@@ -635,6 +637,32 @@ def test_keepalive_minutes_for_option_precedence(tmp_path) -> None:
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 0}, entry) == 0
     # Without the option nothing changes at all.
     assert keepalive_minutes_for({CONF_KEEPALIVE_MINUTES: 125}, plain) == 125
+
+
+@pytest.mark.parametrize("option", ["abc", "", "30.0", None])
+def test_keepalive_option_that_is_not_an_int_never_breaks_the_platform(tmp_path, caplog, option) -> None:
+    """P2-NIT-1: `int(option)` was the one TUNABLE_OPTIONS read without a defensive parse.
+
+    A hand-edited `.storage` entry raised `ValueError` inside `sensor.async_setup_entry`,
+    taking the whole sensor platform - the four gateway diagnostic sensors included -
+    down with it. `gateway._option()` and `__init__`'s `worker_count` both promise the
+    opposite for this family of options.
+    """
+    entry = make_entry(tmp_path / "myhome.yaml", options={CONF_DEFAULT_KEEPALIVE_MINUTES: option})
+    device = {CONF_KEEPALIVE_MINUTES: 125, CONF_KEEPALIVE_MINUTES_DEFAULTED: True}
+    with caplog.at_level(logging.WARNING, logger="custom_components.myhome"):
+        result = keepalive_minutes_for(device, entry)
+    if option == "30.0":
+        # A number that merely does not spell as an int is used, not thrown away.
+        assert result == 30
+        assert "is not a number" not in caplog.text
+    elif option is None:
+        # No option at all: the configured value, silently.
+        assert result == 125
+        assert "is not a number" not in caplog.text
+    else:
+        assert result == 125
+        assert "is not a number" in caplog.text
 
 
 async def test_default_keepalive_option_is_used(

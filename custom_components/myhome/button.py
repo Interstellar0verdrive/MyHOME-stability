@@ -77,8 +77,9 @@ class MyHOMECommandButton(MyHOMEEntity, ButtonEntity):
     """Base class of the two WHO 14 buttons attached to an actuator."""
 
     # Contract C: two buttons share one device dict, so each registers under its
-    # own slot (`disable` / `enable`) instead of the platform name.
-    _entity_slot = "button"
+    # own slot (`disable` / `enable`) instead of the platform name. P2-NIT-2: the base
+    # class used to default the slot to the platform name here, contradicting the line
+    # above; both concrete subclasses set their own slot below.
     # WHO 14 WHAT: 0 disables (locks) the actuator, 1 enables (unlocks) it.
     _what: str = "0"
     _unique_id_suffix: str = ""

@@ -99,14 +99,13 @@ async def async_setup_entry(
             entity_class = MyHOMEAuxiliary
         elif who == 1 and device_class == BinarySensorDeviceClass.MOTION:
             entity_class = MyHOMEMotionSensor
-        if entity_class is None:
-            LOGGER.warning(
-                "Ignoring binary sensor %s: WHO %s with class %s is not supported",
-                device_id,
-                who,
-                device_class,
-            )
-            continue
+        # P2-NIT-3: the chain above is exhaustive. `BINARY_SENSOR_FIELDS` restricts
+        # `who` to 1/9/25 and `_finalize_binary_sensor` refuses a WHO 1 that is not a
+        # motion sensor, so a configuration the platform cannot build no longer reaches
+        # here - it is rejected by the validator with a real message and a key path
+        # (round 1, NIT-4). What used to be a WARNING + `continue` would now only hide
+        # a WHO added to the schema without a matching entity class.
+        assert entity_class is not None, f"binary sensor {device_id}: no entity class for WHO {who}"
 
         binary_sensors.append(
             entity_class(
@@ -200,9 +199,17 @@ class MyHOMEBinarySensor(MyHOMEEntity, BinarySensorEntity):
 
     @callback
     def _update_icon(self) -> None:
-        """Swap `icon` / `icon_on` when the configuration gives both (as switch.py does)."""
-        if self._off_icon is not None and self._on_icon is not None:
-            self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
+        """Apply `icon_on` while on and `icon` otherwise; `icon` may be absent.
+
+        P2-INCONSISTENCY-1: `icon_on` used to need an `icon` next to it or it was
+        ignored altogether, while docs/configuration.md lists it as an independent key.
+        A missing `icon` now simply means "whatever Home Assistant would show while
+        off": `_attr_icon = None` hands the choice back to HA (the device-class icon).
+        """
+        if self._on_icon is None:
+            # Nothing to swap: `_attr_icon` already carries `icon`, if there is one.
+            return
+        self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
 
 
 class MyHOMEDryContact(MyHOMEBinarySensor):
@@ -235,14 +242,48 @@ class MyHOMEDryContact(MyHOMEBinarySensor):
         self.async_schedule_update_ha_state()
 
 
-class MyHOMEAuxiliary(MyHOMEBinarySensor):
+class MyHOMEAuxiliary(MyHOMEBinarySensor, RestoreEntity):
     """A WHO 9 auxiliary channel (read only, no device class by default)."""
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        # P2-RISK-2: the bus never answers a WHO 9 query, so before the first
+        # spontaneous frame - days away for an alarm or gate contact - the channel does
+        # not know its state. It used to claim a definite `off` (or `on` when
+        # `inverted`) and fall back to it after every restart and every reload, which
+        # an automation sees as a transition that never happened on the bus.
+        self._attr_is_on = None
         self._attr_extra_state_attributes = {"Auxiliary channel": self._where}
 
     # AUX channels cannot be queried: no `async_update` (the base class skips it).
+    # OWNd 0.7.49 has no auxiliary command class at all, only `OWNAuxEvent`, so the
+    # last seen value is restored instead (same pattern as the motion sensor).
+
+    @property
+    def extra_restore_state_data(self) -> ExtraStoredData | None:
+        """Persist `is_on` independently of the entity state.
+
+        On a config entry reload the gateway connection is closed before the entities
+        are removed, so Home Assistant snapshots them as ``unavailable`` and only the
+        extra data survives (same reason as ``MyHOMEMotionSensor``).
+        """
+        return RestoredExtraData({"is_on": self._attr_is_on})
+
+    async def async_added_to_hass(self) -> None:
+        """Register and restore the last known channel state."""
+        await super().async_added_to_hass()
+        extra_data = await self.async_get_last_extra_data()
+        stored = extra_data.as_dict().get("is_on") if extra_data is not None else None
+        if stored is None:
+            # A restart (rather than a reload) leaves a usable state snapshot.
+            last_state = await self.async_get_last_state()
+            if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
+                stored = last_state.state == STATE_ON
+        if stored is None:
+            return
+        self._attr_is_on = bool(stored)
+        self._update_icon()
+        self.async_write_ha_state()
 
     def handle_event(self, message: OWNAuxEvent) -> None:
         """Handle an event message (must never raise: it runs in the event loop)."""

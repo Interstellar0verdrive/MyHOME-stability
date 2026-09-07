@@ -265,7 +265,10 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             if ColorMode.BRIGHTNESS in self._attr_supported_color_modes and message.brightness is not None:
                 self._attr_brightness = percent_to_eight_bits(message.brightness)
 
-            if self._off_icon is not None and self._on_icon is not None:
+            if self._on_icon is not None:
+                # P2-INCONSISTENCY-1: `icon` may be absent - `icon_on` is documented as
+                # an independent key. `None` while off hands the icon back to HA
+                # instead of ignoring `icon_on` altogether.
                 self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
         except Exception:  # pragma: no cover - defensive, keeps the session alive
             LOGGER.exception("%s Error handling light event %s", self._gateway_handler.log_id, message)
