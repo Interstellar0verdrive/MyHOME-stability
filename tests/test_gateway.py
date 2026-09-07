@@ -558,6 +558,7 @@ async def test_transport_error_reconnects_and_signals_availability() -> None:
     assert handler.is_connected is False
 
 
+@pytest.mark.slow  # ~0.6 s: six real 0.05 s gaps, to keep the monitor from going idle
 async def test_idle_watchdog_probes_then_reconnects(caplog: pytest.LogCaptureFixture) -> None:
     """gw-03: silence -> probe on the command session -> probe undeliverable -> reconnect."""
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
