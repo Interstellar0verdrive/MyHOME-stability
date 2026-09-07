@@ -72,13 +72,14 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
     """Return `(platform, device_cfg)` for a discovered device, or None when this
     device type is not suggested.
 
-    "Not suggested" is not the same as "not supported": since 0.4.0 a CEN/CEN+
-    scenario control *does* have an entity representation (the `event` platform),
-    but it is declared under `scenario_control:` rather than under a platform
-    section, which this writer cannot emit yet, so a keypad seen during a run is
-    counted in `MyHOMEDiscoverySuggestions._skipped` and reported in the
-    "must be declared by hand" log line. Alarm devices have no entity support at
-    all."""
+    "Not suggested" is not the same as "not supported", and the end-of-run report
+    keeps the two apart. Since 0.4.0 a CEN/CEN+ scenario control *does* have an
+    entity representation (the `event` platform), but it is declared under
+    `scenario_control:` rather than under a platform section, which this writer
+    cannot emit yet: a keypad seen during a run lands in
+    `MyHOMEDiscoverySuggestions._skipped` and is reported as one the user can
+    declare by hand. An alarm device has no entity support at all and no section to
+    declare it under, so it lands in `_unsupported` instead."""
     device_type = device_info["device_type"]
     if device_type not in _SUGGESTABLE:
         return None
