@@ -1596,3 +1596,74 @@ async def test_a_short_refused_timed_run_survives_the_gateway_echo(
         assert state.state == CoverState.OPEN
         assert state.attributes[ATTR_CURRENT_POSITION] == 100
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 100
+
+
+async def test_a_position_frame_on_a_cover_declared_basic_is_ignored(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """C6-2: a dimension-10 frame must not switch a basic cover into the advanced model.
+
+    `advanced:` defaults to `false` and is the one key a user cannot guess from the
+    device label, so "an advanced actuator configured as basic" is an ordinary
+    misconfiguration. The dimension-10 branch used to be the only one in
+    `handle_event` with no `self._advanced` guard, so such a frame took the entity
+    apart: `_finish_movement` stopped the time-based estimate, `_set_advanced_direction`
+    then set the direction again *without* restarting it, and the entity read *Opening*
+    at a frozen percentage for the advanced safety bound plus its grace - here 60 + 42
+    seconds - with nothing in the log to connect it to the missing key. A later plain
+    `*2*1*81##` could not repair it either (the model is already "opening").
+
+    Mutation caught: dropping the `and not self._advanced` guard from the branch, after
+    which the position below jumps to 60 and a status re-read goes out at 60 s.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        assert hass.states.get(ENTITY).attributes[ATTR_ASSUMED_STATE] is True
+        commands.clear()
+
+        with caplog.at_level("DEBUG"):
+            await feed_event(hass, cover, "*#2*81*10*11*60*0*0##")  # "opening, from 60 %"
+        # The user is told which key would make the frame meaningful.
+        assert "configured as basic" in caplog.text
+        assert "advanced: true" in caplog.text
+
+        # Nothing moved: no direction, no position taken from the frame.
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.CLOSED
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+
+        # And no advanced timer was armed behind it: past the 30 s run + 30 s bound
+        # and the 42 s grace, the entity has still asked the actuator nothing.
+        await _advance(hass, freezer, 100)
+        assert commands.status_frames == []
+        assert hass.states.get(ENTITY).state == CoverState.CLOSED
+
+
+async def test_a_position_frame_does_not_interrupt_a_basic_cover_estimate(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """C6-2, the other half: the running estimate must survive the ignored frame.
+
+    Ignoring the frame is only useful if the model it protects keeps running. The
+    cover is opening on a 30 s run when the stray dimension-10 frame arrives; the
+    estimate has to carry on from where it was, not freeze at the position the frame
+    carried.
+
+    Mutation caught: the same missing guard - the estimate stops and the position
+    sticks at 60 for the rest of the run.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        await feed_event(hass, cover, "*2*1*81##")  # somebody pressed "up" on the keypad
+        await _advance(hass, freezer, 6)  # a fifth of the 30 s run
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 20
+
+        await feed_event(hass, cover, "*#2*81*10*11*60*0*0##")
+        state = hass.states.get(ENTITY)
+        assert state.state == CoverState.OPENING
+        assert state.attributes[ATTR_CURRENT_POSITION] == 20  # not 60
+
+        await _advance(hass, freezer, 6)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40

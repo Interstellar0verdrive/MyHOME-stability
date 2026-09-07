@@ -1031,6 +1031,23 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             if self._inverted:
                 opening, closing = closing, opening
 
+            if message.current_position is not None and not self._advanced:
+                # Only an advanced actuator reports its own position, and this cover is
+                # declared basic - so its whole model is the time-based estimate. Taking
+                # the position would swap models half way: `_finish_movement` would stop
+                # the estimate and `_set_advanced_direction` would then set the direction
+                # again *without* restarting it, leaving the entity reading "Opening" at
+                # a frozen percentage until the advanced safety timer expires, and a
+                # later plain movement frame could not repair it. What is wrong here is
+                # the configuration, not the frame, so say so and change nothing.
+                LOGGER.debug(
+                    "%s Cover %s: ignoring a position report (%s%%) from a cover configured as basic; "
+                    "if this actuator really reports its own position, give it `advanced: true`",
+                    self._gateway_handler.log_id,
+                    self._where,
+                    message.current_position,
+                )
+                return
             if message.current_position is not None:
                 # Advanced actuator: a real position (0 = closed), inverted if wired so.
                 position = int(message.current_position)
