@@ -773,6 +773,55 @@ async def test_the_declare_by_hand_count_is_the_count_of_one_run(
         await hass.async_block_till_done()
 
 
+async def test_a_device_that_cannot_be_declared_is_reported_apart_from_one_that_can(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """"Declare it by hand" must not be said of a device that cannot be declared.
+
+    Why it matters in production: this line is the entire user-facing output of a
+    run for everything the writer cannot express, and it lumped two opposite answers
+    together.  A CEN/CEN+ keypad really can be added by hand, under
+    ``scenario_control:`` -- that is what ``docs/discovery.md`` tells the user to do.
+    A burglar-alarm device cannot: there is no alarm section anywhere in the file
+    schema, and every existing section refuses WHO 5.  Reading "1 device(s) ... must
+    be declared by hand (bus_alarm_zone@12)", a careful maintainer goes looking
+    through ``docs/configuration.md`` for a chapter that does not exist.
+
+    Both frames are real: ``*25*21#3*225##`` is button 21 of a CEN+ keypad, and
+    ``*5*11*12##`` is sensor 2 of alarm zone 1, whose plain WHERE is exactly why it
+    survives discovery's address guards.
+
+    Mutation caught: appending every non-suggestable device to one list again - the
+    two device types then share a clause and the alarm one is described as
+    declarable.
+    """
+    async with running_gateway(hass, tmp_path) as entry:
+        service = hass.data[DOMAIN][MAC][CONF_ENTITY].discovery_service
+
+        with no_discovery_sleep():
+            await hass.services.async_call(DOMAIN, SERVICE_START_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+            service.handle_discovery_message(OWNEvent.parse("*25*21#3*225##"))
+            service.handle_discovery_message(OWNEvent.parse("*5*11*12##"))
+            caplog.clear()
+            await hass.services.async_call(DOMAIN, SERVICE_STOP_DISCOVERY, {}, blocking=True)
+            await hass.async_block_till_done()
+
+        reported = [line for line in caplog.text.splitlines() if "Discovery finished" in line]
+        assert len(reported) == 1, caplog.text
+        line = reported[0]
+        # The keypad: declarable, and the line says where.
+        assert "1 device(s) must be declared by hand under `scenario_control:`" in line
+        assert "bus_cenplus_scenario_control@225" in line
+        # The alarm sensor: not declarable, and not described as if it were.
+        assert "1 device(s) belong to a family this integration has no support for" in line
+        assert "bus_alarm_zone@12" in line
+        assert line.index("scenario_control") < line.index("no support for")
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
 async def test_a_second_start_does_not_restart_the_run(hass: HomeAssistant, tmp_path) -> None:
     """Calling ``myhome.start_discovery`` twice must not lose what the first found.
 
