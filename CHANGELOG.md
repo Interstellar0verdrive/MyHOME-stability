@@ -87,7 +87,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     entity was created, was available and stayed `unknown` for ever, with nothing in
     the log but a debug line. The same mismatch hid a duplicate zone from the
     duplicate check and stopped a zone from sharing its device with the WHO 4
-    temperature probe on the same zone;
+    temperature probe on the same zone. A WHO 4 temperature **sensor** written the
+    same way (`where: '01'`) had the identical defect and is normalised with it: it is
+    keyed `4-1` like its frames, is detected as a duplicate of the unpadded spelling
+    and shares the zone's device like an unpadded probe;
   - a `climate` zone paired with a temperature `sensor` on the same zone lost the
     zone's name to the probe: the shared device keeps the climate name and the probe
     name becomes the sensor's `entity_name`;
@@ -276,6 +279,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   session. The *Default instant-power keep-alive* description says which values it
   gives way to: any `keepalive_minutes` written in `myhome.yaml`, under
   `sensor_defaults:` as much as on the sensor itself.
+- **A climate zone or a temperature sensor written with a zero-padded address**
+  (`zone: '01'`, `where: '01'`) now gets the device key, `unique_id`, device and
+  `entity_id` of the unpadded spelling (`4-1`). The old entity never received a frame
+  — it was permanently `unknown` — so nothing that worked is renamed; the old, empty
+  entity and device are pruned on the first load, and an automation that referenced
+  the old `entity_id` has to be pointed at the new one.
 - **Binary sensors are named after their device** ("Window Contact", not "Window
   Contact Window"): they are now the main entity of their device like every other
   platform. Entity ids and history are unaffected; only the displayed name changes.

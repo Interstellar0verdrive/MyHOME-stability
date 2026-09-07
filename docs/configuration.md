@@ -420,6 +420,14 @@ Notes:
 | `standalone` | boolean | `false` | Standalone thermostat (no central unit). |
 | `central` | boolean | `false` | Zone driven through the central unit (`#0#N` addressing). |
 
+> **Entity identity.** An address written with a leading zero used to be keyed `4-01`
+> while every frame for it arrives as `4-1`: the entity was created, was named, was
+> available and stayed `unknown` for ever. Normalising it gives the device key,
+> `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
+> worked is renamed — the padded entity never received a frame — and the old, empty
+> entity and device are pruned on the first load; an automation that referenced the
+> old `entity_id` has to be pointed at the new one.
+
 **Zones with more than one actuator.** A central unit that reports *actuator* status
 sends one frame per actuator (`*#4*<zone>#<n>*20*<state>##`). The protocol layer
 parses the actuator number `n` but offers no public way to read it, and this
@@ -440,7 +448,7 @@ central unit that reports *valve* status and no per-actuator status at all.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. |
+| `class` | `power` \| `energy` \| `temperature` \| `illuminance` | **required** | Sensor type. `power` and `energy` are both WHO 18 meters: `power` creates the Power entity plus the three energy totalisers; `energy` creates the three totalisers only (Energy today / this month are disabled by default) and never arms the instant-power stream, so the `keepalive_minutes` and filter keys have no effect on it. `temperature` is WHO 4 (WHERE = zone), `illuminance` WHO 1. A temperature probe is addressed by zone, so a leading zero in its `where` is accepted and normalised (`'01'` is `1`, `'0302'` is `302`) — see the note below. |
 | `who` | string | from `class` | Only needed to override the WHO implied by the class (must match). |
 | `keepalive_minutes` | integer 0-255 | `125` | Power meters only: the integration asks the meter to push instant power for this many minutes and renews the request by itself. `0` disables the automatic keep-alive. |
 | `min_delta_w`, `min_interval_sec`, `suppress_log_interval_sec`, `info_log_interval_sec` | number | see [Energy monitoring](energy.md) | Per-sensor overrides of the power filtering defaults. |
@@ -448,6 +456,17 @@ central unit that reports *valve* status and no per-actuator status at all.
 
 Units are fixed by the class (W, Wh, °C, lx). Energy filtering, totals and
 `keepalive_minutes` are covered in full in [Energy monitoring](energy.md).
+
+> **Entity identity.** An address written with a leading zero used to be keyed `4-01`
+> while every frame for it arrives as `4-1`: the entity was created, was named, was
+> available and stayed `unknown` for ever. Normalising it gives the device key,
+> `unique_id`, device and `entity_id` of the unpadded spelling (`4-1`). Nothing that
+> worked is renamed — the padded entity never received a frame — and the old, empty
+> entity and device are pruned on the first load; an automation that referenced the
+> old `entity_id` has to be pointed at the new one.
+
+Only WHO 4 addresses are normalised this way. A WHO 18, WHO 9, WHO 25 or WHO 1
+sensor keeps whatever text the bus writes, so padding is self-consistent there.
 
 ## Scenario control (CEN / CEN+)
 
