@@ -78,6 +78,14 @@ CONF_MANUFACTURER_URL = "manufacturerURL"
 CONF_UDN = "UDN"
 CONF_WORKER_COUNT = "command_worker_count"
 # Upper bound for the option: gateways hold only a handful of concurrent sessions.
+#
+# More than one worker also loosens an ordering guarantee.  `gateway._CommandQueue`
+# keeps a cover's stop behind the direction frame it must end, but that is the order
+# frames leave the *queue*: two workers dequeue two adjacent frames in the same loop
+# iteration and write them concurrently, so which one reaches the bus first is decided
+# by session opening, transport retries and how fast the gateway ACKs.  A stop written
+# before its direction frame leaves a shutter nothing will stop.  The default is 1,
+# where the queue order is also the bus order.
 MAX_COMMAND_WORKERS = 4
 CONF_FILE_PATH = "config_file_path"
 CONF_GENERATE_EVENTS = "generate_events"

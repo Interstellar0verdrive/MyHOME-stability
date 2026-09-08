@@ -14,17 +14,22 @@ pair is not identifiable from them).
 
 from __future__ import annotations
 
+import asyncio
+import time
+from datetime import timedelta
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from custom_components.myhome import cover as cover_module
 from custom_components.myhome.const import (
+    CONF_ENTITY,
     DOMAIN,
     SERVICE_COVER_CALIBRATION_COMPUTE,
     SERVICE_COVER_CALIBRATION_RUN,
@@ -513,3 +518,236 @@ async def test_calibration_compute_rejects_impossible_measurements(hass: HomeAss
             await _call(
                 hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85, opened_half_cm=20
             )
+
+
+# --------------------------------------------------------------------------------------
+# The run is timed on the bus, not on the command queue (0.4.3)
+# --------------------------------------------------------------------------------------
+class CommandPath:
+    """A command path that can make a class of frames slow, or lose it entirely.
+
+    `MyHOMEGatewayHandler.send` only queues; what the calibration has to time is the
+    write, so this stand-in reports the write through the delivery callback and can
+    hold a frame back (`slow_prefix`, which costs `delay` seconds of the frozen clock
+    before the write), give up on it (`drop_prefix`), refuse to take it at all
+    (`refuse_prefix`) or never answer at all (`silent`).
+    """
+
+    def __init__(
+        self,
+        freezer: FrozenDateTimeFactory | None = None,
+        *,
+        slow_prefix: str | None = None,
+        delay: float = 0.0,
+        drop_prefix: str | None = None,
+        refuse_prefix: str | None = None,
+        silent: bool = False,
+    ) -> None:
+        self.freezer = freezer
+        self.slow_prefix = slow_prefix
+        self.delay = delay
+        self.drop_prefix = drop_prefix
+        self.refuse_prefix = refuse_prefix
+        self.silent = silent
+        self.frames: list[str] = []
+
+    async def send(self, message: Any, *, on_delivered: Any = None, on_dropped: Any = None) -> bool:
+        frame = str(message)
+        self.frames.append(frame)
+        if self.refuse_prefix is not None and frame.startswith(self.refuse_prefix):
+            # Not even queued: the queue is full, or the handler is closing.
+            return False
+        if self.silent:
+            # Queued, and then nothing at all: no write, no drop, no answer.
+            return True
+        if self.drop_prefix is not None and frame.startswith(self.drop_prefix):
+            # Queued, then abandoned: the TTL expired, or the gateway never answered.
+            if on_dropped is not None:
+                on_dropped()
+            return True
+        if self.freezer is not None and self.slow_prefix is not None and frame.startswith(self.slow_prefix):
+            self.freezer.tick(timedelta(seconds=self.delay))
+        if on_delivered is not None:
+            on_delivered(time.monotonic())
+        return True
+
+
+async def test_the_calibration_run_reports_the_time_the_motor_really_ran(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`motor_seconds` is the interval between the two writes, not the one we asked for.
+
+    The user measures the bar with a tape and hands the number back to
+    `cover_calibration_compute`, which inverts the model against exactly these
+    seconds. If the stop waited four tenths of a second in the command queue, the
+    motor ran for 8.9 s and the measurement belongs to 8.9 s: reporting the 8.5 s that
+    were *intended* would push the error straight into the computed roll.
+
+    Mutation caught: reporting the planned `motor_seconds` (the 0.4.2 shape).
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        path = CommandPath(freezer, slow_prefix="*2*0*", delay=0.4)
+
+        async def _sleep(seconds: float) -> None:
+            freezer.tick(timedelta(seconds=seconds))
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", _sleep),
+        ):
+            response = await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+
+        assert path.frames == ["*2*1*81##", "*2*2*81##", "*2*0*81##"]
+        assert response[ENTITY]["motor_seconds"] == pytest.approx(RUN_DOWN + 0.4)
+
+
+async def test_the_calibration_run_fails_when_the_movement_never_reaches_the_bus(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Nothing moved, so there is nothing to measure and nothing to report.
+
+    A run that answered with the numbers it planned would send the user off to
+    measure a shutter that never left its end stop.
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        path = CommandPath(drop_prefix="*2*2*")
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", new=AsyncMock()),
+            pytest.raises(HomeAssistantError, match="did not start moving"),
+        ):
+            await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+        assert path.frames == ["*2*1*81##", "*2*2*81##"]
+
+
+async def test_the_calibration_run_fails_when_the_stop_never_reaches_the_bus(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The shutter runs on to its end stop: the half run the user should measure is gone."""
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        path = CommandPath(drop_prefix="*2*0*")
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", new=AsyncMock()),
+            pytest.raises(HomeAssistantError, match="never stopped"),
+        ):
+            await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+        assert path.frames == ["*2*1*81##", "*2*2*81##", "*2*0*81##"]
+
+
+async def test_the_calibration_run_fails_when_the_stop_is_refused_outright(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A stop the command path would not even take never stopped anything either.
+
+    The shutter runs on to its end stop exactly as it does for a stop that was queued
+    and then dropped, so the run has to say so. What must not happen is the timestamp
+    of some *earlier* stop being read as this run's: the service would then report the
+    seconds it had planned, and the user would tape a shutter parked at its end stop
+    and hand the number to `cover_calibration_compute`, which would invert the model
+    against a run that never happened.
+
+    Mutation caught: resetting `_stop_delivered_at` after the refusal returns (the
+    stale timestamp then answers for this run and `motor_seconds` comes back as the
+    planned 8.5 s).
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        # An ordinary stop, taken and written: it leaves its instant on the entity.
+        await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+
+        path = CommandPath(refuse_prefix="*2*0*")
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", new=AsyncMock()),
+            pytest.raises(HomeAssistantError, match="never stopped"),
+        ):
+            await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+        assert path.frames == ["*2*1*81##", "*2*2*81##", "*2*0*81##"]
+
+
+class LateCommandPath(CommandPath):
+    """A gateway that takes a while to get round to the frame it was given.
+
+    The queue is what makes it late: an item may legitimately wait to be dequeued at
+    all, and only then does the command itself get its budget.
+    """
+
+    def __init__(self, prefix: str, delay: float) -> None:
+        super().__init__()
+        self.prefix = prefix
+        self.delay = delay
+        self.late: list[asyncio.Task] = []
+
+    async def send(self, message: Any, *, on_delivered: Any = None, on_dropped: Any = None) -> bool:
+        frame = str(message)
+        if not frame.startswith(self.prefix):
+            return await super().send(message, on_delivered=on_delivered, on_dropped=on_dropped)
+        self.frames.append(frame)
+
+        async def _write() -> None:
+            await asyncio.sleep(self.delay)
+            if on_delivered is not None:
+                on_delivered(time.monotonic())
+
+        self.late.append(asyncio.create_task(_write()))
+        return True
+
+
+async def test_the_calibration_run_waits_out_the_queue_as_well_as_the_command(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The wait covers the time in the queue, not only the command's own budget.
+
+    `command_budget` is the worst case from the *dequeue* to the gateway's answer; a
+    frame may sit in the queue for the whole `command_ttl` before that. Bounding the
+    wait by the budget alone gives up on a frame that is still going to be written -
+    on a gateway that is merely busy - and aborts the run before any stop has been
+    sent, leaving the shutter running to its end stop.
+
+    Mutation caught: bounding `_async_await_delivery` by `command_budget` (squeezed to
+    four milliseconds here), after which this run fails with "did not start moving"
+    although the frame reached the bus.
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        # A command that is answered at once once it is dequeued...
+        handler.connect_timeout = 0.001
+        handler.command_timeout = 0.001
+        # ...but a queue that may hold it for a while before that.
+        handler.command_ttl = 5
+        path = LateCommandPath("*2*2*", 0.05)
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", new=AsyncMock()),
+        ):
+            response = await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+
+        assert path.frames == ["*2*1*81##", "*2*2*81##", "*2*0*81##"]
+        assert response[ENTITY]["motor_seconds"] == pytest.approx(RUN_DOWN, abs=0.1)
+
+
+async def test_the_calibration_run_gives_up_when_the_gateway_stops_answering(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A frame that is neither written nor abandoned must not park the service for ever.
+
+    The wait is bounded by the command path's own worst case for a *queued* frame -
+    the queue TTL it may wait to be dequeued plus the budget one command may then
+    take (0.4.3) - all three squeezed to a few milliseconds here; past it the run
+    says what it knows, which is that it never saw the movement start.
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        handler.connect_timeout = 0.001
+        handler.command_timeout = 0.001
+        handler.command_ttl = 0.001
+        silent = CommandPath(silent=True)
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", silent.send),
+            patch.object(cover_module, "_async_sleep", new=AsyncMock()),
+            pytest.raises(HomeAssistantError, match="did not start moving"),
+        ):
+            await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+        assert silent.frames == ["*2*1*81##", "*2*2*81##"]

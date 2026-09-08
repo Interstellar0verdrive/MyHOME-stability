@@ -11,7 +11,10 @@ One :class:`MyHOMEGatewayHandler` per gateway owns
   ``auth_failed``, stops the loops and starts the reauth flow;
 - the COMMAND session(s): :meth:`sending_loop` drains a bounded queue with a TTL,
   sends each command under a timeout, retries ONCE in place with a fresh session and
-  then drops the command with a rate-limited WARNING - never "silently done";
+  then drops the command with a rate-limited WARNING - never "silently done".  Stop
+  frames overtake the rest of the queue, and every command can report when it really
+  reached the bus (or that it never did): see :class:`_QueuedCommand` and
+  :class:`_CommandQueue` (0.4.3);
 - the dispatcher: every reply frame (monitor or command session) goes through
   :meth:`_dispatch_message`; every call into an entity is isolated with
   ``try``/``except`` so an entity bug never tears a session down;
@@ -35,7 +38,7 @@ import logging
 import re
 import time
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -146,6 +149,11 @@ CONNECT_TIMEOUT_SEC = 10.0  # TCP connect + negotiation, one attempt
 # retry loop itself instead of being written down twice.
 COMMAND_ATTEMPTS = 2
 COMMAND_QUEUE_MAXSIZE = 200
+# A WHO 2 stop (`*2*0*<where>##`) overtakes everything else in the queue (0.4.3).
+# A late stop lengthens a shutter's run exactly as a late start shortens it, and a
+# scene that moves twelve covers queues twelve stops as well: they must not wait
+# behind the movement and status frames of the covers that come after them.
+STOP_FRAME_PREFIX = "*2*0*"
 COMMAND_TTL_SEC = float(DEFAULT_QUEUE_TTL_SEC)  # commands older than this are dropped when dequeued
 COMMAND_SESSION_IDLE_SEC = 60.0  # close an unused command session (gateway session limit)
 # Event path.
@@ -231,14 +239,154 @@ class FrameRecord:
 
 @dataclass(slots=True)
 class _QueuedCommand:
+    """One frame waiting for the sending worker, and how to report its fate.
+
+    ``send()`` only *queues*: the frame reaches the bus when a worker writes it,
+    which on a busy queue is a tenth of a second per frame later (0.4.3). A caller
+    that times something against the bus - a cover estimating where its shutter is -
+    passes ``on_delivered`` / ``on_dropped`` and gets told which happened and when.
+
+    Exactly one of the two runs, exactly once: ``on_delivered`` with the monotonic
+    timestamp taken immediately *before* the write the gateway answered (ACK and NACK
+    both mean "the gateway took the frame"), or ``on_dropped`` when the frame never
+    reached the bus at all. Both run on the event loop, and an exception in one is
+    logged and swallowed: a caller's bug must never take a sending worker down.
+
+    A NACK counts as delivered on purpose, and the consequence is worth naming: a
+    cover re-bases its motor clock on a frame the gateway *refused*, so it times a
+    run that never started. Telling the two apart would need a third callback, and
+    the alternative is worse - 0.4.2 started the same estimate at the enqueue, which
+    is the same wrongness a fraction of a second earlier. The refusal is logged as a
+    WARNING by ``_on_command_result``, which is where a user finds out.
+    """
+
     message: OWNCommand
     is_status_request: bool
     enqueued_at: float
     frame: str = field(default="")
+    on_delivered: Callable[[float], None] | None = None
+    on_dropped: Callable[[], None] | None = None
+    # Derived in `__post_init__`: stop frames jump the queue (`_CommandQueue`).
+    is_stop: bool = field(default=False)
+    settled: bool = field(default=False)
 
     def __post_init__(self) -> None:
         if not self.frame:
             self.frame = str(self.message)
+        self.is_stop = self.frame.startswith(STOP_FRAME_PREFIX)
+
+    def mark_delivered(self, at: float) -> None:
+        """The gateway answered the write that started at monotonic ``at``."""
+        self._settle(self.on_delivered, at)
+
+    def mark_dropped(self) -> None:
+        """The frame never reached the bus (a no-op once the command has settled)."""
+        self._settle(self.on_dropped)
+
+    def _settle(self, callback: Callable[..., None] | None, *args: Any) -> None:
+        if self.settled:
+            return
+        # Set *before* the call: a callback that raises has still settled the
+        # command, so the `finally` net in `sending_loop` cannot call the other one.
+        self.settled = True
+        if callback is None:
+            return
+        try:
+            callback(*args)
+        except Exception:  # noqa: BLE001 - a caller's bug must not kill the worker
+            LOGGER.exception("Error in the delivery callback of `%s`", self.frame)
+
+
+class _CommandQueue(asyncio.Queue):
+    """The command queue: FIFO, except that stop frames overtake *other* devices (0.4.3).
+
+    Two deques behind one ``asyncio.Queue``, so the bound (``COMMAND_QUEUE_MAXSIZE``),
+    the waiters and ``task_done`` / ``join`` are the standard ones and the total is
+    still what ``queue_length`` reports. Ordering *among* stops and *among* everything
+    else stays FIFO.
+
+    One frame never overtakes another addressed to the **same device**: a stop queued
+    while that cover's own direction frame is still waiting goes into the ordinary
+    deque instead, *immediately behind the last frame for that device* - not at the
+    tail. Otherwise the actuator would be told to stop while it stands still and
+    *then* told to move - and nothing would ever stop it again, so the shutter would
+    run to its end stop. Appending to the tail would be safe too, but it would also
+    give up the whole point of the priority: a stop that is late because *twelve other
+    covers* are ahead of it would still wait for all twelve. Behind its own frame, in
+    front of everybody else's, is the contract.
+
+    "Same device" is ``(WHO, bare WHERE, bus interface)`` - all three straight off
+    ``OWNCommand``, so a WHO 1 light at WHERE 81 and the WHERE 81 on another bus
+    interface (``81#4#3`` vs ``81#4#5``) are told apart instead of demoting the stop.
+    Status requests are skipped by the scan: a reply is order-independent (the worst a
+    reordering costs is an answer that says "moving", which it would have said anyway),
+    so they must not demote a stop either. Anything the scan cannot key (a message
+    without a WHERE) falls back to the tail of the ordinary deque, which is the
+    conservative side: the error direction is always "too late", never "inverted".
+
+    **The ordering guarantee is the queue's, not the bus's.** With
+    ``command_worker_count`` > 1 (``CONF_WORKER_COUNT``, up to ``MAX_COMMAND_WORKERS``)
+    two workers dequeue two adjacent frames in the same loop iteration and write them
+    concurrently, so a stop can still reach the socket before the direction frame it
+    must end: opening a session, a transport retry or a slow ACK decides the race, not
+    this queue. The default is one worker, where the guarantee holds end to end.
+    """
+
+    _queue: deque[_QueuedCommand]
+    _stops: deque[_QueuedCommand]
+
+    def _init(self, maxsize: int) -> None:
+        self._queue = deque()
+        self._stops = deque()
+
+    def _get(self) -> _QueuedCommand:
+        return (self._stops or self._queue).popleft()
+
+    def _put(self, item: _QueuedCommand) -> None:
+        if not getattr(item, "is_stop", False):
+            self._queue.append(item)
+            return
+        behind = self._last_index_for(item)
+        if behind is None:
+            self._stops.append(item)
+            return
+        # Behind its own device's last frame, in front of everybody else's.
+        self._queue.insert(behind + 1, item)
+
+    def _last_index_for(self, item: _QueuedCommand) -> int | None:
+        """Index in ``_queue`` of the last frame for the same device, else ``None``.
+
+        Only the ordinary deque is searched: everything in ``_stops`` is written
+        before it anyway, so a stop that follows another stop is already in order.
+        Status requests do not count - reordering a status reply changes nothing.
+        """
+        key = self._address_key(item)
+        if key is None:  # pragma: no cover - every WHO 2 frame carries a WHERE
+            # Unkeyable: stay at the tail of the ordinary deque, overtaking nothing.
+            return len(self._queue) - 1
+        for index in range(len(self._queue) - 1, -1, -1):
+            other = self._queue[index]
+            if not other.is_status_request and self._address_key(other) == key:
+                return index
+        return None
+
+    @staticmethod
+    def _address_key(item: _QueuedCommand) -> tuple[Any, str, Any] | None:
+        """``(WHO, bare WHERE, bus interface)``, or ``None`` when there is no WHERE."""
+        where = getattr(item.message, "where", None)
+        if where is None:
+            return None
+        return (getattr(item.message, "who", None), where, getattr(item.message, "interface", None))
+
+    def qsize(self) -> int:
+        return len(self._queue) + len(self._stops)
+
+    def empty(self) -> bool:
+        return not self._queue and not self._stops
+
+    def pending(self) -> tuple[_QueuedCommand, ...]:
+        """Everything still waiting, in the order it will be delivered."""
+        return (*self._stops, *self._queue)
 
 
 @dataclass(slots=True, frozen=True)
@@ -401,7 +549,7 @@ class MyHOMEGatewayHandler:
         self.is_connected: bool = False
         self.listening_worker: asyncio.Task | None = None
         self.sending_workers: list[asyncio.Task] = []
-        self.send_buffer: asyncio.Queue[_QueuedCommand] = asyncio.Queue(maxsize=COMMAND_QUEUE_MAXSIZE)
+        self.send_buffer: asyncio.Queue[_QueuedCommand] = _CommandQueue(maxsize=COMMAND_QUEUE_MAXSIZE)
 
         # Loop control.
         self._closed = False
@@ -720,9 +868,16 @@ class MyHOMEGatewayHandler:
             LOGGER.debug("%s Error while closing a session", self.log_id, exc_info=True)
 
     def _handle_auth_failure(self, err: AuthenticationError, session_type: str) -> None:
-        """Password rejected at runtime: stop everything and ask for reauth (gw-05)."""
+        """Password rejected at runtime: stop everything and ask for reauth (gw-05).
+
+        The workers leave their loop on the flag below without draining, and the
+        config entry stays loaded until the user has completed the reauth flow - so
+        whatever is still queued is settled here (0.4.3). Every command reaches
+        exactly one of its two callbacks, on this path like on every other.
+        """
         self._stop_event_listener = True
         self._stop_command_workers = True
+        self._discard_queued("after the gateway rejected the password")
         self._set_connected(False, session_state=SESSION_STATE_AUTH_FAILED)
         if self.auth_failed:
             return
@@ -739,11 +894,28 @@ class MyHOMEGatewayHandler:
             LOGGER.debug("%s Could not start the reauth flow", self.log_id, exc_info=True)
 
     # ------------------------------------------------------------------ command API
-    async def send(self, message: OWNCommand) -> bool:
-        """Queue a command; False (and a rate-limited WARNING) if it cannot be queued."""
-        return self._enqueue(message, is_status_request=False)
+    async def send(
+        self,
+        message: OWNCommand,
+        *,
+        on_delivered: Callable[[float], None] | None = None,
+        on_dropped: Callable[[], None] | None = None,
+    ) -> bool:
+        """Queue a command; False (and a rate-limited WARNING) if it cannot be queued.
 
-    async def send_status_request(self, message: OWNCommand) -> bool:
+        The return value says only that the frame was *queued*. A caller that has to
+        know when it actually reached the bus - covers time their motor runs on it -
+        passes the two callbacks documented on :class:`_QueuedCommand`.
+        """
+        return self._enqueue(message, is_status_request=False, on_delivered=on_delivered, on_dropped=on_dropped)
+
+    async def send_status_request(
+        self,
+        message: OWNCommand,
+        *,
+        on_delivered: Callable[[float], None] | None = None,
+        on_dropped: Callable[[], None] | None = None,
+    ) -> bool:
         """Queue a status request; same semantics as ``send``, plus coalescing.
 
         An identical status frame already waiting in the queue is *coalesced*: the
@@ -751,12 +923,16 @@ class MyHOMEGatewayHandler:
         same WHERE twice in a row can only produce the same answer, and several
         code paths (general/area lighting events, the idle probe, entities re-arming
         on the connection signal) legitimately race to ask for it.
+
+        A caller that asked to be told what happened to *its* frame is never
+        coalesced (0.4.3): the queued copy carries somebody else's callbacks, so
+        merging the two would silently leave this one without either.
         """
         frame = str(message)
-        if self._has_pending_status(frame):
+        if on_delivered is None and on_dropped is None and self._has_pending_status(frame):
             LOGGER.debug("%s Coalescing status request `%s`: an identical one is already queued", self.log_id, frame)
             return True
-        return self._enqueue(message, is_status_request=True)
+        return self._enqueue(message, is_status_request=True, on_delivered=on_delivered, on_dropped=on_dropped)
 
     def _has_pending_status(self, frame: str) -> bool:
         """True when an identical status request is still waiting in the queue.
@@ -768,10 +944,27 @@ class MyHOMEGatewayHandler:
         """
         return any(
             isinstance(item, _QueuedCommand) and item.is_status_request and item.frame == frame
-            for item in tuple(getattr(self.send_buffer, "_queue", ()))
+            for item in self._pending_commands()
         )
 
-    def _enqueue(self, message: OWNCommand, *, is_status_request: bool) -> bool:
+    def _pending_commands(self) -> tuple[Any, ...]:
+        """Everything still in the queue (a plain ``asyncio.Queue`` works too)."""
+        pending = getattr(self.send_buffer, "pending", None)
+        if callable(pending):
+            return pending()
+        return tuple(getattr(self.send_buffer, "_queue", ()))
+
+    def _enqueue(
+        self,
+        message: OWNCommand,
+        *,
+        is_status_request: bool,
+        on_delivered: Callable[[float], None] | None = None,
+        on_dropped: Callable[[], None] | None = None,
+    ) -> bool:
+        item = _QueuedCommand(
+            message, is_status_request, self._now(), on_delivered=on_delivered, on_dropped=on_dropped
+        )
         if self._closed or self._stop_command_workers:
             self._log_limited(
                 logging.WARNING,
@@ -780,10 +973,10 @@ class MyHOMEGatewayHandler:
                 self.log_id,
                 message,
             )
+            item.mark_dropped()
             self._commands_dropped += 1
             self._refresh_stats(publish=True, immediate=True)
             return False
-        item = _QueuedCommand(message, is_status_request, self._now())
         try:
             self.send_buffer.put_nowait(item)
         except asyncio.QueueFull:
@@ -795,6 +988,7 @@ class MyHOMEGatewayHandler:
                 self.send_buffer.maxsize,
                 message,
             )
+            item.mark_dropped()
             self._commands_dropped += 1
             self._refresh_stats(publish=True, immediate=True)
             return False
@@ -803,6 +997,27 @@ class MyHOMEGatewayHandler:
         # and is published by the next frame / command / lifecycle event.
         self._refresh_stats()
         return True
+
+    def _discard_queued(self, reason: str) -> None:
+        """Drop everything still queued and tell each caller so.
+
+        The one place that settles a whole queue: the workers are stopping (a
+        shutdown, a rejected password), so nothing behind the current frame will
+        ever be written.
+        """
+        dropped = self._drain_queue()
+        if not dropped:
+            return
+        for item in dropped:
+            item.mark_dropped()
+        self._commands_dropped += len(dropped)
+        LOGGER.warning(
+            "%s %d queued command(s) discarded %s: %s",
+            self.log_id,
+            len(dropped),
+            reason,
+            ", ".join(str(item.message) for item in dropped[:10]) + (" ..." if len(dropped) > 10 else ""),
+        )
 
     def _drain_queue(self) -> list[_QueuedCommand]:
         dropped: list[_QueuedCommand] = []
@@ -846,6 +1061,7 @@ class MyHOMEGatewayHandler:
                             item.message,
                             age,
                         )
+                        item.mark_dropped()
                         self._commands_dropped += 1
                         self._refresh_stats(publish=True, immediate=True)
                         continue
@@ -868,12 +1084,19 @@ class MyHOMEGatewayHandler:
                     await self._close_session(session)
                     session = None
                     self._command_sessions.pop(worker_id, None)
+                    item.mark_dropped()
                     self._commands_dropped += 1
                     self._refresh_stats(publish=True, immediate=True)
                     if not self._stop_command_workers:
                         await asyncio.sleep(backoff)
                         backoff = min(backoff * 2, self.max_backoff)
                 finally:
+                    # The single settle point: every branch above has already called
+                    # `mark_delivered` or `mark_dropped`, and both are idempotent, so
+                    # this only catches what nothing else could - a worker cancelled
+                    # in the middle of a write (a reload, a shutdown), which is a
+                    # command that never reached the bus like any other.
+                    item.mark_dropped()
                     self.send_buffer.task_done()
         finally:
             await self._close_session(session)
@@ -905,12 +1128,18 @@ class MyHOMEGatewayHandler:
                     self._command_sessions[worker_id] = session
                     LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
                 self._record_frame(FRAME_COMMAND, item.frame)
+                # Taken immediately before the write, and handed to `on_delivered`
+                # only if that write is answered: it is the closest thing we have to
+                # the moment the frame hit the socket, which is the moment a motor
+                # starts (0.4.3).
+                written_at = self._now()
                 result = await session.send_command(item.message, self.command_timeout)
             except AuthenticationError as err:
                 await self._close_session(session)
                 self._command_sessions.pop(worker_id, None)
                 self._handle_auth_failure(err, "command")
                 # The command is abandoned like any other undeliverable one.
+                item.mark_dropped()
                 self._commands_dropped += 1
                 self._refresh_stats(publish=True, immediate=True)
                 return None, False
@@ -939,9 +1168,13 @@ class MyHOMEGatewayHandler:
                     type(err).__name__,
                     err,
                 )
+                item.mark_dropped()
                 self._commands_dropped += 1
                 self._refresh_stats(publish=True, immediate=True)
                 return None, False
+            # Before the replies are dispatched: a cover must re-base its movement
+            # clock on the write it just made before it is told what came back.
+            item.mark_delivered(written_at)
             await self._on_command_result(item, result)
             return session, True
         return session, False  # pragma: no cover - loop always returns
@@ -1604,15 +1837,7 @@ class MyHOMEGatewayHandler:
         for session in sessions:
             await self._close_session(session)
 
-        dropped = self._drain_queue()
-        if dropped:
-            self._commands_dropped += len(dropped)
-            LOGGER.warning(
-                "%s %d queued command(s) discarded on shutdown: %s",
-                self.log_id,
-                len(dropped),
-                ", ".join(str(item.message) for item in dropped[:10]) + (" ..." if len(dropped) > 10 else ""),
-            )
+        self._discard_queued("on shutdown")
         self._set_connected(False)
         # Final snapshot (queue drained) and no timer left behind.
         self._refresh_stats(publish=True, immediate=True)
