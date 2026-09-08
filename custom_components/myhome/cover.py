@@ -411,6 +411,11 @@ def _clamped_roll(roll: float | None, fallback: float) -> float:
 # nothing, while starting the measured run before the curtain is really at the top
 # invalidates the whole measurement.
 CALIBRATION_SETTLE_SEC = 3.0
+# How long the run waits for the actuator's own "stopped" status before falling back to
+# the model (0.4.4). The status follows our stop frame by about a tenth of a second on
+# the measured gateway; half a second is generous for a bus that has just been written
+# to, and it is spent once, at the end of a run that has already taken half a minute.
+CALIBRATION_STOP_STATUS_SEC = 0.5
 # 60 halvings take a [1, 5] bracket below floating point resolution; the loop is over
 # in microseconds, so there is nothing to gain by stopping earlier.
 CALIBRATION_BISECTION_STEPS = 60
@@ -2084,10 +2089,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             )
 
     async def _async_calibration_started(self) -> datetime:
-        """When the direction frame of the calibration run reached the bus.
+        """When the motor of the calibration run is expected to start.
 
-        Read off the frame itself rather than off the estimate: what is being timed
-        is the motor, and the motor starts when the gateway writes the frame.
+        Read off the frame itself rather than off the estimate: what is being timed is
+        the motor, and the motor starts `start_delay` after the gateway writes the
+        frame - or when the actuator says so, which arrives while the run is already
+        waiting and is picked up there (`async_calibration_run`).
         """
         delivery = self._direction_delivery
         await self._async_await_delivery(delivery)
@@ -2096,14 +2103,19 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} did not start moving - "
                 f"the gateway never took the command; nothing was measured"
             )
-        return delivery.delivered_at
+        return delivery.delivered_at + timedelta(seconds=self._start_delay)
 
     async def _async_calibration_motor_seconds(self, started: datetime, planned: float) -> float:
-        """How long the motor really ran: delivery of the stop minus delivery of the start.
+        """How long the motor really ran, motor-on to motor-off.
 
-        Floored at the run we asked for, which is what it falls back to when the clock
-        did not move at all (a test that replaces the waits); with real waits the
-        elapsed time is always the larger of the two and is what is reported.
+        Both ends are the actuator's own word whenever it gives it: the "moving" status
+        that started the run (`started`, from `async_calibration_run`) and the "stopped"
+        status that ends it. Where it says nothing the two frames are used instead, with
+        the model's own `start_delay` and `stop_latency` on either side of them - which
+        is the same measurement, made with the numbers the user can tune.
+
+        What is reported is always the measurement, unless the clock did not move at
+        all - which only happens where the waits themselves are replaced.
         """
         pending = self._pending_stop
         await self._async_await_delivery(None if pending is None else pending.delivery)
@@ -2114,7 +2126,20 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 f"the gateway did not take the stop; the shutter runs on to its end stop "
                 f"and nothing was measured"
             )
-        return max(planned, (stopped - started).total_seconds())
+        if self._stop_status_at is None:
+            # The actuator answers our stop a moment later, on the monitor session:
+            # wait for it rather than report a measurement the bus was about to correct.
+            await _async_sleep(CALIBRATION_STOP_STATUS_SEC)
+        if self._motor_started_at is not None and self._stop_status_at is not None:
+            measured = (self._stop_status_at - self._motor_started_at).total_seconds()
+        else:
+            measured = (stopped + timedelta(seconds=self._stop_latency) - started).total_seconds()
+        # A measurement is reported however small the difference from the plan: since
+        # 0.4.4 the two are meant to agree, and where they do not it is the bus that
+        # says so - an actuator that brakes faster than `stop_latency` really did run
+        # a little less. What is refused is a clock that did not move at all (a test
+        # that replaces the waits), which measures the bus costs and nothing else.
+        return measured if measured > 0 else planned
 
     async def async_calibration_run(self, direction: str) -> dict[str, Any]:
         """Run the cover to the half way point of `direction` and stop it there.
@@ -2165,12 +2190,20 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 await self.async_close_cover()
             else:
                 await self.async_open_cover()
-            # Measured from the moment the frame reached the bus, not from before it
-            # was queued: the motor only ran once the gateway had written it, and on a
-            # busy command queue that is a good fraction of a second later (0.4.3).
+            # Measured from the moment the motor starts, not from the service call and
+            # not from the frame: the frame may sit in the command queue for a second
+            # (0.4.3) and the motor starts later again (0.4.4). The stop is written
+            # `stop_latency` early, exactly as a `set_cover_position` writes it, so the
+            # motor runs the seconds this run is about.
             started = await self._async_calibration_started()
             spent = (dt_util.utcnow() - started).total_seconds()
-            await _async_sleep(max(0.0, motor_seconds - spent))
+            await _async_sleep(max(0.0, motor_seconds - self._stop_latency - spent))
+            if self._motor_started_at is not None and self._motor_started_at != started:
+                # The actuator said, while we waited, when the motor really started:
+                # that is what the run is timed from, so top the wait up to it.
+                started = self._motor_started_at
+                spent = (dt_util.utcnow() - started).total_seconds()
+                await _async_sleep(max(0.0, motor_seconds - self._stop_latency - spent))
             await self.async_stop_cover()
             motor_seconds = await self._async_calibration_motor_seconds(started, motor_seconds)
         return {
