@@ -120,13 +120,21 @@ class FakeEventChannel:
 
 
 class FakeCommandChannel:
-    """Scriptable stand-in for ``OWNCommandChannel``."""
+    """Scriptable stand-in for ``OWNCommandChannel``.
+
+    The two halves of a command are scripted separately, because 0.4.3 tells them
+    apart: ``on_write`` runs at the write and raising from it is a frame that never
+    reached the socket (nothing is recorded in ``sent`` and ``on_written`` is not
+    called), while a ``responder`` that raises is a frame that *did* leave and whose
+    ACK never came - which is what a ``TimeoutError`` on a real command session is.
+    """
 
     def __init__(self) -> None:
         self.sent: list[str] = []
         self.open_calls = 0
         self.closed = False
         self.open_error: BaseException | None = None
+        self.on_write: Callable[[str], None] | None = None
         self.responder: Callable[[str], CommandResult] | None = None
 
     async def open(self, timeout: float) -> None:
@@ -134,8 +142,15 @@ class FakeCommandChannel:
         if self.open_error is not None:
             raise self.open_error
 
-    async def send_command(self, message: Any, timeout: float) -> CommandResult:
+    async def send_command(
+        self, message: Any, timeout: float, on_written: Callable[[], None] | None = None
+    ) -> CommandResult:
+        if self.on_write is not None:
+            self.on_write(str(message))  # may raise: the frame never left
         self.sent.append(str(message))
+        # The frame is on the socket now; the gateway has not answered yet (0.4.3).
+        if on_written is not None:
+            on_written()
         if self.responder is not None:
             return self.responder(str(message))
         return CommandResult(True, [])
@@ -544,9 +559,9 @@ async def test_delivery_callback_carries_the_moment_of_the_write(acknowledged: b
 async def test_the_delivery_time_is_the_attempt_the_gateway_answered() -> None:
     """A retried command is timed on the write that worked, not on the one that failed.
 
-    The first attempt dies on a broken socket after a measurable pause; the frame only
-    reached the bus on the second one, and a cover that started its motor clock on the
-    first would be out by the whole retry.
+    The first attempt never gets the frame onto a broken socket; it only reached the
+    bus on the second one, and a cover that started its motor clock on the first would
+    be out by the whole retry.
 
     Mutation caught: taking the timestamp once, outside the attempt loop.
     """
@@ -556,11 +571,11 @@ async def test_the_delivery_time_is_the_attempt_the_gateway_answered() -> None:
     def configure(channel: FakeCommandChannel, index: int) -> None:
         if index == 0:
 
-            def broken(message: str) -> CommandResult:
+            def broken(message: str) -> None:
                 failed_at.append(time.monotonic())
                 raise SessionError("gateway closed the socket")
 
-            channel.responder = broken
+            channel.on_write = broken
 
     fate = Fate()
     with fake_channels(command=Factory(FakeCommandChannel, configure)):
@@ -570,6 +585,37 @@ async def test_the_delivery_time_is_the_attempt_the_gateway_answered() -> None:
     assert fate.dropped == 0
     assert len(fate.delivered) == 1
     assert fate.delivered[0] >= failed_at[0]
+
+
+async def test_a_frame_written_once_is_delivered_once_across_the_retry() -> None:
+    """The write worked and the ACK never came: delivered, once, never dropped.
+
+    0.4.3 addendum 9 moved the report from the ACK to the write, and the two come
+    apart exactly here. The frame is on the bus - the actuator has it, whatever the
+    command session thinks - so the cover timing a motor on it is told at once, and
+    the retry that writes the very same frame a second time must not tell it again.
+    The command is still counted as dropped when the gateway answers neither attempt;
+    the caller simply already has its answer, and `on_dropped` stays silent.
+
+    Mutation caught: reporting after the ACK (nothing is delivered at all), and
+    dropping the `settled` guard (the caller is told twice, or told both things).
+    """
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        def hung(message: str) -> CommandResult:
+            raise TimeoutError()
+
+        channel.responder = hung
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"]]
+    assert (len(fate.delivered), fate.dropped) == (1, 0)
+    assert handler.stats.commands_dropped == 1
 
 
 async def test_a_command_that_cannot_be_queued_reports_it_at_once() -> None:
@@ -607,15 +653,19 @@ async def test_an_expired_command_reports_that_it_never_left() -> None:
     assert (fate.delivered, fate.dropped) == ([], 1)
 
 
-async def test_a_command_the_gateway_never_answered_reports_that_it_never_left() -> None:
-    """Both attempts failed: the frame is dropped, and the caller is told once."""
+async def test_a_command_that_never_reached_the_socket_reports_that_it_never_left() -> None:
+    """Both writes failed: the frame is dropped, and the caller is told once.
+
+    The write itself is what fails here - the socket was gone before the frame - so
+    nothing ever left and `on_delivered` must stay silent on both attempts.
+    """
     handler = make_handler()
 
     def configure(channel: FakeCommandChannel, index: int) -> None:
-        def hung(message: str) -> CommandResult:
-            raise TimeoutError()
+        def broken(message: str) -> None:
+            raise SessionError("the socket was gone before the frame")
 
-        channel.responder = hung
+        channel.on_write = broken
 
     fate = Fate()
     with fake_channels(command=Factory(FakeCommandChannel, configure)):
@@ -648,10 +698,12 @@ async def test_an_unexpected_error_in_the_worker_reports_that_the_command_never_
     handler = make_handler()
 
     def configure(channel: FakeCommandChannel, index: int) -> None:
-        def buggy(message: str) -> CommandResult:
+        def buggy(message: str) -> None:
+            # At the write, so the command is genuinely unsettled when the worker's
+            # catch-all arm catches this: a frame that *was* written is delivered.
             raise ValueError("not a transport error")
 
-        channel.responder = buggy
+        channel.on_write = buggy
 
     fate = Fate()
     with fake_channels(command=Factory(FakeCommandChannel, configure)):
@@ -1923,6 +1975,36 @@ async def test_command_channel_timeout_and_peer_close() -> None:
             await channel.get_next()
         await channel.close()
     assert server.sessions == ["*99*1##"]
+
+
+@pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
+async def test_the_write_is_reported_before_the_gateway_answers() -> None:
+    """0.4.3 addendum 9: `on_written` fires on the socket, not on the ACK.
+
+    A MyHOMEServer1 answers a command on the MONITOR session before it acknowledges
+    it here, so a caller told only after the ACK is told after its own frames have
+    already come back at it. The gateway below never answers at all: the hook must
+    still have fired, once, before the timeout - and a session that is not open
+    writes nothing, so it reports nothing.
+
+    Mutation caught: calling the hook after the ACK/NACK loop, or before the write.
+    """
+    written: list[str] = []
+    async with FakeOWNServer(answer=False) as server:
+        channel = OWNCommandChannel(make_gateway(server.port), LOGGER)
+        await channel.open(timeout=2)
+        with pytest.raises(TimeoutError):
+            await channel.send_command(
+                OWNLightingCommand.status("11"), timeout=0.1, on_written=lambda: written.append("on the socket")
+            )
+        assert written == ["on the socket"]
+        assert server.received == ["*#1*11##"]
+        await channel.close()
+        with pytest.raises(SessionError):
+            await channel.send_command(
+                OWNLightingCommand.status("11"), timeout=1, on_written=lambda: written.append("never written")
+            )
+        assert written == ["on the socket"]
 
 
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default

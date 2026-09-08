@@ -41,6 +41,7 @@ from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.components.button import DOMAIN as BUTTON
@@ -247,9 +248,12 @@ class _QueuedCommand:
     passes ``on_delivered`` / ``on_dropped`` and gets told which happened and when.
 
     Exactly one of the two runs, exactly once: ``on_delivered`` with the monotonic
-    timestamp taken immediately *before* the write the gateway answered (ACK and NACK
-    both mean "the gateway took the frame"), or ``on_dropped`` when the frame never
-    reached the bus at all. Both run on the event loop, and an exception in one is
+    timestamp taken immediately *before* the write that reached the socket - it fires
+    as soon as that write returns, without waiting for the gateway's answer, and a
+    NACK afterwards changes nothing ("the gateway took the frame") - or
+    ``on_dropped`` when the frame never reached the bus at all. A write that raises
+    reports nothing: the retry writes again, and only the write that worked is
+    reported, once. Both run on the event loop, and an exception in one is
     logged and swallowed: a caller's bug must never take a sending worker down.
 
     A NACK counts as delivered on purpose, and the consequence is worth naming: a
@@ -1128,12 +1132,18 @@ class MyHOMEGatewayHandler:
                     self._command_sessions[worker_id] = session
                     LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
                 self._record_frame(FRAME_COMMAND, item.frame)
-                # Taken immediately before the write, and handed to `on_delivered`
-                # only if that write is answered: it is the closest thing we have to
-                # the moment the frame hit the socket, which is the moment a motor
-                # starts (0.4.3).
+                # Taken immediately before the write and handed to `on_delivered` by
+                # the channel itself, as soon as the frame has left the socket: it is
+                # the moment a motor starts, and the gateway answers the command on
+                # the *monitor* session before it acknowledges it here, so a caller
+                # told only after the ACK is told too late to recognise its own
+                # frames coming back (0.4.3, addendum 9). A write that raises never
+                # calls it; a NACK after a write that worked still counts as
+                # delivered.
                 written_at = self._now()
-                result = await session.send_command(item.message, self.command_timeout)
+                result = await session.send_command(
+                    item.message, self.command_timeout, on_written=partial(item.mark_delivered, written_at)
+                )
             except AuthenticationError as err:
                 await self._close_session(session)
                 self._command_sessions.pop(worker_id, None)
@@ -1172,8 +1182,9 @@ class MyHOMEGatewayHandler:
                 self._commands_dropped += 1
                 self._refresh_stats(publish=True, immediate=True)
                 return None, False
-            # Before the replies are dispatched: a cover must re-base its movement
-            # clock on the write it just made before it is told what came back.
+            # A net, and normally a no-op: `on_written` has already settled the
+            # command. It only fires for a channel that does not use the hook, and
+            # it is still safe - this line is reached only when the write worked.
             item.mark_delivered(written_at)
             await self._on_command_result(item, result)
             return session, True
