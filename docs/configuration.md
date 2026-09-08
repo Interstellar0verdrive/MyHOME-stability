@@ -106,7 +106,7 @@ misbehaviour, and change one at a time.
 | --- | --- | --- | --- |
 | Idle watchdog | 300 s | 60–3600 | No frame received on the monitor session for this long: a harmless status request is sent through the command session to check the gateway is still alive. Lower it on a gateway that dies silently; raise it on a very quiet plant that produces false probes. |
 | Probe window | 30 s | 5–300 | The probe was sent, nothing arrived on the monitor session and the gateway acknowledged no status request on the command session: the event session is closed and reconnected (backoff 1, 2, 4 … 60 s). A status request the gateway ACKed on the **command** session after the probe went out — the probe itself, or any other — proves it is alive and simply does not mirror replies onto the monitor, so the watchdog re-arms instead of reconnecting. |
-| Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. On timeout it is retried once on a fresh session, then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
+| Command timeout | 10 s | 2–60 | How long a single command may take to be written and acknowledged. A command that could not be written is retried once on a fresh session; one that was written and then not acknowledged is not sent again (the actuator has it). Either way it is then dropped with a warning. Raise it on a slow gateway that NACKs under load. |
 | Command queue TTL | 60 s | 10–600 | Commands still queued after this long are dropped instead of being sent late (a light that switches on two minutes after the button press is worse than one that does not). |
 | Default instant-power keep-alive | 125 min | 0–255 | The keep-alive asked of the energy meters for power sensors whose `keepalive_minutes` comes from neither the sensor nor the gateway's `sensor_defaults:` (alias `energy:`) block. `0` disables it. Any value written in the file — per sensor or in either gateway-level block — always wins, even when it equals the built-in `125`. Precedence: per-sensor key → `sensor_defaults` / `energy` → this option → built-in default. See [Energy monitoring](energy.md). |
 
@@ -273,7 +273,9 @@ the stop the integration sends by itself at the end of a *set position* or a
 tilt run. Both the run and that second and a half are counted, since 0.4.3, from
 the moment the gateway actually wrote the frame, not from the moment Home
 Assistant asked for it: on a busy command queue the two are a good fraction of a
-second apart. A movement in any other direction, such as pressing *up* on the
+second apart. While the frame is still waiting its turn that second and a half has
+not started at all — the gateway cannot repeat a command it has not been given yet —
+so a repeat is recognised as a repeat however long the queue was. A movement in any other direction, such as pressing *up* on the
 keypad right after stopping a shutter that was going down, is honoured straight
 away. Pressing the **same** direction again within that second and a half cannot
 be told apart from the repeat, so it is ignored; the integration then re-reads

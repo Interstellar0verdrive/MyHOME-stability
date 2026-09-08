@@ -255,8 +255,9 @@ unknown number of late frames may still be in flight: the caller must discard it
 | TTL | `60 s` | Checked when the item is dequeued, not while it waits. An expired command is dropped with a WARNING, never sent. |
 | Stop priority | WHO 2 `*2*0*<where>##` | A stop overtakes any movement or status frame queued for **other** devices, so it is not delayed by a scene that is still being written. Behind a frame of its own device it is inserted right after that frame, not at the tail of everyone else's — a status request for that device does not hold it back either. "Same device" is `(WHO, WHERE, bus interface)`, so a light and a cover that happen to share a WHERE are told apart. |
 | Timeout | `10 s` | Per `send_command` call: write + drain + read until ACK/NACK. |
-| Retry | **once**, in place | On a transport error the session is closed and one fresh session is opened for a second attempt. |
-| Drop | after the second failure | A rate-limited WARNING names the command. It is **never re-queued**: a stale command is never replayed minutes later. |
+| Delivery report | at the write | A command that asked to be told when it reaches the bus is told the moment the frame is on the socket, before the gateway's answer: a gateway repeats a command on the monitor session before it acknowledges it on the command one, and a caller told only after the acknowledgement is told too late to recognise its own frames coming back. A frame that is written and never acknowledged is still dropped and counted as such, but the caller keeps its delivery — the actuator has the frame either way. |
+| Retry | **once**, in place, and only if the frame never left | On a transport error the session is closed and one fresh session is opened for a second attempt — unless the frame had already reached the socket, in which case there is no second attempt: a lost acknowledgement is not a lost frame, and writing it again would put a second copy of the command on the bus. |
+| Drop | after the second failed write, or the first write nothing answered | A rate-limited WARNING names the command. It is **never re-queued**: a stale command is never replayed minutes later. A frame that was written and never acknowledged is counted here too, even though its caller has already been told it reached the bus. |
 | Auth failure | immediate stop | `AuthenticationError` on a command session stops both loops and starts the reauth flow. |
 | Backoff | `1 s → 60 s` | Applied inside the sending loop after a failed delivery, reset on the first success. |
 
@@ -300,9 +301,11 @@ all still the **total** of both.
 **A queued command reports what became of it.** `send()` and `send_status_request()`
 take two keyword-only callables, `on_delivered(at)` and `on_dropped()`; exactly one of
 the two fires, exactly once, on the event loop. `on_delivered` carries the monotonic
-timestamp taken immediately *before* the write that succeeded, and fires on a NACK as
-well as on an ACK — both mean the gateway took the frame — before the replies of that
-command are dispatched. `on_dropped` covers every path that loses the command: queue
+timestamp taken immediately *before* the write that succeeded, and fires as soon as
+that write returns — before the gateway's answer, and so before the replies of that
+command are dispatched. A NACK, or no answer at all, changes nothing: the frame is on
+the bus and the actuator has it, which is also why such a command is never written a
+second time. `on_dropped` covers every path that loses the command: queue
 closed, queue full, TTL expired, authentication failure, attempts exhausted, the
 worker's catch-all arm, the drain in `close_listener()`, and a worker cancelled
 mid-write. An exception raised inside either callback is logged and swallowed, like
@@ -312,7 +315,10 @@ every other call into an entity, and the command still counts as settled.
 clock optimistically at the enqueue — the entity reacts to the service call at once —
 and re-bases it when the delivery is reported: `_move_started_at`, the echo window and
 the pending timed stop all move onto the delivery instant, converted from the gateway's
-monotonic clock by measuring the offset between the two clocks at callback time. A
+monotonic clock by measuring the offset between the two clocks at callback time. Until
+that report arrives the echo window stays open however long the wait: the gateway cannot
+repeat a frame it has not been given, so the repeat is still to come — and it comes on
+the monitor session a millisecond after the write, which can be before the report. A
 delivery no later than the optimistic start changes nothing, which is what makes the
 behaviour with an idle queue identical to 0.4.2. The stop the cover sends by itself
 freezes the estimate at *its* delivery instant, and `on_dropped` on a direction frame
