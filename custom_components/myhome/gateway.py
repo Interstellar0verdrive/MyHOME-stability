@@ -251,6 +251,13 @@ class _QueuedCommand:
     both mean "the gateway took the frame"), or ``on_dropped`` when the frame never
     reached the bus at all. Both run on the event loop, and an exception in one is
     logged and swallowed: a caller's bug must never take a sending worker down.
+
+    A NACK counts as delivered on purpose, and the consequence is worth naming: a
+    cover re-bases its motor clock on a frame the gateway *refused*, so it times a
+    run that never started. Telling the two apart would need a third callback, and
+    the alternative is worse - 0.4.2 started the same estimate at the enqueue, which
+    is the same wrongness a fraction of a second earlier. The refusal is logged as a
+    WARNING by ``_on_command_result``, which is where a user finds out.
     """
 
     message: OWNCommand
@@ -291,12 +298,20 @@ class _QueuedCommand:
 
 
 class _CommandQueue(asyncio.Queue):
-    """The command queue: FIFO, except that stop frames overtake everything (0.4.3).
+    """The command queue: FIFO, except that stop frames overtake *other* devices (0.4.3).
 
     Two deques behind one ``asyncio.Queue``, so the bound (``COMMAND_QUEUE_MAXSIZE``),
     the waiters and ``task_done`` / ``join`` are the standard ones and the total is
     still what ``queue_length`` reports. Ordering *among* stops and *among* everything
-    else stays FIFO; only the class of the frame decides which deque it lands in.
+    else stays FIFO.
+
+    One frame never overtakes another addressed to the **same WHERE**: a stop queued
+    while that cover's own direction frame is still waiting is appended to the
+    ordinary deque instead, behind it. Otherwise the actuator would be told to stop
+    while it stands still and *then* told to move - and nothing would ever stop it
+    again, so the shutter would run to its end stop. The point of the priority is a
+    stop that is late because *twelve other covers* are ahead of it, and that is
+    exactly what is left.
     """
 
     _queue: deque[_QueuedCommand]
@@ -310,7 +325,21 @@ class _CommandQueue(asyncio.Queue):
         return (self._stops or self._queue).popleft()
 
     def _put(self, item: _QueuedCommand) -> None:
-        (self._stops if getattr(item, "is_stop", False) else self._queue).append(item)
+        if getattr(item, "is_stop", False) and not self._addresses_something_queued(item):
+            self._stops.append(item)
+            return
+        self._queue.append(item)
+
+    def _addresses_something_queued(self, item: _QueuedCommand) -> bool:
+        """True when an ordinary frame for the same WHERE is already waiting.
+
+        Only the ordinary deque is searched: everything in ``_stops`` is written
+        before it anyway, so a stop that follows another stop is already in order.
+        """
+        where = getattr(item.message, "where", None)
+        if where is None:  # pragma: no cover - every WHO 2 frame carries a WHERE
+            return True
+        return any(getattr(other.message, "where", None) == where for other in self._queue)
 
     def qsize(self) -> int:
         return len(self._queue) + len(self._stops)
@@ -802,9 +831,16 @@ class MyHOMEGatewayHandler:
             LOGGER.debug("%s Error while closing a session", self.log_id, exc_info=True)
 
     def _handle_auth_failure(self, err: AuthenticationError, session_type: str) -> None:
-        """Password rejected at runtime: stop everything and ask for reauth (gw-05)."""
+        """Password rejected at runtime: stop everything and ask for reauth (gw-05).
+
+        The workers leave their loop on the flag below without draining, and the
+        config entry stays loaded until the user has completed the reauth flow - so
+        whatever is still queued is settled here (0.4.3). Every command reaches
+        exactly one of its two callbacks, on this path like on every other.
+        """
         self._stop_event_listener = True
         self._stop_command_workers = True
+        self._discard_queued("after the gateway rejected the password")
         self._set_connected(False, session_state=SESSION_STATE_AUTH_FAILED)
         if self.auth_failed:
             return
@@ -924,6 +960,27 @@ class MyHOMEGatewayHandler:
         # and is published by the next frame / command / lifecycle event.
         self._refresh_stats()
         return True
+
+    def _discard_queued(self, reason: str) -> None:
+        """Drop everything still queued and tell each caller so.
+
+        The one place that settles a whole queue: the workers are stopping (a
+        shutdown, a rejected password), so nothing behind the current frame will
+        ever be written.
+        """
+        dropped = self._drain_queue()
+        if not dropped:
+            return
+        for item in dropped:
+            item.mark_dropped()
+        self._commands_dropped += len(dropped)
+        LOGGER.warning(
+            "%s %d queued command(s) discarded %s: %s",
+            self.log_id,
+            len(dropped),
+            reason,
+            ", ".join(str(item.message) for item in dropped[:10]) + (" ..." if len(dropped) > 10 else ""),
+        )
 
     def _drain_queue(self) -> list[_QueuedCommand]:
         dropped: list[_QueuedCommand] = []
@@ -1743,17 +1800,7 @@ class MyHOMEGatewayHandler:
         for session in sessions:
             await self._close_session(session)
 
-        dropped = self._drain_queue()
-        for item in dropped:
-            item.mark_dropped()
-        if dropped:
-            self._commands_dropped += len(dropped)
-            LOGGER.warning(
-                "%s %d queued command(s) discarded on shutdown: %s",
-                self.log_id,
-                len(dropped),
-                ", ".join(str(item.message) for item in dropped[:10]) + (" ..." if len(dropped) > 10 else ""),
-            )
+        self._discard_queued("on shutdown")
         self._set_connected(False)
         # Final snapshot (queue drained) and no timer left behind.
         self._refresh_stats(publish=True, immediate=True)
