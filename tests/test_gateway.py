@@ -753,6 +753,64 @@ async def test_a_stop_overtakes_everything_already_queued() -> None:
     assert handler.send_buffer.empty()
 
 
+async def test_a_stop_never_overtakes_a_frame_for_the_same_cover() -> None:
+    """The priority is "before *other* devices", never "before its own movement".
+
+    A stop written before the movement it is meant to end leaves the actuator with a
+    stop while it stands still and then a direction frame nothing will ever stop: the
+    shutter runs to its end stop. So a stop queued while a frame for the same WHERE is
+    still waiting keeps its place behind it, and only overtakes the covers it has
+    nothing to do with.
+
+    Mutation caught: routing a stop into the priority deque on `is_stop` alone (the
+    cover's own movement is then written second).
+    """
+    handler = make_handler()
+    assert await handler.send(OWNAutomationCommand.raise_shutter("81"))
+    assert await handler.send_status_request(OWNAutomationCommand.status("81"))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("81"))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("82"))
+    # 82 has nothing waiting, so its stop goes first; 81's stays behind the two
+    # frames that were queued for it, in the order they were queued.
+    assert queued(handler) == ["*2*0*82##", "*2*1*81##", "*#2*81##", "*2*0*81##"]
+    assert handler.send_buffer.qsize() == 4
+    assert handler.stats.queue_length == 4
+
+    with fake_channels(command=Factory(FakeCommandChannel)) as (_, command, _):
+        async with running(handler, listening=False):
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert command.instances[0].sent == ["*2*0*82##", "*2*1*81##", "*#2*81##", "*2*0*81##"]
+    assert handler.send_buffer.empty()
+
+
+async def test_an_authentication_failure_settles_everything_queued_behind_it() -> None:
+    """The workers stop without draining, so the queue is settled where they stop.
+
+    The config entry stays loaded until the user has completed the reauth flow, and
+    nothing else drains: without this the commands behind the failing one are
+    orphaned, and the "exactly one of the two, exactly once" contract has a hole
+    exactly where it matters - a cover that keeps timing a run nothing is running.
+
+    Mutation caught: dropping the drain from `_handle_auth_failure` (the second
+    command is reported as neither delivered nor dropped, and stays in the queue).
+    """
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        channel.open_error = AuthenticationError("password_error")
+
+    first, second = Fate(), Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **first.kwargs)
+            assert await handler.send(OWNLightingCommand.switch_on("12"), **second.kwargs)
+            await wait_until(lambda: handler.sending_workers[0].done())
+            assert handler.send_buffer.qsize() == 0
+    assert (first.delivered, first.dropped) == ([], 1)
+    assert (second.delivered, second.dropped) == ([], 1)
+    assert handler.stats.commands_dropped == 2
+
+
 async def test_a_status_request_with_callbacks_is_never_coalesced() -> None:
     """Coalescing merges two frames; it must not merge two callers' expectations."""
     handler = make_handler()
