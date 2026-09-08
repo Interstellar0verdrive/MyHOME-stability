@@ -8,7 +8,7 @@ their real configuration file.
 
 The emitted YAML uses the MAC-address-root layout accepted by validate.py
 (Contract A) and only keys the schema honours (`who`, `where`/`zone`, `name`,
-`class`, `dimmable`, `shutter_run`).
+`class`, `dimmable`, `opening_time`).
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ from .const import (
     CONF_DEVICE_CLASS,
     CONF_DIMMABLE,
     CONF_FILE_PATH,
+    CONF_OPENING_TIME,
     CONF_PLATFORMS,
-    CONF_SHUTTER_RUN,
     CONF_WHERE,
     CONF_WHO,
     CONF_ZONE,
@@ -111,7 +111,7 @@ def generate_suggested_config(device_info: dict[str, Any]) -> tuple[str, dict[st
     if platform == "light":
         cfg[CONF_DIMMABLE] = device_type == DEVICE_TYPE_BUS_DIMMER
     elif platform == "cover":
-        cfg[CONF_SHUTTER_RUN] = 20
+        cfg[CONF_OPENING_TIME] = 20
     elif device_type == DEVICE_TYPE_BUS_ENERGY_METER:
         cfg[CONF_DEVICE_CLASS] = "power"
     elif device_type == DEVICE_TYPE_BUS_THERMO_SENSOR:
