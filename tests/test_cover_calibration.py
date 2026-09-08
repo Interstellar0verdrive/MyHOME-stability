@@ -3,7 +3,13 @@
 The maths lives in pure module-level functions, so most of this file needs no Home
 Assistant at all: the solver is fed measurements the model itself produced and has to
 give the parameters back.  The two service tests then check the parts only the entity
-can do - the order of the bus frames, the waits between them, and the two refusals.
+can do - the order of the bus frames, the waits between them, and the refusals.
+
+Since the 0.4.2 amendment there are two independent one-dimensional problems, one per
+direction: the closing run measures `closing_roll`, the opening run `opening_roll`, and
+`slat_time` is an input to both rather than an unknown (both runs are a position-50, so
+they stop at the same point of the curtain's time axis whatever the slat time is - the
+pair is not identifiable from them).
 """
 
 from __future__ import annotations
@@ -90,21 +96,32 @@ def test_the_run_reproduces_a_set_cover_position_50() -> None:
 # The solver, on its own
 # --------------------------------------------------------------------------------------
 @pytest.mark.parametrize(
-    ("roll", "slat"),
-    [(1.0, 0.0), (1.2, 0.0), (1.69, 4.7), (1.7, 4.7), (2.4, 2.0), (3.5, 6.5), (5.0, 1.0)],
+    ("closing_roll", "opening_roll", "slat"),
+    [
+        (1.0, 1.0, 0.0),
+        (1.2, 1.2, 0.0),
+        (1.69, 2.12, 4.7),
+        (2.4, 1.3, 2.0),
+        (3.5, 4.9, 6.5),
+        (5.0, 1.0, 1.0),
+    ],
 )
-def test_the_solver_recovers_the_parameters_it_was_given(roll: float, slat: float) -> None:
+def test_the_solver_recovers_the_roll_of_each_direction(
+    closing_roll: float, opening_roll: float, slat: float
+) -> None:
     """Round trip through the model: predict two measurements, then solve them back.
 
     This is the only honest test of a solver: anything else pins the answer of one
-    particular implementation rather than the equation it is supposed to invert.
+    particular implementation rather than the equations it is supposed to invert.  The
+    two directions are deliberately given different rolls, including the two extremes
+    of the range, so a solver that shared one number between them could not pass.
 
     Mutation caught: any sign or scaling error in `calibration_descent_cm` /
-    `calibration_ascent_cm` that the two directions do not share.
+    `calibration_ascent_cm`, and solving the ascent with the descent's equation.
     """
-    closed = cover_module.calibration_descent_cm(roll, slat, HEIGHT, CLOSING, RUN_DOWN)
-    opened = cover_module.calibration_ascent_cm(roll, slat, HEIGHT, OPENING, RUN_UP)
-    found_roll, found_slat = cover_module.solve_cover_calibration(
+    closed = cover_module.calibration_descent_cm(closing_roll, slat, HEIGHT, CLOSING, RUN_DOWN)
+    opened = cover_module.calibration_ascent_cm(opening_roll, slat, HEIGHT, OPENING, RUN_UP)
+    found_closing, found_opening = cover_module.solve_cover_calibration(
         height=HEIGHT,
         opening_time=OPENING,
         closing_time=CLOSING,
@@ -112,23 +129,57 @@ def test_the_solver_recovers_the_parameters_it_was_given(roll: float, slat: floa
         closed_run_seconds=RUN_DOWN,
         opened_run_seconds=RUN_UP,
         opened_half_cm=opened,
+        slat_time=slat,
     )
-    assert found_roll == pytest.approx(roll, abs=0.02)
-    assert found_slat == pytest.approx(slat, abs=0.1)
+    assert found_closing == pytest.approx(closing_roll, abs=0.02)
+    assert found_opening == pytest.approx(opening_roll, abs=0.02)
 
 
-def test_a_known_slat_time_leaves_a_one_dimensional_solve() -> None:
-    """With the slat time given, the descent alone fixes the roll - exactly.
+def test_the_real_shutter_gives_one_roll_per_direction() -> None:
+    """The measurements of the reference window: 85 cm down, 80 cm up.
 
-    The measurement of the reference shutter: 195 cm of travel, 8.5 s of motor (half
-    the 17 s curtain time of a 21.7 s closing run with a 4.7 s slat phase) leave the bar
-    85 cm off the floor, and that is a roll of 1.69.  It is the sanity value of the
-    specification's section 1 - half the curtain time ends at x = (3k+1)/(4(k+1)) - so
-    the run length and the equation really do describe the same movement.
+    195 cm of travel, 8.5 s of motor down (half the 17 s curtain time of a 21.7 s
+    closing run with a 4.7 s slat phase) leave the bar 85 cm off the floor, which is a
+    closing roll of 1.69 - the sanity value of the specification's section 1, since
+    half the curtain time ends at x = (3k+1)/(4(k+1)).  The same shutter measured
+    upwards stops 80 cm off the floor, five centimetres lower, and that is an opening
+    roll of 2.12: the motor is not equally loaded the two ways.
 
-    Mutation caught: solving for the slat time anyway and ignoring the given value.
+    Before the amendment this pair had no solution at all - one roll plus an unknown
+    slat time predicts (almost) the same height both ways, so 85/80 was refused.  Two
+    rolls is what makes the real data solvable.
+
+    Mutation caught: feeding both measurements to the descent equation, which would
+    answer 1.87 for the ascent instead of 2.12.
     """
-    roll, slat = cover_module.solve_cover_calibration(
+    closing_roll, opening_roll = cover_module.solve_cover_calibration(
+        height=HEIGHT,
+        opening_time=OPENING,
+        closing_time=CLOSING,
+        closed_half_cm=85.0,
+        closed_run_seconds=RUN_DOWN,
+        opened_run_seconds=RUN_UP,
+        opened_half_cm=80.0,
+        slat_time=SLAT,
+    )
+    assert closing_roll == pytest.approx(1.69, abs=0.02)
+    assert 2.0 <= opening_roll <= 2.2
+    # Both are exact solutions of their own equation, not a compromise between them.
+    assert cover_module.calibration_descent_cm(
+        closing_roll, SLAT, HEIGHT, CLOSING, RUN_DOWN
+    ) == pytest.approx(85.0, abs=0.05)
+    assert cover_module.calibration_ascent_cm(
+        opening_roll, SLAT, HEIGHT, OPENING, RUN_UP
+    ) == pytest.approx(80.0, abs=0.05)
+
+
+def test_without_the_opening_measurement_only_the_closing_roll_is_answered() -> None:
+    """One run, one roll: nothing is invented for the direction nobody measured.
+
+    Mutation caught: defaulting the opening roll to the closing one inside the solver,
+    which would publish a measured-looking number that was never measured.
+    """
+    closing_roll, opening_roll = cover_module.solve_cover_calibration(
         height=HEIGHT,
         opening_time=OPENING,
         closing_time=CLOSING,
@@ -137,58 +188,46 @@ def test_a_known_slat_time_leaves_a_one_dimensional_solve() -> None:
         opened_run_seconds=RUN_UP,
         slat_time=SLAT,
     )
-    assert slat == SLAT
-    assert roll == pytest.approx(1.69, abs=0.02)
-    # A given slat time wins even when the ascent measurement is there too.
-    roll_again, slat_again = cover_module.solve_cover_calibration(
-        height=HEIGHT,
-        opening_time=OPENING,
-        closing_time=CLOSING,
-        closed_half_cm=85.0,
-        closed_run_seconds=RUN_DOWN,
-        opened_run_seconds=RUN_UP,
-        opened_half_cm=120.0,
-        slat_time=SLAT,
-    )
-    assert (roll_again, slat_again) == (roll, slat)
+    assert closing_roll == pytest.approx(1.69, abs=0.02)
+    assert opening_roll is None
 
 
-def test_the_descent_ignores_the_slat_phase_and_the_ascent_does_not() -> None:
-    """Why two measurements can identify two unknowns at all - and how weakly.
+def test_the_two_runs_stop_at_the_same_place_whatever_the_slat_time_is() -> None:
+    """Why `slat_time` is an input and not an unknown (the amendment's finding).
 
-    Closing from the top the slats only move once the curtain is already on the floor,
-    so the whole run is curtain; opening from the floor the *first* seconds are slats,
-    so the same run lifts the curtain less the longer the slat phase is.  That
-    asymmetry is the entire information content of the second measurement.
+    Both calibration runs are a `set_cover_position: 50` expressed in motor seconds, so
+    the descent fraction and the ascent-equivalent fraction are the same function of
+    the slat time - exactly 0.5 at the configured value and within a centimetre of each
+    other everywhere else.  A single shutter therefore predicts the same height both
+    ways for *every* slat time, which is precisely why the pair (roll, slat_time)
+    cannot be recovered from these two measurements, and why the amendment spends the
+    second measurement on the second roll instead.
 
-    It is also very small, and the assertion says so on purpose: with the run lengths
-    the service itself uses, both halves stop the bar within a centimetre of each other
-    whatever the slat time is, which is why measurements that disagree by more are
-    refused rather than fitted (`CALIBRATION_MAX_ASCENT_RESIDUAL_CM`).
-
-    Mutation caught: subtracting the slat time from the descent as well, which makes
-    the pair of equations degenerate and the slat time unidentifiable.
+    Mutation caught: reintroducing a slat-time sweep, which has nothing to walk on.
     """
-    descent = [cover_module.calibration_descent_cm(1.6, s, HEIGHT, CLOSING, RUN_DOWN) for s in (0.0, 3.0, 6.0)]
-    ascent = [cover_module.calibration_ascent_cm(1.6, s, HEIGHT, OPENING, RUN_UP) for s in (0.0, 3.0, 6.0)]
-    # The bar ends lower and lower in both cases, but not by the same amounts.
-    assert descent[0] > descent[1] > descent[2]
-    assert ascent[0] > ascent[1] > ascent[2]
-    assert (descent[0] - descent[2]) != pytest.approx(ascent[0] - ascent[2], abs=0.5)
-    # ...and the two predictions themselves never part company by much.
-    for down, up in zip(descent, ascent, strict=True):
-        assert abs(down - up) < cover_module.CALIBRATION_MAX_ASCENT_RESIDUAL_CM
+    for slat in (0.0, 3.0, 4.7, 6.0):
+        down = cover_module.calibration_descent_cm(1.6, slat, HEIGHT, CLOSING, RUN_DOWN)
+        up = cover_module.calibration_ascent_cm(1.6, slat, HEIGHT, OPENING, RUN_UP)
+        assert abs(down - up) < 1.0
+    # At the configured slat time the two runs are the same movement mirrored, so the
+    # two predictions coincide.
+    assert cover_module.calibration_descent_cm(
+        1.6, SLAT, HEIGHT, CLOSING, RUN_DOWN
+    ) == pytest.approx(cover_module.calibration_ascent_cm(1.6, SLAT, HEIGHT, OPENING, RUN_UP))
 
 
 def test_a_measurement_outside_the_model_is_refused() -> None:
     """A bar that cannot be where it was measured gets an explanation, not a number.
 
     The band quoted in the message is the whole of what the model can produce, which is
-    what lets the user work out which of the four numbers they gave is wrong.  After
-    8.5 s of the reference shutter's closing run the bar is between 65 cm (the fattest
-    roll) and 98 cm (the linear one) off the floor, and nothing else.
+    what lets the user work out which of the numbers they gave is wrong.  After 8.5 s
+    of the reference shutter's closing run the bar is between 65 cm (the fattest roll)
+    and 98 cm (the linear one) off the floor, and nothing else; the upward run of the
+    same shutter has the same band, because both are a position-50.
+
+    Mutation caught: refusing silently, or quoting the band of the other direction.
     """
-    with pytest.raises(ValueError, match="no shutter matches this measurement") as err:
+    with pytest.raises(ValueError, match="no roll matches closed_half_cm") as err:
         cover_module.solve_cover_calibration(
             height=HEIGHT,
             opening_time=OPENING,
@@ -199,35 +238,11 @@ def test_a_measurement_outside_the_model_is_refused() -> None:
             slat_time=SLAT,
         )
     assert "between 65 cm and 98 cm" in str(err.value)
-    assert "closing_time is the real full run" in str(err.value)
+    assert "8.5 s of a 21.7 s closing run started fully open" in str(err.value)
+    assert "closing_time and slat_time are the real numbers" in str(err.value)
 
-    # No slat time at all can put the bar 194 cm up after 8.5 s of closing.
-    with pytest.raises(ValueError, match="no shutter matches"):
-        cover_module.solve_cover_calibration(
-            height=HEIGHT,
-            opening_time=OPENING,
-            closing_time=CLOSING,
-            closed_half_cm=194.0,
-            closed_run_seconds=RUN_DOWN,
-            opened_run_seconds=RUN_UP,
-            opened_half_cm=100.0,
-        )
-
-
-def test_two_measurements_that_disagree_are_refused_rather_than_fitted() -> None:
-    """The real pair measured on the reference shutter: 85 cm down, 80 cm up.
-
-    Both runs stop at the same point of the curtain's time axis, so one shutter must
-    leave the bar at the same height both ways: the model can spread the two
-    predictions by less than a centimetre over the whole range of slat times.  Five
-    centimetres apart is therefore not a shutter with an unusual roll, it is a
-    measurement or a configured run that is wrong - and the best fit of it is a `roll`
-    pushed against the end of its range, which pasted into the YAML would be worse than
-    no answer at all.
-
-    Mutation caught: dropping the residual check and returning the boundary fit.
-    """
-    with pytest.raises(ValueError, match="do not describe one shutter") as err:
+    # The ascent is refused on its own terms, and names its own field and run.
+    with pytest.raises(ValueError, match="no roll matches opened_half_cm") as err:
         cover_module.solve_cover_calibration(
             height=HEIGHT,
             opening_time=OPENING,
@@ -235,10 +250,11 @@ def test_two_measurements_that_disagree_are_refused_rather_than_fitted() -> None
             closed_half_cm=85.0,
             closed_run_seconds=RUN_DOWN,
             opened_run_seconds=RUN_UP,
-            opened_half_cm=80.0,
+            opened_half_cm=20.0,
+            slat_time=SLAT,
         )
-    assert "80 cm was measured" in str(err.value)
-    assert "give the slat_time" in str(err.value)
+    assert "13.5 s of a 22.3 s opening run started fully closed" in str(err.value)
+    assert "opening_time and slat_time are the real numbers" in str(err.value)
 
 
 def test_the_yaml_snippet_is_a_complete_profile() -> None:
@@ -254,6 +270,26 @@ def test_the_yaml_snippet_is_a_complete_profile() -> None:
     assert "    roll: 1.69" in snippet
     assert "    profile: hallway_shutter" in snippet
     assert "    height: 195.0" in snippet
+
+
+def test_the_snippet_writes_two_rolls_only_when_they_differ() -> None:
+    """One key when the two runs agree, two when they do not - and never all three.
+
+    A `roll:` next to a directional pair would be a third number the user has to keep
+    in step with the other two, and it would be the one key that no run measured.
+
+    Mutation caught: always writing the mean, or always writing both.
+    """
+    together = cover_module.calibration_yaml(
+        "hallway_shutter", HEIGHT, OPENING, CLOSING, SLAT, 1.69, 1.75
+    )
+    assert "    roll: 1.72" in together  # the mean of the two
+    assert "opening_roll" not in together and "closing_roll" not in together
+
+    apart = cover_module.calibration_yaml("hallway_shutter", HEIGHT, OPENING, CLOSING, SLAT, 1.69, 2.12)
+    assert "    opening_roll: 2.12" in apart
+    assert "    closing_roll: 1.69" in apart
+    assert "\n    roll:" not in apart
 
 
 # --------------------------------------------------------------------------------------
@@ -303,8 +339,6 @@ async def test_calibration_run_open_spends_the_slat_phase_first(hass: HomeAssist
     """`direction: open` closes fully first, then opens for slat + half the curtain.
 
     4.7 s of slats and 8.8 s of curtain: 13.5 s, not half of the 22.3 s opening run.
-    The asymmetry with the closing direction is the whole point - it is what makes the
-    two measurements say different things.
     """
     async with setup_myhome(hass, tmp_path, CALIBRATION_YAML) as (_entry, commands):
         with patch.object(cover_module, "_async_sleep", new=AsyncMock()) as sleep:
@@ -342,56 +376,66 @@ async def test_calibration_run_is_refused_while_the_cover_moves(hass: HomeAssist
         assert commands.sent_frames == []
 
 
-async def test_calibration_compute_returns_the_profile(hass: HomeAssistant, tmp_path) -> None:
-    """The whole answer: the two solved values, the residuals and the YAML to paste.
+async def test_calibration_compute_returns_the_closing_roll(hass: HomeAssistant, tmp_path) -> None:
+    """One measurement, one answer: the closing roll and the YAML to paste.
 
     85 cm after the 8.5 s closing run of a 195 cm shutter with a 4.7 s slat phase is a
     roll of 1.69 - and the 8.5 s are re-derived from the cover's own configuration, the
     same way `cover_calibration_run` derived them, so the user carries nothing but the
-    tape measure between the two calls.
+    tape measure between the two calls.  `opening_roll` is absent, because no opening
+    run was measured; `roll` is the closing one, which is the only one there is.
     """
     async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
         response = await _call(
             hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85, slat_time=4.7
         )
         result = response[ENTITY]
-        assert result["roll"] == pytest.approx(1.69, abs=0.02)
+        assert result["closing_roll"] == pytest.approx(1.69, abs=0.02)
+        assert "opening_roll" not in result
+        assert result["roll"] == result["closing_roll"]
         assert result["slat_time"] == 4.7
         assert result["opening_time"] == 22.3 and result["closing_time"] == 21.7
         assert result["height"] == 195.0
         # The run lengths the equations were inverted against, echoed back.
         assert result["closed_run_seconds"] == 8.5
         assert result["opened_run_seconds"] == 13.5
-        # Solved, so the descent residual is zero; the ascent was not measured.
-        assert result["residual_cm"] == {"closed_half_cm": 0.0}
         assert "cover_profiles:" in result["yaml"]
         assert "  hallway_shutter:" in result["yaml"]
         assert f"roll: {result['roll']}" in result["yaml"]
 
 
-async def test_calibration_compute_uses_both_measurements_when_given(hass: HomeAssistant, tmp_path) -> None:
-    """With both halves measured the slat time is solved for instead of assumed.
+async def test_calibration_compute_answers_two_rolls_for_the_real_shutter(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The 85 / 80 pair, end to end: two rolls and a snippet that carries both.
 
-    The measurements below are what a shutter with roll 2.4 and a 2 s slat phase would
-    produce, which is neither the configured roll (1.69) nor the configured slat time
-    (4.7): the answer has to come from the numbers, not from the configuration.
+    This is the acceptance case of the amendment.  The same pair used to be refused as
+    "not one shutter", because one roll and an unknown slat time cannot produce two
+    different heights; read as one roll per direction it is an ordinary measurement of
+    a motor that is not equally loaded up and down.
     """
-    closed = cover_module.calibration_descent_cm(2.4, 2.0, HEIGHT, CLOSING, RUN_DOWN)
-    opened = cover_module.calibration_ascent_cm(2.4, 2.0, HEIGHT, OPENING, RUN_UP)
     async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
         result = (
             await _call(
                 hass,
                 SERVICE_COVER_CALIBRATION_COMPUTE,
                 height=195,
-                closed_half_cm=closed,
-                opened_half_cm=opened,
+                closed_half_cm=85,
+                opened_half_cm=80,
             )
         )[ENTITY]
-        assert result["roll"] == pytest.approx(2.4, abs=0.02)
-        assert result["slat_time"] == pytest.approx(2.0, abs=0.1)
-        assert set(result["residual_cm"]) == {"closed_half_cm", "opened_half_cm"}
-        assert abs(result["residual_cm"]["opened_half_cm"]) <= 0.5
+        assert result["closing_roll"] == pytest.approx(1.69, abs=0.02)
+        assert 2.0 <= result["opening_roll"] <= 2.2
+        # `roll` is the mean, for a user who wants one number and can live with it.
+        assert result["roll"] == pytest.approx(
+            (result["closing_roll"] + result["opening_roll"]) / 2, abs=0.01
+        )
+        # The two are far apart, so the snippet keeps them apart.
+        assert f"opening_roll: {result['opening_roll']}" in result["yaml"]
+        assert f"closing_roll: {result['closing_roll']}" in result["yaml"]
+        assert "\n    roll:" not in result["yaml"]
+        # The slat time was not given, so the cover's own configured value was used.
+        assert result["slat_time"] == 4.7
 
 
 async def test_calibration_compute_accepts_the_measured_run_lengths(hass: HomeAssistant, tmp_path) -> None:
@@ -414,7 +458,7 @@ async def test_calibration_compute_accepts_the_measured_run_lengths(hass: HomeAs
                 opened_run_seconds=13.5,
             )
         )[ENTITY]
-        assert stated["roll"] == pytest.approx(1.69, abs=0.02)
+        assert stated["closing_roll"] == pytest.approx(1.69, abs=0.02)
         # A longer run reaching the same height means a slower, i.e. straighter, tube.
         longer = (
             await _call(
@@ -427,24 +471,35 @@ async def test_calibration_compute_accepts_the_measured_run_lengths(hass: HomeAs
             )
         )[ENTITY]
         assert longer["closed_run_seconds"] == 9.5
-        assert longer["roll"] < stated["roll"]
+        assert longer["closing_roll"] < stated["closing_roll"]
 
 
 async def test_calibration_compute_falls_back_to_the_configured_slat_time(
     hass: HomeAssistant, tmp_path
 ) -> None:
-    """Without the second measurement there is nothing to solve the slat time from.
+    """`slat_time` is never solved for: given it is trusted, otherwise it is read.
 
-    Mutation caught: solving for it anyway from the descent alone, where it trades off
-    against the roll and any answer fits.
+    Mutation caught: solving for it from the descent, where it trades off against the
+    roll and any answer fits.
     """
     async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
-        result = (await _call(hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85))[ENTITY]
-        assert result["slat_time"] == 4.7
+        configured = (await _call(hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85))[
+            ENTITY
+        ]
+        assert configured["slat_time"] == 4.7
+        given = (
+            await _call(
+                hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85, slat_time=2.0
+            )
+        )[ENTITY]
+        assert given["slat_time"] == 2.0
+        # A shorter slat phase means a longer curtain run, so the same 8.5 s cover less
+        # of it: the bar ends higher for the same roll, and the solved roll is bigger.
+        assert given["closing_roll"] > configured["closing_roll"]
 
 
 async def test_calibration_compute_rejects_impossible_measurements(hass: HomeAssistant, tmp_path) -> None:
-    """A bar above the travel, or one no shutter could reach, is a measuring mistake."""
+    """A bar above the travel, or one no roll could reach, is a measuring mistake."""
     async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
         with pytest.raises(ServiceValidationError, match="above the curtain travel"):
             await _call(hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=200)
@@ -452,10 +507,9 @@ async def test_calibration_compute_rejects_impossible_measurements(hass: HomeAss
             await _call(
                 hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85, opened_half_cm=300
             )
-        with pytest.raises(ServiceValidationError, match="no shutter matches this measurement"):
+        with pytest.raises(ServiceValidationError, match="no roll matches closed_half_cm"):
             await _call(hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=150)
-        # The real pair measured on this shutter: 5 cm apart, which one shutter cannot do.
-        with pytest.raises(ServiceValidationError, match="do not describe one shutter"):
+        with pytest.raises(ServiceValidationError, match="no roll matches opened_half_cm"):
             await _call(
-                hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85, opened_half_cm=80
+                hass, SERVICE_COVER_CALIBRATION_COMPUTE, height=195, closed_half_cm=85, opened_half_cm=20
             )

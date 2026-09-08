@@ -297,7 +297,7 @@
     },
     "cover_calibration_compute": {
       "name": "Calibra tapparella (calcolo)",
-      "description": "Trasforma le altezze misurate dopo cover_calibration_run nei valori di roll e slat_time di questa tapparella e restituisce un blocco cover_profiles pronto da incollare in myhome.yaml.",
+      "description": "Trasforma le altezze misurate dopo cover_calibration_run nel roll di questa tapparella - uno per direzione se sono state misurate entrambe le corse - e restituisce un blocco cover_profiles pronto da incollare in myhome.yaml.",
       "fields": {
         "height": {
           "name": "Corsa del telo",
@@ -309,11 +309,11 @@
         },
         "opened_half_cm": {
           "name": "Altezza dopo la mezza apertura",
-          "description": "La stessa misura dopo la direzione 'open'. Facoltativa: senza di essa viene calcolato solo il roll, non lo slat_time."
+          "description": "La stessa misura dopo la direzione 'open'. Facoltativa: è quella che fornisce l'opening_roll separato; senza di essa viene calcolato solo il roll in chiusura."
         },
         "slat_time": {
           "name": "Tempo lamelle",
-          "description": "Secondi di corsa delle sole lamelle, se già noti. Se indicati qui vengono usati così come sono e non ricalcolati."
+          "description": "Secondi di corsa delle sole lamelle. È un dato di ingresso, mai un risultato: se indicati qui vengono usati così come sono, altrimenti vale il valore configurato sulla tapparella."
         },
         "closed_run_seconds": {
           "name": "Durata della corsa in chiusura",

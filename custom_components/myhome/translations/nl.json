@@ -297,7 +297,7 @@
     },
     "cover_calibration_compute": {
       "name": "Rolluik kalibreren (berekenen)",
-      "description": "Zet de hoogtes die na cover_calibration_run gemeten zijn om in de roll en slat_time van dit rolluik en geeft een cover_profiles-blok terug dat zo in myhome.yaml geplakt kan worden.",
+      "description": "Zet de hoogtes die na cover_calibration_run gemeten zijn om in de roll van dit rolluik - een per richting als beide ritten gemeten zijn - en geeft een cover_profiles-blok terug dat zo in myhome.yaml geplakt kan worden.",
       "fields": {
         "height": {
           "name": "Loopafstand van het doek",
@@ -309,11 +309,11 @@
         },
         "opened_half_cm": {
           "name": "Hoogte na de halve opening",
-          "description": "Dezelfde meting na richting 'open'. Optioneel: zonder deze meting wordt alleen de roll berekend, niet de slat_time."
+          "description": "Dezelfde meting na richting 'open'. Optioneel: deze meting levert de aparte opening_roll op; zonder haar wordt alleen de roll bij het sluiten berekend."
         },
         "slat_time": {
           "name": "Lamellentijd",
-          "description": "Seconden looptijd van alleen de lamellen, als die al bekend zijn. Hier opgegeven worden ze zo overgenomen en niet berekend."
+          "description": "Seconden looptijd van alleen de lamellen. Het is een invoerwaarde, nooit een uitkomst: hier opgegeven wordt ze zo overgenomen, anders geldt de waarde die op het rolluik is ingesteld."
         },
         "closed_run_seconds": {
           "name": "Duur van de sluitrit",

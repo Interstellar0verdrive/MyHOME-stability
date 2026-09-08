@@ -297,7 +297,7 @@
     },
     "cover_calibration_compute": {
       "name": "Calibrer le volet (calcul)",
-      "description": "Transforme les hauteurs mesurées après cover_calibration_run en roll et slat_time de ce volet et renvoie un bloc cover_profiles prêt à coller dans myhome.yaml.",
+      "description": "Transforme les hauteurs mesurées après cover_calibration_run en roll de ce volet - un par direction lorsque les deux courses ont été mesurées - et renvoie un bloc cover_profiles prêt à coller dans myhome.yaml.",
       "fields": {
         "height": {
           "name": "Course du tablier",
@@ -309,11 +309,11 @@
         },
         "opened_half_cm": {
           "name": "Hauteur après la demi-ouverture",
-          "description": "La même mesure après la direction « open ». Facultative : sans elle, seul le roll est calculé, pas le slat_time."
+          "description": "La même mesure après la direction « open ». Facultative : c'est elle qui donne l'opening_roll séparé ; sans elle, seul le roll de fermeture est calculé."
         },
         "slat_time": {
           "name": "Temps des lames",
-          "description": "Secondes de course des seules lames, lorsqu'elles sont déjà connues. Indiquées ici, elles sont reprises telles quelles et non recalculées."
+          "description": "Secondes de course des seules lames. C'est une donnée d'entrée, jamais un résultat : indiquées ici, elles sont reprises telles quelles, sinon la valeur configurée sur le volet est utilisée."
         },
         "closed_run_seconds": {
           "name": "Durée de la course de fermeture",

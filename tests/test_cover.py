@@ -125,6 +125,20 @@ gateway:
       roll: 1.7
 """
 
+# A shutter that is not equally loaded in the two directions (0.4.2 amendment): the
+# curtain phase is 30 s each way, but the tube behaves differently up and down.
+DIRECTIONAL_ROLL_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_directional:
+      where: '90'
+      name: Cover Directional
+      shutter_run: 30
+      closing_roll: 1.7
+      opening_roll: 1.0
+"""
+
 # A slat phase that is *timed* but not exposed: `tilt` is left at its default (false).
 NO_TILT_YAML = f"""
 gateway:
@@ -163,6 +177,7 @@ ASYM_ENTITY = "cover.cover_asymmetric"
 ROLL_ENTITY = "cover.cover_roll"
 NO_TILT_ENTITY = "cover.cover_hidden_slats"
 PROFILE_ENTITY = "cover.cover_profiled"
+DIRECTIONAL_ENTITY = "cover.cover_directional"
 
 
 def _closed(entity_id: str = SLAT_ENTITY) -> State:
@@ -703,11 +718,21 @@ class _Model:
     the pre-0.4.2 formulas over a grid.
     """
 
-    def __init__(self, opening: float, closing: float, slat: float, roll: float) -> None:
+    def __init__(
+        self,
+        opening: float,
+        closing: float,
+        slat: float,
+        roll: float,
+        opening_roll: float | None = None,
+        closing_roll: float | None = None,
+    ) -> None:
         self._opening_time = opening
         self._closing_time = closing
         self._slat_time = slat
         self._roll = roll
+        self._opening_roll = roll if opening_roll is None else opening_roll
+        self._closing_roll = roll if closing_roll is None else closing_roll
         self._curtain_up = max(cover_module.MIN_CURTAIN_TIME, opening - slat)
         self._curtain_down = max(cover_module.MIN_CURTAIN_TIME, closing - slat)
         self._two_phase = slat > 0
@@ -826,6 +851,77 @@ def test_roll_1_7_matches_the_measured_shutter() -> None:
     # ... and the trip back costs exactly what the trip out did.
     assert model._travel_time(cover_module.CLOSING, 100, 100, 44, 100) == pytest.approx(10.0, abs=0.1)
     assert model._travel_time(cover_module.OPENING, 44, 100, 100, 100) == pytest.approx(10.0, abs=0.1)
+
+
+def test_a_roll_that_never_came_from_the_validator_is_still_usable() -> None:
+    """`_clamped_roll` is the entity's own guard, not a second copy of the schema.
+
+    Contract A keeps the three roll keys inside [1, 5], but `MyHOMECover` is also built
+    by hand, and a roll below 1 does not merely shift a position - it makes `_roll_x`
+    answer outside [0, 100] and every estimate meaningless.
+
+    Mutation caught: dropping the fallback, which turns an unwritten directional key
+    into a roll of 0.
+    """
+    assert cover_module._clamped_roll(None, 1.7) == 1.7
+    assert cover_module._clamped_roll(0, 1.7) == 1.7
+    assert cover_module._clamped_roll(0.2, 1.7) == cover_module.MIN_ROLL
+    assert cover_module._clamped_roll(9.0, 1.7) == cover_module.MAX_ROLL
+    assert cover_module._clamped_roll(2.5, 1.7) == 2.5
+
+
+def test_a_directional_roll_moves_the_two_ways_differently() -> None:
+    """One tube, two rolls: the descent uses `closing_roll`, the ascent `opening_roll`.
+
+    The reference shutter really does behave like this (1.69 down against 2.12 up):
+    the motor fights gravity one way and is helped by it the other, and a single
+    coefficient cannot describe both runs. With a curved descent (k = 1.7) and a linear
+    ascent (k = 1), a third of the run down leaves the curtain at 61 % and a third of
+    the run up at 33 % - the plain linear answer.
+
+    Mutation caught: using one roll for both directions, which makes the two numbers
+    equal again.
+    """
+    model = _Model(opening=30, closing=30, slat=0.0, roll=1.7, opening_roll=1.0, closing_roll=1.7)
+    assert model._travel(cover_module.CLOSING, 100, 100, 10.0)[0] == 61
+    assert model._travel(cover_module.OPENING, 0, 100, 10.0)[0] == 33
+    # `_travel_time` is the inverse of the same two curves, each on its own axis.
+    assert model._travel_time(cover_module.CLOSING, 100, 100, 61, 100) == pytest.approx(10.0, abs=0.1)
+    assert model._travel_time(cover_module.OPENING, 0, 0, 33, 100) == pytest.approx(10.0, abs=0.1)
+    # The way back is NOT the way out any more: that is the whole point of two rolls.
+    # The 39 % the curtain fell in 10 s costs 11.7 s to climb back on a linear ascent.
+    assert model._travel_time(cover_module.OPENING, 61, 100, 100, 100) == pytest.approx(11.7, abs=0.1)
+
+
+async def test_a_directional_roll_cover_publishes_and_uses_both(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two rolls, two attributes, and an ascent timed with the upward one.
+
+    Half way up on this cover is the linear 15 s (`opening_roll: 1`), not the 13.1 s
+    the downward roll of 1.7 would have given. `Roll` is not published at all: a single
+    number would have to be one of the two, and reading it as "the" roll of the shutter
+    is exactly the mistake the amendment exists to prevent.
+
+    Mutation caught: `set_cover_position` taking `closing_roll` whatever the direction.
+    """
+    mock_restore_cache(
+        hass, (State(DIRECTIONAL_ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),)
+    )
+    async with setup_myhome(hass, tmp_path, DIRECTIONAL_ROLL_YAML) as (_entry, commands):
+        state = hass.states.get(DIRECTIONAL_ENTITY)
+        assert state.attributes["Opening roll"] == 1.0
+        assert state.attributes["Closing roll"] == 1.7
+        assert "Roll" not in state.attributes
+
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: DIRECTIONAL_ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+        await _advance(hass, freezer, 14.0)
+        assert commands.sent_frames == ["*2*1*90##"]
+        await _advance(hass, freezer, 1.5)  # 15.5 s > 15 s
+        assert commands.sent_frames == ["*2*1*90##", "*2*0*90##"]
+        assert hass.states.get(DIRECTIONAL_ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
 
 
 async def test_set_position_on_a_roll_cover_stops_on_the_roll_time(

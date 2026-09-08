@@ -273,6 +273,40 @@ def test_cover_roll_defaults_to_the_device_class():
         check(gw(cover={"c": {"where": "81", "name": "C", "roll": 5.5}}))
 
 
+def test_the_directional_rolls_default_to_the_common_one():
+    """``opening_roll`` / ``closing_roll`` mirror ``opening_time`` / ``closing_time``.
+
+    A file that writes neither describes a shutter that behaves the same both ways -
+    every 0.4.1 configuration - so both directions get the common ``roll``; a file that
+    writes one gets that one and keeps the common value for the other.
+
+    Mutation caught: resolving only one of the two, or letting a written ``roll``
+    override a written directional key.
+    """
+    out = check(
+        gw(
+            cover={
+                "plain": {"where": "81", "name": "P"},
+                "common": {"where": "82", "name": "C", "roll": 2.0},
+                "split": {"where": "83", "name": "S", "roll": 2.0, "opening_roll": 3.0},
+                "both": {"where": "84", "name": "B", "opening_roll": 2.1, "closing_roll": 1.69},
+            }
+        )
+    )
+    plat = platforms(out)["cover"]
+    assert (plat["2-81"]["opening_roll"], plat["2-81"]["closing_roll"]) == (1.6, 1.6)
+    assert (plat["2-82"]["opening_roll"], plat["2-82"]["closing_roll"]) == (2.0, 2.0)
+    assert (plat["2-83"]["opening_roll"], plat["2-83"]["closing_roll"]) == (3.0, 2.0)
+    # Written on their own they say nothing about ``roll``, which keeps its default.
+    assert plat["2-84"]["roll"] == 1.6
+    assert (plat["2-84"]["opening_roll"], plat["2-84"]["closing_roll"]) == (2.1, 1.69)
+    # The physical range is the same one, on all three keys.
+    with pytest.raises(Invalid, match="at most 5"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "opening_roll": 5.5}}))
+    with pytest.raises(Invalid, match="at least 1"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "closing_roll": 0.5}}))
+
+
 def test_cover_tilt_defaults_to_false_and_height_is_kept():
     """``tilt`` is opt-in from 0.4.2; ``height`` is harmless without a profile."""
     plat = platforms(check(gw(cover={"c": {"where": "81", "name": "C", "slat_time": 3, "height": 195}})))
@@ -372,6 +406,102 @@ def test_a_key_written_on_the_cover_beats_the_profile():
     assert cover["opening_time"] == pytest.approx(3.9230769 + 17.2 * 0.8053995, abs=1e-6)
 
 
+# The same shutter measured in both directions, which is what the two calibration runs
+# of 0.4.2 produce (1.69 down, 2.12 up on the reference window).
+SPLIT_PROFILE = {
+    "reference_height": 195,
+    "opening_time": 22.3,
+    "closing_time": 21.7,
+    "slat_time": 5.1,
+    "roll": 1.6,
+    "opening_roll": 2.12,
+    "closing_roll": 1.69,
+}
+
+
+def test_a_profile_carries_a_roll_per_direction():
+    """A profile without directional rolls describes a symmetric shutter, and says so.
+
+    Mutation caught: leaving the two keys unresolved in the profile, which makes them
+    fall back to the *cover's* default (1.6) instead of the profile's own roll.
+    """
+    out = check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE), "split": dict(SPLIT_PROFILE)},
+            cover={
+                "s": {"where": "81", "name": "S", "profile": "tall"},
+                "d": {"where": "82", "name": "D", "profile": "split"},
+                "w": {"where": "83", "name": "W", "profile": "split", "closing_roll": 1.2},
+            },
+        )
+    )
+    plat = platforms(out)["cover"]
+    # TALL_PROFILE writes only `roll`, so both directions are that roll.
+    assert (plat["2-81"]["opening_roll"], plat["2-81"]["closing_roll"]) == (1.6, 1.6)
+    assert (plat["2-82"]["opening_roll"], plat["2-82"]["closing_roll"]) == (2.12, 1.69)
+    # ... and the cover still wins, per key.
+    assert (plat["2-83"]["opening_roll"], plat["2-83"]["closing_roll"]) == (2.12, 1.2)
+
+
+def test_the_directional_rolls_are_scaled_to_the_cover_height():
+    """The section-3 growth applied to each roll, with the numbers worked out by hand.
+
+    H/H_ref = 150/195 = 0.7692308.
+    closing_roll = sqrt(1 + (1.69**2 - 1) * 0.7692308) = sqrt(2.4277692) = 1.5581300;
+    opening_roll = sqrt(1 + (2.12**2 - 1) * 0.7692308) = sqrt(3.688)     = 1.9204166;
+    roll         = sqrt(1 + (1.60**2 - 1) * 0.7692308) = sqrt(2.2)       = 1.4832397.
+
+    The curtain time is scaled by the **closing** growth alone -
+    scale_c = (1.5581300 - 1) / (1.69 - 1) = 0.8088841 - because it measures how much
+    fabric the tube has to wind, which is one length of curtain whichever way the motor
+    turns; slat = 5.1 * 0.7692308 = 3.9230769, opening = slat + 17.2 * scale_c,
+    closing = slat + 16.6 * scale_c.
+
+    Mutation caught: growing the directional rolls from the common one, or taking the
+    curtain scale from the opening roll (which would give two different curtains).
+    """
+    out = check(
+        gw(
+            cover_profiles={"split": dict(SPLIT_PROFILE)},
+            cover={"c": {"where": "81", "name": "C", "profile": "split", "height": 150}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["closing_roll"] == pytest.approx(1.5581300, abs=1e-6)
+    assert cover["opening_roll"] == pytest.approx(1.9204166, abs=1e-6)
+    assert cover["roll"] == pytest.approx(1.4832397, abs=1e-6)
+    assert cover["slat_time"] == pytest.approx(3.9230769, abs=1e-6)
+    assert cover["opening_time"] == pytest.approx(3.9230769 + 17.2 * 0.8088841, abs=1e-6)
+    assert cover["closing_time"] == pytest.approx(3.9230769 + 16.6 * 0.8088841, abs=1e-6)
+
+
+def test_a_linear_closing_roll_scales_the_curtain_by_the_height():
+    """``closing_roll: 1`` is the divide-by-zero case of the curtain scale, on its own.
+
+    The profile's common ``roll`` is 1.6 and only the *closing* direction is linear, so
+    the fallback has to be picked from the key the scale really uses.
+    """
+    out = check(
+        gw(
+            cover_profiles={
+                "odd": {
+                    "reference_height": 200,
+                    "opening_time": 20,
+                    "slat_time": 4,
+                    "roll": 1.6,
+                    "closing_roll": 1,
+                }
+            },
+            cover={"c": {"where": "81", "name": "C", "profile": "odd", "height": 100}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["closing_roll"] == 1.0
+    assert cover["slat_time"] == 2.0
+    # 2 s of slats + half of the 16 s curtain run, exactly as for a linear profile.
+    assert cover["opening_time"] == pytest.approx(10.0)
+
+
 def test_cover_profile_schema_errors():
     """Every way a ``cover_profiles:`` block can be wrong, with a usable path."""
     with pytest.raises(Invalid) as err:
@@ -385,6 +515,8 @@ def test_cover_profile_schema_errors():
 
     with pytest.raises(Invalid, match="at most 5"):
         check(gw(cover_profiles={"tall": {"reference_height": 195, "opening_time": 20, "roll": 9}}))
+    with pytest.raises(Invalid, match="at most 5"):
+        check(gw(cover_profiles={"tall": {"reference_height": 195, "opening_time": 20, "opening_roll": 9}}))
     with pytest.raises(Invalid, match="higher than 0"):
         check(gw(cover_profiles={"tall": {"reference_height": 0, "opening_time": 20}}))
     with pytest.raises(Invalid, match="must be a mapping"):
@@ -1742,6 +1874,7 @@ _ENGINE_CASES = [
             "cover": {
                 "a": {"where": "81", "name": "A", "profile": "tall", "height": 150},
                 "b": {"where": "82", "name": "B", "roll": 2, "tilt": True, "slat_time": 3},
+                "c": {"where": "83", "name": "C", "opening_roll": 2.12, "closing_roll": 1.69},
             },
         }
     },
@@ -1900,6 +2033,12 @@ def test_the_advanced_cover_warning_names_only_the_keys_the_user_wrote(
     check(_cover(advanced=True, opening_time=20, roll=2, tilt=True))
     assert "opening_time is still read, but only to bound the safety timer" in caplog.text
     assert "roll and tilt do nothing here" in caplog.text
+
+    # ... and the amendment's two directional rolls are on the same side of it.
+    caplog.clear()
+    check(_cover(advanced=True, opening_roll=2, closing_roll=1.5))
+    assert "opening_roll and closing_roll do nothing here" in caplog.text
+    assert "still read" not in caplog.text
 
 
 def test_the_advanced_warning_names_shutter_run_first_when_it_still_bounds_the_timer(

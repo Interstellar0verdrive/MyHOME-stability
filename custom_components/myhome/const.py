@@ -34,7 +34,8 @@ SERVICE_START_DISCOVERY = "start_discovery"
 SERVICE_STOP_DISCOVERY = "stop_discovery"
 SERVICE_START_SENDING_INSTANT_POWER = "start_sending_instant_power"
 # Cover calibration (0.4.2): one service drives the shutter to a half run so the user
-# can measure it with a tape, the other turns that measurement into `roll` / `slat_time`.
+# can measure it with a tape, the other turns that measurement into the directional
+# rolls (`closing_roll` from the downward run, `opening_roll` from the upward one).
 SERVICE_COVER_CALIBRATION_RUN = "cover_calibration_run"
 SERVICE_COVER_CALIBRATION_COMPUTE = "cover_calibration_compute"
 
@@ -100,6 +101,12 @@ CONF_CLOSING_TIME = "closing_time"
 # when it is up (big roll) and slowest when it is down: ``roll`` is r_max / r_min, the
 # single number that describes that speed ratio.  ``roll: 1`` is the old linear model.
 CONF_ROLL = "roll"
+# Per-direction overrides of ``roll``, mirroring ``opening_time`` / ``closing_time``
+# (0.4.2 amendment).  A real shutter is not equally loaded up and down - the motor
+# fights gravity one way and is helped by it the other - so one coefficient cannot
+# describe both runs; each defaults to ``roll`` when it is not written.
+CONF_OPENING_ROLL = "opening_roll"
+CONF_CLOSING_ROLL = "closing_roll"
 # Whether the slat phase is *exposed* as a tilt entity feature.  The two-phase timing
 # runs either way (a run from fully closed still spends ``slat_time`` on the slats);
 # ``tilt: false`` (the default from 0.4.2) only hides controls most shutters cannot

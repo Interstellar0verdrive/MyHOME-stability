@@ -297,7 +297,7 @@
     },
     "cover_calibration_compute": {
       "name": "Calibrate cover (compute)",
-      "description": "Turns the heights measured after cover_calibration_run into the roll and slat_time of this cover, and returns a cover_profiles snippet ready to paste into myhome.yaml.",
+      "description": "Turns the heights measured after cover_calibration_run into the roll of this cover - one per direction when both runs were measured - and returns a cover_profiles snippet ready to paste into myhome.yaml.",
       "fields": {
         "height": {
           "name": "Curtain travel",
@@ -309,11 +309,11 @@
         },
         "opened_half_cm": {
           "name": "Height after the opening half run",
-          "description": "The same measurement after direction 'open'. Optional: without it the slat time is not solved for, only the roll."
+          "description": "The same measurement after direction 'open'. Optional: it is what gives the separate opening_roll, and without it only the closing roll is worked out."
         },
         "slat_time": {
           "name": "Slat time",
-          "description": "Seconds of slat-only travel, when it is already known. Given here it is trusted and not solved for."
+          "description": "Seconds of slat-only travel. It is an input, never an answer: given here it is used as it stands, otherwise the value configured on the cover is."
         },
         "closed_run_seconds": {
           "name": "Closing run length",

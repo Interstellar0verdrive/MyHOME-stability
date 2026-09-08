@@ -34,7 +34,10 @@ Roll model (0.4.2).  The curtain phase is not linear either: the curtain winds o
 tube, the motor turns at a constant speed, so the curtain moves fastest when it is up
 (the roll is fat) and slowest when it is down.  `roll` = r_max / r_min describes that
 in one number, and `_roll_tau` / `_roll_x` below are the whole of it; `roll: 1` gives
-back the old linear model exactly, term for term.
+back the old linear model exactly, term for term.  A measured shutter turns out not to
+behave the same way up and down (the motor is not equally loaded), so from 0.4.2 the
+curtain phase carries one roll per direction: `closing_roll` for descents,
+`opening_roll` for ascents, both defaulting to the common `roll`.
 
 Advanced actuators report a real position through dimension 10; OWNd maps
 `position == 0` to *closed* (`OWNAutomationEvent`), which matches the HA convention,
@@ -44,6 +47,7 @@ so their value is used verbatim.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from math import sqrt
 from typing import Any
@@ -85,6 +89,7 @@ from .const import (
     CALIBRATION_DIRECTIONS,
     CONF_ADVANCED_SHUTTER,
     CONF_BUS_INTERFACE,
+    CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
@@ -94,6 +99,7 @@ from .const import (
     CONF_ICON,
     CONF_INVERTED,
     CONF_MANUFACTURER,
+    CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
     CONF_PROFILE,
@@ -241,37 +247,48 @@ def _roll_x(roll: float, tau: float) -> float:
     return (k * k - (k - tau * (k - 1)) ** 2) / (k * k - 1)
 
 
+def _clamped_roll(roll: float | None, fallback: float) -> float:
+    """A roll inside the physical range, falling back when the key was not written.
+
+    Contract A already guarantees both, but the entity is also constructible by hand
+    (tests, a future config flow), and a roll below 1 makes `_roll_x` return a
+    position outside [0, 100] rather than merely a wrong one.
+    """
+    if not roll:
+        return fallback
+    return min(MAX_ROLL, max(MIN_ROLL, float(roll)))
+
+
 # ------------------------------------------------------------------ calibration
-# Two service calls turn a tape measure into a `roll` / `slat_time` pair:
+# Two service calls turn a tape measure into the pair of directional rolls:
 # `cover_calibration_run` reproduces, on the real shutter, exactly the motor time a
 # `set_cover_position: 50` would spend with the cover's current configuration and the
 # old linear model, the user measures how far the bar ended from the floor, and
-# `cover_calibration_compute` inverts the model to find the numbers that predict that
+# `cover_calibration_compute` inverts the model to find the roll that predicts that
 # measurement.  The run has to be a movement the *configuration* defines, not an
 # arbitrary one: the compute step re-derives the same seconds from the same YAML, so
 # the two services always talk about the same movement without passing anything but
 # the measurement between them.
+#
+# `slat_time` is never solved for (0.4.2 amendment).  Both runs are a position-50, so
+# they stop at the same point of the curtain's time axis whatever the slat time is, and
+# the pair (roll, slat_time) is not identifiable from them: any slat time predicts the
+# same two heights.  What the two measurements *do* carry is the up/down asymmetry of a
+# real motor, so each run now solves its own direction's roll - two independent
+# one-dimensional bisections, and one number per equation.
 #
 # How long the shutter is left to reach the far end before the measured run starts.
 # The configured run is only an estimate, and an end stop reached a second early costs
 # nothing, while starting the measured run before the curtain is really at the top
 # invalidates the whole measurement.
 CALIBRATION_SETTLE_SEC = 3.0
-# Grid of the two-dimensional solve: a coarse sweep over `slat_time` (each value giving
-# one `roll` by bisection), then a finer one around the best of them.  0.05 s is well
-# under what anybody can measure and 0.005 s is below the resolution of the answer.
-CALIBRATION_SLAT_STEP_SEC = 0.05
-CALIBRATION_SLAT_FINE_STEP_SEC = 0.005
 # 60 halvings take a [1, 5] bracket below floating point resolution; the loop is over
 # in microseconds, so there is nothing to gain by stopping earlier.
 CALIBRATION_BISECTION_STEPS = 60
-# How far the solved shutter may still miss the *ascent* measurement before the answer
-# is refused.  The two half runs stop the bar at nearly the same height (see
-# `calibration_ascent_cm`), so the ascent carries very little information about the
-# slat time: when it disagrees with the descent by more than a tape measure's error,
-# the best fit is a boundary value of `roll` rather than a measurement, and handing it
-# to the user would be worse than saying nothing.
-CALIBRATION_MAX_ASCENT_RESIDUAL_CM = 2.0
+# Below this difference the two directional rolls are written back as one `roll:` key.
+# 0.1 is well inside what a tape measure can distinguish (on the reference shutter it is
+# about 2 cm of bar), and two keys that say the same thing are two keys to keep in step.
+CALIBRATION_SAME_ROLL_TOLERANCE = 0.1
 # Name of the profile in the generated snippet when the entity has no object id yet.
 CALIBRATION_FALLBACK_PROFILE = "standard"
 
@@ -347,33 +364,31 @@ def calibration_ascent_cm(
     of a descent: a bar that is `tau_up` of the curtain time above the floor sits where
     a descent from the top would be after `1 - tau_up`.
 
-    This is where the slat time enters differently from the descent - which is the
-    whole reason a second measurement can say anything about it - but only weakly: with
-    the run seconds the service itself computes, both halves stop the bar within about
-    a centimetre of each other whatever the slat time is.
+    The roll here is the *opening* one, and the slat time is a known input rather than
+    an unknown: with the run seconds the service itself uses, this equation and the
+    descent one land on the same point of the curtain's time axis for every slat time,
+    so the only thing that can make the two measured heights differ is the roll.
     """
     curtain = max(MIN_CURTAIN_TIME, opening_time - slat)
     moving = max(0.0, run_seconds - slat)
     return height * (1.0 - _roll_x(roll, 1.0 - min(1.0, moving / curtain)))
 
 
-def _solve_roll(
-    slat: float, height: float, closing_time: float, run_seconds: float, target_cm: float
-) -> float | None:
-    """The roll that puts the bar `target_cm` off the floor, or None when there is none.
+def _bisect_roll(predict: Callable[[float], float], target_cm: float) -> float | None:
+    """The roll whose prediction is `target_cm`, or None when the range cannot reach it.
 
-    `calibration_descent_cm` decreases as the roll grows (a fatter roll at the top
-    means more curtain unwound in the same time), so a plain bisection converges and
-    the reachable band is simply the two ends of the roll range.
+    Both `calibration_descent_cm` and `calibration_ascent_cm` fall as the roll grows (a
+    fatter roll at the top means more curtain moved in the same time), so a plain
+    bisection converges and the reachable band is simply the two ends of the range.
     """
-    highest = calibration_descent_cm(MIN_ROLL, slat, height, closing_time, run_seconds)
-    lowest = calibration_descent_cm(MAX_ROLL, slat, height, closing_time, run_seconds)
+    highest = predict(MIN_ROLL)
+    lowest = predict(MAX_ROLL)
     if not lowest - 1e-9 <= target_cm <= highest + 1e-9:
         return None
     low, high = MIN_ROLL, MAX_ROLL
     for _ in range(CALIBRATION_BISECTION_STEPS):
         middle = (low + high) / 2
-        if calibration_descent_cm(middle, slat, height, closing_time, run_seconds) > target_cm:
+        if predict(middle) > target_cm:
             low = middle
         else:
             high = middle
@@ -381,43 +396,30 @@ def _solve_roll(
 
 
 def _unsolvable(
-    height: float,
-    closing_time: float,
+    field: str,
+    measured_cm: float,
     run_seconds: float,
-    closed_half_cm: float,
-    slowest_slat: float,
-    fastest_slat: float,
+    run_word: str,
+    time_key: str,
+    full_seconds: float,
+    start_word: str,
+    lowest_cm: float,
+    highest_cm: float,
 ) -> str:
-    """Why no shutter can have produced this measurement, and what to look at.
+    """Why no roll can have produced this measurement, and what to look at.
 
     The band is the whole of what the model can produce: the bar is highest with the
-    smallest roll and the shortest slat phase (the least curtain unwound), lowest with
-    the largest of both.  Quoting it is the only way the user can tell which of the
-    four numbers they gave is the wrong one.
+    smallest roll and lowest with the largest.  Quoting it is the only way the user can
+    tell which of the numbers they gave is the wrong one - the measurement, the height,
+    the run time or the end the run started from.
     """
     return (
-        f"no shutter matches this measurement: after {run_seconds:.1f} s of a "
-        f"{closing_time:.1f} s closing run started fully open, the bar can only be between "
-        f"{calibration_descent_cm(MAX_ROLL, fastest_slat, height, closing_time, run_seconds):.0f} cm and "
-        f"{calibration_descent_cm(MIN_ROLL, slowest_slat, height, closing_time, run_seconds):.0f} cm from the "
-        f"floor, and {closed_half_cm:.0f} cm was measured. Check that the height is the curtain "
-        f"travel and not the window, that the shutter really was fully open when the run started, "
-        f"and that closing_time is the real full run"
-    )
-
-
-def _disagreeing(predicted_cm: float, opened_half_cm: float) -> str:
-    """Why one shutter cannot have produced both measurements.
-
-    Reported instead of the best fit, which in this case is a `roll` pushed against the
-    end of its range by a couple of centimetres of disagreement rather than measured.
-    """
-    return (
-        f"the two measurements do not describe one shutter: the closing half run gives a shutter "
-        f"whose opening half run would leave the bar {predicted_cm:.0f} cm from the floor, and "
-        f"{opened_half_cm:.0f} cm was measured. Check that both runs really started from the far "
-        f"end, that opening_time and closing_time are the real full runs, or give the slat_time "
-        f"and drop opened_half_cm to solve the roll from the closing run alone"
+        f"no roll matches {field}={measured_cm:.0f} cm: after {run_seconds:.1f} s of a "
+        f"{full_seconds:.1f} s {run_word} run started fully {start_word}, the bar can only be "
+        f"between {lowest_cm:.0f} cm and {highest_cm:.0f} cm from the floor. Check that the "
+        f"height is the curtain travel and not the window, that the shutter really was fully "
+        f"{start_word} when the run started, and that {time_key} and slat_time are the real "
+        f"numbers of this cover"
     )
 
 
@@ -429,53 +431,86 @@ def solve_cover_calibration(
     *,
     closed_run_seconds: float,
     opened_run_seconds: float,
+    slat_time: float,
     opened_half_cm: float | None = None,
-    slat_time: float | None = None,
-) -> tuple[float, float]:
-    """Recover (roll, slat_time) from one or two half-run measurements.
+) -> tuple[float, float | None]:
+    """Recover (closing_roll, opening_roll) from one or two half-run measurements.
 
-    With a slat time already known (given, or the one configured on the cover) the
-    descent measurement alone fixes the roll, and the answer is a bisection.  With both
-    measurements and neither unknown known, the descent still gives one roll per
-    candidate slat time, so the search is one dimensional after all: sweep the slat
-    time, and keep the value whose *ascent* prediction is closest to what was measured.
+    Two independent one-dimensional problems, not one two-dimensional one: the closing
+    run measures how the tube behaves on the way down and the opening run how it
+    behaves on the way up, and neither says anything about the other.  The slat time is
+    an input in both (see the section comment: it is not identifiable from these two
+    runs, so it is taken from the stopwatch or from the configuration).
 
-    Raises ``ValueError`` with an explanation when no shutter fits the numbers.
+    Raises ``ValueError`` with an explanation when a measurement is outside everything
+    the roll range can produce.
     """
-    if slat_time is not None:
-        roll = _solve_roll(slat_time, height, closing_time, closed_run_seconds, closed_half_cm)
-        if roll is None:
-            raise ValueError(
-                _unsolvable(height, closing_time, closed_run_seconds, closed_half_cm, slat_time, slat_time)
-            )
-        return roll, slat_time
 
-    limit = max(0.0, min(opening_time, closing_time) - 1)
-    best: tuple[float, float, float] | None = None
-    for step, span in ((CALIBRATION_SLAT_STEP_SEC, None), (CALIBRATION_SLAT_FINE_STEP_SEC, CALIBRATION_SLAT_STEP_SEC)):
-        low = 0.0 if best is None or span is None else max(0.0, best[2] - span)
-        high = limit if best is None or span is None else min(limit, best[2] + span)
-        candidate = low
-        while candidate <= high + 1e-9:
-            roll = _solve_roll(candidate, height, closing_time, closed_run_seconds, closed_half_cm)
-            if roll is not None:
-                predicted = calibration_ascent_cm(roll, candidate, height, opening_time, opened_run_seconds)
-                residual = abs(predicted - (opened_half_cm or 0.0))
-                if best is None or residual < best[0]:
-                    best = (residual, roll, candidate)
-            candidate += step
-    if best is None:
-        raise ValueError(_unsolvable(height, closing_time, closed_run_seconds, closed_half_cm, 0.0, limit))
-    if best[0] > CALIBRATION_MAX_ASCENT_RESIDUAL_CM:
-        predicted = calibration_ascent_cm(best[1], best[2], height, opening_time, opened_run_seconds)
-        raise ValueError(_disagreeing(predicted, opened_half_cm or 0.0))
-    return best[1], best[2]
+    def descent(roll: float) -> float:
+        return calibration_descent_cm(roll, slat_time, height, closing_time, closed_run_seconds)
+
+    closing_roll = _bisect_roll(descent, closed_half_cm)
+    if closing_roll is None:
+        raise ValueError(
+            _unsolvable(
+                ATTR_CLOSED_HALF_CM,
+                closed_half_cm,
+                closed_run_seconds,
+                "closing",
+                CONF_CLOSING_TIME,
+                closing_time,
+                "open",
+                descent(MAX_ROLL),
+                descent(MIN_ROLL),
+            )
+        )
+    if opened_half_cm is None:
+        return closing_roll, None
+
+    def ascent(roll: float) -> float:
+        return calibration_ascent_cm(roll, slat_time, height, opening_time, opened_run_seconds)
+
+    opening_roll = _bisect_roll(ascent, opened_half_cm)
+    if opening_roll is None:
+        raise ValueError(
+            _unsolvable(
+                ATTR_OPENED_HALF_CM,
+                opened_half_cm,
+                opened_run_seconds,
+                "opening",
+                CONF_OPENING_TIME,
+                opening_time,
+                "closed",
+                ascent(MAX_ROLL),
+                ascent(MIN_ROLL),
+            )
+        )
+    return closing_roll, opening_roll
 
 
 def calibration_yaml(
-    name: str, height: float, opening_time: float, closing_time: float, slat_time: float, roll: float
+    name: str,
+    height: float,
+    opening_time: float,
+    closing_time: float,
+    slat_time: float,
+    closing_roll: float,
+    opening_roll: float | None = None,
 ) -> str:
-    """The snippet to paste into ``myhome.yaml``: the profile, then the two cover lines."""
+    """The snippet to paste into ``myhome.yaml``: the profile, then the two cover lines.
+
+    Two rolls that agree are written as the single ``roll:`` key they really are; two
+    that differ are written separately and ``roll:`` is left out entirely, because a
+    third number that neither run measured would only be one more thing to keep in step.
+    """
+    if opening_roll is None or abs(opening_roll - closing_roll) <= CALIBRATION_SAME_ROLL_TOLERANCE:
+        common = closing_roll if opening_roll is None else (closing_roll + opening_roll) / 2
+        rolls = f"    {CONF_ROLL}: {round(common, 2)}\n"
+    else:
+        rolls = (
+            f"    {CONF_OPENING_ROLL}: {round(opening_roll, 2)}\n"
+            f"    {CONF_CLOSING_ROLL}: {round(closing_roll, 2)}\n"
+        )
     return (
         "cover_profiles:\n"
         f"  {name}:\n"
@@ -483,8 +518,8 @@ def calibration_yaml(
         f"    {CONF_OPENING_TIME}: {round(opening_time, 1)}\n"
         f"    {CONF_CLOSING_TIME}: {round(closing_time, 1)}\n"
         f"    {CONF_SLAT_TIME}: {round(slat_time, 1)}\n"
-        f"    {CONF_ROLL}: {round(roll, 2)}\n"
-        "\n"
+        + rolls
+        + "\n"
         "# on the cover itself:\n"
         f"    {CONF_PROFILE}: {name}\n"
         f"    {CONF_HEIGHT}: {round(height, 1)}\n"
@@ -519,6 +554,8 @@ async def async_setup_entry(
             opening_time=cfg.get(CONF_OPENING_TIME),
             closing_time=cfg.get(CONF_CLOSING_TIME),
             roll=cfg.get(CONF_ROLL, DEFAULT_ROLL),
+            opening_roll=cfg.get(CONF_OPENING_ROLL),
+            closing_roll=cfg.get(CONF_CLOSING_ROLL),
             tilt=cfg.get(CONF_TILT, DEFAULT_TILT),
             height=cfg.get(CONF_HEIGHT),
             profile=cfg.get(CONF_PROFILE),
@@ -573,6 +610,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         opening_time: float | None = None,
         closing_time: float | None = None,
         roll: float = DEFAULT_ROLL,
+        opening_roll: float | None = None,
+        closing_roll: float | None = None,
         tilt: bool = DEFAULT_TILT,
         height: float | None = None,
         profile: str | None = None,
@@ -610,7 +649,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._closing_time = float(closing_time or self._shutter_run)
         self._slat_time = max(0.0, float(slat_time or 0.0))
         # Contract A clamps it to [1, 5]; a hand-built entity might not.
-        self._roll = min(MAX_ROLL, max(MIN_ROLL, float(roll or DEFAULT_ROLL)))
+        self._roll = _clamped_roll(roll, DEFAULT_ROLL)
+        # A real shutter is not equally loaded in the two directions (the reference one
+        # measures 1.6 down and 2.1 up), so the curtain phase carries one roll per
+        # direction; both default to the common value (0.4.2 amendment).
+        self._opening_roll = _clamped_roll(opening_roll, self._roll)
+        self._closing_roll = _clamped_roll(closing_roll, self._roll)
         self._height = None if height is None else float(height)
         self._profile = profile
         # Curtain-only part of each run (the validator keeps it >= 1 s).
@@ -651,7 +695,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._attr_extra_state_attributes["Closing time"] = self._closing_time
             if self._slat_time > 0:
                 self._attr_extra_state_attributes["Slat time"] = self._slat_time
-            self._attr_extra_state_attributes["Roll"] = self._roll
+            if self._opening_roll == self._closing_roll:
+                # One number describes both runs: publishing two identical ones would
+                # only invite the reader to look for a difference that is not there.
+                self._attr_extra_state_attributes["Roll"] = self._opening_roll
+            else:
+                self._attr_extra_state_attributes["Opening roll"] = self._opening_roll
+                self._attr_extra_state_attributes["Closing roll"] = self._closing_roll
             # These two say nothing about the movement, they say where the numbers
             # above came from - so they only appear when the file really has them.
             if self._height is not None:
@@ -774,23 +824,28 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # command.
         return 0, int(max(0, min(100, round(tilt))))
 
-    def _curtain_tau(self, position: float) -> float:
-        """Where `position` sits on the curtain's time axis (0 at the top, 1 on the floor)."""
-        return _roll_tau(self._roll, 1.0 - position / 100)
+    def _curtain_tau(self, position: float, roll: float) -> float:
+        """Where `position` sits on the curtain's time axis (0 at the top, 1 on the floor).
 
-    def _curtain_position(self, tau: float) -> float:
-        """The curtain position (0-100) reached at time fraction `tau` of a descent."""
-        return (1.0 - _roll_x(self._roll, tau)) * 100
+        The axis belongs to the *direction*: a descent and an ascent of the same shutter
+        have their own roll, so the same position is a different fraction of each run.
+        """
+        return _roll_tau(roll, 1.0 - position / 100)
+
+    def _curtain_position(self, tau: float, roll: float) -> float:
+        """The curtain position (0-100) reached at time fraction `tau` of that run."""
+        return (1.0 - _roll_x(roll, tau)) * 100
 
     def _travel(self, direction: str, position: int, tilt: int, elapsed: float) -> tuple[int, int]:
         """State reached `elapsed` seconds after leaving (`position`, `tilt`).
 
         The curtain part goes through the roll model: the run is converted to a
         position on the curtain's *time* axis, moved along it by the elapsed fraction
-        of the run, and converted back.  An ascent is the time reversal of a descent -
-        same tube, same speed at the same height - so both directions share the pair of
-        functions and only the sign differs.  The slat phase is unchanged: those
-        seconds turn the slats, they wind nothing on the tube, so they stay linear.
+        of the run, and converted back.  Each direction uses its own roll (0.4.2
+        amendment) and therefore its own time axis; within one run the conversion out
+        and back is the same function, so nothing drifts.  The slat phase is unchanged:
+        those seconds turn the slats, they wind nothing on the tube, so they stay
+        linear.
         """
         slat = self._slat_time
         if direction == OPENING:
@@ -800,13 +855,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 if elapsed <= slat_left:
                     return self._normalise(0, tilt + elapsed / slat * 100)
                 elapsed -= slat_left
-            tau = self._curtain_tau(position) - elapsed / self._curtain_up
-            return self._normalise(self._curtain_position(tau), 100)
+            roll = self._opening_roll
+            tau = self._curtain_tau(position, roll) - elapsed / self._curtain_up
+            return self._normalise(self._curtain_position(tau, roll), 100)
+        roll = self._closing_roll
         # Time still to run before the curtain touches the floor (tau = 1).
-        curtain_left = (1.0 - self._curtain_tau(position)) * self._curtain_down
+        curtain_left = (1.0 - self._curtain_tau(position, roll)) * self._curtain_down
         if elapsed < curtain_left:
-            tau = self._curtain_tau(position) + elapsed / self._curtain_down
-            return self._normalise(self._curtain_position(tau), 100)
+            tau = self._curtain_tau(position, roll) + elapsed / self._curtain_down
+            return self._normalise(self._curtain_position(tau, roll), 100)
         # The curtain is on the floor: the rest of the run closes the slats.
         elapsed -= curtain_left
         if slat <= 0:
@@ -825,8 +882,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """Seconds the motor must run to go from (`position`, `tilt`) to the target.
 
         The exact inverse of `_travel`: the curtain leg is the distance between the two
-        positions measured on the curtain's time axis (which is what the roll model
-        makes linear), the slat leg is unchanged.
+        positions measured on the curtain's time axis of *that direction* (which is what
+        the roll model makes linear), the slat leg is unchanged.
         """
         slat = self._slat_time
         if direction == OPENING:
@@ -835,9 +892,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 # Opening past the floor always ends with the slats fully open.
                 slat_target = 100 if target_position > 0 else target_tilt
                 seconds += max(0.0, slat_target - tilt) / 100 * slat
-            curtain = max(0.0, self._curtain_tau(position) - self._curtain_tau(target_position))
+            roll = self._opening_roll
+            curtain = max(
+                0.0, self._curtain_tau(position, roll) - self._curtain_tau(target_position, roll)
+            )
             return seconds + curtain * self._curtain_up
-        curtain = max(0.0, self._curtain_tau(target_position) - self._curtain_tau(position))
+        roll = self._closing_roll
+        curtain = max(0.0, self._curtain_tau(target_position, roll) - self._curtain_tau(position, roll))
         seconds = curtain * self._curtain_down
         if target_position <= 0 and slat > 0:
             start_tilt = 100 if position > 0 else tilt
@@ -1526,9 +1587,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     ) -> dict[str, Any]:
         """Turn the measurements of `cover_calibration_run` into a profile.
 
-        One measurement (the descent) fixes the roll once the slat time is known; a
-        second one (the ascent) is what makes it possible to solve for both at once.
-        A ``slat_time:`` given here is trusted and not solved for.
+        The closing measurement gives `closing_roll`, the opening one `opening_roll`,
+        and the two are independent: each inverts its own run, so a shutter that is
+        stiffer on the way up simply gets two numbers instead of one.
+
+        `slat_time` is an input, never an answer (see the section comment): given here
+        it is used as it stands, otherwise the cover's configured value is.
 
         The motor seconds default to the ones `cover_calibration_run` computed from
         this cover's configuration, so a user who did not touch the YAML in between has
@@ -1546,6 +1610,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 f"{SERVICE_COVER_CALIBRATION_COMPUTE}: opened_half_cm ({opened_half_cm}) is above the "
                 f"curtain travel ({height} cm); measure from the floor to the bottom of the bar"
             )
+        slat = self._slat_time if slat_time is None else slat_time
         # Whatever the run really spent: the defaults are the very seconds it computed
         # from this same configuration, so the equations invert the movement that was
         # actually measured.
@@ -1553,11 +1618,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             closed_run_seconds = calibration_close_run_seconds(self._closing_time, self._slat_time)
         if opened_run_seconds is None:
             opened_run_seconds = calibration_open_run_seconds(self._opening_time, self._slat_time)
-        # The ascent is the only measurement that says anything about the slat time, so
-        # without it the configured one is the best available answer.
-        known_slat = slat_time if slat_time is not None else (None if opened_half_cm is not None else self._slat_time)
         try:
-            roll, slat = solve_cover_calibration(
+            closing_roll, opening_roll = solve_cover_calibration(
                 height=height,
                 opening_time=self._opening_time,
                 closing_time=self._closing_time,
@@ -1565,37 +1627,36 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 closed_run_seconds=closed_run_seconds,
                 opened_run_seconds=opened_run_seconds,
                 opened_half_cm=opened_half_cm,
-                slat_time=known_slat,
+                slat_time=slat,
             )
         except ValueError as err:
             raise ServiceValidationError(f"{SERVICE_COVER_CALIBRATION_COMPUTE}: {err}") from err
 
-        residual = {
-            ATTR_CLOSED_HALF_CM: round(
-                calibration_descent_cm(roll, slat, height, self._closing_time, closed_run_seconds)
-                - closed_half_cm,
-                1,
-            )
-        }
-        if opened_half_cm is not None:
-            residual[ATTR_OPENED_HALF_CM] = round(
-                calibration_ascent_cm(roll, slat, height, self._opening_time, opened_run_seconds)
-                - opened_half_cm,
-                1,
-            )
-        return {
-            CONF_ROLL: round(roll, 2),
+        # `roll` is the one number to write when only one is wanted; with a single
+        # measurement it is simply the one that was measured.
+        common = closing_roll if opening_roll is None else (closing_roll + opening_roll) / 2
+        answer: dict[str, Any] = {
+            CONF_ROLL: round(common, 2),
+            CONF_CLOSING_ROLL: round(closing_roll, 2),
             CONF_SLAT_TIME: round(slat, 1),
             CONF_OPENING_TIME: round(self._opening_time, 1),
             CONF_CLOSING_TIME: round(self._closing_time, 1),
             ATTR_HEIGHT: round(height, 1),
             ATTR_CLOSED_RUN_SECONDS: round(closed_run_seconds, 1),
             ATTR_OPENED_RUN_SECONDS: round(opened_run_seconds, 1),
-            "residual_cm": residual,
             "yaml": calibration_yaml(
-                self._profile_name, height, self._opening_time, self._closing_time, slat, roll
+                self._profile_name,
+                height,
+                self._opening_time,
+                self._closing_time,
+                slat,
+                closing_roll,
+                opening_roll,
             ),
         }
+        if opening_roll is not None:
+            answer[CONF_OPENING_ROLL] = round(opening_roll, 2)
+        return answer
 
     # ------------------------------------------------------------------ events
     def handle_event(self, message: OWNAutomationEvent) -> None:

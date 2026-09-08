@@ -79,6 +79,7 @@ from .const import (
     # CEN / CEN+ scenario controls (0.4.0)
     CONF_BUTTONS,
     CONF_CENTRAL,
+    CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
     CONF_COOLING_SUPPORT,
     CONF_COVER_PROFILES,
@@ -102,6 +103,7 @@ from .const import (
     CONF_MIN_DELTA_W,
     CONF_MIN_INTERVAL_SEC,
     CONF_OBJECT,
+    CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
     CONF_PROFILE,
@@ -682,6 +684,9 @@ COVER_FIELDS: dict = {
     Optional(CONF_CLOSING_TIME): _RUN_SECONDS,
     Optional(CONF_SLAT_TIME): _NON_NEGATIVE_FLOAT,
     Optional(CONF_ROLL): _ROLL,
+    # Per-direction rolls (0.4.2 amendment): each falls back to ``roll``.
+    Optional(CONF_OPENING_ROLL): _ROLL,
+    Optional(CONF_CLOSING_ROLL): _ROLL,
     # The slat phase is timed either way; ``tilt`` only decides whether it is *exposed*
     # as tilt controls (plat-07 / 0.4.2).
     Optional(CONF_TILT, default=DEFAULT_TILT): Boolean(),
@@ -706,6 +711,11 @@ COVER_PROFILE_FIELDS: dict = {
     Optional(CONF_CLOSING_TIME): _RUN_SECONDS,
     Optional(CONF_SLAT_TIME, default=DEFAULT_SLAT_TIME): _NON_NEGATIVE_FLOAT,
     Optional(CONF_ROLL, default=DEFAULT_ROLL_SHUTTER): _ROLL,
+    # No schema default: _finalize_cover_profile falls them back to ``roll``, which is
+    # the only way "the profile says both directions are the same" can be told from
+    # "the profile measured them separately".
+    Optional(CONF_OPENING_ROLL): _ROLL,
+    Optional(CONF_CLOSING_ROLL): _ROLL,
 }
 
 
@@ -854,7 +864,13 @@ def _fold_shutter_run_alias(device: MutableMapping, path: list, what: str) -> No
 
 
 def _finalize_cover_profile(profile: MutableMapping, name: str) -> None:
-    """Fold the alias, require an opening time and default the closing one to it."""
+    """Fold the alias, require an opening time, and default what is per-direction.
+
+    ``closing_time`` follows ``opening_time`` and each directional roll follows
+    ``roll``: a profile measured in one direction only describes a shutter that
+    behaves the same both ways, which is the assumption every 0.4.1 configuration
+    already made.
+    """
     _fold_shutter_run_alias(profile, [CONF_COVER_PROFILES, name], f"cover profile '{name}'")
     if CONF_OPENING_TIME not in profile:
         raise Invalid(
@@ -863,6 +879,8 @@ def _finalize_cover_profile(profile: MutableMapping, name: str) -> None:
             path=[CONF_COVER_PROFILES, name, CONF_OPENING_TIME],
         )
     profile.setdefault(CONF_CLOSING_TIME, profile[CONF_OPENING_TIME])
+    profile.setdefault(CONF_OPENING_ROLL, profile[CONF_ROLL])
+    profile.setdefault(CONF_CLOSING_ROLL, profile[CONF_ROLL])
 
 
 @contextmanager
@@ -913,6 +931,16 @@ def cover_profiles_section(block: object) -> dict:
     return profiles
 
 
+def _grown_roll(k_ref: float, ratio: float) -> float:
+    """The roll of the same shutter cut to ``ratio`` of the reference height.
+
+    The tube keeps its bare radius and the curtain adds thickness in proportion to how
+    much of it is wound on, so ``k**2 - 1`` - not ``k`` - is what scales with the
+    height.
+    """
+    return sqrt(1 + (k_ref * k_ref - 1) * ratio)
+
+
 def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
     """The profile's timings, scaled from its reference height to ``height``.
 
@@ -923,15 +951,23 @@ def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
     height (0.4.2 spec, section 3)::
 
         k       = sqrt(1 + (k_ref**2 - 1) * H / H_ref)
-        scale_c = (k - 1) / (k_ref - 1)          # (H / H_ref for a linear profile)
+        scale_c = (k_close - 1) / (k_ref_close - 1)   # (H / H_ref for a linear profile)
         slat    = profile.slat_time * H / H_ref
         opening = slat + (profile.opening_time - profile.slat_time) * scale_c
+
+    The same growth is applied to each directional roll (0.4.2 amendment).  The
+    *curtain time* scale is taken from the **closing** roll and used for both runs on
+    purpose: it measures how much curtain the tube has to unwind, which is one length
+    of fabric whichever way the motor turns, and the up/down difference the directional
+    rolls carry is the motor's load, not the geometry.  Picking each direction's own
+    scale would make a 195 cm profile predict two different curtain lengths.
 
     Without a ``height:`` on the cover there is nothing to scale to and the profile is
     used as it stands.
     """
     reference = profile[CONF_REFERENCE_HEIGHT]
     k_ref = profile[CONF_ROLL]
+    k_ref_close = profile[CONF_CLOSING_ROLL]
     slat_ref = profile[CONF_SLAT_TIME]
     if height is None:
         return {
@@ -939,18 +975,24 @@ def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
             CONF_CLOSING_TIME: profile[CONF_CLOSING_TIME],
             CONF_SLAT_TIME: slat_ref,
             CONF_ROLL: k_ref,
+            CONF_OPENING_ROLL: profile[CONF_OPENING_ROLL],
+            CONF_CLOSING_ROLL: k_ref_close,
         }
     ratio = height / reference
-    roll = sqrt(1 + (k_ref * k_ref - 1) * ratio)
+    closing_roll = _grown_roll(k_ref_close, ratio)
     # A linear profile has no roll growth to be proportional to, so the curtain time
     # simply follows the height (and the formula above would divide by zero).
-    curtain_scale = (roll - 1) / (k_ref - 1) if k_ref - 1 > ROLL_LINEAR_TOLERANCE else ratio
+    curtain_scale = (
+        (closing_roll - 1) / (k_ref_close - 1) if k_ref_close - 1 > ROLL_LINEAR_TOLERANCE else ratio
+    )
     slat = slat_ref * ratio
     return {
         CONF_OPENING_TIME: slat + (profile[CONF_OPENING_TIME] - slat_ref) * curtain_scale,
         CONF_CLOSING_TIME: slat + (profile[CONF_CLOSING_TIME] - slat_ref) * curtain_scale,
         CONF_SLAT_TIME: slat,
-        CONF_ROLL: roll,
+        CONF_ROLL: _grown_roll(k_ref, ratio),
+        CONF_OPENING_ROLL: _grown_roll(profile[CONF_OPENING_ROLL], ratio),
+        CONF_CLOSING_ROLL: closing_roll,
     }
 
 
@@ -980,7 +1022,9 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
     Four sources, first hit wins **per key**: what the user wrote on the cover, the
     ``profile:`` scaled to the cover's ``height:``, the profile as it stands, and
     finally the legacy defaults (20 s in both directions, no slat phase, and a roll of
-    1.6 on a shutter / 1.0 on anything else - only a rolling shutter has a tube).
+    1.6 on a shutter / 1.0 on anything else - only a rolling shutter has a tube).  The
+    directional keys (``closing_time``, ``opening_roll``, ``closing_roll``) fall back to
+    their common one at the end of that chain.
 
     ``slat_time`` must leave at least one second of curtain travel in **both**
     directions, otherwise the position estimate would be meaningless.  That cross-check
@@ -1001,6 +1045,11 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
             DEFAULT_ROLL_SHUTTER if device[CONF_DEVICE_CLASS] == CoverDeviceClass.SHUTTER else DEFAULT_ROLL,
         ),
     )
+    # Per-direction rolls (0.4.2 amendment), resolved with the same precedence and
+    # falling back to the common ``roll`` - exactly as ``closing_time`` falls back to
+    # ``opening_time``, profile included.
+    device.setdefault(CONF_OPENING_ROLL, profile.get(CONF_OPENING_ROLL, device[CONF_ROLL]))
+    device.setdefault(CONF_CLOSING_ROLL, profile.get(CONF_CLOSING_ROLL, device[CONF_ROLL]))
     # Backwards compatibility: everything that used to read ``shutter_run`` (0.3.x
     # configurations dumped back out, third-party templates, the discovery helper) still
     # finds the full upward run under that name.
@@ -1034,6 +1083,8 @@ _COVER_TIMING_KEYS = (
     CONF_OPENING_TIME,
     CONF_CLOSING_TIME,
     CONF_ROLL,
+    CONF_OPENING_ROLL,
+    CONF_CLOSING_ROLL,
     CONF_TILT,
     CONF_HEIGHT,
     CONF_PROFILE,
@@ -1042,7 +1093,8 @@ _COVER_TIMING_KEYS = (
 
 # Of the travel keys, the ones that really change ``max(opening_time, closing_time)``.
 # ``profile`` does (it supplies both run times) and ``height`` only scales a profile, so
-# it does nothing on its own; ``slat_time``, ``roll`` and ``tilt`` never reach the timer.
+# it does nothing on its own; ``slat_time``, the three roll keys and ``tilt`` never
+# reach the timer.
 _ADVANCED_TIMER_KEYS = (CONF_SHUTTER_RUN, CONF_OPENING_TIME, CONF_CLOSING_TIME, CONF_HEIGHT, CONF_PROFILE)
 
 
