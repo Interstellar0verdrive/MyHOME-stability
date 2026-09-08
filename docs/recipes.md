@@ -574,11 +574,14 @@ and must be at least `1`, and `closing_time` defaults to `opening_time`;
 `shutter_run` is the legacy alias of `opening_time` and still works; `slat_time`
 defaults to `0` (two-phase model off) and must leave at least one second of curtain
 travel in both directions; `roll` defaults to `1.6` on `class: shutter` and to `1.0`
-on every other class, and must be between `1.0` and `5.0`; `tilt`, `advanced` and
+on every other class, and must be between `1.0` and `5.0`; `opening_roll` and
+`closing_roll` both default to `roll` and take the same range; `tilt`, `advanced` and
 `inverted` default to `false`; `class` defaults to `shutter`.
 
 `roll: 1.0` is the plain linear estimate of 0.4.1 and earlier — set it explicitly on
-a cover whose behaviour you do not want to change. See
+a cover whose behaviour you do not want to change. `opening_roll` and `closing_roll`
+override it one direction at a time, exactly as `opening_time` and `closing_time` do
+for the run times, for a shutter that does not behave the same way up and down. See
 [Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll),
 and [Calibrating a shutter in centimetres](#calibrating-a-shutter-in-centimetres)
 below for measuring your own.
@@ -734,13 +737,18 @@ incoming frames, so both directions stay consistent.
 
 ### Calibrating a shutter in centimetres
 
-The run times are a stopwatch job. The `roll` — how much faster the curtain travels
-when it is up than when it is down, see
+The run times and the slat time are a stopwatch job. The roll — how much faster the
+curtain travels when it is up than when it is down, see
 [Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll)
 — is not: you cannot see it, you can only measure where the shutter *ends up*. That
 is what the two calibration actions do. You measure one shutter with a tape measure,
 and every similar shutter in the house then gets the same model scaled by its own
 height.
+
+Two measurements, two independent answers: the descent gives `closing_roll` and the
+ascent gives `opening_roll`. Neither of them is a cross-check on the other, and
+neither solves the `slat_time` — that value is always the one you configured, or the
+one you hand the action.
 
 > **The cover runs to a full end stop and back, twice.** Nothing may be in the way:
 > no open window, no plant on the sill, nobody underneath. Do this while you are
@@ -748,15 +756,16 @@ height.
 
 #### Prerequisites
 
-Write `opening_time` and `closing_time` **first**, measured with a stopwatch from the
-moment the motor starts to the moment it stops by itself at the end stop, in each
-direction (`cover.open_cover` and `cover.close_cover`, both all the way). Everything
-below is built on them: each run drives the motor for exactly the time a plain
-*set position 50 %* would use with the current configuration and a linear model
-(downwards half of the curtain run, upwards the `slat_time` currently configured,
-if any, plus half of the curtain run), and the computation solves the model against
-both. Do not edit these keys between the runs
-and the computation: the maths reads the same values the runs used.
+Write `opening_time`, `closing_time` and, if the shutter has one, `slat_time`
+**first**, all three with a stopwatch: the run times from the moment the motor
+starts to the moment it stops by itself at the end stop, in each direction
+(`cover.open_cover` and `cover.close_cover`, both all the way), and the slat time as
+the seconds between the start of an upward run and the instant the bottom edge
+leaves the floor. Everything below is built on them: each run drives the motor for
+exactly the time a plain *set position 50 %* would use with the current
+configuration and a linear model (downwards half of the curtain run, upwards the
+configured `slat_time` plus half of the curtain run), and the computation reads the
+same numbers back. Do not edit these keys between the runs and the computation.
 
 ```yaml
 gateway:
@@ -767,10 +776,13 @@ gateway:
       name: "Living Room Shutter"
       opening_time: 22.3     # measured, full upward run
       closing_time: 21.7     # measured, full downward run
+      slat_time: 4.7         # measured, bottom edge leaves the floor here
 ```
 
-Reload the integration and check the `Opening time` / `Closing time` attributes of
-the entity: they are what the calibration will use.
+Reload the integration and check the `Opening time` / `Closing time` / `Slat time`
+attributes of the entity: they are what the calibration will use. The slat time is
+never solved for — a stopwatch reads it directly, and it is the one part of the run
+you can actually watch happen.
 
 Measure the **height** as well — floor to the bottom edge with the shutter fully
 open, in centimetres. It is 195 cm in this example.
@@ -788,8 +800,11 @@ data:
 ```
 
 The cover opens fully, waits until it is certainly against the top end stop, then
-closes for exactly half its `closing_time` and stops. **Measure the centimetres from
-the floor to the bottom edge** and write the number down (85 cm here).
+closes for the seconds a linear *set position 50 %* would use — here
+`(21.7 − 4.7) / 2` = 8.5 s — and stops. **Measure the centimetres from the floor to
+the bottom edge** and write the number down (85 cm here). The action reports the
+seconds it used as `motor_seconds`; note that down too if you like, though step 3
+recomputes the same number from the configuration.
 
 #### Step 2 — the half ascent
 
@@ -803,10 +818,14 @@ data:
   direction: open
 ```
 
-The cover closes fully, then opens for half its `opening_time` and stops. Measure
-again (88 cm here). This second measurement is what lets step 3 solve the
-`slat_time` too; without it the configured `slat_time` is taken as correct and only
-the `roll` is solved.
+The cover closes fully, then opens for the mirror-image time — the slat phase plus
+half the curtain run, here `4.7 + (22.3 − 4.7) / 2` = 13.5 s — and stops. Measure
+again (80 cm here).
+
+This second measurement is optional, and it is not a check on the first one: it is
+the measurement of the *other* direction. Give it and step 3 returns an
+`opening_roll` beside the `closing_roll`; leave it out and only the descent is
+described, and the same coefficient is used both ways.
 
 #### Step 3 — compute the model
 
@@ -817,7 +836,7 @@ target:
 data:
   height: 195
   closed_half_cm: 85
-  opened_half_cm: 88
+  opened_half_cm: 80
 ```
 
 The action moves nothing and writes nothing: it solves the model and answers. In
@@ -825,14 +844,15 @@ The action moves nothing and writes nothing: it solves the model and answers. In
 `response_variable:`. Its shape (**your numbers will be different**):
 
 ```yaml
-roll: 1.69
+closing_roll: 1.69
+opening_roll: 2.12
+roll: 1.9
 slat_time: 4.7
 opening_time: 22.3
 closing_time: 21.7
 height: 195
-residual_cm:
-  closed: 0.1
-  opened: 0.4
+closed_run_seconds: 8.5
+opened_run_seconds: 13.5
 yaml: |
   cover_profiles:
     living_room_shutter:
@@ -840,16 +860,31 @@ yaml: |
       opening_time: 22.3
       closing_time: 21.7
       slat_time: 4.7
-      roll: 1.69
+      closing_roll: 1.69
+      opening_roll: 2.12
   # on the cover itself:
   #   profile: living_room_shutter
   #   height: 195
 ```
 
-`residual_cm` is the check: it is how far the solved model lands from each
-measurement. A few millimetres means the shutter really does behave like one motor
-and one roll; several centimetres means it does not, and the numbers below it are a
-best fit rather than a description.
+Each measurement is solved on its own, by bisection, and lands on it exactly: the
+descent gives `closing_roll`, the ascent `opening_roll`, and `roll` is simply their
+mean, reported for the covers and the templates that want one number. `slat_time` is
+the value the action used — the one you configured, or the one you passed in the
+call. `opening_roll` is missing altogether when you did not measure the ascent.
+
+**Why the two are not the same number.** In pure geometry they would be: the roll
+has the same radius at the same height whichever way the curtain is going. A real
+shutter is less tidy going up — the motor is lifting the whole hanging curtain, the
+slats have to unstick from each other and leave the floor, the tube is loaded
+differently — and all of that slows the first part of the ascent and shifts where
+half a run ends up. Rather than model it, the integration lets the coefficient
+differ per direction and each measurement sets its own. The shutter in this example
+ended half a run at 85 cm coming down and 80 cm going up, which is about 1.7 and
+2.1 — a real difference, not a measurement error, and one that a single averaged
+coefficient would split down the middle and miss by a few centimetres each way. A
+shutter whose two numbers come out within about 0.1 of each other is symmetrical
+enough, and the snippet then writes a single `roll:` instead of the two keys.
 
 Paste the snippet into `myhome.yaml` — the `cover_profiles:` block at gateway level,
 beside the platform sections, and the two commented lines onto the cover itself.
@@ -866,7 +901,8 @@ gateway:
       opening_time: 22.3
       closing_time: 21.7
       slat_time: 4.7
-      roll: 1.69
+      closing_roll: 1.69
+      opening_roll: 2.12
 
   cover:
     living_room_shutter:
@@ -876,14 +912,22 @@ gateway:
       height: 195
 ```
 
-The `opening_time` / `closing_time` keys can come off the cover now: the profile
-carries them, and at the reference height nothing is scaled.
+The `opening_time` / `closing_time` / `slat_time` keys can come off the cover now:
+the profile carries them, and at the reference height nothing is scaled.
+
+If instead the action refuses the call, it is because the centimetres you gave it
+cannot be produced by any roll coefficient in the accepted range (`1.0` to `5.0`)
+with those run times: the message names the measurement it could not use and the
+band of centimetres that direction can actually reach. That usually means the cover
+did not start from its end stop, or the run times are not the ones the run used —
+re-run step 1 or 2 and measure again.
 
 #### Step 4 — reload and check
 
 Reload the integration (**Settings → Devices & services → MyHOME → ⋮ → Reload**; a
-full restart is not needed) and confirm the `Roll` attribute of the entity. Then run
-the cover fully open once, so the estimate has a reference, and ask for the middle:
+full restart is not needed) and confirm the `Opening roll` / `Closing roll`
+attributes of the entity (a single `Roll` when the two are equal). Then run the
+cover fully open once, so the estimate has a reference, and ask for the middle:
 
 ```yaml
 action: cover.set_cover_position
@@ -935,7 +979,12 @@ A cover that misses by a lot has no business in that profile: measure it with st
 #### What accuracy to expect
 
 - **On the calibrated cover**: 2-3 cm at mid-travel on a 2 m shutter, which is as
-  good as the measurements you fed it.
+  good as the measurements you fed it. Each solved coefficient reproduces its own
+  measurement exactly; the error you are left with is what the model does *between*
+  the point you measured and the end stops.
+- **With only the descent measured**: the same coefficient is used going up, and the
+  ascent is the direction where shutters misbehave. Measuring both is ten more
+  minutes and it is what step 2 is for.
 - **On the derived covers**: a little more. The derivation assumes the same product —
   same motor, same slat profile, same tube — and scales it by height alone. A
   different motor is a different profile.
@@ -956,13 +1005,14 @@ A cover that misses by a lot has no business in that profile: measure it with st
    seconds are `slat_time`.
 5. Check `set_cover_position` at 50 %: if the cover consistently overshoots the
    times are too large, if it stops short they are too small — but a *systematic*
-   miss at mid-travel with the end stops right is the `roll`, not the times, and
+   miss at mid-travel with the end stops right is the roll, not the times, and
    [Calibrating a shutter in centimetres](#calibrating-a-shutter-in-centimetres)
-   solves it properly.
+   solves it properly. A miss in one direction only is a roll that differs per
+   direction, and the same recipe gives you `opening_roll` and `closing_roll`.
 
-The values are exposed on basic covers as the `Opening time`, `Closing time` and
-`Roll` attributes (plus `Slat time`, `Height` and `Profile` when in use), so you can
-confirm what is actually loaded.
+The values are exposed on basic covers as the `Opening time` and `Closing time`
+attributes and either `Roll` or `Opening roll` / `Closing roll` (plus `Slat time`,
+`Height` and `Profile` when in use), so you can confirm what is actually loaded.
 
 ### "Movement started / movement finished" automation
 

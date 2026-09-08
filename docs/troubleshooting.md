@@ -118,20 +118,27 @@ tube) than with it down, so a linear estimate stops a basic actuator too low on 
 way down and too high on the way up. See
 [Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll).
 
-1. Check the `Roll` attribute of the cover in **Developer tools → States**. Covers
-   of `class: shutter` default to `1.6` since 0.4.2; anything else defaults to `1.0`,
-   the old linear estimate.
-2. Measure the real value once with
+1. Check the `Roll` attribute of the cover in **Developer tools → States** — or
+   `Opening roll` and `Closing roll`, which is what you get instead when the two
+   directions carry different coefficients. Covers of `class: shutter` default to
+   `1.6` in both directions since 0.4.2; anything else defaults to `1.0`, the old
+   linear estimate.
+2. Measure the real values once with
    [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres)
-   and apply it, on that cover or as a profile shared by every shutter of the same
+   and apply them, on that cover or as a profile shared by every shutter of the same
    kind.
-3. If instead the cover misses *everything*, end stops included — it stops short of
+3. **If it misses going up but not coming down** (or the other way round), one
+   coefficient cannot describe both directions — which is common, since a shutter is
+   not symmetrical under load. Measure both directions in that recipe and write the
+   `opening_roll` / `closing_roll` pair it gives you rather than a single `roll`.
+4. If instead the cover misses *everything*, end stops included — it stops short of
    the top, or keeps running after the position reads `100` — the run times are
    wrong; re-measure `opening_time` and `closing_time` with a stopwatch first, then
    calibrate.
-4. If it is the first few centimetres off the floor that are wrong, and the position
-   sits at `0` while the slats are still moving, that is `slat_time`, not `roll`:
-   see [the two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
+5. If it is the first few centimetres off the floor that are wrong, and the position
+   sits at `0` while the slats are still moving, that is `slat_time`, not the roll:
+   stopwatch it (the calibration never solves it for you) — see
+   [the two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
 
 A basic actuator never reports its position, so this is always an estimate. Running
 the cover fully open or fully closed re-synchronises it.

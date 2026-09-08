@@ -23,28 +23,46 @@ and the tilt controls are now opt-in.
   still reached by running into them — and it applies to basic actuators only, an
   `advanced:` one reporting its own position. See
   [Configuration → Why the position is not linear](docs/configuration.md#why-the-position-is-not-linear-roll).
+- **A roll per direction** (`opening_roll`, `closing_roll`, on a cover and in a
+  profile; same range, both defaulting to `roll`). They mirror `opening_time` and
+  `closing_time` exactly: write one when the shutter does not behave the same way up
+  and down. Geometry says it should — the roll has the same radius at the same height
+  whichever way the curtain moves — but a real shutter going up is lifting the whole
+  hanging curtain and peeling the slats off the floor, and the measured difference is
+  not small: the shutter these numbers were taken on wants about `1.7` coming down
+  and `2.1` going up. Descents use `closing_roll`, ascents `opening_roll`, curtain
+  phase only.
 - **Cover profiles** (`cover_profiles:`, at gateway level beside the platform
   sections). A profile holds a `reference_height` in centimetres and the model
-  measured at that height (`opening_time`, `closing_time`, `slat_time`, `roll`); a
-  cover then names it with `profile:` and gives its own `height:`, and the times and
-  the roll are scaled to it. Measure one shutter, describe the other twelve by their
-  height. A key written on the cover still wins, key by key, so a single slower motor
-  is one line, not a second profile. See
+  measured at that height (`opening_time`, `closing_time`, `slat_time`, `roll`, or
+  `opening_roll` / `closing_roll`); a cover then names it with `profile:` and gives
+  its own `height:`, and the times and the rolls are scaled to it — each directional
+  roll by the same formula, and the curtain times by the growth of the *closing*
+  roll. Measure one shutter, describe the other twelve by their height. A key written
+  on the cover still wins, key by key, so a single slower motor is one line, not a
+  second profile. See
   [Configuration → Cover profiles](docs/configuration.md#cover-profiles).
 - **Two calibration actions**, both returning response data:
   `myhome.cover_calibration_run` drives a targeted basic cover to one end stop and
-  back for exactly half its configured run, so that you can measure where it stopped;
-  `myhome.cover_calibration_compute` turns that measurement (with the cover's height,
-  and optionally a second measurement in the other direction) into a `roll`, a
-  `slat_time` and a ready-to-paste `cover_profiles:` snippet. The step-by-step
-  procedure, with the accuracy to expect, is
+  back for the seconds a linear *set position 50 %* would use, so that you can
+  measure where it stopped; `myhome.cover_calibration_compute` turns those
+  centimetres, with the cover's height, into the roll of that direction — the descent
+  measurement gives `closing_roll`, the optional ascent measurement `opening_roll` —
+  and a ready-to-paste `cover_profiles:` snippet, which carries a single `roll:` when
+  the two agree within `0.1` and both directional keys when they do not. The two
+  equations are independent: neither checks the other, and neither solves the
+  `slat_time`, which is always the configured value or the one passed in the call. A
+  measurement no coefficient in the accepted range can produce is refused, with the
+  band of centimetres that direction can actually reach. The step-by-step procedure,
+  with the accuracy to expect, is
   [Recipes → Calibrating a shutter in centimetres](docs/recipes.md#calibrating-a-shutter-in-centimetres);
   the fields, the response keys and the refusals are in
   [Services and events](docs/services-and-events.md#myhomecover_calibration_run).
 - Cover keys `height:` (centimetres of curtain travel, what scales a profile) and
   `profile:` (the name of a `cover_profiles:` entry; an unknown name is a validation
   error listing the ones that are defined), and `tilt:` (see *Changed*).
-- Basic covers gained the `Roll` state attribute, and `Height` / `Profile` when those
+- Basic covers gained the `Roll` state attribute — replaced by `Opening roll` and
+  `Closing roll` when the two directions differ — and `Height` / `Profile` when those
   keys are written.
 
 ### Changed
@@ -57,7 +75,9 @@ and the tilt controls are now opt-in.
   for a different number of seconds, and an automation comparing
   `current_position` against a threshold may fire at a different moment. The two end
   stops are unaffected. Write `roll: 1.0` on a cover to keep exactly the 0.4.1
-  estimate, or measure the real value with the calibration actions above.
+  estimate, or measure the real values with the calibration actions above. The same
+  `1.6` is used in both directions until `opening_roll` or `closing_roll` says
+  otherwise.
 - **The tilt controls are now opt-in: `tilt: true`.** Until 0.4.1, `slat_time`
   greater than `0` on a basic cover both split the run in two phases *and* published
   the tilt features. It now only does the first: the timing model is unchanged — a
@@ -77,13 +97,14 @@ and the tilt controls are now opt-in.
   different values are refused with a message naming both keys, since they are one
   setting. The documentation now uses `opening_time` throughout.
 - **The `Shutter run` state attribute of basic covers is gone**, replaced by
-  `Opening time`, `Closing time` and `Roll` (plus `Slat time`, `Height` and `Profile`
-  when in use). `Shutter run` was `Opening time` under another name and would have
+  `Opening time`, `Closing time` and `Roll` — or `Opening roll` and `Closing roll`
+  when the two directions differ — plus `Slat time`, `Height` and `Profile` when in
+  use. `Shutter run` was `Opening time` under another name and would have
   been actively misleading next to a `Closing time` that no longer derives from it. A
   template or dashboard reading `state_attr(..., 'Shutter run')` has to be pointed at
   `Opening time`.
-- The validator's `advanced:` warning covers the new keys: `roll`, `height`,
-  `profile` and `tilt` do nothing on an actuator that reports its own position, and
+- The validator's `advanced:` warning covers the new keys: `roll`, `opening_roll`,
+  `closing_roll`, `height`, `profile` and `tilt` do nothing on an actuator that reports its own position, and
   are named one by one in the log line, as the timing keys already were. The
   configuration still loads.
 

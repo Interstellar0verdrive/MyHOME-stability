@@ -69,9 +69,10 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   control (`slat_time`, `tilt`), `set_cover_position`, `inverted` wiring, and real
   positions on advanced actuators
 - **Covers, the position that is actually right**: the estimate follows the roll on
-  the tube instead of a straight line (`roll`), and two actions measure that model on
-  your own shutter in centimetres and scale it to every other shutter of the same
-  kind by its height (`cover_profiles:`) — see
+  the tube instead of a straight line (`roll`, or `opening_roll` / `closing_roll`
+  when the shutter does not behave the same way up and down), and two actions measure
+  that model on your own shutter in centimetres and scale it to every other shutter
+  of the same kind by its height (`cover_profiles:`) — see
   [Calibrating a shutter in centimetres](docs/recipes.md#calibrating-a-shutter-in-centimetres)
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)

@@ -96,8 +96,9 @@ data:
 
 ### `myhome.cover_calibration_run`
 
-Moves a cover to one end stop, then runs it back for exactly **half** its configured
-run time and stops it there, so that you can measure where it ended up. It is step 1
+Moves a cover to one end stop, then runs it back for exactly the seconds a linear
+*set position 50 %* would use and stops it there, so that you can measure where it
+ended up. It is step 1
 of [Recipes → Calibrating a shutter in
 centimetres](recipes.md#calibrating-a-shutter-in-centimetres); on its own it changes
 no configuration and stores nothing.
@@ -112,7 +113,7 @@ data:
 
 | Field | Required | Notes |
 |---|---|---|
-| `direction` | yes | `close` or `open`. The direction of the half run you are going to measure. |
+| `direction` | yes | `close` or `open`. The direction of the run you are going to measure: `close` yields the `closing_roll`, `open` the `opening_roll`. |
 
 **Target**: one or more **basic** covers (`integration: myhome`, `domain: cover`).
 Several covers are done one after another, never in parallel — you have to be
@@ -141,7 +142,7 @@ Response data, keyed by entity id:
 |---|---|
 | `direction` | The direction that was run. |
 | `motor_seconds` | The seconds the motor was run, from the formulas above. |
-| `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. |
+| `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. `slat_time` is reported, never solved for: it is the configured value. |
 
 Refused with a `ServiceValidationError`, naming the entity:
 
@@ -154,9 +155,9 @@ Refused with a `ServiceValidationError`, naming the entity:
 
 ### `myhome.cover_calibration_compute`
 
-Turns the centimetres you measured into a `roll` (and, if you let it, a
-`slat_time`), and hands back a ready-to-paste YAML snippet. It computes only: no
-cover is moved and nothing is written to `myhome.yaml`.
+Turns the centimetres you measured into roll coefficients — one per direction
+measured — and hands back a ready-to-paste YAML snippet. It computes only: no cover
+is moved and nothing is written to `myhome.yaml`.
 
 ```yaml
 action: myhome.cover_calibration_compute
@@ -165,38 +166,47 @@ target:
 data:
   height: 195
   closed_half_cm: 85
-  opened_half_cm: 88
+  opened_half_cm: 80
 ```
 
 | Field | Required | Notes |
 |---|---|---|
 | `height` | yes | Curtain travel height of that cover in centimetres, floor to fully open. |
-| `closed_half_cm` | yes | Centimetres from the floor to the bottom edge after `cover_calibration_run` with `direction: close`. Between `0` and `height`. |
-| `opened_half_cm` | no | The same measurement after `direction: open`. Give it and the service solves `slat_time` as well as `roll`; leave it out and the cover's configured `slat_time` is taken as correct. |
-| `slat_time` | no | A slat time you have measured yourself, in seconds. When given it is trusted and only `roll` is solved for, whether or not `opened_half_cm` is there. |
+| `closed_half_cm` | yes | Centimetres from the floor to the bottom edge after `cover_calibration_run` with `direction: close`. Between `0` and `height`. It is what yields the `closing_roll`. |
+| `opened_half_cm` | no | The same measurement after `direction: open`, and what yields the `opening_roll`. Leave it out and only the descent is described; the resulting coefficient is then used in both directions. |
+| `slat_time` | no | The slat time in seconds, when you have stopwatched a better value than the one on the cover. It is **always** a given quantity, never solved for: without this field the cover's configured `slat_time` is used. |
 | `closed_run_seconds`, `opened_run_seconds` | no | The `motor_seconds` the two runs reported. Leave them out and the same formula the run uses is applied to the cover's *current* configuration — which is why the YAML must not change between the run and this action. |
 
 **Target**: exactly **one** basic cover. The maths needs that cover's configured
 `opening_time` and `closing_time` — the same numbers the run used — so a second
 entity would have nothing to do with the measurements.
 
+Each direction is one equation in one unknown, solved by bisection and independent
+of the other: the descent measurement fixes the `closing_roll`, the ascent
+measurement the `opening_roll`. Neither is a check on the other, and neither
+determines the slat time.
+
 Response data:
 
 | Key | Value |
 |---|---|
-| `roll` | The solved roll coefficient, rounded to 0.01. |
-| `slat_time` | The slat time used: solved, given, or the cover's own. Seconds, rounded to 0.1. |
+| `closing_roll` | The coefficient solved from `closed_half_cm`, rounded to 0.01. |
+| `opening_roll` | The coefficient solved from `opened_half_cm`, rounded to 0.01. Absent when the ascent was not measured. |
+| `roll` | The mean of the two, or the closing one alone when only the descent was measured. The single number to write when the directions agree. |
+| `slat_time` | The slat time the maths used: the field you passed, or the cover's own. Seconds, rounded to 0.1. |
 | `opening_time`, `closing_time` | The times the solution was computed against, unchanged. |
 | `height` | The height you passed, echoed back. |
-| `residual_cm` | How far the solution is from each measurement, in centimetres: what the model predicts for the run(s) you measured minus what you measured. A few millimetres is a good fit; several centimetres on the ascent means the cover does not behave like one motor and one roll. |
-| `yaml` | A `cover_profiles:` entry built from the result, plus the `profile:` / `height:` lines for the cover itself, ready to paste into `myhome.yaml`. |
+| `closed_run_seconds`, `opened_run_seconds` | The motor seconds each equation was built on — the fields you passed, or the values recomputed from the cover's configuration. |
+| `yaml` | A `cover_profiles:` entry built from the result, plus the `profile:` / `height:` lines for the cover itself, ready to paste into `myhome.yaml`. It writes a single `roll:` when the two coefficients differ by at most `0.1`, and `opening_roll:` / `closing_roll:` (with no `roll:`) when they differ by more. |
 
-Refused with a `ServiceValidationError` when the numbers cannot describe a shutter —
-a measurement no roll coefficient in the accepted range can produce, a
-`closed_half_cm` that says the curtain never moved, a `slat_time` that leaves no
-curtain travel. The message says which measurement to check and what it implies;
-re-measuring the run, or repeating `cover_calibration_run` after making sure the
-cover really started from its end stop, is the usual fix.
+Refused with a `ServiceValidationError` when a measurement lies outside what the
+model can reach: no coefficient in the accepted range (`1.0` to `5.0`), with those
+run times and that height, puts the bottom edge where you say it was. The message
+names the measurement — the descent or the ascent — and gives the band of
+centimetres that direction can actually produce, so you can see at once whether you
+mistyped a number or the cover did not start from its end stop. Repeating
+`cover_calibration_run` for that direction, after checking that nothing stopped the
+cover early, is the usual fix.
 
 With more than one gateway loaded, every gateway-targeted service above requires
 the `gateway` field — omitting it fails with *"Specify the gateway: N gateways are
