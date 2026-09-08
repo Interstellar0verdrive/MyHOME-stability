@@ -17,7 +17,9 @@ OWNd's (the package is pinned and untouched) but:
   only frames the OWNd parser cannot understand come back as their raw text.
 - :meth:`OWNCommandChannel.send_command` writes one command and reads EVERY reply
   frame until the gateway's ACK/NACK (under a timeout), so multi-frame status and
-  energy replies never desynchronise the session and reach the caller.
+  energy replies never desynchronise the session and reach the caller.  Its
+  ``on_written`` hook (0.4.3) reports the frame the moment it leaves the socket,
+  which is a good fraction of a second before the ACK comes back.
 - :meth:`OWNChannel.close` never raises and is safe before ``open()`` and twice.
 """
 
@@ -26,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from OWNd.connection import OWNGateway, OWNSession
@@ -228,7 +231,12 @@ class OWNCommandChannel(OWNChannel):
     def __init__(self, gateway: OWNGateway, logger: logging.Logger) -> None:
         super().__init__(gateway, "command", logger)
 
-    async def send_command(self, message: object, timeout: float = 10.0) -> CommandResult:
+    async def send_command(
+        self,
+        message: object,
+        timeout: float = 10.0,
+        on_written: Callable[[], None] | None = None,
+    ) -> CommandResult:
         """Send ``message`` and read the gateway's reply frames until ACK/NACK.
 
         Returns a :class:`CommandResult` whose ``replies`` hold every non-signaling
@@ -237,6 +245,13 @@ class OWNCommandChannel(OWNChannel):
         seconds (half-open socket), :class:`SessionError` / ``OSError`` on transport
         failures.  After any exception the channel is no longer open: the caller
         must close it and use a fresh one.
+
+        ``on_written`` (0.4.3) is called once the frame has left the socket and
+        *before* the ACK is waited for.  That is the moment a motor starts, and the
+        gateway answers the command on the monitor session before it answers it
+        here: a caller that waits for the ACK to learn its frame is out learns it
+        too late.  A write that raises never calls it.  Exceptions from it are the
+        caller's business - it runs inside this call, so it must not raise.
         """
         writer = self._stream_writer
         if not self._is_open or writer is None:
@@ -246,6 +261,8 @@ class OWNCommandChannel(OWNChannel):
             async with asyncio.timeout(timeout):
                 writer.write(str(message).encode())
                 await writer.drain()
+                if on_written is not None:
+                    on_written()
                 while True:
                     frame = await self.read_frame()
                     if isinstance(frame, OWNSignaling):

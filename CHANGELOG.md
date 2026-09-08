@@ -37,6 +37,18 @@ change to the roll model, the profiles or the calibration maths.
 - **The window in which a gateway echo is recognised opens when the frame is written**,
   not when it is queued. A command that spent a second in the queue is still recognised
   by its own repeat, instead of that repeat being read as somebody at the keypad.
+- **A cover no longer runs to its end stop when its command waited in the queue.** A
+  scene that moves several shutters at once can leave a frame waiting more than a second
+  and a half before the gateway writes it; the gateway's own repeat of that command then
+  arrived after the window in which it is recognised as a repeat, and was read as
+  somebody pressing the keypad — the shutter ran to the end of its travel and the stop
+  that should have ended the run was cancelled with it. The window now covers the wait as
+  well, and a command is timed from the moment its frame reaches the socket rather than
+  from the gateway's acknowledgement.
+- **A command the gateway never acknowledged is not written a second time.** The frame
+  had already left the socket, so the actuator has it: the retry only ever repeats a
+  frame that never reached the socket at all. Such a command is still reported and
+  counted as dropped, exactly as before.
 
 ### Changed
 
