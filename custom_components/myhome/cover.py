@@ -1159,9 +1159,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """
         if self._advanced:
             return None
-        return RestoredExtraData(
-            {"position": self.current_cover_position, "tilt": self.current_cover_tilt_position}
-        )
+        # `_estimate`, not the two properties: a cover with `tilt: false` publishes no
+        # tilt at all (`current_cover_tilt_position` is None there) but still tracks
+        # where its slats are, and throwing that away on every restart would cost a
+        # full `slat_time` of travel the first time the cover is asked to open.
+        position, tilt = self._estimate()
+        return RestoredExtraData({"position": position, "tilt": tilt})
 
     async def async_added_to_hass(self) -> None:
         """Restore the last known position/tilt, then register and request the status.

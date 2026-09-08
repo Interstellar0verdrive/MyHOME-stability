@@ -927,6 +927,29 @@ async def test_a_profiled_cover_publishes_where_its_numbers_came_from(
         assert "Profile" not in plain.attributes and "Height" not in plain.attributes
 
 
+async def test_a_hidden_slat_state_survives_a_reload(hass: HomeAssistant, tmp_path) -> None:
+    """A cover with `tilt: false` still remembers where its slats were.
+
+    The tilt is not published on such a cover, so restoring it from the *state* is
+    impossible; the extra restore data carries the model's own value instead. Without
+    it the first open after a restart would spend a whole `slat_time` turning slats
+    that were already open, and every position afterwards would be out by that much.
+
+    Mutation caught: storing `current_cover_tilt_position` (None here) instead of the
+    estimate.
+    """
+    async with setup_myhome(hass, tmp_path, NO_TILT_YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, "2-88")
+        cover._finish_movement(0, 40)  # noqa: SLF001 - the slats half open, curtain down
+        assert cover.extra_restore_state_data.as_dict() == {"position": 0, "tilt": 40}
+
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        restored = entity_object(hass, COVER, "2-88")
+        assert restored._move_start_tilt is None  # noqa: SLF001 - not moving
+        assert restored._attr_current_cover_tilt_position == 40  # noqa: SLF001
+
+
 async def test_the_calibration_sleep_really_sleeps() -> None:
     """The one line every calibration test patches out (`_async_sleep`).
 
