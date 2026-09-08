@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -31,7 +32,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
-from OWNd.message import OWNAutomationCommand
+from OWNd.message import OWNAutomationCommand, OWNEvent
 from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
     async_fire_time_changed_exact,
@@ -3531,6 +3532,36 @@ async def test_a_stop_on_a_run_that_was_re_based_still_counts_the_coasting(
         assert state.state == CoverState.OPEN
 
 
+class YieldingCommandPath(SlowCommandPath):
+    """A command path whose `send` suspends before it takes a stop frame.
+
+    `MyHOMEGatewayHandler.send` happens not to await anything today - `_enqueue` is
+    synchronous - but nothing in its contract promises that, and a semaphore, a lock
+    or a backpressure wait would all put an `await` there. While it is suspended the
+    event loop keeps running the monitor session, so `answer` is the bus frame that
+    arrives in exactly that gap: dispatched once, on the first stop frame, after the
+    caller has computed the position to freeze and before the stop is on record.
+    """
+
+    def __init__(self, entity: Any, answer: str) -> None:
+        super().__init__()
+        self._entity = entity
+        self._answer: str | None = answer
+
+    async def send(
+        self,
+        message: Any,
+        *,
+        on_delivered: Any = None,
+        on_dropped: Any = None,
+    ) -> bool:
+        if self._answer is not None and str(message).startswith("*2*0*"):
+            answer, self._answer = self._answer, None
+            await asyncio.sleep(0)
+            self._entity.handle_event(OWNEvent.parse(answer))
+        return await super().send(message, on_delivered=on_delivered, on_dropped=on_dropped)
+
+
 async def test_a_stop_inside_the_start_delay_freezes_where_the_motor_really_got_to(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -3576,6 +3607,50 @@ async def test_a_stop_inside_the_start_delay_freezes_where_the_motor_really_got_
         assert state.attributes[ATTR_CURRENT_POSITION] == 100
         assert state.state == CoverState.OPEN
         assert slow.frames == ["*2*2*81##", "*2*0*81##"]
+
+
+async def test_a_moving_status_while_our_stop_is_being_sent_changes_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The guard against a re-base must not depend on `send` never suspending.
+
+    `_async_send_stop` reads the position to freeze and the motor time it belongs to,
+    hands the frame over, and only then records the stop. Everything in between is one
+    `await`: today it never yields, but the moment it does - a semaphore, a lock, a
+    backpressure wait - a "moving" status dispatched inside it would find no stop on
+    record, re-base the run onto its own end, and freeze the slats at the tenth of a
+    second of coasting instead of the 40 % they were sent to.
+
+    Mutation caught: recording the pending stop *after* the await without raising the
+    flag before it (the cover reads tilt 3 instead of 40).
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        cover = entity_object(hass, COVER, "2-85")
+        slow = YieldingCommandPath(cover, "*2*1*85##")
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER,
+                "set_cover_tilt_position",
+                {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40},
+                blocking=True,
+            )
+            assert slow.write_next() == "*2*1*85##"
+            await hass.async_block_till_done()
+
+            # 40 % of a three-second slat phase is 1.2 s of motor, so the stop falls
+            # due at 0.5 + 1.2 - 0.1 - and the actuator's status reaches the entity
+            # while that stop is still inside `send`, 1.6 s after our own frame, well
+            # within the window in which an answer can be ours.
+            await _advance_exact(hass, freezer, START_DELAY_SEC + 1.2 - STOP_LATENCY_SEC)
+            assert [frame for frame, _, _ in slow.queue] == ["*2*0*85##"]
+            assert slow.write_next() == "*2*0*85##"
+            await hass.async_block_till_done()
+
+        state = hass.states.get(SLAT_ENTITY)
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 40
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert slow.frames == ["*2*1*85##", "*2*0*85##"]
 
 
 async def test_a_keypad_run_is_not_re_timed_by_the_frames_that_follow_it(

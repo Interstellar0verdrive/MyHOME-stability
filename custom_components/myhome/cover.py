@@ -905,6 +905,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # while its delivery is still unknown, and the stop frame we are waiting for.
         self._move_delivery: _FrameDelivery | None = None
         self._pending_stop: _PendingStop | None = None
+        # True from the moment a stop of ours is handed to the command path until
+        # `_pending_stop` takes over: see the invariant stated in `_async_send_stop`.
+        self._stop_in_flight = False
         # The last direction frame we handed to the command path, whatever the
         # estimate then did with it: the calibration run times itself on its delivery.
         self._direction_delivery: _FrameDelivery | None = None
@@ -1337,9 +1340,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # set it holds the direction of the movement in progress, which the caller
             # has just matched.)
             return
-        if self._pending_stop is not None:
+        if self._pending_stop is not None or self._stop_in_flight:
             # Our stop is already on its way - the whole run happened inside the window
             # below. Re-basing now would only shorten the motor time we freeze on.
+            #
+            # `_stop_in_flight` is the same test one moment earlier: `_pending_stop` is
+            # only recorded once `send` has returned, and `send` is not required to run
+            # without suspending. A "moving" status dispatched while it is suspended
+            # would find no pending stop, re-base the run onto its own end, and freeze
+            # the shutter at `stop_latency` of travel - the start position, for a whole
+            # curtain run. The invariant the flag carries is stated in `_async_send_stop`.
             return
         now = dt_util.utcnow()
         if (now - delivered).total_seconds() > self._start_delay + MOTOR_START_WINDOW_SEC:
@@ -1452,11 +1462,24 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # Read before the hand-over: an empty command queue answers inside `send`.
         queued_at = dt_util.utcnow()
         move_started_at = self._move_started_at
-        sent = await self._gateway_handler.send(
-            OWNAutomationCommand.stop_shutter(self._full_where),
-            on_delivered=delivery.deliver,
-            on_dropped=delivery.drop,
-        )
+        # Invariant: from the instant the frame is handed over until the movement is
+        # settled, no bus frame may re-base the movement clock. `frozen` and
+        # `base_elapsed` above were computed against `move_started_at` and are only
+        # meaningful against it. `_pending_stop` cannot carry that on its own - it is
+        # recorded below, after the await - and `MyHOMEGatewayHandler.send` happens not
+        # to suspend today, but nothing in its contract says so and a semaphore, a lock
+        # or a backpressure wait added there would let a "moving" status through in
+        # between. So the flag is raised first and handed over to `_pending_stop`
+        # without an await in between.
+        self._stop_in_flight = True
+        try:
+            sent = await self._gateway_handler.send(
+                OWNAutomationCommand.stop_shutter(self._full_where),
+                on_delivered=delivery.deliver,
+                on_dropped=delivery.drop,
+            )
+        finally:
+            self._stop_in_flight = False
         if not sent:
             return False
         # Our own auto-stop must not fire again while we wait for this one; the
