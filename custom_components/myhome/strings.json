@@ -287,11 +287,11 @@
     },
     "cover_calibration_run": {
       "name": "Calibrate cover (run)",
-      "description": "Sends the cover to one end, then runs it half of its configured travel in the chosen direction and stops it there, so the height of the bar can be measured for cover_calibration_compute.",
+      "description": "Sends the cover to one end, then runs it for exactly the motor time a set_cover_position 50 would use with its current configuration and stops it there, so the height of the bar can be measured for cover_calibration_compute.",
       "fields": {
         "direction": {
           "name": "Direction",
-          "description": "Which half run to measure: 'close' starts from fully open, 'open' from fully closed."
+          "description": "Which run to measure: 'close' starts from fully open and runs half the curtain time, 'open' starts from fully closed and runs the slat time plus half the curtain time."
         }
       }
     },
@@ -314,6 +314,14 @@
         "slat_time": {
           "name": "Slat time",
           "description": "Seconds of slat-only travel, when it is already known. Given here it is trusted and not solved for."
+        },
+        "closed_run_seconds": {
+          "name": "Closing run length",
+          "description": "Motor seconds the closing run really lasted, as reported by cover_calibration_run. Only needed when the cover's times changed in between: it defaults to the same value the run computed."
+        },
+        "opened_run_seconds": {
+          "name": "Opening run length",
+          "description": "Motor seconds the opening run really lasted, as reported by cover_calibration_run. Only needed when the cover's times changed in between: it defaults to the same value the run computed."
         }
       }
     }
