@@ -553,8 +553,10 @@ automation:
 ### Time-based position on a basic actuator
 
 Basic (non-`advanced`) WHO 2 actuators report only "opening", "closing" and
-"stopped" — never a position. The integration estimates the position from
-`shutter_run`, the number of seconds a full travel takes.
+"stopped" — never a position. The integration estimates the position from the run
+times — `opening_time` and `closing_time`, the seconds a full travel takes in each
+direction — and from `roll`, which says how the curtain speeds up as it winds onto
+the tube.
 
 ```yaml
 gateway:
@@ -564,14 +566,22 @@ gateway:
       where: "81"
       name: "Living Room Shutter"
       class: shutter
-      shutter_run: 30        # seconds for a full open→closed travel
+      opening_time: 30       # seconds for a full closed→open travel
 ```
 
-Defaults and limits, from the validator: `shutter_run` defaults to `20` seconds
-and must be at least `1`; `slat_time` defaults to `0` (two-phase model off) and
-must leave at least one second of curtain travel in both directions;
-`opening_time` and `closing_time` default to `shutter_run`; `advanced` and
+Defaults and limits, from the validator: `opening_time` defaults to `20` seconds
+and must be at least `1`, and `closing_time` defaults to `opening_time`;
+`shutter_run` is the legacy alias of `opening_time` and still works; `slat_time`
+defaults to `0` (two-phase model off) and must leave at least one second of curtain
+travel in both directions; `roll` defaults to `1.6` on `class: shutter` and to `1.0`
+on every other class, and must be between `1.0` and `5.0`; `tilt`, `advanced` and
 `inverted` default to `false`; `class` defaults to `shutter`.
+
+`roll: 1.0` is the plain linear estimate of 0.4.1 and earlier — set it explicitly on
+a cover whose behaviour you do not want to change. See
+[Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll),
+and [Calibrating a shutter in centimetres](#calibrating-a-shutter-in-centimetres)
+below for measuring your own.
 
 Such covers are marked `assumed_state`, which is why the dashboard card shows
 separate up/stop/down buttons rather than a toggle. While the cover moves, the
@@ -591,8 +601,9 @@ gateway:
     living_room_shutter:
       where: "81"
       name: "Living Room Shutter"
-      shutter_run: 30
+      opening_time: 30
       slat_time: 3         # 3 s of slats + 27 s of curtain, each way
+      tilt: true           # offer the tilt controls as well
 ```
 
 `current_position` then counts the **curtain** only (0 = on the floor, 100 = up) and
@@ -601,14 +612,21 @@ gateway:
 is in
 [Configuration → The two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
 
-If the motor is measurably slower in one direction, replace `shutter_run` with
-`opening_time` and `closing_time` (`shutter_run` stays the fallback for both):
+**Since 0.4.2 `tilt: true` is what creates the tilt controls.** `slat_time` on its
+own still splits the run in two phases — the timing, the meaning of position `0` and
+the run computed by `set_cover_position` are unchanged — but the entity offers no
+`current_tilt_position` and no `cover.*_tilt` services without it. Add the key to
+every cover you actually tilt from Home Assistant.
+
+If the motor is measurably slower in one direction, add `closing_time` next to
+`opening_time`:
 
 ```yaml
       bedroom_shutter:
         where: "82"
         name: "Bedroom Shutter"
         slat_time: 3
+        tilt: true
         opening_time: 32
         closing_time: 28
 ```
@@ -616,9 +634,9 @@ If the motor is measurably slower in one direction, replace `shutter_run` with
 ### Closed, with the slats open
 
 The classic night position: curtain all the way down, slats open for a bit of air
-and light. It needs a **basic** actuator with `slat_time` set — the tilt services
-only exist there, and an `advanced:` cover gets no tilt control at all — and is a
-single service call: the cover runs up for `slat_time` seconds and stops.
+and light. It needs a **basic** actuator with `slat_time` set **and `tilt: true`** —
+the tilt services only exist there, and an `advanced:` cover gets no tilt control at
+all — and is a single service call: the cover runs up for `slat_time` seconds and stops.
 
 ```yaml
 script:
@@ -658,10 +676,12 @@ script:
           position: 5
 ```
 
-With `shutter_run: 30` and `slat_time: 3` that runs the motor for
-`3 + 0.05 × 27 = 4.35` seconds: three to open the slats, then a little over one to
-lift the curtain. Without `slat_time` the same call would run 1.5 s and leave the
-curtain on the floor.
+With `opening_time: 30` and `slat_time: 3` that runs the motor for about `4.7`
+seconds: three to open the slats, then a little under two to lift the curtain — the
+curtain is at its slowest down there, which is why it is not the `0.05 × 27 = 1.35`
+seconds a linear model would use (that is what `roll: 1.0` gives, and the shutter
+then stops short of the 5 %). Without `slat_time` at all the same call would run
+1.5 s and leave the curtain on the floor.
 
 ### `set_cover_position`
 
@@ -669,9 +689,11 @@ curtain on the floor.
 
 - **advanced**: the position is sent to the actuator directly.
 - **basic**: the cover is started in the right direction and stopped by a timer
-  after the run computed through both phases of the model. Without `slat_time` that
-  is the plain `|target − current| / 100 × shutter_run` seconds; with it, the slat
-  phase is added whenever the curtain leaves (or reaches) the floor.
+  after the run computed through both phases of the model and through the `roll`.
+  With `roll: 1.0` and no `slat_time` that is the plain
+  `|target − current| / 100 × opening_time` seconds; the roll bends it (a run near
+  the floor takes longer than the same percentage near the top), and `slat_time`
+  adds the slat phase whenever the curtain leaves (or reaches) the floor.
 - **basic, target `0` or `100`**: the cover is run into its end stop instead of being
   stopped by a timer, which re-calibrates the estimate for free (the end-stop frame
   snaps the estimate to `0` / `100`; see the two-phase model notes in the
@@ -707,23 +729,236 @@ incoming frames, so both directions stay consistent.
         where: "84"
         name: "Garage Blind"
         inverted: true
-        shutter_run: 18
+        opening_time: 18
 ```
 
-### Tuning `shutter_run`
+### Calibrating a shutter in centimetres
 
-1. Set `shutter_run` to your best guess and reload the integration.
+The run times are a stopwatch job. The `roll` — how much faster the curtain travels
+when it is up than when it is down, see
+[Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll)
+— is not: you cannot see it, you can only measure where the shutter *ends up*. That
+is what the two calibration actions do. You measure one shutter with a tape measure,
+and every similar shutter in the house then gets the same model scaled by its own
+height.
+
+> **The cover runs to a full end stop and back, twice.** Nothing may be in the way:
+> no open window, no plant on the sill, nobody underneath. Do this while you are
+> standing in front of it — you have to measure it anyway.
+
+#### Prerequisites
+
+Write `opening_time` and `closing_time` **first**, measured with a stopwatch from the
+moment the motor starts to the moment it stops by itself at the end stop, in each
+direction (`cover.open_cover` and `cover.close_cover`, both all the way). Everything
+below is built on them: the run drives the motor for exactly half of one of them, and
+the computation solves the model against both.
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+  cover:
+    living_room_shutter:
+      where: "81"
+      name: "Living Room Shutter"
+      opening_time: 22.3     # measured, full upward run
+      closing_time: 21.7     # measured, full downward run
+```
+
+Reload the integration and check the `Opening time` / `Closing time` attributes of
+the entity: they are what the calibration will use.
+
+Measure the **height** as well — floor to the bottom edge with the shutter fully
+open, in centimetres. It is 195 cm in this example.
+
+#### Step 1 — the half descent
+
+From **Developer tools → Actions**, in YAML mode:
+
+```yaml
+action: myhome.cover_calibration_run
+target:
+  entity_id: cover.living_room_shutter
+data:
+  direction: close
+```
+
+The cover opens fully, waits until it is certainly against the top end stop, then
+closes for exactly half its `closing_time` and stops. **Measure the centimetres from
+the floor to the bottom edge** and write the number down (85 cm here).
+
+#### Step 2 — the half ascent
+
+The same action, the other way:
+
+```yaml
+action: myhome.cover_calibration_run
+target:
+  entity_id: cover.living_room_shutter
+data:
+  direction: open
+```
+
+The cover closes fully, then opens for half its `opening_time` and stops. Measure
+again (88 cm here). This second measurement is what lets step 3 solve the
+`slat_time` too; without it the configured `slat_time` is taken as correct and only
+the `roll` is solved.
+
+#### Step 3 — compute the model
+
+```yaml
+action: myhome.cover_calibration_compute
+target:
+  entity_id: cover.living_room_shutter
+data:
+  height: 195
+  closed_half_cm: 85
+  opened_half_cm: 88
+```
+
+The action moves nothing and writes nothing: it solves the model and answers. In
+*Developer tools → Actions* the response is shown under the call; in a script use
+`response_variable:`. Its shape (**your numbers will be different**):
+
+```yaml
+roll: 1.69
+slat_time: 4.7
+opening_time: 22.3
+closing_time: 21.7
+height: 195
+residual_cm:
+  closed: 0.1
+  opened: 0.4
+yaml: |
+  cover_profiles:
+    living_room_shutter:
+      reference_height: 195
+      opening_time: 22.3
+      closing_time: 21.7
+      slat_time: 4.7
+      roll: 1.69
+  # on the cover itself:
+  #   profile: living_room_shutter
+  #   height: 195
+```
+
+`residual_cm` is the check: it is how far the solved model lands from each
+measurement. A few millimetres means the shutter really does behave like one motor
+and one roll; several centimetres means it does not, and the numbers below it are a
+best fit rather than a description.
+
+Paste the snippet into `myhome.yaml` — the `cover_profiles:` block at gateway level,
+beside the platform sections, and the two commented lines onto the cover itself.
+Rename the profile to something you will recognise (`tall`, `bedrooms`, `2m_shutter`)
+if it is going to describe more than the one cover it was measured on.
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+
+  cover_profiles:
+    tall:
+      reference_height: 195
+      opening_time: 22.3
+      closing_time: 21.7
+      slat_time: 4.7
+      roll: 1.69
+
+  cover:
+    living_room_shutter:
+      where: "81"
+      name: "Living Room Shutter"
+      profile: tall
+      height: 195
+```
+
+The `opening_time` / `closing_time` keys can come off the cover now: the profile
+carries them, and at the reference height nothing is scaled.
+
+#### Step 4 — reload and check
+
+Reload the integration (**Settings → Devices & services → MyHOME → ⋮ → Reload**; a
+full restart is not needed) and confirm the `Roll` attribute of the entity. Then run
+the cover fully open once, so the estimate has a reference, and ask for the middle:
+
+```yaml
+action: cover.set_cover_position
+target:
+  entity_id: cover.living_room_shutter
+data:
+  position: 50
+```
+
+Measure. On a 195 cm shutter the bottom edge should now sit within a couple of
+centimetres of 97 cm. Before the calibration it would have stopped noticeably low.
+
+#### Step 5 — every other shutter in the house
+
+Give the others the same profile and **their own height**, and nothing else:
+
+```yaml
+  cover:
+    kitchen_shutter:
+      where: "82"
+      name: "Kitchen Shutter"
+      profile: tall
+      height: 120
+    hall_shutter:
+      where: "83"
+      name: "Hall Shutter"
+      profile: tall
+      height: 160
+```
+
+The times and the roll are scaled per cover — the arithmetic is in
+[Configuration → How a height scales a profile](configuration.md#how-a-height-scales-a-profile).
+Reload, run them all to 50 % and walk round with the tape measure. Correct only the
+ones that miss: a written key beats the profile key by key, so a shutter with a
+slower motor keeps the profile and overrides one number.
+
+```yaml
+    hall_shutter:
+      where: "83"
+      name: "Hall Shutter"
+      profile: tall
+      height: 160
+      closing_time: 19.4    # this one is measurably slower coming down
+```
+
+A cover that misses by a lot has no business in that profile: measure it with steps
+1-3 and give it a profile of its own.
+
+#### What accuracy to expect
+
+- **On the calibrated cover**: 2-3 cm at mid-travel on a 2 m shutter, which is as
+  good as the measurements you fed it.
+- **On the derived covers**: a little more. The derivation assumes the same product —
+  same motor, same slat profile, same tube — and scales it by height alone. A
+  different motor is a different profile.
+- **The end stops are exact either way**: `0` and `100` are reached by running into
+  the physical stop, not by a timer, and that is also what re-synchronises the
+  estimate. A basic actuator never reports its position; everything in between the
+  stops remains an estimate, only now a much better one.
+- Re-measure after mechanical work on the shutter. Nothing else drifts.
+
+### Tuning the travel times
+
+1. Set `opening_time` to your best guess and reload the integration.
 2. Close the cover fully (`cover.close_cover`), wait for it to stop moving on its
    own, then open it fully with a stopwatch running.
-3. Set `shutter_run` to the measured seconds, save, reload.
+3. Set `opening_time` to the measured seconds, save, reload. Time the way down too,
+   and add `closing_time` if it differs by more than a second.
 4. On the same upward run, note when the **bottom edge leaves the floor**: those
    seconds are `slat_time`.
-5. Check `set_cover_position` at 50 %: if the cover consistently overshoots,
-   `shutter_run` is too large; if it stops short, too small.
+5. Check `set_cover_position` at 50 %: if the cover consistently overshoots the
+   times are too large, if it stops short they are too small — but a *systematic*
+   miss at mid-travel with the end stops right is the `roll`, not the times, and
+   [Calibrating a shutter in centimetres](#calibrating-a-shutter-in-centimetres)
+   solves it properly.
 
-The values are exposed on the entity as the `Shutter run` attribute for basic
-covers (plus `Slat time`, `Opening time` and `Closing time` when in use), so you
-can confirm what is actually loaded.
+The values are exposed on basic covers as the `Opening time`, `Closing time` and
+`Roll` attributes (plus `Slat time`, `Height` and `Profile` when in use), so you can
+confirm what is actually loaded.
 
 ### "Movement started / movement finished" automation
 
