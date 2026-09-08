@@ -42,12 +42,19 @@ change to the roll model, the profiles or the calibration maths.
 
 - **Stop frames overtake the command queue.** A stop (`*2*0*<where>##`) is handed to a
   sending worker before any movement or status frame already waiting **for another
-  cover**; ordering among stops, and among everything else, stays FIFO. It never
-  overtakes a frame queued for its own cover: what one shutter is told still reaches
-  the bus in the order it was told, so a stop can never end a run that has not started.
-  A late stop lengthens a run exactly as a late start shortens it, and twelve stops can
-  collide just as twelve starts can. The queue bound, the TTL, the published queue
-  length and the diagnostics counters are unchanged and still count the total.
+  device**; ordering among stops, and among everything else, stays FIFO. Behind a
+  frame of its own device it is inserted right after that frame, not appended behind
+  every other cover's too, so a scene moving a dozen other shutters can no longer make
+  the stop wait for all of them; what one device is told still reaches the bus in the
+  order it was told, so a stop can never end a run that has not started. A status
+  request for the same device does not hold the stop back either — only another
+  movement frame does — and "same device" is `(WHO, WHERE, bus interface)`, so a light
+  and a cover sharing a WHERE are told apart. A late stop lengthens a run exactly as a
+  late start shortens it, and twelve stops can collide just as twelve starts can. The
+  queue bound, the TTL, the published queue length and the diagnostics counters are
+  unchanged and still count the total. This ordering is a guarantee of the queue, not
+  of the bus: with `command_worker_count` set above its default of `1`, two adjacent
+  frames for the same device can still be written out of order.
 - **`myhome.cover_calibration_run` reports the interval the motor really ran.** It
   starts timing the half run when the direction frame reaches the bus, and
   `motor_seconds` is now the interval between that delivery and the delivery of the

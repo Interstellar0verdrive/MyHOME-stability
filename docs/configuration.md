@@ -86,6 +86,10 @@ without removing the integration:
   integration may hold open at once (default `1`, range `1`-`4`). Gateways only
   serve a handful of concurrent sessions, so `4` is the ceiling: see
   [Gateway compatibility → Note 3](gateway-compatibility.md#note-3--session-limits).
+  Per-device ordering, [stop priority included](architecture.md#the-command-queue), is
+  a guarantee of the queue, not of the bus: with more than one command worker, two
+  adjacent frames for the same device can be dequeued together and race each other
+  over the wire, so the default of `1` is where the guarantee holds end to end.
 - **Generate events in Home Assistant for each message received** — toggles
   `myhome_message_event` (see [Services and events](services-and-events.md))
 

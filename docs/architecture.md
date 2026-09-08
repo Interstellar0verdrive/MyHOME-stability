@@ -253,7 +253,7 @@ unknown number of late frames may still be in flight: the caller must discard it
 |---|---|---|
 | Bounded | `maxsize=200` | `put_nowait` raises `QueueFull`; `send()` returns `False` and logs a rate-limited WARNING. `myhome.send_message` turns that `False` into a visible `HomeAssistantError`. |
 | TTL | `60 s` | Checked when the item is dequeued, not while it waits. An expired command is dropped with a WARNING, never sent. |
-| Stop priority | WHO 2 `*2*0*<where>##` | A stop is handed to a worker before any movement or status frame queued for **other** devices, so a stop is not delayed by a scene that is still being written. It never overtakes a frame queued for its own WHERE: ordering per device stays strictly FIFO, and so does ordering among the stops themselves. |
+| Stop priority | WHO 2 `*2*0*<where>##` | A stop overtakes any movement or status frame queued for **other** devices, so it is not delayed by a scene that is still being written. Behind a frame of its own device it is inserted right after that frame, not at the tail of everyone else's — a status request for that device does not hold it back either. "Same device" is `(WHO, WHERE, bus interface)`, so a light and a cover that happen to share a WHERE are told apart. |
 | Timeout | `10 s` | Per `send_command` call: write + drain + read until ACK/NACK. |
 | Retry | **once**, in place | On a transport error the session is closed and one fresh session is opened for a second attempt. |
 | Drop | after the second failure | A rate-limited WARNING names the command. It is **never re-queued**: a stale command is never replayed minutes later. |
@@ -279,18 +279,23 @@ session if it had gone idle, write, read replies until the ACK. A dozen commands
 issued in the same instant therefore reach the bus spread over more than a second.
 That is invisible for a light, and decisive for a cover that times its own run.
 
-**Stops jump the queue, except their own cover's.** `_CommandQueue` is an
+**Stops jump the queue, except their own device's.** `_CommandQueue` is an
 `asyncio.Queue` subclass with a second deque for WHO 2 stop frames (`*2*0*<where>##`): a
 queued stop is handed to a worker before any movement or status frame waiting for
 **other** devices, so a stop is not held up by a scene that is still being written. It
-enters that deque only when nothing else for the same `where` is waiting; when the
-movement it has to end is itself still queued, the stop is appended behind it, so the
-frames of one cover always reach the bus in the order they were asked for. Ordering
-among stops, and among everything else, stays FIFO. A late stop lengthens a run exactly
-as a late start shortens it, so the frame that *ends* a movement is the one worth
-prioritising. The bound (`COMMAND_QUEUE_MAXSIZE`), the TTL, `task_done()` / `join()`,
-the published `queue_length` and `diagnostics.queue_size` are all still the **total** of
-both.
+enters that deque only when nothing else for the same device is waiting; when a
+movement frame for that device is itself still queued, the stop is inserted right
+behind the last one of them — not appended behind everyone else's frames too — so a
+scene moving a dozen other covers can no longer make the stop wait for all of them,
+while the frames of that one device still reach the bus in the order they were asked
+for. "Same device" is `(WHO, WHERE, bus interface)`, so a WHO 1 light and the cover at
+the same WHERE, or the same WHERE on two bus interfaces, are never confused with one
+another; a status request for that device does not count either, since reordering a
+reply changes nothing. Ordering among stops, and among everything else, stays FIFO. A
+late stop lengthens a run exactly as a late start shortens it, so the frame that *ends*
+a movement is the one worth prioritising. The bound (`COMMAND_QUEUE_MAXSIZE`), the TTL,
+`task_done()` / `join()`, the published `queue_length` and `diagnostics.queue_size` are
+all still the **total** of both.
 
 **A queued command reports what became of it.** `send()` and `send_status_request()`
 take two keyword-only callables, `on_delivered(at)` and `on_dropped()`; exactly one of
