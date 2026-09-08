@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-08
+
 Covers: the position estimate of a basic actuator now follows the shutter's real
 mechanics instead of a straight line, it can be measured in centimetres with two new
 actions, and one measured shutter can describe every other shutter of the same kind.
@@ -869,7 +871,8 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
 
-[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.0
 [0.3.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.3.1
