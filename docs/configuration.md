@@ -262,7 +262,9 @@ basic (timed) cover, the second to every `advanced:` one.
 
 The gateway repeats commands back to Home Assistant a moment after it accepts them,
 and those repeats look exactly like a keypad press. A frame arriving within 1.5 s of
-a command sent by Home Assistant is ignored as such a repeat only when it can be one:
+a command sent by Home Assistant — counted, since 0.4.3, from the moment that command
+was actually written to the bus rather than from the moment it was queued — is ignored
+as such a repeat only when it can be one:
 a `stopped` frame right after a movement we asked for, or a copy of the movement a
 stop of ours interrupted — a `cover.stop_cover`, or the stop the integration sends by
 itself at the end of a *set position* or a tilt run. A movement in any other
@@ -435,6 +437,13 @@ Consequences, all of them deliberate:
   which does nothing there at all.
 - `cover.set_cover_position` computes the run through **both** phases: from fully
   closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
+- **The clock starts when the frame reaches the bus**, not when the service call is
+  made (since 0.4.3). One command session writes about ten frames a second, so
+  commanding a dozen covers at once staggers their *starts* over more than a second —
+  but not the length of their runs: each shutter still runs exactly the seconds its
+  target costs. The bus adds two constant delays of its own, the motor starting about
+  0.6 s after its frame and stopping about 0.1 s after the stop; they are not deducted
+  anywhere, they are part of what a calibration in centimetres measures and absorbs.
 - `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
   what re-calibrates the estimate: a "stopped" frame that arrives during a full run
   commanded from Home Assistant, once at least three quarters of the expected run

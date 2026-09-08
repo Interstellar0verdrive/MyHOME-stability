@@ -129,8 +129,8 @@ What it does to each cover, in order:
    model — `(closing_time - slat_time) / 2` for `close` (it starts from fully open,
    so no slat phase comes first), `slat_time + (opening_time - slat_time) / 2` for
    `open` (it starts from fully closed, so the slats open first), with `slat_time`
-   at `0` when it is not set — counted from the moment that command went out, then
-   sends `stop_cover`;
+   at `0` when it is not set — counted from the moment that command reached the bus,
+   then sends `stop_cover`;
 3. leaves the cover there and reports what it did.
 
 The commands are the entity's own, so the position estimate, the echo filtering and
@@ -141,7 +141,7 @@ Response data, keyed by entity id:
 | Key | Value |
 |---|---|
 | `direction` | The direction that was run. |
-| `motor_seconds` | The seconds the motor was run, from the formulas above. |
+| `motor_seconds` | The seconds the motor really ran: the interval between the delivery of the direction frame and the delivery of the stop, which is what the run above was timed on since 0.4.3 (never less than the run it asked for). With an idle command queue it is the figure from the formulas above; with frames waiting in front of it, it is that figure plus the time the stop spent queued. |
 | `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. `slat_time` is reported, never solved for: it is the configured value. |
 
 Refused with a `ServiceValidationError`, naming the entity:
@@ -149,6 +149,12 @@ Refused with a `ServiceValidationError`, naming the entity:
 - on an `advanced:` cover — it reports its own position, there is nothing to
   calibrate;
 - on a cover that is already moving.
+
+It fails with a `HomeAssistantError`, naming the entity, when one of its own frames
+never reaches the bus (the command queue refused it, its time to live expired, the
+gateway never answered): a run whose direction frame or whose stop was lost has no
+interval to report, and reporting the seconds it *meant* to run would send you off to
+measure a shutter that did not move, or did not stop.
 
 > The cover runs to a **full end stop and back**, twice the length of a normal
 > command. Make sure nothing is in the way, above or below.

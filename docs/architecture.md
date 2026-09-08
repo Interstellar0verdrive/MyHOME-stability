@@ -269,6 +269,48 @@ identically at DEBUG.
 `close_listener()` drains whatever is left and logs the discarded commands (up to
 the first ten by name).
 
+### Delivery order and delivery instants (0.4.3)
+
+`send()` only *queues* a frame and returns. The frames are written by
+`command_worker_count` sending loops — one by default, four at most, each with its own
+command session — and one frame costs about **0.1 s** on a MyHOMEServer1: open the
+session if it had gone idle, write, read replies until the ACK. A dozen commands
+issued in the same instant therefore reach the bus spread over more than a second.
+That is invisible for a light, and decisive for a cover that times its own run.
+
+**Stops jump the queue.** `_CommandQueue` is an `asyncio.Queue` subclass with a second
+deque for WHO 2 stop frames (`*2*0*<where>##`): a queued stop is handed to a worker
+before any movement or status frame already waiting. Ordering among stops, and among
+everything else, stays FIFO. A late stop lengthens a run exactly as a late start
+shortens it, so the frame that *ends* a movement is the one worth prioritising. The
+bound (`COMMAND_QUEUE_MAXSIZE`), the TTL, `task_done()` / `join()`, the published
+`queue_length` and `diagnostics.queue_size` are all still the **total** of both.
+
+**A queued command reports what became of it.** `send()` and `send_status_request()`
+take two keyword-only callables, `on_delivered(at)` and `on_dropped()`; exactly one of
+the two fires, exactly once, on the event loop. `on_delivered` carries the monotonic
+timestamp taken immediately *before* the write that succeeded, and fires on a NACK as
+well as on an ACK — both mean the gateway took the frame — before the replies of that
+command are dispatched. `on_dropped` covers every path that loses the command: queue
+closed, queue full, TTL expired, authentication failure, attempts exhausted, the
+worker's catch-all arm, the drain in `close_listener()`, and a worker cancelled
+mid-write. An exception raised inside either callback is logged and swallowed, like
+every other call into an entity, and the command still counts as settled.
+
+`MyHOMECover` is so far the only caller that asks. A basic cover starts its movement
+clock optimistically at the enqueue — the entity reacts to the service call at once —
+and re-bases it when the delivery is reported: `_move_started_at`, the echo window and
+the pending timed stop all move onto the delivery instant, converted from the
+gateway's monotonic clock by measuring the offset between the two clocks at callback
+time. A delivery no later than the optimistic start changes nothing, which is what
+makes the behaviour with an idle queue identical to 0.4.2. The stop the cover sends by
+itself freezes the estimate at *its* delivery instant, and `on_dropped` on a direction
+frame cancels the movement rather than estimating one that never started. Advanced
+actuators ask for no report — they publish their real position — and the constant
+latency between the write and the motor (about 0.6 s to start, 0.1 s to stop, measured
+from the gateway's own echoes) is not compensated here: it is part of what the
+centimetre calibration measures and absorbs.
+
 ## Availability
 
 `is_connected` is `True` only while the **event** session is verified alive. Every
