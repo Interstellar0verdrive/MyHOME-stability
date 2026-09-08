@@ -7,7 +7,8 @@ tests can assert the OpenWebNet frames each platform produces.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Iterator
+import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -67,15 +68,39 @@ class Commands:
 
 @contextmanager
 def mock_commands() -> Iterator[Commands]:
-    """Record everything the entities send through the gateway handler."""
+    """Record everything the entities send through the gateway handler.
+
+    The stand-in behaves like a gateway with an empty command queue: the frame is
+    written the instant it is handed over, so ``on_delivered`` (0.4.3) fires inside
+    ``send`` with the timestamp of that moment. Every timing an entity derives from a
+    delivery is then the one it would have derived from the enqueue, which is what
+    makes these tests pin the 0.4.2 behaviour unchanged. ``mock_slow_commands``
+    is the counterpart for the queue that is *not* empty.
+    """
     commands = Commands()
 
-    async def _send(self: Any, message: OWNMessage) -> bool:
+    async def _send(
+        self: Any,
+        message: OWNMessage,
+        *,
+        on_delivered: Callable[[float], None] | None = None,
+        on_dropped: Callable[[], None] | None = None,
+    ) -> bool:
         commands.sent.append(message)
+        if on_delivered is not None:
+            on_delivered(time.monotonic())
         return True
 
-    async def _send_status_request(self: Any, message: OWNMessage) -> bool:
+    async def _send_status_request(
+        self: Any,
+        message: OWNMessage,
+        *,
+        on_delivered: Callable[[float], None] | None = None,
+        on_dropped: Callable[[], None] | None = None,
+    ) -> bool:
         commands.status.append(message)
+        if on_delivered is not None:
+            on_delivered(time.monotonic())
         return True
 
     with (

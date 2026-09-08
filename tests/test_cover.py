@@ -1359,7 +1359,7 @@ async def test_a_stop_the_gateway_refused_changes_nothing(
         await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
         await _advance(hass, freezer, 5)
 
-        async def _refuse(self, message) -> bool:
+        async def _refuse(self, message, **kwargs) -> bool:
             return False
 
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
@@ -1407,7 +1407,7 @@ async def test_a_timed_stop_the_gateway_refused_runs_on_to_the_end_stop(
             COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 50}, blocking=True
         )
 
-        async def _refuse(self, message) -> bool:
+        async def _refuse(self, message, **kwargs) -> bool:
             return False
 
         # 100 -> 50 on a 30 s run: the auto-stop is due after 15 s, and refused.
@@ -1454,7 +1454,7 @@ async def test_a_refused_stop_cover_arms_no_echo_window(
         await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
         await _advance(hass, freezer, 5)
 
-        async def _refuse(self, message) -> bool:
+        async def _refuse(self, message, **kwargs) -> bool:
             return False
 
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _refuse):
@@ -1997,7 +1997,7 @@ async def test_a_short_refused_timed_run_survives_the_gateway_echo(
         )
         assert commands.sent_frames == ["*2*1*85##"]
 
-        async def _refuse(self, message) -> bool:
+        async def _refuse(self, message, **kwargs) -> bool:
             return False
 
         # The 1.2 s tilt run is over and its stop is refused: the slats keep going.
@@ -2050,7 +2050,7 @@ async def test_a_real_stop_inside_the_inherited_echo_window_is_re_read(
         assert commands.sent_frames == ["*2*1*85##"]
         commands.clear()
 
-        async def _refuse(self, message) -> bool:
+        async def _refuse(self, message, **kwargs) -> bool:
             return False
 
         # Same setup as the test above: the 1.2 s tilt run is over, its stop is refused,
@@ -2181,7 +2181,7 @@ async def test_a_fresh_command_after_a_continued_run_re_reads_nothing(
             COVER, "set_cover_tilt_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40}, blocking=True
         )
 
-        async def _refuse(self, message) -> bool:
+        async def _refuse(self, message, **kwargs) -> bool:
             return False
 
         # The 1.2 s tilt run ends, its stop is refused: the run continues to the end
