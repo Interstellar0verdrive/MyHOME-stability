@@ -123,10 +123,13 @@ What it does to each cover, in order:
 1. sends the **opposite** full command (`open_cover` for `direction: close`,
    `close_cover` for `direction: open`) and waits the configured run of that
    direction plus 3 seconds, so the cover is certainly against its end stop;
-2. sends the requested direction and, exactly half of the **curtain** run as
-   currently configured — `(closing_time - slat_time) / 2` for `close`,
-   `(opening_time - slat_time) / 2` for `open`, with `slat_time` at `0` when it is
-   not set — after that command went out, sends `stop_cover`;
+2. sends the requested direction and runs the motor for exactly the time a
+   `set_cover_position: 50` would use with the current configuration and a linear
+   model — `(closing_time - slat_time) / 2` for `close` (it starts from fully open,
+   so no slat phase comes first), `slat_time + (opening_time - slat_time) / 2` for
+   `open` (it starts from fully closed, so the slats open first), with `slat_time`
+   at `0` when it is not set — counted from the moment that command went out, then
+   sends `stop_cover`;
 3. leaves the cover there and reports what it did.
 
 The commands are the entity's own, so the position estimate, the echo filtering and
@@ -137,7 +140,7 @@ Response data, keyed by entity id:
 | Key | Value |
 |---|---|
 | `direction` | The direction that was run. |
-| `motor_seconds` | The seconds the motor was run, i.e. half of the curtain run above. |
+| `motor_seconds` | The seconds the motor was run, from the formulas above. |
 | `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. |
 
 Refused with a `ServiceValidationError`, naming the entity:
