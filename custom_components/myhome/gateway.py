@@ -323,6 +323,13 @@ class _CommandQueue(asyncio.Queue):
     so they must not demote a stop either. Anything the scan cannot key (a message
     without a WHERE) falls back to the tail of the ordinary deque, which is the
     conservative side: the error direction is always "too late", never "inverted".
+
+    **The ordering guarantee is the queue's, not the bus's.** With
+    ``command_worker_count`` > 1 (``CONF_WORKER_COUNT``, up to ``MAX_COMMAND_WORKERS``)
+    two workers dequeue two adjacent frames in the same loop iteration and write them
+    concurrently, so a stop can still reach the socket before the direction frame it
+    must end: opening a session, a transport retry or a slow ACK decides the race, not
+    this queue. The default is one worker, where the guarantee holds end to end.
     """
 
     _queue: deque[_QueuedCommand]
