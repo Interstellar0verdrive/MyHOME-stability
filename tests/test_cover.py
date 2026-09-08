@@ -3586,13 +3586,17 @@ async def test_the_two_bus_costs_can_be_measured_per_cover(
             assert slow.write_next() == "*2*2*84##"
             await hass.async_block_till_done()
 
-            await _advance_exact(hass, freezer, 1.2 + TWELVE_RUN_SEC - 0.4)
+            # 100 -> 40 on a 30 s run is 18 s of motor: 1.2 + 18 - 0.4 between the
+            # two frames, and not a millisecond before it.
+            await _advance_exact(hass, freezer, 1.2 + 18.0 - 0.4 - 0.1)
+            assert slow.queue == []
+            await _advance_exact(hass, freezer, 0.1)
             assert len(slow.queue) == 1
             assert slow.write_next() == "*2*0*84##"
             await hass.async_block_till_done()
 
         ran = slow.instant("*2*0*84##") - slow.instant("*2*2*84##")
-        assert abs(ran.total_seconds() - (1.2 + TWELVE_RUN_SEC - 0.4)) < 0.001
+        assert abs(ran.total_seconds() - (1.2 + 18.0 - 0.4)) < 0.001
         assert hass.states.get(TUNED_ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
 
         # A *free* run anticipates nothing: no stop frame ends it, the actuator's own

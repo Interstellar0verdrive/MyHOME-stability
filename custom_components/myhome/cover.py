@@ -1291,8 +1291,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # The gateway echoes the frame it was given, not the one we queued.
             self._own_command_at = delivered
         # The motor starts `start_delay` after the frame, until the actuator says
-        # otherwise (0.4.4); with an idle queue and `start_delay: 0` this is the instant
-        # the clock already had, and the whole re-base is a no-op, term for term.
+        # otherwise (0.4.4). With an idle command queue the frame is written the instant
+        # it is handed over, so this lands a hair *before* the clock the enqueue already
+        # set (the same `start_delay` after the same instant) and the re-base is
+        # skipped: the ordinary single-cover case is untouched, term for term.
         started = delivered + timedelta(seconds=self._start_delay)
         if started <= self._move_started_at:
             return
