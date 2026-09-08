@@ -31,6 +31,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
+from OWNd.message import OWNAutomationCommand
 from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
     async_fire_time_changed_exact,
@@ -2375,9 +2376,17 @@ TWELVE_RUN_SEC = 18.0
 FRAME_GAP_SEC = 0.1
 
 
-def _frame_where(frame: str) -> str:
-    """The WHERE of an OWN frame: the last field before the terminator."""
-    return frame.rstrip("#").rsplit("*", 1)[-1]
+def _frame_where(frame: str) -> tuple[Any, str, Any]:
+    """The device an OWN frame addresses, keyed exactly as `gateway._CommandQueue`.
+
+    `(WHO, bare WHERE, bus interface)` straight off the parsed message, so the double
+    is no *less* conservative than the queue it models: reading the last field before
+    the terminator instead gives `81#4#3` for `*2*1*81#4#3##` (which would let a stop
+    for one bus interface overtake a direction frame for another) and `50` for an
+    advanced cover's `*#2*81*#11#001*50##`.
+    """
+    message = OWNAutomationCommand(frame)
+    return (message.who, message.where, message.interface)
 
 
 class SlowCommandPath:

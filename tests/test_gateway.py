@@ -758,29 +758,116 @@ async def test_a_stop_never_overtakes_a_frame_for_the_same_cover() -> None:
 
     A stop written before the movement it is meant to end leaves the actuator with a
     stop while it stands still and then a direction frame nothing will ever stop: the
-    shutter runs to its end stop. So a stop queued while a frame for the same WHERE is
-    still waiting keeps its place behind it, and only overtakes the covers it has
+    shutter runs to its end stop. So a stop queued while a frame for the same device
+    is still waiting keeps its place behind it, and only overtakes the covers it has
     nothing to do with.
 
+    A queued *status request* for the same cover does not demote it (review 2): a
+    reply is order-independent, and the reconnect sweep, `async_update`, the echo
+    recheck and the safety timer all queue one, so counting them would demote nearly
+    every stop for nothing.
+
     Mutation caught: routing a stop into the priority deque on `is_stop` alone (the
-    cover's own movement is then written second).
+    cover's own movement is then written second); counting status requests in the
+    scan (the stop lands behind `*#2*81##` instead of in front of it).
     """
     handler = make_handler()
     assert await handler.send(OWNAutomationCommand.raise_shutter("81"))
     assert await handler.send_status_request(OWNAutomationCommand.status("81"))
     assert await handler.send(OWNAutomationCommand.stop_shutter("81"))
     assert await handler.send(OWNAutomationCommand.stop_shutter("82"))
-    # 82 has nothing waiting, so its stop goes first; 81's stays behind the two
-    # frames that were queued for it, in the order they were queued.
-    assert queued(handler) == ["*2*0*82##", "*2*1*81##", "*#2*81##", "*2*0*81##"]
+    # 82 has nothing waiting, so its stop goes first; 81's stays behind the direction
+    # frame it must end - and in front of the status request, which it may overtake.
+    assert queued(handler) == ["*2*0*82##", "*2*1*81##", "*2*0*81##", "*#2*81##"]
     assert handler.send_buffer.qsize() == 4
     assert handler.stats.queue_length == 4
 
     with fake_channels(command=Factory(FakeCommandChannel)) as (_, command, _):
         async with running(handler, listening=False):
             await asyncio.wait_for(handler.send_buffer.join(), 2)
-    assert command.instances[0].sent == ["*2*0*82##", "*2*1*81##", "*#2*81##", "*2*0*81##"]
+    assert command.instances[0].sent == ["*2*0*82##", "*2*1*81##", "*2*0*81##", "*#2*81##"]
     assert handler.send_buffer.empty()
+
+
+async def test_a_stop_waits_for_its_own_movement_and_for_nothing_else() -> None:
+    """It keeps its place behind its own frame, not behind the whole queue (review 2).
+
+    BUG-1(b)'s scenario: a scene moves twelve covers and the user stops the first one.
+    Appending the stop to the tail is safe, but it makes the priority worth nothing -
+    the shutter over-runs by the eleven unrelated frames queued after the direction
+    frame, which is exactly what 0.4.3 exists to avoid. It is inserted right after the
+    last frame for its own device instead.
+
+    Mutation caught: `_put` appending the stop to `_queue` instead of inserting it
+    (the stop comes out thirteenth), and the whole set of queue invariants that a
+    mid-deque insert could break - the total `qsize`, the published length, one
+    `task_done` per item (`join()` would hang otherwise) and the bound.
+    """
+    handler = make_handler()
+    for where in range(81, 94):
+        assert await handler.send(OWNAutomationCommand.lower_shutter(str(where)))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("81"))
+
+    expected = ["*2*2*81##", "*2*0*81##"] + [f"*2*2*{where}##" for where in range(82, 94)]
+    assert queued(handler) == expected
+    assert queued(handler).index("*2*0*81##") == 1
+    assert handler.send_buffer.qsize() == 14
+    assert handler.stats.queue_length == 14
+
+    with fake_channels(command=Factory(FakeCommandChannel)) as (_, command, _):
+        async with running(handler, listening=False):
+            # `join()` returning at all is the `task_done` bookkeeping still adding up.
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert command.instances[0].sent == expected
+    assert handler.send_buffer.empty()
+    assert handler.send_buffer.qsize() == 0
+
+
+async def test_the_stop_priority_tells_devices_apart_by_who_and_bus_interface() -> None:
+    """Only frames for the *same* device demote a stop (review 2).
+
+    `message.where` is the bare WHERE: `*2*1*81#4#3##`.where is `'81'`, and so is a
+    WHO 1 light's. Keying on it alone lets a light at WHERE 81, or the cover at the
+    same WHERE on another bus interface, demote a stop it could never invert. The key
+    is `(WHO, WHERE, interface)`, all three straight off `OWNCommand`.
+
+    Mutation caught: dropping WHO or `interface` from the key (each stop below then
+    lands in the ordinary deque, behind a frame for a different device).
+    """
+    handler = make_handler()
+    assert await handler.send(OWNLightingCommand.switch_on("81"))  # WHO 1, WHERE 81
+    assert await handler.send(OWNAutomationCommand.lower_shutter("81#4#5"))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("81#4#3"))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("81"))
+    assert queued(handler) == [
+        "*2*0*81#4#3##",
+        "*2*0*81##",
+        "*1*1*81##",
+        "*2*2*81#4#5##",
+    ]
+
+    # The same-device case still holds on an interface WHERE.
+    assert await handler.send(OWNAutomationCommand.stop_shutter("81#4#5"))
+    assert queued(handler)[-1] == "*2*0*81#4#5##"
+    assert handler.send_buffer.qsize() == 5
+
+
+async def test_the_stop_priority_respects_the_queue_bound() -> None:
+    """An inserted stop counts against `COMMAND_QUEUE_MAXSIZE` like any other frame.
+
+    Mutation caught: inserting into `_queue` without the bound (`put_nowait` checks
+    `full()`, which is `qsize()`, which is the total of both deques).
+    """
+    handler = make_handler()
+    handler.send_buffer = _CommandQueue(maxsize=2)
+    assert await handler.send(OWNAutomationCommand.lower_shutter("81"))
+    assert await handler.send(OWNAutomationCommand.lower_shutter("82"))
+    assert handler.send_buffer.full()
+    # Both routes are refused when the queue is full: the insert and the priority deque.
+    assert await handler.send(OWNAutomationCommand.stop_shutter("81")) is False
+    assert await handler.send(OWNAutomationCommand.stop_shutter("83")) is False
+    assert queued(handler) == ["*2*2*81##", "*2*2*82##"]
+    assert handler.send_buffer.qsize() == 2
 
 
 async def test_an_authentication_failure_settles_everything_queued_behind_it() -> None:

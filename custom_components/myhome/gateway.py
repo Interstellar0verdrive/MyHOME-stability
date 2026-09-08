@@ -305,13 +305,24 @@ class _CommandQueue(asyncio.Queue):
     still what ``queue_length`` reports. Ordering *among* stops and *among* everything
     else stays FIFO.
 
-    One frame never overtakes another addressed to the **same WHERE**: a stop queued
-    while that cover's own direction frame is still waiting is appended to the
-    ordinary deque instead, behind it. Otherwise the actuator would be told to stop
-    while it stands still and *then* told to move - and nothing would ever stop it
-    again, so the shutter would run to its end stop. The point of the priority is a
-    stop that is late because *twelve other covers* are ahead of it, and that is
-    exactly what is left.
+    One frame never overtakes another addressed to the **same device**: a stop queued
+    while that cover's own direction frame is still waiting goes into the ordinary
+    deque instead, *immediately behind the last frame for that device* - not at the
+    tail. Otherwise the actuator would be told to stop while it stands still and
+    *then* told to move - and nothing would ever stop it again, so the shutter would
+    run to its end stop. Appending to the tail would be safe too, but it would also
+    give up the whole point of the priority: a stop that is late because *twelve other
+    covers* are ahead of it would still wait for all twelve. Behind its own frame, in
+    front of everybody else's, is the contract.
+
+    "Same device" is ``(WHO, bare WHERE, bus interface)`` - all three straight off
+    ``OWNCommand``, so a WHO 1 light at WHERE 81 and the WHERE 81 on another bus
+    interface (``81#4#3`` vs ``81#4#5``) are told apart instead of demoting the stop.
+    Status requests are skipped by the scan: a reply is order-independent (the worst a
+    reordering costs is an answer that says "moving", which it would have said anyway),
+    so they must not demote a stop either. Anything the scan cannot key (a message
+    without a WHERE) falls back to the tail of the ordinary deque, which is the
+    conservative side: the error direction is always "too late", never "inverted".
     """
 
     _queue: deque[_QueuedCommand]
@@ -325,21 +336,40 @@ class _CommandQueue(asyncio.Queue):
         return (self._stops or self._queue).popleft()
 
     def _put(self, item: _QueuedCommand) -> None:
-        if getattr(item, "is_stop", False) and not self._addresses_something_queued(item):
+        if not getattr(item, "is_stop", False):
+            self._queue.append(item)
+            return
+        behind = self._last_index_for(item)
+        if behind is None:
             self._stops.append(item)
             return
-        self._queue.append(item)
+        # Behind its own device's last frame, in front of everybody else's.
+        self._queue.insert(behind + 1, item)
 
-    def _addresses_something_queued(self, item: _QueuedCommand) -> bool:
-        """True when an ordinary frame for the same WHERE is already waiting.
+    def _last_index_for(self, item: _QueuedCommand) -> int | None:
+        """Index in ``_queue`` of the last frame for the same device, else ``None``.
 
         Only the ordinary deque is searched: everything in ``_stops`` is written
         before it anyway, so a stop that follows another stop is already in order.
+        Status requests do not count - reordering a status reply changes nothing.
         """
+        key = self._address_key(item)
+        if key is None:  # pragma: no cover - every WHO 2 frame carries a WHERE
+            # Unkeyable: stay at the tail of the ordinary deque, overtaking nothing.
+            return len(self._queue) - 1
+        for index in range(len(self._queue) - 1, -1, -1):
+            other = self._queue[index]
+            if not other.is_status_request and self._address_key(other) == key:
+                return index
+        return None
+
+    @staticmethod
+    def _address_key(item: _QueuedCommand) -> tuple[Any, str, Any] | None:
+        """``(WHO, bare WHERE, bus interface)``, or ``None`` when there is no WHERE."""
         where = getattr(item.message, "where", None)
-        if where is None:  # pragma: no cover - every WHO 2 frame carries a WHERE
-            return True
-        return any(getattr(other.message, "where", None) == where for other in self._queue)
+        if where is None:
+            return None
+        return (getattr(item.message, "who", None), where, getattr(item.message, "interface", None))
 
     def qsize(self) -> int:
         return len(self._queue) + len(self._stops)
