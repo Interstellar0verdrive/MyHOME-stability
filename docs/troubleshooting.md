@@ -147,7 +147,9 @@ queued, while the frame itself left for the bus about a tenth of a second later 
 command already waiting; a scene moving twelve shutters at once stopped them 5 to 14 cm
 too high on a 195 cm window, the last one of the scene worst, while the same covers
 driven one at a time were exact. The run is now timed from the instant the frame is
-written, and stop frames are written before anything else waiting.
+written, and a stop frame is written before anything still waiting for the *other*
+covers — never before a frame of its own cover, which would end a run that had not
+started.
 
 If a scene still lands differently from a single command after 0.4.3:
 

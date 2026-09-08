@@ -154,7 +154,11 @@ It fails with a `HomeAssistantError`, naming the entity, when one of its own fra
 never reaches the bus (the command queue refused it, its time to live expired, the
 gateway never answered): a run whose direction frame or whose stop was lost has no
 interval to report, and reporting the seconds it *meant* to run would send you off to
-measure a shutter that did not move, or did not stop.
+measure a shutter that did not move, or did not stop. It waits for each of its frames
+to be either written or dropped for as long as that can take — the **Command queue
+TTL** plus the whole budget of one command, about 100 seconds with the defaults —
+before giving up on it, so a busy queue in front of the run delays it rather than
+failing it.
 
 > The cover runs to a **full end stop and back**, twice the length of a normal
 > command. Make sure nothing is in the way, above or below.

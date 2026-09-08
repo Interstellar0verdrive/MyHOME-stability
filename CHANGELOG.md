@@ -25,7 +25,9 @@ change to the roll model, the profiles or the calibration maths.
 - **The stop that ends a *set position* or a tilt run is timed the same way.** The
   motor keeps turning while the stop frame waits its turn, so the estimate is frozen
   where the shutter really got to when the stop left, not on the target it had already
-  passed.
+  passed. That stop is armed from the instant the direction frame reached the bus, and
+  is not queued before it, so a run whose start waited its turn still runs its full
+  length instead of being cut short by its own stop.
 - **A movement command that never reaches the bus no longer moves the estimate.** When
   the command path gives up on a direction frame — the queue TTL expired, the gateway
   never answered — the cover goes back to the position it started from, instead of
@@ -39,11 +41,13 @@ change to the roll model, the profiles or the calibration maths.
 ### Changed
 
 - **Stop frames overtake the command queue.** A stop (`*2*0*<where>##`) is handed to a
-  sending worker before any movement or status frame already waiting; ordering among
-  stops, and among everything else, stays FIFO. A late stop lengthens a run exactly as
-  a late start shortens it, and twelve stops can collide just as twelve starts can. The
-  queue bound, the TTL, the published queue length and the diagnostics counters are
-  unchanged and still count the total.
+  sending worker before any movement or status frame already waiting **for another
+  cover**; ordering among stops, and among everything else, stays FIFO. It never
+  overtakes a frame queued for its own cover: what one shutter is told still reaches
+  the bus in the order it was told, so a stop can never end a run that has not started.
+  A late stop lengthens a run exactly as a late start shortens it, and twelve stops can
+  collide just as twelve starts can. The queue bound, the TTL, the published queue
+  length and the diagnostics counters are unchanged and still count the total.
 - **`myhome.cover_calibration_run` reports the interval the motor really ran.** It
   starts timing the half run when the direction frame reaches the bus, and
   `motor_seconds` is now the interval between that delivery and the delivery of the
