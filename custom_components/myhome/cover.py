@@ -143,6 +143,8 @@ from .myhome_device import MyHOMEEntity, address_attributes
 # arrives within `STOP_ECHO_WINDOW_SEC` of the moment our own command reached the bus,
 # and only once - which includes the whole time that command spent in the command
 # queue, since the gateway can only echo a frame it has already been given (0.4.3).
+# Inside that wait the "only once" does not apply: the echo is still to come, so the
+# window is not consumed by what arrives before the write (see `_is_echo`).
 # Anything else is taken at face value. In particular a movement in a direction the
 # gateway could not possibly be echoing - we stopped it while it was closing and it
 # starts opening - is somebody at the keypad and is obeyed straight away.
@@ -155,8 +157,11 @@ from .myhome_device import MyHOMEEntity, address_attributes
 # stay wrong until the next command.
 STOP_ECHO_WINDOW_SEC = 1.5
 # How long after an ignored movement frame the actuator is asked for its status.
-# The answer can never be mistaken for an echo whatever this value is (`_is_echo`
-# disarms the window before scheduling the re-check), so the number is only about
+# The answer can never be mistaken for an echo whatever this value is - `_is_echo`
+# disarms the window before scheduling the re-check, and in the one case where it
+# does not (our own frame is still queued) the re-read never reaches the bus at all:
+# the frame is either written, and the movement it started is running, or dropped,
+# and the re-read goes with it - so the number is only about
 # usefulness: long enough for the gateway to have finished echoing our command and
 # for a real movement to have made some progress worth asking about, short enough
 # that the position is wrong for two seconds rather than until the next command.
@@ -1450,7 +1455,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             if frame_direction is None or frame_direction != self._stopped_direction:
                 return False
             recheck = True
-            pending = self._pending_stop is not None
+            # No `pending` term here, deliberately: this branch is only ever reached
+            # *after* our stop has reached the bus. `_mark_own_stop` is the only thing
+            # that puts the entity in it, and it runs from `_apply_stop_delivery`,
+            # which has already cleared `_pending_stop`; while our stop is still
+            # queued the entity is in the movement branch above. The term this line
+            # carried (`self._pending_stop is not None`) was therefore never true -
+            # nothing in the suite could tell it from a constant - and it would have
+            # been pointless anyway: a frame that has not been written cannot be
+            # echoed, and the window opens at the instant of the write.
+            pending = False
         elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
         # The window covers the whole wait as well (0.4.3, addendum 9): while the
         # frame this window belongs to is still queued, the second and a half has not
@@ -1472,6 +1486,32 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             frame_direction or "stopped",
             elapsed,
         )
+        if pending:
+            # The frame this window belongs to is *still in the queue*, so the gateway
+            # has not been given it yet and what just arrived cannot be its echo: the
+            # echo is still to come, a millisecond after the write and quite possibly
+            # before the delivery report. Closing the window here (the "each shape is
+            # ignored once" rule) would leave that real echo to be read as a keypad
+            # press and lose the run - the very failure this window exists to prevent.
+            # So the window stays armed until `_apply_movement_delivery` re-bases it
+            # onto the instant of the write.
+            #
+            # What is swallowed instead may have been a real stop, and the trade is
+            # deliberate: with our own frame still queued the motor has not started
+            # for us, so a stop now stops nothing of *this* run - our frame is written
+            # after it and starts the motor anyway - and the shape that is swallowed
+            # is "stopped", which is also what the estimate ends up saying if the
+            # frame is then dropped. Nothing is lost either way.
+            #
+            # The re-read is armed all the same, as the cheap half of the trade this
+            # window's history is made of: it is the one thing that would still ask
+            # the actuator if this window ever outlived the frame it belongs to. In
+            # both ordinary outcomes it asks nothing - the frame is written and the
+            # movement is running, which `_async_echo_recheck` sees and stays off the
+            # bus for, or the frame is dropped and `_cancel_timers` takes the re-read
+            # with the rest of the movement.
+            self._schedule_echo_recheck()
+            return True
         self._own_command_at = None
         if recheck:
             # It could just as well have been somebody pressing the same direction
@@ -1489,21 +1529,26 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def _async_echo_recheck(self, now: datetime) -> None:
         """The ignored movement frame may have been real: re-read the actuator status."""
         self._echo_recheck = None
-        # A later frame already started the estimate: nothing was lost, so skip the
-        # re-read. No test can reach this on HA 2026.9: `async_call_later` hands the
-        # job to `create_eager_task`, so this coroutine runs *inside* the timer
-        # callback and finishes without ever suspending (nothing on the way to
-        # `send_status_request` awaits anything real). There is therefore no window
-        # in which a bus frame could set `_moving` between the timer firing and this
-        # line. The guard stays because that is a detail of how HA schedules jobs,
-        # not a promise; it is excluded from coverage rather than chased.
+        # The estimate is running, so nothing was lost: skip the re-read. This is how
+        # the re-read armed while our own frame was still queued (`_is_echo`) ends:
+        # by the time it fires that frame has been written and the movement it started
+        # is under way, and asking the actuator would put a status request on the bus
+        # for an answer we already have. (The other end of that arm never gets here at
+        # all: a frame that is dropped instead cancels the movement, and every timer
+        # with it.)
+        #
+        # The two older arms cannot reach this line on HA 2026.9: `async_call_later`
+        # hands the job to `create_eager_task`, so this coroutine runs *inside* the
+        # timer callback and finishes without ever suspending (nothing on the way to
+        # `send_status_request` awaits anything real), which leaves no window in which
+        # a bus frame could set `_moving` between the timer firing and this line.
         #
         # A continued free run is the exception, and the reason for the second half of
         # the condition: there the estimate is *deliberately* still running while we
         # ask, because the whole question is whether the shutter is still running with
         # it. The answer costs one status request and can only help - it either
         # confirms the direction or delivers a real stop.
-        if self._moving is not None and not self._echo_after_restart:  # pragma: no cover - unreachable, see above
+        if self._moving is not None and not self._echo_after_restart:
             return
         LOGGER.debug(
             "%s Cover %s: re-reading the status after an ignored movement frame",

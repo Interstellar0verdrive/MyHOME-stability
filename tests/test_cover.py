@@ -3065,6 +3065,86 @@ async def test_the_same_answer_reported_before_it_arrives_is_still_an_echo(
         assert state.state == CoverState.OPEN
 
 
+async def test_a_keypad_stop_while_our_own_frame_is_still_queued(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Somebody presses stop while our direction frame is still waiting its turn.
+
+    Review 3 / risk 1: the extended window swallows that stop as if it were the echo
+    of our own frame - nothing in the frame tells the two apart - and the rule "each
+    shape is ignored once" then closed the window on it. The *real* echo, which
+    arrives a millisecond after the write and before the delivery report, was
+    therefore read as a keypad press: the run was ended by the "stopped", the target
+    died with it, and the "raising" behind it started a free run to the end stop.
+    Exactly the addendum-9 failure, re-entered through a stop that landed in the wait.
+
+    The window now stays armed while the frame it belongs to is queued, so the real
+    echo is still recognised and the run survives. What the cover guarantees here is
+    the full outcome, not a fallback: one stop, written 12 s after the direction
+    frame reached the bus, and the shutter on its 40 % target. Swallowing that keypad
+    press costs nothing, because our frame had not been written yet - the motor only
+    starts when it is, and it is written *after* the stop, so there was no run of
+    ours for that stop to end.
+
+    The re-read armed by the swallow finds the movement running and stays off the
+    bus (`_async_echo_recheck`); it is there for the case where our frame is dropped
+    and never starts anything.
+
+    Mutation caught: closing the window (`_own_command_at = None`) on a frame that
+    only the `pending` term kept inside it - no stop is ever sent and the cover ends
+    at 100 %.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            commands.clear()
+
+            # Half way through the wait: a real stop from the keypad, for a motor
+            # that is not running yet.
+            await _advance_exact(hass, freezer, 0.8)
+            await feed_event(hass, cover, "*2*0*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            # The gateway writes our frame and answers it on the monitor session,
+            # before the write is reported back to us.
+            await _advance_exact(hass, freezer, QUEUE_WAIT_SEC - 0.8)
+            assert slow.write_next(report=False) == "*2*1*81##"
+            for answer in _server1_answer("81", "1"):
+                await feed_event(hass, cover, answer)
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            slow.report_next()
+            await hass.async_block_till_done()
+            # The motor really started here, so the estimate starts here too.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            await _advance_exact(hass, freezer, 0.55)
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            # The stop falls due 12 s after the frame reached the bus, and the
+            # re-read armed in the queue asked the actuator nothing in between.
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - 0.55)
+            assert commands.status_frames == []
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+            for answer in ("*2*1000#0*81##", "*2*0*81##"):
+                await feed_event(hass, cover, answer)
+
+        assert slow.frames == ["*2*1*81##", "*2*0*81##"]
+        ran = slow.instant("*2*0*81##") - slow.instant("*2*1*81##")
+        assert abs(ran.total_seconds() - RUN_TO_40_SEC) < 0.001
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 40
+        assert state.state == CoverState.OPEN
+
+
 @pytest.mark.slow
 async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
