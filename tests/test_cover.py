@@ -244,17 +244,18 @@ async def test_position_estimate_while_opening(hass: HomeAssistant, tmp_path, fr
         assert hass.states.get(ENTITY).state == CoverState.OPENING
 
         await _advance(hass, freezer, 15)
-        # Unknown start position is assumed closed, so half a run is 50 %.
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+        # Unknown start position is assumed closed, so half a run is 50 % - less the
+        # half second the motor spends not turning yet (0.4.4): 14.5 s of a 30 s run.
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 48
 
         # The actuator reports it stopped: freeze the estimate there.
         await feed_event(hass, entity_object(hass, COVER, "2-81"), "*2*0*81##")
         state = hass.states.get(ENTITY)
         assert state.state == CoverState.OPEN
-        assert state.attributes[ATTR_CURRENT_POSITION] == 50
+        assert state.attributes[ATTR_CURRENT_POSITION] == 48
 
         await _advance(hass, freezer, 10)
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 48
 
 
 async def test_full_close_reaches_closed(hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory) -> None:
@@ -285,9 +286,11 @@ async def test_set_position_stops_on_time(hass: HomeAssistant, tmp_path, freezer
 
         await _advance(hass, freezer, 10)
         assert commands.sent_frames == ["*2*2*81##"]
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 67
+        # 9.5 s of motor: the first half second of the call is the bus (0.4.4).
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 68
 
-        # 60 % of a 30 s run = 18 s.
+        # 60 % of a 30 s run = 18 s of motor, so the stop frame leaves at
+        # 0.5 + 18 - 0.1 = 18.4 s and the shutter coasts onto the target.
         await _advance(hass, freezer, 9)
         assert commands.sent_frames == ["*2*2*81##", "*2*0*81##"]
         state = hass.states.get(ENTITY)
@@ -305,12 +308,14 @@ async def test_stop_cancels_the_timer(hass: HomeAssistant, tmp_path, freezer: Fr
         await _advance(hass, freezer, 6)
         await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
         assert commands.sent_frames == ["*2*2*81##", "*2*0*81##"]
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 80
+        # 5.5 s of motor before the frame, plus the tenth of a second the motor takes
+        # to obey it: 5.6 s of a 30 s run (0.4.4).
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 81
 
         # The auto-stop must not fire afterwards.
         await _advance(hass, freezer, 60)
         assert commands.sent_frames == ["*2*2*81##", "*2*0*81##"]
-        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 80
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 81
 
 
 async def test_inverted_flips_commands_and_events(
@@ -464,16 +469,19 @@ async def test_set_position_5_from_closed_runs_through_the_slat_phase(
         assert commands.sent_frames == ["*2*1*85##"]
 
         # 2 s in: still inside the slat phase, the curtain has not moved yet.
+        # 1.5 s of motor, since the first half second is the bus (0.4.4).
         await _advance(hass, freezer, 2)
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
-        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 67
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 50
         assert state.state == CoverState.OPENING
 
-        await _advance(hass, freezer, 1.7)  # 3.7 s: not there yet
+        await _advance(hass, freezer, 2.1)  # 4.1 s: not there yet
         assert commands.sent_frames == ["*2*1*85##"]
 
-        await _advance(hass, freezer, 0.7)  # 4.4 s > 3 + 0.05 * 27 = 4.35 s
+        # 4.8 s > 0.5 + 4.35 - 0.1: the frame leaves a tenth of a second early and
+        # the motor coasts onto the target.
+        await _advance(hass, freezer, 0.7)
         assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 5
@@ -488,10 +496,10 @@ async def test_set_position_50_from_closed(hass: HomeAssistant, tmp_path, freeze
         await hass.services.async_call(
             COVER, "set_cover_position", {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_POSITION: 50}, blocking=True
         )
-        await _advance(hass, freezer, 15.9)
+        await _advance(hass, freezer, 16.3)
         assert commands.sent_frames == ["*2*1*85##"]
 
-        await _advance(hass, freezer, 0.7)  # 16.6 s > 3 + 13.5 = 16.5 s
+        await _advance(hass, freezer, 0.9)  # 17.2 s > 0.5 + 16.5 - 0.1 = 16.9 s
         assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 50
@@ -510,14 +518,15 @@ async def test_close_from_half_open_ends_with_the_slats_closed(
         await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
         assert commands.sent_frames == ["*2*2*85##"]
 
-        # 15.5 s: the curtain is down (13.5 s) but the slats are still closing.
+        # 15.5 s: 15 s of motor, so the curtain is down (13.5 s) and the slats are
+        # half way through their three seconds.
         await _advance(hass, freezer, 15.5)
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
-        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 33
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 50
         assert state.state == CoverState.CLOSING
 
-        await _advance(hass, freezer, 1.5)  # 17 s > 13.5 + 3
+        await _advance(hass, freezer, 1.5)  # 17 s > 0.5 + 13.5 + 3
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 0
@@ -535,9 +544,10 @@ async def test_open_and_close_tilt_from_closed(hass: HomeAssistant, tmp_path, fr
 
         await _advance(hass, freezer, 2.4)
         assert commands.sent_frames == ["*2*1*85##"]
-        assert hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_TILT_POSITION] == 80
+        # 1.9 s of motor into the three-second slat phase.
+        assert hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_TILT_POSITION] == 63
 
-        await _advance(hass, freezer, 0.7)  # 3.1 s > slat_time
+        await _advance(hass, freezer, 0.7)  # 3.1 s > 0.5 + 3 - 0.1
         assert commands.sent_frames == ["*2*1*85##", "*2*0*85##"]
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
@@ -626,7 +636,7 @@ async def test_asymmetric_opening_and_closing_times(
         await hass.services.async_call(
             COVER, "set_cover_position", {ATTR_ENTITY_ID: ASYM_ENTITY, ATTR_POSITION: 50}, blocking=True
         )
-        await _advance(hass, freezer, 16.9)
+        await _advance(hass, freezer, 17.3)  # 17.9 = 0.5 + 17.5 - 0.1: not yet
         assert commands.sent_frames == ["*2*1*86##"]
         await _advance(hass, freezer, 0.7)
         assert commands.sent_frames == ["*2*1*86##", "*2*0*86##"]
@@ -635,8 +645,8 @@ async def test_asymmetric_opening_and_closing_times(
         # Down: 50 % of (28 - 3) = 12.5 s of curtain, then 3 s of slats.
         commands.clear()
         await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ASYM_ENTITY}, blocking=True)
-        await _advance(hass, freezer, 12)
-        assert hass.states.get(ASYM_ENTITY).attributes[ATTR_CURRENT_POSITION] == 2
+        await _advance(hass, freezer, 12)  # 11.5 s of motor
+        assert hass.states.get(ASYM_ENTITY).attributes[ATTR_CURRENT_POSITION] == 4
         await _advance(hass, freezer, 4)  # 16 s > 12.5 + 3
         state = hass.states.get(ASYM_ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
@@ -1223,7 +1233,7 @@ async def test_restore_wins_over_the_first_status_reply(hass: HomeAssistant, tmp
     ("delay", "expected_state", "expected_position"),
     [
         (1.0, CoverState.CLOSING, 40),  # inside the window: the gateway echo is ignored
-        (1.6, CoverState.OPEN, 95),  # outside it: a real keypad stop wins
+        (1.6, CoverState.OPEN, 96),  # outside it: a real keypad stop wins
     ],
 )
 async def test_stop_echo_window_boundary(
@@ -1757,7 +1767,10 @@ async def test_a_keypad_reversal_during_our_own_movement_is_honoured(
         await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
         assert hass.states.get(ENTITY).state == CoverState.CLOSING
 
-        await _advance(hass, freezer, 0.5)  # well inside the 1.5 s echo window
+        # Well inside the 1.5 s echo window, and far enough in for the motor to have
+        # moved at all: before 0.5 s of bus delay (0.4.4) the shutter is still at 100 %
+        # and an UP press would have nowhere to go.
+        await _advance(hass, freezer, 1.0)
         await feed_event(hass, cover, "*2*1*81##")  # somebody presses UP on the keypad
 
         assert hass.states.get(ENTITY).state == CoverState.OPENING
@@ -2382,6 +2395,34 @@ RUN_TO_40_SEC = 12.0
 # One frame of queue in the echo replay below, chosen so that the covers written last
 # are written more than STOP_ECHO_WINDOW_SEC (1.5 s) after the service call.
 ECHO_FRAME_GAP_SEC = 0.15
+# The two bus costs the model carries from 0.4.4, read off the entity's own defaults so
+# that a test never pins a number the integration has stopped using. The motor starts
+# `START_DELAY_SEC` after the frame unless the actuator says otherwise, and stops
+# `STOP_LATENCY_SEC` after the stop frame - so a run of `d` seconds of motor spans
+# `START_DELAY_SEC + d - STOP_LATENCY_SEC` between the two writes.
+START_DELAY_SEC = cover_module.DEFAULT_START_DELAY
+STOP_LATENCY_SEC = cover_module.DEFAULT_STOP_LATENCY
+# How long the actuator takes to answer a direction command with its own "moving"
+# status, on the installation 0.4.4 comes from.
+MOTOR_ECHO_SEC = 0.55
+# The same answer, from a slower actuator: long enough that a whole scene of twelve
+# frames is written before the first of them comes back, which is what makes the
+# twelve-cover replay below readable (still well inside the window in which an answer
+# can be ours: `start_delay` + 1.5 s).
+SLOW_MOTOR_ECHO_SEC = 1.2
+
+
+def _motor_seconds(slow: SlowCommandPath, where: str, direction: str, started: datetime | None = None) -> float:
+    """Motor time between two written frames, as the bus really spends it.
+
+    The frame that starts the run is written `START_DELAY_SEC` before the motor turns,
+    and the stop frame `STOP_LATENCY_SEC` before it comes to rest. `started` replaces
+    the first term when the actuator itself said when it started moving.
+    """
+    stopped = slow.instant(f"*2*0*{where}##") + timedelta(seconds=STOP_LATENCY_SEC)
+    if started is None:
+        started = slow.instant(f"*2*{direction}*{where}##") + timedelta(seconds=START_DELAY_SEC)
+    return (stopped - started).total_seconds()
 
 
 def _server1_answer(where: str, what: str) -> tuple[str, ...]:
@@ -2556,9 +2597,14 @@ async def test_twelve_covers_at_once_each_run_their_modelled_time(
             # (Home Assistant fans a multi-entity service call out in its own order.)
             assert sorted(slow.frames) == sorted(f"*2*2*{where}##" for where in TWELVE_WHERES)
 
-            # Each stop now falls due 18 s after *its own* frame was written, so the
-            # twelve of them arrive 100 ms apart at a worker that is idle again.
-            await _advance_exact(hass, freezer, TWELVE_RUN_SEC - 11 * FRAME_GAP_SEC)
+            # Each stop now falls due 18 s of *motor* after its own frame was written
+            # - half a second of bus first, a tenth of a second of coasting deducted at
+            # the end - so the twelve of them arrive 100 ms apart at an idle worker.
+            await _advance_exact(
+                hass,
+                freezer,
+                TWELVE_RUN_SEC + START_DELAY_SEC - STOP_LATENCY_SEC - 11 * FRAME_GAP_SEC,
+            )
             for index in range(12):
                 if index:
                     await _advance_exact(hass, freezer, FRAME_GAP_SEC)
@@ -2567,8 +2613,8 @@ async def test_twelve_covers_at_once_each_run_their_modelled_time(
                 await hass.async_block_till_done()
 
         for where in TWELVE_WHERES:
-            ran = slow.instant(f"*2*0*{where}##") - slow.instant(f"*2*2*{where}##")
-            assert abs(ran.total_seconds() - TWELVE_RUN_SEC) < 0.001, f"cover {where} ran {ran}"
+            ran = _motor_seconds(slow, where, "2")
+            assert abs(ran - TWELVE_RUN_SEC) < 0.001, f"cover {where} ran {ran}s"
         for entity in TWELVE_ENTITIES:
             state = hass.states.get(entity)
             assert state.attributes[ATTR_CURRENT_POSITION] == 40
@@ -2601,20 +2647,21 @@ async def test_a_late_start_carries_the_timed_stop_with_it(
             # The estimate is re-based: 1.2 s of the run had not happened yet.
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
 
-            # 18 s after the *call* the shutter is still going: it started 1.2 s late.
+            # 18 s after the *call* the shutter is still going: it started 1.2 s late,
+            # and half a second later again (0.4.4) because no echo ever came.
             await _advance_exact(hass, freezer, 16.8)
             assert slow.queue == []
             assert hass.states.get(ENTITY).state == CoverState.CLOSING
-            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 44
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 46
 
-            await _advance_exact(hass, freezer, 1.2)
+            # 1.2 + 0.5 + 18 - 0.1: the stop frame leaves here.
+            await _advance_exact(hass, freezer, 1.6)
             assert len(slow.queue) == 1
             slow.write_next()
             await hass.async_block_till_done()
 
         assert slow.frames == ["*2*2*81##", "*2*0*81##"]
-        ran = slow.instant("*2*0*81##") - slow.instant("*2*2*81##")
-        assert abs(ran.total_seconds() - 18.0) < 0.001
+        assert abs(_motor_seconds(slow, "81", "2") - 18.0) < 0.001
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 40
         assert state.state == CoverState.OPEN
@@ -2645,7 +2692,7 @@ async def test_a_stop_written_late_freezes_where_the_shutter_really_got_to(
             slow.write_next()
             await hass.async_block_till_done()
 
-            await _advance_exact(hass, freezer, 18.0)
+            await _advance_exact(hass, freezer, 18.0 + START_DELAY_SEC - STOP_LATENCY_SEC)
             assert len(slow.queue) == 1  # the stop is queued, but nothing stopped yet
             assert hass.states.get(ENTITY).state == CoverState.CLOSING
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
@@ -2728,7 +2775,7 @@ async def test_a_stop_that_never_left_runs_on_to_the_end_stop(
             slow.write_next()
             await hass.async_block_till_done()
 
-            await _advance_exact(hass, freezer, 15.0)
+            await _advance_exact(hass, freezer, 15.0 + START_DELAY_SEC - STOP_LATENCY_SEC)
             assert slow.drop_next() == "*2*0*81##"
             await hass.async_block_till_done()
             assert hass.states.get(ENTITY).state == CoverState.CLOSING
@@ -2749,7 +2796,7 @@ async def test_an_explicit_stop_written_late_keeps_the_estimate_running(
     """`cover.stop_cover` freezes the position at the delivery, not at the call.
 
     Mutation caught: freezing on `self._estimate()` at the call (the 0.4.2 shape),
-    after which the cover reads 83 % while the shutter stood at 70 %.
+    after which the cover reads 85 % while the shutter stood at 71 %.
     """
     mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
     async with setup_myhome(hass, tmp_path, BASIC_YAML):
@@ -2769,8 +2816,10 @@ async def test_an_explicit_stop_written_late_keeps_the_estimate_running(
             await hass.async_block_till_done()
 
         state = hass.states.get(ENTITY)
-        # 9 s of a 30 s run, not the 5 s that had passed when the button was pressed.
-        assert state.attributes[ATTR_CURRENT_POSITION] == 70
+        # 8.6 s of a 30 s run - the motor started half a second after the command and
+        # stopped a tenth of a second after the frame - not the 4.5 s it had run when
+        # the button was pressed.
+        assert state.attributes[ATTR_CURRENT_POSITION] == 71
         assert state.state == CoverState.OPEN
 
 
@@ -2823,17 +2872,19 @@ async def test_a_write_reported_after_a_bus_frame_ended_the_run_changes_nothing(
             await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
             await _advance_exact(hass, freezer, 5.0)
             await feed_event(hass, cover, "*2*1*81##")
-            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 83
+            # 4.5 s of motor: the clock of our own frame starts half a second in.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 85
             assert hass.states.get(ENTITY).state == CoverState.OPENING
             await _advance_exact(hass, freezer, 2.0)
             slow.write_next()
             await hass.async_block_till_done()
             await _advance_exact(hass, freezer, 2.0)
-            # Four seconds of keypad run on a 30 s shutter, from the 83 % the closing
-            # estimate had reached. A report that re-based the clock of a run it does
-            # not belong to would leave it two seconds behind, at 90 %.
-            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 96
-            # 83 % to the top is 5.1 s of motor, and the run started at 5 s.
+            # Four seconds of keypad run on a 30 s shutter, from the 85 % the closing
+            # estimate had reached - and a keypad run starts the moment the frame says
+            # so, with no bus delay of its own. A report that re-based the clock of a
+            # run it does not belong to would leave it two seconds behind, at 92 %.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 98
+            # 85 % to the top is 4.5 s of motor, and the run started at 5 s.
             await _advance_exact(hass, freezer, 1.1)  # and it reaches the top
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
             assert hass.states.get(ENTITY).state == CoverState.OPEN
@@ -2845,7 +2896,7 @@ async def test_a_write_reported_after_a_bus_frame_ended_the_run_changes_nothing(
             )
             slow.write_next()
             await hass.async_block_till_done()
-            await _advance_exact(hass, freezer, 18.0)
+            await _advance_exact(hass, freezer, 18.0 + START_DELAY_SEC - STOP_LATENCY_SEC)
             assert len(slow.queue) == 1  # the stop is queued and not written
             await feed_event(hass, cover, "*2*0*81##")
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
@@ -2885,23 +2936,23 @@ async def test_a_stop_never_leaves_before_the_movement_it_must_end(
                 {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40},
                 blocking=True,
             )
-            # The 1.2 s run falls due while its own frame is still in the queue.
-            await _advance_exact(hass, freezer, 1.3)
+            # The 1.2 s run falls due (at 0.5 + 1.2 - 0.1) while its own frame is
+            # still in the queue.
+            await _advance_exact(hass, freezer, 1.7)
             assert [frame for frame, _, _ in slow.queue] == ["*2*1*85##"]
 
-            # The motor starts now: the whole run is still ahead of it.
+            # The motor starts half a second from now: the whole run is ahead of it.
             slow.write_next()
             await hass.async_block_till_done()
             assert hass.states.get(SLAT_ENTITY).state == CoverState.OPENING
 
-            await _advance_exact(hass, freezer, 1.2)
+            await _advance_exact(hass, freezer, 1.6)
             assert [frame for frame, _, _ in slow.queue] == ["*2*0*85##"]
             slow.write_next()
             await hass.async_block_till_done()
 
         assert slow.frames == ["*2*1*85##", "*2*0*85##"]
-        ran = slow.instant("*2*0*85##") - slow.instant("*2*1*85##")
-        assert abs(ran.total_seconds() - 1.2) < 0.001
+        assert abs(_motor_seconds(slow, "85", "1") - 1.2) < 0.001
         state = hass.states.get(SLAT_ENTITY)
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 40
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
@@ -2918,12 +2969,13 @@ async def test_a_stop_asked_for_while_the_movement_is_still_queued_leaves_after_
     cover - the actuator would take the stop while standing still and then start
     moving with nothing left to end the run - and the position frozen must be the
     travel the motor really did: from the instant the direction frame was written to
-    the instant the stop was, two seconds of a 30 s run, not the 3.5 s that had passed
-    since the service call.
+    the instant the stop was, 1.6 s of a 30 s run - half a second after the direction
+    frame to a tenth of a second after the stop - not the 3.5 s that had passed since
+    the service call.
 
     Mutation caught: routing the stop into the priority deque (the frames reach the
     bus the wrong way round), and measuring the run from the optimistic start after
-    the movement was re-based onto its delivery (the cover then reads 88 %).
+    the movement was re-based onto its delivery (the cover then reads 90 %).
     """
     mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
     async with setup_myhome(hass, tmp_path, BASIC_YAML):
@@ -2940,7 +2992,7 @@ async def test_a_stop_asked_for_while_the_movement_is_still_queued_leaves_after_
             assert slow.write_next() == "*2*2*81##"
             await hass.async_block_till_done()
             assert hass.states.get(ENTITY).state == CoverState.CLOSING
-            # Nothing has moved yet: the motor started at this instant.
+            # Nothing has moved yet: the motor starts half a second from here.
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
 
             await _advance_exact(hass, freezer, 2.0)
@@ -2948,13 +3000,13 @@ async def test_a_stop_asked_for_while_the_movement_is_still_queued_leaves_after_
             await hass.async_block_till_done()
 
             state = hass.states.get(ENTITY)
-            # Two seconds of a 30 s run, which is what the shutter really did.
-            assert state.attributes[ATTR_CURRENT_POSITION] == 93
+            # 1.6 s of a 30 s run, which is what the shutter really did.
+            assert state.attributes[ATTR_CURRENT_POSITION] == 95
             assert state.state == CoverState.OPEN
 
             # And it stays there: nothing is running any more.
             await _advance_exact(hass, freezer, 40)
-            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 93
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 95
         assert slow.frames == ["*2*2*81##", "*2*0*81##"]
 
 
@@ -3001,24 +3053,27 @@ async def test_the_answer_to_a_frame_that_waited_is_not_a_keypad_press(
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
 
             # And says so half a second later, after the report: still not a keypad
-            # press, and still nothing that could turn the run into a free one.
-            await _advance_exact(hass, freezer, 0.55)
+            # press, and still nothing that could turn the run into a free one - it is
+            # the motor starting, and from 0.4.4 the run is timed from this instant.
+            await _advance_exact(hass, freezer, MOTOR_ECHO_SEC)
+            started = dt_util.utcnow()
             await feed_event(hass, cover, "*2*1*81##")
             assert hass.states.get(ENTITY).state == CoverState.OPENING
             assert len(slow.queue) == 0
 
-            # The stop falls due 12 s after the frame reached the bus.
-            await _advance_exact(hass, freezer, RUN_TO_40_SEC - 0.55)
+            # The stop falls due 12 s of motor after *that*, less the tenth of a
+            # second the actuator takes to obey it.
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC)
             assert len(slow.queue) == 1
             assert slow.write_next() == "*2*0*81##"
             await hass.async_block_till_done()
             for answer in ("*2*1000#0*81##", "*2*0*81##"):
                 await feed_event(hass, cover, answer)
 
-        # Exactly one stop, and the motor ran the modelled time.
+        # Exactly one stop, and the motor ran the modelled time - counted from the
+        # actuator's own word, not from the frame that asked it to start.
         assert slow.frames == ["*2*1*81##", "*2*0*81##"]
-        ran = slow.instant("*2*0*81##") - slow.instant("*2*1*81##")
-        assert abs(ran.total_seconds() - RUN_TO_40_SEC) < 0.001
+        assert abs(_motor_seconds(slow, "81", "1", started=started) - RUN_TO_40_SEC) < 0.001
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 40
         assert state.state == CoverState.OPEN
@@ -3049,17 +3104,17 @@ async def test_the_same_answer_reported_before_it_arrives_is_still_an_echo(
                 await feed_event(hass, cover, answer)
             assert hass.states.get(ENTITY).state == CoverState.OPENING
 
-            await _advance_exact(hass, freezer, 0.55)
+            await _advance_exact(hass, freezer, MOTOR_ECHO_SEC)
+            started = dt_util.utcnow()
             await feed_event(hass, cover, "*2*1*81##")
             assert hass.states.get(ENTITY).state == CoverState.OPENING
 
-            await _advance_exact(hass, freezer, RUN_TO_40_SEC - 0.55)
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC)
             assert slow.write_next() == "*2*0*81##"
             await hass.async_block_till_done()
 
         assert slow.frames == ["*2*1*81##", "*2*0*81##"]
-        ran = slow.instant("*2*0*81##") - slow.instant("*2*1*81##")
-        assert abs(ran.total_seconds() - RUN_TO_40_SEC) < 0.001
+        assert abs(_motor_seconds(slow, "81", "1", started=started) - RUN_TO_40_SEC) < 0.001
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 40
         assert state.state == CoverState.OPEN
@@ -3080,8 +3135,8 @@ async def test_a_keypad_stop_while_our_own_frame_is_still_queued(
 
     The window now stays armed while the frame it belongs to is queued, so the real
     echo is still recognised and the run survives. What the cover guarantees here is
-    the full outcome, not a fallback: one stop, written 12 s after the direction
-    frame reached the bus, and the shutter on its 40 % target. Swallowing that keypad
+    the full outcome, not a fallback: one stop, written 12 s of motor after the
+    actuator said it had started, and the shutter on its 40 % target. Swallowing that keypad
     press costs nothing, because our frame had not been written yet - the motor only
     starts when it is, and it is written *after* the stop, so there was no run of
     ours for that stop to end.
@@ -3123,13 +3178,14 @@ async def test_a_keypad_stop_while_our_own_frame_is_still_queued(
             # The motor really started here, so the estimate starts here too.
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
 
-            await _advance_exact(hass, freezer, 0.55)
+            await _advance_exact(hass, freezer, MOTOR_ECHO_SEC)
+            started = dt_util.utcnow()
             await feed_event(hass, cover, "*2*1*81##")
             assert hass.states.get(ENTITY).state == CoverState.OPENING
 
-            # The stop falls due 12 s after the frame reached the bus, and the
-            # re-read armed in the queue asked the actuator nothing in between.
-            await _advance_exact(hass, freezer, RUN_TO_40_SEC - 0.55)
+            # The stop falls due 12 s of motor after the actuator said it had started,
+            # and the re-read armed in the queue asked it nothing in between.
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC)
             assert commands.status_frames == []
             assert len(slow.queue) == 1
             assert slow.write_next() == "*2*0*81##"
@@ -3138,8 +3194,7 @@ async def test_a_keypad_stop_while_our_own_frame_is_still_queued(
                 await feed_event(hass, cover, answer)
 
         assert slow.frames == ["*2*1*81##", "*2*0*81##"]
-        ran = slow.instant("*2*0*81##") - slow.instant("*2*1*81##")
-        assert abs(ran.total_seconds() - RUN_TO_40_SEC) < 0.001
+        assert abs(_motor_seconds(slow, "81", "1", started=started) - RUN_TO_40_SEC) < 0.001
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 40
         assert state.state == CoverState.OPEN
@@ -3188,7 +3243,11 @@ async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
                 await hass.async_block_till_done()
                 assert hass.states.get(f"cover.cover_{where}").state == CoverState.CLOSING
 
-            await _advance_exact(hass, freezer, TWELVE_RUN_SEC - 11 * ECHO_FRAME_GAP_SEC)
+            # The echo arrived at the write, so every clock was re-based onto it and
+            # every stop falls due `TWELVE_RUN_SEC - STOP_LATENCY_SEC` after it.
+            await _advance_exact(
+                hass, freezer, TWELVE_RUN_SEC - STOP_LATENCY_SEC - 11 * ECHO_FRAME_GAP_SEC
+            )
             for index in range(12):
                 if index:
                     await _advance_exact(hass, freezer, ECHO_FRAME_GAP_SEC)
@@ -3199,8 +3258,467 @@ async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
                     await feed_event(hass, covers[where], answer)
 
         for where in TWELVE_WHERES:
-            ran = slow.instant(f"*2*0*{where}##") - slow.instant(f"*2*2*{where}##")
-            assert abs(ran.total_seconds() - TWELVE_RUN_SEC) < 0.001, f"cover {where} ran {ran}"
+            # Timed from the actuator's own "moving", which arrived at the write here.
+            ran = _motor_seconds(slow, where, "2", started=slow.instant(f"*2*2*{where}##"))
+            assert abs(ran - TWELVE_RUN_SEC) < 0.001, f"cover {where} ran {ran}s"
             state = hass.states.get(f"cover.cover_{where}")
             assert state.attributes[ATTR_CURRENT_POSITION] == 40
             assert state.state == CoverState.OPEN
+
+
+# ------------------------------------------------- the motor's own clock (0.4.4)
+# The bus costs a fixed amount per movement: the actuator answers our direction frame
+# with its own "moving" status about half a second later, and keeps turning about a
+# tenth of a second past our stop. The configured times are motor times, so the run has
+# to be measured between those two instants - which is what the tests below pin.
+TUNED_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_tuned:
+      where: '84'
+      name: Cover Tuned
+      shutter_run: 30
+      roll: 1
+      start_delay: 1.2
+      stop_latency: 0.4
+"""
+TUNED_ENTITY = "cover.cover_tuned"
+
+
+async def test_the_run_is_timed_from_the_actuators_own_moving_status(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The finding of 0.4.4, on an idle queue: the motor starts when the actuator says.
+
+    The frame is written at once, so 0.4.3 timed the run from that instant and stopped
+    it 0.57 s of motor early - about 0.45 s in the measurements, 3-9 cm on a 195 cm
+    window, and only on runs that did not end at an end stop (those hid it, which is
+    why the calibration never caught it).
+
+    This actuator answers in 1.2 s rather than the 0.55 s of the replays above, which
+    is what makes the assertions below tell the answer apart from the half-second
+    fallback: the run is 0.7 s longer than 0.4.3 would have made it, and the estimate
+    stands still for all of it.
+
+    Mutation caught: dropping the re-base in `_apply_motor_start` (the stop is queued
+    0.7 s early and the estimate reads 22 % half way), re-basing the clock without
+    re-arming the timed stop (the stop is queued 0.7 s early alone), and re-basing on
+    every "moving" frame instead of the first (the second one, 0.3 s later, would move
+    the whole run with it).
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            assert slow.write_next() == "*2*1*81##"  # an empty queue: written at once
+            await hass.async_block_till_done()
+
+            # A second and a bit in, the estimate believes the model's half second and
+            # has 0.7 s of travel on the clock ...
+            await _advance_exact(hass, freezer, SLOW_MOTOR_ECHO_SEC)
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 2
+            started = dt_util.utcnow()
+
+            # ... and then the actuator says it is only starting now, and is believed:
+            # the whole run is still ahead of it. (On the measured gateway the answer
+            # comes 0.57 s after the frame and this correction is 2 cm.)
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            # A second copy of the same status is not a second start: the motor starts
+            # once, and a gateway that repeats itself must not restart the run - the
+            # shutter would then overshoot its target by everything it had travelled.
+            await _advance_exact(hass, freezer, 0.3)
+            await feed_event(hass, cover, "*2*1*81##")
+
+            # Six seconds of motor is half the run to 40 %.
+            await _advance_exact(hass, freezer, 5.7)
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 20
+            assert len(slow.queue) == 0
+
+            # The stop is not queued a moment before it is due ...
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC - 6.1)
+            assert slow.queue == []
+            await _advance_exact(hass, freezer, 0.1)
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        assert abs(_motor_seconds(slow, "81", "1", started=started) - RUN_TO_40_SEC) < 0.001
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 40
+        assert state.state == CoverState.OPEN
+
+
+async def test_without_a_moving_status_the_run_starts_after_the_start_delay(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A gateway that never relays the status: the run is timed from the frame + 0.5 s.
+
+    That is what `start_delay` is for, and it is the only thing it is for - an actuator
+    that answers is believed instead. Half a second of a 30 s run is 1 % of the window,
+    which is the error 0.4.3 had on every run.
+
+    Mutation caught: `start_delay` unused (the stop leaves half a second early again).
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            written = dt_util.utcnow()
+            assert slow.write_next() == "*2*1*81##"
+            await hass.async_block_till_done()
+
+            # Nothing says the motor started, so the model's own half second stands.
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC)
+            assert slow.queue == [], "the half second of `start_delay` was not counted"
+            await _advance_exact(hass, freezer, START_DELAY_SEC)
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        assert slow.instant("*2*1*81##") == written
+        assert abs(_motor_seconds(slow, "81", "1") - RUN_TO_40_SEC) < 0.001
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
+
+
+async def test_a_moving_status_long_after_our_command_leaves_the_clock_alone(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Only the actuator's *answer* re-bases the run, not any later frame.
+
+    Some gateways repeat the direction while the shutter runs, and a keypad press in
+    the direction a run is already going produces the same frame. Two seconds past the
+    delivery neither can be the answer to our command any more, and moving the clock
+    then would restart a run that is half over - the shutter would sail past its
+    target by everything it had already travelled.
+
+    Mutation caught: dropping the `start_delay + MOTOR_START_WINDOW_SEC` test (the stop
+    then leaves 12 s after the late frame, four seconds of motor too late).
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            assert slow.write_next() == "*2*1*81##"
+            await hass.async_block_till_done()
+
+            # Well past `start_delay` + the echo window (0.5 + 1.5 s).
+            await _advance_exact(hass, freezer, 4.0)
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+            # 3.5 s of motor, unchanged by the frame that just arrived.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 12
+
+            await _advance_exact(
+                hass, freezer, START_DELAY_SEC + RUN_TO_40_SEC - STOP_LATENCY_SEC - 4.0
+            )
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        assert abs(_motor_seconds(slow, "81", "1") - RUN_TO_40_SEC) < 0.001
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
+
+
+async def test_a_moving_status_that_arrives_after_the_stop_was_due_changes_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A run so short that the stop is queued before the actuator answers.
+
+    A 40 % tilt is 1.2 s of motor and the actuator can take longer than that to say it
+    has started. The stop is queued by then - it fell due on the clock the delivery
+    armed - and the motor time it will freeze is measured from that same clock;
+    re-basing the run onto an answer that arrives afterwards would freeze the estimate
+    on a motor time the shutter never spent, and the slats would sit wherever the
+    arithmetic landed.
+
+    Mutation caught: dropping the `_pending_stop` guard from `_apply_motor_start`
+    (the cover then reads tilt 3 instead of 47).
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        cover = entity_object(hass, COVER, "2-85")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER,
+                "set_cover_tilt_position",
+                {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 40},
+                blocking=True,
+            )
+            assert slow.write_next() == "*2*1*85##"
+            await hass.async_block_till_done()
+
+            # 0.5 + 1.2 - 0.1: the run is over, and the stop is queued behind a busy
+            # worker, before the actuator has said anything at all.
+            await _advance_exact(hass, freezer, START_DELAY_SEC + 1.2 - STOP_LATENCY_SEC)
+            assert [frame for frame, _, _ in slow.queue] == ["*2*0*85##"]
+
+            # It answers here, still inside the window in which an answer could be
+            # ours, and with our stop already queued.
+            await _advance_exact(hass, freezer, 0.2)
+            await feed_event(hass, cover, "*2*1*85##")
+            assert slow.write_next() == "*2*0*85##"
+            await hass.async_block_till_done()
+
+        state = hass.states.get(SLAT_ENTITY)
+        # The stop frame left 0.2 s after it was queued, so the motor ran 1.4 s of the
+        # three-second slat phase instead of the 1.2 s asked for: 47 %, not 40 %.
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 47
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert slow.frames == ["*2*1*85##", "*2*0*85##"]
+
+
+async def test_a_stop_on_a_run_that_was_re_based_still_counts_the_coasting(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The motor coasts past our stop whatever the clock it is measured against.
+
+    Both frames of a short tilt run can be queued together - the user changes their
+    mind while a scene is still being written - and the movement is then re-based onto
+    its own delivery *after* the stop has been queued. The motor time to freeze is the
+    one that really existed, from the delivery of the direction frame to a tenth of a
+    second past the delivery of the stop; on a three-second slat phase that tenth is
+    three points of tilt, which is the whole difference between the two arms of
+    `_apply_stop_delivery`.
+
+    Mutation caught: dropping `stop_latency` from the re-based arm (tilt 17, not 20).
+    """
+    mock_restore_cache(hass, (_closed(),))
+    async with setup_myhome(hass, tmp_path, SLAT_YAML):
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER,
+                "set_cover_tilt_position",
+                {ATTR_ENTITY_ID: SLAT_ENTITY, ATTR_TILT_POSITION: 100},
+                blocking=True,
+            )
+            await _advance_exact(hass, freezer, 0.5)
+            await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True)
+            # Behind its own movement, as ever: the queue never inverts a device.
+            assert [frame for frame, _, _ in slow.queue] == ["*2*1*85##", "*2*0*85##"]
+
+            # The direction frame reaches the bus here, so the motor starts half a
+            # second later - after the stop was queued, which is what re-bases the run.
+            await _advance_exact(hass, freezer, 0.5)
+            assert slow.write_next() == "*2*1*85##"
+            await hass.async_block_till_done()
+
+            await _advance_exact(hass, freezer, 1.0)
+            assert slow.write_next() == "*2*0*85##"
+            await hass.async_block_till_done()
+
+        state = hass.states.get(SLAT_ENTITY)
+        # The motor ran from 1.5 s (the delivery plus the start delay) to 2.1 s (the
+        # stop plus the coasting): 0.6 s of the three-second slat phase.
+        assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 20
+        assert state.attributes[ATTR_CURRENT_POSITION] == 0
+        assert state.state == CoverState.OPEN
+
+
+async def test_a_keypad_run_is_not_re_timed_by_the_frames_that_follow_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Contract F, unchanged by 0.4.4: a keypad run starts when its frame says it does.
+
+    There is no command of ours to answer, so there is no bus delay to model and
+    nothing to re-base: the actuator is already moving when the frame arrives. A
+    repeat of the same direction while it runs must not restart the estimate.
+
+    Mutation caught: re-basing on `_own_command` being None (the second frame then
+    rewinds the estimate by ten seconds), and reaching for the delivery instant of a
+    frame there never was - which `handle_event`'s catch-all would swallow, leaving
+    the frame unhandled and one exception per keypad press in the log.
+    """
+    async with setup_myhome(hass, tmp_path, BASIC_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, "2-81")
+        await feed_event(hass, cover, "*2*1*81##")  # somebody presses UP on the keypad
+        assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+        # A keypad run is timed from the frame, with no half second of bus in front.
+        await _advance(hass, freezer, 10)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 33
+
+        await feed_event(hass, cover, "*2*1*81##")  # the gateway repeats it
+        await _advance(hass, freezer, 5)
+        assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+        assert commands.sent_frames == []
+        assert "Error handling cover event" not in caplog.text
+
+
+async def test_the_two_bus_costs_can_be_measured_per_cover(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`start_delay` and `stop_latency` are read off the cover, and published when set.
+
+    A slow actuator on a long bus: 1.2 s before the motor turns and 0.4 s of coasting
+    after the stop, so the 18 s run spans 18.8 s between the two frames.
+
+    Mutation caught: hard-coding either default in the entity instead of reading the
+    configured value.
+    """
+    mock_restore_cache(hass, (State(TUNED_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, TUNED_YAML):
+        state = hass.states.get(TUNED_ENTITY)
+        assert state.attributes["Start delay"] == 1.2
+        assert state.attributes["Stop latency"] == 0.4
+
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: TUNED_ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            assert slow.write_next() == "*2*2*84##"
+            await hass.async_block_till_done()
+
+            await _advance_exact(hass, freezer, 1.2 + TWELVE_RUN_SEC - 0.4)
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*84##"
+            await hass.async_block_till_done()
+
+        ran = slow.instant("*2*0*84##") - slow.instant("*2*2*84##")
+        assert abs(ran.total_seconds() - (1.2 + TWELVE_RUN_SEC - 0.4)) < 0.001
+        assert hass.states.get(TUNED_ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
+
+        # A *free* run anticipates nothing: no stop frame ends it, the actuator's own
+        # end stop does, and the estimate settles a full 12 s of motor after the start.
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: TUNED_ENTITY}, blocking=True)
+            assert slow.write_next() == "*2*2*84##"
+            await hass.async_block_till_done()
+
+            await _advance_exact(hass, freezer, 1.2 + 12.0 - 0.2)
+            assert hass.states.get(TUNED_ENTITY).state == CoverState.CLOSING
+            await _advance_exact(hass, freezer, 0.2)
+            assert hass.states.get(TUNED_ENTITY).state == CoverState.CLOSED
+        assert slow.queue == []
+
+
+async def test_the_default_bus_costs_are_not_published(hass: HomeAssistant, tmp_path) -> None:
+    """Every cover has them; only a cover that was measured says so."""
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        attributes = hass.states.get(ENTITY).attributes
+        assert "Start delay" not in attributes
+        assert "Stop latency" not in attributes
+
+
+@pytest.mark.slow
+async def test_twelve_covers_from_intermediate_positions_all_reach_their_targets(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The measurement that opened 0.4.4: twelve shutters, none of them at an end stop.
+
+    Every run that started from an end stop landed within a centimetre or two, and
+    every run that started half way stopped short by the same constant - the bus
+    latency, which the timed model had nowhere to put. Here each cover starts from its
+    own intermediate position and is sent to its own target, the queue staggers the
+    twelve frames and the actuators answer each of them in their own time, and what
+    must hold for all twelve is that the motor ran the seconds the model asked for, to
+    a millisecond. That is 0.006 % of the window; the 1 % the specification asks for
+    would be 0.18 s, which is less than the bus latency this release is about.
+    """
+    starts = {where: 30 + 5 * index for index, where in enumerate(TWELVE_WHERES)}
+    targets = {where: 90 - 4 * index for index, where in enumerate(TWELVE_WHERES)}
+    mock_restore_cache(
+        hass,
+        tuple(
+            State(f"cover.cover_{where}", CoverState.OPEN, {ATTR_CURRENT_POSITION: starts[where]})
+            for where in TWELVE_WHERES
+        ),
+    )
+    async with setup_myhome(hass, tmp_path, TWELVE_YAML):
+        covers = {where: entity_object(hass, COVER, f"2-{where}") for where in TWELVE_WHERES}
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            for where in TWELVE_WHERES:
+                await hass.services.async_call(
+                    COVER,
+                    "set_cover_position",
+                    {ATTR_ENTITY_ID: f"cover.cover_{where}", ATTR_POSITION: targets[where]},
+                    blocking=True,
+                )
+            assert len(slow.queue) == 12
+            # Nothing has started yet - and nothing may drift *backwards* either: the
+            # clock of each of these runs is half a second in the future, and an
+            # estimate that took that at face value would report every shutter moving
+            # the wrong way until its motor caught up.
+            for where in TWELVE_WHERES:
+                assert (
+                    hass.states.get(f"cover.cover_{where}").attributes[ATTR_CURRENT_POSITION]
+                    == starts[where]
+                )
+
+            # The worker writes one frame every 100 ms.
+            written: list[str] = []
+            for index in range(12):
+                if index:
+                    await _advance_exact(hass, freezer, FRAME_GAP_SEC)
+                written.append(slow.write_next())
+                await hass.async_block_till_done()
+
+            # Each actuator answers its own frame `SLOW_MOTOR_ECHO_SEC` later, in the
+            # order the frames were written, and the run is timed from that answer.
+            echoes: dict[str, datetime] = {}
+            for index, frame in enumerate(written):
+                await _advance_exact(
+                    hass, freezer, SLOW_MOTOR_ECHO_SEC - 11 * FRAME_GAP_SEC if not index else FRAME_GAP_SEC
+                )
+                where = _frame_where(frame)[1]
+                echoes[where] = dt_util.utcnow()
+                await feed_event(hass, covers[where], frame)
+                assert hass.states.get(f"cover.cover_{where}").state in (
+                    CoverState.OPENING,
+                    CoverState.CLOSING,
+                )
+
+            # Every stop falls due `modelled - stop_latency` after its own answer.
+            modelled = {
+                where: covers[where]._travel_time(  # noqa: SLF001
+                    cover_module.OPENING if targets[where] > starts[where] else cover_module.CLOSING,
+                    starts[where],
+                    100,
+                    targets[where],
+                    100,
+                )
+                for where in TWELVE_WHERES
+            }
+            due = sorted(
+                (echoes[where] + timedelta(seconds=modelled[where] - STOP_LATENCY_SEC), where)
+                for where in TWELVE_WHERES
+            )
+            for instant, where in due:
+                delta = (instant - dt_util.utcnow()).total_seconds()
+                if delta > 0:
+                    await _advance_exact(hass, freezer, delta)
+                if f"*2*0*{where}##" in slow.frames:
+                    # Two runs happened to end at the same instant; this one went out
+                    # with the other, which is exactly what the assertion below asked.
+                    continue
+                assert f"*2*0*{where}##" in [frame for frame, _, _ in slow.queue], (
+                    f"cover {where} did not stop when it was due"
+                )
+                while slow.queue:
+                    slow.write_next()
+                    await hass.async_block_till_done()
+
+        for where in TWELVE_WHERES:
+            direction = "1" if targets[where] > starts[where] else "2"
+            ran = _motor_seconds(slow, where, direction, started=echoes[where])
+            assert abs(ran - modelled[where]) < 0.001, f"cover {where} ran {ran}s, modelled {modelled[where]}s"
+            state = hass.states.get(f"cover.cover_{where}")
+            assert state.attributes[ATTR_CURRENT_POSITION] == targets[where]
