@@ -3929,3 +3929,228 @@ async def test_twelve_covers_from_intermediate_positions_all_reach_their_targets
             assert abs(ran - modelled[where]) < 0.001, f"cover {where} ran {ran}s, modelled {modelled[where]}s"
             state = hass.states.get(f"cover.cover_{where}")
             assert state.attributes[ATTR_CURRENT_POSITION] == targets[where]
+
+
+# ------------------------------------------- a deadline that fires too early (0.4.4)
+# The failure of 2026-09-08 18:47, on the installation this release was measured on:
+# nine covers commanded at once, a command queue writing about one frame every 1.2 s,
+# and one cover told to go from 100 % to 25 % - a run of 11.25 s. Its direction frame
+# reached the bus 11.6 s after it was queued, which is the very instant its stop fell
+# due on the clock the *enqueue* had set (0.5 + 11.25 - 0.1). The run was re-based onto
+# the delivery as it must be, and the stop went out a tenth of a second behind the
+# direction frame all the same: the motor had turned for a tenth of a second, the
+# shutter stayed at the top and the entity froze on the 25 % it never reached.
+#
+# The rule these tests pin is the one thing that makes a late delivery harmless: a run
+# ends when *its own* clock says it does, and a timer armed against a clock that has
+# since moved ends nothing at all.
+LATE_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_late:
+      where: '81'
+      name: Cover Late
+      shutter_run: 15
+      roll: 1
+"""
+LATE_ENTITY = "cover.cover_late"
+# 100 % -> 25 % on a 15 s linear run.
+LATE_RUN_SEC = 11.25
+# What the queue cost that frame: eight covers ahead of it at the gateway's own pace.
+LATE_QUEUE_SEC = 11.6
+
+
+async def test_a_deadline_that_fired_before_the_re_base_stops_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The replay of the failure above: the delivery lands on the old deadline.
+
+    Two things fire here that must both come to nothing - the timer that had already
+    been handed to the loop when the delivery re-based the clock (nothing can take
+    such a timer back, so it carries the arming it belongs to and is dropped by it),
+    and a timer that goes off early for any other reason at all (the arithmetic of the
+    run says how much of it is left, and that is the answer). Only then does the
+    actuator's own "moving" status arrive, and the stop goes out a whole run after
+    *that*.
+
+    Mutation caught: sending the stop from a deadline whose run still has seconds to
+    go - the shutter then stops a tenth of a second after it started, at the top of
+    the window, with the entity reading the 25 % it never reached.
+    """
+    mock_restore_cache(hass, (State(LATE_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, LATE_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: LATE_ENTITY, ATTR_POSITION: 25}, blocking=True
+            )
+            # Eight covers ahead of it: the frame reaches the bus a hair before the
+            # stop was due on the clock the enqueue set.
+            await _advance_exact(hass, freezer, LATE_QUEUE_SEC)
+            delivered = dt_util.utcnow()
+            assert slow.write_next() == "*2*2*81##"
+            await hass.async_block_till_done()
+            assert slow.queue == []
+
+            # The deadline of that clock, running after the delivery has moved it: the
+            # loop was holding it when the re-base happened. It belongs to an arming
+            # that is over, and it must do nothing.
+            await cover._async_movement_deadline(  # noqa: SLF001
+                cover._stop_timer_generation - 1,  # noqa: SLF001
+                dt_util.utcnow(),
+            )
+            assert slow.queue == []
+
+            # And the same again through the loop itself, at the instant the old
+            # deadline fell due, with every timer in the house fired early.
+            await _advance_exact(hass, freezer, START_DELAY_SEC + LATE_RUN_SEC - STOP_LATENCY_SEC - LATE_QUEUE_SEC)
+            async_fire_time_changed_exact(hass, dt_util.utcnow() + timedelta(milliseconds=1), fire_all=True)
+            await hass.async_block_till_done()
+            assert slow.queue == [], "the stop went out while the motor was still starting"
+            assert hass.states.get(LATE_ENTITY).state == CoverState.CLOSING
+            assert hass.states.get(LATE_ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
+
+            # The actuator answers 0.57 s after the write, and the run is timed from
+            # there (0.4.4): the stop is due a whole run later, less the coasting.
+            await _advance_exact(
+                hass,
+                freezer,
+                (delivered + timedelta(seconds=MOTOR_ECHO_SEC) - dt_util.utcnow()).total_seconds(),
+            )
+            started = dt_util.utcnow()
+            await feed_event(hass, cover, "*2*2*81##")
+            assert slow.queue == []
+
+            await _advance_exact(hass, freezer, LATE_RUN_SEC - STOP_LATENCY_SEC)
+            assert len(slow.queue) == 1, "the stop did not go out at the end of the run"
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        # The motor ran the seconds the model asked for, from the actuator's own word
+        # that it had started to a tenth of a second past our stop.
+        assert abs(_motor_seconds(slow, "81", "2", started=started) - LATE_RUN_SEC) < 0.001
+        assert slow.instant("*2*0*81##") == started + timedelta(seconds=LATE_RUN_SEC - STOP_LATENCY_SEC)
+        state = hass.states.get(LATE_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 25
+        assert state.state == CoverState.OPEN
+
+
+async def test_a_delivery_after_twice_the_run_still_gets_a_whole_run(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A frame that waits in the queue for longer than two runs.
+
+    Nothing about the queue shortens the movement: the deadline that falls due while
+    the frame is still waiting only holds a timer in place (it cannot stop a motor
+    that has not started, and its stop would be *written before* the direction frame),
+    and the real one is armed when the gateway says the frame has left.
+
+    Mutation caught: sending the stop from the deadline that falls due during the wait
+    (the shutter then never stops), and arming the real one from anything but the
+    delivery.
+    """
+    mock_restore_cache(hass, (State(LATE_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, LATE_YAML):
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: LATE_ENTITY, ATTR_POSITION: 25}, blocking=True
+            )
+            # Twice the run and more, with the frame still in the queue.
+            await _advance_exact(hass, freezer, 2 * LATE_RUN_SEC + 1.0)
+            assert slow.queue and slow.queue[0][0] == "*2*2*81##"
+            assert hass.states.get(LATE_ENTITY).state == CoverState.CLOSING
+            # The estimate is optimistic while the frame waits - it was started at the
+            # enqueue so that the entity reacts to the service call at once - and after
+            # two runs of waiting it has walked past the target and down to the bottom.
+            # The delivery puts it back where the shutter really is; nothing else does.
+            assert hass.states.get(LATE_ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            delivered = dt_util.utcnow()
+            slow.write_next()
+            await hass.async_block_till_done()
+            assert slow.queue == []
+            assert hass.states.get(LATE_ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
+
+            # 0.5 + 11.25 - 0.1 after the write, and not a second earlier.
+            await _advance_exact(hass, freezer, START_DELAY_SEC + LATE_RUN_SEC - STOP_LATENCY_SEC - 0.05)
+            assert slow.queue == []
+            await _advance_exact(hass, freezer, 0.05)
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        assert abs(_motor_seconds(slow, "81", "2") - LATE_RUN_SEC) < 0.001
+        assert slow.instant("*2*0*81##") == delivered + timedelta(
+            seconds=START_DELAY_SEC + LATE_RUN_SEC - STOP_LATENCY_SEC
+        )
+        state = hass.states.get(LATE_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 25
+        assert state.state == CoverState.OPEN
+
+
+# A queue that writes a frame every 1.2 s, the pace the nine-cover scene measured on
+# the real bus - five times the run below, so every cover's stop falls due on the
+# enqueue clock long before its own frame has left.
+SLOW_FRAME_GAP_SEC = 1.2
+# 8 % of a 30 s linear run.
+SHORT_RUN_SEC = 2.4
+
+
+@pytest.mark.slow
+async def test_twelve_covers_on_a_queue_slower_than_their_runs_all_reach_their_targets(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Twelve short runs behind a queue that is slower than any of them.
+
+    The condition of the 2026-09-08 failure, generalised: every cover but the first is
+    handed its frame long after the stop of that run was due on the clock its enqueue
+    set, and the twelfth waits more than five runs. What must hold for all twelve is
+    the same as ever - the motor ran the seconds the model asked for, and the shutter
+    is on its target.
+    """
+    starts = {where: 30 + 5 * index for index, where in enumerate(TWELVE_WHERES)}
+    targets = {where: starts[where] + 8 for where in TWELVE_WHERES}
+    mock_restore_cache(
+        hass,
+        tuple(
+            State(f"cover.cover_{where}", CoverState.OPEN, {ATTR_CURRENT_POSITION: starts[where]})
+            for where in TWELVE_WHERES
+        ),
+    )
+    async with setup_myhome(hass, tmp_path, TWELVE_YAML):
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            for where in TWELVE_WHERES:
+                await hass.services.async_call(
+                    COVER,
+                    "set_cover_position",
+                    {ATTR_ENTITY_ID: f"cover.cover_{where}", ATTR_POSITION: targets[where]},
+                    blocking=True,
+                )
+            assert len(slow.queue) == 12
+
+            # The worker writes one frame every 1.2 s; each stop is written when it
+            # falls due, `start_delay + run - stop_latency` after its own frame left,
+            # and jumps the queue to get there (0.4.3). The two never collide.
+            stop_delay = START_DELAY_SEC + SHORT_RUN_SEC - STOP_LATENCY_SEC
+            schedule = sorted(
+                [(SLOW_FRAME_GAP_SEC * index, False) for index in range(12)]
+                + [(SLOW_FRAME_GAP_SEC * index + stop_delay, True) for index in range(12)]
+            )
+            previous = 0.0
+            for instant, is_stop in schedule:
+                await _advance_exact(hass, freezer, instant - previous)
+                previous = instant
+                frame = slow.write_next()
+                assert frame.startswith("*2*0*") is is_stop, f"unexpected {frame} at {instant}s"
+                await hass.async_block_till_done()
+            assert slow.queue == []
+
+        for where in TWELVE_WHERES:
+            ran = _motor_seconds(slow, where, "1")
+            assert abs(ran - SHORT_RUN_SEC) < 0.001, f"cover {where} ran {ran}s"
+            state = hass.states.get(f"cover.cover_{where}")
+            assert state.attributes[ATTR_CURRENT_POSITION] == targets[where]
+            assert state.state == CoverState.OPEN
