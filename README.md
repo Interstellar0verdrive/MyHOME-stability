@@ -64,10 +64,16 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
 ## Features
 
 - **Lights**: ON/OFF and dimmable actuators, area/group/general addresses, bus interfaces
-- **Covers**: shutters and blinds with a time-based position estimate (`shutter_run`),
-  a two-phase slats/curtain model with tilt control (`slat_time`, `opening_time`,
-  `closing_time`), `set_cover_position`, `inverted` wiring, and real positions on
-  advanced actuators
+- **Covers**: shutters and blinds with a time-based position estimate
+  (`opening_time`, `closing_time`), a two-phase slats/curtain model with opt-in tilt
+  control (`slat_time`, `tilt`), `set_cover_position`, `inverted` wiring, and real
+  positions on advanced actuators
+- **Covers, the position that is actually right**: the estimate follows the roll on
+  the tube instead of a straight line (`roll`, or `opening_roll` / `closing_roll`
+  when the shutter does not behave the same way up and down), and two actions measure
+  that model on your own shutter in centimetres and scale it to every other shutter
+  of the same kind by its height (`cover_profiles:`) — see
+  [Calibrating a shutter in centimetres](docs/recipes.md#calibrating-a-shutter-in-centimetres)
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
 - **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy

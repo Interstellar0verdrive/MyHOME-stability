@@ -24,7 +24,10 @@ of this schema.
 - [Switch](#switch)
 - [Cover](#cover)
   - [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)
+  - [Why the position is not linear (`roll`)](#why-the-position-is-not-linear-roll)
   - [The two-phase travel model (`slat_time`)](#the-two-phase-travel-model-slat_time)
+  - [Cover profiles](#cover-profiles)
+    - [How a height scales a profile](#how-a-height-scales-a-profile)
   - [Calibrating a cover](#calibrating-a-cover)
 - [Binary sensor](#binary-sensor)
 - [Climate](#climate)
@@ -151,6 +154,8 @@ Two root styles are accepted, and they can be mixed (one entry per gateway):
 
 Under the gateway, each platform section (`light`, `switch`, `cover`, `binary_sensor`, `sensor`, `climate`, `scenario_control`) maps a **YAML key of your choice** (used only in error messages) to a device. Sections may be left empty.
 
+Besides the platform sections a gateway may carry `sensor_defaults:` (see [Energy monitoring](energy.md#sensor_defaults)) and, since 0.4.2, `cover_profiles:` (see [Cover profiles](#cover-profiles)): settings shared by several devices rather than devices of their own.
+
 Rules worth knowing:
 
 - **Quote every `where`** (`where: "01"`, not `where: 01`). YAML reads an unquoted address as a number, and a leading zero is gone by the time the validator sees it: nothing downstream can tell `where: 01` from `where: 1`, and `where: 0115` has already become `77` (YAML reads it as octal). Those values **cannot be detected**, so the validator does not claim to catch them — it accepts unquoted integers only as `0`, a two-digit or a four-digit value and refuses every other number — a bare `1`-`9`, which is ambiguous, a negative value, which is no address at all, and the 3- and 5-digit forms sensor addresses take, above all — and asks you to quote the whole file. Unquoted two- and four-digit numbers still load, for the configurations that always relied on it, which is exactly why the habit matters: an address written with a leading zero loads too, as a different device — everywhere except a WHO 4 zone or temperature probe, whose address is a zone number and is normalised (`'01'` is `1`; see [Climate](#climate)).
@@ -223,17 +228,32 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). Get this key wrong in the *other* direction — an actuator that does report its own position, left at `false` — and those position frames are ignored: the timed estimate is what the cover was configured for, and mixing the two would leave the entity reading *Opening* at a frozen percentage. The log says so once per frame, at debug level, and names `advanced: true`. |
-| `shutter_run` | number (s) | `20` | Full travel time in seconds, at least `1`. Basic actuators use it to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), derive open/closed and support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` — both of which default to `shutter_run` — plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). When both directional keys are written, `shutter_run` has no effect on that deadline. The validator warns when the keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
-| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
-| `opening_time` | number (s) | = `shutter_run` | Full **upward** run, when it differs from the downward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
-| `closing_time` | number (s) | = `shutter_run` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
+| `opening_time` | number (s) | `20` | Full **upward** run in seconds, slats included, at least `1`. The official name of the key since **0.4.2** (`shutter_run` is its alias). Basic actuators use it, with `closing_time` and `roll`, to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), to derive open/closed and to support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). The validator warns when the timing keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
+| `closing_time` | number (s) | = `opening_time` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
+| `shutter_run` | number (s) | – | **Legacy alias of `opening_time`**, kept for good: every configuration written before 0.4.2 keeps working unchanged. Writing both keys is accepted only if they carry the same number; two different values are refused with a message naming both. It has no separate meaning any more — in particular it is no longer the fallback of `closing_time` under another name, since `closing_time` falls back to `opening_time`, which is the same value. |
+| `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Since 0.4.2 the tilt *controls* need `tilt: true` as well; without it the two-phase timing still runs (see below), it is only the tilt entity features that are not offered. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
+| `roll` | number, `1.0`-`5.0` | `1.6` on `class: shutter`, `1.0` on every other class | How much faster the curtain travels when it is up than when it is down, because the roll on the tube is fatter (see [Why the position is not linear](#why-the-position-is-not-linear-roll)). `1.0` is the plain linear model of 0.4.1 and earlier. Typical measured values are between `1.4` and `2.0`. Only used by basic actuators, and only for the curtain phase: the slat phase stays linear. It is the value used in **both** directions unless one of the two keys below overrides it. |
+| `opening_roll` | number, `1.0`-`5.0` | = `roll` | The roll used for **upward** runs, when the shutter does not behave the same way going up. Mirrors `opening_time` exactly: write it only when you have measured it. |
+| `closing_roll` | number, `1.0`-`5.0` | = `roll` | The roll used for **downward** runs. Mirrors `closing_time`. Writing both directional keys makes `roll` irrelevant for the estimate; it is still what the attributes fall back on when the two are equal. |
+| `tilt` | boolean | `false` | Offer the tilt controls (`cover.open_cover_tilt` and friends, and the `current_tilt_position` attribute). **Default `false` since 0.4.2**, even with `slat_time` set: the two-phase timing model runs underneath either way, only the tilt entity features are opt-in. Has no effect on an `advanced` cover, which never has tilt controls. |
+| `height` | number (cm) | – | Curtain travel height, floor to fully open, in centimetres. On its own it does nothing but show up as an attribute; with `profile` it is what scales the profile's times and roll to this cover (see [Cover profiles](#cover-profiles)). |
+| `profile` | string | – | Name of an entry of the gateway-level [`cover_profiles:`](#cover-profiles) mapping. An unknown name is a validation error listing the names that are defined. |
 | `inverted` | boolean | `false` | The actuator is wired the other way round: `open_cover` sends *lower*, a bus "raising" frame is read as closing and an advanced actuator's reported level is mirrored. Home Assistant's own convention is unchanged: position `0` is still closed, `100` still open. |
-| `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). |
+| `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). It also decides the default `roll`. |
 | `lock_buttons` | boolean | `false` | Create Lock/Unlock configuration buttons for this actuator (Point-to-Point WHERE only). |
 
 `slat_time` must leave at least one second of curtain travel in both directions
 (`slat_time < min(opening_time, closing_time) - 1`), otherwise the configuration is
 rejected with the name of the offending cover.
+
+A key written on the cover always wins. Everything not written there is taken from
+the cover's `profile` (scaled by its `height`, if both are given), and what is left
+falls back to the defaults in the table above.
+
+`roll`, `opening_roll`, `closing_roll`, `height`, `profile` and `tilt` join
+`opening_time`, `closing_time`, `slat_time` and `shutter_run` in the list of keys
+the validator warns about on an `advanced:` cover: they do nothing there, the
+warning names them, and the configuration still loads.
 
 ### Keypad presses and gateway echoes
 
@@ -309,6 +329,65 @@ its timed estimate running; a cover declared `advanced: true` never estimates a
 position at all. If a shutter reads *Opening* at a percentage that does not move, the
 debug log will have said which of the two you are missing.
 
+### Why the position is not linear (`roll`)
+
+A rolling shutter winds onto a tube. The motor turns at a constant speed; the
+curtain does not. With the shutter up, most of the curtain is already wound on the
+tube, the roll is fat, and one turn of the motor pulls a long piece of curtain past
+the window. With the shutter down the tube is nearly bare, and the same turn pulls
+much less. The curtain is therefore fastest near the top and slowest near the floor.
+
+A stopwatch model that assumes one constant speed gets the two end stops right — a
+full run is a full run — and everything in between wrong, always in the same
+direction: the estimate says the shutter is higher than it is on the way down, and
+*set position 50 %* stops it too low.
+
+`roll` is the one number that describes this: the ratio between the radius of the
+full roll (shutter open) and the radius of the bare tube (shutter closed), which is
+also the ratio between the fastest and the slowest curtain speed.
+
+| `roll` | Meaning |
+|---|---|
+| `1.0` | Constant speed — the plain linear model of 0.4.1 and earlier. Set it explicitly on a cover whose estimate you do not want to change. |
+| `1.4` – `2.0` | The range ordinary domestic roller shutters measure in. |
+| `1.6` | The default on `class: shutter`, chosen as the middle of that range. |
+| other classes | `1.0`: a blind, an awning or a garage door has no roll to speak of, or none we can model. |
+
+Only the **curtain** phase goes through this model. The slat phase (`slat_time`)
+stays linear, because the slats are not winding on anything, and both end stops are
+still reached by running into them.
+
+What it changes, for the default `roll: 1.6`, on a cover coming down from fully
+open (curtain phase only):
+
+| Fraction of the curtain run spent descending | Estimated position, `roll: 1.0` | Estimated position, `roll: 1.6` |
+|---|---|---|
+| a quarter | 75 % | 71 % |
+| half | 50 % | 44 % |
+| three quarters | 25 % | 21 % |
+
+On a 195 cm shutter, half the curtain run leaves the bottom edge about 86 cm from
+the floor, not 98. The same numbers read the other way: to *reach* the middle of
+the window the motor has to run for rather more than half the time.
+
+**One roll per direction, when the shutter needs it.** The geometry alone would make
+the ascent the descent played backwards — same radius at the same height, so the
+same speed. Real shutters are not quite that symmetrical: going up the motor lifts
+the whole hanging curtain, the slats have to leave the floor and unstick from each
+other, and the tube is loaded differently from when the curtain is paying out under
+its own weight. Rather than model any of that, the integration lets the coefficient
+differ per direction: `closing_roll` for descents, `opening_roll` for ascents, both
+defaulting to `roll`. On the shutter these numbers were measured on (195 cm), half
+the run down ended 85 cm off the floor and half the run up ended 80 cm — roughly a
+roll of 1.7 downwards and 2.1 upwards. One coefficient per direction absorbs that
+difference; a single one splits it and is a few centimetres out both ways.
+
+The default is a plausible average, not your shutter, and it is the same in both
+directions. Measure yours once with
+[Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres),
+which returns the roll of that cover in each direction and a ready-to-paste profile.
+
+
 ### The two-phase travel model (`slat_time`)
 
 On most roller shutters the motor run is not all lift. Starting from fully closed,
@@ -325,6 +404,18 @@ With `slat_time` set, the integration splits every run in two phases:
 | Slats ("lamelle") | `slat_time` | `current_tilt_position` — 0 = slats closed, 100 = slats open |
 | Curtain | `opening_time - slat_time` (up) / `closing_time - slat_time` (down) | `current_position` — 0 = curtain on the floor, 100 = fully open |
 
+The slat phase is linear; the curtain phase goes through the
+[`roll` model](#why-the-position-is-not-linear-roll).
+
+**Since 0.4.2 the tilt controls are opt-in.** `slat_time` alone buys the *timing*:
+the run to a position is computed through both phases, `current_position: 0` still
+means the curtain is on the floor, and a run up from fully closed still spends
+`slat_time` before anything lifts. What it no longer buys by itself is the tilt
+*entity features* — `current_tilt_position` and the four `cover.*_tilt` services.
+Add `tilt: true` next to `slat_time` to get them back; the rest of this section then
+describes the cover exactly as 0.4.1 did. Nothing else changes with the default
+`tilt: false`, and the two bullets about the slats below simply do not apply.
+
 Consequences, all of them deliberate:
 
 - `current_position: 0` means **the curtain rests on the floor**, whatever the slats
@@ -335,7 +426,7 @@ Consequences, all of them deliberate:
   pinned to `100` and the tilt services are ignored (with a DEBUG log line).
 - The tilt services (`cover.open_cover_tilt`, `cover.close_cover_tilt`,
   `cover.set_cover_tilt_position`, `cover.stop_cover_tilt`) are only offered on a
-  **basic** actuator with `slat_time` greater than `0`. On an `advanced:` cover
+  **basic** actuator with `slat_time` greater than `0` **and `tilt: true`**. On an `advanced:` cover
   there is no tilt control at all, and the timing keys never produce a position —
   the actuator reports its own. Two of them are not unused, though: the run times
   set the safety timer described under [Keypad presses and gateway
@@ -360,21 +451,135 @@ Consequences, all of them deliberate:
 - Gateway echoes and the advanced actuator's direction safety timer apply to every
   cover, whatever `slat_time` is — see [Keypad presses and gateway
   echoes](#keypad-presses-and-gateway-echoes) above.
-- `slat_time: 0` (the default) is exactly the 0.3.x linear behaviour, tilt included:
-  no tilt feature, no extra attribute.
+- `slat_time: 0` (the default) leaves one single phase, and with `roll: 1.0` as well
+  that is exactly the 0.3.x behaviour, tilt included: no tilt feature, no extra
+  attribute.
+
+### Cover profiles
+
+Most houses have one kind of shutter in several sizes: same motor, same slats,
+different heights. `cover_profiles:` lets you measure **one** of them properly and
+describe all the others by their height alone.
+
+The mapping sits at gateway level, beside the platform sections:
+
+```yaml
+gateway:
+  mac: "00:03:50:AA:BB:CC"
+
+  cover_profiles:
+    tall:                     # any name, any number of profiles
+      reference_height: 195   # cm — the height of the cover this was measured on
+      opening_time: 22.3      # s, full upward run, slats included
+      closing_time: 21.7      # s, defaults to opening_time
+      slat_time: 4.7          # s, defaults to 0
+      roll: 1.6               # defaults to 1.6
+      # opening_roll / closing_roll here too, when the two directions differ
+
+  cover:
+    living_room_shutter:
+      where: "81"
+      name: "Living Room Shutter"
+      profile: tall
+      height: 195             # the profile's own reference: nothing is scaled
+    kitchen_shutter:
+      where: "82"
+      name: "Kitchen Shutter"
+      profile: tall
+      height: 120             # shorter: times and roll are scaled down
+    hall_shutter:
+      where: "83"
+      name: "Hall Shutter"
+      profile: tall           # no height: the profile's numbers, unscaled
+      closing_time: 19.4      # measured on this one; overrides the profile
+```
+
+| Key | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `reference_height` | number (cm) > 0 | **required** | Curtain travel height of the cover the profile was measured on. |
+| `opening_time` | number (s) ≥ 1 | **required** | Full upward run of that cover, slats included. `shutter_run` is accepted here as an alias too. |
+| `closing_time` | number (s) ≥ 1 | = `opening_time` | Full downward run of that cover. |
+| `slat_time` | number (s) ≥ 0 | `0` | Slat phase of that cover. |
+| `roll` | number, `1.0`-`5.0` | `1.6` | Roll coefficient of that cover, in both directions. |
+| `opening_roll` | number, `1.0`-`5.0` | = `roll` | Roll coefficient of that cover going up, when it differs. Mirrors `opening_time`. |
+| `closing_roll` | number, `1.0`-`5.0` | = `roll` | Roll coefficient of that cover going down, when it differs. Mirrors `closing_time`. |
+
+A profile nobody uses is harmless. A `profile:` naming an entry that does not exist
+is a validation error, and the message lists the names that are defined.
+
+#### How a height scales a profile
+
+Everything below happens once, when the file is loaded. Writing a key on the cover
+itself always wins over the derived value, key by key — that is how the
+`hall_shutter` above keeps its own `closing_time` and inherits the rest.
+
+Call `H_ref` the profile's `reference_height`, `k_ref` one of its roll coefficients
+and `H` the cover's `height`:
+
+- **Roll.** A shorter curtain makes a thinner roll, so a shorter cover is *more*
+  linear than the one the profile was measured on:
+  `roll = √(1 + (k_ref² − 1) × H / H_ref)`. The formula is applied to **each**
+  direction separately: `closing_roll` from the profile's closing roll,
+  `opening_roll` from its opening roll. With a single `roll:` in the profile the two
+  are the same number and come out the same.
+- **Slat time.** The slat gap is proportional to the number of slats, and so to the
+  height: `slat_time = slat_time_ref × H / H_ref`.
+- **Curtain time.** The curtain time follows the roll growth rather than the height,
+  and it is the **closing** roll that sets the scale — one scale for both run times,
+  and the descent is the direction the model is anchored on:
+  `scale = (closing_roll − 1) / (k_ref_close − 1)`, or plain `H / H_ref` when the
+  profile is linear coming down (`k_ref_close = 1`).
+- **Run times.** The slat phase is added back to the scaled curtain phase:
+  `opening_time = slat_time + (opening_time_ref − slat_time_ref) × scale`, and the
+  same for `closing_time`.
+
+Worked example — the `tall` profile above (195 cm, 22.3 / 21.7 / 4.7 s, roll 1.6 in
+both directions) applied to a cover declared `height: 120`:
+
+| Step | Computation | Result |
+|---|---|---|
+| Height ratio | `120 / 195` | `0.615` |
+| `roll` (both directions) | `√(1 + (1.6² − 1) × 0.615)` = `√1.96` | **`1.40`** |
+| Curtain scale | `(1.40 − 1) / (1.6 − 1)` | `0.667` |
+| `slat_time` | `4.7 × 0.615` | **`2.9 s`** |
+| `opening_time` | `2.9 + (22.3 − 4.7) × 0.667` | **`14.6 s`** |
+| `closing_time` | `2.9 + (21.7 − 4.7) × 0.667` | **`14.2 s`** |
+
+Had that profile carried the measured pair `closing_roll: 1.69` /
+`opening_roll: 2.12` instead of the single `roll: 1.6`, the same 120 cm cover would
+get `closing_roll` `√(1 + (1.69² − 1) × 0.615)` = **`1.46`**, `opening_roll`
+`√(1 + (2.12² − 1) × 0.615)` = **`1.77`**, and a curtain scale of
+`(1.46 − 1) / (1.69 − 1)` = `0.672` — the run times barely move, the two estimates
+in between do.
+
+(The integration keeps full precision internally and rounds only for display: times
+to 0.1 s, roll coefficients to 0.01.)
+
+Two cases worth spelling out:
+
+- a cover with a `profile` and **no** `height` gets the profile's numbers as they
+  are, unscaled — right for a cover the same size as the reference one;
+- a cover with a `height` and **no** `profile` scales nothing. The key is then only
+  documentation, published as the `Height` attribute.
+
+The derivation assumes the covers are the same product: same motor, same slat
+profile, same tube. A cover with a visibly different motor should be measured on its
+own — either with its own keys, or with a second profile.
+
 
 ### Calibrating a cover
 
+With a stopwatch, for the two run times:
+
 1. Close the cover completely (`cover.close_cover`) and let it stop by itself.
-2. Start a stopwatch, command `cover.open_cover` and note two moments:
+2. Start the stopwatch, command `cover.open_cover` and note two moments:
    - the instant the **bottom edge leaves the floor** → that is `slat_time`
      (typically 2-4 s);
-   - the instant the cover **stops at the top** → that is `shutter_run` (the full
+   - the instant the cover **stops at the top** → that is `opening_time` (the full
      upward run).
-3. Time the way back down (`cover.close_cover`, until the motor stops by itself). If
-   it differs from the upward run by more than a second or so, set `opening_time` and
-   `closing_time` instead of a single `shutter_run`; otherwise `shutter_run` alone is
-   enough.
+3. Time the way back down (`cover.close_cover`, until the motor stops by itself) →
+   `closing_time`. If it is within a second of the upward run, `opening_time` alone
+   is enough; `closing_time` falls back to it.
 4. Reload the integration and check `set_cover_position: 50`: consistent overshoot
    means the times are too large, stopping short means too small.
 
@@ -385,7 +590,7 @@ gateway:
     living_room_shutter:
       where: "81"
       name: "Living Room Shutter"
-      shutter_run: 30      # full run, both directions
+      opening_time: 30     # full run, both directions
       slat_time: 3         # the first/last 3 s only move the slats
     bedroom_shutter:
       where: "82"
@@ -395,8 +600,19 @@ gateway:
       closing_time: 28
 ```
 
-The loaded values are exposed on basic covers as the `Shutter run` attribute, plus
-`Slat time`, `Opening time` and `Closing time` when they are actually in use.
+A stopwatch cannot measure the roll, though, and it is what decides where 50 %
+lands. For that the integration has two actions that drive the cover, take the
+centimetres you measured on it and solve the model, one direction at a time:
+`myhome.cover_calibration_run` and `myhome.cover_calibration_compute` (see
+[Services and events](services-and-events.md#myhomecover_calibration_run)). The
+step-by-step procedure, including how to reuse the result on the other covers of the
+house, is
+[Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres).
+
+The loaded values are exposed on basic covers as the `Opening time` and
+`Closing time` attributes and either `Roll` — when the two directions agree — or
+`Opening roll` and `Closing roll`, plus `Slat time`, `Height` and `Profile` when
+they are set.
 
 See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
 `set_cover_position` behaviour, "closed with the slats open" and `inverted` wiring.
@@ -643,7 +859,7 @@ States** and in `state_attr(...)` templates.
 | `A` / `PL` | Lights, switches, covers, Lock/Unlock buttons, illuminance sensors and WHO 1 motion sensors with a Point-to-Point WHERE | The two halves of the WHERE: `A` is the ambient, `PL` the light point (`"15"` → `A: 1`, `PL: 5`; `"0115"` → `A: 01`, `PL: 15`). |
 | `Where` | The same entities with a General, Area or Group WHERE | The WHERE verbatim: cutting `"0"` or `"#3"` in half would mean nothing. |
 | `Int` | Any of the above with an `interface:` | The F422 bus interface, unpadded (`"3"`). |
-| `Shutter run`, `Slat time`, `Opening time`, `Closing time` | Basic covers | The travel times in seconds, in use — `Slat time` and the two directions only appear when they actually differ from the defaults. |
+| `Opening time`, `Closing time`, `Roll` / `Opening roll` + `Closing roll`, `Slat time`, `Height`, `Profile` | Basic covers | The cover model actually loaded: the two travel times in seconds and the roll are always there — as a single `Roll` when the two directions carry the same coefficient, as `Opening roll` and `Closing roll` when they differ. `Slat time` appears when it is greater than `0`, `Height` and `Profile` when the keys are written. Times are rounded to 0.1 s and roll coefficients to 0.01 for display. The `Shutter run` attribute of 0.4.1 and earlier is gone — it was `Opening time` under another name. |
 | `Sensor` | WHO 25 dry contacts | The WHERE split as OpenWebNet writes it, `(<type>)<number>`: `301` renders as `(3)01`, i.e. dry contact number `01`. Type `3` is a dry contact, type `4` an IR detector. A WHERE of any other shape is reported verbatim. |
 | `Auxiliary channel` | WHO 9 auxiliary binary sensors | The WHERE, verbatim. |
 | `Timeout`, `Sensitivity` | WHO 1 motion sensors | How long the entity waits before going back to *off*: the sensor's own motion timeout plus a 15 s margin. Both are requested from the sensor when the entity is added and show a default (`315` s, `medium`) until it answers. `Sensitivity` is the PIR level as a word — `low`, `medium`, `high` or `very high`. |
@@ -660,6 +876,8 @@ report.
 - **`required key not provided`**: `where` and `name` are mandatory (climate: `zone`/`name` optional).
 - **an invalid or ambiguous `where`**: either the address is not a valid OpenWebNet WHERE, or it was written unquoted in a shape that could mean two things. The message echoes the value you actually wrote and asks for quotes on every `where:` in the file: a leading zero is already gone by the time the validator runs, so this is advice, not a diagnosis of that one value. Quoting is necessary, not sufficient — a 3- or 5-digit address is a sensor address and is refused on a light, a switch or a cover whether it is quoted or not — and a negative value is refused outright, with its own message, since no platform has a negative address.
 - **`Duplicate WHERE 'x' (who N): cover 'a' collides with cover 'b'`**: the same device is declared twice; fix the address or remove one of the two entries (both YAML keys are named). When the two entries spell the address differently — `'01'` and `'001'` are the same WHO 4 zone — the message quotes **both** spellings as the file writes them (`… collides with climate 'living_room', which writes it '01'`) and says that addresses are compared after they are normalised.
+- **a cover with both `opening_time` and `shutter_run`, set to different values**: `shutter_run` is the legacy alias of `opening_time`, so the two cannot disagree. The message names both keys; drop one of them.
+- **a cover whose `profile:` names no entry of `cover_profiles:`**: the message lists the profile names that are defined for that gateway. See [Cover profiles](#cover-profiles).
 - **`sensor 'x' is missing the required sensor class`**: add `class: power|energy|temperature|illuminance`.
 - **`sensor 'x': WHERE '0' is the central unit's address, not a probe's`**: a WHO 4 temperature probe is addressed by zone (`1`-`99`, or `<sensor><zone>`). The central unit is a `climate:` device with `zone: "#0"`.
 - **a WHO 1 `binary_sensor` with a `class` other than `motion`**: WHO 1 inputs are modelled as motion sensors only. Drop the class, or move the device to `who: "25"` if it is a dry contact.

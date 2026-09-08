@@ -1,6 +1,6 @@
 # Services and events
 
-The five services the integration registers, and the contract (event name and
+The seven services the integration registers, and the contract (event name and
 data keys) of every event it fires. For copy-paste automations built on these,
 see [Recipes](recipes.md).
 
@@ -12,6 +12,8 @@ see [Recipes](recipes.md).
   - [`myhome.start_sending_instant_power`](#myhomestart_sending_instant_power)
   - [`myhome.sync_time`](#myhomesync_time)
   - [`myhome.send_message`](#myhomesend_message)
+  - [`myhome.cover_calibration_run`](#myhomecover_calibration_run)
+  - [`myhome.cover_calibration_compute`](#myhomecover_calibration_compute)
 - [Events](#events)
   - [Device discovery events](#device-discovery-events)
   - [CEN+ keypad events](#cen-keypad-events)
@@ -92,10 +94,128 @@ data:
 | `message` | yes | A valid OpenWebNet frame, e.g. `*1*1*15##`. |
 | `gateway` | only with more than one gateway loaded | MAC address in any notation. |
 
+### `myhome.cover_calibration_run`
+
+Moves a cover to one end stop, then runs it back for exactly the seconds a linear
+*set position 50 %* would use and stops it there, so that you can measure where it
+ended up. It is step 1
+of [Recipes → Calibrating a shutter in
+centimetres](recipes.md#calibrating-a-shutter-in-centimetres); on its own it changes
+no configuration and stores nothing.
+
+```yaml
+action: myhome.cover_calibration_run
+target:
+  entity_id: cover.living_room_shutter
+data:
+  direction: close
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `direction` | yes | `close` or `open`. The direction of the run you are going to measure: `close` yields the `closing_roll`, `open` the `opening_roll`. |
+
+**Target**: one or more **basic** covers (`integration: myhome`, `domain: cover`).
+Several covers are done one after another, never in parallel — you have to be
+standing in front of each one with a tape measure.
+
+What it does to each cover, in order:
+
+1. sends the **opposite** full command (`open_cover` for `direction: close`,
+   `close_cover` for `direction: open`) and waits the configured run of that
+   direction plus 3 seconds, so the cover is certainly against its end stop;
+2. sends the requested direction and runs the motor for exactly the time a
+   `set_cover_position: 50` would use with the current configuration and a linear
+   model — `(closing_time - slat_time) / 2` for `close` (it starts from fully open,
+   so no slat phase comes first), `slat_time + (opening_time - slat_time) / 2` for
+   `open` (it starts from fully closed, so the slats open first), with `slat_time`
+   at `0` when it is not set — counted from the moment that command went out, then
+   sends `stop_cover`;
+3. leaves the cover there and reports what it did.
+
+The commands are the entity's own, so the position estimate, the echo filtering and
+the safety timers see this run like any other movement.
+
+Response data, keyed by entity id:
+
+| Key | Value |
+|---|---|
+| `direction` | The direction that was run. |
+| `motor_seconds` | The seconds the motor was run, from the formulas above. |
+| `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. `slat_time` is reported, never solved for: it is the configured value. |
+
+Refused with a `ServiceValidationError`, naming the entity:
+
+- on an `advanced:` cover — it reports its own position, there is nothing to
+  calibrate;
+- on a cover that is already moving.
+
+> The cover runs to a **full end stop and back**, twice the length of a normal
+> command. Make sure nothing is in the way, above or below.
+
+### `myhome.cover_calibration_compute`
+
+Turns the centimetres you measured into roll coefficients — one per direction
+measured — and hands back a ready-to-paste YAML snippet. It computes only: no cover
+is moved and nothing is written to `myhome.yaml`.
+
+```yaml
+action: myhome.cover_calibration_compute
+target:
+  entity_id: cover.living_room_shutter
+data:
+  height: 195
+  closed_half_cm: 85
+  opened_half_cm: 80
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `height` | yes | Curtain travel height of that cover in centimetres, floor to fully open. |
+| `closed_half_cm` | yes | Centimetres from the floor to the bottom edge after `cover_calibration_run` with `direction: close`. Between `0` and `height`. It is what yields the `closing_roll`. |
+| `opened_half_cm` | no | The same measurement after `direction: open`, and what yields the `opening_roll`. Leave it out and only the descent is described; the resulting coefficient is then used in both directions. |
+| `slat_time` | no | The slat time in seconds, when you have stopwatched a better value than the one on the cover. It is **always** a given quantity, never solved for: without this field the cover's configured `slat_time` is used. |
+| `closed_run_seconds`, `opened_run_seconds` | no | The `motor_seconds` the two runs reported. Leave them out and the same formula the run uses is applied to the cover's *current* configuration — which is why the YAML must not change between the run and this action. |
+
+**Target**: exactly **one** basic cover. The maths needs that cover's configured
+`opening_time` and `closing_time` — the same numbers the run used — so a second
+entity would have nothing to do with the measurements.
+
+Each direction is one equation in one unknown, solved by bisection and independent
+of the other: the descent measurement fixes the `closing_roll`, the ascent
+measurement the `opening_roll`. Neither is a check on the other, and neither
+determines the slat time.
+
+Response data:
+
+| Key | Value |
+|---|---|
+| `closing_roll` | The coefficient solved from `closed_half_cm`, rounded to 0.01. |
+| `opening_roll` | The coefficient solved from `opened_half_cm`, rounded to 0.01. Absent when the ascent was not measured. |
+| `roll` | The mean of the two, or the closing one alone when only the descent was measured. The single number to write when the directions agree. |
+| `slat_time` | The slat time the maths used: the field you passed, or the cover's own. Seconds, rounded to 0.1. |
+| `opening_time`, `closing_time` | The times the solution was computed against, unchanged. |
+| `height` | The height you passed, echoed back. |
+| `closed_run_seconds`, `opened_run_seconds` | The motor seconds each equation was built on — the fields you passed, or the values recomputed from the cover's configuration. |
+| `yaml` | A `cover_profiles:` entry built from the result, plus the `profile:` / `height:` lines for the cover itself, ready to paste into `myhome.yaml`. It writes a single `roll:` when the two coefficients differ by at most `0.1`, and `opening_roll:` / `closing_roll:` (with no `roll:`) when they differ by more. |
+
+Refused with a `ServiceValidationError` when a measurement lies outside what the
+model can reach: no coefficient in the accepted range (`1.0` to `5.0`), with those
+run times and that height, puts the bottom edge where you say it was. The message
+names the measurement — the descent or the ascent — and gives the band of
+centimetres that direction can actually produce, so you can see at once whether you
+mistyped a number or the cover did not start from its end stop. Repeating
+`cover_calibration_run` for that direction, after checking that nothing stopped the
+cover early, is the usual fix.
+
 With more than one gateway loaded, every gateway-targeted service above requires
 the `gateway` field — omitting it fails with *"Specify the gateway: N gateways are
-loaded."* `myhome.start_sending_instant_power` targets entities instead, so it
-needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gateways).
+loaded."* `myhome.start_sending_instant_power` and the two cover calibration
+services target entities instead, so they need no `gateway`. See
+[Recipes → Several gateways](recipes.md#several-gateways).
+
+Both calibration services **return data**: call them from *Developer tools →
+Actions* to read the response there, or with `response_variable:` in a script.
 
 ## Events
 
