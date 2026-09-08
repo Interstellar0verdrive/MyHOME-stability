@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-08
+
 Covers driven together stop where they are told again. A basic actuator timed its run
 from the moment the command was *queued* rather than from the moment the gateway
 actually wrote it on the bus, and a scene moving a dozen shutters at once left the
@@ -941,7 +943,8 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
 
-[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.3
 [0.4.2]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.0
