@@ -3213,6 +3213,10 @@ async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
     twelve may take that answer for a keypad press: every motor runs the modelled
     time and every shutter ends on 40 %.
 
+    The burst the gateway relays at the write is *not* the motor (it is too soon to
+    be one, `MOTOR_MIRROR_WINDOW_SEC`); each actuator says so itself a good while
+    later, and the run is timed from there.
+
     Mutation caught: the same one as the single-cover replay, on the covers whose
     frame waited longest (the first ones are still inside the old window).
     """
@@ -3232,20 +3236,32 @@ async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
             )
             assert len(slow.queue) == 12
 
+            written: list[str] = []
             for index in range(12):
                 if index:
                     await _advance_exact(hass, freezer, ECHO_FRAME_GAP_SEC)
                 where = _frame_where(slow.write_next(report=False))[1]
+                written.append(where)
                 for answer in _server1_answer(where, "2"):
                     await feed_event(hass, covers[where], answer)
                 slow.report_next()
-                # The motor confirms the direction it is already running in.
+                await hass.async_block_till_done()
+                assert hass.states.get(f"cover.cover_{where}").state == CoverState.CLOSING
+
+            # Twelve frames later - 1.65 s after its own write for every one of them,
+            # well past the mirror floor and still inside the window in which an answer
+            # can be ours - each actuator says its motor is running. *That* is what
+            # re-bases the clock, so every stop falls due `TWELVE_RUN_SEC -
+            # STOP_LATENCY_SEC` after its own answer.
+            echoes: dict[str, datetime] = {}
+            for index, where in enumerate(written):
+                if index:
+                    await _advance_exact(hass, freezer, ECHO_FRAME_GAP_SEC)
+                echoes[where] = dt_util.utcnow()
                 await feed_event(hass, covers[where], f"*2*2*{where}##")
                 await hass.async_block_till_done()
                 assert hass.states.get(f"cover.cover_{where}").state == CoverState.CLOSING
 
-            # The echo arrived at the write, so every clock was re-based onto it and
-            # every stop falls due `TWELVE_RUN_SEC - STOP_LATENCY_SEC` after it.
             await _advance_exact(
                 hass, freezer, TWELVE_RUN_SEC - STOP_LATENCY_SEC - 11 * ECHO_FRAME_GAP_SEC
             )
@@ -3259,8 +3275,8 @@ async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
                     await feed_event(hass, covers[where], answer)
 
         for where in TWELVE_WHERES:
-            # Timed from the actuator's own "moving", which arrived at the write here.
-            ran = _motor_seconds(slow, where, "2", started=slow.instant(f"*2*2*{where}##"))
+            # Timed from the actuator's own "moving", not from the write it followed.
+            ran = _motor_seconds(slow, where, "2", started=echoes[where])
             assert abs(ran - TWELVE_RUN_SEC) < 0.001, f"cover {where} ran {ran}s"
             state = hass.states.get(f"cover.cover_{where}")
             assert state.attributes[ATTR_CURRENT_POSITION] == 40
@@ -3532,6 +3548,12 @@ async def test_a_stop_on_a_run_that_was_re_based_still_counts_the_coasting(
         assert state.state == CoverState.OPEN
 
 
+# A direction status the gateway relays at the instant it writes our own frame: too
+# soon to be a motor (`MOTOR_MIRROR_WINDOW_SEC`), and the one shape that would give
+# back the whole `start_delay` on every run if it were believed.
+MIRRORED_ECHO_SEC = 0.02
+
+
 class YieldingCommandPath(SlowCommandPath):
     """A command path whose `send` suspends before it takes a stop frame.
 
@@ -3651,6 +3673,65 @@ async def test_a_moving_status_while_our_stop_is_being_sent_changes_nothing(
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 40
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert slow.frames == ["*2*1*85##", "*2*0*85##"]
+
+
+async def test_a_direction_frame_relayed_at_the_write_is_not_the_motor_starting(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A gateway that mirrors the command it writes must not disable `start_delay`.
+
+    Nothing in `*2*1*81##` says whether it is the gateway relaying the frame it has
+    just been given or the actuator answering it half a second later; only its timing
+    does. A mirror taken for the motor re-bases the clock onto the write and hands back
+    the whole `start_delay` on every single run - 0.4.3's error, silently, with the key
+    configured and never used. So a direction status younger than
+    `MOTOR_MIRROR_WINDOW_SEC` leaves the clock alone, and - just as important - does
+    not consume the "once per movement" either: the real answer at 0.57 s is still
+    taken.
+
+    Mutation caught: dropping the lower bound on the acceptance window (the stop leaves
+    0.53 s early, which is the shortfall the release is about).
+    """
+    assert MIRRORED_ECHO_SEC < cover_module.MOTOR_MIRROR_WINDOW_SEC < MOTOR_ECHO_SEC
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            assert slow.write_next() == "*2*1*81##"
+            await hass.async_block_till_done()
+
+            # The gateway relays our own frame on the monitor session, 20 ms after
+            # writing it. No motor starts that fast, and the estimate does not move.
+            await _advance_exact(hass, freezer, MIRRORED_ECHO_SEC)
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            # The actuator itself answers at the measured 0.57 s, and *is* believed.
+            await _advance_exact(hass, freezer, MOTOR_ECHO_SEC - MIRRORED_ECHO_SEC)
+            started = dt_util.utcnow()
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            # Had the mirror been taken for the motor, the stop would be queued here.
+            await _advance_exact(
+                hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC - (MOTOR_ECHO_SEC - MIRRORED_ECHO_SEC)
+            )
+            assert slow.queue == [], "the frame the gateway mirrored was taken for the motor"
+
+            await _advance_exact(hass, freezer, MOTOR_ECHO_SEC - MIRRORED_ECHO_SEC)
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        assert abs(_motor_seconds(slow, "81", "1", started=started) - RUN_TO_40_SEC) < 0.001
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 40
+        assert state.state == CoverState.OPEN
 
 
 async def test_a_keypad_run_is_not_re_timed_by_the_frames_that_follow_it(

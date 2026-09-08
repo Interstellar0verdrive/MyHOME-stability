@@ -195,6 +195,24 @@ ECHO_RECHECK_DELAY_SEC = 2.0
 # (the estimate is already running that way) - what it must not do is move a clock that
 # has been ticking for a minute.
 MOTOR_START_WINDOW_SEC = STOP_ECHO_WINDOW_SEC
+# ... and how soon is *too* soon to be the motor. A gateway answers a command it has
+# just written by relaying it on the monitor session, and some gateways relay the
+# direction frame itself - which is indistinguishable, frame for frame, from the
+# actuator's own "moving" status. Taken for the motor it would re-base the clock onto
+# the write and give back the whole `start_delay` this release exists to model, on
+# every run, silently.
+#
+# The two are told apart by their timing, and only by it. On the reference
+# MyHOMEServer1 the frames the gateway relays at the write ("stop" translation,
+# "stopped" status, the translation of the direction) all arrive within about 0.1 s of
+# it, while the actuator's own direction status arrives at 0.57 s - the two populations
+# do not overlap, and this is the floor between them: a "moving" status younger than
+# this is the gateway mirroring our own command and leaves the clock alone. It is
+# deliberately nearer the mirror than the motor, because being late by a tenth of a
+# second costs a tenth of a second of estimate while mistaking a mirror for the motor
+# costs `start_delay` on every single run. An actuator that really does start in less
+# than this much has no `start_delay` worth modelling anyway.
+MOTOR_MIRROR_WINDOW_SEC = 0.15
 # An advanced actuator reports its own position, so no timer bounds its movement:
 # if its "stopped" frame is lost the entity would read "Opening" for ever. This much
 # on top of the longest configured run is when we stop waiting and ask the actuator
@@ -1319,9 +1337,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         The caller has already matched the direction against the movement in progress;
         what is left is that the movement must be one *we* commanded, its frame must
         have reached the bus, our stop must not be out already, and the answer must be
-        recent enough to be an answer. Everything else is somebody at the keypad
-        pressing the direction the shutter is already running in, which changes nothing
-        and must leave the clock alone.
+        recent enough to be an answer and old enough not to be the gateway relaying the
+        frame it has just written (`MOTOR_MIRROR_WINDOW_SEC`). Everything else is
+        somebody at the keypad pressing the direction the shutter is already running in,
+        which changes nothing and must leave the clock alone.
         """
         if self._motor_started_at is not None:
             # The motor starts once. A gateway that repeats the status, or a keypad
@@ -1352,15 +1371,29 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # curtain run. The invariant the flag carries is stated in `_async_send_stop`.
             return
         now = dt_util.utcnow()
-        if (now - delivered).total_seconds() > self._start_delay + MOTOR_START_WINDOW_SEC:
+        age = (now - delivered).total_seconds()
+        if age > self._start_delay + MOTOR_START_WINDOW_SEC:
             # Too late to be the answer to our command: somebody at the keypad pressed
             # the direction we are already running in. The estimate is right either way.
+            return
+        if age < MOTOR_MIRROR_WINDOW_SEC:
+            # Too *soon* to be a motor: this is the gateway relaying the frame it has
+            # just written, not the actuator answering it. `_motor_started_at` is left
+            # unset on purpose, so the actuator's real answer half a second later is
+            # still taken.
+            LOGGER.debug(
+                "%s Cover %s: a direction status %.2fs after our own frame is the gateway "
+                "mirroring it, not the motor starting; the clock is left alone",
+                self._gateway_handler.log_id,
+                self._where,
+                age,
+            )
             return
         LOGGER.debug(
             "%s Cover %s: the actuator started %.2fs after our frame reached the bus",
             self._gateway_handler.log_id,
             self._where,
-            (now - delivered).total_seconds(),
+            age,
         )
         self._motor_started_at = now
         self._move_started_at = now
