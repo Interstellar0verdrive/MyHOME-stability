@@ -33,6 +33,20 @@ SERVICE_SEND_MESSAGE = "send_message"
 SERVICE_START_DISCOVERY = "start_discovery"
 SERVICE_STOP_DISCOVERY = "stop_discovery"
 SERVICE_START_SENDING_INSTANT_POWER = "start_sending_instant_power"
+# Cover calibration (0.4.2): one service drives the shutter to a half run so the user
+# can measure it with a tape, the other turns that measurement into `roll` / `slat_time`.
+SERVICE_COVER_CALIBRATION_RUN = "cover_calibration_run"
+SERVICE_COVER_CALIBRATION_COMPUTE = "cover_calibration_compute"
+
+# Calibration service fields / response keys.
+ATTR_DIRECTION = "direction"
+ATTR_HEIGHT = "height"
+ATTR_CLOSED_HALF_CM = "closed_half_cm"
+ATTR_OPENED_HALF_CM = "opened_half_cm"
+ATTR_MOTOR_SECONDS = "motor_seconds"
+DIRECTION_OPEN = "open"
+DIRECTION_CLOSE = "close"
+CALIBRATION_DIRECTIONS: tuple[str, ...] = (DIRECTION_CLOSE, DIRECTION_OPEN)
 
 # Request timeout constants
 GATEWAY_TEST_TIMEOUT_SEC = 20
@@ -80,6 +94,23 @@ CONF_SHUTTER_RUN = "shutter_run"
 CONF_SLAT_TIME = "slat_time"
 CONF_OPENING_TIME = "opening_time"
 CONF_CLOSING_TIME = "closing_time"
+# Roll model (0.4.2).  A rolling shutter winds on a tube, so the curtain moves fastest
+# when it is up (big roll) and slowest when it is down: ``roll`` is r_max / r_min, the
+# single number that describes that speed ratio.  ``roll: 1`` is the old linear model.
+CONF_ROLL = "roll"
+# Whether the slat phase is *exposed* as a tilt entity feature.  The two-phase timing
+# runs either way (a run from fully closed still spends ``slat_time`` on the slats);
+# ``tilt: false`` (the default from 0.4.2) only hides controls most shutters cannot
+# really position.
+CONF_TILT = "tilt"
+# Curtain travel height in centimetres.  Only used to scale a ``profile`` to this
+# window; harmless on its own (it is published as an attribute).
+CONF_HEIGHT = "height"
+CONF_PROFILE = "profile"
+# Gateway-level block of named timing profiles (``cover_profiles:``) and the one key
+# that only lives inside it.
+CONF_COVER_PROFILES = "cover_profiles"
+CONF_REFERENCE_HEIGHT = "reference_height"
 CONF_LOCK_BUTTONS = "lock_buttons"
 CONF_SOURCE_PLATFORM = "source_platform"
 CONF_HEATING_SUPPORT = "heat"
@@ -202,6 +233,19 @@ CONF_KEEPALIVE_MINUTES = "keepalive_minutes"
 DEFAULT_MANUFACTURER = "BTicino S.p.A."
 DEFAULT_SHUTTER_RUN = 20.0  # seconds, full travel of a basic cover (Contract F)
 DEFAULT_SLAT_TIME = 0.0  # seconds of slat-only travel; 0 disables the two-phase model
+# Roll coefficient (0.4.2).  A rolling shutter really does wind on a tube, so 1.6 is a
+# far better first guess than "the curtain moves at a constant speed"; anything else
+# (an awning, a curtain on a rail, a gate) has no roll at all and stays linear.
+DEFAULT_ROLL_SHUTTER = 1.6
+DEFAULT_ROLL = 1.0
+# A roll below 1 would mean the tube gets *thinner* as it fills; above 5 the curtain
+# would be ten times slower at the bottom than at the top, which no shutter is.
+MIN_ROLL = 1.0
+MAX_ROLL = 5.0
+# Below this distance from 1 the roll equations are singular (they divide by k - 1) and
+# physically indistinguishable from the linear model, so both are taken as linear.
+ROLL_LINEAR_TOLERANCE = 1e-9
+DEFAULT_TILT = False  # tilt controls are opt-in from 0.4.2
 DEFAULT_KEEPALIVE_MINUTES = 125  # instant power keep-alive (Contract E; 0 = disabled)
 
 # Device type constants (used by discovery.py to classify bus traffic)

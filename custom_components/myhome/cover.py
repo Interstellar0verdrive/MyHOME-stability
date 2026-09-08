@@ -24,6 +24,18 @@ While the curtain is up the slats are necessarily open, so tilt is pinned to 100
 tilt commands are no-ops.  `slat_time: 0` (the default) disables the whole thing and
 reproduces the 0.3.x linear model exactly, tilt included (no tilt feature at all).
 
+The slat phase is *timed* whenever `slat_time` is set, but it is only *exposed* as tilt
+controls when `tilt: true` is written (0.4.2).  Most shutters cannot really be told to
+hold their slats at 40 %, so the controls are opt-in; the timing model is not, because
+a run from fully closed genuinely does spend `slat_time` on the slats before the
+curtain leaves the floor, whether or not anybody can see it.
+
+Roll model (0.4.2).  The curtain phase is not linear either: the curtain winds on a
+tube, the motor turns at a constant speed, so the curtain moves fastest when it is up
+(the roll is fat) and slowest when it is down.  `roll` = r_max / r_min describes that
+in one number, and `_roll_tau` / `_roll_x` below are the whole of it; `roll: 1` gives
+back the old linear model exactly, term for term.
+
 Advanced actuators report a real position through dimension 10; OWNd maps
 `position == 0` to *closed* (`OWNAutomationEvent`), which matches the HA convention,
 so their value is used verbatim.
@@ -32,6 +44,7 @@ so their value is used verbatim.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from math import sqrt
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -65,19 +78,28 @@ from .const import (
     CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
+    CONF_HEIGHT,
     CONF_ICON,
     CONF_INVERTED,
     CONF_MANUFACTURER,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
+    CONF_PROFILE,
+    CONF_ROLL,
     CONF_SHUTTER_RUN,
     CONF_SLAT_TIME,
+    CONF_TILT,
     CONF_WHERE,
     CONF_WHO,
+    DEFAULT_ROLL,
     DEFAULT_SHUTTER_RUN,
     DEFAULT_SLAT_TIME,
+    DEFAULT_TILT,
     DOMAIN,
     LOGGER,
+    MAX_ROLL,
+    MIN_ROLL,
+    ROLL_LINEAR_TOLERANCE,
     bus_full_where,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -178,6 +200,31 @@ CLOSING = "closing"
 MIN_CURTAIN_TIME = 0.001
 
 
+# ------------------------------------------------------------------ the roll model
+# `x` is the fraction of the CURTAIN travel measured from the top: x = 0 fully open,
+# x = 1 curtain on the floor (so x = 1 - position/100).  `tau` is the fraction of the
+# curtain time.  Descending from the top at constant motor speed, the curtain covers
+# less and less distance per second as the roll on the tube gets thinner, and the two
+# functions below are that relation and its inverse.  They are pure and total: the
+# whole roll model of the integration is these eight lines.
+def _roll_tau(roll: float, x: float) -> float:
+    """Fraction of the curtain time needed to descend from the top to `x`."""
+    x = min(1.0, max(0.0, x))
+    k = max(MIN_ROLL, roll)
+    if k - 1.0 <= ROLL_LINEAR_TOLERANCE:
+        return x
+    return (k - sqrt(k * k - (k * k - 1) * x)) / (k - 1)
+
+
+def _roll_x(roll: float, tau: float) -> float:
+    """Where the curtain is after descending from the top for `tau` of the curtain time."""
+    tau = min(1.0, max(0.0, tau))
+    k = max(MIN_ROLL, roll)
+    if k - 1.0 <= ROLL_LINEAR_TOLERANCE:
+        return tau
+    return (k * k - (k - tau * (k - 1)) ** 2) / (k * k - 1)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -205,6 +252,10 @@ async def async_setup_entry(
             slat_time=cfg.get(CONF_SLAT_TIME, DEFAULT_SLAT_TIME),
             opening_time=cfg.get(CONF_OPENING_TIME),
             closing_time=cfg.get(CONF_CLOSING_TIME),
+            roll=cfg.get(CONF_ROLL, DEFAULT_ROLL),
+            tilt=cfg.get(CONF_TILT, DEFAULT_TILT),
+            height=cfg.get(CONF_HEIGHT),
+            profile=cfg.get(CONF_PROFILE),
             inverted=cfg[CONF_INVERTED],
             manufacturer=cfg[CONF_MANUFACTURER],
             model=cfg[CONF_DEVICE_MODEL],
@@ -239,6 +290,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         slat_time: float = DEFAULT_SLAT_TIME,
         opening_time: float | None = None,
         closing_time: float | None = None,
+        roll: float = DEFAULT_ROLL,
+        tilt: bool = DEFAULT_TILT,
+        height: float | None = None,
+        profile: str | None = None,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -272,12 +327,21 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._opening_time = float(opening_time or self._shutter_run)
         self._closing_time = float(closing_time or self._shutter_run)
         self._slat_time = max(0.0, float(slat_time or 0.0))
+        # Contract A clamps it to [1, 5]; a hand-built entity might not.
+        self._roll = min(MAX_ROLL, max(MIN_ROLL, float(roll or DEFAULT_ROLL)))
+        self._height = None if height is None else float(height)
+        self._profile = profile
         # Curtain-only part of each run (the validator keeps it >= 1 s).
         self._curtain_up = max(MIN_CURTAIN_TIME, self._opening_time - self._slat_time)
         self._curtain_down = max(MIN_CURTAIN_TIME, self._closing_time - self._slat_time)
         self._inverted = bool(inverted)
-        # Tilt is only meaningful on a basic cover with a configured slat phase.
-        self._has_tilt = not self._advanced and self._slat_time > 0
+        # The two-phase *timing* runs whenever a slat phase is configured on a basic
+        # cover: opening from the floor really does spend `slat_time` on the slats
+        # first, and pretending otherwise would put every later position out by that
+        # much.  Whether the slats are also *exposed* as tilt controls is a separate,
+        # opt-in question (`tilt:`, 0.4.2) - most actuators cannot hold them at 40 %.
+        self._two_phase = not self._advanced and self._slat_time > 0
+        self._has_tilt = bool(tilt) and self._two_phase
 
         self._attr_supported_features = (
             CoverEntityFeature.OPEN
@@ -298,14 +362,20 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         self._attr_extra_state_attributes = address_attributes(where, self._interface)
         if not self._advanced:
-            self._attr_extra_state_attributes["Shutter run"] = self._shutter_run
-            # Only advertise the 0.4.0 keys when they actually change the model.
+            # The whole model a basic cover's position comes from, in the order it is
+            # read.  `Shutter run` is gone (0.4.2): it was always the same number as
+            # `Opening time`, which is now always published.
+            self._attr_extra_state_attributes["Opening time"] = self._opening_time
+            self._attr_extra_state_attributes["Closing time"] = self._closing_time
             if self._slat_time > 0:
                 self._attr_extra_state_attributes["Slat time"] = self._slat_time
-            if self._opening_time != self._shutter_run:
-                self._attr_extra_state_attributes["Opening time"] = self._opening_time
-            if self._closing_time != self._shutter_run:
-                self._attr_extra_state_attributes["Closing time"] = self._closing_time
+            self._attr_extra_state_attributes["Roll"] = self._roll
+            # These two say nothing about the movement, they say where the numbers
+            # above came from - so they only appear when the file really has them.
+            if self._height is not None:
+                self._attr_extra_state_attributes["Height"] = self._height
+            if self._profile is not None:
+                self._attr_extra_state_attributes["Profile"] = self._profile
 
         self._attr_current_cover_position: int | None = None
         self._attr_current_cover_tilt_position: int | None = None
@@ -414,12 +484,32 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         clamped = int(max(0, min(100, round(position))))
         if clamped > 0:
             return clamped, 100
-        if not self._has_tilt:
+        if not self._two_phase:
             return 0, 0
+        # `_two_phase`, not `_has_tilt`: a cover with `tilt: false` still tracks where
+        # the slats are, it just never publishes it.  Forgetting it here would make
+        # every stop inside the slat phase cost a full `slat_time` again on the next
+        # command.
         return 0, int(max(0, min(100, round(tilt))))
 
+    def _curtain_tau(self, position: float) -> float:
+        """Where `position` sits on the curtain's time axis (0 at the top, 1 on the floor)."""
+        return _roll_tau(self._roll, 1.0 - position / 100)
+
+    def _curtain_position(self, tau: float) -> float:
+        """The curtain position (0-100) reached at time fraction `tau` of a descent."""
+        return (1.0 - _roll_x(self._roll, tau)) * 100
+
     def _travel(self, direction: str, position: int, tilt: int, elapsed: float) -> tuple[int, int]:
-        """State reached `elapsed` seconds after leaving (`position`, `tilt`)."""
+        """State reached `elapsed` seconds after leaving (`position`, `tilt`).
+
+        The curtain part goes through the roll model: the run is converted to a
+        position on the curtain's *time* axis, moved along it by the elapsed fraction
+        of the run, and converted back.  An ascent is the time reversal of a descent -
+        same tube, same speed at the same height - so both directions share the pair of
+        functions and only the sign differs.  The slat phase is unchanged: those
+        seconds turn the slats, they wind nothing on the tube, so they stay linear.
+        """
         slat = self._slat_time
         if direction == OPENING:
             if position <= 0 and slat > 0 and tilt < 100:
@@ -428,10 +518,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 if elapsed <= slat_left:
                     return self._normalise(0, tilt + elapsed / slat * 100)
                 elapsed -= slat_left
-            return self._normalise(position + elapsed / self._curtain_up * 100, 100)
-        curtain_left = position / 100 * self._curtain_down
+            tau = self._curtain_tau(position) - elapsed / self._curtain_up
+            return self._normalise(self._curtain_position(tau), 100)
+        # Time still to run before the curtain touches the floor (tau = 1).
+        curtain_left = (1.0 - self._curtain_tau(position)) * self._curtain_down
         if elapsed < curtain_left:
-            return self._normalise(position - elapsed / self._curtain_down * 100, 100)
+            tau = self._curtain_tau(position) + elapsed / self._curtain_down
+            return self._normalise(self._curtain_position(tau), 100)
         # The curtain is on the floor: the rest of the run closes the slats.
         elapsed -= curtain_left
         if slat <= 0:
@@ -447,7 +540,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         target_position: int,
         target_tilt: int,
     ) -> float:
-        """Seconds the motor must run to go from (`position`, `tilt`) to the target."""
+        """Seconds the motor must run to go from (`position`, `tilt`) to the target.
+
+        The exact inverse of `_travel`: the curtain leg is the distance between the two
+        positions measured on the curtain's time axis (which is what the roll model
+        makes linear), the slat leg is unchanged.
+        """
         slat = self._slat_time
         if direction == OPENING:
             seconds = 0.0
@@ -455,8 +553,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 # Opening past the floor always ends with the slats fully open.
                 slat_target = 100 if target_position > 0 else target_tilt
                 seconds += max(0.0, slat_target - tilt) / 100 * slat
-            return seconds + max(0.0, target_position - position) / 100 * self._curtain_up
-        seconds = max(0.0, position - target_position) / 100 * self._curtain_down
+            curtain = max(0.0, self._curtain_tau(position) - self._curtain_tau(target_position))
+            return seconds + curtain * self._curtain_up
+        curtain = max(0.0, self._curtain_tau(target_position) - self._curtain_tau(position))
+        seconds = curtain * self._curtain_down
         if target_position <= 0 and slat > 0:
             start_tilt = 100 if position > 0 else tilt
             seconds += max(0.0, start_tilt - target_tilt) / 100 * slat

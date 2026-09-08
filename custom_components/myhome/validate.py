@@ -21,6 +21,12 @@ wrapped in plain lambdas in ``gateway_schema``.  The top-level ``MyHomeConfigSch
 instance is always called directly by ``__init__.py`` so its ``__call__`` runs on both
 engines.  Nothing else in this module is engine sensitive (verified with both engines
 by ``tests/test_validate.py``).
+
+Cross-section note (0.4.2): a cover may name a ``profile:`` defined in the *gateway's*
+``cover_profiles:`` block, and the per-device finalizers only ever see one device dict.
+``_gateway_section`` therefore validates that block first and publishes it through
+``cover_profiles_in_scope`` for the duration of the gateway's own validation; nothing
+else in the file reaches across sections.
 """
 from __future__ import annotations
 
@@ -28,6 +34,7 @@ import difflib
 import re
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, Sequence
 from contextlib import contextmanager
+from math import sqrt
 
 from homeassistant.components.binary_sensor import (
     DOMAIN as BINARY_SENSOR,
@@ -74,6 +81,7 @@ from .const import (
     CONF_CENTRAL,
     CONF_CLOSING_TIME,
     CONF_COOLING_SUPPORT,
+    CONF_COVER_PROFILES,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
     CONF_DIMMABLE,
@@ -82,6 +90,7 @@ from .const import (
     CONF_FAN_SUPPORT,
     CONF_GATEWAY as CONF_GATEWAY_BLOCK,
     CONF_HEATING_SUPPORT,
+    CONF_HEIGHT,
     CONF_ICON,
     CONF_ICON_ON,
     CONF_INFO_LOG_INTERVAL_SEC,
@@ -95,7 +104,10 @@ from .const import (
     CONF_OBJECT,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
+    CONF_PROFILE,
     CONF_PROTOCOL,
+    CONF_REFERENCE_HEIGHT,
+    CONF_ROLL,
     CONF_SCENARIO_CONTROL,
     CONF_SENSOR_DEFAULTS,
     CONF_SHUTTER_RUN,
@@ -103,16 +115,23 @@ from .const import (
     CONF_SOURCE_PLATFORM,
     CONF_STANDALONE,
     CONF_SUPPRESS_LOG_INTERVAL_SEC,
+    CONF_TILT,
     CONF_WHERE,
     CONF_WHO,
     CONF_ZONE,
     DEFAULT_KEEPALIVE_MINUTES,
     DEFAULT_MANUFACTURER,
+    DEFAULT_ROLL,
+    DEFAULT_ROLL_SHUTTER,
     DEFAULT_SCENARIO_BUTTONS,
     DEFAULT_SHUTTER_RUN,
     DEFAULT_SLAT_TIME,
+    DEFAULT_TILT,
     LOGGER,
+    MAX_ROLL,
+    MIN_ROLL,
     PROTOCOL_CEN_PLUS,
+    ROLL_LINEAR_TOLERANCE,
     SCENARIO_CONTROL_BUTTON_RANGE,
     SCENARIO_CONTROL_MODELS,
     SCENARIO_CONTROL_WHO,
@@ -564,6 +583,12 @@ def _device_class(enum, allowed: Sequence):
 _NON_NEGATIVE_INT = All(Coerce(int), Range(min=0))
 _NON_NEGATIVE_FLOAT = All(Coerce(float), Range(min=0))
 _KEEPALIVE_MINUTES = All(Coerce(int), Range(min=0, max=255))
+# Cover timings (0.4.2).  A run shorter than a second cannot be estimated at all, a
+# height of zero centimetres would divide by zero in the profile derivation, and the
+# roll range is the physical one (see ``MIN_ROLL`` / ``MAX_ROLL``).
+_RUN_SECONDS = All(Coerce(float), Range(min=1))
+_POSITIVE_FLOAT = All(Coerce(float), Range(min=0, min_included=False))
+_ROLL = All(Coerce(float), Range(min=MIN_ROLL, max=MAX_ROLL))
 
 _COMMON_FIELDS: dict = {
     Required(CONF_NAME): str,
@@ -648,19 +673,41 @@ COVER_FIELDS: dict = {
     Required(CONF_WHERE): ACTUATOR_WHERE,
     Optional(CONF_BUS_INTERFACE): BusInterface(),
     Optional(CONF_ADVANCED_SHUTTER, default=False): Boolean(),
-    Optional(CONF_SHUTTER_RUN, default=DEFAULT_SHUTTER_RUN): All(Coerce(float), Range(min=1)),
-    # Two-phase travel (0.4.0).  No schema default for the two directions: they fall
-    # back to ``shutter_run`` in _finalize_cover, so ``shutter_run`` stays the one
-    # value most installations need.
-    Optional(CONF_SLAT_TIME, default=DEFAULT_SLAT_TIME): All(Coerce(float), Range(min=0)),
-    Optional(CONF_OPENING_TIME): All(Coerce(float), Range(min=1)),
-    Optional(CONF_CLOSING_TIME): All(Coerce(float), Range(min=1)),
+    # No schema default on any timing key from 0.4.2: _finalize_cover has to be able to
+    # tell "the user wrote this" from "nobody did", because a value that comes from a
+    # ``profile:`` sits between the two (see _finalize_cover for the precedence).
+    Optional(CONF_OPENING_TIME): _RUN_SECONDS,
+    # ``shutter_run`` is the 0.3.x spelling of ``opening_time`` and stays valid forever.
+    Optional(CONF_SHUTTER_RUN): _RUN_SECONDS,
+    Optional(CONF_CLOSING_TIME): _RUN_SECONDS,
+    Optional(CONF_SLAT_TIME): _NON_NEGATIVE_FLOAT,
+    Optional(CONF_ROLL): _ROLL,
+    # The slat phase is timed either way; ``tilt`` only decides whether it is *exposed*
+    # as tilt controls (plat-07 / 0.4.2).
+    Optional(CONF_TILT, default=DEFAULT_TILT): Boolean(),
+    Optional(CONF_HEIGHT): _POSITIVE_FLOAT,
+    Optional(CONF_PROFILE): str,
     Optional(CONF_INVERTED, default=False): Boolean(),
     # Default (shutter) applied by _finalize_cover, after the ``device_class`` alias is folded.
     Optional(CONF_DEVICE_CLASS): _device_class(CoverDeviceClass, _COVER_CLASSES),
     Optional(DEVICE_CLASS_ALIAS): _device_class(CoverDeviceClass, _COVER_CLASSES),
     Optional(CONF_LOCK_BUTTONS, default=False): Boolean(),
 }
+
+# One entry of the gateway-level ``cover_profiles:`` block (0.4.2): the measured
+# behaviour of ONE model of shutter, at one reference height.  Every cover that names
+# it gets its own times, scaled to its own ``height:`` (see _derive_cover_from_profile).
+COVER_PROFILE_FIELDS: dict = {
+    Required(CONF_REFERENCE_HEIGHT): _POSITIVE_FLOAT,
+    # ``opening_time`` is required, but it may be spelled ``shutter_run`` here too, so
+    # both are Optional for the schema and _finalize_cover_profile enforces the pair.
+    Optional(CONF_OPENING_TIME): _RUN_SECONDS,
+    Optional(CONF_SHUTTER_RUN): _RUN_SECONDS,
+    Optional(CONF_CLOSING_TIME): _RUN_SECONDS,
+    Optional(CONF_SLAT_TIME, default=DEFAULT_SLAT_TIME): _NON_NEGATIVE_FLOAT,
+    Optional(CONF_ROLL, default=DEFAULT_ROLL_SHUTTER): _ROLL,
+}
+
 
 BINARY_SENSOR_FIELDS: dict = {
     **_COMMON_FIELDS,
@@ -757,19 +804,208 @@ def _finalize_switch(device: MutableMapping, yaml_key: str) -> None:
     device.setdefault(CONF_DEVICE_CLASS, SwitchDeviceClass.SWITCH)
 
 
-def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
-    """Apply the default class and the two-phase travel times (0.4.0).
+# --------------------------------------------------------------------------------------
+# Cover profiles (0.4.2)
+#
+# ``cover_profiles:`` is a GATEWAY-level block, but the value a cover ends up with is
+# resolved by the per-device finalizer, which the schema engine calls with the device
+# dict alone.  Threading the block through the schema would mean turning every nested
+# section into a subclass the compatibility layer refuses to call (see the module
+# docstring), so the profiles of the gateway currently being validated are published in
+# the module-level stack below instead - exactly the shape ``collect_unknown_keys``
+# already uses for the same reason.  ``_gateway_section`` is the only place that pushes.
+# --------------------------------------------------------------------------------------
+_ACTIVE_COVER_PROFILES: list[Mapping[str, Mapping]] = []
 
-    ``opening_time`` / ``closing_time`` default to ``shutter_run`` (so a symmetric
-    cover keeps needing one value only) and ``slat_time`` must leave at least one
-    second of curtain travel in **both** directions, otherwise the position estimate
-    would be meaningless.  That cross-check is skipped on an ``advanced`` cover, which
-    produces no estimate at all (P4-NIT-1).
+
+@contextmanager
+def cover_profiles_in_scope(profiles: Mapping[str, Mapping]) -> Iterator[None]:
+    """Make ``profiles`` the ones ``profile:`` resolves against while the context runs."""
+    _ACTIVE_COVER_PROFILES.append(profiles)
+    try:
+        yield
+    finally:
+        _ACTIVE_COVER_PROFILES.pop()
+
+
+def _active_cover_profiles() -> Mapping[str, Mapping]:
+    """The gateway's ``cover_profiles:``; empty outside a gateway (a bare device schema)."""
+    return _ACTIVE_COVER_PROFILES[-1] if _ACTIVE_COVER_PROFILES else {}
+
+
+def _fold_shutter_run_alias(device: MutableMapping, path: list, what: str) -> None:
+    """``shutter_run`` is the legacy spelling of ``opening_time``; both -> they must agree.
+
+    Kept forever: it is the key every 0.3.x configuration in the wild is written with.
+    Two different values are refused rather than silently resolved, because there is no
+    honest way to guess which of the two the user meant.
+    """
+    if CONF_SHUTTER_RUN not in device:
+        return
+    alias_value = device.pop(CONF_SHUTTER_RUN)
+    if CONF_OPENING_TIME in device and device[CONF_OPENING_TIME] != alias_value:
+        raise Invalid(
+            f"{what} has both {CONF_OPENING_TIME}={device[CONF_OPENING_TIME]} and "
+            f"{CONF_SHUTTER_RUN}={alias_value}; {CONF_SHUTTER_RUN} is the legacy name of "
+            f"{CONF_OPENING_TIME}, so write only one of them",
+            path=[*path, CONF_SHUTTER_RUN],
+        )
+    device[CONF_OPENING_TIME] = alias_value
+
+
+def _finalize_cover_profile(profile: MutableMapping, name: str) -> None:
+    """Fold the alias, require an opening time and default the closing one to it."""
+    _fold_shutter_run_alias(profile, [CONF_COVER_PROFILES, name], f"cover profile '{name}'")
+    if CONF_OPENING_TIME not in profile:
+        raise Invalid(
+            f"cover profile '{name}' needs an '{CONF_OPENING_TIME}' (or its legacy alias "
+            f"'{CONF_SHUTTER_RUN}'): the full upward run of the reference shutter, in seconds",
+            path=[CONF_COVER_PROFILES, name, CONF_OPENING_TIME],
+        )
+    profile.setdefault(CONF_CLOSING_TIME, profile[CONF_OPENING_TIME])
+
+
+@contextmanager
+def prefix_invalid_path(path: Sequence[object]) -> Iterator[None]:
+    """Re-raise an ``Invalid`` from a nested schema under ``path``.
+
+    ``cover_profiles`` is validated outside the gateway schema (see
+    ``cover_profiles_section``), so nothing prepends the block and profile names to the
+    path of a failure inside one - and that path is what the Repairs issue shows the
+    user to point at the offending line.
+    """
+    try:
+        yield
+    except Invalid as err:
+        raise Invalid(err.error_message, path=[*path, *err.path]) from err
+
+
+def cover_profiles_section(block: object) -> dict:
+    """Validate a gateway's ``cover_profiles:`` block into ``{name: profile}``.
+
+    A plain function rather than a ``Schema`` subclass on purpose: it is called once per
+    gateway by ``_gateway_section``, which needs the finalised profiles *before* the
+    cover section is validated, and calling it twice (once for the value in the output,
+    once for the finalizer) would report every error twice.
+    """
+    if block is None:
+        return {}
+    if not isinstance(block, Mapping):
+        raise Invalid(
+            f"'{CONF_COVER_PROFILES}' must be a mapping of profile names to their timings",
+            path=[CONF_COVER_PROFILES],
+        )
+    one_profile = Schema(dict(COVER_PROFILE_FIELDS), extra=ALLOW_EXTRA)
+    known = _known_keys(COVER_PROFILE_FIELDS)
+    profiles: dict = {}
+    for name, values in block.items():
+        if not isinstance(name, str):
+            raise Invalid(
+                f"'{CONF_COVER_PROFILES}' keys are profile names, so they must be text "
+                f"(got {name!r}); quote it if it looks like a number",
+                path=[CONF_COVER_PROFILES],
+            )
+        with prefix_invalid_path([CONF_COVER_PROFILES, name]):
+            profile = one_profile({} if values is None else values)
+        warn_unknown_keys((CONF_COVER_PROFILES, name), profile, known)
+        _finalize_cover_profile(profile, name)
+        profiles[name] = profile
+    return profiles
+
+
+def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
+    """The profile's timings, scaled from its reference height to ``height``.
+
+    Physics, not curve fitting: the roll on the tube grows with the amount of curtain
+    wound on it, so a *shorter* window of the same model has a smaller roll and a
+    proportionally shorter curtain run, while its slat gap only scales with the number
+    of slats.  With ``k_ref`` and ``H_ref`` from the profile and ``H`` the cover's own
+    height (0.4.2 spec, section 3)::
+
+        k       = sqrt(1 + (k_ref**2 - 1) * H / H_ref)
+        scale_c = (k - 1) / (k_ref - 1)          # (H / H_ref for a linear profile)
+        slat    = profile.slat_time * H / H_ref
+        opening = slat + (profile.opening_time - profile.slat_time) * scale_c
+
+    Without a ``height:`` on the cover there is nothing to scale to and the profile is
+    used as it stands.
+    """
+    reference = profile[CONF_REFERENCE_HEIGHT]
+    k_ref = profile[CONF_ROLL]
+    slat_ref = profile[CONF_SLAT_TIME]
+    if height is None:
+        return {
+            CONF_OPENING_TIME: profile[CONF_OPENING_TIME],
+            CONF_CLOSING_TIME: profile[CONF_CLOSING_TIME],
+            CONF_SLAT_TIME: slat_ref,
+            CONF_ROLL: k_ref,
+        }
+    ratio = height / reference
+    roll = sqrt(1 + (k_ref * k_ref - 1) * ratio)
+    # A linear profile has no roll growth to be proportional to, so the curtain time
+    # simply follows the height (and the formula above would divide by zero).
+    curtain_scale = (roll - 1) / (k_ref - 1) if k_ref - 1 > ROLL_LINEAR_TOLERANCE else ratio
+    slat = slat_ref * ratio
+    return {
+        CONF_OPENING_TIME: slat + (profile[CONF_OPENING_TIME] - slat_ref) * curtain_scale,
+        CONF_CLOSING_TIME: slat + (profile[CONF_CLOSING_TIME] - slat_ref) * curtain_scale,
+        CONF_SLAT_TIME: slat,
+        CONF_ROLL: roll,
+    }
+
+
+def _cover_profile_values(device: Mapping, yaml_key: str) -> dict:
+    """Resolve the cover's ``profile:`` against the gateway block, scaled to its height."""
+    name = device.get(CONF_PROFILE)
+    if name is None:
+        return {}
+    profiles = _active_cover_profiles()
+    if name not in profiles:
+        defined = ", ".join(repr(key) for key in sorted(profiles))
+        raise Invalid(
+            f"cover '{yaml_key}': unknown profile {name!r}; "
+            + (
+                f"the profiles defined under '{CONF_COVER_PROFILES}' are {defined}"
+                if defined
+                else f"this gateway defines no '{CONF_COVER_PROFILES}' block"
+            ),
+            path=[yaml_key, CONF_PROFILE],
+        )
+    return _derive_cover_from_profile(profiles[name], device.get(CONF_HEIGHT))
+
+
+def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
+    """Apply the default class and resolve the travel model of a cover (0.4.2).
+
+    Four sources, first hit wins **per key**: what the user wrote on the cover, the
+    ``profile:`` scaled to the cover's ``height:``, the profile as it stands, and
+    finally the legacy defaults (20 s in both directions, no slat phase, and a roll of
+    1.6 on a shutter / 1.0 on anything else - only a rolling shutter has a tube).
+
+    ``slat_time`` must leave at least one second of curtain travel in **both**
+    directions, otherwise the position estimate would be meaningless.  That cross-check
+    is skipped on an ``advanced`` cover, which produces no estimate at all (P4-NIT-1).
     """
     device.setdefault(CONF_DEVICE_CLASS, CoverDeviceClass.SHUTTER)
-    shutter_run = device[CONF_SHUTTER_RUN]
-    device.setdefault(CONF_OPENING_TIME, shutter_run)
-    device.setdefault(CONF_CLOSING_TIME, shutter_run)
+    _fold_shutter_run_alias(device, [yaml_key], f"cover '{yaml_key}'")
+    profile = _cover_profile_values(device, yaml_key)
+
+    device.setdefault(CONF_OPENING_TIME, profile.get(CONF_OPENING_TIME, DEFAULT_SHUTTER_RUN))
+    # A symmetric cover writes one time only, so the downward run follows the upward one.
+    device.setdefault(CONF_CLOSING_TIME, profile.get(CONF_CLOSING_TIME, device[CONF_OPENING_TIME]))
+    device.setdefault(CONF_SLAT_TIME, profile.get(CONF_SLAT_TIME, DEFAULT_SLAT_TIME))
+    device.setdefault(
+        CONF_ROLL,
+        profile.get(
+            CONF_ROLL,
+            DEFAULT_ROLL_SHUTTER if device[CONF_DEVICE_CLASS] == CoverDeviceClass.SHUTTER else DEFAULT_ROLL,
+        ),
+    )
+    # Backwards compatibility: everything that used to read ``shutter_run`` (0.3.x
+    # configurations dumped back out, third-party templates, the discovery helper) still
+    # finds the full upward run under that name.
+    device[CONF_SHUTTER_RUN] = device[CONF_OPENING_TIME]
+
     slat_time = device[CONF_SLAT_TIME]
     if slat_time <= 0 or device.get(CONF_ADVANCED_SHUTTER):
         # Two-phase model disabled (0.3.x behaviour), or an advanced actuator, which
@@ -789,21 +1025,40 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
         )
 
 
-_COVER_TIMING_KEYS = (CONF_SHUTTER_RUN, CONF_SLAT_TIME, CONF_OPENING_TIME, CONF_CLOSING_TIME)
+# Keys of the travel model: on an `advanced:` cover they are reported (see
+# `_warn_cover_timings_on_advanced`), because only the two run times do anything
+# there - and only to size the safety timer.
+_COVER_TIMING_KEYS = (
+    CONF_SHUTTER_RUN,
+    CONF_SLAT_TIME,
+    CONF_OPENING_TIME,
+    CONF_CLOSING_TIME,
+    CONF_ROLL,
+    CONF_TILT,
+    CONF_HEIGHT,
+    CONF_PROFILE,
+)
+
+
+# Of the travel keys, the ones that really change ``max(opening_time, closing_time)``.
+# ``profile`` does (it supplies both run times) and ``height`` only scales a profile, so
+# it does nothing on its own; ``slat_time``, ``roll`` and ``tilt`` never reach the timer.
+_ADVANCED_TIMER_KEYS = (CONF_SHUTTER_RUN, CONF_OPENING_TIME, CONF_CLOSING_TIME, CONF_HEIGHT, CONF_PROFILE)
 
 
 def _keys_that_bound_the_advanced_timer(written: set[str]) -> list[str]:
     """Of the run-time keys the user wrote, the ones that really reach the timer.
 
     ``MyHOMECover._advanced_move_timeout`` is ``max(opening_time, closing_time)`` plus
-    ``ADVANCED_MOVE_MARGIN_SEC``, and the two directional keys default to
-    ``shutter_run``.  So ``shutter_run`` reaches the timer only through a directional
-    key the user left out: when both are written it has no effect on the deadline at
-    all (D4-1), and saying otherwise in the warning would be false.
+    ``ADVANCED_MOVE_MARGIN_SEC``, and the direction the user left out falls back to the
+    one they wrote - so every key that sets a run time reaches the deadline.  D4-1's
+    exception (a ``shutter_run`` both directional keys had overridden) cannot happen
+    any more: since 0.4.2 ``shutter_run`` *is* ``opening_time``, and writing the two
+    with different values is refused outright.
     """
-    keys = [key for key in (CONF_OPENING_TIME, CONF_CLOSING_TIME) if key in written]
-    if CONF_SHUTTER_RUN in written and len(keys) < 2:
-        keys.insert(0, CONF_SHUTTER_RUN)
+    keys = [key for key in _COVER_TIMING_KEYS if key in written and key in _ADVANCED_TIMER_KEYS]
+    if CONF_HEIGHT in keys and CONF_PROFILE not in keys:
+        keys.remove(CONF_HEIGHT)
     return keys
 
 
@@ -1183,7 +1438,27 @@ _GATEWAY_KNOWN_KEYS = {
     SCENARIO_SECTION,
     CONF_ENERGY_DEFAULTS,
     CONF_SENSOR_DEFAULTS,
+    CONF_COVER_PROFILES,
 }
+
+
+def _gateway_section(value):
+    """Validate one gateway root, with its ``cover_profiles:`` in scope (0.4.2).
+
+    ``cover_profiles`` is deliberately NOT a key of ``gateway_schema``: the cover
+    finalizer needs the finalised profiles while the ``cover:`` section is being
+    validated, and the engine gives a nested section no way to reach a sibling one.  So
+    the block is validated here, published to the finalizer through
+    ``cover_profiles_in_scope`` and written back over the raw copy ``ALLOW_EXTRA``
+    carried through, which keeps it a single validation with a single error path.
+    """
+    raw = value.get(CONF_COVER_PROFILES) if isinstance(value, Mapping) else None
+    profiles = cover_profiles_section(raw)
+    with cover_profiles_in_scope(profiles):
+        result = gateway_schema(value)
+    if CONF_COVER_PROFILES in result:
+        result[CONF_COVER_PROFILES] = profiles
+    return result
 
 
 # --------------------------------------------------------------------------------------
@@ -1486,10 +1761,13 @@ class MyHomeConfigSchema(Schema):
 
 config_schema = MyHomeConfigSchema(
     {
-        Optional(CONF_GATEWAY_BLOCK): gateway_schema,
+        # ``_gateway_section`` rather than ``gateway_schema`` itself: a plain callable
+        # is the only thing both engines really invoke (the lambda pattern of
+        # ``_section``), and it is where ``cover_profiles:`` is resolved.
+        Optional(CONF_GATEWAY_BLOCK): _gateway_section,
         # Legacy / multi-gateway style: the MAC address (or any name, with an inner
         # ``mac``) as root key.
-        Optional(str): gateway_schema,
+        Optional(str): _gateway_section,
     },
     extra=PREVENT_EXTRA,  # root keys are gateways only; non-string keys are rejected
 )
