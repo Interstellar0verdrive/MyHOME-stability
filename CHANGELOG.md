@@ -5,6 +5,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Covers driven together stop where they are told again. A basic actuator timed its run
+from the moment the command was *queued* rather than from the moment the gateway
+actually wrote it on the bus, and a scene moving a dozen shutters at once left the
+last ones running short. Nothing to configure: no new key, no changed default, no
+change to the roll model, the profiles or the calibration maths.
+
+### Fixed
+
+- **Covers commanded together stopped too high.** One command worker writes about ten
+  frames a second, so with twelve covers given `set_cover_position` at once the k-th
+  direction frame left the socket roughly `0.1 × k` seconds after that cover had
+  already started counting, while its stop — scheduled for the end of the run, and
+  finding an empty queue by then — went out immediately. Every motor ran shorter than
+  modelled: measured on a 195 cm shutter, the twelve stopped between 5 and 14 cm too
+  high, the last ones worst, while the same covers driven one at a time landed within
+  a centimetre or two. The run is now timed from the instant the frame is written to
+  the bus, and the timed stop that ends it moves with that instant.
+- **The stop that ends a *set position* or a tilt run is timed the same way.** The
+  motor keeps turning while the stop frame waits its turn, so the estimate is frozen
+  where the shutter really got to when the stop left, not on the target it had already
+  passed. That stop is armed from the instant the direction frame reached the bus, and
+  is not queued before it, so a run whose start waited its turn still runs its full
+  length instead of being cut short by its own stop.
+- **A movement command that never reaches the bus no longer moves the estimate.** When
+  the command path gives up on a direction frame — the queue TTL expired, the gateway
+  never answered — the cover goes back to the position it started from, instead of
+  running a phantom estimate to an end stop nothing is heading for. A stop that is
+  dropped after being queued keeps the behaviour a refused stop already had: the
+  shutter runs on to its end stop, and the estimate runs with it.
+- **The window in which a gateway echo is recognised opens when the frame is written**,
+  not when it is queued. A command that spent a second in the queue is still recognised
+  by its own repeat, instead of that repeat being read as somebody at the keypad.
+
+### Changed
+
+- **Stop frames overtake the command queue.** A stop (`*2*0*<where>##`) is handed to a
+  sending worker before any movement or status frame already waiting **for another
+  cover**; ordering among stops, and among everything else, stays FIFO. It never
+  overtakes a frame queued for its own cover: what one shutter is told still reaches
+  the bus in the order it was told, so a stop can never end a run that has not started.
+  A late stop lengthens a run exactly as a late start shortens it, and twelve stops can
+  collide just as twelve starts can. The queue bound, the TTL, the published queue
+  length and the diagnostics counters are unchanged and still count the total.
+- **`myhome.cover_calibration_run` reports the interval the motor really ran.** It
+  starts timing the half run when the direction frame reaches the bus, and
+  `motor_seconds` is now the interval between that delivery and the delivery of the
+  stop — never less than the run that was asked for — rather than the number of seconds
+  the run was planned for. On an idle queue the two are the same figure. The action
+  fails with a message naming the entity when either frame never reaches the bus,
+  instead of reporting seconds for a shutter that did not move, or did not stop.
+
 ## [0.4.2] - 2026-09-08
 
 Covers: the position estimate of a basic actuator now follows the shutter's real

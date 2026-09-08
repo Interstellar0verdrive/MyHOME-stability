@@ -260,32 +260,39 @@ warning names them, and the configuration still loads.
 Neither of the two rules below depends on `slat_time`: the first applies to every
 basic (timed) cover, the second to every `advanced:` one.
 
-The gateway repeats commands back to Home Assistant a moment after it accepts them,
-and those repeats look exactly like a keypad press. A frame arriving within 1.5 s of
-a command sent by Home Assistant is ignored as such a repeat only when it can be one:
-a `stopped` frame right after a movement we asked for, or a copy of the movement a
-stop of ours interrupted — a `cover.stop_cover`, or the stop the integration sends by
-itself at the end of a *set position* or a tilt run. A movement in any other
-direction, such as pressing *up* on the keypad right after stopping a shutter that
-was going down, is honoured straight away. Pressing the **same** direction again
-within that second and a half cannot be told apart from the repeat, so it is ignored;
-the integration then re-reads the actuator's status, and the movement is picked up
-about two seconds late rather than lost. A stop Home Assistant could not even send —
-the gateway's command queue was full, or the connection was closing — changes nothing
-at all: no repeat can follow a command that was never sent, and the shutter is still
-running, so the estimate keeps running with it. The same holds for the stop the
-integration sends by itself at the end of a *set position* or a tilt run: if that one
-cannot be sent, the shutter carries on to its end stop, and so does the estimate,
-which the actuator's own frame at the end of the run then puts back in step. That
-holds however short the run was: a two-percent nudge of the position slider takes
-well under the second and a half in which the gateway may still be repeating the
-command that started it, and the repeat is recognised as one rather than being read
-as the shutter stopping. The price of recognising it is that a *real* stop in that
-same second and a half — somebody at the keypad, or the shutter meeting an obstacle —
-cannot be told apart from it either. So that one is handled the same way as the
-ambiguous keypad press: the frame is ignored, the actuator is asked what it is really
-doing, and its answer ends the run about two seconds late instead of letting the
-estimate run on to the end stop and settle there.
+The gateway repeats commands back to Home Assistant a moment after it accepts
+them, and those repeats look exactly like a keypad press. A frame arriving
+within 1.5 s of a command sent by Home Assistant is ignored as such a repeat
+only when it can be one: a `stopped` frame right after a movement we asked for,
+or a copy of the movement a stop of ours interrupted — a `cover.stop_cover`, or
+the stop the integration sends by itself at the end of a *set position* or a
+tilt run. Both the run and that second and a half are counted, since 0.4.3, from
+the moment the gateway actually wrote the frame, not from the moment Home
+Assistant asked for it: on a busy command queue the two are a good fraction of a
+second apart. A movement in any other direction, such as pressing *up* on the
+keypad right after stopping a shutter that was going down, is honoured straight
+away. Pressing the **same** direction again within that second and a half cannot
+be told apart from the repeat, so it is ignored; the integration then re-reads
+the actuator's status, and the movement is picked up about two seconds late
+rather than lost. A stop Home Assistant could not even send — the gateway's
+command queue was full, or the connection was closing — changes nothing at all:
+no repeat can follow a command that was never sent, and the shutter is still
+running, so the estimate keeps running with it. A stop that was accepted and
+then never reached the bus — it waited in the queue past its sixty seconds, or
+the gateway stopped answering — comes to the same thing one step later: the
+shutter runs on to its end stop and the estimate runs on with it, for a
+`cover.stop_cover` exactly as for the stop the integration sends by itself at
+the end of a *set position* or a tilt run. Either way the actuator's own frame
+at the end of the run is what puts the estimate back in step. That holds however
+short the run was: a two-percent nudge of the position slider takes well under
+the second and a half in which the gateway may still be repeating the command
+that started it, and the repeat is recognised as one rather than being read as
+the shutter stopping. The price of recognising it is that a *real* stop in that
+same second and a half — somebody at the keypad, or the shutter meeting an
+obstacle — cannot be told apart from it either. So that one is handled the same
+way as the ambiguous keypad press: the frame is ignored, the actuator is asked
+what it is really doing, and its answer ends the run about two seconds late
+instead of letting the estimate run on to the end stop and settle there.
 
 An advanced actuator's *Opening* / *Closing* state comes from its own frames. If the
 frame that says it stopped is lost, the state would otherwise stay that way for
@@ -435,6 +442,13 @@ Consequences, all of them deliberate:
   which does nothing there at all.
 - `cover.set_cover_position` computes the run through **both** phases: from fully
   closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
+- **The clock starts when the frame reaches the bus**, not when the service call is
+  made (since 0.4.3). One command session writes about ten frames a second, so
+  commanding a dozen covers at once staggers their *starts* over more than a second —
+  but not the length of their runs: each shutter still runs exactly the seconds its
+  target costs. The bus adds two constant delays of its own, the motor starting about
+  0.6 s after its frame and stopping about 0.1 s after the stop; they are not deducted
+  anywhere, they are part of what a calibration in centimetres measures and absorbs.
 - `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
   what re-calibrates the estimate: a "stopped" frame that arrives during a full run
   commanded from Home Assistant, once at least three quarters of the expected run

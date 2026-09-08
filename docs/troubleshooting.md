@@ -140,6 +140,32 @@ way down and too high on the way up. See
    stopwatch it (the calibration never solves it for you) — see
    [the two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
 
+**Several covers moved together stop at different heights than one at a time:**
+
+Fixed in **0.4.3**. Until then a cover timed its run from the moment the command was
+queued, while the frame itself left for the bus about a tenth of a second later per
+command already waiting; a scene moving twelve shutters at once stopped them 5 to 14 cm
+too high on a 195 cm window, the last one of the scene worst, while the same covers
+driven one at a time were exact. The run is now timed from the instant the frame is
+written, and a stop frame is written before anything still waiting for the *other*
+covers — never before a frame of its own cover, which would end a run that had not
+started.
+
+If a scene still lands differently from a single command after 0.4.3:
+
+1. Download the [diagnostics](#diagnostics-download) right after running the scene and
+   look at `handler`: a `queue_size` (and `stats.queue_length`) that stays high, or a
+   `stats.commands_dropped` that grows, means the frames are not merely late but
+   backing up or being lost, which no timing model can repair. `recent_frames` shows
+   what actually went out, and when.
+2. Check `command_worker_count` in `effective_options` (**Configure** on the
+   integration page). One worker is the default and one is enough for the timing; more
+   of them shorten a long queue, at the cost of one command session per worker on a
+   gateway that holds only a handful — see [Gateway compatibility → Note 3 — session
+   limits](gateway-compatibility.md#note-3--session-limits).
+3. If the covers land consistently off in the *same* direction whether they run alone
+   or together, it is the model and not the queue: go back to the `roll` above.
+
 A basic actuator never reports its position, so this is always an estimate. Running
 the cover fully open or fully closed re-synchronises it.
 

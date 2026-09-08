@@ -253,9 +253,10 @@ unknown number of late frames may still be in flight: the caller must discard it
 |---|---|---|
 | Bounded | `maxsize=200` | `put_nowait` raises `QueueFull`; `send()` returns `False` and logs a rate-limited WARNING. `myhome.send_message` turns that `False` into a visible `HomeAssistantError`. |
 | TTL | `60 s` | Checked when the item is dequeued, not while it waits. An expired command is dropped with a WARNING, never sent. |
+| Stop priority | WHO 2 `*2*0*<where>##` | A stop is handed to a worker before any movement or status frame queued for **other** devices, so a stop is not delayed by a scene that is still being written. It never overtakes a frame queued for its own WHERE: ordering per device stays strictly FIFO, and so does ordering among the stops themselves. |
 | Timeout | `10 s` | Per `send_command` call: write + drain + read until ACK/NACK. |
 | Retry | **once**, in place | On a transport error the session is closed and one fresh session is opened for a second attempt. |
-| Drop | after the second failure | A rate-limited WARNING names the command. It is **never re-queued**: ordering stays intact and a stale command is never replayed minutes later. |
+| Drop | after the second failure | A rate-limited WARNING names the command. It is **never re-queued**: a stale command is never replayed minutes later. |
 | Auth failure | immediate stop | `AuthenticationError` on a command session stops both loops and starts the reauth flow. |
 | Backoff | `1 s → 60 s` | Applied inside the sending loop after a failed delivery, reset on the first success. |
 
@@ -268,6 +269,56 @@ identically at DEBUG.
 
 `close_listener()` drains whatever is left and logs the discarded commands (up to
 the first ten by name).
+
+### Delivery order and delivery instants (0.4.3)
+
+`send()` only *queues* a frame and returns. The frames are written by
+`command_worker_count` sending loops — one by default, four at most, each with its own
+command session — and one frame costs about **0.1 s** on a MyHOMEServer1: open the
+session if it had gone idle, write, read replies until the ACK. A dozen commands
+issued in the same instant therefore reach the bus spread over more than a second.
+That is invisible for a light, and decisive for a cover that times its own run.
+
+**Stops jump the queue, except their own cover's.** `_CommandQueue` is an
+`asyncio.Queue` subclass with a second deque for WHO 2 stop frames (`*2*0*<where>##`): a
+queued stop is handed to a worker before any movement or status frame waiting for
+**other** devices, so a stop is not held up by a scene that is still being written. It
+enters that deque only when nothing else for the same `where` is waiting; when the
+movement it has to end is itself still queued, the stop is appended behind it, so the
+frames of one cover always reach the bus in the order they were asked for. Ordering
+among stops, and among everything else, stays FIFO. A late stop lengthens a run exactly
+as a late start shortens it, so the frame that *ends* a movement is the one worth
+prioritising. The bound (`COMMAND_QUEUE_MAXSIZE`), the TTL, `task_done()` / `join()`,
+the published `queue_length` and `diagnostics.queue_size` are all still the **total** of
+both.
+
+**A queued command reports what became of it.** `send()` and `send_status_request()`
+take two keyword-only callables, `on_delivered(at)` and `on_dropped()`; exactly one of
+the two fires, exactly once, on the event loop. `on_delivered` carries the monotonic
+timestamp taken immediately *before* the write that succeeded, and fires on a NACK as
+well as on an ACK — both mean the gateway took the frame — before the replies of that
+command are dispatched. `on_dropped` covers every path that loses the command: queue
+closed, queue full, TTL expired, authentication failure, attempts exhausted, the
+worker's catch-all arm, the drain in `close_listener()`, and a worker cancelled
+mid-write. An exception raised inside either callback is logged and swallowed, like
+every other call into an entity, and the command still counts as settled.
+
+`MyHOMECover` is so far the only caller that asks. A basic cover starts its movement
+clock optimistically at the enqueue — the entity reacts to the service call at once —
+and re-bases it when the delivery is reported: `_move_started_at`, the echo window and
+the pending timed stop all move onto the delivery instant, converted from the gateway's
+monotonic clock by measuring the offset between the two clocks at callback time. A
+delivery no later than the optimistic start changes nothing, which is what makes the
+behaviour with an idle queue identical to 0.4.2. The stop the cover sends by itself
+freezes the estimate at *its* delivery instant, and `on_dropped` on a direction frame
+cancels the movement rather than estimating one that never started. The timed stop that
+ends a run is armed from that delivery instant and is never queued while the direction
+frame is still waiting — the motor has not started yet, so there is nothing to stop: the
+deadline re-arms itself for one more run's length and the real stop is armed once the
+direction frame is reported written. Advanced actuators ask for no report — they publish
+their real position — and the constant latency between the write and the motor (about
+0.6 s to start, 0.1 s to stop, measured from the gateway's own echoes) is not
+compensated here: it is part of what the centimetre calibration measures and absorbs.
 
 ## Availability
 
