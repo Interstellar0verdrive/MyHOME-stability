@@ -43,6 +43,14 @@ stop frame, and the timed model had nowhere to put either cost. It now does.
   takes a second and a half to start, the old measurement was nearly a second long —
   and that number goes straight into `cover_calibration_compute`, which inverts the
   roll against it.
+- **A shutter no longer stops the instant it starts when the command queue is very busy.** If
+  the end of a run fell due at the same moment the movement's own frame reached the bus — a
+  scene of nine or twelve covers on a slow gateway, a run barely longer than the queue in
+  front of it — the stop could go out a tenth of a second behind the frame that started the
+  motor: the shutter stayed where it was and the entity froze on the position it had been
+  asked for. A run now ends only when its own clock says it does, and a timer that fires while
+  the run is being re-based onto the bus (or onto the actuator's own "moving" status) re-arms
+  itself at the real end instead of stopping anything.
 
 ### Changed
 
