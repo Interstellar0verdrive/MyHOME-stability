@@ -5,6 +5,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Shutters that start half way no longer stop short. Twelve real shutters on one
+MyHOMEServer1, replayed at their real bus timings: every run that started or ended at
+an end stop landed within 1-2 cm, and every run that started from an intermediate
+position stopped about 0.45 s of motor time short — 3-4 cm too high on a descent,
+5-9 cm too low on an ascent of a 195 cm window. Cause: the actuator only starts
+turning a fixed while after its direction frame, and keeps turning a little after its
+stop frame, and the timed model had nowhere to put either cost. It now does.
+
+### Added
+
+- **`stop_latency` (default `0.1` s) and `start_delay` (default `0.5` s)**, per cover
+  and per cover profile: the two fixed costs of driving a shutter over this bus, in
+  seconds. They resolve like every other timing key — the cover's own value, then the
+  profile's, then the default — and a profile carries them *unscaled*: a shorter
+  window has less curtain to wind, not a faster gateway. `start_delay` is only used
+  until (or instead of) the actuator's own "moving" status; a gateway that relays no
+  status frames uses it for every run. Setting both to `0` reproduces the 0.4.3
+  timing exactly. Both are published as `Start delay` / `Stop latency` attributes
+  when they differ from the defaults, and both are named by the existing warning when
+  they are written on an `advanced:` cover, where they do nothing.
+
+### Fixed
+
+- **Shutters that start half way no longer stop short.** A movement was timed from
+  the moment its frame reached the bus, but the motor only starts about half a second
+  later — the actuator says so itself, with a "moving" status — and it keeps turning
+  about a tenth of a second past the stop frame. Every run that did not end at an end
+  stop was therefore about 0.45 s of motor short: 3-4 cm too high on a descent, 5-9 cm
+  too low on an ascent of a 195 cm window, with the errors cancelling on the way back.
+  The run is now timed from the actuator's own "moving" status, and the stop frame is
+  written early enough for the motor to coast onto the target.
+- **`myhome.cover_calibration_run` measures the motor, not the frames.** It waits for
+  the actuator to say it has started before counting its half run, writes the stop
+  the same tenth of a second early a *set position* does, and reports `motor_seconds`
+  between the two status frames when the actuator gives them. On an actuator that
+  takes a second and a half to start, the old measurement was nearly a second long —
+  and that number goes straight into `cover_calibration_compute`, which inverts the
+  roll against it.
+
+### Changed
+
+- **`opening_time`, `closing_time` and `slat_time` are motor times** — a stopwatch
+  from the moment the curtain moves to the moment it stops. They always were, but
+  until 0.4.4 the bus latency had nowhere else to go, so a user who padded them with
+  half a second of bus should take it back off.
+- **`motor_seconds`** (`myhome.cover_calibration_run`) is no longer floored at the run
+  that was asked for; it is the measurement, and only a caller whose waits do not move
+  the clock at all still gets the planned figure.
+
 ## [0.4.3] - 2026-09-08
 
 Covers driven together stop where they are told again. A basic actuator timed its run

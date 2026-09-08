@@ -129,7 +129,8 @@ What it does to each cover, in order:
    model — `(closing_time - slat_time) / 2` for `close` (it starts from fully open,
    so no slat phase comes first), `slat_time + (opening_time - slat_time) / 2` for
    `open` (it starts from fully closed, so the slats open first), with `slat_time`
-   at `0` when it is not set — counted from the moment that command reached the bus,
+   at `0` when it is not set — counted from the moment the motor started, the
+   actuator's own status when it sends one, `start_delay` after the frame otherwise —
    then sends `stop_cover`;
 3. leaves the cover there and reports what it did.
 
@@ -141,7 +142,7 @@ Response data, keyed by entity id:
 | Key | Value |
 |---|---|
 | `direction` | The direction that was run. |
-| `motor_seconds` | The seconds the motor really ran: the interval between the delivery of the direction frame and the delivery of the stop, which is what the run above was timed on since 0.4.3 (never less than the run it asked for). With an idle command queue it is the figure from the formulas above; with frames waiting in front of it, it is that figure plus the time the stop spent queued. |
+| `motor_seconds` | The seconds the motor really ran: from the actuator's own "moving" status to its own "stopped", when it sends them, and otherwise from the write of the direction frame plus `start_delay` to the write of the stop plus `stop_latency`. With an idle command queue and an actuator that behaves as configured it is the figure from the formulas above; anything else — a busy queue, a motor slower to start than `start_delay` — makes it the figure the shutter really travelled, which is the one `cover_calibration_compute` must be given. |
 | `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. `slat_time` is reported, never solved for: it is the configured value. |
 
 Refused with a `ServiceValidationError`, naming the entity:

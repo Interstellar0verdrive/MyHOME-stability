@@ -314,22 +314,29 @@ every other call into an entity, and the command still counts as settled.
 `MyHOMECover` is so far the only caller that asks. A basic cover starts its movement
 clock optimistically at the enqueue — the entity reacts to the service call at once —
 and re-bases it when the delivery is reported: `_move_started_at`, the echo window and
-the pending timed stop all move onto the delivery instant, converted from the gateway's
-monotonic clock by measuring the offset between the two clocks at callback time. Until
-that report arrives the echo window stays open however long the wait: the gateway cannot
+the pending timed stop all move onto `delivered + start_delay` (since 0.4.4; 0.4.3
+moved them onto the delivery instant itself), converted from the gateway's monotonic
+clock by measuring the offset between the two clocks at callback time. Until that
+report arrives the echo window stays open however long the wait: the gateway cannot
 repeat a frame it has not been given, so the repeat is still to come — and it comes on
 the monitor session a millisecond after the write, which can be before the report. A
 delivery no later than the optimistic start changes nothing, which is what makes the
-behaviour with an idle queue identical to 0.4.2. The stop the cover sends by itself
-freezes the estimate at *its* delivery instant, and `on_dropped` on a direction frame
-cancels the movement rather than estimating one that never started. The timed stop that
-ends a run is armed from that delivery instant and is never queued while the direction
-frame is still waiting — the motor has not started yet, so there is nothing to stop: the
-deadline re-arms itself for one more run's length and the real stop is armed once the
-direction frame is reported written. Advanced actuators ask for no report — they publish
-their real position — and the constant latency between the write and the motor (about
-0.6 s to start, 0.1 s to stop, measured from the gateway's own echoes) is not
-compensated here: it is part of what the centimetre calibration measures and absorbs.
+behaviour with an idle queue identical to 0.4.2. If the actuator's own "moving" status
+for our direction then arrives — inside `start_delay + STOP_ECHO_WINDOW_SEC` of the
+delivery, and only once per movement — the clock is re-based a second time onto that
+instant, which is what a gateway that relays status frames actually times the run on;
+`start_delay` is only what a gateway that never does falls back to for the whole run.
+The stop the cover sends by itself freezes the estimate `stop_latency` past *its*
+delivery instant, where the shutter coasts to, and `on_dropped` on a direction frame
+cancels the movement rather than estimating one that never started. The timed stop
+that ends a run is armed `stop_latency` before the modelled end and is never queued
+while the direction frame is still waiting — the motor has not started yet, so there
+is nothing to stop: the deadline re-arms itself for one more run's length and the real
+stop is armed once the direction frame is reported written. Advanced actuators ask for
+no report — they publish their real position — and the same constant latency (about
+half a second to start, a tenth of a second to stop, measured from the gateway's own
+echoes) is not compensated for them: it is part of what the centimetre calibration
+measures and absorbs, exactly as before 0.4.4.
 
 ## Availability
 

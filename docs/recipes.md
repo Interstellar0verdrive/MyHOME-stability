@@ -803,8 +803,10 @@ The cover opens fully, waits until it is certainly against the top end stop, the
 closes for the seconds a linear *set position 50 %* would use — here
 `(21.7 − 4.7) / 2` = 8.5 s — and stops. **Measure the centimetres from the floor to
 the bottom edge** and write the number down (85 cm here). The action reports the
-seconds it used as `motor_seconds`; note that down too if you like, though step 3
-recomputes the same number from the configuration.
+seconds it used as `motor_seconds` — the *measured* motor time, from the actuator's
+own "moving" status to its own "stopped" when it sends them, which can differ from
+the planned 8.5 s by a tenth of a second or two; note it down too if you like, though
+step 3 recomputes the same number from the configuration.
 
 #### Step 2 — the half ascent
 
