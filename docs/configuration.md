@@ -232,8 +232,10 @@ A device behind an F422 bus interface is addressed on the bus as
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `advanced` | boolean | `false` | Advanced actuator reporting its real position (position control from the device). Get this key wrong in the *other* direction — an actuator that does report its own position, left at `false` — and those position frames are ignored: the timed estimate is what the cover was configured for, and mixing the two would leave the entity reading *Opening* at a frozen percentage. The log says so once per frame, at debug level, and names `advanced: true`. |
-| `opening_time` | number (s) | `20` | Full **upward** run in seconds, slats included, at least `1`. The official name of the key since **0.4.2** (`shutter_run` is its alias). Basic actuators use it, with `closing_time` and `roll`, to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), to derive open/closed and to support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). The validator warns when the timing keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
+| `opening_time` | number (s) | `20` | Full **upward** run in seconds, slats included, at least `1`, measured motor-on to motor-off — the bus delays before and after it are `start_delay` and `stop_latency`, not part of this number. The official name of the key since **0.4.2** (`shutter_run` is its alias). Basic actuators use it, with `closing_time` and `roll`, to estimate the position (`0` = curtain down, `100` = fully open; with `slat_time`, `0` means the curtain rests on the floor, see the two-phase model below), to derive open/closed and to support *set position* by timed stop. On `advanced` actuators it does not estimate anything — they report their real position — but it is not unused: the longer of `opening_time` / `closing_time` plus 30 seconds is the deadline after which the actuator is asked what it is doing and a movement whose "stopped" frame was lost is cleared (cleared only if the actuator does not answer within the whole time a single command may take — a connection to re-open, a command to acknowledge, and one retry of both — plus a two-second margin: about 42 seconds with the default options, see [Keypad presses and gateway echoes](#keypad-presses-and-gateway-echoes)). The validator warns when the timing keys are set on an `advanced` cover, naming each one and what it still does there, so the log line is expected and not a symptom. |
 | `closing_time` | number (s) | = `opening_time` | Full **downward** run, when it differs from the upward one. At least `1`. On an `advanced` actuator it only bounds the direction safety timer. |
+| `stop_latency` | number (s) | `0.1` | How long the motor keeps turning after the stop frame is written, in seconds. The stop that ends a *set position* or a tilt run is written that much before the modelled end of the run, and the position frozen by `cover.stop_cover` is where the shutter coasts to. A constant of the installation, not of the window: it is never scaled by `height`. |
+| `start_delay` | number (s) | `0.5` | How long the motor takes to start after the frame is written, in seconds. Used **only** until the actuator says itself that it is moving — which it normally does, about half a second later, and the run is then timed from that instant instead. It is what a gateway that does not relay status frames falls back on. Also never scaled by `height`. |
 | `shutter_run` | number (s) | – | **Legacy alias of `opening_time`**, kept for good: every configuration written before 0.4.2 keeps working unchanged. Writing both keys is accepted only if they carry the same number; two different values are refused with a message naming both. It has no separate meaning any more — in particular it is no longer the fallback of `closing_time` under another name, since `closing_time` falls back to `opening_time`, which is the same value. |
 | `slat_time` | number (s) | `0` | Seconds of the run that only open/close the slats ("lamelle"), without moving the curtain. `0` disables the two-phase model. Since 0.4.2 the tilt *controls* need `tilt: true` as well; without it the two-phase timing still runs (see below), it is only the tilt entity features that are not offered. Ignored on `advanced` actuators, which have no tilt controls — and, since it is ignored, no longer cross-checked against the run times there either. |
 | `roll` | number, `1.0`-`5.0` | `1.6` on `class: shutter`, `1.0` on every other class | How much faster the curtain travels when it is up than when it is down, because the roll on the tube is fatter (see [Why the position is not linear](#why-the-position-is-not-linear-roll)). `1.0` is the plain linear model of 0.4.1 and earlier. Typical measured values are between `1.4` and `2.0`. Only used by basic actuators, and only for the curtain phase: the slat phase stays linear. It is the value used in **both** directions unless one of the two keys below overrides it. |
@@ -252,12 +254,15 @@ rejected with the name of the offending cover.
 
 A key written on the cover always wins. Everything not written there is taken from
 the cover's `profile` (scaled by its `height`, if both are given), and what is left
-falls back to the defaults in the table above.
+falls back to the defaults in the table above. `stop_latency` and `start_delay`
+resolve the same way — cover, then profile, then default — but they are the two
+keys a profile hands over **unscaled**: a shorter window has less curtain to wind,
+not a faster gateway.
 
-`roll`, `opening_roll`, `closing_roll`, `height`, `profile` and `tilt` join
-`opening_time`, `closing_time`, `slat_time` and `shutter_run` in the list of keys
-the validator warns about on an `advanced:` cover: they do nothing there, the
-warning names them, and the configuration still loads.
+`roll`, `opening_roll`, `closing_roll`, `height`, `profile`, `tilt`, `stop_latency`
+and `start_delay` join `opening_time`, `closing_time`, `slat_time` and `shutter_run`
+in the list of keys the validator warns about on an `advanced:` cover: they do
+nothing there, the warning names them, and the configuration still loads.
 
 ### Keypad presses and gateway echoes
 
@@ -448,13 +453,17 @@ Consequences, all of them deliberate:
   which does nothing there at all.
 - `cover.set_cover_position` computes the run through **both** phases: from fully
   closed, position 5 % costs `slat_time + 0.05 × (opening_time - slat_time)` seconds.
-- **The clock starts when the frame reaches the bus**, not when the service call is
-  made (since 0.4.3). One command session writes about ten frames a second, so
-  commanding a dozen covers at once staggers their *starts* over more than a second —
-  but not the length of their runs: each shutter still runs exactly the seconds its
-  target costs. The bus adds two constant delays of its own, the motor starting about
-  0.6 s after its frame and stopping about 0.1 s after the stop; they are not deducted
-  anywhere, they are part of what a calibration in centimetres measures and absorbs.
+- **The clock starts when the motor does**, not when the service call is made and not
+  when the frame reaches the bus (since 0.4.4). One command session writes about ten
+  frames a second, so commanding a dozen covers at once staggers their *starts* over
+  more than a second — but not the length of their runs: each shutter still runs
+  exactly the seconds its target costs. The bus adds two constant delays of its own,
+  and both are now modelled: the actuator answers a movement command with its own
+  "moving" status about half a second later, which is when the run is timed from, and
+  it keeps turning about a tenth of a second after the stop frame, which is why the
+  stop is written that much early. `start_delay` and `stop_latency` are those two
+  numbers, and a gateway that relays no status frames uses `start_delay` for every
+  run.
 - `cover.open_cover` and `cover.close_cover` still run into the end stop, which is
   what re-calibrates the estimate: a "stopped" frame that arrives during a full run
   commanded from Home Assistant, once at least three quarters of the expected run
@@ -523,6 +532,8 @@ gateway:
 | `roll` | number, `1.0`-`5.0` | `1.6` | Roll coefficient of that cover, in both directions. |
 | `opening_roll` | number, `1.0`-`5.0` | = `roll` | Roll coefficient of that cover going up, when it differs. Mirrors `opening_time`. |
 | `closing_roll` | number, `1.0`-`5.0` | = `roll` | Roll coefficient of that cover going down, when it differs. Mirrors `closing_time`. |
+| `stop_latency` | number (s) ≥ 0 | `0.1` | How long the motor keeps turning after the stop frame is written. Carried over **unchanged**, whatever the cover's `height` is. |
+| `start_delay` | number (s) ≥ 0 | `0.5` | How long the motor takes to start after the frame is written. Carried over **unchanged** as well — these two are the only keys a profile hands over the same whatever the cover's `height` is. |
 
 A profile nobody uses is harmless. A `profile:` naming an entry that does not exist
 is a validation error, and the message lists the names that are defined.
@@ -592,7 +603,9 @@ own — either with its own keys, or with a second profile.
 With a stopwatch, for the two run times:
 
 1. Close the cover completely (`cover.close_cover`) and let it stop by itself.
-2. Start the stopwatch, command `cover.open_cover` and note two moments:
+2. Command `cover.open_cover`, start the stopwatch **when the curtain starts to
+   move** (about half a second later — that half second is `start_delay`, not part
+   of the run) and note two moments:
    - the instant the **bottom edge leaves the floor** → that is `slat_time`
      (typically 2-4 s);
    - the instant the cover **stops at the top** → that is `opening_time` (the full
@@ -601,7 +614,10 @@ With a stopwatch, for the two run times:
    `closing_time`. If it is within a second of the upward run, `opening_time` alone
    is enough; `closing_time` falls back to it.
 4. Reload the integration and check `set_cover_position: 50`: consistent overshoot
-   means the times are too large, stopping short means too small.
+   means the times are too large, stopping short means too small. If you added an
+   allowance for the bus to these times before 0.4.4 — a few tenths to stop the
+   shutter falling short — take it back off: the integration now models the delay at
+   each end, and a padded time is counted twice.
 
 ```yaml
 gateway:

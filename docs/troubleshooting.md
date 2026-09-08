@@ -169,6 +169,27 @@ If a scene still lands differently from a single command after 0.4.3:
 A basic actuator never reports its position, so this is always an estimate. Running
 the cover fully open or fully closed re-synchronises it.
 
+**Runs that start from an intermediate position stop short, but full runs land fine:**
+
+Fixed in **0.4.4**. Until then a run was timed from the moment its frame reached the
+bus, but the motor only starts turning a fixed while later and keeps turning a fixed
+while after the stop frame; a run that started and ended at an end stop absorbed both
+costs into the calibration, while a run that started or ended in the middle of the
+travel did not — on a 195 cm shutter that meant 3-4 cm too high on a descent, 5-9 cm
+too low on an ascent. The run is now timed from the actuator's own "moving" status
+(`start_delay`, default `0.5` s, as a fallback when nothing relays it), and the stop
+is written `stop_latency` (default `0.1` s) before the modelled end so the motor
+coasts onto the target.
+
+If a shutter still stops short of an intermediate target after 0.4.4, check the
+`Start delay` / `Stop latency` attributes (published only when they differ from the
+defaults) and, if your gateway starts or stops noticeably slower or faster than that,
+tune `stop_latency` and `start_delay` on the cover or its profile — see
+[Configuration → Cover](configuration.md#cover). If you
+had added a bus allowance to `opening_time` / `closing_time` before 0.4.4 to work
+around this, take it back off: the delay is now modelled at each end, and a padded
+time is counted twice.
+
 ## Repairs
 
 Configuration problems are reported in **Settings → System → Repairs**, not only in
