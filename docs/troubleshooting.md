@@ -7,6 +7,7 @@ Common issues, debug logging, and upgrading from the pre-`myhome.yaml` versions.
 - [Gateway connection issues](#gateway-connection-issues)
 - [Device discovery issues](#device-discovery-issues)
 - [Configuration issues](#configuration-issues)
+- [Cover position issues](#cover-position-issues)
 - [Repairs](#repairs)
 - [Diagnostics download](#diagnostics-download)
 - [Debug logging](#debug-logging)
@@ -104,6 +105,36 @@ See [Discovery](discovery.md) — since 0.2.0, suggestions go to `myhome_discove
 
 See [Configuration → Validation errors](configuration.md#validation-errors) for
 the exact error messages the integration produces.
+
+## Cover position issues
+
+**The 50 % position lands too low / too high:**
+
+If the two end stops are right — `cover.open_cover` and `cover.close_cover` reach
+them, and the entity reads `100` and `0` there — but the middle of the travel is
+consistently off in the same direction, the run times are not the problem: the
+`roll` is. A rolling shutter travels faster with the curtain up (fat roll on the
+tube) than with it down, so a linear estimate stops a basic actuator too low on the
+way down and too high on the way up. See
+[Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll).
+
+1. Check the `Roll` attribute of the cover in **Developer tools → States**. Covers
+   of `class: shutter` default to `1.6` since 0.4.2; anything else defaults to `1.0`,
+   the old linear estimate.
+2. Measure the real value once with
+   [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres)
+   and apply it, on that cover or as a profile shared by every shutter of the same
+   kind.
+3. If instead the cover misses *everything*, end stops included — it stops short of
+   the top, or keeps running after the position reads `100` — the run times are
+   wrong; re-measure `opening_time` and `closing_time` with a stopwatch first, then
+   calibrate.
+4. If it is the first few centimetres off the floor that are wrong, and the position
+   sits at `0` while the slats are still moving, that is `slat_time`, not `roll`:
+   see [the two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
+
+A basic actuator never reports its position, so this is always an estimate. Running
+the cover fully open or fully closed re-synchronises it.
 
 ## Repairs
 

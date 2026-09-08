@@ -8,9 +8,9 @@ minimal configuration example; the pages here go deeper.
   integration options (including the session tunables), the full `myhome.yaml` schema
   (file location, root formats, every parameter per platform), Lock/Unlock buttons,
   multiple gateways, custom icons/device classes, and validation errors.
-- **[Services and events](services-and-events.md)** — the five services and
-  their fields, and the event contracts (CEN/CEN+, general/area/group,
-  discovery, raw bus traffic).
+- **[Services and events](services-and-events.md)** — the seven services and
+  their fields, the two cover calibration actions and their response data, and the
+  event contracts (CEN/CEN+, general/area/group, discovery, raw bus traffic).
 - **[Energy monitoring](energy.md)** — the instant-power keep-alive, the push
   filter, `sensor_defaults`, daily/monthly/total energy, and deriving kWh with
   `integration`/`utility_meter` when the gateway returns no totals.
