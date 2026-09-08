@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-09-08
 Shutters that start half way no longer stop short. Twelve real shutters on one
 MyHOMEServer1, replayed at their real bus timings: every run that started or ended at
 an end stop landed within 1-2 cm, and every run that started from an intermediate
@@ -1000,7 +1001,8 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
 
-[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.4
 [0.4.3]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.3
 [0.4.2]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.1
