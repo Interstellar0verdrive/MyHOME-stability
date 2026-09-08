@@ -140,10 +140,12 @@ from .myhome_device import MyHOMEEntity, address_attributes
 #     movement it was interrupting.
 #
 # So a frame is ignored as an echo only when it matches one of those two shapes and
-# arrives within `STOP_ECHO_WINDOW_SEC` of our own command, and only once. Anything
-# else is taken at face value. In particular a movement in a direction the gateway
-# could not possibly be echoing - we stopped it while it was closing and it starts
-# opening - is somebody at the keypad and is obeyed straight away.
+# arrives within `STOP_ECHO_WINDOW_SEC` of the moment our own command reached the bus,
+# and only once - which includes the whole time that command spent in the command
+# queue, since the gateway can only echo a frame it has already been given (0.4.3).
+# Anything else is taken at face value. In particular a movement in a direction the
+# gateway could not possibly be echoing - we stopped it while it was closing and it
+# starts opening - is somebody at the keypad and is obeyed straight away.
 #
 # One case stays genuinely ambiguous: a keypad press in the *same* direction we have
 # just stopped, inside the window. Nothing in the frame tells it apart from the echo,
@@ -1441,13 +1443,27 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # ago by our own movement command, and the "stopped" frame that follows it
             # is the gateway's, so there is nothing to re-read.
             recheck = self._echo_after_restart
+            # Only our own movement frame can hold this window open (see below).
+            pending = self._move_delivery is not None
         else:
             # We commanded a stop: only the direction it interrupted can be echoed.
             if frame_direction is None or frame_direction != self._stopped_direction:
                 return False
             recheck = True
+            pending = self._pending_stop is not None
         elapsed = (dt_util.utcnow() - self._own_command_at).total_seconds()
-        if elapsed >= STOP_ECHO_WINDOW_SEC:
+        # The window covers the whole wait as well (0.4.3, addendum 9): while the
+        # frame this window belongs to is still queued, the second and a half has not
+        # started - the gateway cannot echo a frame it has not been given, and the
+        # instant it is given it answers on the *monitor* session, which may well
+        # beat the delivery report back to us. Measuring from the enqueue instead
+        # turned a scene of twelve covers into one shutter running to its end stop:
+        # its frame waited 1.6 s in the queue, the "stopped" that followed the write
+        # was taken for a real stop, and the "raising" behind it for somebody at the
+        # keypad. Each branch above extends its own window and only its own: a
+        # "stopped" frame arriving while a *stop* of ours is queued is the actuator
+        # saying it stopped by itself, and ends the run exactly as it did before.
+        if elapsed >= STOP_ECHO_WINDOW_SEC and not pending:
             return False
         LOGGER.debug(
             "%s Cover %s: ignoring the gateway echo (%s) %.2fs after our command",

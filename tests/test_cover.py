@@ -2374,6 +2374,28 @@ TWELVE_ENTITIES = [f"cover.cover_{where}" for where in TWELVE_WHERES]
 TWELVE_RUN_SEC = 18.0
 # What one frame costs the single command worker (measured on a MyHOMEServer1).
 FRAME_GAP_SEC = 0.1
+# The queue delay that broke a cover on the real bus (addendum 9): eleven frames
+# ahead of the twelfth, plus the gateway's own pace.
+QUEUE_WAIT_SEC = 1.6
+# 0 -> 40 on a 30 s linear run.
+RUN_TO_40_SEC = 12.0
+# One frame of queue in the echo replay below, chosen so that the covers written last
+# are written more than STOP_ECHO_WINDOW_SEC (1.5 s) after the service call.
+ECHO_FRAME_GAP_SEC = 0.15
+
+
+def _server1_answer(where: str, what: str) -> tuple[str, ...]:
+    """What a MyHOMEServer1 sends on the MONITOR session when it writes a command.
+
+    Measured on the installation this addendum comes from: the command translation
+    "stop", the status "stopped", and the translation of the direction, all three
+    within about a tenth of a second of the write - and only about half a second
+    later, when the motor has really started, the direction status itself, which is
+    the caller's job to feed. The two `1000#` translations parse to neither a
+    direction nor a position and the cover ignores them; the "stopped" in the middle
+    is the one that ended a run it had no business ending.
+    """
+    return (f"*2*1000#0*{where}##", f"*2*0*{where}##", f"*2*1000#{what}*{where}##")
 
 
 def _frame_where(frame: str) -> tuple[Any, str, Any]:
@@ -2403,6 +2425,7 @@ class SlowCommandPath:
         self.stops: list[tuple[str, Any, Any]] = []
         self.queued: list[tuple[str, Any, Any]] = []
         self.written: list[tuple[str, datetime]] = []
+        self.unreported: list[tuple[str, Any, datetime]] = []
 
     async def send(
         self,
@@ -2427,12 +2450,35 @@ class SlowCommandPath:
     def _take(self) -> tuple[str, Any, Any]:
         return (self.stops or self.queued).pop(0)
 
-    def write_next(self) -> str:
-        """Write the next frame *now*, and tell its caller so."""
+    def write_next(self, report: bool = True) -> str:
+        """Write the next frame *now*, and tell its caller so.
+
+        `report=False` writes the frame and says nothing yet: that is the race the
+        addendum to 0.4.3 is about - the gateway answers a command on the *monitor*
+        session as soon as it has it, and those frames can reach the entity before
+        the write is reported back to it. `report_next` then does the telling.
+        """
         frame, on_delivered, _ = self._take()
-        self.written.append((frame, dt_util.utcnow()))
-        if on_delivered is not None:
+        written_at = dt_util.utcnow()
+        self.written.append((frame, written_at))
+        if on_delivered is None:
+            return frame
+        if report:
             on_delivered(time.monotonic())
+        else:
+            self.unreported.append((frame, on_delivered, written_at))
+        return frame
+
+    def report_next(self) -> str:
+        """Report a write performed earlier, carrying the instant it happened.
+
+        The report is monotonic and the cover converts it against the wall clock at
+        callback time, so on a frozen clock the frozen seconds that passed in between
+        have to be taken back off by hand - otherwise a report made "later" would
+        claim the frame left later than it did.
+        """
+        frame, on_delivered, written_at = self.unreported.pop(0)
+        on_delivered(time.monotonic() - (dt_util.utcnow() - written_at).total_seconds())
         return frame
 
     def drop_next(self) -> str:
@@ -2755,7 +2801,7 @@ async def test_a_write_reported_after_a_bus_frame_ended_the_run_changes_nothing(
 ) -> None:
     """Both delivery reports name the run they belong to, and only touch that one.
 
-    A keypad stop can land between the queueing of a frame and its write; the run it
+    A keypad press can land between the queueing of a frame and its write; the run it
     ended is over, and a report that arrives afterwards must not restart its clock or
     re-freeze its position.
 
@@ -2768,14 +2814,28 @@ async def test_a_write_reported_after_a_bus_frame_ended_the_run_changes_nothing(
         cover = entity_object(hass, COVER, "2-81")
         slow = SlowCommandPath()
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
-            # A movement whose frame is still in the queue when the keypad stops it.
+            # A movement whose frame is still in the queue when the keypad sends the
+            # cover the other way. It has to be the other way: a "stopped" frame
+            # arriving while our own direction frame is queued is the gateway echoing
+            # that very frame, and is ignored (addendum 9), while a direction the
+            # gateway cannot possibly be echoing is somebody at the keypad and is
+            # obeyed at once - which ends the run our frame belonged to just as well.
             await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
             await _advance_exact(hass, freezer, 5.0)
-            await feed_event(hass, cover, "*2*0*81##")
+            await feed_event(hass, cover, "*2*1*81##")
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 83
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+            await _advance_exact(hass, freezer, 2.0)
             slow.write_next()
             await hass.async_block_till_done()
-            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 83
+            await _advance_exact(hass, freezer, 2.0)
+            # Four seconds of keypad run on a 30 s shutter, from the 83 % the closing
+            # estimate had reached. A report that re-based the clock of a run it does
+            # not belong to would leave it two seconds behind, at 90 %.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 96
+            # 83 % to the top is 5.1 s of motor, and the run started at 5 s.
+            await _advance_exact(hass, freezer, 1.1)  # and it reaches the top
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
             assert hass.states.get(ENTITY).state == CoverState.OPEN
 
             # And a timed stop whose frame is still in the queue when the actuator
@@ -2785,7 +2845,7 @@ async def test_a_write_reported_after_a_bus_frame_ended_the_run_changes_nothing(
             )
             slow.write_next()
             await hass.async_block_till_done()
-            await _advance_exact(hass, freezer, 12.9)
+            await _advance_exact(hass, freezer, 18.0)
             assert len(slow.queue) == 1  # the stop is queued and not written
             await feed_event(hass, cover, "*2*0*81##")
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 40
@@ -2896,3 +2956,171 @@ async def test_a_stop_asked_for_while_the_movement_is_still_queued_leaves_after_
             await _advance_exact(hass, freezer, 40)
             assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 93
         assert slow.frames == ["*2*2*81##", "*2*0*81##"]
+
+
+async def test_the_answer_to_a_frame_that_waited_is_not_a_keypad_press(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The real-bus failure of addendum 9, replayed frame by frame.
+
+    Twelve `set_cover_position` at once; this cover's "up" frame waits 1.6 s in the
+    command queue. The gateway answers it on the monitor session the moment it is
+    written - the translation "stop", the status "stopped", the translation "raise" -
+    and those three reach the entity *before* the write is reported back to it; the
+    status "raising" follows half a second later, after the report.
+
+    Measured from the enqueue the echo window (1.5 s) was already over when they
+    arrived, so the "stopped" ended the run and the "raising" behind it was taken for
+    somebody at the keypad: the cover started a free run and went to the top, and the
+    stop that should have ended the run belonged to a movement that no longer
+    existed. The window now covers the whole wait, so the movement survives its own
+    echo, one stop leaves 12 s after the frame reached the bus, and the shutter ends
+    on its target.
+
+    Mutation caught: measuring the window from `_own_command_at` alone (the run ends
+    at the "stopped" and the cover reads 100 %).
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            # Eleven frames ahead of it: the write happens a second and a half later.
+            await _advance_exact(hass, freezer, QUEUE_WAIT_SEC)
+            assert slow.write_next(report=False) == "*2*1*81##"
+            for answer in _server1_answer("81", "1"):
+                await feed_event(hass, cover, answer)
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            slow.report_next()
+            await hass.async_block_till_done()
+            # The motor really started here, so the estimate starts here too.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            # And says so half a second later, after the report: still not a keypad
+            # press, and still nothing that could turn the run into a free one.
+            await _advance_exact(hass, freezer, 0.55)
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+            assert len(slow.queue) == 0
+
+            # The stop falls due 12 s after the frame reached the bus.
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - 0.55)
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+            for answer in ("*2*1000#0*81##", "*2*0*81##"):
+                await feed_event(hass, cover, answer)
+
+        # Exactly one stop, and the motor ran the modelled time.
+        assert slow.frames == ["*2*1*81##", "*2*0*81##"]
+        ran = slow.instant("*2*0*81##") - slow.instant("*2*1*81##")
+        assert abs(ran.total_seconds() - RUN_TO_40_SEC) < 0.001
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 40
+        assert state.state == CoverState.OPEN
+
+
+async def test_the_same_answer_reported_before_it_arrives_is_still_an_echo(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same four frames, with the write reported before any of them arrives.
+
+    This is the ordering 0.4.3 already handled - the window is re-based onto the
+    delivery instant and the "stopped" lands well inside it - and it must keep
+    behaving exactly as the race above: same estimate, same single stop, same target.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            await _advance_exact(hass, freezer, QUEUE_WAIT_SEC)
+            assert slow.write_next() == "*2*1*81##"  # written and reported at once
+            await hass.async_block_till_done()
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+            for answer in _server1_answer("81", "1"):
+                await feed_event(hass, cover, answer)
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            await _advance_exact(hass, freezer, 0.55)
+            await feed_event(hass, cover, "*2*1*81##")
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - 0.55)
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        assert slow.frames == ["*2*1*81##", "*2*0*81##"]
+        ran = slow.instant("*2*0*81##") - slow.instant("*2*1*81##")
+        assert abs(ran.total_seconds() - RUN_TO_40_SEC) < 0.001
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 40
+        assert state.state == CoverState.OPEN
+
+
+@pytest.mark.slow
+async def test_twelve_covers_answered_by_the_gateway_all_stop_on_their_target(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The whole scene, with the gateway answering every frame it writes.
+
+    One frame every 150 ms, so the covers written last are written more than the
+    1.5 s echo window after Home Assistant asked for them - and every one of them is
+    answered on the monitor session before its write is reported back. Not one of the
+    twelve may take that answer for a keypad press: every motor runs the modelled
+    time and every shutter ends on 40 %.
+
+    Mutation caught: the same one as the single-cover replay, on the covers whose
+    frame waited longest (the first ones are still inside the old window).
+    """
+    mock_restore_cache(
+        hass,
+        tuple(State(entity, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}) for entity in TWELVE_ENTITIES),
+    )
+    async with setup_myhome(hass, tmp_path, TWELVE_YAML):
+        covers = {where: entity_object(hass, COVER, f"2-{where}") for where in TWELVE_WHERES}
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER,
+                "set_cover_position",
+                {ATTR_ENTITY_ID: TWELVE_ENTITIES, ATTR_POSITION: 40},
+                blocking=True,
+            )
+            assert len(slow.queue) == 12
+
+            for index in range(12):
+                if index:
+                    await _advance_exact(hass, freezer, ECHO_FRAME_GAP_SEC)
+                where = _frame_where(slow.write_next(report=False))[1]
+                for answer in _server1_answer(where, "2"):
+                    await feed_event(hass, covers[where], answer)
+                slow.report_next()
+                # The motor confirms the direction it is already running in.
+                await feed_event(hass, covers[where], f"*2*2*{where}##")
+                await hass.async_block_till_done()
+                assert hass.states.get(f"cover.cover_{where}").state == CoverState.CLOSING
+
+            await _advance_exact(hass, freezer, TWELVE_RUN_SEC - 11 * ECHO_FRAME_GAP_SEC)
+            for index in range(12):
+                if index:
+                    await _advance_exact(hass, freezer, ECHO_FRAME_GAP_SEC)
+                assert len(slow.queue) == 1, f"cover {index} did not stop when it was due"
+                where = _frame_where(slow.write_next())[1]
+                await hass.async_block_till_done()
+                for answer in (f"*2*1000#0*{where}##", f"*2*0*{where}##"):
+                    await feed_event(hass, covers[where], answer)
+
+        for where in TWELVE_WHERES:
+            ran = slow.instant(f"*2*0*{where}##") - slow.instant(f"*2*2*{where}##")
+            assert abs(ran.total_seconds() - TWELVE_RUN_SEC) < 0.001, f"cover {where} ran {ran}"
+            state = hass.states.get(f"cover.cover_{where}")
+            assert state.attributes[ATTR_CURRENT_POSITION] == 40
+            assert state.state == CoverState.OPEN
