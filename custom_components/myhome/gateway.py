@@ -253,7 +253,11 @@ class _QueuedCommand:
     NACK afterwards changes nothing ("the gateway took the frame") - or
     ``on_dropped`` when the frame never reached the bus at all. A write that raises
     reports nothing: the retry writes again, and only the write that worked is
-    reported, once. Both run on the event loop, and an exception in one is
+    reported, once. A write that *worked* is never repeated, whatever the gateway
+    then fails to say about it - a lost ACK is not a lost frame, and a second copy of
+    the command would be a second echo burst on the bus (0.4.3, review 3). Such a
+    command is still counted and logged as dropped; only the callbacks differ.
+    Both run on the event loop, and an exception in one is
     logged and swallowed: a caller's bug must never take a sending worker down.
 
     A NACK counts as delivered on purpose, and the consequence is worth naming: a
@@ -1114,7 +1118,9 @@ class MyHOMEGatewayHandler:
 
         Returns the (possibly new) session and whether the gateway answered
         (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
-        stale command is never replayed later.
+        stale command is never replayed later.  A second attempt only ever
+        follows a write that failed: once the frame has left the socket the
+        loop stops, whatever happens to the answer (see the `item.settled` arm).
         """
         for attempt in range(1, COMMAND_ATTEMPTS + 1):
             try:
@@ -1157,6 +1163,31 @@ class MyHOMEGatewayHandler:
                 await self._close_session(session)
                 session = None
                 self._command_sessions.pop(worker_id, None)
+                if item.settled:
+                    # The write worked and only the answer was lost: the session died,
+                    # or the ACK never came, *after* the frame had left the socket -
+                    # which is what `on_written` having settled the command means. The
+                    # frame is on the bus and the actuator has it, so a retry would put
+                    # a second copy of the same command on the bus: for a WHO 2
+                    # actuator a second echo burst nobody is expecting, and one the
+                    # caller is never told about, since its delivery was reported at
+                    # the first write. A lost ACK is not a lost frame, so the attempt
+                    # loop ends here. The counting and the logging are unchanged - the
+                    # command is still dropped, because nothing acknowledged it - and
+                    # only the caller's callbacks differ, exactly as `_QueuedCommand`'s
+                    # docstring says (0.4.3, review 3).
+                    self._log_limited(
+                        logging.WARNING,
+                        "cmd-unanswered",
+                        "%s Command `%s` was written but never answered (%s: %s); not sending it a second time",
+                        self.log_id,
+                        item.message,
+                        type(err).__name__,
+                        err,
+                    )
+                    self._commands_dropped += 1
+                    self._refresh_stats(publish=True, immediate=True)
+                    return None, False
                 if attempt < COMMAND_ATTEMPTS:
                     LOGGER.debug(
                         "%s Sending `%s` failed (%s: %s); retrying with a fresh session",

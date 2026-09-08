@@ -371,16 +371,22 @@ async def test_command_acknowledged_replies_dispatched(caplog: pytest.LogCapture
 
 
 async def test_command_retry_once_in_place_with_fresh_session() -> None:
-    """gw-01 / gw-11: a failed send is retried once on a NEW session, never re-queued."""
+    """gw-01 / gw-11: a failed send is retried once on a NEW session, never re-queued.
+
+    The failure is at the *write* (0.4.3, review 3): only a frame that never reached
+    the socket is written again, so that is what a retry test has to script. A frame
+    that did leave and was never answered is a different outcome entirely - see
+    `test_a_frame_written_once_is_never_written_again`.
+    """
     handler = make_handler()
 
     def configure(channel: FakeCommandChannel, index: int) -> None:
         if index == 0:
 
-            def broken(message: str) -> CommandResult:
+            def broken(message: str) -> None:
                 raise SessionError("gateway closed the socket")
 
-            channel.responder = broken
+            channel.on_write = broken
 
     with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
         async with running(handler, listening=False):
@@ -388,24 +394,29 @@ async def test_command_retry_once_in_place_with_fresh_session() -> None:
             assert await handler.send(OWNLightingCommand.switch_off("11"))
             await asyncio.wait_for(handler.send_buffer.join(), 2)
     assert len(command.instances) == 2
-    assert command.instances[0].sent == ["*1*1*11##"]
+    assert command.instances[0].sent == []
     assert command.instances[0].closed
     # Same command first, then the next one: order preserved, no duplicate.
     assert command.instances[1].sent == ["*1*1*11##", "*1*0*11##"]
 
 
 async def test_command_dropped_after_two_failures(caplog: pytest.LogCaptureFixture) -> None:
-    """gw-02: timeout / transport failure twice -> WARNING and drop, queue keeps moving."""
+    """gw-02: two failed writes -> WARNING and drop, queue keeps moving.
+
+    Both attempts fail on the way to the socket, which since review 3 is the only
+    kind of failure that is attempted twice: the frame never left, so nothing was
+    reported to its caller and there is nothing on the bus to duplicate.
+    """
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
     handler = make_handler()
 
     def configure(channel: FakeCommandChannel, index: int) -> None:
         if index < 2:
 
-            def hung(message: str) -> CommandResult:
+            def hung(message: str) -> None:
                 raise TimeoutError()
 
-            channel.responder = hung
+            channel.on_write = hung
 
     with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
         async with running(handler, listening=False):
@@ -413,7 +424,7 @@ async def test_command_dropped_after_two_failures(caplog: pytest.LogCaptureFixtu
             await asyncio.wait_for(handler.send_buffer.join(), 2)
             assert await handler.send(OWNLightingCommand.switch_on("12"))
             await asyncio.wait_for(handler.send_buffer.join(), 2)
-    assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"], ["*1*1*12##"]]
+    assert [channel.sent for channel in command.instances] == [[], [], ["*1*1*12##"]]
     assert handler.send_buffer.qsize() == 0
     assert any(
         f"dropped after {COMMAND_ATTEMPTS} attempts" in record.message and record.levelno == logging.WARNING
@@ -587,18 +598,23 @@ async def test_the_delivery_time_is_the_attempt_the_gateway_answered() -> None:
     assert fate.delivered[0] >= failed_at[0]
 
 
-async def test_a_frame_written_once_is_delivered_once_across_the_retry() -> None:
-    """The write worked and the ACK never came: delivered, once, never dropped.
+async def test_a_frame_written_once_is_never_written_again() -> None:
+    """The write worked and the ACK never came: delivered once, and not re-sent.
 
     0.4.3 addendum 9 moved the report from the ACK to the write, and the two come
     apart exactly here. The frame is on the bus - the actuator has it, whatever the
-    command session thinks - so the cover timing a motor on it is told at once, and
-    the retry that writes the very same frame a second time must not tell it again.
-    The command is still counted as dropped when the gateway answers neither attempt;
+    command session thinks - so the cover timing a motor on it is told at once. The
+    retry loop must then stop: a lost ACK is not a lost frame, and writing it again
+    would put a second copy of the command on the bus (review 3, risk 2). For a WHO 2
+    actuator that second copy is a second burst of echo frames on the monitor
+    session, arriving long after the window in which they are recognised as echoes -
+    which is the very failure this branch exists to fix, re-entered through the back
+    door. The command is still counted as dropped, because nothing acknowledged it;
     the caller simply already has its answer, and `on_dropped` stays silent.
 
-    Mutation caught: reporting after the ACK (nothing is delivered at all), and
-    dropping the `settled` guard (the caller is told twice, or told both things).
+    Mutations caught: retrying a settled command (a second session writes the frame
+    again), reporting after the ACK (nothing is delivered at all), and dropping the
+    `settled` guard (the caller is told twice, or told both things).
     """
     handler = make_handler()
 
@@ -613,9 +629,40 @@ async def test_a_frame_written_once_is_delivered_once_across_the_retry() -> None
         async with running(handler, listening=False):
             assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
             await asyncio.wait_for(handler.send_buffer.join(), 2)
-    assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"]]
+    assert [channel.sent for channel in command.instances] == [["*1*1*11##"]]
     assert (len(fate.delivered), fate.dropped) == (1, 0)
     assert handler.stats.commands_dropped == 1
+
+
+async def test_a_frame_that_never_left_the_socket_is_written_again() -> None:
+    """The other half of the rule: a write that *failed* is still retried.
+
+    The attempt loop is only cut short for a frame that reached the socket. A write
+    that raised delivered nothing, so the fresh session must write it again - this is
+    the ordinary "the command session died between two commands" case, and it is what
+    `COMMAND_ATTEMPTS` is for.
+
+    Mutation caught: cutting the loop short on any transport error rather than on a
+    settled command (the frame is written once and the gateway never gets it).
+    """
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        if index == 0:
+
+            def dead(message: str) -> None:
+                raise SessionError("the socket is gone")
+
+            channel.on_write = dead
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert [channel.sent for channel in command.instances] == [[], ["*1*1*11##"]]
+    assert (len(fate.delivered), fate.dropped) == (1, 0)
+    assert handler.stats.commands_dropped == 0
 
 
 async def test_a_command_that_cannot_be_queued_reports_it_at_once() -> None:
@@ -1987,7 +2034,17 @@ async def test_the_write_is_reported_before_the_gateway_answers() -> None:
     still have fired, once, before the timeout - and a session that is not open
     writes nothing, so it reports nothing.
 
-    Mutation caught: calling the hook after the ACK/NACK loop, or before the write.
+    The third block is the one that pins the *order* (review 3, minor 2): a socket
+    that died under an open session, so that the write itself raises. The not-open
+    guard above it raises before the hook wherever the hook sits, and could not tell
+    the two placements apart; here the frame never leaves and nothing may be
+    reported, which is the contract the whole delivery report rests on - the gateway
+    handler treats a settled command as one that reached the bus and never writes it
+    again.
+
+    Mutations caught: calling the hook after the ACK/NACK loop (nothing is reported
+    before the timeout), and calling it before the write or between the write and the
+    drain (the broken socket reports a frame that never left).
     """
     written: list[str] = []
     async with FakeOWNServer(answer=False) as server:
@@ -2005,6 +2062,23 @@ async def test_the_write_is_reported_before_the_gateway_answers() -> None:
                 OWNLightingCommand.status("11"), timeout=1, on_written=lambda: written.append("never written")
             )
         assert written == ["on the socket"]
+
+        # A session that opened and whose socket is then gone: `is_open` is still
+        # true, so nothing stops the send, and the transport is the thing that
+        # refuses. The frame reaches neither the socket nor `server.received`.
+        broken = OWNCommandChannel(make_gateway(server.port), LOGGER)
+        await broken.open(timeout=2)
+        broken._stream_writer.transport.abort()  # noqa: SLF001 - the socket dies mid-session
+        assert broken.is_open
+        with pytest.raises(OSError):
+            await broken.send_command(
+                OWNLightingCommand.status("12"), timeout=1, on_written=lambda: written.append("never left")
+            )
+        assert written == ["on the socket"]
+        assert server.received == ["*#1*11##"]
+        # The session is unusable after a failed write, and says so.
+        assert not broken.is_open
+        await broken.close()
 
 
 @pytest.mark.usefixtures("socket_enabled")  # loopback only; pytest-socket blocks sockets by default
