@@ -1921,10 +1921,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
             return
         interrupted = self._moving
+        # Signed on purpose: inside `start_delay` the clock is still in the future and
+        # this is negative, which is exactly the motor time the queue delay has to be
+        # measured against. `_apply_stop_delivery` adds that delay and clamps the sum
+        # at zero, once, at the end - clamping here instead would add the delay to a
+        # motor that had not started yet and freeze the shutter up to `start_delay` of
+        # travel past where it really is.
         elapsed = (
             0.0
             if self._move_started_at is None
-            else max(0.0, (dt_util.utcnow() - self._move_started_at).total_seconds())
+            else (dt_util.utcnow() - self._move_started_at).total_seconds()
         )
         # Where the shutter comes to rest if the frame goes out at once: the estimate
         # as it stands now plus the `stop_latency` the motor takes to obey (0.4.4).

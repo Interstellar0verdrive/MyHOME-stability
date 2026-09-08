@@ -3531,6 +3531,53 @@ async def test_a_stop_on_a_run_that_was_re_based_still_counts_the_coasting(
         assert state.state == CoverState.OPEN
 
 
+async def test_a_stop_inside_the_start_delay_freezes_where_the_motor_really_got_to(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The user changes their mind before the motor has even started.
+
+    `close_cover` at t = 0, `stop_cover` a tenth of a second later, and the stop frame
+    written at t = 0.5 because another cover's frame was in front of it. The motor
+    started at t = 0.5 (`start_delay`) and stopped at t = 0.6 (`stop_latency`): it ran
+    a tenth of a second, and the shutter has not left the top.
+
+    The whole point is that the elapsed time is *signed* while the clock is still in
+    the future: the queue delay has to be added to -0.4 s, not to a zero somebody
+    clamped it to on the way in. Clamping it early adds the delay to a motor that had
+    not started, which freezes the entity up to `start_delay` of travel past where the
+    shutter is - half a second of a 30 s run, ~3 cm on a 195 cm window, in the very
+    direction 0.4.4 exists to remove.
+
+    Mutation caught: clamping `elapsed` in `async_stop_cover` instead of letting
+    `_apply_stop_delivery` clamp the sum once, at the end (the cover reads 98 %).
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+            assert slow.write_next() == "*2*2*81##"  # an idle queue: written at once
+            await hass.async_block_till_done()
+
+            # A tenth of a second in, the motor has not started and the estimate says so.
+            await _advance_exact(hass, freezer, 0.1)
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
+            await hass.services.async_call(COVER, "stop_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+            assert [frame for frame, _, _ in slow.queue] == ["*2*0*81##"]
+
+            # The queue was busy: the stop only reaches the bus at t = 0.5, the very
+            # instant the motor starts. It runs for the `stop_latency` of coasting and
+            # nothing more.
+            await _advance_exact(hass, freezer, 0.4)
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 100
+        assert state.state == CoverState.OPEN
+        assert slow.frames == ["*2*2*81##", "*2*0*81##"]
+
+
 async def test_a_keypad_run_is_not_re_timed_by_the_frames_that_follow_it(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
 ) -> None:
