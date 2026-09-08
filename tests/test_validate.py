@@ -615,6 +615,83 @@ def test_cover_slat_time_error_names_the_device():
     assert err.value.path == ["gateway", "cover", "shutter", "slat_time"]
 
 
+# --------------------------------------------------------------------------------------
+# The two bus costs: stop_latency / start_delay (0.4.4)
+# --------------------------------------------------------------------------------------
+def test_the_bus_costs_default_to_the_measured_ones():
+    """Every cover gets the two 0.4.4 keys, whether or not the file mentions them."""
+    plat = platforms(
+        check(
+            gw(
+                cover={
+                    "plain": {"where": "81", "name": "P"},
+                    "tuned": {"where": "82", "name": "T", "stop_latency": 0.25, "start_delay": 0},
+                }
+            )
+        )
+    )["cover"]
+    assert plat["2-81"]["stop_latency"] == 0.1
+    assert plat["2-81"]["start_delay"] == 0.5
+    assert isinstance(plat["2-81"]["stop_latency"], float)
+    tuned = plat["2-82"]
+    # ``start_delay: 0`` is a real value, not "nobody wrote it": a gateway whose
+    # actuators start instantly must be able to say so.
+    assert (tuned["stop_latency"], tuned["start_delay"]) == (0.25, 0.0)
+
+
+def test_the_bus_costs_are_refused_below_zero():
+    """A negative delay would run the clock backwards; both keys are floats >= 0."""
+    with pytest.raises(Invalid, match="at least 0"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "stop_latency": -0.1}}))
+    with pytest.raises(Invalid, match="at least 0"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "start_delay": -1}}))
+    with pytest.raises(Invalid, match="at least 0"):
+        check(
+            gw(
+                cover_profiles={"tall": {**TALL_PROFILE, "start_delay": -1}},
+                cover={"c": {"where": "81", "name": "C", "profile": "tall"}},
+            )
+        )
+
+
+def test_the_bus_costs_come_from_the_profile_and_are_never_scaled():
+    """They are properties of the bus, not of the window: the height must not touch them.
+
+    Mutation caught: putting either key through the curtain scaling (a 150 cm cover on a
+    195 cm profile would then start 0.38 s late instead of 0.5 s), or dropping them from
+    the derivation, which sends the cover back to the default and silently ignores the
+    profile.
+    """
+    out = check(
+        gw(
+            cover_profiles={"tall": {**TALL_PROFILE, "stop_latency": 0.2, "start_delay": 0.6}},
+            cover={
+                "scaled": {"where": "81", "name": "S", "profile": "tall", "height": 150},
+                "asis": {"where": "82", "name": "A", "profile": "tall"},
+                "own": {"where": "83", "name": "O", "profile": "tall", "height": 150, "start_delay": 0.9},
+            },
+        )
+    )
+    plat = platforms(out)["cover"]
+    assert (plat["2-81"]["stop_latency"], plat["2-81"]["start_delay"]) == (0.2, 0.6)
+    assert (plat["2-82"]["stop_latency"], plat["2-82"]["start_delay"]) == (0.2, 0.6)
+    # ... and the cover's own key still wins, per key, exactly like every other one.
+    assert (plat["2-83"]["stop_latency"], plat["2-83"]["start_delay"]) == (0.2, 0.9)
+
+
+def test_a_profile_without_the_bus_costs_carries_the_defaults():
+    """0.4.2 profiles keep working: the two keys default inside the profile too."""
+    out = check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE)},
+            cover={"c": {"where": "81", "name": "C", "profile": "tall", "height": 150}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert (cover["stop_latency"], cover["start_delay"]) == (0.1, 0.5)
+    assert out[MAC_NORM]["cover_profiles"]["tall"]["start_delay"] == 0.5
+
+
 
 # --------------------------------------------------------------------------------------
 # device_class alias and per-platform defaults (val-02, val-08, val-12)
@@ -2038,6 +2115,13 @@ def test_the_advanced_cover_warning_names_only_the_keys_the_user_wrote(
     caplog.clear()
     check(_cover(advanced=True, opening_roll=2, closing_roll=1.5))
     assert "opening_roll and closing_roll do nothing here" in caplog.text
+    assert "still read" not in caplog.text
+
+    # 0.4.4: an advanced actuator has no estimate to time, so neither bus cost does
+    # anything there either - and both must be named, not silently accepted.
+    caplog.clear()
+    check(_cover(advanced=True, stop_latency=0.2, start_delay=0.8))
+    assert "stop_latency and start_delay do nothing here" in caplog.text
     assert "still read" not in caplog.text
 
 
