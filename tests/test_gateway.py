@@ -26,7 +26,7 @@ from homeassistant.components.climate import DOMAIN as CLIMATE
 from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.components.light import DOMAIN as LIGHT
 from homeassistant.components.sensor import DOMAIN as SENSOR
-from OWNd.message import OWNCommand, OWNLightingCommand, OWNMessage
+from OWNd.message import OWNAutomationCommand, OWNCommand, OWNLightingCommand, OWNMessage
 
 from custom_components.myhome import gateway as gateway_module
 from custom_components.myhome.const import (
@@ -63,6 +63,7 @@ from custom_components.myhome.gateway import (
     SESSION_STATE_DISCONNECTED,
     GatewayStats,
     MyHOMEGatewayHandler,
+    _CommandQueue,
     _entity_key_candidates,
     _message_entity_key,
     _QueuedCommand,
@@ -304,7 +305,8 @@ def fired(hass: MagicMock, event_type: str) -> list[dict[str, Any]]:
 
 
 def queued(handler: MyHOMEGatewayHandler) -> list[str]:
-    return [str(item.message) for item in list(handler.send_buffer._queue)]  # noqa: SLF001
+    """Everything still waiting, in the order the worker will take it."""
+    return [str(item.message) for item in handler.send_buffer.pending()]
 
 
 def connection_calls(dispatch: MagicMock) -> list[bool]:
@@ -485,6 +487,286 @@ async def test_idle_command_session_is_closed() -> None:
             assert await handler.send(OWNLightingCommand.switch_off("11"))
             await asyncio.wait_for(handler.send_buffer.join(), 2)
     assert len(command.instances) == 2
+
+
+# ------------------------------------------------------------------ delivery (0.4.3)
+class Fate:
+    """Records what the gateway said about one queued command."""
+
+    def __init__(self) -> None:
+        self.delivered: list[float] = []
+        self.dropped = 0
+
+    def deliver(self, at: float) -> None:
+        self.delivered.append(at)
+
+    def drop(self) -> None:
+        self.dropped += 1
+
+    @property
+    def kwargs(self) -> dict[str, Any]:
+        return {"on_delivered": self.deliver, "on_dropped": self.drop}
+
+
+@pytest.mark.parametrize("acknowledged", [True, False])
+async def test_delivery_callback_carries_the_moment_of_the_write(acknowledged: bool) -> None:
+    """0.4.3: `on_delivered` fires on ACK *and* on NACK, timed just before the write.
+
+    Both mean "the gateway took the frame", which is what a cover times its motor
+    on - a refused command still left the socket. The timestamp is taken immediately
+    before the write, so it sits between the `send()` call and the moment the fake
+    channel sees the frame.
+
+    Mutation caught: timestamping the callback instead of the write (which would put
+    it *after* the mark below), and skipping the callback on a NACK.
+    """
+    handler = make_handler()
+    written: list[float] = []
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        def responder(message: str) -> CommandResult:
+            written.append(time.monotonic())
+            return CommandResult(acknowledged, [])
+
+        channel.responder = responder
+
+    fate = Fate()
+    before = time.monotonic()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert fate.dropped == 0
+    assert len(fate.delivered) == 1
+    assert before <= fate.delivered[0] <= written[0]
+
+
+async def test_the_delivery_time_is_the_attempt_the_gateway_answered() -> None:
+    """A retried command is timed on the write that worked, not on the one that failed.
+
+    The first attempt dies on a broken socket after a measurable pause; the frame only
+    reached the bus on the second one, and a cover that started its motor clock on the
+    first would be out by the whole retry.
+
+    Mutation caught: taking the timestamp once, outside the attempt loop.
+    """
+    handler = make_handler()
+    failed_at: list[float] = []
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        if index == 0:
+
+            def broken(message: str) -> CommandResult:
+                failed_at.append(time.monotonic())
+                raise SessionError("gateway closed the socket")
+
+            channel.responder = broken
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert fate.dropped == 0
+    assert len(fate.delivered) == 1
+    assert fate.delivered[0] >= failed_at[0]
+
+
+async def test_a_command_that_cannot_be_queued_reports_it_at_once() -> None:
+    """The two refusals `send()` already reports also settle the callbacks."""
+    handler = make_handler()
+    handler.send_buffer = _CommandQueue(maxsize=1)
+    assert await handler.send(OWNLightingCommand.switch_on("11")) is True
+    full = Fate()
+    assert await handler.send(OWNLightingCommand.switch_on("12"), **full.kwargs) is False
+    assert (full.delivered, full.dropped) == ([], 1)
+
+    handler._closed = True  # noqa: SLF001
+    closed = Fate()
+    assert await handler.send(OWNLightingCommand.switch_on("13"), **closed.kwargs) is False
+    assert (closed.delivered, closed.dropped) == ([], 1)
+
+
+async def test_an_expired_command_reports_that_it_never_left() -> None:
+    """A command dropped on the TTL is a command that never reached the bus."""
+    handler = make_handler()
+    fate = Fate()
+    handler.send_buffer.put_nowait(
+        _QueuedCommand(
+            OWNLightingCommand.switch_on("11"),
+            False,
+            time.monotonic() - 120,
+            on_delivered=fate.deliver,
+            on_dropped=fate.drop,
+        )
+    )
+    with fake_channels() as (_, command, _):
+        async with running(handler, listening=False):
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert all(channel.sent == [] for channel in command.instances)
+    assert (fate.delivered, fate.dropped) == ([], 1)
+
+
+async def test_a_command_the_gateway_never_answered_reports_that_it_never_left() -> None:
+    """Both attempts failed: the frame is dropped, and the caller is told once."""
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        def hung(message: str) -> CommandResult:
+            raise TimeoutError()
+
+        channel.responder = hung
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert (fate.delivered, fate.dropped) == ([], 1)
+
+
+async def test_an_authentication_failure_reports_that_the_command_never_left() -> None:
+    """The password was rejected mid-flight: the command is abandoned like any other."""
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        channel.open_error = AuthenticationError("password_error")
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await wait_until(lambda: handler.sending_workers[0].done())
+    assert (fate.delivered, fate.dropped) == ([], 1)
+
+
+async def test_an_unexpected_error_in_the_worker_reports_that_the_command_never_left(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The worker's own catch-all arm settles the command it was carrying."""
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        def buggy(message: str) -> CommandResult:
+            raise ValueError("not a transport error")
+
+        channel.responder = buggy
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert (fate.delivered, fate.dropped) == ([], 1)
+
+
+async def test_the_shutdown_drain_reports_every_command_it_discards() -> None:
+    """Nothing queued at shutdown is left without an answer."""
+    handler = make_handler()
+    fate = Fate()
+    assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+    with fake_channels():
+        await handler.close_listener()
+    assert (fate.delivered, fate.dropped) == ([], 1)
+
+
+async def test_a_command_is_settled_exactly_once() -> None:
+    """Delivered *and* then drained on shutdown still means delivered, once.
+
+    The `finally` net in the sending loop calls `mark_dropped` on every command it
+    carried, cancellation included; a command the gateway answered has already
+    settled, so the net must be a no-op for it.
+
+    Mutation caught: dropping the `settled` guard, after which every delivered
+    command is reported as dropped a moment later.
+    """
+    handler = make_handler()
+    fate = Fate()
+    with fake_channels():
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert (len(fate.delivered), fate.dropped) == (1, 0)
+
+
+async def test_a_callback_that_raises_does_not_kill_the_worker(caplog: pytest.LogCaptureFixture) -> None:
+    """A caller's bug is logged and swallowed: the queue keeps moving.
+
+    Same contract as every other call into an entity (gw-13). Both callbacks are
+    exercised: the first command explodes on delivery, the second on the drop.
+    """
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+    handler = make_handler()
+
+    def boom(*args: Any) -> None:
+        raise RuntimeError("callback bug")
+
+    fate = Fate()
+    with fake_channels() as (_, command, _):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), on_delivered=boom)
+            assert await handler.send(OWNLightingCommand.switch_on("12"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+            assert not handler.sending_workers[0].done()
+        # The dropping side of it, on the shutdown drain.
+        handler._closed = False  # noqa: SLF001
+        handler._stop_command_workers = False  # noqa: SLF001
+        assert await handler.send(OWNLightingCommand.switch_on("13"), on_dropped=boom)
+        await handler.close_listener()
+    assert command.instances[0].sent == ["*1*1*11##", "*1*1*12##"]
+    assert (len(fate.delivered), fate.dropped) == (1, 0)
+    assert sum("delivery callback" in record.message for record in caplog.records) == 2
+
+
+async def test_a_stop_overtakes_everything_already_queued() -> None:
+    """0.4.3: a WHO 2 stop is written before any pending movement or status frame.
+
+    A late stop lengthens a run exactly as a late start shortens it, and a scene that
+    moves twelve covers queues twelve stops as well. Ordering *among* the stops, and
+    among everything else, stays FIFO.
+
+    Mutation caught: putting stops in the ordinary deque (the frames then come out in
+    the order they were queued), or sorting the two deques the other way round.
+    """
+    handler = make_handler()
+    assert await handler.send(OWNAutomationCommand.raise_shutter("81"))
+    assert await handler.send_status_request(OWNAutomationCommand.status("81"))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("82"))
+    assert await handler.send(OWNAutomationCommand.stop_shutter("83"))
+    assert await handler.send(OWNLightingCommand.switch_on("11"))
+    assert queued(handler) == ["*2*0*82##", "*2*0*83##", "*2*1*81##", "*#2*81##", "*1*1*11##"]
+    # The bound and the published length are still the total, not one deque's.
+    assert handler.send_buffer.qsize() == 5
+    assert handler.stats.queue_length == 5
+
+    with fake_channels(command=Factory(FakeCommandChannel)) as (_, command, _):
+        async with running(handler, listening=False):
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert command.instances[0].sent == [
+        "*2*0*82##",
+        "*2*0*83##",
+        "*2*1*81##",
+        "*#2*81##",
+        "*1*1*11##",
+    ]
+    assert handler.send_buffer.empty()
+
+
+async def test_a_status_request_with_callbacks_is_never_coalesced() -> None:
+    """Coalescing merges two frames; it must not merge two callers' expectations."""
+    handler = make_handler()
+    status = OWNAutomationCommand.status("81")
+    assert await handler.send_status_request(status)
+    assert await handler.send_status_request(status)  # coalesced, nothing added
+    assert queued(handler) == ["*#2*81##"]
+    fate = Fate()
+    assert await handler.send_status_request(status, **fate.kwargs)
+    assert queued(handler) == ["*#2*81##", "*#2*81##"]
+    with fake_channels():
+        async with running(handler, listening=False):
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert (len(fate.delivered), fate.dropped) == (1, 0)
 
 
 # --------------------------------------------------------------------------- event path

@@ -49,7 +49,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
 from math import sqrt
@@ -303,7 +303,7 @@ class _PendingStop:
     interrupted: str | None
     frozen: tuple[int | None, int | None]
     base_elapsed: float
-    queued_at: datetime = field(default_factory=dt_util.utcnow)
+    queued_at: datetime
 
 # The curtain phase can never be zero: the validator keeps at least one second of it,
 # this only protects the divisions against a hand-crafted device config.
@@ -1146,7 +1146,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # Something else already owns the estimate (a later command, a bus frame).
             return
         self._move_delivery = None
-        if self._moving is None or self._move_started_at is None:
+        if self._moving is None or self._move_started_at is None:  # pragma: no cover - unreachable:
+            # everything that ends a movement goes through `_cancel_timers`, which
+            # forgets the frame above, so the identity check has already returned.
             return
         if delivery.dropped:
             LOGGER.debug(
@@ -1244,6 +1246,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         for the run is the caller's to decide, and the two callers decide differently.
         """
         delivery = _FrameDelivery()
+        # Read before the hand-over: an empty command queue answers inside `send`.
+        queued_at = dt_util.utcnow()
         sent = await self._gateway_handler.send(
             OWNAutomationCommand.stop_shutter(self._full_where),
             on_delivered=delivery.deliver,
@@ -1256,7 +1260,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if self._stop_timer is not None:
             self._stop_timer()
             self._stop_timer = None
-        pending = _PendingStop(delivery, interrupted, frozen, base_elapsed)
+        pending = _PendingStop(delivery, interrupted, frozen, base_elapsed, queued_at)
         self._stop_delivered_at = None
         self._pending_stop = pending
         delivery.attach(partial(self._apply_stop_delivery, pending))
