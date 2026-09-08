@@ -1,6 +1,6 @@
 # Services and events
 
-The five services the integration registers, and the contract (event name and
+The seven services the integration registers, and the contract (event name and
 data keys) of every event it fires. For copy-paste automations built on these,
 see [Recipes](recipes.md).
 
@@ -12,6 +12,8 @@ see [Recipes](recipes.md).
   - [`myhome.start_sending_instant_power`](#myhomestart_sending_instant_power)
   - [`myhome.sync_time`](#myhomesync_time)
   - [`myhome.send_message`](#myhomesend_message)
+  - [`myhome.cover_calibration_run`](#myhomecover_calibration_run)
+  - [`myhome.cover_calibration_compute`](#myhomecover_calibration_compute)
 - [Events](#events)
   - [Device discovery events](#device-discovery-events)
   - [CEN+ keypad events](#cen-keypad-events)
@@ -92,10 +94,113 @@ data:
 | `message` | yes | A valid OpenWebNet frame, e.g. `*1*1*15##`. |
 | `gateway` | only with more than one gateway loaded | MAC address in any notation. |
 
+### `myhome.cover_calibration_run`
+
+Moves a cover to one end stop, then runs it back for exactly **half** its configured
+run time and stops it there, so that you can measure where it ended up. It is step 1
+of [Recipes → Calibrating a shutter in
+centimetres](recipes.md#calibrating-a-shutter-in-centimetres); on its own it changes
+no configuration and stores nothing.
+
+```yaml
+action: myhome.cover_calibration_run
+target:
+  entity_id: cover.living_room_shutter
+data:
+  direction: close
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `direction` | yes | `close` or `open`. The direction of the half run you are going to measure. |
+
+**Target**: one or more **basic** covers (`integration: myhome`, `domain: cover`).
+Several covers are done one after another, never in parallel — you have to be
+standing in front of each one with a tape measure.
+
+What it does to each cover, in order:
+
+1. sends the **opposite** full command (`open_cover` for `direction: close`,
+   `close_cover` for `direction: open`) and waits the configured run of that
+   direction plus 3 seconds, so the cover is certainly against its end stop;
+2. sends the requested direction and, exactly `closing_time / 2` (for `close`) or
+   `opening_time / 2` (for `open`) seconds after that command went out, sends
+   `stop_cover`;
+3. leaves the cover there and reports what it did.
+
+The commands are the entity's own, so the position estimate, the echo filtering and
+the safety timers see this run like any other movement.
+
+Response data, keyed by entity id:
+
+| Key | Value |
+|---|---|
+| `direction` | The direction that was run. |
+| `motor_seconds` | The half run actually used, in seconds. |
+| `opening_time`, `closing_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. |
+
+Refused with a `ServiceValidationError`, naming the entity:
+
+- on an `advanced:` cover — it reports its own position, there is nothing to
+  calibrate;
+- on a cover that is already moving.
+
+> The cover runs to a **full end stop and back**, twice the length of a normal
+> command. Make sure nothing is in the way, above or below.
+
+### `myhome.cover_calibration_compute`
+
+Turns the centimetres you measured into a `roll` (and, if you let it, a
+`slat_time`), and hands back a ready-to-paste YAML snippet. It computes only: no
+cover is moved and nothing is written to `myhome.yaml`.
+
+```yaml
+action: myhome.cover_calibration_compute
+target:
+  entity_id: cover.living_room_shutter
+data:
+  height: 195
+  closed_half_cm: 85
+  opened_half_cm: 88
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `height` | yes | Curtain travel height of that cover in centimetres, floor to fully open. |
+| `closed_half_cm` | yes | Centimetres from the floor to the bottom edge after `cover_calibration_run` with `direction: close`. Between `0` and `height`. |
+| `opened_half_cm` | no | The same measurement after `direction: open`. Give it and the service solves `slat_time` as well as `roll`; leave it out and the cover's configured `slat_time` is taken as correct. |
+| `slat_time` | no | A slat time you have measured yourself, in seconds. When given it is trusted and only `roll` is solved for, whether or not `opened_half_cm` is there. |
+
+**Target**: exactly **one** basic cover. The maths needs that cover's configured
+`opening_time` and `closing_time` — the same numbers the run used — so a second
+entity would have nothing to do with the measurements.
+
+Response data:
+
+| Key | Value |
+|---|---|
+| `roll` | The solved roll coefficient, rounded to 0.01. |
+| `slat_time` | The slat time used: solved, given, or the cover's own. Seconds, rounded to 0.1. |
+| `opening_time`, `closing_time` | The times the solution was computed against, unchanged. |
+| `height` | The height you passed, echoed back. |
+| `residual_cm` | How far the solution is from each measurement, in centimetres: what the model predicts for the run(s) you measured minus what you measured. A few millimetres is a good fit; several centimetres on the ascent means the cover does not behave like one motor and one roll. |
+| `yaml` | A `cover_profiles:` entry built from the result, plus the `profile:` / `height:` lines for the cover itself, ready to paste into `myhome.yaml`. |
+
+Refused with a `ServiceValidationError` when the numbers cannot describe a shutter —
+a measurement no roll coefficient in the accepted range can produce, a
+`closed_half_cm` that says the curtain never moved, a `slat_time` that leaves no
+curtain travel. The message says which measurement to check and what it implies;
+re-measuring the run, or repeating `cover_calibration_run` after making sure the
+cover really started from its end stop, is the usual fix.
+
 With more than one gateway loaded, every gateway-targeted service above requires
 the `gateway` field — omitting it fails with *"Specify the gateway: N gateways are
-loaded."* `myhome.start_sending_instant_power` targets entities instead, so it
-needs no `gateway`. See [Recipes → Several gateways](recipes.md#several-gateways).
+loaded."* `myhome.start_sending_instant_power` and the two cover calibration
+services target entities instead, so they need no `gateway`. See
+[Recipes → Several gateways](recipes.md#several-gateways).
+
+Both calibration services **return data**: call them from *Developer tools →
+Actions* to read the response there, or with `response_variable:` in a script.
 
 ## Events
 
