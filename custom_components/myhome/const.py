@@ -115,6 +115,16 @@ CONF_ROLL = "roll"
 # describe both runs; each defaults to ``roll`` when it is not written.
 CONF_OPENING_ROLL = "opening_roll"
 CONF_CLOSING_ROLL = "closing_roll"
+# The two fixed costs of driving a shutter over the bus (0.4.4).  They are constants of
+# the *installation*, not of the window: the actuator answers a direction command with
+# its "moving" status about half a second after the frame is written, and it keeps
+# turning for about a tenth of a second after a stop.  Neither scales with the height,
+# so a ``profile`` carries them unscaled.
+#
+# ``start_delay`` is only the fallback: when the actuator's own "moving" status arrives
+# the run is timed from *that* instant instead, and the key is never consulted.
+CONF_STOP_LATENCY = "stop_latency"
+CONF_START_DELAY = "start_delay"
 # Whether the slat phase is *exposed* as a tilt entity feature.  The two-phase timing
 # runs either way (a run from fully closed still spends ``slat_time`` on the slats);
 # ``tilt: false`` (the default from 0.4.2) only hides controls most shutters cannot
@@ -263,6 +273,12 @@ MAX_ROLL = 5.0
 # physically indistinguishable from the linear model, so both are taken as linear.
 ROLL_LINEAR_TOLERANCE = 1e-9
 DEFAULT_TILT = False  # tilt controls are opt-in from 0.4.2
+# Measured on a MyHOMEServer1 with F411 actuators (0.4.4): the "stopped" status follows
+# our stop frame by 0.08 s, the "moving" status follows a direction frame by 0.57 s.
+# Both are rounded to one figure, because they are a first guess for every installation
+# rather than a measurement of anybody's: a user who times their own bus writes them.
+DEFAULT_STOP_LATENCY = 0.1  # s the motor keeps turning after the stop frame is written
+DEFAULT_START_DELAY = 0.5  # s before the motor starts, when the actuator never says so
 DEFAULT_KEEPALIVE_MINUTES = 125  # instant power keep-alive (Contract E; 0 = disabled)
 
 # Device type constants (used by discovery.py to classify bus traffic)

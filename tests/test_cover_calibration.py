@@ -26,6 +26,7 @@ from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.util import dt as dt_util
 
 from custom_components.myhome import cover as cover_module
 from custom_components.myhome.const import (
@@ -36,7 +37,7 @@ from custom_components.myhome.const import (
 )
 
 from .helpers_core import MAC
-from .helpers_platforms import setup_myhome
+from .helpers_platforms import entity_object, feed_event, setup_myhome
 
 # A shutter measured on a real window: 195 cm of travel, an asymmetric run and a slat
 # phase.  The numbers are the ones the 0.4.2 specification works its example with.
@@ -326,9 +327,11 @@ async def test_calibration_run_drives_the_cover_and_reports_the_motor_time(
         # The opening run (22.3 s) plus the settle, then (21.7 - 4.7) / 2 = 8.5 s.
         waits = [call.args[0] for call in sleep.await_args_list]
         assert waits[0] == pytest.approx(22.3 + cover_module.CALIBRATION_SETTLE_SEC)
-        # The wait is measured from the moment the command went out, so it is the
-        # motor time minus however long the command path took.
-        assert waits[1] == pytest.approx(8.5, abs=0.01)
+        # The wait is measured from the moment the *motor* starts, which is half a
+        # second after the frame reaches the bus while the actuator says nothing
+        # (0.4.4), and it ends a tenth of a second early because the motor coasts that
+        # far past the stop frame: 0.5 + 8.5 - 0.1 s of waiting for 8.5 s of motor.
+        assert waits[1] == pytest.approx(8.9, abs=0.01)
         assert response == {
             ENTITY: {
                 "direction": "close",
@@ -352,7 +355,8 @@ async def test_calibration_run_open_spends_the_slat_phase_first(hass: HomeAssist
         assert commands.sent_frames == ["*2*2*81##", "*2*1*81##", "*2*0*81##"]
         waits = [call.args[0] for call in sleep.await_args_list]
         assert waits[0] == pytest.approx(21.7 + cover_module.CALIBRATION_SETTLE_SEC)
-        assert waits[1] == pytest.approx(13.5, abs=0.01)
+        # 0.5 + 13.5 - 0.1: the bus costs at either end of a 13.5 s run (0.4.4).
+        assert waits[1] == pytest.approx(13.9, abs=0.01)
         assert response[ENTITY]["motor_seconds"] == 13.5
         assert response[ENTITY]["slat_time"] == 4.7
 
@@ -751,3 +755,127 @@ async def test_the_calibration_run_gives_up_when_the_gateway_stops_answering(
         ):
             await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
         assert silent.frames == ["*2*1*81##", "*2*2*81##"]
+
+
+# --------------------------------------------------------------------------------------
+# The run is timed on the motor, not on the frames (0.4.4)
+# --------------------------------------------------------------------------------------
+class AnsweringPath:
+    """A command path whose actuator answers, the way a real one does.
+
+    The gateway writes each frame at once and the actuator says what it is doing a
+    moment later, on the monitor session: `moving_after` seconds after a direction
+    frame, `stopped_after` seconds after a stop. Those two answers are the ends of the
+    motor time a calibration run measures, and they are what 0.4.4 measures it between.
+
+    The clock only moves inside `sleep`, which is the calibration's own wait
+    (`cover_module._async_sleep`), so the answers are delivered there - at the exact
+    instant they are due, with the frozen clock moved onto it.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        freezer: FrozenDateTimeFactory,
+        cover: Any,
+        *,
+        moving_after: float,
+        stopped_after: float,
+    ) -> None:
+        self.hass = hass
+        self.freezer = freezer
+        self.cover = cover
+        self.moving_after = moving_after
+        self.stopped_after = stopped_after
+        self.frames: list[str] = []
+        self.answered: dict[str, Any] = {}
+        self._due: list[tuple[Any, str]] = []
+
+    async def send(self, message: Any, *, on_delivered: Any = None, on_dropped: Any = None) -> bool:
+        frame = str(message)
+        self.frames.append(frame)
+        if on_delivered is not None:
+            on_delivered(time.monotonic())
+        delay = self.stopped_after if frame.startswith("*2*0*") else self.moving_after
+        self._due.append((dt_util.utcnow() + timedelta(seconds=delay), frame))
+        self._due.sort(key=lambda item: item[0])
+        return True
+
+    async def sleep(self, seconds: float) -> None:
+        """Wait, delivering whatever the actuator says while we do."""
+        end = dt_util.utcnow() + timedelta(seconds=seconds)
+        while self._due and self._due[0][0] <= end:
+            instant, frame = self._due.pop(0)
+            self.freezer.move_to(instant)
+            await feed_event(self.hass, self.cover, frame)
+            self.answered.setdefault(frame, instant)
+        self.freezer.move_to(end)
+        await self.hass.async_block_till_done()
+
+
+async def test_the_calibration_run_measures_between_the_two_status_frames(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`motor_seconds` is the actuator's own "moving" to its own "stopped".
+
+    A slow actuator: a second and a half before the motor turns, three tenths before it
+    comes to rest. Timing the run from the two *frames* - what 0.4.3 did, and what the
+    model does when the actuator says nothing - would report 9.5 s for a motor that ran
+    8.7 s, and the user would hand those 9.5 s to `cover_calibration_compute`, which
+    would invert the model against a run that never happened. Nine tenths of a second
+    on this shutter is 8 cm of bar.
+
+    The run also *waits* for the answer: the 8.5 s of motor are counted from it, so the
+    shutter really does travel the seconds the compute step will assume.
+
+    Mutation caught: reporting the delivered interval when both status frames were
+    seen, or starting the count at the delivery of the frame.
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        path = AnsweringPath(hass, freezer, cover, moving_after=1.5, stopped_after=0.3)
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", path.sleep),
+        ):
+            response = await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+
+        assert path.frames == ["*2*1*81##", "*2*2*81##", "*2*0*81##"]
+        started = path.answered["*2*2*81##"]
+        stopped = path.answered["*2*0*81##"]
+        # The motor really ran from the one status frame to the other.
+        assert (stopped - started).total_seconds() == pytest.approx(8.7, abs=0.01)
+        assert response[ENTITY]["motor_seconds"] == pytest.approx(8.7, abs=0.05)
+        # ... and that is neither the run that was planned nor the interval between the
+        # two frames, which is what a model with no answer to go on has to use.
+        frames = path.frames.index("*2*0*81##")
+        assert frames == 2
+        assert response[ENTITY]["motor_seconds"] != RUN_DOWN
+
+
+async def test_the_calibration_run_falls_back_to_the_frames_when_nothing_answers(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A gateway that relays no status: the two frames, plus the model's own costs.
+
+    `start_delay` before the motor turns and `stop_latency` after the stop frame is the
+    best the model can do, and it is exactly what the run itself waited on - so a bus
+    that behaves as configured reports the seconds that were asked for.
+
+    Mutation caught: measuring from the frames without the two costs (8.9 s of motor
+    reported for a run that spent 8.5 s of it), which is the 0.4.3 number.
+    """
+    async with setup_myhome(hass, tmp_path, CALIBRATION_YAML):
+
+        async def _sleep(seconds: float) -> None:
+            freezer.tick(timedelta(seconds=seconds))
+
+        path = CommandPath()
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", _sleep),
+        ):
+            response = await _call(hass, SERVICE_COVER_CALIBRATION_RUN, direction="close")
+
+        assert path.frames == ["*2*1*81##", "*2*2*81##", "*2*0*81##"]
+        assert response[ENTITY]["motor_seconds"] == pytest.approx(RUN_DOWN, abs=0.01)

@@ -110,12 +110,16 @@ from .const import (
     CONF_ROLL,
     CONF_SHUTTER_RUN,
     CONF_SLAT_TIME,
+    CONF_START_DELAY,
+    CONF_STOP_LATENCY,
     CONF_TILT,
     CONF_WHERE,
     CONF_WHO,
     DEFAULT_ROLL,
     DEFAULT_SHUTTER_RUN,
     DEFAULT_SLAT_TIME,
+    DEFAULT_START_DELAY,
+    DEFAULT_STOP_LATENCY,
     DEFAULT_TILT,
     DIRECTION_CLOSE,
     DOMAIN,
@@ -166,6 +170,49 @@ STOP_ECHO_WINDOW_SEC = 1.5
 # for a real movement to have made some progress worth asking about, short enough
 # that the position is wrong for two seconds rather than until the next command.
 ECHO_RECHECK_DELAY_SEC = 2.0
+# ---------------------------------------------------------------- the motor's own clock
+# The bus costs a fixed amount per movement, and 0.4.3 still had nowhere to put it: the
+# actuator answers our direction frame with its own "moving" status about 0.57 s after
+# the frame is written, and its "stopped" status about 0.08 s after our stop frame. The
+# configured run times are *motor* times - a stopwatch from the moment the curtain moves
+# to the moment it stops - so a run timed from the frame is short by the first number
+# and long by the second. On the installation this comes from that showed up as every
+# movement from an intermediate position stopping about 0.45 s of motor time early:
+# 3-4 cm too high going down, 5-9 cm too low coming up, on a 195 cm window. Runs that
+# start from an end stop hid it, because the calibration absorbed it into the roll.
+#
+# So the clock is re-based on the actuator's own word (`_apply_motor_start`): the first
+# "moving" status for the direction we commanded, after our frame has reached the bus
+# and inside the window below, *is* the motor starting, and the run - and the timed stop
+# that ends it - are measured from there. `start_delay` is only what stands in until (or
+# instead of) that frame, and `stop_latency` is written into the stop: the frame goes out
+# that much before the modelled end of the run, because the motor keeps turning until the
+# actuator has stopped it.
+#
+# How long a "moving" status may still be the answer to our own command, measured from
+# the delivery of our frame: `start_delay` plus this. Past it the frame is somebody at
+# the keypad pressing the direction we are already running in, and it changes nothing
+# (the estimate is already running that way) - what it must not do is move a clock that
+# has been ticking for a minute.
+MOTOR_START_WINDOW_SEC = STOP_ECHO_WINDOW_SEC
+# ... and how soon is *too* soon to be the motor. A gateway answers a command it has
+# just written by relaying it on the monitor session, and some gateways relay the
+# direction frame itself - which is indistinguishable, frame for frame, from the
+# actuator's own "moving" status. Taken for the motor it would re-base the clock onto
+# the write and give back the whole `start_delay` this release exists to model, on
+# every run, silently.
+#
+# The two are told apart by their timing, and only by it. On the reference
+# MyHOMEServer1 the frames the gateway relays at the write ("stop" translation,
+# "stopped" status, the translation of the direction) all arrive within about 0.1 s of
+# it, while the actuator's own direction status arrives at 0.57 s - the two populations
+# do not overlap, and this is the floor between them: a "moving" status younger than
+# this is the gateway mirroring our own command and leaves the clock alone. It is
+# deliberately nearer the mirror than the motor, because being late by a tenth of a
+# second costs a tenth of a second of estimate while mistaking a mirror for the motor
+# costs `start_delay` on every single run. An actuator that really does start in less
+# than this much has no `start_delay` worth modelling anyway.
+MOTOR_MIRROR_WINDOW_SEC = 0.15
 # An advanced actuator reports its own position, so no timer bounds its movement:
 # if its "stopped" frame is lost the entity would read "Opening" for ever. This much
 # on top of the longest configured run is when we stop waiting and ask the actuator
@@ -382,6 +429,11 @@ def _clamped_roll(roll: float | None, fallback: float) -> float:
 # nothing, while starting the measured run before the curtain is really at the top
 # invalidates the whole measurement.
 CALIBRATION_SETTLE_SEC = 3.0
+# How long the run waits for the actuator's own "stopped" status before falling back to
+# the model (0.4.4). The status follows our stop frame by about a tenth of a second on
+# the measured gateway; half a second is generous for a bus that has just been written
+# to, and it is spent once, at the end of a run that has already taken half a minute.
+CALIBRATION_STOP_STATUS_SEC = 0.5
 # 60 halvings take a [1, 5] bracket below floating point resolution; the loop is over
 # in microseconds, so there is nothing to gain by stopping earlier.
 CALIBRATION_BISECTION_STEPS = 60
@@ -657,6 +709,8 @@ async def async_setup_entry(
             opening_roll=cfg.get(CONF_OPENING_ROLL),
             closing_roll=cfg.get(CONF_CLOSING_ROLL),
             tilt=cfg.get(CONF_TILT, DEFAULT_TILT),
+            stop_latency=cfg.get(CONF_STOP_LATENCY, DEFAULT_STOP_LATENCY),
+            start_delay=cfg.get(CONF_START_DELAY, DEFAULT_START_DELAY),
             height=cfg.get(CONF_HEIGHT),
             profile=cfg.get(CONF_PROFILE),
             inverted=cfg[CONF_INVERTED],
@@ -713,6 +767,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         opening_roll: float | None = None,
         closing_roll: float | None = None,
         tilt: bool = DEFAULT_TILT,
+        stop_latency: float = DEFAULT_STOP_LATENCY,
+        start_delay: float = DEFAULT_START_DELAY,
         height: float | None = None,
         profile: str | None = None,
     ) -> None:
@@ -755,6 +811,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # direction; both default to the common value (0.4.2 amendment).
         self._opening_roll = _clamped_roll(opening_roll, self._roll)
         self._closing_roll = _clamped_roll(closing_roll, self._roll)
+        # The two fixed costs of the bus (0.4.4). Contract A guarantees floats >= 0;
+        # a hand-built entity might not, and a negative one would run time backwards.
+        self._stop_latency = max(0.0, float(stop_latency or 0.0))
+        self._start_delay = max(0.0, float(start_delay or 0.0))
         self._height = None if height is None else float(height)
         self._profile = profile
         # Curtain-only part of each run (the validator keeps it >= 1 s).
@@ -802,6 +862,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             else:
                 self._attr_extra_state_attributes["Opening roll"] = self._opening_roll
                 self._attr_extra_state_attributes["Closing roll"] = self._closing_roll
+            # The bus costs are published only when they are not the measured defaults
+            # (0.4.4): every installation has them, so printing 0.1 / 0.5 on all twelve
+            # covers says nothing, while a number somebody tuned is exactly what a
+            # question about a shutter that stops early needs to show.
+            if self._stop_latency != DEFAULT_STOP_LATENCY:
+                self._attr_extra_state_attributes["Stop latency"] = self._stop_latency
+            if self._start_delay != DEFAULT_START_DELAY:
+                self._attr_extra_state_attributes["Start delay"] = self._start_delay
             # These two say nothing about the movement, they say where the numbers
             # above came from - so they only appear when the file really has them.
             if self._height is not None:
@@ -855,12 +923,22 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # while its delivery is still unknown, and the stop frame we are waiting for.
         self._move_delivery: _FrameDelivery | None = None
         self._pending_stop: _PendingStop | None = None
+        # True from the moment a stop of ours is handed to the command path until
+        # `_pending_stop` takes over: see the invariant stated in `_async_send_stop`.
+        self._stop_in_flight = False
         # The last direction frame we handed to the command path, whatever the
         # estimate then did with it: the calibration run times itself on its delivery.
         self._direction_delivery: _FrameDelivery | None = None
         # When our last stop frame actually reached the bus (the calibration run
         # measures its motor time between two deliveries, not between two intentions).
         self._stop_delivered_at: datetime | None = None
+        # 0.4.4. When the direction frame of the running movement reached the bus (the
+        # instant the actuator's answer to it is measured from), when the actuator said
+        # it had really started - None until it does, and the whole point of the release
+        # - and when its own "stopped" status came back after a stop of ours.
+        self._move_delivered_at: datetime | None = None
+        self._motor_started_at: datetime | None = None
+        self._stop_status_at: datetime | None = None
 
     @property
     def _advanced_probe_grace(self) -> float:
@@ -1015,8 +1093,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             seconds += max(0.0, start_tilt - target_tilt) / 100 * slat
         return seconds
 
-    def _estimate(self) -> tuple[int | None, int | None]:
-        """Current (position, tilt), extrapolated from the running movement."""
+    def _estimate(self, ahead: float = 0.0) -> tuple[int | None, int | None]:
+        """Current (position, tilt), extrapolated from the running movement.
+
+        `ahead` looks that many seconds into the future, which is what a stop of ours
+        needs: the motor only comes to rest `stop_latency` after the frame is written.
+        """
         if (
             self._moving is None
             or self._move_started_at is None
@@ -1024,7 +1106,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             or self._move_start_tilt is None
         ):
             return self._attr_current_cover_position, self._attr_current_cover_tilt_position
-        elapsed = (dt_util.utcnow() - self._move_started_at).total_seconds()
+        # Clamped at zero: from 0.4.4 the clock of a movement we commanded starts in the
+        # *future* - `start_delay` after the frame - and the motor has not turned yet.
+        elapsed = max(0.0, (dt_util.utcnow() - self._move_started_at).total_seconds() + ahead)
         return self._travel(self._moving, self._move_start_position, self._move_start_tilt, elapsed)
 
     # ------------------------------------------------------------------ movement
@@ -1091,7 +1175,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         optimistically at the enqueue, so the entity reacts to the service call at
         once; when the gateway reports that the frame really left, everything that
         was measured from the enqueue is moved onto that instant instead
-        (`_apply_movement_delivery`).
+        (`_apply_movement_delivery`), and when the actuator says it is running, onto
+        that (`_apply_motor_start`, 0.4.4).
+
+        A movement of ours does not start the motor at the instant of the frame: the
+        clock therefore starts `start_delay` later, which is what stands in until the
+        actuator's own "moving" status arrives - and what stays if it never does. A
+        keypad press has no such delay: the frame we are reacting to *is* the actuator
+        saying it has started.
         """
         position, tilt = self._estimate()
         self._cancel_timers()
@@ -1107,7 +1198,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         self._move_start_position = position
         self._move_start_tilt = tilt
-        self._move_started_at = dt_util.utcnow()
+        self._move_started_at = dt_util.utcnow() + timedelta(
+            seconds=self._start_delay if delivery is not None else 0.0
+        )
+        self._move_delivered_at = None
+        self._motor_started_at = None
         self._moving = direction
         self._target_position = target_position
         if own_command:
@@ -1136,11 +1231,42 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._finish_movement(self._end_position, self._end_tilt)
             return
 
-        self._stop_timer = async_call_later(self.hass, duration, self._async_movement_deadline)
+        self._arm_movement_deadline(self._move_started_at, duration)
         self._tick_unsub = async_track_time_interval(self.hass, self._async_position_tick, POSITION_TICK)
         if delivery is not None:
             self._move_delivery = delivery
             delivery.attach(partial(self._apply_movement_delivery, delivery))
+
+    @property
+    def _stop_offset(self) -> float:
+        """How long before the modelled end of the run our stop frame has to go out.
+
+        Only a run *we* end: the motor keeps turning for `stop_latency` after the frame
+        is written, so the frame leaves that much early and the shutter stops on the
+        target. A free run is ended by the actuator's own end stop and there is nothing
+        to anticipate - the timer only settles the estimate where the motor already is.
+        """
+        return self._stop_latency if self._target_position is not None else 0.0
+
+    @callback
+    def _arm_movement_deadline(self, started_at: datetime, duration: float) -> None:
+        """(Re-)arm the end-of-run timer against the movement clock as it now stands.
+
+        Every re-base of that clock - the delivery of the frame, the actuator saying the
+        motor is running - goes through here, because a clock that moves without its
+        timer is exactly the bug 0.4.3 was written for, one layer down.
+        """
+        if self._stop_timer is not None:
+            self._stop_timer()
+        due = started_at + timedelta(seconds=duration - self._stop_offset)
+        # `max(0, ...)`: a re-base that arrives after the stop was already due (a very
+        # long queue, a run shorter than the stop latency) sends it as soon as the loop
+        # lets it, which is the earliest the shutter could have been stopped anyway.
+        self._stop_timer = async_call_later(
+            self.hass,
+            max(0.0, (due - dt_util.utcnow()).total_seconds()),
+            self._async_movement_deadline,
+        )
 
     @callback
     def _apply_movement_delivery(self, delivery: _FrameDelivery) -> None:
@@ -1177,23 +1303,102 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self.async_write_ha_state()
             return
         delivered = delivery.delivered_at
-        if delivered is None or delivered <= self._move_started_at:
-            # Delivered before (or as) we started timing: an empty queue, which is
-            # the ordinary single-cover case. Nothing to move.
+        if delivered is None:  # pragma: no cover - a settled delivery is one or the other
             return
-        self._move_started_at = delivered
+        # Kept whatever the clock then does with it: it is what `_apply_motor_start`
+        # measures the actuator's answer from, and the answer may already be on its way.
+        self._move_delivered_at = delivered
         if self._own_command is not None and self._own_command_at is not None:
             # The gateway echoes the frame it was given, not the one we queued.
             self._own_command_at = delivered
+        # The motor starts `start_delay` after the frame, until the actuator says
+        # otherwise (0.4.4). With an idle command queue the frame is written the instant
+        # it is handed over, so this lands a hair *before* the clock the enqueue already
+        # set (the same `start_delay` after the same instant) and the re-base is
+        # skipped: the ordinary single-cover case is untouched, term for term.
+        started = delivered + timedelta(seconds=self._start_delay)
+        if started <= self._move_started_at:
+            return
+        self._move_started_at = started
         if self._stop_timer is not None and self._move_duration is not None:
-            self._stop_timer()
-            remaining = self._move_duration - (dt_util.utcnow() - delivered).total_seconds()
-            # `max(0, ...)` is the guard for a delivery that somehow arrives after the
-            # stop was already due: the stop then goes out as soon as the loop lets it.
-            self._stop_timer = async_call_later(
-                self.hass, max(0.0, remaining), self._async_movement_deadline
-            )
+            self._arm_movement_deadline(started, self._move_duration)
         self.async_write_ha_state()
+
+    @callback
+    def _apply_motor_start(self) -> None:
+        """The actuator says the motor is running: time the run from this instant.
+
+        This is the whole of 0.4.4. A basic actuator answers our direction command with
+        its own "moving" status about half a second later, and *that* is when the run
+        the configured times describe begins - they are stopwatch times, motor-on to
+        motor-off. Until this frame the clock is a guess (`start_delay`); from here it
+        is the actuator's own word, and the timed stop moves with it.
+
+        The caller has already matched the direction against the movement in progress;
+        what is left is that the movement must be one *we* commanded, its frame must
+        have reached the bus, our stop must not be out already, and the answer must be
+        recent enough to be an answer and old enough not to be the gateway relaying the
+        frame it has just written (`MOTOR_MIRROR_WINDOW_SEC`). Everything else is
+        somebody at the keypad pressing the direction the shutter is already running in,
+        which changes nothing and must leave the clock alone.
+        """
+        if self._motor_started_at is not None:
+            # The motor starts once. A gateway that repeats the status, or a keypad
+            # press in the direction we are already running, must not restart a run
+            # that is half over: the shutter would sail past its target by everything
+            # it had already travelled.
+            return
+        delivered = self._move_delivered_at
+        if delivered is None:
+            # Nothing here can be answering a frame of ours: a keypad movement, a run
+            # continued after a refused stop, or our own frame still waiting in the
+            # command queue - the gateway has not been given it, so this cannot be its
+            # answer. Only `_apply_movement_delivery` sets this, only for the frame the
+            # running movement was started with, and `_start_movement` clears it.
+            # (`self._own_command` is the same test one step removed: whenever this is
+            # set it holds the direction of the movement in progress, which the caller
+            # has just matched.)
+            return
+        if self._pending_stop is not None or self._stop_in_flight:
+            # Our stop is already on its way - the whole run happened inside the window
+            # below. Re-basing now would only shorten the motor time we freeze on.
+            #
+            # `_stop_in_flight` is the same test one moment earlier: `_pending_stop` is
+            # only recorded once `send` has returned, and `send` is not required to run
+            # without suspending. A "moving" status dispatched while it is suspended
+            # would find no pending stop, re-base the run onto its own end, and freeze
+            # the shutter at `stop_latency` of travel - the start position, for a whole
+            # curtain run. The invariant the flag carries is stated in `_async_send_stop`.
+            return
+        now = dt_util.utcnow()
+        age = (now - delivered).total_seconds()
+        if age > self._start_delay + MOTOR_START_WINDOW_SEC:
+            # Too late to be the answer to our command: somebody at the keypad pressed
+            # the direction we are already running in. The estimate is right either way.
+            return
+        if age < MOTOR_MIRROR_WINDOW_SEC:
+            # Too *soon* to be a motor: this is the gateway relaying the frame it has
+            # just written, not the actuator answering it. `_motor_started_at` is left
+            # unset on purpose, so the actuator's real answer half a second later is
+            # still taken.
+            LOGGER.debug(
+                "%s Cover %s: a direction status %.2fs after our own frame is the gateway "
+                "mirroring it, not the motor starting; the clock is left alone",
+                self._gateway_handler.log_id,
+                self._where,
+                age,
+            )
+            return
+        LOGGER.debug(
+            "%s Cover %s: the actuator started %.2fs after our frame reached the bus",
+            self._gateway_handler.log_id,
+            self._where,
+            age,
+        )
+        self._motor_started_at = now
+        self._move_started_at = now
+        if self._stop_timer is not None and self._move_duration is not None:
+            self._arm_movement_deadline(now, self._move_duration)
 
     @callback
     def _finish_movement(self, position: int | None, tilt: int | None = None) -> None:
@@ -1221,7 +1426,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def _async_movement_deadline(self, now: datetime) -> None:
-        """The cover reached its target (or the end of its run).
+        """The cover is `stop_latency` away from its target (or at the end of its run).
+
+        A timed run's deadline falls `stop_latency` before the modelled end (0.4.4),
+        because the motor only stops once the actuator has the frame; a free run's falls
+        at the end, since nothing is being anticipated (see `_stop_offset`).
 
         A free run needs no command: the actuator stops by itself at the end stop,
         and all we do is settle the estimate there. A timed run (`set_cover_position`
@@ -1255,7 +1464,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if not needs_stop:
             self._finish_movement(end_position, end_tilt)
         # The target is what the model says the cover reaches after `_move_duration`
-        # of motor: that is the pair to age by the delivery delay.
+        # of motor: that is the pair to age by the delivery delay. It needs no
+        # `stop_latency` of its own - the timer fired that much early precisely so that
+        # the coasting after the frame lands the shutter on the target (0.4.4).
         elif not await self._async_send_stop(interrupted, (end_position, end_tilt), self._move_duration or 0.0):
             self._continue_to_end_stop()
         self.async_write_ha_state()
@@ -1265,8 +1476,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     ) -> bool:
         """Queue our own stop and settle the estimate when it reaches the bus.
 
-        `frozen` is where the estimate would have been frozen if the frame had gone
-        out at once, and `base_elapsed` the motor time it corresponds to; the gateway
+        `frozen` is where the shutter comes to rest if the frame goes out at once -
+        `stop_latency` of coasting included (0.4.4) - and `base_elapsed` the motor time
+        it corresponds to; the gateway
         then says how much later the frame really left, and that much extra travel is
         added before the position is frozen. With an idle command queue the delay is
         zero and this is exactly the 0.4.2 behaviour, term for term.
@@ -1275,18 +1487,32 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         for the run is the caller's to decide, and the two callers decide differently.
         """
         delivery = _FrameDelivery()
-        # Reset *before* the frame is handed over, refusal included: the timestamp of
-        # some earlier stop must never be read as the delivery of this one (a
-        # calibration run reports "was never stopped" on a refusal, as it must).
+        # Reset *before* the frame is handed over, refusal included: the timestamps of
+        # some earlier stop must never be read as this one's (a calibration run reports
+        # "was never stopped" on a refusal, as it must).
         self._stop_delivered_at = None
+        self._stop_status_at = None
         # Read before the hand-over: an empty command queue answers inside `send`.
         queued_at = dt_util.utcnow()
         move_started_at = self._move_started_at
-        sent = await self._gateway_handler.send(
-            OWNAutomationCommand.stop_shutter(self._full_where),
-            on_delivered=delivery.deliver,
-            on_dropped=delivery.drop,
-        )
+        # Invariant: from the instant the frame is handed over until the movement is
+        # settled, no bus frame may re-base the movement clock. `frozen` and
+        # `base_elapsed` above were computed against `move_started_at` and are only
+        # meaningful against it. `_pending_stop` cannot carry that on its own - it is
+        # recorded below, after the await - and `MyHOMEGatewayHandler.send` happens not
+        # to suspend today, but nothing in its contract says so and a semaphore, a lock
+        # or a backpressure wait added there would let a "moving" status through in
+        # between. So the flag is raised first and handed over to `_pending_stop`
+        # without an await in between.
+        self._stop_in_flight = True
+        try:
+            sent = await self._gateway_handler.send(
+                OWNAutomationCommand.stop_shutter(self._full_where),
+                on_delivered=delivery.deliver,
+                on_dropped=delivery.drop,
+            )
+        finally:
+            self._stop_in_flight = False
         if not sent:
             return False
         # Our own auto-stop must not fire again while we wait for this one; the
@@ -1339,9 +1565,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             and self._move_start_tilt is not None
         ):
             # The motor ran `delay` seconds longer than the run we modelled - or,
-            # if the movement was re-based meanwhile, exactly from that instant.
+            # if the movement was re-based meanwhile, exactly from that instant to
+            # `stop_latency` past this frame, which is where it really comes to rest.
             elapsed = (
-                (delivered - self._move_started_at).total_seconds()
+                (delivered - self._move_started_at).total_seconds() + self._stop_latency
                 if rebased
                 else pending.base_elapsed + delay
             )
@@ -1750,13 +1977,22 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
             return
         interrupted = self._moving
+        # Signed on purpose: inside `start_delay` the clock is still in the future and
+        # this is negative, which is exactly the motor time the queue delay has to be
+        # measured against. `_apply_stop_delivery` adds that delay and clamps the sum
+        # at zero, once, at the end - clamping here instead would add the delay to a
+        # motor that had not started yet and freeze the shutter up to `start_delay` of
+        # travel past where it really is.
         elapsed = (
             0.0
             if self._move_started_at is None
             else (dt_util.utcnow() - self._move_started_at).total_seconds()
         )
-        # Where 0.4.2 would have frozen it: the estimate as it stands right now.
-        if not await self._async_send_stop(interrupted, self._estimate(), elapsed):
+        # Where the shutter comes to rest if the frame goes out at once: the estimate
+        # as it stands now plus the `stop_latency` the motor takes to obey (0.4.4).
+        if not await self._async_send_stop(
+            interrupted, self._estimate(self._stop_latency), elapsed + self._stop_latency
+        ):
             # The command path would not even take the frame: nothing here changed,
             # and "changes nothing at all" includes writing the state again.
             return
@@ -1917,10 +2153,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             )
 
     async def _async_calibration_started(self) -> datetime:
-        """When the direction frame of the calibration run reached the bus.
+        """When the motor of the calibration run is expected to start.
 
-        Read off the frame itself rather than off the estimate: what is being timed
-        is the motor, and the motor starts when the gateway writes the frame.
+        Read off the frame itself rather than off the estimate: what is being timed is
+        the motor, and the motor starts `start_delay` after the gateway writes the
+        frame - or when the actuator says so, which arrives while the run is already
+        waiting and is picked up there (`async_calibration_run`).
         """
         delivery = self._direction_delivery
         await self._async_await_delivery(delivery)
@@ -1929,14 +2167,19 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} did not start moving - "
                 f"the gateway never took the command; nothing was measured"
             )
-        return delivery.delivered_at
+        return delivery.delivered_at + timedelta(seconds=self._start_delay)
 
     async def _async_calibration_motor_seconds(self, started: datetime, planned: float) -> float:
-        """How long the motor really ran: delivery of the stop minus delivery of the start.
+        """How long the motor really ran, motor-on to motor-off.
 
-        Floored at the run we asked for, which is what it falls back to when the clock
-        did not move at all (a test that replaces the waits); with real waits the
-        elapsed time is always the larger of the two and is what is reported.
+        Both ends are the actuator's own word whenever it gives it: the "moving" status
+        that started the run (`started`, from `async_calibration_run`) and the "stopped"
+        status that ends it. Where it says nothing the two frames are used instead, with
+        the model's own `start_delay` and `stop_latency` on either side of them - which
+        is the same measurement, made with the numbers the user can tune.
+
+        What is reported is always the measurement, unless the clock did not move at
+        all - which only happens where the waits themselves are replaced.
         """
         pending = self._pending_stop
         await self._async_await_delivery(None if pending is None else pending.delivery)
@@ -1947,7 +2190,20 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 f"the gateway did not take the stop; the shutter runs on to its end stop "
                 f"and nothing was measured"
             )
-        return max(planned, (stopped - started).total_seconds())
+        if self._stop_status_at is None:
+            # The actuator answers our stop a moment later, on the monitor session:
+            # wait for it rather than report a measurement the bus was about to correct.
+            await _async_sleep(CALIBRATION_STOP_STATUS_SEC)
+        if self._motor_started_at is not None and self._stop_status_at is not None:
+            measured = (self._stop_status_at - self._motor_started_at).total_seconds()
+        else:
+            measured = (stopped + timedelta(seconds=self._stop_latency) - started).total_seconds()
+        # A measurement is reported however small the difference from the plan: since
+        # 0.4.4 the two are meant to agree, and where they do not it is the bus that
+        # says so - an actuator that brakes faster than `stop_latency` really did run
+        # a little less. What is refused is a clock that did not move at all (a test
+        # that replaces the waits), which measures the bus costs and nothing else.
+        return measured if measured > 0 else planned
 
     async def async_calibration_run(self, direction: str) -> dict[str, Any]:
         """Run the cover to the half way point of `direction` and stop it there.
@@ -1998,12 +2254,20 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 await self.async_close_cover()
             else:
                 await self.async_open_cover()
-            # Measured from the moment the frame reached the bus, not from before it
-            # was queued: the motor only ran once the gateway had written it, and on a
-            # busy command queue that is a good fraction of a second later (0.4.3).
+            # Measured from the moment the motor starts, not from the service call and
+            # not from the frame: the frame may sit in the command queue for a second
+            # (0.4.3) and the motor starts later again (0.4.4). The stop is written
+            # `stop_latency` early, exactly as a `set_cover_position` writes it, so the
+            # motor runs the seconds this run is about.
             started = await self._async_calibration_started()
             spent = (dt_util.utcnow() - started).total_seconds()
-            await _async_sleep(max(0.0, motor_seconds - spent))
+            await _async_sleep(max(0.0, motor_seconds - self._stop_latency - spent))
+            if self._motor_started_at is not None and self._motor_started_at != started:
+                # The actuator said, while we waited, when the motor really started:
+                # that is what the run is timed from, so top the wait up to it.
+                started = self._motor_started_at
+                spent = (dt_util.utcnow() - started).total_seconds()
+                await _async_sleep(max(0.0, motor_seconds - self._stop_latency - spent))
             await self.async_stop_cover()
             motor_seconds = await self._async_calibration_motor_seconds(started, motor_seconds)
         return {
@@ -2156,14 +2420,24 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             elif opening:
                 # Someone pressed the keypad (or a scenario ran): the very same
                 # two-phase model tracks the movement until it stops.
-                if self._moving != OPENING and not self._is_echo(OPENING):
+                if self._moving == OPENING:
+                    # Already running that way. If this is the actuator answering our
+                    # own command, it is the motor starting, and the run is timed from
+                    # here (0.4.4); anything else changes nothing.
+                    self._apply_motor_start()
+                elif not self._is_echo(OPENING):
                     self._start_movement(OPENING)
             elif closing:
-                if self._moving != CLOSING and not self._is_echo(CLOSING):
+                if self._moving == CLOSING:
+                    self._apply_motor_start()
+                elif not self._is_echo(CLOSING):
                     self._start_movement(CLOSING)
             elif opening is False and closing is False:
                 if self._is_echo(None):
                     return
+                # The actuator's own "stopped": the end of the motor time a calibration
+                # run measures, whether it ends our stop or a run of its own.
+                self._stop_status_at = dt_util.utcnow()
                 if self._own_free_run and self._moving is not None and self._reached_end_stop():
                     # The actuator hit the end stop before our timer: snap to the end,
                     # this is what re-calibrates the estimate.

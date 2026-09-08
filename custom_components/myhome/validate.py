@@ -116,6 +116,8 @@ from .const import (
     CONF_SLAT_TIME,
     CONF_SOURCE_PLATFORM,
     CONF_STANDALONE,
+    CONF_START_DELAY,
+    CONF_STOP_LATENCY,
     CONF_SUPPRESS_LOG_INTERVAL_SEC,
     CONF_TILT,
     CONF_WHERE,
@@ -128,6 +130,8 @@ from .const import (
     DEFAULT_SCENARIO_BUTTONS,
     DEFAULT_SHUTTER_RUN,
     DEFAULT_SLAT_TIME,
+    DEFAULT_START_DELAY,
+    DEFAULT_STOP_LATENCY,
     DEFAULT_TILT,
     LOGGER,
     MAX_ROLL,
@@ -687,6 +691,11 @@ COVER_FIELDS: dict = {
     # Per-direction rolls (0.4.2 amendment): each falls back to ``roll``.
     Optional(CONF_OPENING_ROLL): _ROLL,
     Optional(CONF_CLOSING_ROLL): _ROLL,
+    # The two fixed costs of the bus (0.4.4), in seconds.  No schema default, for the
+    # same reason as the timing keys above: the ``profile`` sits between "written" and
+    # "nobody wrote it".
+    Optional(CONF_STOP_LATENCY): _NON_NEGATIVE_FLOAT,
+    Optional(CONF_START_DELAY): _NON_NEGATIVE_FLOAT,
     # The slat phase is timed either way; ``tilt`` only decides whether it is *exposed*
     # as tilt controls (plat-07 / 0.4.2).
     Optional(CONF_TILT, default=DEFAULT_TILT): Boolean(),
@@ -716,6 +725,10 @@ COVER_PROFILE_FIELDS: dict = {
     # "the profile measured them separately".
     Optional(CONF_OPENING_ROLL): _ROLL,
     Optional(CONF_CLOSING_ROLL): _ROLL,
+    # The bus costs (0.4.4) belong to the installation rather than to the window, so a
+    # profile carries them as they stand: _derive_cover_from_profile never scales them.
+    Optional(CONF_STOP_LATENCY, default=DEFAULT_STOP_LATENCY): _NON_NEGATIVE_FLOAT,
+    Optional(CONF_START_DELAY, default=DEFAULT_START_DELAY): _NON_NEGATIVE_FLOAT,
 }
 
 
@@ -969,6 +982,13 @@ def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
     k_ref = profile[CONF_ROLL]
     k_ref_close = profile[CONF_CLOSING_ROLL]
     slat_ref = profile[CONF_SLAT_TIME]
+    # The two bus costs (0.4.4) are *not* in the scaling above and never will be: they
+    # are the gateway's answer time and the motor's brake, the same on a 90 cm skylight
+    # as on a 250 cm door, so they are carried through both branches unchanged.
+    bus = {
+        CONF_STOP_LATENCY: profile[CONF_STOP_LATENCY],
+        CONF_START_DELAY: profile[CONF_START_DELAY],
+    }
     if height is None:
         return {
             CONF_OPENING_TIME: profile[CONF_OPENING_TIME],
@@ -977,6 +997,7 @@ def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
             CONF_ROLL: k_ref,
             CONF_OPENING_ROLL: profile[CONF_OPENING_ROLL],
             CONF_CLOSING_ROLL: k_ref_close,
+            **bus,
         }
     ratio = height / reference
     closing_roll = _grown_roll(k_ref_close, ratio)
@@ -993,6 +1014,7 @@ def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
         CONF_ROLL: _grown_roll(k_ref, ratio),
         CONF_OPENING_ROLL: _grown_roll(profile[CONF_OPENING_ROLL], ratio),
         CONF_CLOSING_ROLL: closing_roll,
+        **bus,
     }
 
 
@@ -1050,6 +1072,10 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
     # ``opening_time``, profile included.
     device.setdefault(CONF_OPENING_ROLL, profile.get(CONF_OPENING_ROLL, device[CONF_ROLL]))
     device.setdefault(CONF_CLOSING_ROLL, profile.get(CONF_CLOSING_ROLL, device[CONF_ROLL]))
+    # The bus costs (0.4.4), same precedence, no directional pair and no scaling: the
+    # cover's own key, then the profile's, then the measured default.
+    device.setdefault(CONF_STOP_LATENCY, profile.get(CONF_STOP_LATENCY, DEFAULT_STOP_LATENCY))
+    device.setdefault(CONF_START_DELAY, profile.get(CONF_START_DELAY, DEFAULT_START_DELAY))
     # Backwards compatibility: everything that used to read ``shutter_run`` (0.3.x
     # configurations dumped back out, third-party templates, the discovery helper) still
     # finds the full upward run under that name.
@@ -1085,6 +1111,8 @@ _COVER_TIMING_KEYS = (
     CONF_ROLL,
     CONF_OPENING_ROLL,
     CONF_CLOSING_ROLL,
+    CONF_STOP_LATENCY,
+    CONF_START_DELAY,
     CONF_TILT,
     CONF_HEIGHT,
     CONF_PROFILE,
@@ -1093,8 +1121,8 @@ _COVER_TIMING_KEYS = (
 
 # Of the travel keys, the ones that really change ``max(opening_time, closing_time)``.
 # ``profile`` does (it supplies both run times) and ``height`` only scales a profile, so
-# it does nothing on its own; ``slat_time``, the three roll keys and ``tilt`` never
-# reach the timer.
+# it does nothing on its own; ``slat_time``, the three roll keys, the two bus costs and
+# ``tilt`` never reach the timer.
 _ADVANCED_TIMER_KEYS = (CONF_SHUTTER_RUN, CONF_OPENING_TIME, CONF_CLOSING_TIME, CONF_HEIGHT, CONF_PROFILE)
 
 
