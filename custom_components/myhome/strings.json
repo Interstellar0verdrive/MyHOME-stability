@@ -284,6 +284,46 @@
           "description": "MAC address of the gateway. Optional when only one gateway is configured."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Calibrate cover (run)",
+      "description": "Sends the cover to one end, then runs it for exactly the motor time a set_cover_position 50 would use with its current configuration and stops it there, so the height of the bar can be measured for cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Direction",
+          "description": "Which run to measure: 'close' starts from fully open and runs half the curtain time, 'open' starts from fully closed and runs the slat time plus half the curtain time."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Calibrate cover (compute)",
+      "description": "Turns the heights measured after cover_calibration_run into the roll of this cover - one per direction when both runs were measured - and returns a cover_profiles snippet ready to paste into myhome.yaml.",
+      "fields": {
+        "height": {
+          "name": "Curtain travel",
+          "description": "Distance in centimetres between the fully open and the fully closed bar (the travel, not the window)."
+        },
+        "closed_half_cm": {
+          "name": "Height after the closing half run",
+          "description": "Centimetres between the floor and the bottom of the bar, measured after cover_calibration_run with direction 'close'."
+        },
+        "opened_half_cm": {
+          "name": "Height after the opening half run",
+          "description": "The same measurement after direction 'open'. Optional: it is what gives the separate opening_roll, and without it only the closing roll is worked out."
+        },
+        "slat_time": {
+          "name": "Slat time",
+          "description": "Seconds of slat-only travel. It is an input, never an answer: given here it is used as it stands, otherwise the value configured on the cover is."
+        },
+        "closed_run_seconds": {
+          "name": "Closing run length",
+          "description": "Motor seconds the closing run really lasted, as reported by cover_calibration_run. Only needed when the cover's times changed in between: it defaults to the same value the run computed."
+        },
+        "opened_run_seconds": {
+          "name": "Opening run length",
+          "description": "Motor seconds the opening run really lasted, as reported by cover_calibration_run. Only needed when the cover's times changed in between: it defaults to the same value the run computed."
+        }
+      }
     }
   }
 }

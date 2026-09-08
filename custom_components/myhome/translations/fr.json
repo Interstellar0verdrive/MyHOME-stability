@@ -284,6 +284,46 @@
           "description": "Adresse MAC du serveur. Facultatif si un seul serveur est configuré."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Calibrer le volet (course)",
+      "description": "Envoie le volet en fin de course, puis le fait tourner exactement pendant le temps moteur qu'utiliserait un set_cover_position 50 avec sa configuration actuelle et l'arrête là, afin de mesurer la hauteur de la lame pour cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Direction",
+          "description": "Quelle course mesurer : « close » part du volet entièrement ouvert et dure la moitié du temps du tablier, « open » part du volet entièrement fermé et dure le temps des lames plus la moitié du temps du tablier."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Calibrer le volet (calcul)",
+      "description": "Transforme les hauteurs mesurées après cover_calibration_run en roll de ce volet - un par direction lorsque les deux courses ont été mesurées - et renvoie un bloc cover_profiles prêt à coller dans myhome.yaml.",
+      "fields": {
+        "height": {
+          "name": "Course du tablier",
+          "description": "Distance en centimètres entre la lame entièrement relevée et entièrement abaissée (la course, pas la fenêtre)."
+        },
+        "closed_half_cm": {
+          "name": "Hauteur après la demi-fermeture",
+          "description": "Centimètres entre le sol et le bas de la lame, mesurés après cover_calibration_run avec la direction « close »."
+        },
+        "opened_half_cm": {
+          "name": "Hauteur après la demi-ouverture",
+          "description": "La même mesure après la direction « open ». Facultative : c'est elle qui donne l'opening_roll séparé ; sans elle, seul le roll de fermeture est calculé."
+        },
+        "slat_time": {
+          "name": "Temps des lames",
+          "description": "Secondes de course des seules lames. C'est une donnée d'entrée, jamais un résultat : indiquées ici, elles sont reprises telles quelles, sinon la valeur configurée sur le volet est utilisée."
+        },
+        "closed_run_seconds": {
+          "name": "Durée de la course de fermeture",
+          "description": "Secondes de moteur réellement passées par la course de fermeture, telles que renvoyées par cover_calibration_run. Utile seulement si les temps du volet ont changé entre-temps : par défaut, la valeur calculée par la course."
+        },
+        "opened_run_seconds": {
+          "name": "Durée de la course d'ouverture",
+          "description": "Secondes de moteur réellement passées par la course d'ouverture, telles que renvoyées par cover_calibration_run. Utile seulement si les temps du volet ont changé entre-temps : par défaut, la valeur calculée par la course."
+        }
+      }
     }
   }
 }

@@ -284,6 +284,46 @@
           "description": "MAC-adres van de gateway. Optioneel als er maar één gateway geconfigureerd is."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Rolluik kalibreren (rit)",
+      "description": "Stuurt het rolluik naar het eindpunt, laat het daarna precies zo lang lopen als een set_cover_position 50 met de huidige instellingen zou doen en stopt het daar, zodat de hoogte van de onderlat gemeten kan worden voor cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Richting",
+          "description": "Welke rit gemeten wordt: 'close' begint volledig open en duurt de helft van de doektijd, 'open' begint volledig gesloten en duurt de lamellentijd plus de helft van de doektijd."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Rolluik kalibreren (berekenen)",
+      "description": "Zet de hoogtes die na cover_calibration_run gemeten zijn om in de roll van dit rolluik - een per richting als beide ritten gemeten zijn - en geeft een cover_profiles-blok terug dat zo in myhome.yaml geplakt kan worden.",
+      "fields": {
+        "height": {
+          "name": "Loopafstand van het doek",
+          "description": "Afstand in centimeters tussen de volledig opgetrokken en de volledig neergelaten onderlat (de loopafstand, niet het raam)."
+        },
+        "closed_half_cm": {
+          "name": "Hoogte na de halve sluiting",
+          "description": "Centimeters tussen de vloer en de onderkant van de lat, gemeten na cover_calibration_run met richting 'close'."
+        },
+        "opened_half_cm": {
+          "name": "Hoogte na de halve opening",
+          "description": "Dezelfde meting na richting 'open'. Optioneel: deze meting levert de aparte opening_roll op; zonder haar wordt alleen de roll bij het sluiten berekend."
+        },
+        "slat_time": {
+          "name": "Lamellentijd",
+          "description": "Seconden looptijd van alleen de lamellen. Het is een invoerwaarde, nooit een uitkomst: hier opgegeven wordt ze zo overgenomen, anders geldt de waarde die op het rolluik is ingesteld."
+        },
+        "closed_run_seconds": {
+          "name": "Duur van de sluitrit",
+          "description": "Motorseconden die de sluitrit werkelijk duurde, zoals cover_calibration_run ze meldt. Alleen nodig als de looptijden van het rolluik intussen veranderd zijn: standaard dezelfde waarde die de rit berekende."
+        },
+        "opened_run_seconds": {
+          "name": "Duur van de openingsrit",
+          "description": "Motorseconden die de openingsrit werkelijk duurde, zoals cover_calibration_run ze meldt. Alleen nodig als de looptijden van het rolluik intussen veranderd zijn: standaard dezelfde waarde die de rit berekende."
+        }
+      }
     }
   }
 }

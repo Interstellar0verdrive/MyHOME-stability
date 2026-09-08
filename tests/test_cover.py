@@ -25,6 +25,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from pytest_homeassistant_custom_component.common import (
@@ -46,6 +47,9 @@ from .helpers_platforms import (
     setup_myhome,
 )
 
+# `roll: 1` on every fixture below: these tests were written against the linear model
+# and still pin it exactly (0.4.2 keeps `roll: 1` term-for-term identical to 0.3.x).
+# The roll model itself is exercised by the ROLL_YAML fixture and the helper tests.
 BASIC_YAML = f"""
 gateway:
   mac: {MAC}
@@ -54,6 +58,7 @@ gateway:
       where: '81'
       name: Cover Test
       shutter_run: 30
+      roll: 1
       icon: mdi:window-shutter
 """
 
@@ -65,6 +70,7 @@ gateway:
       where: '82'
       name: Cover Inverted
       shutter_run: 20
+      roll: 1
       inverted: true
 """
 
@@ -88,6 +94,8 @@ gateway:
       name: Cover Slats
       shutter_run: 30
       slat_time: 3
+      tilt: true
+      roll: 1
 """
 
 # Same slat phase, but the motor is slower going up than coming down.
@@ -98,15 +106,78 @@ gateway:
     cover_asymmetric:
       where: '86'
       name: Cover Asymmetric
-      shutter_run: 30
       slat_time: 3
+      tilt: true
+      roll: 1
       opening_time: 32
       closing_time: 28
+"""
+
+# The roll model itself: 30 s of curtain, no slats, k = 1.7 (spec 0.4.2 section 1).
+ROLL_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_roll:
+      where: '87'
+      name: Cover Roll
+      shutter_run: 30
+      roll: 1.7
+"""
+
+# A shutter that is not equally loaded in the two directions (0.4.2 amendment): the
+# curtain phase is 30 s each way, but the tube behaves differently up and down.
+DIRECTIONAL_ROLL_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_directional:
+      where: '90'
+      name: Cover Directional
+      shutter_run: 30
+      closing_roll: 1.7
+      opening_roll: 1.0
+"""
+
+# A slat phase that is *timed* but not exposed: `tilt` is left at its default (false).
+NO_TILT_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    cover_hidden_slats:
+      where: '88'
+      name: Cover Hidden Slats
+      shutter_run: 30
+      slat_time: 3
+      roll: 1
+"""
+
+# A cover whose whole model comes from a gateway profile, scaled to its own window.
+PROFILE_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover_profiles:
+    tall:
+      reference_height: 195
+      opening_time: 22.3
+      closing_time: 21.7
+      slat_time: 5.1
+      roll: 1.6
+  cover:
+    cover_profiled:
+      where: '89'
+      name: Cover Profiled
+      profile: tall
+      height: 150
 """
 
 ENTITY = "cover.cover_test"
 SLAT_ENTITY = "cover.cover_slats"
 ASYM_ENTITY = "cover.cover_asymmetric"
+ROLL_ENTITY = "cover.cover_roll"
+NO_TILT_ENTITY = "cover.cover_hidden_slats"
+PROFILE_ENTITY = "cover.cover_profiled"
+DIRECTIONAL_ENTITY = "cover.cover_directional"
 
 
 def _closed(entity_id: str = SLAT_ENTITY) -> State:
@@ -148,7 +219,9 @@ async def test_real_config_creates_every_cover(hass: HomeAssistant, tmp_path) ->
         assert state.attributes[ATTR_DEVICE_CLASS] == CoverDeviceClass.SHUTTER
         assert state.attributes["icon"] == "mdi:window-shutter"
         assert state.attributes[ATTR_ASSUMED_STATE] is True
-        assert state.attributes["Shutter run"] == 30.0
+        assert state.attributes["Opening time"] == 30.0
+        assert state.attributes["Closing time"] == 30.0
+        assert "Shutter run" not in state.attributes
         assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
             CoverEntityFeature.OPEN
             | CoverEntityFeature.CLOSE
@@ -342,11 +415,10 @@ async def test_slat_cover_advertises_tilt(hass: HomeAssistant, tmp_path) -> None
         assert state.state == CoverState.CLOSED
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 0
-        assert state.attributes["Shutter run"] == 30.0
+        assert state.attributes["Opening time"] == 30.0
+        assert state.attributes["Closing time"] == 30.0
         assert state.attributes["Slat time"] == 3.0
-        # Symmetric run: the per-direction attributes stay out of the way.
-        assert "Opening time" not in state.attributes
-        assert "Closing time" not in state.attributes
+        assert state.attributes["Roll"] == 1.0
         assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
             CoverEntityFeature.OPEN
             | CoverEntityFeature.CLOSE
@@ -633,6 +705,354 @@ async def test_keypad_stop_is_not_mistaken_for_an_echo(
         assert state.state == CoverState.OPEN
         assert state.attributes[ATTR_CURRENT_POSITION] == 0
         assert 0 < state.attributes[ATTR_CURRENT_TILT_POSITION] < 100
+
+
+# --------------------------------------------------------------------------------------
+# The roll model (0.4.2)
+# --------------------------------------------------------------------------------------
+class _Model:
+    """Just enough of a cover to call the travel model, without Home Assistant.
+
+    `_travel` / `_travel_time` / `_normalise` read six attributes and nothing else, so
+    the model can be exercised on its own - which is the only way to compare it against
+    the pre-0.4.2 formulas over a grid.
+    """
+
+    def __init__(
+        self,
+        opening: float,
+        closing: float,
+        slat: float,
+        roll: float,
+        opening_roll: float | None = None,
+        closing_roll: float | None = None,
+    ) -> None:
+        self._opening_time = opening
+        self._closing_time = closing
+        self._slat_time = slat
+        self._roll = roll
+        self._opening_roll = roll if opening_roll is None else opening_roll
+        self._closing_roll = roll if closing_roll is None else closing_roll
+        self._curtain_up = max(cover_module.MIN_CURTAIN_TIME, opening - slat)
+        self._curtain_down = max(cover_module.MIN_CURTAIN_TIME, closing - slat)
+        self._two_phase = slat > 0
+        self._has_tilt = slat > 0
+
+    _normalise = cover_module.MyHOMECover._normalise
+    _curtain_tau = cover_module.MyHOMECover._curtain_tau
+    _curtain_position = cover_module.MyHOMECover._curtain_position
+    _travel = cover_module.MyHOMECover._travel
+    _travel_time = cover_module.MyHOMECover._travel_time
+
+
+def _linear_travel(model: _Model, direction: str, position: int, tilt: int, elapsed: float):
+    """The 0.4.1 `_travel`, verbatim: the reference the roll model must degenerate to."""
+    slat = model._slat_time
+    if direction == cover_module.OPENING:
+        if position <= 0 and slat > 0 and tilt < 100:
+            slat_left = (100 - tilt) / 100 * slat
+            if elapsed <= slat_left:
+                return model._normalise(0, tilt + elapsed / slat * 100)
+            elapsed -= slat_left
+        return model._normalise(position + elapsed / model._curtain_up * 100, 100)
+    curtain_left = position / 100 * model._curtain_down
+    if elapsed < curtain_left:
+        return model._normalise(position - elapsed / model._curtain_down * 100, 100)
+    elapsed -= curtain_left
+    if slat <= 0:
+        return model._normalise(0, 0)
+    start_tilt = 100 if position > 0 else tilt
+    return model._normalise(0, start_tilt - elapsed / slat * 100)
+
+
+def _linear_travel_time(model: _Model, direction: str, position: int, tilt: int, target: int, target_tilt: int):
+    """The 0.4.1 `_travel_time`, verbatim."""
+    slat = model._slat_time
+    if direction == cover_module.OPENING:
+        seconds = 0.0
+        if position <= 0 and slat > 0:
+            slat_target = 100 if target > 0 else target_tilt
+            seconds += max(0.0, slat_target - tilt) / 100 * slat
+        return seconds + max(0.0, target - position) / 100 * model._curtain_up
+    seconds = max(0.0, position - target) / 100 * model._curtain_down
+    if target <= 0 and slat > 0:
+        start_tilt = 100 if position > 0 else tilt
+        seconds += max(0.0, start_tilt - target_tilt) / 100 * slat
+    return seconds
+
+
+@pytest.mark.parametrize("roll", [1.0, 1.0000000001, 1.3, 1.7, 2.5, 5.0])
+def test_roll_helpers_are_inverse_and_monotonic(roll: float) -> None:
+    """`_roll_tau` and `_roll_x` are each other's inverse on [0, 1], and increasing.
+
+    Everything else in the model is built on those two properties: if they held only
+    approximately, a position would drift a little every time it was converted to a
+    time and back, which is exactly what `set_cover_position` does.
+    """
+    grid = [i / 20 for i in range(21)]
+    for x in grid:
+        assert cover_module._roll_x(roll, cover_module._roll_tau(roll, x)) == pytest.approx(x, abs=1e-9)
+        assert cover_module._roll_tau(roll, cover_module._roll_x(roll, x)) == pytest.approx(x, abs=1e-9)
+    # Endpoints are exact: the curtain leaves the top at 0 and reaches the floor at 1.
+    assert cover_module._roll_tau(roll, 0.0) == 0.0
+    assert cover_module._roll_tau(roll, 1.0) == pytest.approx(1.0)
+    assert cover_module._roll_x(roll, 0.0) == 0.0
+    assert cover_module._roll_x(roll, 1.0) == pytest.approx(1.0)
+    taus = [cover_module._roll_tau(roll, x) for x in grid]
+    assert taus == sorted(taus)
+    # The curtain is never *ahead* of the linear model: it starts fast and slows down,
+    # so it has always covered at least its share of the distance.
+    assert all(cover_module._roll_x(roll, tau) >= tau - 1e-12 for tau in grid)
+
+
+def test_roll_one_is_exactly_the_linear_model() -> None:
+    """`roll: 1` must be the 0.3.x/0.4.0 model term for term, not merely close to it.
+
+    Every timing test in this file (and every installation upgrading from 0.4.1) is
+    written against the linear formulas, so the degenerate case is a compatibility
+    promise rather than a limit.
+
+    Mutation caught: dropping the `k - 1 <= tolerance` branch of the helpers, which
+    turns the exact answer into a 0/0.
+    """
+    for slat in (0.0, 3.0):
+        model = _Model(opening=32, closing=28, slat=slat, roll=1.0)
+        for direction in (cover_module.OPENING, cover_module.CLOSING):
+            for position in (0, 1, 17, 50, 99, 100):
+                for tilt in (0, 40, 100):
+                    for elapsed in (0.0, 0.5, 3.0, 7.5, 19.0, 40.0):
+                        assert model._travel(direction, position, tilt, elapsed) == _linear_travel(
+                            model, direction, position, tilt, elapsed
+                        )
+                    for target in (0, 5, 50, 100):
+                        for target_tilt in (0, 60, 100):
+                            assert model._travel_time(
+                                direction, position, tilt, target, target_tilt
+                            ) == pytest.approx(
+                                _linear_travel_time(model, direction, position, tilt, target, target_tilt),
+                                abs=1e-9,
+                            )
+
+
+def test_roll_1_7_matches_the_measured_shutter() -> None:
+    """The numbers of the 0.4.2 specification, section 1 (H = 195 cm, k = 1.7).
+
+    Half the curtain time downwards from fully open leaves the curtain at 44 % - 85 cm
+    off the floor on a 195 cm window, not the 97 cm the linear model predicts. The
+    quarter and three-quarter points are the same curve read twice more.
+    """
+    model = _Model(opening=20, closing=20, slat=0.0, roll=1.7)
+    assert model._travel(cover_module.CLOSING, 100, 100, 10.0)[0] == 44
+    assert model._travel(cover_module.CLOSING, 100, 100, 5.0)[0] == 70
+    assert model._travel(cover_module.CLOSING, 100, 100, 15.0)[0] == 20
+    # An ascent is the time reversal of the descent: the same half run from the floor
+    # ends at the same height.
+    assert model._travel(cover_module.OPENING, 0, 100, 10.0)[0] == 44
+    # ... and the trip back costs exactly what the trip out did.
+    assert model._travel_time(cover_module.CLOSING, 100, 100, 44, 100) == pytest.approx(10.0, abs=0.1)
+    assert model._travel_time(cover_module.OPENING, 44, 100, 100, 100) == pytest.approx(10.0, abs=0.1)
+
+
+def test_a_roll_that_never_came_from_the_validator_is_still_usable() -> None:
+    """`_clamped_roll` is the entity's own guard, not a second copy of the schema.
+
+    Contract A keeps the three roll keys inside [1, 5], but `MyHOMECover` is also built
+    by hand, and a roll below 1 does not merely shift a position - it makes `_roll_x`
+    answer outside [0, 100] and every estimate meaningless.
+
+    Mutation caught: dropping the fallback, which turns an unwritten directional key
+    into a roll of 0.
+    """
+    assert cover_module._clamped_roll(None, 1.7) == 1.7
+    assert cover_module._clamped_roll(0, 1.7) == 1.7
+    assert cover_module._clamped_roll(0.2, 1.7) == cover_module.MIN_ROLL
+    assert cover_module._clamped_roll(9.0, 1.7) == cover_module.MAX_ROLL
+    assert cover_module._clamped_roll(2.5, 1.7) == 2.5
+
+
+def test_a_directional_roll_moves_the_two_ways_differently() -> None:
+    """One tube, two rolls: the descent uses `closing_roll`, the ascent `opening_roll`.
+
+    The reference shutter really does behave like this (1.69 down against 2.12 up):
+    the motor fights gravity one way and is helped by it the other, and a single
+    coefficient cannot describe both runs. With a curved descent (k = 1.7) and a linear
+    ascent (k = 1), a third of the run down leaves the curtain at 61 % and a third of
+    the run up at 33 % - the plain linear answer.
+
+    Mutation caught: using one roll for both directions, which makes the two numbers
+    equal again.
+    """
+    model = _Model(opening=30, closing=30, slat=0.0, roll=1.7, opening_roll=1.0, closing_roll=1.7)
+    assert model._travel(cover_module.CLOSING, 100, 100, 10.0)[0] == 61
+    assert model._travel(cover_module.OPENING, 0, 100, 10.0)[0] == 33
+    # `_travel_time` is the inverse of the same two curves, each on its own axis.
+    assert model._travel_time(cover_module.CLOSING, 100, 100, 61, 100) == pytest.approx(10.0, abs=0.1)
+    assert model._travel_time(cover_module.OPENING, 0, 0, 33, 100) == pytest.approx(10.0, abs=0.1)
+    # The way back is NOT the way out any more: that is the whole point of two rolls.
+    # The 39 % the curtain fell in 10 s costs 11.7 s to climb back on a linear ascent.
+    assert model._travel_time(cover_module.OPENING, 61, 100, 100, 100) == pytest.approx(11.7, abs=0.1)
+
+
+async def test_a_directional_roll_cover_publishes_and_uses_both(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two rolls, two attributes, and an ascent timed with the upward one.
+
+    Half way up on this cover is the linear 15 s (`opening_roll: 1`), not the 13.1 s
+    the downward roll of 1.7 would have given. `Roll` is not published at all: a single
+    number would have to be one of the two, and reading it as "the" roll of the shutter
+    is exactly the mistake the amendment exists to prevent.
+
+    Mutation caught: `set_cover_position` taking `closing_roll` whatever the direction.
+    """
+    mock_restore_cache(
+        hass, (State(DIRECTIONAL_ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),)
+    )
+    async with setup_myhome(hass, tmp_path, DIRECTIONAL_ROLL_YAML) as (_entry, commands):
+        state = hass.states.get(DIRECTIONAL_ENTITY)
+        assert state.attributes["Opening roll"] == 1.0
+        assert state.attributes["Closing roll"] == 1.7
+        assert "Roll" not in state.attributes
+
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: DIRECTIONAL_ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+        await _advance(hass, freezer, 14.0)
+        assert commands.sent_frames == ["*2*1*90##"]
+        await _advance(hass, freezer, 1.5)  # 15.5 s > 15 s
+        assert commands.sent_frames == ["*2*1*90##", "*2*0*90##"]
+        assert hass.states.get(DIRECTIONAL_ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+
+
+async def test_set_position_on_a_roll_cover_stops_on_the_roll_time(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Half *way* is not half the *time*: 50 % on a k = 1.7 shutter costs 13.1 s of 30.
+
+    tau(0.5) = (1.7 - sqrt(2.89 - 1.89 * 0.5)) / 0.7 = 0.436238, so the motor runs
+    0.436238 * 30 = 13.09 s - against the 15 s the linear model would have used.
+
+    Mutation caught: leaving `set_cover_position` on the linear formula while only
+    `_travel` learned about the roll, which would stop the shutter two seconds late.
+    """
+    mock_restore_cache(hass, (State(ROLL_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, ROLL_YAML) as (_entry, commands):
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ROLL_ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+        await _advance(hass, freezer, 12.4)
+        assert commands.sent_frames == ["*2*2*87##"]
+
+        await _advance(hass, freezer, 1.0)  # 13.4 s > 13.09 s
+        assert commands.sent_frames == ["*2*2*87##", "*2*0*87##"]
+        state = hass.states.get(ROLL_ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 50
+        assert state.attributes["Roll"] == 1.7
+
+
+async def test_tilt_is_hidden_by_default_but_still_timed(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`tilt` defaults to false: no tilt feature, no tilt attribute - but the same run.
+
+    The slat phase is a property of the shutter, not of the user interface: opening
+    from fully closed really does spend `slat_time` turning the slats before the
+    curtain leaves the floor, and a model that skipped it would put every position
+    afterwards out by that much. What `tilt: false` removes is only the controls.
+
+    Mutation caught: `_has_tilt` and `_two_phase` collapsed back into one flag, which
+    makes this run 13.5 s instead of 16.5 s.
+    """
+    mock_restore_cache(hass, (_closed(NO_TILT_ENTITY),))
+    async with setup_myhome(hass, tmp_path, NO_TILT_YAML) as (_entry, commands):
+        state = hass.states.get(NO_TILT_ENTITY)
+        assert state.state == CoverState.CLOSED
+        assert ATTR_CURRENT_TILT_POSITION not in state.attributes
+        assert state.attributes[ATTR_SUPPORTED_FEATURES] == (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+        )
+        # The slat phase is still configured, and still advertised as a number.
+        assert state.attributes["Slat time"] == 3.0
+
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: NO_TILT_ENTITY, ATTR_POSITION: 50}, blocking=True
+        )
+        await _advance(hass, freezer, 15.9)
+        assert commands.sent_frames == ["*2*1*88##"]
+        await _advance(hass, freezer, 0.7)  # 16.6 s > 3 + 13.5 = 16.5 s
+        assert commands.sent_frames == ["*2*1*88##", "*2*0*88##"]
+        assert hass.states.get(NO_TILT_ENTITY).attributes[ATTR_CURRENT_POSITION] == 50
+
+
+async def test_tilt_commands_are_refused_when_tilt_is_off(hass: HomeAssistant, tmp_path) -> None:
+    """Without the feature Home Assistant refuses the service before it reaches us."""
+    mock_restore_cache(hass, (_closed(NO_TILT_ENTITY),))
+    async with setup_myhome(hass, tmp_path, NO_TILT_YAML) as (_entry, commands):
+        with pytest.raises(HomeAssistantError):
+            await hass.services.async_call(
+                COVER, "open_cover_tilt", {ATTR_ENTITY_ID: NO_TILT_ENTITY}, blocking=True
+            )
+        assert commands.sent_frames == []
+
+
+async def test_a_profiled_cover_publishes_where_its_numbers_came_from(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`Height` and `Profile` are the audit trail of a derived cover.
+
+    The times themselves say nothing about where they came from, and a cover whose
+    model was scaled from a gateway profile is exactly the one whose attributes will be
+    read when the estimate looks wrong.
+
+    Mutation caught: dropping either attribute, or publishing them on a cover that has
+    neither key (the other tests in this file assert they are absent there).
+    """
+    async with setup_myhome(hass, tmp_path, PROFILE_YAML):
+        state = hass.states.get(PROFILE_ENTITY)
+        assert state.attributes["Profile"] == "tall"
+        assert state.attributes["Height"] == 150.0
+        # sqrt(1 + (1.6**2 - 1) * 150/195) = 1.4832397, rounded only for display.
+        assert state.attributes["Roll"] == pytest.approx(1.4832397, abs=1e-6)
+        assert state.attributes["Slat time"] == pytest.approx(3.9230769, abs=1e-6)
+
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        plain = hass.states.get(ENTITY)
+        assert "Profile" not in plain.attributes and "Height" not in plain.attributes
+
+
+async def test_a_hidden_slat_state_survives_a_reload(hass: HomeAssistant, tmp_path) -> None:
+    """A cover with `tilt: false` still remembers where its slats were.
+
+    The tilt is not published on such a cover, so restoring it from the *state* is
+    impossible; the extra restore data carries the model's own value instead. Without
+    it the first open after a restart would spend a whole `slat_time` turning slats
+    that were already open, and every position afterwards would be out by that much.
+
+    Mutation caught: storing `current_cover_tilt_position` (None here) instead of the
+    estimate.
+    """
+    async with setup_myhome(hass, tmp_path, NO_TILT_YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, "2-88")
+        cover._finish_movement(0, 40)  # noqa: SLF001 - the slats half open, curtain down
+        assert cover.extra_restore_state_data.as_dict() == {"position": 0, "tilt": 40}
+
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        restored = entity_object(hass, COVER, "2-88")
+        assert restored._move_start_tilt is None  # noqa: SLF001 - not moving
+        assert restored._attr_current_cover_tilt_position == 40  # noqa: SLF001
+
+
+async def test_the_calibration_sleep_really_sleeps() -> None:
+    """The one line every calibration test patches out (`_async_sleep`).
+
+    It exists so a test can replace the waiting without touching `asyncio.sleep` for
+    the whole process; a zero-second call is enough to prove it is a real await.
+    """
+    await cover_module._async_sleep(0)
 
 
 # ---------------------------------------------------------------- review 2026-09-07

@@ -204,8 +204,8 @@ def test_negative_ranges_raise():
 # --------------------------------------------------------------------------------------
 # Cover two-phase travel: slat_time / opening_time / closing_time (0.4.0)
 # --------------------------------------------------------------------------------------
-def test_cover_travel_times_default_to_shutter_run():
-    """``opening_time`` / ``closing_time`` fall back to ``shutter_run``, per direction."""
+def test_cover_travel_times_default_to_the_opening_time():
+    """``closing_time`` falls back to ``opening_time``; ``shutter_run`` is its alias."""
     out = check(
         gw(
             cover={
@@ -215,10 +215,9 @@ def test_cover_travel_times_default_to_shutter_run():
                     "name": "Asym",
                     "shutter_run": 30,
                     "slat_time": 3,
-                    "opening_time": 32,
                     "closing_time": 28,
                 },
-                "up_only": {"where": "83", "name": "Up", "shutter_run": 30, "opening_time": 34},
+                "up_only": {"where": "83", "name": "Up", "opening_time": 34},
             }
         )
     )
@@ -226,10 +225,358 @@ def test_cover_travel_times_default_to_shutter_run():
     sym = plat["cover"]["2-81"]
     assert sym["slat_time"] == 3.0 and sym["opening_time"] == 30.0 and sym["closing_time"] == 30.0
     asym = plat["cover"]["2-82"]
-    assert asym["opening_time"] == 32.0 and asym["closing_time"] == 28.0
+    assert asym["opening_time"] == 30.0 and asym["closing_time"] == 28.0
     assert isinstance(asym["opening_time"], float)
     up_only = plat["cover"]["2-83"]
-    assert up_only["opening_time"] == 34.0 and up_only["closing_time"] == 30.0
+    assert up_only["opening_time"] == 34.0 and up_only["closing_time"] == 34.0
+    # Every reader of the 0.3.x key still finds the full upward run under it.
+    assert up_only["shutter_run"] == 34.0
+
+
+def test_shutter_run_is_an_alias_of_opening_time():
+    """The 0.3.x spelling stays valid, and disagreeing with the new one is refused.
+
+    Every configuration in the wild is written with ``shutter_run``, so it may never
+    stop working; but once it means exactly ``opening_time`` there is no honest way to
+    resolve a file that writes both with different values.
+
+    Mutation caught: dropping the alias check, after which one of the two values is
+    silently thrown away.
+    """
+    same = platforms(check(gw(cover={"c": {"where": "81", "name": "C", "shutter_run": 25, "opening_time": 25}})))
+    assert same["cover"]["2-81"]["opening_time"] == 25.0
+    with pytest.raises(Invalid) as err:
+        check(gw(cover={"c": {"where": "81", "name": "C", "shutter_run": 25, "opening_time": 30}}))
+    assert "shutter_run is the legacy name of opening_time" in str(err.value)
+    assert err.value.path == ["gateway", "cover", "c", "shutter_run"]
+
+
+def test_cover_roll_defaults_to_the_device_class():
+    """Only a rolling shutter winds on a tube; everything else stays linear."""
+    out = check(
+        gw(
+            cover={
+                "shutter": {"where": "81", "name": "S"},
+                "awning": {"where": "82", "name": "A", "class": "awning"},
+                "written": {"where": "83", "name": "W", "roll": 2.5},
+            }
+        )
+    )
+    plat = platforms(out)
+    assert plat["cover"]["2-81"]["roll"] == 1.6
+    assert plat["cover"]["2-82"]["roll"] == 1.0
+    assert plat["cover"]["2-83"]["roll"] == 2.5
+    # The physical range: below 1 the tube would get thinner as it fills.
+    with pytest.raises(Invalid, match="at least 1"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "roll": 0.9}}))
+    with pytest.raises(Invalid, match="at most 5"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "roll": 5.5}}))
+
+
+def test_the_directional_rolls_default_to_the_common_one():
+    """``opening_roll`` / ``closing_roll`` mirror ``opening_time`` / ``closing_time``.
+
+    A file that writes neither describes a shutter that behaves the same both ways -
+    every 0.4.1 configuration - so both directions get the common ``roll``; a file that
+    writes one gets that one and keeps the common value for the other.
+
+    Mutation caught: resolving only one of the two, or letting a written ``roll``
+    override a written directional key.
+    """
+    out = check(
+        gw(
+            cover={
+                "plain": {"where": "81", "name": "P"},
+                "common": {"where": "82", "name": "C", "roll": 2.0},
+                "split": {"where": "83", "name": "S", "roll": 2.0, "opening_roll": 3.0},
+                "both": {"where": "84", "name": "B", "opening_roll": 2.1, "closing_roll": 1.69},
+            }
+        )
+    )
+    plat = platforms(out)["cover"]
+    assert (plat["2-81"]["opening_roll"], plat["2-81"]["closing_roll"]) == (1.6, 1.6)
+    assert (plat["2-82"]["opening_roll"], plat["2-82"]["closing_roll"]) == (2.0, 2.0)
+    assert (plat["2-83"]["opening_roll"], plat["2-83"]["closing_roll"]) == (3.0, 2.0)
+    # Written on their own they say nothing about ``roll``, which keeps its default.
+    assert plat["2-84"]["roll"] == 1.6
+    assert (plat["2-84"]["opening_roll"], plat["2-84"]["closing_roll"]) == (2.1, 1.69)
+    # The physical range is the same one, on all three keys.
+    with pytest.raises(Invalid, match="at most 5"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "opening_roll": 5.5}}))
+    with pytest.raises(Invalid, match="at least 1"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "closing_roll": 0.5}}))
+
+
+def test_cover_tilt_defaults_to_false_and_height_is_kept():
+    """``tilt`` is opt-in from 0.4.2; ``height`` is harmless without a profile."""
+    plat = platforms(check(gw(cover={"c": {"where": "81", "name": "C", "slat_time": 3, "height": 195}})))
+    cover = plat["cover"]["2-81"]
+    assert cover["tilt"] is False
+    assert cover["height"] == 195.0 and isinstance(cover["height"], float)
+    assert cover["slat_time"] == 3.0
+    plat = platforms(check(gw(cover={"c": {"where": "81", "name": "C", "slat_time": 3, "tilt": True}})))
+    assert plat["cover"]["2-81"]["tilt"] is True
+    with pytest.raises(Invalid, match="higher than 0"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "height": 0}}))
+
+
+# --------------------------------------------------------------------------------------
+# Gateway-level cover_profiles and the height derivation (0.4.2)
+# --------------------------------------------------------------------------------------
+TALL_PROFILE = {"reference_height": 195, "opening_time": 22.3, "closing_time": 21.7, "slat_time": 5.1, "roll": 1.6}
+
+
+def test_cover_profile_without_a_height_is_used_as_it_stands():
+    out = check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE)},
+            cover={"c": {"where": "81", "name": "C", "profile": "tall"}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["opening_time"] == 22.3 and cover["closing_time"] == 21.7
+    assert cover["slat_time"] == 5.1 and cover["roll"] == 1.6
+    assert cover["profile"] == "tall"
+    # The merged block is published on the gateway entry, normalised.
+    assert out[MAC_NORM]["cover_profiles"]["tall"]["reference_height"] == 195.0
+
+
+def test_cover_profile_is_scaled_to_the_cover_height():
+    """The section-3 formulas, with the numbers worked out by hand.
+
+    H/H_ref = 150/195; k = sqrt(1 + (1.6**2 - 1) * 150/195) = sqrt(2.2) = 1.4832397;
+    scale_c = (k - 1) / 0.6 = 0.8053995; slat = 5.1 * 150/195 = 3.9230769;
+    opening = slat + (22.3 - 5.1) * scale_c; closing = slat + (21.7 - 5.1) * scale_c.
+
+    Mutation caught: scaling the whole run instead of its curtain part, or scaling the
+    slat gap by the roll growth instead of by the height.
+    """
+    out = check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE)},
+            cover={"c": {"where": "81", "name": "C", "profile": "tall", "height": 150}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["roll"] == pytest.approx(1.4832397, abs=1e-6)
+    assert cover["slat_time"] == pytest.approx(3.9230769, abs=1e-6)
+    assert cover["opening_time"] == pytest.approx(3.9230769 + 17.2 * 0.8053995, abs=1e-6)
+    assert cover["closing_time"] == pytest.approx(3.9230769 + 16.6 * 0.8053995, abs=1e-6)
+    assert cover["shutter_run"] == cover["opening_time"]
+
+
+def test_a_linear_profile_scales_by_the_plain_height_ratio():
+    """``roll: 1`` has no roll growth to be proportional to (and would divide by zero)."""
+    out = check(
+        gw(
+            cover_profiles={"flat": {"reference_height": 200, "opening_time": 20, "slat_time": 4, "roll": 1}},
+            cover={"c": {"where": "81", "name": "C", "profile": "flat", "height": 100}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["roll"] == 1.0
+    assert cover["slat_time"] == 2.0
+    # 2 s of slats + half of the 16 s curtain run.
+    assert cover["opening_time"] == pytest.approx(10.0)
+    assert cover["closing_time"] == pytest.approx(10.0)
+
+
+def test_a_key_written_on_the_cover_beats_the_profile():
+    """Precedence is per key: only the ones the file does not write are derived."""
+    out = check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE)},
+            cover={
+                "c": {
+                    "where": "81",
+                    "name": "C",
+                    "profile": "tall",
+                    "height": 150,
+                    "roll": 2.0,
+                    "closing_time": 19,
+                }
+            },
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["roll"] == 2.0
+    assert cover["closing_time"] == 19.0
+    # The keys that were not written still come from the derivation.
+    assert cover["slat_time"] == pytest.approx(3.9230769, abs=1e-6)
+    assert cover["opening_time"] == pytest.approx(3.9230769 + 17.2 * 0.8053995, abs=1e-6)
+
+
+# The same shutter measured in both directions, which is what the two calibration runs
+# of 0.4.2 produce (1.69 down, 2.12 up on the reference window).
+SPLIT_PROFILE = {
+    "reference_height": 195,
+    "opening_time": 22.3,
+    "closing_time": 21.7,
+    "slat_time": 5.1,
+    "roll": 1.6,
+    "opening_roll": 2.12,
+    "closing_roll": 1.69,
+}
+
+
+def test_a_profile_carries_a_roll_per_direction():
+    """A profile without directional rolls describes a symmetric shutter, and says so.
+
+    Mutation caught: leaving the two keys unresolved in the profile, which makes them
+    fall back to the *cover's* default (1.6) instead of the profile's own roll.
+    """
+    out = check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE), "split": dict(SPLIT_PROFILE)},
+            cover={
+                "s": {"where": "81", "name": "S", "profile": "tall"},
+                "d": {"where": "82", "name": "D", "profile": "split"},
+                "w": {"where": "83", "name": "W", "profile": "split", "closing_roll": 1.2},
+            },
+        )
+    )
+    plat = platforms(out)["cover"]
+    # TALL_PROFILE writes only `roll`, so both directions are that roll.
+    assert (plat["2-81"]["opening_roll"], plat["2-81"]["closing_roll"]) == (1.6, 1.6)
+    assert (plat["2-82"]["opening_roll"], plat["2-82"]["closing_roll"]) == (2.12, 1.69)
+    # ... and the cover still wins, per key.
+    assert (plat["2-83"]["opening_roll"], plat["2-83"]["closing_roll"]) == (2.12, 1.2)
+
+
+def test_the_directional_rolls_are_scaled_to_the_cover_height():
+    """The section-3 growth applied to each roll, with the numbers worked out by hand.
+
+    H/H_ref = 150/195 = 0.7692308.
+    closing_roll = sqrt(1 + (1.69**2 - 1) * 0.7692308) = sqrt(2.4277692) = 1.5581300;
+    opening_roll = sqrt(1 + (2.12**2 - 1) * 0.7692308) = sqrt(3.688)     = 1.9204166;
+    roll         = sqrt(1 + (1.60**2 - 1) * 0.7692308) = sqrt(2.2)       = 1.4832397.
+
+    The curtain time is scaled by the **closing** growth alone -
+    scale_c = (1.5581300 - 1) / (1.69 - 1) = 0.8088841 - because it measures how much
+    fabric the tube has to wind, which is one length of curtain whichever way the motor
+    turns; slat = 5.1 * 0.7692308 = 3.9230769, opening = slat + 17.2 * scale_c,
+    closing = slat + 16.6 * scale_c.
+
+    Mutation caught: growing the directional rolls from the common one, or taking the
+    curtain scale from the opening roll (which would give two different curtains).
+    """
+    out = check(
+        gw(
+            cover_profiles={"split": dict(SPLIT_PROFILE)},
+            cover={"c": {"where": "81", "name": "C", "profile": "split", "height": 150}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["closing_roll"] == pytest.approx(1.5581300, abs=1e-6)
+    assert cover["opening_roll"] == pytest.approx(1.9204166, abs=1e-6)
+    assert cover["roll"] == pytest.approx(1.4832397, abs=1e-6)
+    assert cover["slat_time"] == pytest.approx(3.9230769, abs=1e-6)
+    assert cover["opening_time"] == pytest.approx(3.9230769 + 17.2 * 0.8088841, abs=1e-6)
+    assert cover["closing_time"] == pytest.approx(3.9230769 + 16.6 * 0.8088841, abs=1e-6)
+
+
+def test_a_linear_closing_roll_scales_the_curtain_by_the_height():
+    """``closing_roll: 1`` is the divide-by-zero case of the curtain scale, on its own.
+
+    The profile's common ``roll`` is 1.6 and only the *closing* direction is linear, so
+    the fallback has to be picked from the key the scale really uses.
+    """
+    out = check(
+        gw(
+            cover_profiles={
+                "odd": {
+                    "reference_height": 200,
+                    "opening_time": 20,
+                    "slat_time": 4,
+                    "roll": 1.6,
+                    "closing_roll": 1,
+                }
+            },
+            cover={"c": {"where": "81", "name": "C", "profile": "odd", "height": 100}},
+        )
+    )
+    cover = platforms(out)["cover"]["2-81"]
+    assert cover["closing_roll"] == 1.0
+    assert cover["slat_time"] == 2.0
+    # 2 s of slats + half of the 16 s curtain run, exactly as for a linear profile.
+    assert cover["opening_time"] == pytest.approx(10.0)
+
+
+def test_cover_profile_schema_errors():
+    """Every way a ``cover_profiles:`` block can be wrong, with a usable path."""
+    with pytest.raises(Invalid) as err:
+        check(gw(cover_profiles={"tall": {"opening_time": 20}}))
+    assert "reference_height" in str(err.value)
+    assert err.value.path[:2] == ["gateway", "cover_profiles"]
+
+    with pytest.raises(Invalid, match="needs an 'opening_time'") as err:
+        check(gw(cover_profiles={"tall": {"reference_height": 195}}))
+    assert err.value.path == ["gateway", "cover_profiles", "tall", "opening_time"]
+
+    with pytest.raises(Invalid, match="at most 5"):
+        check(gw(cover_profiles={"tall": {"reference_height": 195, "opening_time": 20, "roll": 9}}))
+    with pytest.raises(Invalid, match="at most 5"):
+        check(gw(cover_profiles={"tall": {"reference_height": 195, "opening_time": 20, "opening_roll": 9}}))
+    with pytest.raises(Invalid, match="higher than 0"):
+        check(gw(cover_profiles={"tall": {"reference_height": 0, "opening_time": 20}}))
+    with pytest.raises(Invalid, match="must be a mapping"):
+        check(gw(cover_profiles=["tall"]))
+    with pytest.raises(Invalid, match="profile names"):
+        check(gw(cover_profiles={195: {"reference_height": 195, "opening_time": 20}}))
+    # The alias is accepted inside a profile too, and disagreeing is refused there too.
+    out = check(
+        gw(
+            cover_profiles={"tall": {"reference_height": 195, "shutter_run": 22.3}},
+            cover={"c": {"where": "81", "name": "C", "profile": "tall"}},
+        )
+    )
+    assert platforms(out)["cover"]["2-81"]["opening_time"] == 22.3
+    with pytest.raises(Invalid, match="legacy name of opening_time"):
+        check(gw(cover_profiles={"tall": {"reference_height": 195, "shutter_run": 22, "opening_time": 20}}))
+
+
+def test_an_empty_cover_profile_block_is_accepted():
+    """``cover_profiles:`` with nothing under it parses as None, like every section."""
+    out = check(gw(cover_profiles=None, cover={"c": {"where": "81", "name": "C"}}))
+    assert platforms(out)["cover"]["2-81"]["roll"] == 1.6
+    # A *profile* with nothing under it is a different thing: it has no reference height.
+    with pytest.raises(Invalid) as err:
+        check(gw(cover_profiles={"tall": None}))
+    assert err.value.path == ["gateway", "cover_profiles", "tall", "reference_height"]
+
+
+def test_an_unknown_profile_name_lists_the_defined_ones():
+    with pytest.raises(Invalid) as err:
+        check(
+            gw(
+                cover_profiles={"tall": dict(TALL_PROFILE), "short": dict(TALL_PROFILE)},
+                cover={"c": {"where": "81", "name": "C", "profile": "medium"}},
+            )
+        )
+    assert "unknown profile 'medium'" in str(err.value)
+    assert "'short', 'tall'" in str(err.value)
+    assert err.value.path == ["gateway", "cover", "c", "profile"]
+
+    with pytest.raises(Invalid, match="defines no 'cover_profiles' block"):
+        check(gw(cover={"c": {"where": "81", "name": "C", "profile": "tall"}}))
+
+
+def test_cover_profiles_do_not_leak_between_gateways():
+    """The block is per gateway: a name defined on one is unknown on the other."""
+    with pytest.raises(Invalid, match="unknown profile 'tall'"):
+        check(
+            {
+                "gateway": {"mac": MAC, "cover_profiles": {"tall": dict(TALL_PROFILE)}},
+                MAC2: {"cover": {"c": {"where": "81", "name": "C", "profile": "tall"}}},
+            }
+        )
+    # ... and the stack is unwound even after that failure.
+    assert validate._ACTIVE_COVER_PROFILES == []
+
+
+def test_an_unknown_key_inside_a_profile_is_reported(caplog: pytest.LogCaptureFixture) -> None:
+    check(gw(cover_profiles={"tall": {"reference_height": 195, "opening_time": 20, "rol": 1.6}}))
+    assert "cover_profiles" in caplog.text and "rol" in caplog.text
 
 
 def test_cover_slat_time_must_leave_curtain_travel():
@@ -1517,6 +1864,22 @@ _ENGINE_CASES = [
         }
     },
     {"gateway": {"mac": MAC, "scenario_control": {"kp": {"protocol": "cen", "object": 25, "name": "K"}}}},
+    # 0.4.2: the cover_profiles block is validated OUTSIDE the gateway schema
+    # (`_gateway_section`), so the two engines have to agree on the path it re-raises
+    # under as well as on the accepted output.
+    {
+        "gateway": {
+            "mac": MAC,
+            "cover_profiles": {"tall": {"reference_height": 195, "shutter_run": 22.3, "slat_time": 5.1}},
+            "cover": {
+                "a": {"where": "81", "name": "A", "profile": "tall", "height": 150},
+                "b": {"where": "82", "name": "B", "roll": 2, "tilt": True, "slat_time": 3},
+                "c": {"where": "83", "name": "C", "opening_roll": 2.12, "closing_roll": 1.69},
+            },
+        }
+    },
+    {"gateway": {"mac": MAC, "cover_profiles": {"tall": {"opening_time": 20}}}},
+    {"gateway": {"mac": MAC, "cover": {"c": {"where": "81", "name": "C", "profile": "nope"}}}},
 ]
 
 
@@ -1665,38 +2028,63 @@ def test_the_advanced_cover_warning_names_only_the_keys_the_user_wrote(
     assert "opening_time is still read, but only to bound the safety timer" in caplog.text
     assert "does nothing here" not in caplog.text
 
-    # D4-1: the deadline is `max(opening_time, closing_time)`, and the two directional
-    # keys default to `shutter_run` - so once both are written, `shutter_run` does not
-    # reach the timer at all and the message must not claim it is "still read".
+    # 0.4.2: the keys of the roll model never reach the timer, whatever else is written.
     caplog.clear()
-    check(_cover(advanced=True, shutter_run=30, opening_time=20, closing_time=25))
-    assert "opening_time and closing_time are still read" in caplog.text
-    assert "shutter_run does nothing here" in caplog.text
+    check(_cover(advanced=True, opening_time=20, roll=2, tilt=True))
+    assert "opening_time is still read, but only to bound the safety timer" in caplog.text
+    assert "roll and tilt do nothing here" in caplog.text
+
+    # ... and the amendment's two directional rolls are on the same side of it.
+    caplog.clear()
+    check(_cover(advanced=True, opening_roll=2, closing_roll=1.5))
+    assert "opening_roll and closing_roll do nothing here" in caplog.text
+    assert "still read" not in caplog.text
 
 
 def test_the_advanced_warning_names_shutter_run_first_when_it_still_bounds_the_timer(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """D4-1's other half: `shutter_run` plus *one* directional key.
+    """`shutter_run` plus the other direction: both bound the deadline, in file order.
 
-    `_keys_that_bound_the_advanced_timer` exists for exactly this file. With both
-    directional keys written, `shutter_run` reaches the deadline through neither and
-    is reported as inert (the test above). With only one written, the *other*
-    direction still falls back to `shutter_run`, so it does reach
-    `max(opening_time, closing_time)` and has to be named as bounding - and named
-    first, in the order the value travels: the fallback, then the key that overrides
-    it in one direction.
+    D4-1's original case - a `shutter_run` that both directional keys had overridden,
+    and which the message therefore must not call "still read" - cannot arise since
+    0.4.2, because `shutter_run` *is* `opening_time` and writing the two with
+    different values is refused. What is left to pin is that the fallback is named
+    first, in the order the value travels: the run it sets, then the direction that
+    overrides it.
 
-    Mutation caught: `insert(0, ...)` -> `append(...)` in
-    `_keys_that_bound_the_advanced_timer`.
+    Mutation caught: iterating `written` (a set, unordered) instead of
+    `_COVER_TIMING_KEYS` in `_keys_that_bound_the_advanced_timer`.
     """
-    check(_cover(advanced=True, shutter_run=30, opening_time=20))
-    assert "shutter_run and opening_time are still read" in caplog.text
+    check(_cover(advanced=True, shutter_run=30, closing_time=25))
+    assert "shutter_run and closing_time are still read" in caplog.text
+    assert "does nothing here" not in caplog.text
+
+
+def test_a_profile_on_an_advanced_cover_still_bounds_the_timer(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """`profile:` supplies the run times, so calling it inert would be the D4-1 lie again.
+
+    `height:` is the opposite case: it only scales a profile, so on its own it changes
+    no time at all and belongs on the "does nothing" side of the sentence.
+
+    Mutation caught: listing `profile` among the inert keys, or keeping `height` among
+    the bounding ones when no profile is named.
+    """
+    check(
+        gw(
+            cover_profiles={"tall": dict(TALL_PROFILE)},
+            cover={"s": {"where": "83", "name": "S", "advanced": True, "profile": "tall", "height": 195}},
+        )
+    )
+    assert "height and profile are still read" in caplog.text
     assert "does nothing here" not in caplog.text
 
     caplog.clear()
-    check(_cover(advanced=True, shutter_run=30, closing_time=25))
-    assert "shutter_run and closing_time are still read" in caplog.text
+    check(_cover(advanced=True, height=195))
+    assert "height does nothing here" in caplog.text
+    assert "still read" not in caplog.text
 
 
 def test_slat_time_is_not_cross_checked_on_an_advanced_cover(

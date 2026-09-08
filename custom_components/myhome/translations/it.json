@@ -284,6 +284,46 @@
           "description": "Indirizzo MAC del gateway. Facoltativo se è configurato un solo gateway."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Calibra tapparella (corsa)",
+      "description": "Porta la tapparella a fine corsa, poi la fa muovere esattamente per il tempo motore che userebbe un set_cover_position 50 con la configurazione attuale e la ferma lì, in modo da poter misurare l'altezza della stecca per cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Direzione",
+          "description": "Quale corsa misurare: 'close' parte da tutta aperta e dura metà del tempo del telo, 'open' parte da tutta chiusa e dura il tempo delle lamelle più metà del tempo del telo."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Calibra tapparella (calcolo)",
+      "description": "Trasforma le altezze misurate dopo cover_calibration_run nel roll di questa tapparella - uno per direzione se sono state misurate entrambe le corse - e restituisce un blocco cover_profiles pronto da incollare in myhome.yaml.",
+      "fields": {
+        "height": {
+          "name": "Corsa del telo",
+          "description": "Distanza in centimetri fra la stecca tutta alzata e quella tutta abbassata (la corsa, non la finestra)."
+        },
+        "closed_half_cm": {
+          "name": "Altezza dopo la mezza chiusura",
+          "description": "Centimetri fra il pavimento e il bordo inferiore della stecca, misurati dopo cover_calibration_run con direzione 'close'."
+        },
+        "opened_half_cm": {
+          "name": "Altezza dopo la mezza apertura",
+          "description": "La stessa misura dopo la direzione 'open'. Facoltativa: è quella che fornisce l'opening_roll separato; senza di essa viene calcolato solo il roll in chiusura."
+        },
+        "slat_time": {
+          "name": "Tempo lamelle",
+          "description": "Secondi di corsa delle sole lamelle. È un dato di ingresso, mai un risultato: se indicati qui vengono usati così come sono, altrimenti vale il valore configurato sulla tapparella."
+        },
+        "closed_run_seconds": {
+          "name": "Durata della corsa in chiusura",
+          "description": "Secondi di motore effettivamente durati dalla corsa in chiusura, come riportati da cover_calibration_run. Servono solo se i tempi della tapparella sono cambiati nel frattempo: per impostazione predefinita vale lo stesso valore calcolato dalla corsa."
+        },
+        "opened_run_seconds": {
+          "name": "Durata della corsa in apertura",
+          "description": "Secondi di motore effettivamente durati dalla corsa in apertura, come riportati da cover_calibration_run. Servono solo se i tempi della tapparella sono cambiati nel frattempo: per impostazione predefinita vale lo stesso valore calcolato dalla corsa."
+        }
+      }
     }
   }
 }

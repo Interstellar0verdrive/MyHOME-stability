@@ -51,3 +51,85 @@ stop_discovery:
       example: "00:03:50:AA:BB:CC"
       selector:
         text:
+
+cover_calibration_run:
+  target:
+    entity:
+      integration: myhome
+      domain: cover
+  fields:
+    direction:
+      required: true
+      example: close
+      selector:
+        select:
+          options:
+            - close
+            - open
+
+cover_calibration_compute:
+  target:
+    entity:
+      integration: myhome
+      domain: cover
+  fields:
+    height:
+      required: true
+      example: 195
+      selector:
+        number:
+          min: 1
+          max: 500
+          step: 0.5
+          unit_of_measurement: cm
+          mode: box
+    closed_half_cm:
+      required: true
+      example: 85
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 0.5
+          unit_of_measurement: cm
+          mode: box
+    opened_half_cm:
+      required: false
+      example: 80
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 0.5
+          unit_of_measurement: cm
+          mode: box
+    slat_time:
+      required: false
+      example: 4.7
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 0.1
+          unit_of_measurement: s
+          mode: box
+    closed_run_seconds:
+      required: false
+      example: 8.5
+      selector:
+        number:
+          min: 0.1
+          max: 600
+          step: 0.1
+          unit_of_measurement: s
+          mode: box
+    opened_run_seconds:
+      required: false
+      example: 13.5
+      selector:
+        number:
+          min: 0.1
+          max: 600
+          step: 0.1
+          unit_of_measurement: s
+          mode: box

@@ -89,7 +89,7 @@ _SUGGESTION_CASES: dict[str, tuple[str, str, str, dict[str, Any]]] = {
         "54",
         "Study Blind",
         "cover",
-        {"who": "2", "where": "54", "name": "Study Blind", "shutter_run": 20},
+        {"who": "2", "where": "54", "name": "Study Blind", "opening_time": 20},
     ),
     DEVICE_TYPE_BUS_ENERGY_METER: (
         "5#1",
@@ -174,12 +174,12 @@ def test_generate_suggested_config_emits_the_full_yaml_contract(
     that refuse to load: a climate device keyed on ``where`` instead of ``zone``, a
     sensor without the ``class`` its WHO requires (validate.py rejects a classless
     sensor outright, and pairs ``power``<->WHO 18 / ``temperature``<->WHO 4), a
-    cover without ``shutter_run`` (a required key), or a dimmer suggested as an
+    cover without ``opening_time`` (a required key), or a dimmer suggested as an
     on/off light so half the user's lights lose brightness.
 
     Mutations caught: swapping any (platform, WHO) pair in ``_SUGGESTABLE``;
     emitting ``where`` instead of ``zone`` for climate (or both); inverting the
-    ``dimmable`` comparison; changing the ``shutter_run: 20`` default; wiring the
+    ``dimmable`` comparison; changing the ``opening_time: 20`` default; wiring the
     wrong ``class`` string ("power"/"temperature"/"motion") to a device type;
     adding a stray key or dropping ``name``.
     """
@@ -221,7 +221,7 @@ def test_every_suggestion_survives_the_real_validator(device_type: str) -> None:
     unloadable, so every other device of that gateway disappeared too.
 
     Mutation caught: pointing a suggestion at a platform whose schema refuses its
-    WHO, dropping a required key (a cover without ``shutter_run``), or emitting a
+    WHO, dropping a required key (a cover without ``opening_time``), or emitting a
     class the platform does not allow.
     """
     where = _VALIDATOR_WHERE.get(device_type, _SUGGESTION_CASES[device_type][0])
