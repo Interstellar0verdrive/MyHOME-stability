@@ -308,6 +308,11 @@ class _PendingStop:
     frozen: tuple[int | None, int | None]
     base_elapsed: float
     queued_at: datetime
+    # Where the movement clock stood when the stop was queued. The movement may be
+    # re-based onto its own delivery instant while this stop waits (both frames were
+    # queued together and the direction one is written first), and `base_elapsed` is
+    # then measured against an origin that no longer exists.
+    move_started_at: datetime | None
 
 
 # ------------------------------------------------------------------ the roll model
@@ -1157,6 +1162,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 self._where,
             )
             self._finish_movement(self._move_start_position, self._move_start_tilt)
+            # The gateway cannot echo a frame it never had: a command that never left
+            # the queue must not arm the window (the rule this file states elsewhere).
+            self._own_command = None
+            self._own_command_at = None
+            self._stopped_direction = None
             self.async_write_ha_state()
             return
         delivered = delivery.delivered_at
@@ -1218,6 +1228,18 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         the target would lose exactly the centimetres a busy command queue costs.
         """
         self._stop_timer = None
+        if self._move_delivery is not None:
+            # The direction frame has not reached the bus yet, so the motor has not
+            # started: there is nothing to stop, and a stop queued now would be
+            # written *before* it (0.4.3 lets stops overtake other covers' frames) -
+            # after which nothing would ever stop the shutter. Keep a timer in place
+            # and let `_apply_movement_delivery` arm the real deadline at
+            # `delivered + duration`; this one only has to outlive the delivery, and
+            # a dropped frame cancels the whole movement anyway.
+            self._stop_timer = async_call_later(
+                self.hass, self._move_duration or 0.0, self._async_movement_deadline
+            )
+            return
         needs_stop = self._target_position is not None
         end_position, end_tilt = self._end_position, self._end_tilt
         # Read before `_finish_movement` clears it: `_mark_own_stop` needs to know
@@ -1246,8 +1268,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         for the run is the caller's to decide, and the two callers decide differently.
         """
         delivery = _FrameDelivery()
+        # Reset *before* the frame is handed over, refusal included: the timestamp of
+        # some earlier stop must never be read as the delivery of this one (a
+        # calibration run reports "was never stopped" on a refusal, as it must).
+        self._stop_delivered_at = None
         # Read before the hand-over: an empty command queue answers inside `send`.
         queued_at = dt_util.utcnow()
+        move_started_at = self._move_started_at
         sent = await self._gateway_handler.send(
             OWNAutomationCommand.stop_shutter(self._full_where),
             on_delivered=delivery.deliver,
@@ -1260,8 +1287,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if self._stop_timer is not None:
             self._stop_timer()
             self._stop_timer = None
-        pending = _PendingStop(delivery, interrupted, frozen, base_elapsed, queued_at)
-        self._stop_delivered_at = None
+        pending = _PendingStop(delivery, interrupted, frozen, base_elapsed, queued_at, move_started_at)
         self._pending_stop = pending
         delivery.attach(partial(self._apply_stop_delivery, pending))
         return True
@@ -1291,18 +1317,32 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._stop_delivered_at = delivered
         position, tilt = pending.frozen
         delay = 0.0 if delivered is None else (delivered - pending.queued_at).total_seconds()
+        # The movement was re-based onto its own delivery instant while this stop
+        # waited: `base_elapsed` counts from an origin the motor never had, and the
+        # only motor time that ever existed is `delivered - _move_started_at`.
+        rebased = (
+            delivered is not None
+            and self._move_started_at is not None
+            and self._move_started_at != pending.move_started_at
+        )
         if (
-            delay > 0
+            (delay > 0 or rebased)
             and pending.interrupted is not None
             and self._move_start_position is not None
             and self._move_start_tilt is not None
         ):
-            # The motor ran `delay` seconds longer than the run we modelled.
+            # The motor ran `delay` seconds longer than the run we modelled - or,
+            # if the movement was re-based meanwhile, exactly from that instant.
+            elapsed = (
+                (delivered - self._move_started_at).total_seconds()
+                if rebased
+                else pending.base_elapsed + delay
+            )
             position, tilt = self._travel(
                 pending.interrupted,
                 self._move_start_position,
                 self._move_start_tilt,
-                pending.base_elapsed + delay,
+                max(0.0, elapsed),
             )
         self._finish_movement(position, tilt)
         # The gateway only echoes what it was actually given, so the window opens
@@ -1655,7 +1695,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             else (dt_util.utcnow() - self._move_started_at).total_seconds()
         )
         # Where 0.4.2 would have frozen it: the estimate as it stands right now.
-        await self._async_send_stop(interrupted, self._estimate(), elapsed)
+        if not await self._async_send_stop(interrupted, self._estimate(), elapsed):
+            # The command path would not even take the frame: nothing here changed,
+            # and "changes nothing at all" includes writing the state again.
+            return
         self.async_write_ha_state()
 
     async def async_stop_cover_tilt(self, **kwargs: Any) -> None:
@@ -1780,22 +1823,36 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         object_id = self.entity_id.split(".", 1)[-1] if self.entity_id else ""
         return object_id or CALIBRATION_FALLBACK_PROFILE
 
+    @property
+    def _delivery_bound(self) -> float:
+        """Longest a queued frame may legitimately take to be written *or* dropped.
+
+        `command_budget` covers one command from the dequeue to the gateway's answer;
+        ahead of that a frame may sit in the queue for the whole `command_ttl` before
+        it is dequeued at all, and it is dropped when it does not. Both together are
+        the real worst case, and anything shorter gives up on a frame that is still
+        going to be written - on a merely busy gateway, with the shutter running.
+        """
+        return self._gateway_handler.command_ttl + self._gateway_handler.command_budget
+
     async def _async_await_delivery(self, delivery: _FrameDelivery | None) -> None:
         """Wait until the gateway has written (or given up on) a frame we queued.
 
-        Bounded by the command path's own worst case for one frame, so a gateway that
-        stopped answering ends the wait instead of parking the calibration for ever.
+        Bounded by the command path's own worst case for a queued frame, so a gateway
+        that stopped answering ends the wait instead of parking the calibration for
+        ever.
         """
         if delivery is None or delivery.settled.is_set():
             return
+        bound = self._delivery_bound
         try:
-            await asyncio.wait_for(delivery.settled.wait(), self._gateway_handler.command_budget)
+            await asyncio.wait_for(delivery.settled.wait(), bound)
         except TimeoutError:
             LOGGER.warning(
-                "%s Cover %s: the gateway has not written our frame within %.0fs",
+                "%s Cover %s: the gateway has neither written nor dropped our frame within %.0fs",
                 self._gateway_handler.log_id,
                 self._where,
-                self._gateway_handler.command_budget,
+                bound,
             )
 
     async def _async_calibration_started(self) -> datetime:
