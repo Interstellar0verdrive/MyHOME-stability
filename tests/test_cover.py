@@ -138,11 +138,31 @@ gateway:
       roll: 1
 """
 
+# A cover whose whole model comes from a gateway profile, scaled to its own window.
+PROFILE_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover_profiles:
+    tall:
+      reference_height: 195
+      opening_time: 22.3
+      closing_time: 21.7
+      slat_time: 5.1
+      roll: 1.6
+  cover:
+    cover_profiled:
+      where: '89'
+      name: Cover Profiled
+      profile: tall
+      height: 150
+"""
+
 ENTITY = "cover.cover_test"
 SLAT_ENTITY = "cover.cover_slats"
 ASYM_ENTITY = "cover.cover_asymmetric"
 ROLL_ENTITY = "cover.cover_roll"
 NO_TILT_ENTITY = "cover.cover_hidden_slats"
+PROFILE_ENTITY = "cover.cover_profiled"
 
 
 def _closed(entity_id: str = SLAT_ENTITY) -> State:
@@ -880,6 +900,40 @@ async def test_tilt_commands_are_refused_when_tilt_is_off(hass: HomeAssistant, t
                 COVER, "open_cover_tilt", {ATTR_ENTITY_ID: NO_TILT_ENTITY}, blocking=True
             )
         assert commands.sent_frames == []
+
+
+async def test_a_profiled_cover_publishes_where_its_numbers_came_from(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`Height` and `Profile` are the audit trail of a derived cover.
+
+    The times themselves say nothing about where they came from, and a cover whose
+    model was scaled from a gateway profile is exactly the one whose attributes will be
+    read when the estimate looks wrong.
+
+    Mutation caught: dropping either attribute, or publishing them on a cover that has
+    neither key (the other tests in this file assert they are absent there).
+    """
+    async with setup_myhome(hass, tmp_path, PROFILE_YAML):
+        state = hass.states.get(PROFILE_ENTITY)
+        assert state.attributes["Profile"] == "tall"
+        assert state.attributes["Height"] == 150.0
+        # sqrt(1 + (1.6**2 - 1) * 150/195) = 1.4832397, rounded only for display.
+        assert state.attributes["Roll"] == pytest.approx(1.4832397, abs=1e-6)
+        assert state.attributes["Slat time"] == pytest.approx(3.9230769, abs=1e-6)
+
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        plain = hass.states.get(ENTITY)
+        assert "Profile" not in plain.attributes and "Height" not in plain.attributes
+
+
+async def test_the_calibration_sleep_really_sleeps() -> None:
+    """The one line every calibration test patches out (`_async_sleep`).
+
+    It exists so a test can replace the waiting without touching `asyncio.sleep` for
+    the whole process; a zero-second call is enough to prove it is a real await.
+    """
+    await cover_module._async_sleep(0)
 
 
 # ---------------------------------------------------------------- review 2026-09-07

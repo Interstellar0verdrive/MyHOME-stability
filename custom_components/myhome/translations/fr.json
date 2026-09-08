@@ -284,6 +284,38 @@
           "description": "Adresse MAC du serveur. Facultatif si un seul serveur est configuré."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Calibrer le volet (course)",
+      "description": "Envoie le volet en fin de course, puis le fait tourner pendant la moitié de sa course configurée dans la direction choisie et l'arrête là, afin de mesurer la hauteur de la lame pour cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Direction",
+          "description": "Quelle demi-course mesurer : « close » part du volet entièrement ouvert, « open » du volet entièrement fermé."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Calibrer le volet (calcul)",
+      "description": "Transforme les hauteurs mesurées après cover_calibration_run en roll et slat_time de ce volet et renvoie un bloc cover_profiles prêt à coller dans myhome.yaml.",
+      "fields": {
+        "height": {
+          "name": "Course du tablier",
+          "description": "Distance en centimètres entre la lame entièrement relevée et entièrement abaissée (la course, pas la fenêtre)."
+        },
+        "closed_half_cm": {
+          "name": "Hauteur après la demi-fermeture",
+          "description": "Centimètres entre le sol et le bas de la lame, mesurés après cover_calibration_run avec la direction « close »."
+        },
+        "opened_half_cm": {
+          "name": "Hauteur après la demi-ouverture",
+          "description": "La même mesure après la direction « open ». Facultative : sans elle, seul le roll est calculé, pas le slat_time."
+        },
+        "slat_time": {
+          "name": "Temps des lames",
+          "description": "Secondes de course des seules lames, lorsqu'elles sont déjà connues. Indiquées ici, elles sont reprises telles quelles et non recalculées."
+        }
+      }
     }
   }
 }

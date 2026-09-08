@@ -284,6 +284,38 @@
           "description": "MAC address of the gateway. Optional when only one gateway is configured."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Calibrate cover (run)",
+      "description": "Sends the cover to one end, then runs it half of its configured travel in the chosen direction and stops it there, so the height of the bar can be measured for cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Direction",
+          "description": "Which half run to measure: 'close' starts from fully open, 'open' from fully closed."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Calibrate cover (compute)",
+      "description": "Turns the heights measured after cover_calibration_run into the roll and slat_time of this cover, and returns a cover_profiles snippet ready to paste into myhome.yaml.",
+      "fields": {
+        "height": {
+          "name": "Curtain travel",
+          "description": "Distance in centimetres between the fully open and the fully closed bar (the travel, not the window)."
+        },
+        "closed_half_cm": {
+          "name": "Height after the closing half run",
+          "description": "Centimetres between the floor and the bottom of the bar, measured after cover_calibration_run with direction 'close'."
+        },
+        "opened_half_cm": {
+          "name": "Height after the opening half run",
+          "description": "The same measurement after direction 'open'. Optional: without it the slat time is not solved for, only the roll."
+        },
+        "slat_time": {
+          "name": "Slat time",
+          "description": "Seconds of slat-only travel, when it is already known. Given here it is trusted and not solved for."
+        }
+      }
     }
   }
 }

@@ -284,6 +284,38 @@
           "description": "MAC-adres van de gateway. Optioneel als er maar één gateway geconfigureerd is."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Rolluik kalibreren (rit)",
+      "description": "Stuurt het rolluik naar het eindpunt, laat het daarna de helft van de ingestelde looptijd in de gekozen richting lopen en stopt het daar, zodat de hoogte van de onderlat gemeten kan worden voor cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Richting",
+          "description": "Welke halve rit gemeten wordt: 'close' begint volledig open, 'open' begint volledig gesloten."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Rolluik kalibreren (berekenen)",
+      "description": "Zet de hoogtes die na cover_calibration_run gemeten zijn om in de roll en slat_time van dit rolluik en geeft een cover_profiles-blok terug dat zo in myhome.yaml geplakt kan worden.",
+      "fields": {
+        "height": {
+          "name": "Loopafstand van het doek",
+          "description": "Afstand in centimeters tussen de volledig opgetrokken en de volledig neergelaten onderlat (de loopafstand, niet het raam)."
+        },
+        "closed_half_cm": {
+          "name": "Hoogte na de halve sluiting",
+          "description": "Centimeters tussen de vloer en de onderkant van de lat, gemeten na cover_calibration_run met richting 'close'."
+        },
+        "opened_half_cm": {
+          "name": "Hoogte na de halve opening",
+          "description": "Dezelfde meting na richting 'open'. Optioneel: zonder deze meting wordt alleen de roll berekend, niet de slat_time."
+        },
+        "slat_time": {
+          "name": "Lamellentijd",
+          "description": "Seconden looptijd van alleen de lamellen, als die al bekend zijn. Hier opgegeven worden ze zo overgenomen en niet berekend."
+        }
+      }
     }
   }
 }

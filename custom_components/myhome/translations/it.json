@@ -284,6 +284,38 @@
           "description": "Indirizzo MAC del gateway. Facoltativo se è configurato un solo gateway."
         }
       }
+    },
+    "cover_calibration_run": {
+      "name": "Calibra tapparella (corsa)",
+      "description": "Porta la tapparella a fine corsa, poi la fa muovere per metà del tempo configurato nella direzione scelta e la ferma lì, in modo da poter misurare l'altezza della stecca per cover_calibration_compute.",
+      "fields": {
+        "direction": {
+          "name": "Direzione",
+          "description": "Quale mezza corsa misurare: 'close' parte da tutta aperta, 'open' da tutta chiusa."
+        }
+      }
+    },
+    "cover_calibration_compute": {
+      "name": "Calibra tapparella (calcolo)",
+      "description": "Trasforma le altezze misurate dopo cover_calibration_run nei valori di roll e slat_time di questa tapparella e restituisce un blocco cover_profiles pronto da incollare in myhome.yaml.",
+      "fields": {
+        "height": {
+          "name": "Corsa del telo",
+          "description": "Distanza in centimetri fra la stecca tutta alzata e quella tutta abbassata (la corsa, non la finestra)."
+        },
+        "closed_half_cm": {
+          "name": "Altezza dopo la mezza chiusura",
+          "description": "Centimetri fra il pavimento e il bordo inferiore della stecca, misurati dopo cover_calibration_run con direzione 'close'."
+        },
+        "opened_half_cm": {
+          "name": "Altezza dopo la mezza apertura",
+          "description": "La stessa misura dopo la direzione 'open'. Facoltativa: senza di essa viene calcolato solo il roll, non lo slat_time."
+        },
+        "slat_time": {
+          "name": "Tempo lamelle",
+          "description": "Secondi di corsa delle sole lamelle, se già noti. Se indicati qui vengono usati così come sono e non ricalcolati."
+        }
+      }
     }
   }
 }

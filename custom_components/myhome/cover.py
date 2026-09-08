@@ -43,10 +43,12 @@ so their value is used verbatim.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from math import sqrt
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
     ATTR_CURRENT_TILT_POSITION,
@@ -60,7 +62,9 @@ from homeassistant.components.cover import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, SupportsResponse, callback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoredExtraData, RestoreEntity
@@ -71,6 +75,12 @@ from OWNd.message import (
 )
 
 from .const import (
+    ATTR_CLOSED_HALF_CM,
+    ATTR_DIRECTION,
+    ATTR_HEIGHT,
+    ATTR_MOTOR_SECONDS,
+    ATTR_OPENED_HALF_CM,
+    CALIBRATION_DIRECTIONS,
     CONF_ADVANCED_SHUTTER,
     CONF_BUS_INTERFACE,
     CONF_CLOSING_TIME,
@@ -85,6 +95,7 @@ from .const import (
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
     CONF_PROFILE,
+    CONF_REFERENCE_HEIGHT,
     CONF_ROLL,
     CONF_SHUTTER_RUN,
     CONF_SLAT_TIME,
@@ -95,11 +106,14 @@ from .const import (
     DEFAULT_SHUTTER_RUN,
     DEFAULT_SLAT_TIME,
     DEFAULT_TILT,
+    DIRECTION_CLOSE,
     DOMAIN,
     LOGGER,
     MAX_ROLL,
     MIN_ROLL,
     ROLL_LINEAR_TOLERANCE,
+    SERVICE_COVER_CALIBRATION_COMPUTE,
+    SERVICE_COVER_CALIBRATION_RUN,
     bus_full_where,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -225,6 +239,183 @@ def _roll_x(roll: float, tau: float) -> float:
     return (k * k - (k - tau * (k - 1)) ** 2) / (k * k - 1)
 
 
+# ------------------------------------------------------------------ calibration
+# Two service calls turn a tape measure into a `roll` / `slat_time` pair:
+# `cover_calibration_run` drives the shutter to the half way point of one direction
+# and stops it there, the user measures how far the bar is from the floor, and
+# `cover_calibration_compute` inverts the model to find the numbers that predict that
+# measurement.
+#
+# How long the shutter is left to reach the far end before the measured run starts.
+# The configured run is only an estimate, and an end stop reached a second early costs
+# nothing, while starting the measured run before the curtain is really at the top
+# invalidates the whole measurement.
+CALIBRATION_SETTLE_SEC = 3.0
+# Grid of the two-dimensional solve: a coarse sweep over `slat_time` (each value giving
+# one `roll` by bisection), then a finer one around the best of them.  0.05 s is well
+# under what anybody can measure and 0.005 s is below the resolution of the answer.
+CALIBRATION_SLAT_STEP_SEC = 0.05
+CALIBRATION_SLAT_FINE_STEP_SEC = 0.005
+# 60 halvings take a [1, 5] bracket below floating point resolution; the loop is over
+# in microseconds, so there is nothing to gain by stopping earlier.
+CALIBRATION_BISECTION_STEPS = 60
+# Name of the profile in the generated snippet when the entity has no object id yet.
+CALIBRATION_FALLBACK_PROFILE = "standard"
+
+CALIBRATION_RUN_SCHEMA = {
+    vol.Required(ATTR_DIRECTION): vol.In(list(CALIBRATION_DIRECTIONS)),
+}
+CALIBRATION_COMPUTE_SCHEMA = {
+    vol.Required(ATTR_HEIGHT): vol.All(vol.Coerce(float), vol.Range(min=0, min_included=False)),
+    vol.Required(ATTR_CLOSED_HALF_CM): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(ATTR_OPENED_HALF_CM): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    vol.Optional(CONF_SLAT_TIME): vol.All(vol.Coerce(float), vol.Range(min=0)),
+}
+
+
+async def _async_sleep(seconds: float) -> None:
+    """Wait, in a single place the tests can replace.
+
+    Patching `asyncio.sleep` itself would reach every other coroutine in the process,
+    including Home Assistant's own; the calibration is the only thing in this
+    integration that really has to wait for a shutter to move.
+    """
+    await asyncio.sleep(seconds)
+
+
+# The calibration runs one cover at a time, even when the service call targets
+# several: the whole point is that somebody is standing in front of the shutter with a
+# tape measure, and Home Assistant would otherwise run every targeted entity in
+# parallel (`helpers.service.entity_service_call` gathers them).
+_CALIBRATION_LOCK = asyncio.Lock()
+
+
+def calibration_descent_cm(roll: float, slat: float, height: float, closing_time: float) -> float:
+    """Height of the bar after half a closing run started from fully open.
+
+    Closing from the top the curtain moves first and the slats only close once it has
+    reached the floor, so the whole `closing_time / 2` is curtain time.
+    """
+    curtain = max(MIN_CURTAIN_TIME, closing_time - slat)
+    return height * (1.0 - _roll_x(roll, min(1.0, (closing_time / 2) / curtain)))
+
+
+def calibration_ascent_cm(roll: float, slat: float, height: float, opening_time: float) -> float:
+    """Height of the bar after half an opening run started from fully closed.
+
+    The mirror case, and the reason the pair of measurements identifies two unknowns:
+    opening from the floor the *first* `slat` seconds only turn the slats, so the
+    curtain moves for `opening_time / 2 - slat` and the measurement depends on the slat
+    time in a way the descent does not.
+    """
+    curtain = max(MIN_CURTAIN_TIME, opening_time - slat)
+    moving = max(0.0, opening_time / 2 - slat)
+    return height * (1.0 - _roll_x(roll, 1.0 - min(1.0, moving / curtain)))
+
+
+def _solve_roll(slat: float, height: float, closing_time: float, target_cm: float) -> float | None:
+    """The roll that puts the bar `target_cm` off the floor, or None when there is none.
+
+    `calibration_descent_cm` decreases as the roll grows (a fatter roll at the top
+    means more curtain unwound in the same time), so a plain bisection converges and
+    the reachable band is simply the two ends of the roll range.
+    """
+    highest = calibration_descent_cm(MIN_ROLL, slat, height, closing_time)
+    lowest = calibration_descent_cm(MAX_ROLL, slat, height, closing_time)
+    if not lowest - 1e-9 <= target_cm <= highest + 1e-9:
+        return None
+    low, high = MIN_ROLL, MAX_ROLL
+    for _ in range(CALIBRATION_BISECTION_STEPS):
+        middle = (low + high) / 2
+        if calibration_descent_cm(middle, slat, height, closing_time) > target_cm:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2
+
+
+def _unsolvable(
+    height: float, closing_time: float, closed_half_cm: float, slowest_slat: float, fastest_slat: float
+) -> str:
+    """Why no shutter can have produced this measurement, and what to look at.
+
+    The band is the whole of what the model can produce: the bar is highest with the
+    smallest roll and the shortest slat phase (the most curtain time to spend), lowest
+    with the largest of both.  Quoting it is the only way the user can tell which of
+    the four numbers they gave is the wrong one.
+    """
+    return (
+        f"no shutter matches this measurement: after {closing_time / 2:.1f} s of a "
+        f"{closing_time:.1f} s closing run started fully open, the bar can only be between "
+        f"{calibration_descent_cm(MAX_ROLL, fastest_slat, height, closing_time):.0f} cm and "
+        f"{calibration_descent_cm(MIN_ROLL, slowest_slat, height, closing_time):.0f} cm from the "
+        f"floor, and {closed_half_cm:.0f} cm was measured. Check that the height is the curtain "
+        f"travel and not the window, that the shutter really was fully open when the run started, "
+        f"and that closing_time is the real full run"
+    )
+
+
+def solve_cover_calibration(
+    height: float,
+    opening_time: float,
+    closing_time: float,
+    closed_half_cm: float,
+    opened_half_cm: float | None = None,
+    slat_time: float | None = None,
+) -> tuple[float, float]:
+    """Recover (roll, slat_time) from one or two half-run measurements.
+
+    With a slat time already known (given, or the one configured on the cover) the
+    descent measurement alone fixes the roll, and the answer is a bisection.  With both
+    measurements and neither unknown known, the descent still gives one roll per
+    candidate slat time, so the search is one dimensional after all: sweep the slat
+    time, and keep the value whose *ascent* prediction is closest to what was measured.
+
+    Raises ``ValueError`` with an explanation when no shutter fits the numbers.
+    """
+    if slat_time is not None:
+        roll = _solve_roll(slat_time, height, closing_time, closed_half_cm)
+        if roll is None:
+            raise ValueError(_unsolvable(height, closing_time, closed_half_cm, slat_time, slat_time))
+        return roll, slat_time
+
+    limit = max(0.0, min(opening_time, closing_time) - 1)
+    best: tuple[float, float, float] | None = None
+    for step, span in ((CALIBRATION_SLAT_STEP_SEC, None), (CALIBRATION_SLAT_FINE_STEP_SEC, CALIBRATION_SLAT_STEP_SEC)):
+        low = 0.0 if best is None or span is None else max(0.0, best[2] - span)
+        high = limit if best is None or span is None else min(limit, best[2] + span)
+        candidate = low
+        while candidate <= high + 1e-9:
+            roll = _solve_roll(candidate, height, closing_time, closed_half_cm)
+            if roll is not None:
+                residual = abs(calibration_ascent_cm(roll, candidate, height, opening_time) - (opened_half_cm or 0.0))
+                if best is None or residual < best[0]:
+                    best = (residual, roll, candidate)
+            candidate += step
+    if best is None:
+        raise ValueError(_unsolvable(height, closing_time, closed_half_cm, 0.0, limit))
+    return best[1], best[2]
+
+
+def calibration_yaml(
+    name: str, height: float, opening_time: float, closing_time: float, slat_time: float, roll: float
+) -> str:
+    """The snippet to paste into ``myhome.yaml``: the profile, then the two cover lines."""
+    return (
+        "cover_profiles:\n"
+        f"  {name}:\n"
+        f"    {CONF_REFERENCE_HEIGHT}: {round(height, 1)}\n"
+        f"    {CONF_OPENING_TIME}: {round(opening_time, 1)}\n"
+        f"    {CONF_CLOSING_TIME}: {round(closing_time, 1)}\n"
+        f"    {CONF_SLAT_TIME}: {round(slat_time, 1)}\n"
+        f"    {CONF_ROLL}: {round(roll, 2)}\n"
+        "\n"
+        "# on the cover itself:\n"
+        f"    {CONF_PROFILE}: {name}\n"
+        f"    {CONF_HEIGHT}: {round(height, 1)}\n"
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -263,6 +454,22 @@ async def async_setup_entry(
         )
         for device_id, cfg in configured_covers.items()
     ]
+
+    platform = entity_platform.async_get_current_platform()
+    # Both answer with data (`SupportsResponse.ONLY`): a calibration whose result is
+    # only visible in the log would be useless from a script.
+    platform.async_register_entity_service(
+        SERVICE_COVER_CALIBRATION_RUN,
+        CALIBRATION_RUN_SCHEMA,
+        "async_calibration_run",
+        supports_response=SupportsResponse.ONLY,
+    )
+    platform.async_register_entity_service(
+        SERVICE_COVER_CALIBRATION_COMPUTE,
+        CALIBRATION_COMPUTE_SCHEMA,
+        "async_calibration_compute",
+        supports_response=SupportsResponse.ONLY,
+    )
 
     async_add_entities(covers)
 
@@ -1151,6 +1358,134 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             return False
         elapsed = (dt_util.utcnow() - self._move_started_at).total_seconds()
         return elapsed >= END_STOP_MIN_FRACTION * self._move_duration
+
+    # ------------------------------------------------------------------ calibration
+    def _reject_calibration(self, service: str) -> None:
+        """An advanced actuator has nothing to calibrate: it reports its own position."""
+        if self._advanced:
+            raise ServiceValidationError(
+                f"{service}: {self.entity_id} is an 'advanced' cover, which reports its real "
+                f"position; there is no travel model to calibrate"
+            )
+
+    @property
+    def _profile_name(self) -> str:
+        """Name for the generated profile: the cover's own object id."""
+        object_id = self.entity_id.split(".", 1)[-1] if self.entity_id else ""
+        return object_id or CALIBRATION_FALLBACK_PROFILE
+
+    async def async_calibration_run(self, direction: str) -> dict[str, Any]:
+        """Run the cover to the half way point of `direction` and stop it there.
+
+        The cover is first sent all the way to the *opposite* end, because the half run
+        only means anything measured from a known end stop, and the model's own idea of
+        where the cover is cannot be trusted - that is what is being calibrated. Then
+        the requested direction runs for exactly half the configured time of that
+        direction and is stopped, leaving the bar somewhere the user can measure.
+
+        Everything goes through the ordinary entity methods, so the estimate, the echo
+        window and the safety timers see this run exactly as they see a user's.
+        """
+        self._reject_calibration(SERVICE_COVER_CALIBRATION_RUN)
+        async with _CALIBRATION_LOCK:
+            if self._moving is not None:
+                raise ServiceValidationError(
+                    f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} is already moving; "
+                    f"stop it and try again"
+                )
+            closing = direction == DIRECTION_CLOSE
+            full_run = self._opening_time if closing else self._closing_time
+            motor_seconds = (self._closing_time if closing else self._opening_time) / 2
+            LOGGER.info(
+                "%s Cover %s: calibration run '%s' - going to the far end (%.1fs), then %.1fs of travel",
+                self._gateway_handler.log_id,
+                self._where,
+                direction,
+                full_run,
+                motor_seconds,
+            )
+            if closing:
+                await self.async_open_cover()
+            else:
+                await self.async_close_cover()
+            await _async_sleep(full_run + CALIBRATION_SETTLE_SEC)
+
+            started = dt_util.utcnow()
+            if closing:
+                await self.async_close_cover()
+            else:
+                await self.async_open_cover()
+            # Measured from the moment the command went out, not from before it: the
+            # command path may have taken a while, and the motor only ran after it.
+            spent = (dt_util.utcnow() - started).total_seconds()
+            await _async_sleep(max(0.0, motor_seconds - spent))
+            await self.async_stop_cover()
+        return {
+            ATTR_DIRECTION: direction,
+            ATTR_MOTOR_SECONDS: round(motor_seconds, 1),
+            CONF_OPENING_TIME: round(self._opening_time, 1),
+            CONF_CLOSING_TIME: round(self._closing_time, 1),
+        }
+
+    async def async_calibration_compute(
+        self,
+        height: float,
+        closed_half_cm: float,
+        opened_half_cm: float | None = None,
+        slat_time: float | None = None,
+    ) -> dict[str, Any]:
+        """Turn the measurements of `cover_calibration_run` into a profile.
+
+        One measurement (the descent) fixes the roll once the slat time is known; a
+        second one (the ascent) is what makes it possible to solve for both at once.
+        A ``slat_time:`` given here is trusted and not solved for.
+        """
+        self._reject_calibration(SERVICE_COVER_CALIBRATION_COMPUTE)
+        if closed_half_cm > height:
+            raise ServiceValidationError(
+                f"{SERVICE_COVER_CALIBRATION_COMPUTE}: closed_half_cm ({closed_half_cm}) is above the "
+                f"curtain travel ({height} cm); measure from the floor to the bottom of the bar"
+            )
+        if opened_half_cm is not None and opened_half_cm > height:
+            raise ServiceValidationError(
+                f"{SERVICE_COVER_CALIBRATION_COMPUTE}: opened_half_cm ({opened_half_cm}) is above the "
+                f"curtain travel ({height} cm); measure from the floor to the bottom of the bar"
+            )
+        # The ascent is the only measurement that says anything about the slat time, so
+        # without it the configured one is the best available answer.
+        known_slat = slat_time if slat_time is not None else (None if opened_half_cm is not None else self._slat_time)
+        try:
+            roll, slat = solve_cover_calibration(
+                height=height,
+                opening_time=self._opening_time,
+                closing_time=self._closing_time,
+                closed_half_cm=closed_half_cm,
+                opened_half_cm=opened_half_cm,
+                slat_time=known_slat,
+            )
+        except ValueError as err:
+            raise ServiceValidationError(f"{SERVICE_COVER_CALIBRATION_COMPUTE}: {err}") from err
+
+        residual = {
+            ATTR_CLOSED_HALF_CM: round(
+                calibration_descent_cm(roll, slat, height, self._closing_time) - closed_half_cm, 1
+            )
+        }
+        if opened_half_cm is not None:
+            residual[ATTR_OPENED_HALF_CM] = round(
+                calibration_ascent_cm(roll, slat, height, self._opening_time) - opened_half_cm, 1
+            )
+        return {
+            CONF_ROLL: round(roll, 2),
+            CONF_SLAT_TIME: round(slat, 1),
+            CONF_OPENING_TIME: round(self._opening_time, 1),
+            CONF_CLOSING_TIME: round(self._closing_time, 1),
+            ATTR_HEIGHT: round(height, 1),
+            "residual_cm": residual,
+            "yaml": calibration_yaml(
+                self._profile_name, height, self._opening_time, self._closing_time, slat, roll
+            ),
+        }
 
     # ------------------------------------------------------------------ events
     def handle_event(self, message: OWNAutomationEvent) -> None:
