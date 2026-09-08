@@ -2431,12 +2431,17 @@ class SlowCommandPath:
 async def _advance_exact(hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float) -> None:
     """Move the frozen clock forward and fire only what is due at that instant.
 
-    `_advance` fires everything within half a second, which is what the tests that
-    assert *positions* need; these ones assert *instants* to the millisecond, so they
-    need a timer to fire when it is due and not before.
+    `_advance` fires everything within the next half second, which is exactly the
+    slack these tests must not have: they assert *instants* to the millisecond. The
+    millisecond of margin below is not slack, it is rounding - the helper compares a
+    `datetime.timestamp()` against a `time.time()`, and at 1.8e9 seconds those two
+    floats do not always agree on the last digit, so a timer due at exactly this
+    instant would otherwise fire or not depending on the wall clock the test started
+    at. It does not move the frozen clock, so every instant recorded below is still
+    the exact one the test asked for.
     """
     freezer.tick(timedelta(seconds=seconds))
-    async_fire_time_changed_exact(hass)
+    async_fire_time_changed_exact(hass, dt_util.utcnow() + timedelta(milliseconds=1))
     await hass.async_block_till_done()
 
 

@@ -220,6 +220,10 @@ END_STOP_MIN_FRACTION = 0.75
 OPENING = "opening"
 CLOSING = "closing"
 
+# The curtain phase can never be zero: the validator keeps at least one second of it,
+# this only protects the divisions against a hand-crafted device config.
+MIN_CURTAIN_TIME = 0.001
+
 
 # ------------------------------------------------------- when the frame really left
 # `MyHOMEGatewayHandler.send()` only *queues* a frame. One worker writes the queue
@@ -304,10 +308,6 @@ class _PendingStop:
     frozen: tuple[int | None, int | None]
     base_elapsed: float
     queued_at: datetime
-
-# The curtain phase can never be zero: the validator keeps at least one second of it,
-# this only protects the divisions against a hand-crafted device config.
-MIN_CURTAIN_TIME = 0.001
 
 
 # ------------------------------------------------------------------ the roll model
