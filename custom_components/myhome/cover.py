@@ -266,6 +266,17 @@ ADVANCED_MOVE_MARGIN_SEC = 30.0
 ADVANCED_PROBE_GRACE_MARGIN_SEC = 2.0
 # How often the estimated position is pushed to Home Assistant while the cover moves.
 POSITION_TICK = timedelta(seconds=1)
+# How much earlier than the end of the run the end-of-run timer may fire and still be
+# taken at its word (`_async_movement_deadline`). The timer is armed against the event
+# loop's clock and the run is modelled on the wall clock, and the two agree only to
+# about a millisecond; a timer that fires this much early or later is the timer of the
+# run it belongs to, one that fires *seconds* early belongs to a clock that has moved
+# since - a movement re-based onto the instant its frame reached the bus, or onto the
+# actuator's own "moving" status - and ending the run on it stops a motor that has
+# just started (0.4.4, §8). Small enough that no re-base is ever inside it: the
+# smallest one that exists is a queue delay, and a queue that answers within ten
+# milliseconds is an idle one, which re-bases nothing at all.
+DEADLINE_SLACK_SEC = 0.01
 # A "stopped" frame during a free run *we* commanded is read as the physical end stop
 # (which re-calibrates the estimate) once this fraction of the expected run has
 # elapsed; earlier, it is taken for a real stop and the estimate is frozen.
@@ -908,6 +919,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._end_position: int | None = None
         self._end_tilt: int | None = None
         self._stop_timer = None
+        # Which arming of that timer is the current one. A timer handle that has
+        # already fired cannot be taken back - `async_call_later`'s cancel is a no-op
+        # from that moment on - so every arming stamps its own number on the timer and
+        # `_async_movement_deadline` acts only on the number that is still current.
+        # Without it a deadline that fired while the movement was being re-based ends
+        # a run that has just started (0.4.4, §8).
+        self._stop_timer_generation = 0
         self._tick_unsub = None
         # One-shot status re-request after an ignored movement frame (see `_is_echo`).
         self._echo_recheck = None
@@ -1125,6 +1143,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if self._stop_timer is not None:
             self._stop_timer()
             self._stop_timer = None
+        # A timer that had already fired is cancelled by this and by nothing else: the
+        # movement it was armed for is over (or has been replaced by another), and a
+        # deadline that ran afterwards would end a run that is not the one it timed.
+        self._stop_timer_generation += 1
         if self._tick_unsub is not None:
             self._tick_unsub()
             self._tick_unsub = None
@@ -1256,16 +1278,36 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         motor is running - goes through here, because a clock that moves without its
         timer is exactly the bug 0.4.3 was written for, one layer down.
         """
+        due = started_at + timedelta(seconds=duration - self._stop_offset)
+        self._arm_deadline_in((due - dt_util.utcnow()).total_seconds())
+
+    @callback
+    def _arm_deadline_in(self, delay: float) -> None:
+        """Arm the end-of-run timer `delay` seconds from now and disown the old one.
+
+        The old timer is cancelled *and* left behind by the generation, because those
+        are two different things: cancelling a timer that is still waiting takes it
+        back, cancelling one that has already fired does nothing at all. The second
+        case is not a corner of the loop's scheduling, it is the failure of
+        2026-09-08: nine covers commanded at once, a command queue writing a frame
+        every 1.2 s, and a stop that fell due on the enqueue clock at the very instant
+        the direction frame reached the bus. The clock was re-based onto that instant
+        as it must be, the timer with it - and the deadline that had already fired ran
+        anyway and stopped a motor that had turned for a tenth of a second.
+
+        `max(0, ...)`: a negative delay is a run that is genuinely over already (a
+        tilt phase shorter than `stop_latency`), and it stops as soon as the loop lets
+        it, which is the earliest the shutter could have been stopped anyway. No
+        re-base can produce one - it puts the end of the run a whole `duration` into
+        the future - and `_async_movement_deadline` checks that for itself.
+        """
         if self._stop_timer is not None:
             self._stop_timer()
-        due = started_at + timedelta(seconds=duration - self._stop_offset)
-        # `max(0, ...)`: a re-base that arrives after the stop was already due (a very
-        # long queue, a run shorter than the stop latency) sends it as soon as the loop
-        # lets it, which is the earliest the shutter could have been stopped anyway.
+        self._stop_timer_generation += 1
         self._stop_timer = async_call_later(
             self.hass,
-            max(0.0, (due - dt_util.utcnow()).total_seconds()),
-            self._async_movement_deadline,
+            max(0.0, delay),
+            partial(self._async_movement_deadline, self._stop_timer_generation),
         )
 
     @callback
@@ -1320,7 +1362,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if started <= self._move_started_at:
             return
         self._move_started_at = started
-        if self._stop_timer is not None and self._move_duration is not None:
+        if self._pending_stop is None and not self._stop_in_flight and self._move_duration is not None:
+            # Always, and whatever became of the timer that was there: the end of this
+            # run is `delivered + start_delay + duration` and nothing else, so a timer
+            # that has already fired is replaced rather than believed. The condition is
+            # about our own stop, not about the timer - a `stop_cover` queued behind
+            # this very frame ends the run instead (both were queued together and the
+            # direction frame is written first), and re-arming here would send a second
+            # stop a whole run later, at a shutter standing still.
             self._arm_movement_deadline(started, self._move_duration)
         self.async_write_ha_state()
 
@@ -1397,7 +1446,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         )
         self._motor_started_at = now
         self._move_started_at = now
-        if self._stop_timer is not None and self._move_duration is not None:
+        if self._move_duration is not None:
+            # As at the delivery: the run ends `duration` of motor after this instant,
+            # whatever timer is or is not left over from the clock this replaces. No
+            # stop of ours can be out - both shapes of that were refused above - so
+            # there is nothing here that a re-armed timer could stop twice.
             self._arm_movement_deadline(now, self._move_duration)
 
     @callback
@@ -1425,7 +1478,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """Push the estimated position to HA while the cover moves."""
         self.async_write_ha_state()
 
-    async def _async_movement_deadline(self, now: datetime) -> None:
+    async def _async_movement_deadline(self, generation: int, now: datetime) -> None:
         """The cover is `stop_latency` away from its target (or at the end of its run).
 
         A timed run's deadline falls `stop_latency` before the modelled end (0.4.4),
@@ -1442,7 +1495,19 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         The stop that *is* taken settles the estimate only once the gateway has
         written it (0.4.3): until then the motor is still turning, and freezing on
         the target would lose exactly the centimetres a busy command queue costs.
+
+        `generation` is which arming of the timer this is, and the two guards below
+        are the same rule read twice: a run ends when *its own* clock says it does,
+        never because a timer armed against a clock that no longer exists happens to
+        go off. The first guard drops a timer that had already fired when the clock
+        moved under it (nothing can take such a timer back); the second is the
+        arithmetic itself, and catches the same thing however it was armed.
         """
+        if generation != self._stop_timer_generation:
+            # Armed against a clock this movement no longer runs on: the frame reached
+            # the bus, or the actuator said the motor had started, after this timer had
+            # already fired. The arming that replaced it owns the end of the run.
+            return
         self._stop_timer = None
         if self._move_delivery is not None:
             # The direction frame has not reached the bus yet, so the motor has not
@@ -1452,10 +1517,27 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # and let `_apply_movement_delivery` arm the real deadline at
             # `delivered + duration`; this one only has to outlive the delivery, and
             # a dropped frame cancels the whole movement anyway.
-            self._stop_timer = async_call_later(
-                self.hass, self._move_duration or 0.0, self._async_movement_deadline
-            )
+            self._arm_deadline_in(self._move_duration or 0.0)
             return
+        if self._move_started_at is not None and self._move_duration is not None:
+            # The run's own clock, read against the instant this timer believes it
+            # fired at. It is the same arithmetic the timer was armed with, so in the
+            # ordinary case this is zero or a hair past it and the run ends here;
+            # seconds of it left mean the clock was re-based after this timer had been
+            # handed to the loop, and the stop belongs at the end of the *new* run.
+            remaining = (
+                self._move_started_at + timedelta(seconds=self._move_duration - self._stop_offset) - now
+            ).total_seconds()
+            if remaining > DEADLINE_SLACK_SEC:
+                LOGGER.debug(
+                    "%s Cover %s: the end-of-run timer fired %.2fs early; the movement was "
+                    "re-based under it and the stop goes out at the end of the new run",
+                    self._gateway_handler.log_id,
+                    self._where,
+                    remaining,
+                )
+                self._arm_movement_deadline(self._move_started_at, self._move_duration)
+                return
         needs_stop = self._target_position is not None
         end_position, end_tilt = self._end_position, self._end_tilt
         # Read before `_finish_movement` clears it: `_mark_own_stop` needs to know
@@ -1516,10 +1598,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if not sent:
             return False
         # Our own auto-stop must not fire again while we wait for this one; the
-        # estimate keeps ticking, because the shutter keeps moving.
+        # estimate keeps ticking, because the shutter keeps moving. The generation
+        # goes with it, so a deadline that fired while this frame was being handed
+        # over cannot send a second stop behind it.
         if self._stop_timer is not None:
             self._stop_timer()
             self._stop_timer = None
+        self._stop_timer_generation += 1
         pending = _PendingStop(delivery, interrupted, frozen, base_elapsed, queued_at, move_started_at)
         self._pending_stop = pending
         delivery.attach(partial(self._apply_stop_delivery, pending))
