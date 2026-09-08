@@ -751,8 +751,10 @@ height.
 Write `opening_time` and `closing_time` **first**, measured with a stopwatch from the
 moment the motor starts to the moment it stops by itself at the end stop, in each
 direction (`cover.open_cover` and `cover.close_cover`, both all the way). Everything
-below is built on them: the run drives the motor for exactly half of one of them, and
-the computation solves the model against both.
+below is built on them: the run drives the motor for exactly half of the curtain part
+of one of them (the run minus the `slat_time` currently configured, if any), and the
+computation solves the model against both. Do not edit these keys between the runs
+and the computation: the maths reads the same values the runs used.
 
 ```yaml
 gateway:

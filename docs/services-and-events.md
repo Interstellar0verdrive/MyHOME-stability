@@ -123,9 +123,10 @@ What it does to each cover, in order:
 1. sends the **opposite** full command (`open_cover` for `direction: close`,
    `close_cover` for `direction: open`) and waits the configured run of that
    direction plus 3 seconds, so the cover is certainly against its end stop;
-2. sends the requested direction and, exactly `closing_time / 2` (for `close`) or
-   `opening_time / 2` (for `open`) seconds after that command went out, sends
-   `stop_cover`;
+2. sends the requested direction and, exactly half of the **curtain** run as
+   currently configured — `(closing_time - slat_time) / 2` for `close`,
+   `(opening_time - slat_time) / 2` for `open`, with `slat_time` at `0` when it is
+   not set — after that command went out, sends `stop_cover`;
 3. leaves the cover there and reports what it did.
 
 The commands are the entity's own, so the position estimate, the echo filtering and
@@ -136,8 +137,8 @@ Response data, keyed by entity id:
 | Key | Value |
 |---|---|
 | `direction` | The direction that was run. |
-| `motor_seconds` | The half run actually used, in seconds. |
-| `opening_time`, `closing_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. |
+| `motor_seconds` | The seconds the motor was run, i.e. half of the curtain run above. |
+| `opening_time`, `closing_time`, `slat_time` | The times the cover is configured with — the ones the maths of `cover_calibration_compute` will use. |
 
 Refused with a `ServiceValidationError`, naming the entity:
 
@@ -170,6 +171,7 @@ data:
 | `closed_half_cm` | yes | Centimetres from the floor to the bottom edge after `cover_calibration_run` with `direction: close`. Between `0` and `height`. |
 | `opened_half_cm` | no | The same measurement after `direction: open`. Give it and the service solves `slat_time` as well as `roll`; leave it out and the cover's configured `slat_time` is taken as correct. |
 | `slat_time` | no | A slat time you have measured yourself, in seconds. When given it is trusted and only `roll` is solved for, whether or not `opened_half_cm` is there. |
+| `closed_run_seconds`, `opened_run_seconds` | no | The `motor_seconds` the two runs reported. Leave them out and the same formula the run uses is applied to the cover's *current* configuration — which is why the YAML must not change between the run and this action. |
 
 **Target**: exactly **one** basic cover. The maths needs that cover's configured
 `opening_time` and `closing_time` — the same numbers the run used — so a second
