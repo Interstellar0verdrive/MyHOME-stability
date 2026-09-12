@@ -122,11 +122,14 @@ class FakeEventChannel:
 class FakeCommandChannel:
     """Scriptable stand-in for ``OWNCommandChannel``.
 
-    The two halves of a command are scripted separately, because 0.4.3 tells them
-    apart: ``on_write`` runs at the write and raising from it is a frame that never
-    reached the socket (nothing is recorded in ``sent`` and ``on_written`` is not
-    called), while a ``responder`` that raises is a frame that *did* leave and whose
-    ACK never came - which is what a ``TimeoutError`` on a real command session is.
+    The two halves of a command are scripted separately, because the handler tells
+    them apart: ``on_write`` runs at the write and raising from it is a frame that
+    never reached the socket (nothing is recorded in ``sent`` and ``on_written`` is
+    not called), while a ``responder`` that raises is a frame that left the socket
+    and was never answered - which is what a ``TimeoutError``, or the ``SessionError``
+    of a session the gateway has quietly closed, means on a real command session.
+    Both are retried since 0.4.5; only the wording of the warning differs, and only
+    ``sent`` says which of the two happened.
     """
 
     def __init__(self) -> None:
@@ -373,10 +376,10 @@ async def test_command_acknowledged_replies_dispatched(caplog: pytest.LogCapture
 async def test_command_retry_once_in_place_with_fresh_session() -> None:
     """gw-01 / gw-11: a failed send is retried once on a NEW session, never re-queued.
 
-    The failure is at the *write* (0.4.3, review 3): only a frame that never reached
-    the socket is written again, so that is what a retry test has to script. A frame
-    that did leave and was never answered is a different outcome entirely - see
-    `test_a_frame_written_once_is_never_written_again`.
+    The failure is at the *write* here: the frame never reached the socket, so the
+    second session is the only one that has anything in `sent`. A frame that did
+    leave and was never answered is retried too, and `sent` is what tells the two
+    apart - see `test_a_frame_written_into_a_dead_session_is_written_again`.
     """
     handler = make_handler()
 
@@ -403,9 +406,8 @@ async def test_command_retry_once_in_place_with_fresh_session() -> None:
 async def test_command_dropped_after_two_failures(caplog: pytest.LogCaptureFixture) -> None:
     """gw-02: two failed writes -> WARNING and drop, queue keeps moving.
 
-    Both attempts fail on the way to the socket, which since review 3 is the only
-    kind of failure that is attempted twice: the frame never left, so nothing was
-    reported to its caller and there is nothing on the bus to duplicate.
+    Both attempts fail on the way to the socket: the frame never left, so nothing
+    was reported to its caller and there is nothing on the bus to duplicate.
     """
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
     handler = make_handler()
@@ -598,23 +600,72 @@ async def test_the_delivery_time_is_the_attempt_the_gateway_answered() -> None:
     assert fate.delivered[0] >= failed_at[0]
 
 
-async def test_a_frame_written_once_is_never_written_again() -> None:
-    """The write worked and the ACK never came: delivered once, and not re-sent.
+async def test_a_frame_written_into_a_dead_session_is_written_again(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """0.4.5, the regression of 2026-09-12: the write worked and the bus never saw it.
 
-    0.4.3 addendum 9 moved the report from the ACK to the write, and the two come
-    apart exactly here. The frame is on the bus - the actuator has it, whatever the
-    command session thinks - so the cover timing a motor on it is told at once. The
-    retry loop must then stop: a lost ACK is not a lost frame, and writing it again
-    would put a second copy of the command on the bus (review 3, risk 2). For a WHO 2
-    actuator that second copy is a second burst of echo frames on the monitor
-    session, arriving long after the window in which they are recognised as echoes -
-    which is the very failure this branch exists to fix, re-entered through the back
-    door. The command is still counted as dropped, because nothing acknowledged it;
-    the caller simply already has its answer, and `on_dropped` stays silent.
+    A MyHOMEServer1 closes a command session it has not been used on for about half a
+    minute and says nothing. The write into that half-open socket returns as if
+    nothing were wrong, the bytes go nowhere, and the read of the ACK raises. 0.4.3
+    read the successful write as proof that the frame was on the bus, reported the
+    delivery at once and refused to send it again: three times in one night that was
+    a light that never switched and a shutter that never moved while its entity timed
+    a phantom run.
 
-    Mutations caught: retrying a settled command (a second session writes the frame
-    again), reporting after the ACK (nothing is delivered at all), and dropping the
-    `settled` guard (the caller is told twice, or told both things).
+    So the frame goes out again on a fresh session, and the delivery belongs to the
+    write that was answered - the second one. Nothing is dropped: the command was
+    delivered, late, and the caller's clock starts where the motor really started.
+
+    Mutations caught: keeping the `item.settled` arm of 0.4.3 (only one session ever
+    writes), reporting the delivery at the write (the first, unanswered attempt is
+    reported, and the timestamp is the wrong one), and reporting the timestamp of the
+    first write while answering on the second.
+    """
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+    handler = make_handler()
+    first_attempt_gave_up_at: list[float] = []
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        if index == 0:
+
+            def dead(message: str) -> CommandResult:
+                first_attempt_gave_up_at.append(time.monotonic())
+                raise SessionError("command session closed by the gateway")
+
+            channel.responder = dead
+
+    fate = Fate()
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    # Two sessions, and the frame really was written on both: the first write is the
+    # one that went nowhere.
+    assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"]]
+    assert command.instances[0].closed
+    assert (len(fate.delivered), fate.dropped) == (1, 0)
+    assert fate.delivered[0] >= first_attempt_gave_up_at[0]
+    assert handler.stats.commands_dropped == 0
+    assert any(
+        "was written but never answered" in record.message
+        and "sending it again on a fresh session" in record.message
+        and record.levelno == logging.WARNING
+        for record in caplog.records
+    )
+
+
+async def test_a_frame_no_attempt_answered_is_dropped_and_never_delivered() -> None:
+    """Written twice, answered never: dropped once, and the caller is told so once.
+
+    The other end of the same rule. "Delivered" means the gateway answered, so a
+    command no attempt got an answer for has not been delivered - whatever the
+    sockets returned - and its caller must be told to cancel: a cover that had been
+    told "delivered" here would time a run nothing on the bus ever started, which is
+    exactly the phantom estimate of the night this release is about.
+
+    Mutation caught: reporting the delivery at the write (the caller is told
+    delivered, and `on_dropped` never fires).
     """
     handler = make_handler()
 
@@ -629,21 +680,21 @@ async def test_a_frame_written_once_is_never_written_again() -> None:
         async with running(handler, listening=False):
             assert await handler.send(OWNLightingCommand.switch_on("11"), **fate.kwargs)
             await asyncio.wait_for(handler.send_buffer.join(), 2)
-    assert [channel.sent for channel in command.instances] == [["*1*1*11##"]]
-    assert (len(fate.delivered), fate.dropped) == (1, 0)
+    assert [channel.sent for channel in command.instances] == [["*1*1*11##"], ["*1*1*11##"]]
+    assert (fate.delivered, fate.dropped) == ([], 1)
     assert handler.stats.commands_dropped == 1
 
 
 async def test_a_frame_that_never_left_the_socket_is_written_again() -> None:
-    """The other half of the rule: a write that *failed* is still retried.
+    """The ordinary half of the rule: a write that *failed* is retried too.
 
-    The attempt loop is only cut short for a frame that reached the socket. A write
-    that raised delivered nothing, so the fresh session must write it again - this is
-    the ordinary "the command session died between two commands" case, and it is what
-    `COMMAND_ATTEMPTS` is for.
+    A write that raised delivered nothing, so the fresh session must write it again -
+    this is the ordinary "the command session died between two commands" case, and it
+    is what `COMMAND_ATTEMPTS` is for. The difference from the dead-session case above
+    is only what reaches the bus: here nothing did, so no duplicate is possible.
 
-    Mutation caught: cutting the loop short on any transport error rather than on a
-    settled command (the frame is written once and the gateway never gets it).
+    Mutation caught: giving up on the first transport error (the frame is written
+    once, into a socket that refused it, and the gateway never gets it).
     """
     handler = make_handler()
 

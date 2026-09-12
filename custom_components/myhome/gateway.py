@@ -247,18 +247,21 @@ class _QueuedCommand:
     that times something against the bus - a cover estimating where its shutter is -
     passes ``on_delivered`` / ``on_dropped`` and gets told which happened and when.
 
-    Exactly one of the two runs, exactly once: ``on_delivered`` with the monotonic
-    timestamp taken immediately *before* the write that reached the socket - it fires
-    as soon as that write returns, without waiting for the gateway's answer, and a
-    NACK afterwards changes nothing ("the gateway took the frame") - or
-    ``on_dropped`` when the frame never reached the bus at all. A write that raises
-    reports nothing: the retry writes again, and only the write that worked is
-    reported, once. A write that *worked* is never repeated, whatever the gateway
-    then fails to say about it - a lost ACK is not a lost frame, and a second copy of
-    the command would be a second echo burst on the bus (0.4.3, review 3). Such a
-    command is still counted and logged as dropped; only the callbacks differ.
-    Both run on the event loop, and an exception in one is
-    logged and swallowed: a caller's bug must never take a sending worker down.
+    Exactly one of the two runs, exactly once: ``on_delivered`` once the gateway has
+    answered the frame - ACK or NACK - carrying the monotonic timestamp taken
+    immediately *before* the write it answered, or ``on_dropped`` when no attempt was
+    answered at all. Both run on the event loop, and an exception in one is logged and
+    swallowed: a caller's bug must never take a sending worker down.
+
+    "Delivered" therefore means "the gateway answered", and it is the only thing that
+    proves the frame reached the bus. A write that returns proves nothing: a
+    MyHOMEServer1 closes an idle command session without telling us, and a write into
+    that half-open socket succeeds locally while the bytes go nowhere (0.4.5). Such a
+    frame is written again on a fresh session, and it is the *second* write's instant
+    that is reported - the motor started there, if it started at all. 0.4.3 reported
+    the delivery at the write and stopped retrying a frame that had been written; on a
+    real installation that turned three dead sessions in one night into two lights that
+    never switched and a shutter that never moved while its entity timed a run.
 
     A NACK counts as delivered on purpose, and the consequence is worth naming: a
     cover re-bases its motor clock on a frame the gateway *refused*, so it times a
@@ -266,6 +269,12 @@ class _QueuedCommand:
     the alternative is worse - 0.4.2 started the same estimate at the enqueue, which
     is the same wrongness a fraction of a second earlier. The refusal is logged as a
     WARNING by ``_on_command_result``, which is where a user finds out.
+
+    The retry is safe because WHO 1 and WHO 2 commands are idempotent in practice (on
+    twice is on, up twice is up, stop twice is stop) and the cover echo logic already
+    tolerates the duplicate status frames a second copy produces - while a frame that
+    is silently lost is a light that does not switch. A lost ACK is rarer than a lost
+    frame on a session the gateway has closed, and only one of the two can be fixed.
     """
 
     message: OWNCommand
@@ -1118,11 +1127,19 @@ class MyHOMEGatewayHandler:
 
         Returns the (possibly new) session and whether the gateway answered
         (ACK or NACK).  Never re-queues (gw-11): ordering is preserved and a
-        stale command is never replayed later.  A second attempt only ever
-        follows a write that failed: once the frame has left the socket the
-        loop stops, whatever happens to the answer (see the `item.settled` arm).
+        stale command is never replayed later.  Every transport error is
+        retried, whether or not the write itself returned: a write into a
+        session the gateway has already closed succeeds locally and delivers
+        nothing (0.4.5), and only the answer tells the two apart.
         """
         for attempt in range(1, COMMAND_ATTEMPTS + 1):
+            # Whether *this* attempt's frame left the socket. Only the log wording
+            # below depends on it - a frame that left and a frame that did not are
+            # the same transport error to the caller - but it is not the same thing
+            # to whoever reads the warning: one of the two may reach the bus twice.
+            # `on_written` is the one place that can tell them apart, and it is reset
+            # here so a failed `open()` can never inherit the previous attempt's.
+            written: list[float] = []
             try:
                 if session is None:
                     new_session = OWNCommandChannel(self.gateway, LOGGER)
@@ -1138,17 +1155,16 @@ class MyHOMEGatewayHandler:
                     self._command_sessions[worker_id] = session
                     LOGGER.debug("%s Command session established (worker %s)", self.log_id, worker_id)
                 self._record_frame(FRAME_COMMAND, item.frame)
-                # Taken immediately before the write and handed to `on_delivered` by
-                # the channel itself, as soon as the frame has left the socket: it is
-                # the moment a motor starts, and the gateway answers the command on
-                # the *monitor* session before it acknowledges it here, so a caller
-                # told only after the ACK is told too late to recognise its own
-                # frames coming back (0.4.3, addendum 9). A write that raises never
-                # calls it; a NACK after a write that worked still counts as
-                # delivered.
+                # Taken immediately before the write: it is the instant the motor
+                # starts, and it is what `on_delivered` carries once the gateway has
+                # answered *this* attempt. The report itself waits for the ACK/NACK
+                # (0.4.5): a write that returned is not a frame that arrived, and the
+                # echo window of a cover already covers the whole pending delivery, so
+                # waiting costs nothing and buys the guarantee that "delivered" means
+                # the gateway has the frame.
                 written_at = self._now()
                 result = await session.send_command(
-                    item.message, self.command_timeout, on_written=partial(item.mark_delivered, written_at)
+                    item.message, self.command_timeout, on_written=partial(written.append, written_at)
                 )
             except AuthenticationError as err:
                 await self._close_session(session)
@@ -1163,39 +1179,37 @@ class MyHOMEGatewayHandler:
                 await self._close_session(session)
                 session = None
                 self._command_sessions.pop(worker_id, None)
-                if item.settled:
-                    # The write worked and only the answer was lost: the session died,
-                    # or the ACK never came, *after* the frame had left the socket -
-                    # which is what `on_written` having settled the command means. The
-                    # frame is on the bus and the actuator has it, so a retry would put
-                    # a second copy of the same command on the bus: for a WHO 2
-                    # actuator a second echo burst nobody is expecting, and one the
-                    # caller is never told about, since its delivery was reported at
-                    # the first write. A lost ACK is not a lost frame, so the attempt
-                    # loop ends here. The counting and the logging are unchanged - the
-                    # command is still dropped, because nothing acknowledged it - and
-                    # only the caller's callbacks differ, exactly as `_QueuedCommand`'s
-                    # docstring says (0.4.3, review 3).
-                    self._log_limited(
-                        logging.WARNING,
-                        "cmd-unanswered",
-                        "%s Command `%s` was written but never answered (%s: %s); not sending it a second time",
-                        self.log_id,
-                        item.message,
-                        type(err).__name__,
-                        err,
-                    )
-                    self._commands_dropped += 1
-                    self._refresh_stats(publish=True, immediate=True)
-                    return None, False
                 if attempt < COMMAND_ATTEMPTS:
-                    LOGGER.debug(
-                        "%s Sending `%s` failed (%s: %s); retrying with a fresh session",
-                        self.log_id,
-                        item.message,
-                        type(err).__name__,
-                        err,
-                    )
+                    if written:
+                        # The write returned and the answer never did. 0.4.3 read that
+                        # as "the frame is on the bus, only the ACK was lost" and gave
+                        # up; the night of 2026-09-12 it was three times the opposite -
+                        # an idle session the gateway had closed, a write into a
+                        # half-open socket, and bytes that never reached the bus. Both
+                        # readings are possible and only one of them can be repaired,
+                        # so the frame goes out again on a fresh session: at worst the
+                        # bus sees a second copy of an idempotent command, at best a
+                        # light switches that would otherwise have stayed off. Warned
+                        # at WARNING rather than DEBUG because the duplicate is worth
+                        # knowing about when a gateway NACKs under load.
+                        self._log_limited(
+                            logging.WARNING,
+                            "cmd-unanswered",
+                            "%s Command `%s` was written but never answered (%s: %s); "
+                            "sending it again on a fresh session",
+                            self.log_id,
+                            item.message,
+                            type(err).__name__,
+                            err,
+                        )
+                    else:
+                        LOGGER.debug(
+                            "%s Sending `%s` failed (%s: %s); retrying with a fresh session",
+                            self.log_id,
+                            item.message,
+                            type(err).__name__,
+                            err,
+                        )
                     continue
                 self._log_limited(
                     logging.WARNING,
@@ -1213,9 +1227,9 @@ class MyHOMEGatewayHandler:
                 self._commands_dropped += 1
                 self._refresh_stats(publish=True, immediate=True)
                 return None, False
-            # A net, and normally a no-op: `on_written` has already settled the
-            # command. It only fires for a channel that does not use the hook, and
-            # it is still safe - this line is reached only when the write worked.
+            # The gateway answered this attempt (ACK or NACK), so the frame is on the
+            # bus: the delivery is reported here, timestamped at the write it belongs
+            # to - the successful attempt's, never the failed one's.
             item.mark_delivered(written_at)
             await self._on_command_result(item, result)
             return session, True

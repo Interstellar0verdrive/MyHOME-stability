@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -15,6 +17,7 @@ from homeassistant.components.light import (
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_SUPPORTED_FEATURES, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from OWNd.message import OWNLightingCommand
 
 from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
@@ -23,6 +26,7 @@ from custom_components.myhome.light import (
     percent_to_eight_bits,
     transition_to_speed,
 )
+from custom_components.myhome.own_session import CommandResult, SessionError
 
 from .helpers_core import MAC
 from .helpers_platforms import (
@@ -33,6 +37,7 @@ from .helpers_platforms import (
     set_connected,
     setup_myhome,
 )
+from .test_gateway import Factory, FakeCommandChannel, fake_channels, make_handler, running
 
 DIMMER_YAML = f"""
 gateway:
@@ -303,3 +308,47 @@ async def test_availability_follows_connection_signal(hass: HomeAssistant, tmp_p
         assert hass.states.get("light.dimmer_test").state == STATE_UNAVAILABLE
         await set_connected(hass, True)
         assert hass.states.get("light.dimmer_test").state != STATE_UNAVAILABLE
+
+
+async def test_a_command_lost_with_a_dead_session_is_sent_again(hass: HomeAssistant, tmp_path) -> None:
+    """0.4.5, from both ends: the night two lights did not switch.
+
+    The command session had been idle long enough for the MyHOMEServer1 to close it
+    without a word. The write into the half-open socket returned, the bus never saw
+    the frame, and only the ACK that never came said so. Since 0.4.3 such a frame was
+    not written again - the light stayed off, and the log had one warning in it. It
+    goes out again on a fresh session now: `*1*1*24##` twice is still one light on,
+    which is the whole reason the retry is safe here.
+
+    The other end is the entity's: whatever the command path does with the frame, a
+    MyHOME light takes its state from the bus and from nothing else. It does not turn
+    on because a frame was written - it turns on because a frame came back.
+
+    Mutations caught: giving up on a transport error once the frame has left the
+    socket (one session, one write, one light that stays off), and any optimistic
+    state in `async_turn_on`.
+    """
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        if index == 0:
+
+            def dead(message: str) -> CommandResult:
+                raise SessionError("command session closed by the gateway")
+
+            channel.responder = dead
+
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("24"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert [channel.sent for channel in command.instances] == [["*1*1*24##"], ["*1*1*24##"]]
+    assert handler.stats.commands_dropped == 0
+
+    async with setup_myhome(hass, tmp_path, DIMMER_YAML) as (_entry, commands):
+        porch = entity_object(hass, LIGHT, "1-24")
+        await hass.services.async_call(LIGHT, "turn_on", {ATTR_ENTITY_ID: "light.porch"}, blocking=True)
+        assert commands.sent_frames == ["*1*1*24##"]
+        assert hass.states.get("light.porch").state != STATE_ON
+        await feed_event(hass, porch, "*1*1*24##")
+        assert hass.states.get("light.porch").state == STATE_ON
