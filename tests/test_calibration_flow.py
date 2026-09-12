@@ -898,7 +898,7 @@ async def test_the_precise_tape_screens_say_what_is_expected(
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:15])
         assert result["step_id"] == "measure_descent"
         rough = result["description_placeholders"]
-        assert rough["tolerance"] == "10"
+        assert rough["tolerance"] == "15"
         assert float(rough["expected"]) > 0
 
         result = await drive(hass, freezer, result, (*PATH_A_BASIC[15:-1], Act(option="refine")))

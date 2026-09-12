@@ -533,3 +533,131 @@ def test_no_other_screen_points_at_the_static_path(path: Path) -> None:
         assert key == f"options.step.{step_id}.description", key
         assert text.count("/myhome_static/") == 1, key
         assert f"/myhome_static/{STEP_IMAGES[step_id]}" in text, key
+
+
+# --------------------------------------------------------------- the words themselves
+# The Italian is the original every other file is translated from, and the owner read it
+# out loud twice in front of a real shutter.  These are the four things he asked for by
+# name, each of which survived one rewrite before it was caught.
+FORBIDDEN_ITALIAN: dict[str, str] = {
+    "finestr": (
+        'a window is not a shutter, and the dialog is not a window either: "tapparella" '
+        'for the thing that moves, "vano" for the hole in the wall, "dialogo" for this box'
+    ),
+    "così che": 'dialectal with a subjunctive: "in questo modo ..." with an indicative',
+    "cosi' che": "the same, unaccented",
+    "fino in fondo": '"completamente", in both directions, because a shutter opens upwards',
+    " lei ": "a shutter is a thing: no personal pronoun stands for it",
+    " lui ": "the same",
+    " lui:": "the same, before a colon",
+    " lei:": "the same, before a colon",
+}
+
+
+# One "finestra" is a window of time and not a hole in a wall: the label of the probe
+# window, in the connection form, which has nothing to do with shutters.
+EXEMPT_FROM_THE_ITALIAN_RULES = {"options.step.gateway.data.probe_window_sec"}
+
+
+def test_the_italian_says_none_of_the_words_the_live_test_struck_out() -> None:
+    """Four rules, read off the owner's two walk-throughs (FLOW, "Feedback ...").
+
+    They are checked on the Italian alone because the Italian is the one that was read
+    out loud: the other six are translations of it, and the words the rules are about
+    ("finestra" against "tapparella") are a distinction the other languages draw with
+    different words anyway.
+
+    Mutation caught: any of the four creeping back into any Italian string - the ones
+    the flow shows, the service descriptions, the entity names.
+    """
+    italian = COMPONENT / "translations" / "it.json"
+    offences = [
+        (key, word)
+        for key, text in flatten(load(italian)).items()
+        if key not in EXEMPT_FROM_THE_ITALIAN_RULES
+        for word in FORBIDDEN_ITALIAN
+        if word in text.lower()
+    ]
+    assert not offences, "\n".join(
+        f"{key}: {word!r} - {FORBIDDEN_ITALIAN[word]}" for key, word in offences
+    )
+
+
+# The screens a shutter is moving through while they are on the screen. "Nobody reads
+# while watching the shutter": everything they would have said belongs to the briefing
+# before the "Avvia" button, and what is left is one line and a button.
+DURING_THE_MOVEMENT = {"open_lift": "open_brief", "open_top": "open_brief", "close_bottom": "close_brief"}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_moving_screens_say_one_thing_and_the_briefing_says_the_rest(path: Path) -> None:
+    """The timed steps put every instruction on the screen *before* "Avvia".
+
+    A press that is half a second late moves the estimate by centimetres, and the
+    second live walk-through lost both presses of the ascent to a screen that was still
+    explaining itself while the shutter ran.
+
+    Mutation caught: moving an instruction back into a screen shown during a movement,
+    in any of the eight files.
+    """
+    steps = options_block(path)["step"]
+    for moving, briefing in DURING_THE_MOVEMENT.items():
+        lines = [
+            line
+            for line in steps[moving]["description"].splitlines()
+            if line.strip() and not line.startswith("![](")
+        ]
+        # The cover's name (a menu title cannot carry it) and one instruction.
+        assert len(lines) == 2, f"{path.name}: {moving}: {lines}"
+        assert len(steps[briefing]["description"]) > len(steps[moving]["description"]), (
+            f"{path.name}: {briefing} against {moving}"
+        )
+
+
+# What the briefing of a timed step has to have named, in the language of each file:
+# the motor (the press is the motor stopping, not the curtain arriving), the slats (the
+# reason the two are not the same instant) and the base the bottom edge rests on.
+TIMED_VOCABULARY: dict[str, tuple[str, str, str]] = {
+    "strings": ("motor", "slats", "base"),
+    "en": ("motor", "slats", "base"),
+    "it": ("motore", "lamelle", "base"),
+    "fr": ("moteur", "lames", "base"),
+    "nl": ("motor", "lamellen", "basis"),
+    "es": ("motor", "lamas", "base"),
+    "de": ("motor", "lamellen", "grundlinie"),
+    "pt": ("motor", "lâminas", "base"),
+}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_both_briefings_name_the_motor_the_slats_and_the_base(path: Path) -> None:
+    """The one thing the second walk-through got wrong twice, in all eight files.
+
+    Going up, the bottom edge leaves the base a second or two after the motor starts;
+    coming down, the curtain goes on moving after the bottom edge touches, to close the
+    slats. Both presses are the *motor*, and both briefings have to say so before the
+    shutter is allowed to move.
+
+    Mutation caught: translating the warning away in one language, which no structural
+    check would otherwise see.
+    """
+    steps = options_block(path)["step"]
+    for briefing in ("open_brief", "close_brief"):
+        description = steps[briefing]["description"].lower()
+        for word in TIMED_VOCABULARY[path.stem]:
+            assert word in description, f"{path.name}: {briefing}: {word!r}"
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_three_ways_are_lettered_and_not_numbered(path: Path) -> None:
+    """A, B and C, in the text and on the buttons: they are not steps in a sequence.
+
+    Mutation caught: a label that stops announcing its letter, in any language - the
+    paragraph above it says "the first (A) ...", and a button that does not answer it
+    leaves the reader counting.
+    """
+    step = options_block(path)["step"]["path"]
+    for option, letter in (("path_a", "(A)"), ("path_b", "(B)"), ("path_c", "(C)")):
+        assert step["menu_options"][option].startswith(f"{letter} "), f"{path.name}: {option}"
+        assert letter in step["description"], f"{path.name}: {letter}"
+    assert set(step["menu_options"]) == {"path_a", "path_b", "path_c", "cancel_flow"}
