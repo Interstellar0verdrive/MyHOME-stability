@@ -118,13 +118,15 @@ estimate put it. One or two centimetres is normal and already a good
 approximation; three or more mean this shutter does not behave like the profile it
 was given, and the screen offers path C on the spot.
 
-What it stores: the profile name and the height, **and** the profile's numbers
-scaled to this shutter. Both, because a `profile:` does not beat a run time written
-for the cover itself in the configuration file — so the name alone would leave a
-shutter whose times are written in that file running on the file's numbers, which
-is the opposite of what the screen promises. `Calibration source` therefore says
-`profile <name>` for such a shutter: the numbers are the profile's, arithmetic and
-all.
+What it stores: the profile name and the height — no numbers of its own. From that
+moment the shutter **follows** the profile, run times included, scaled to its own
+height, and the profile's values are used **instead of** the ones the configuration
+file writes for that cover, if you use one: this is a statement about the shutter
+made after the file was written, which a `profile:` named in the file is not.
+`Calibration source` therefore says `profile <name>` for such a shutter. Correcting
+the profile afterwards — in `cover_profiles:` or from **Profili e tapparelle →
+Modifica i valori** — reaches this shutter too, at the next reload, scaled to its
+own height; nothing of the profile was ever copied into it.
 
 ### (C) It has a profile but stops in the wrong place
 
@@ -137,8 +139,10 @@ a heavier curtain, a fatter tube. It asks how far to go:
   tape readings. What a shutter needs when it misses *at mid-travel*, which is not
   the motor running differently but the curtain winding differently.
 
-Only the keys it actually measured are stored, and only for this shutter.
-Everything else goes on coming from the profile.
+Only the keys it actually measured are stored, and only for this shutter — merged
+into whatever was already stored for it, so the height and any other override this
+run did not re-measure stay exactly as they were. Everything still not covered
+goes on coming from the profile.
 
 ## The two levels
 
@@ -211,9 +215,17 @@ small diagram of what to look at.
 
 **Assign a profile to each shutter** — one selector per basic cover, with
 "No profile (the file's values, or the defaults)" at the top. Only rows that really
-changed are written. A shutter newly assigned to a profile whose height nobody
-knows is asked for it in a follow-up form: a profile is the measurement of a
-shutter of a certain height and there is nothing to scale it by without one.
+changed are written; submitting the form with nothing changed writes nothing at
+all, on any row. A shutter newly assigned to a profile whose height nobody knows is
+asked for it in a follow-up form: a profile is the measurement of a shutter of a
+certain height and there is nothing to scale it by without one.
+
+A shutter the configuration file itself gives a `profile:` opens this form already
+selected on that profile, so choosing it again changes nothing on the row and
+writes nothing — the shutter goes on running under the file's own order, where a
+key the file writes for it still wins over the profile it names. To make it follow
+that profile from above the file's keys, move the row to another profile and back,
+or measure the shutter instead.
 
 Dropping the assignment back to "No profile" removes the name and the numbers that
 came with the profile. The height stays — somebody held a tape against that shutter
@@ -226,8 +238,9 @@ that follow it and offers:
   which shutters follow it. Changes nothing;
 - **Edit the values by hand** — a prefilled form. For the numbers you know better
   than the measurement did, the manufacturer's declared times for instance.
-  Correcting a profile re-derives every shutter that merely inherited it, and never
-  touches an override paths A or C measured;
+  Correcting a profile reaches every shutter that follows it at the next reload,
+  scaled to each one's own height, and never touches an override paths A or C
+  measured;
 - **Delete the profile** — a confirmation screen that names the shutters that use
   it. They go back to the configuration file, if you use one, or to the defaults;
   their own measurements stay. A `cover_profiles:` entry of the same name in the
@@ -248,8 +261,10 @@ One entry per shutter the integration is keeping something for:
 - **Edit the values by hand** — a prefilled form, per shutter. A field left empty
   is not a zero: it means "nothing to say about this one", and the value goes back
   to coming from the profile or the file. Emptying the form deletes the record;
-- **Measure again** — the guided calibration on that shutter, replacing what is
-  there;
+- **Measure again** — the guided calibration on that shutter. Path A or C merges
+  into what is already stored, keeping the height and any override this run did
+  not re-measure; picking a profile (path B) replaces the shutter's own measured
+  overrides with the profile assignment instead;
 - **Delete** — a confirmation, then back to the file or the profile. The
   measurements cannot be recovered: getting them back means measuring again.
 
@@ -270,27 +285,41 @@ configuration file. It holds two things — the **profiles** and, per shutter, i
 
 Per key, highest first:
 
-1. the values the guided calibration stored **for that shutter** — the measurement
-   of that one shutter;
-2. the key as written for that cover in the **configuration file**, if you use one
+1. the values the guided calibration stored **for that shutter** — path A, or
+   **(C) Affina la calibrazione** measured on it directly;
+2. a profile **assigned** to the shutter — from **Profili e tapparelle**, or chosen
+   with path B — scaled to the shutter's height. This is a statement about that
+   shutter made after the configuration file was written, so it is used **instead
+   of** the keys the file writes for that cover;
+3. the key as written for that cover in the **configuration file**, if you use one
    (including what the file implies: `roll:` stands for both directional rolls,
-   `opening_time:` for `closing_time:`);
-3. the **profile**, scaled to the shutter's height — the one assigned here, else
-   the `profile:` written in the file;
-4. the file's own profile chain and then the **defaults**.
+   `opening_time:` for `closing_time:`). A `profile:` the file itself gives a cover
+   is not the statement rule 2 is and does not move here: a key the file writes for
+   that cover still wins over the profile it names;
+4. the file's own profile chain (the `profile:` it names, scaled to the height) and
+   then the **defaults**.
 
 A measurement of one shutter is more specific than a line typed about all of them,
-which is why rule 1 beats the file; a profile is not, which is why rule 3 does not.
-Stored profiles and `cover_profiles:` share one namespace, and a stored profile of
-the same name wins — the log says so once per name.
+which is why rule 1 beats everything else; an assigned profile is a statement about
+that one shutter too, made after the file, which is why rule 2 beats rule 3; the
+file's own `profile:` is not such a statement, which is why rule 4 does not beat
+rule 3. Stored profiles and `cover_profiles:` share one namespace, and a stored
+profile of the same name wins — the log says so once per name.
 
-The `Calibration source` attribute of every basic cover says which of the three it
-is running on:
+Nothing of an assigned profile is copied into the shutter's stored calibration:
+only the name, the flag and the height are. Correcting the profile — in
+`cover_profiles:` or from **Profili e tapparelle → Modifica i valori** — reaches
+every shutter that follows it at the next reload, scaled to each one's own height.
+Deleting it takes the assignment away and leaves the height and any measurement
+alone; the shutter goes back to what the file says.
+
+The `Calibration source` attribute of every basic cover says which of these it is
+running on:
 
 | Value | Meaning |
 |---|---|
-| `guided` | This shutter was measured (path A or C), or its stored values were edited by hand |
-| `profile <name>` | It was assigned that profile — by the assignment form or by path B — and was not measured itself |
+| `guided` | This shutter was measured (path A or C) — including one that was assigned a profile and then refined, since the refinement is the measurement — or its stored values were edited by hand |
+| `profile <name>` | It follows that profile — assigned from the assignment form or by path B — and was not measured itself |
 | `yaml` | Nothing is stored for it: the configuration file, the file's profile chain, or the defaults |
 
 A calibration naming a profile that no longer exists logs a warning and falls back

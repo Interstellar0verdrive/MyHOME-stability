@@ -58,10 +58,12 @@ way, and nothing is ever written to `myhome.yaml`.
   once, when the dialog is closed, and only if something was really stored.
 - **`Calibration source` tells a measurement from an inheritance.** It says `guided`
   for a shutter the dialog measured (or whose stored values were edited by hand),
-  `profile <name>` for one that was only assigned a profile, and `yaml` when nothing
-  is stored for it and the numbers come from the configuration file or the defaults.
-  The distinction matters because a profile does not beat a run time written for the
-  cover itself, while a measurement of that cover does.
+  `profile <name>` for one that follows a profile, and `yaml` when nothing is
+  stored for it and the numbers come from the configuration file or the defaults.
+  The distinction matters because a profile assigned from the dialog ranks above
+  the keys the cover's own configuration-file entry writes — it is a statement
+  about that cover made after the file — while a `profile:` the file names itself
+  does not, and a measurement of the cover always wins over either.
 - **`myhome.cover_calibration_run` marks the cover `Calibrating` while it runs**, so
   `cover.set_cover_position` is refused for the half minute it takes. It is built
   out of the same primitives as the guided steps, and two things timing one motor
