@@ -93,8 +93,10 @@ from .calibration import (
     roll_tau,
     roll_x,
 )
+from .calibration_store import resolve_cover_config
 from .const import (
     ATTR_CALIBRATING,
+    ATTR_CALIBRATION_SOURCE,
     ATTR_CLOSED_HALF_CM,
     ATTR_CLOSED_RUN_SECONDS,
     ATTR_DIRECTION,
@@ -103,10 +105,12 @@ from .const import (
     ATTR_OPENED_HALF_CM,
     ATTR_OPENED_RUN_SECONDS,
     CALIBRATION_DIRECTIONS,
+    CALIBRATION_SOURCE_YAML,
     CONF_ADVANCED_SHUTTER,
     CONF_BUS_INTERFACE,
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
+    CONF_COVER_PROFILES,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
     CONF_ENTITY,
@@ -716,11 +720,30 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the cover entities of this gateway (none when unconfigured)."""
-    configured_covers = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS].get(PLATFORM, {})
+    mac = config_entry.data[CONF_MAC]
+    configured_covers = hass.data[DOMAIN][mac][CONF_PLATFORMS].get(PLATFORM, {})
     if not configured_covers:
         return
 
-    gateway_handler = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
+    gateway_handler = hass.data[DOMAIN][mac][CONF_ENTITY]
+    # What the file says about profiles; the stored ones join them inside
+    # `resolve_cover_config`, which is also where a name defined twice is settled.
+    yaml_profiles = hass.data[DOMAIN][mac].get(CONF_COVER_PROFILES) or {}
+    # A guided calibration is stored per cover and merged in here, once, at setup:
+    # the entity reads its travel model in its constructor and never again, which is
+    # why every one of the store's helpers reloads the entry (0.5.0, spec 1.3).
+    sources: dict[str, str] = {}
+    for device_id, cfg in configured_covers.items():
+        resolved = resolve_cover_config(
+            hass, config_entry, cfg, f"{mac}-{device_id}", yaml_profiles
+        )
+        # Written back into the validated configuration rather than kept beside it:
+        # everything that reads a cover's numbers (the entity below, the diagnostics,
+        # whatever comes next) then reads the ones the shutter really runs on.
+        cfg.update(resolved.values)
+        # The legacy spelling of `opening_time` follows it, as it does in the validator.
+        cfg[CONF_SHUTTER_RUN] = cfg[CONF_OPENING_TIME]
+        sources[device_id] = resolved.source
     covers = [
         MyHOMECover(
             hass=hass,
@@ -749,6 +772,7 @@ async def async_setup_entry(
             manufacturer=cfg[CONF_MANUFACTURER],
             model=cfg[CONF_DEVICE_MODEL],
             gateway=gateway_handler,
+            calibration_source=sources[device_id],
         )
         for device_id, cfg in configured_covers.items()
     ]
@@ -803,6 +827,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         start_delay: float = DEFAULT_START_DELAY,
         height: float | None = None,
         profile: str | None = None,
+        calibration_source: str | None = None,
     ) -> None:
         super().__init__(
             hass=hass,
@@ -849,6 +874,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._start_delay = max(0.0, float(start_delay or 0.0))
         self._height = None if height is None else float(height)
         self._profile = profile
+        # Where the numbers above came from: "guided" when a stored calibration was
+        # merged into them, "profile <name>" when a profile supplies them, "yaml"
+        # otherwise (0.5.0). Resolved by `calibration_store.resolve_cover`, which is
+        # the only thing that can tell the three apart.
+        self._calibration_source = calibration_source or CALIBRATION_SOURCE_YAML
         # Curtain-only part of each run (the validator keeps it >= 1 s).
         self._curtain_up = max(MIN_CURTAIN_TIME, self._opening_time - self._slat_time)
         self._curtain_down = max(MIN_CURTAIN_TIME, self._closing_time - self._slat_time)
@@ -908,6 +938,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 self._attr_extra_state_attributes["Height"] = self._height
             if self._profile is not None:
                 self._attr_extra_state_attributes["Profile"] = self._profile
+            # Always published, unlike the two above: a shutter whose times came from a
+            # guided calibration looks exactly like one whose times were typed into the
+            # file, and the difference is the first thing to establish when one of them
+            # stops where it should not.
+            self._attr_extra_state_attributes[ATTR_CALIBRATION_SOURCE] = self._calibration_source
 
         self._attr_current_cover_position: int | None = None
         self._attr_current_cover_tilt_position: int | None = None

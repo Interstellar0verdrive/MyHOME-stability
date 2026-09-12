@@ -62,6 +62,23 @@ CALIBRATION_SOURCE_GUIDED = "guided"
 CALIBRATION_SOURCE_YAML = "yaml"
 CALIBRATION_SOURCE_PROFILE = "profile"
 
+# The two config subentry types the guided calibration stores its results in (0.5.0).
+# One profile describes a *model* of shutter at one reference height and is shared by
+# every window of that kind; one calibration belongs to a single cover, names the
+# profile it follows (if any) and carries whatever that particular window needed
+# overriding. The flows that create them are phase 2; the engine only reads and writes.
+SUBENTRY_COVER_PROFILE = "cover_profile"
+SUBENTRY_COVER_CALIBRATION = "cover_calibration"
+# Keys of a stored subentry.
+CONF_COVER_UNIQUE_ID = "cover_unique_id"
+CONF_OVERRIDES = "overrides"
+CONF_SOURCE = "source"
+CONF_MEASURED_AT = "measured_at"
+CONF_RAW = "raw"
+# Where the validator records which travel keys `myhome.yaml` really carries for a
+# cover, so a stored calibration can be given its place in the precedence (0.5.0).
+CONF_KEYS_FROM_FILE = "keys_from_file"
+
 # Request timeout constants
 GATEWAY_TEST_TIMEOUT_SEC = 20
 
@@ -149,6 +166,26 @@ CONF_PROFILE = "profile"
 # that only lives inside it.
 CONF_COVER_PROFILES = "cover_profiles"
 CONF_REFERENCE_HEIGHT = "reference_height"
+# The slat phase of a *descent* (0.5.0). The model has one slat time, used for both
+# directions, and the precise level of the guided flow can measure the downward one
+# separately (the optional "it touched the floor" press); it is stored so the
+# measurement is not lost, and the day the travel model grows an asymmetric slat
+# phase it is already there. Nothing reads it yet - see the phase 1 handoff.
+CONF_CLOSING_SLAT_TIME = "closing_slat_time"
+# Every key of the travel model a stored calibration may carry, in the order a profile
+# is read in. `roll` is included for completeness: a guided calibration writes the two
+# directional ones, and `roll` is only their fallback.
+COVER_CALIBRATION_KEYS: tuple[str, ...] = (
+    CONF_OPENING_TIME,
+    CONF_CLOSING_TIME,
+    CONF_SLAT_TIME,
+    CONF_CLOSING_SLAT_TIME,
+    CONF_ROLL,
+    CONF_OPENING_ROLL,
+    CONF_CLOSING_ROLL,
+    CONF_STOP_LATENCY,
+    CONF_START_DELAY,
+)
 CONF_LOCK_BUTTONS = "lock_buttons"
 CONF_SOURCE_PLATFORM = "source_platform"
 CONF_HEATING_SUPPORT = "heat"

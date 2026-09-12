@@ -8,7 +8,7 @@ tests can assert the OpenWebNet frames each platform produces.
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -125,9 +125,10 @@ async def setup_myhome(
     *,
     connected: bool = True,
     clear_commands: bool = True,
+    subentries: Iterable[Any] = (),
 ) -> AsyncIterator[tuple[MockConfigEntry, Commands]]:
     """Set up the integration with ``yaml_text`` and yield the entry and the recorder."""
-    entry = make_entry(write_yaml(tmp_path, yaml_text))
+    entry = make_entry(write_yaml(tmp_path, yaml_text), subentries=subentries)
     with mock_gateway(), mock_commands() as commands:
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)

@@ -97,6 +97,7 @@ from .const import (
     CONF_INFO_LOG_INTERVAL_SEC,
     CONF_INVERTED,
     CONF_KEEPALIVE_MINUTES,
+    CONF_KEYS_FROM_FILE,
     # Contract A keys (added to const.py by F2; platform modules import them from there).
     CONF_LOCK_BUTTONS,
     CONF_MANUFACTURER,
@@ -123,6 +124,7 @@ from .const import (
     CONF_WHERE,
     CONF_WHO,
     CONF_ZONE,
+    COVER_CALIBRATION_KEYS,
     DEFAULT_KEEPALIVE_MINUTES,
     DEFAULT_MANUFACTURER,
     DEFAULT_ROLL,
@@ -701,6 +703,11 @@ COVER_FIELDS: dict = {
     Optional(CONF_TILT, default=DEFAULT_TILT): Boolean(),
     Optional(CONF_HEIGHT): _POSITIVE_FLOAT,
     Optional(CONF_PROFILE): str,
+    # The validator's own marker (0.5.0, ``record_cover_keys_from_file``), declared
+    # here for the same reason as ``keepalive_minutes_defaulted`` on a sensor: a config
+    # that has already been through the validator must not be reported as carrying an
+    # unknown key when it is validated again.
+    Optional(CONF_KEYS_FROM_FILE): [str],
     Optional(CONF_INVERTED, default=False): Boolean(),
     # Default (shutter) applied by _finalize_cover, after the ``device_class`` alias is folded.
     Optional(CONF_DEVICE_CLASS): _device_class(CoverDeviceClass, _COVER_CLASSES),
@@ -710,7 +717,7 @@ COVER_FIELDS: dict = {
 
 # One entry of the gateway-level ``cover_profiles:`` block (0.4.2): the measured
 # behaviour of ONE model of shutter, at one reference height.  Every cover that names
-# it gets its own times, scaled to its own ``height:`` (see _derive_cover_from_profile).
+# it gets its own times, scaled to its own ``height:`` (see derive_cover_from_profile).
 COVER_PROFILE_FIELDS: dict = {
     Required(CONF_REFERENCE_HEIGHT): _POSITIVE_FLOAT,
     # ``opening_time`` is required, but it may be spelled ``shutter_run`` here too, so
@@ -726,7 +733,7 @@ COVER_PROFILE_FIELDS: dict = {
     Optional(CONF_OPENING_ROLL): _ROLL,
     Optional(CONF_CLOSING_ROLL): _ROLL,
     # The bus costs (0.4.4) belong to the installation rather than to the window, so a
-    # profile carries them as they stand: _derive_cover_from_profile never scales them.
+    # profile carries them as they stand: derive_cover_from_profile never scales them.
     Optional(CONF_STOP_LATENCY, default=DEFAULT_STOP_LATENCY): _NON_NEGATIVE_FLOAT,
     Optional(CONF_START_DELAY, default=DEFAULT_START_DELAY): _NON_NEGATIVE_FLOAT,
 }
@@ -954,7 +961,7 @@ def _grown_roll(k_ref: float, ratio: float) -> float:
     return sqrt(1 + (k_ref * k_ref - 1) * ratio)
 
 
-def _derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
+def derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
     """The profile's timings, scaled from its reference height to ``height``.
 
     Physics, not curve fitting: the roll on the tube grows with the amount of curtain
@@ -1035,7 +1042,25 @@ def _cover_profile_values(device: Mapping, yaml_key: str) -> dict:
             ),
             path=[yaml_key, CONF_PROFILE],
         )
-    return _derive_cover_from_profile(profiles[name], device.get(CONF_HEIGHT))
+    return derive_cover_from_profile(profiles[name], device.get(CONF_HEIGHT))
+
+
+def record_cover_keys_from_file(device: MutableMapping, written: Iterable[str]) -> None:
+    """Remember which of the travel keys this cover really carries in ``myhome.yaml``.
+
+    The finalizer below fills in every key from the profile or from the defaults, so a
+    dict that has been through it can no longer say whether ``closing_time: 21.7`` was
+    written by the user or derived from something else.  From 0.5.0 that difference
+    matters: a guided calibration stored in a config subentry sits *between* the two
+    (it overrides the defaults and the profile, and is overridden by what the user
+    wrote in the file), and the only way to resolve it is to know what the file says.
+
+    ``shutter_run`` is recorded under its modern name, because that is what it is
+    (``_fold_shutter_run_alias``), and only the keys a calibration can supply are kept:
+    the rest would be noise in the diagnostics and in the entry the user can read.
+    """
+    keys = {CONF_OPENING_TIME if key == CONF_SHUTTER_RUN else key for key in written}
+    device[CONF_KEYS_FROM_FILE] = sorted(keys & set(COVER_CALIBRATION_KEYS))
 
 
 def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
@@ -1459,6 +1484,10 @@ class MyHomeDeviceSchema(Schema):
                 finalize(device, yaml_key)
             if self.platform == COVER:
                 _warn_cover_timings_on_advanced(device, yaml_key, written.get(yaml_key, set()))
+                # After the finalizer, deliberately: it is the one thing in the device
+                # dict that the finalizer's own defaults would otherwise erase the
+                # evidence of (0.5.0, the precedence of a stored calibration).
+                record_cover_keys_from_file(device, written.get(yaml_key, set()))
         return data
 
 
