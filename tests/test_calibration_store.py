@@ -829,19 +829,17 @@ async def test_a_subentry_of_another_kind_is_left_where_it_is(
 
 
 # --------------------------------------------------------------------------------------
-# A profile a window inherited its numbers from (0.5.0 v2, BUG-1)
+# A window that was *told* which profile it follows (BUG-1; final review RISK-A/RISK-B)
 # --------------------------------------------------------------------------------------
-# Path B measures a window's travel and says "it is one of those". A profile does not
-# beat a run time written in the file, so the name alone would leave such a window
-# exactly where it was; what is stored is the profile *scaled to this window*, marked
-# as derived, with the name and the height beside it so it can be derived again.
-def derived_record(profile: str, height: float) -> dict[str, Any]:
+# Path B and "Assegna un profilo" are the two screens on which somebody says, of this
+# window, "it is one of those" - after the file was written, on this installation. What
+# they store is the intent (`profile_wins`) and not the numbers it comes to, so the
+# profile is scaled again on every read and can never go stale.
+def assigned_record(profile: str, height: float) -> dict[str, Any]:
     return calibration_record(
         profile=profile,
+        profile_wins=True,
         height=height,
-        overrides=calibration_store.profile_overrides(
-            profile_as_config(profile, PROFILE_DATA), height
-        ),
         source=calibration_store.CALIBRATION_SOURCE_PROFILE,
     )
 
@@ -849,10 +847,11 @@ def derived_record(profile: str, height: float) -> dict[str, Any]:
 def test_a_profile_scaled_to_a_window_is_the_arithmetic_the_resolution_would_do() -> None:
     """`profile_overrides` is `derive_cover_from_profile`, rounded and cut to the keys.
 
-    The two bus costs are not among them on purpose: `stop_latency` and `start_delay`
-    are the gateway's answer time and the motor's brake, the same on every window, and
-    freezing them into a per-cover override would pin them against a later change of
-    the options.
+    Nothing stores the result any more, but the summary screen shows it and the YAML
+    snippet offers it as something to paste into the file, so the arithmetic still has
+    to be the resolution's own. The two bus costs are not among them on purpose:
+    `stop_latency` and `start_delay` are the gateway's answer time and the motor's
+    brake, the same on every window.
     """
     shaped = profile_as_config("tall", PROFILE_DATA)
     same = calibration_store.profile_overrides(shaped, 195.0)
@@ -870,25 +869,84 @@ def test_a_profile_scaled_to_a_window_is_the_arithmetic_the_resolution_would_do(
     assert CONF_START_DELAY not in shorter
 
 
-def test_numbers_inherited_from_a_profile_are_not_called_a_measurement() -> None:
-    """`Calibration source` names the profile, because that is where they came from.
+def test_a_window_told_to_follow_a_profile_puts_it_above_the_file_s_own_times() -> None:
+    """The precedence path B and the assignment screen ask for, and nothing else does.
 
-    Mutation caught: letting any record with overrides say `guided`, which would claim
-    a window was measured when only its height was.
+    A basic cover's run times are usually written per cover - which is how the owner's
+    `myhome.yaml` is written - and a profile sits under the file (spec 1.3). So a
+    record naming the profile alone left both screens doing nothing at all, on the two
+    screens whose whole promise is "this one is like that one" (BUG-1, RISK-B).
+
+    Mutation caught: dropping the `profile_wins` branch of `resolve_cover`, after which
+    the file's 30 s is what the cover runs on; and honouring the flag for a cover whose
+    `profile:` merely comes from the file, which would reverse spec 1.3 for everybody.
+    """
+    device = _validated(
+        **{
+            CONF_OPENING_TIME: 30.0,
+            CONF_CLOSING_TIME: 29.0,
+            CONF_KEYS_FROM_FILE: [CONF_OPENING_TIME, CONF_CLOSING_TIME],
+        }
+    )
+    told = StoredCalibration(
+        UNIQUE_ID,
+        profile="tall",
+        profile_wins=True,
+        height=195.0,
+        source=calibration_store.CALIBRATION_SOURCE_PROFILE,
+    )
+    resolved = resolve_cover(device, profiles={"tall": PROFILE}, calibration=told)
+    assert resolved.values[CONF_OPENING_TIME] == pytest.approx(22.3)
+    assert resolved.values[CONF_CLOSING_TIME] == pytest.approx(21.7)
+    assert resolved.source == "profile tall"
+
+    # ...and without the flag - a `profile:` the file gives the cover - the file wins,
+    # which is the order the whole module docstring argues out.
+    bare = StoredCalibration(UNIQUE_ID, profile="tall", height=195.0)
+    resolved_bare = resolve_cover(device, profiles={"tall": PROFILE}, calibration=bare)
+    assert resolved_bare.values[CONF_OPENING_TIME] == 30.0
+
+
+def test_a_tape_held_against_this_window_still_beats_the_profile_it_follows() -> None:
+    """The exception is under rule 1, not over it: a refinement is above everything.
+
+    "(C) Affina" measures this motor; the profile is a measurement of another window.
+
+    Mutation caught: putting the derived values above the stored overrides.
+    """
+    device = _validated(**{CONF_OPENING_TIME: 30.0, CONF_KEYS_FROM_FILE: [CONF_OPENING_TIME]})
+    refined = StoredCalibration(
+        UNIQUE_ID,
+        profile="tall",
+        profile_wins=True,
+        height=195.0,
+        overrides={CONF_OPENING_TIME: 27.5},
+    )
+    resolved = resolve_cover(device, profiles={"tall": PROFILE}, calibration=refined)
+    assert resolved.values[CONF_OPENING_TIME] == 27.5
+    # ...and everything it did not measure still comes from the profile, above the file.
+    assert resolved.values[CONF_CLOSING_TIME] == pytest.approx(21.7)
+    # It was measured here, so the attribute says so rather than naming the profile.
+    assert resolved.source == "guided"
+
+
+def test_a_window_that_was_only_assigned_is_not_called_a_measurement() -> None:
+    """`Calibration source` names the profile, because that is where the numbers are.
+
+    Mutation caught: letting a record with no overrides at all say `guided`, which
+    would claim a window was measured when only its height was.
     """
     inherited = StoredCalibration(
         cover_unique_id=UNIQUE_ID,
         profile="tall",
+        profile_wins=True,
         height=195.0,
-        overrides={CONF_OPENING_TIME: 22.3},
         source=calibration_store.CALIBRATION_SOURCE_PROFILE,
     )
-    assert inherited.derived_from_profile is True
+    assert inherited.follows_a_profile is True
     assert inherited.is_a_measurement is False
-    measured = StoredCalibration(
-        cover_unique_id=UNIQUE_ID, overrides={CONF_OPENING_TIME: 22.3}
-    )
-    assert measured.derived_from_profile is False
+    measured = StoredCalibration(cover_unique_id=UNIQUE_ID, overrides={CONF_OPENING_TIME: 22.3})
+    assert measured.follows_a_profile is False
     assert measured.is_a_measurement is True
     resolved = resolve_cover(
         _validated(**{CONF_HEIGHT: 195.0}), profiles={"tall": PROFILE}, calibration=inherited
@@ -896,20 +954,25 @@ def test_numbers_inherited_from_a_profile_are_not_called_a_measurement() -> None
     assert resolved.source == "profile tall"
 
 
-async def test_correcting_a_profile_derives_it_again_for_the_windows_it_lent_it_to(
+async def test_correcting_a_profile_reaches_the_windows_that_follow_it(
     hass: HomeAssistant, tmp_path
 ) -> None:
-    """The reason the name and the height are stored beside the numbers.
+    """Nothing was copied, so there is nothing to re-derive and nothing to forget.
 
-    Mutation caught: deriving once and never again, after which a corrected profile
-    stops reaching every window that inherited it - which is exactly what storing the
-    numbers was supposed not to cost.
+    The first draft of this stored the profile's numbers in every follower's record and
+    derived them again from `async_set_profile`. That worked for the profiles the store
+    owns and for no others: a `cover_profiles:` profile corrected in `myhome.yaml` went
+    on reaching its followers as a frozen copy of what it used to say (final review,
+    RISK-A).
+
+    Mutation caught: storing the numbers in the record again, after which a corrected
+    profile stops reaching the windows that follow it.
     """
     async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
         store = await load_store(hass, entry)
         await store.async_set_profile("tall", PROFILE_DATA)
-        # One window that inherited the profile, one that was measured on its own.
-        await store.async_set_calibration(UNIQUE_ID, derived_record("tall", 195.0))
+        # One window that follows the profile, one that was measured on its own.
+        await store.async_set_calibration(UNIQUE_ID, assigned_record("tall", 195.0))
         measured = f"{MAC}-2-82"
         await store.async_set_calibration(
             measured,
@@ -922,60 +985,87 @@ async def test_correcting_a_profile_derives_it_again_for_the_windows_it_lent_it_
             "tall", {**PROFILE_DATA, CONF_OPENING_TIME: 40.0, CONF_CLOSING_TIME: 39.0}
         )
 
-        assert store.calibration(UNIQUE_ID).overrides[CONF_OPENING_TIME] == 40.0
-        assert store.calibration(UNIQUE_ID).overrides[CONF_CLOSING_TIME] == 39.0
+        from_the_file = _validated(
+            **{CONF_OPENING_TIME: 20.0, CONF_KEYS_FROM_FILE: [CONF_OPENING_TIME]}
+        )
+        follower = resolve_cover(
+            from_the_file, profiles=store.profiles, calibration=store.calibration(UNIQUE_ID)
+        )
+        assert follower.values[CONF_OPENING_TIME] == pytest.approx(40.0)
+        assert follower.values[CONF_CLOSING_TIME] == pytest.approx(39.0)
         # ...and a measurement of a window is nobody else's business.
         assert store.calibration(measured).overrides == {CONF_OPENING_TIME: 30.0}
-        # It is on disk, not only in memory.
-        again = CalibrationStore(hass, entry.entry_id)
-        await again.async_load()
-        assert again.calibration(UNIQUE_ID).overrides[CONF_OPENING_TIME] == 40.0
 
-        # ...and a profile replaced by something this version cannot read takes its
-        # numbers away rather than deriving nonsense from them: the window goes back to
-        # what the file says, which is the safe way to be wrong.
+        # A profile replaced by something this version cannot read is ignored rather
+        # than derived from: the window goes back to what the file says, which is the
+        # safe way to be wrong.
         await store.async_set_profile("tall", {CONF_NAME: "tall"})
-        assert store.calibration(UNIQUE_ID).overrides == {}
+        assert store.profiles == {}
+        back = resolve_cover(
+            from_the_file, profiles=store.profiles, calibration=store.calibration(UNIQUE_ID)
+        )
+        assert back.values[CONF_OPENING_TIME] == 20.0
 
 
-async def test_deleting_a_profile_takes_back_the_numbers_it_lent(
+async def test_deleting_a_profile_takes_the_assignment_and_leaves_the_measurements(
     hass: HomeAssistant, tmp_path
 ) -> None:
-    """Inherited numbers go with the profile; the height that was measured stays.
+    """The name goes, and with it the precedence it carried; the tape readings stay.
 
-    Mutation caught: leaving them behind, which would keep a window running for ever on
-    a profile the user deleted - and beating the configuration file while doing it.
+    Mutation caught: leaving the name behind, which would make "Profili e tapparelle"
+    offer a profile that does not exist - and leave a window claiming to follow it.
     """
     async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
         store = await load_store(hass, entry)
         await store.async_set_profile("tall", PROFILE_DATA)
-        await store.async_set_calibration(UNIQUE_ID, derived_record("tall", 195.0))
+        await store.async_set_calibration(UNIQUE_ID, assigned_record("tall", 195.0))
+        measured = f"{MAC}-2-82"
+        await store.async_set_calibration(
+            measured,
+            cover_calibration_data(
+                measured,
+                profile="tall",
+                profile_wins=True,
+                height=195.0,
+                overrides={CONF_OPENING_TIME: 30.0},
+            ),
+        )
 
-        assert await store.async_remove_profile("tall") == [UNIQUE_ID]
+        assert await store.async_remove_profile("tall") == sorted([UNIQUE_ID, measured])
 
         record = store.calibration(UNIQUE_ID)
-        assert record.overrides == {}
         assert record.profile is None
+        assert record.profile_wins is False
         assert record.height == 195.0
+        # What was measured on the other window is not the profile's to take away.
+        assert store.calibration(measured).overrides == {CONF_OPENING_TIME: 30.0}
+        assert store.calibration(measured).follows_a_profile is False
 
 
-async def test_moving_a_window_to_another_profile_drops_the_first_one_s_numbers(
+async def test_moving_a_window_to_another_profile_keeps_what_was_measured_on_it(
     hass: HomeAssistant, tmp_path
 ) -> None:
-    """Assigning is not measuring: the new assignment is a bare one.
+    """Assigning names a kind of shutter; it does not un-measure this one.
 
-    Mutation caught: keeping the old profile's arithmetic, which would leave the window
-    running on a profile it no longer follows.
+    Mutation caught: writing a bare assignment, without the `profile_wins` that is the
+    whole content of the screen - the new profile would then not reach a cover whose
+    file carries its own run times (review RISK-B).
     """
     async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
         store = await load_store(hass, entry)
         await store.async_set_profile("tall", PROFILE_DATA)
-        await store.async_set_calibration(UNIQUE_ID, derived_record("tall", 195.0))
+        await store.async_set_calibration(UNIQUE_ID, assigned_record("tall", 195.0))
 
         assert await store.async_set_assignments({UNIQUE_ID: ("short", None)}) is True
         record = store.calibration(UNIQUE_ID)
         assert record.profile == "short"
-        assert record.overrides == {}
+        assert record.profile_wins is True
         assert record.height == 195.0
         # Re-assigning it to the same profile changes nothing at all.
         assert await store.async_set_assignments({UNIQUE_ID: ("short", None)}) is False
+        # ..."Nessun profilo" takes the precedence away with the name, and leaves the
+        # height, which was measured with a tape.
+        assert await store.async_set_assignments({UNIQUE_ID: (None, None)}) is True
+        assert store.calibration(UNIQUE_ID).follows_a_profile is False
+        assert store.calibration(UNIQUE_ID).profile is None
+        assert store.calibration(UNIQUE_ID).height == 195.0

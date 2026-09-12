@@ -15,6 +15,7 @@ inside a wait, or between a frame and its answer.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -848,3 +849,80 @@ async def test_the_one_at_a_time_lock_is_one_per_gateway(hass: HomeAssistant, tm
             assert err.value.reason == REASON_BUSY
         finally:
             mine.release()
+
+
+async def test_a_run_cut_short_is_not_settled_until_its_stop_is_on_the_bus(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """What a reload has to wait for, and the only exact way to wait for it.
+
+    Closing the dialog cancels the progress task and then calls the options flow's
+    `async_remove`, which schedules the reload: at that instant the `finally` that
+    shields the stop has not run yet, so the reload could close the gateway sessions
+    first and swallow the one stop the runner goes to some trouble to write. Two turns
+    of the event loop used to stand in for the wait - a guess nothing could pin (final
+    review, RISK-D, mutation M11).
+
+    Mutation caught: setting the event in the `finally` of the run itself, which is
+    reached while the shielded stop is still on its way; never clearing it, which makes
+    every wait return at once.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        # The run is held in the wait it spends most of its life in, which is where the
+        # dialog closing finds it.
+        parked = asyncio.Event()
+
+        async def _hold(_seconds: float) -> None:
+            await parked.wait()
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", _hold),
+        ):
+            task = hass.async_create_task(cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5))
+            for _ in range(12):
+                await asyncio.sleep(0)
+            assert path.frames == [LOWER]
+            assert cover._calib_settled.is_set() is False  # noqa: SLF001
+
+            # The dialog is closed: the task is cancelled and nobody awaits it.
+            task.cancel()
+            assert STOP not in path.frames
+
+            assert await cover.async_calib_settled() is True
+            assert STOP in path.frames
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+async def test_a_run_that_ends_by_itself_leaves_nothing_to_wait_for(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The common case costs the reload nothing at all.
+
+    Mutation caught: leaving the event clear after a run that stopped the shutter
+    itself, which would make every close of the dialog wait out the timeout.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        with _patched(path)[0], _patched(path)[1]:
+            await cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5)
+        assert cover._calib_settled.is_set() is True  # noqa: SLF001
+        assert await cover.async_calib_settled() is True
+
+
+async def test_a_run_that_never_tidies_up_does_not_hold_the_reload_for_ever(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A gateway that is not answering is a reason to reload, not a reason to wait.
+
+    Mutation caught: waiting on the event with no bound at all, which would leave the
+    entry unloadable behind a stop nothing is ever going to write.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        cover._calib_settled.clear()  # noqa: SLF001 - a run that never came back
+        assert await cover.async_calib_settled(timeout=0.01) is False

@@ -236,9 +236,19 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "verify_offer": {"cover"},
     "verify_result": {"cover", "deviation"},
     "profile_name": {"cover", "replaced"},
-    "summary_basic": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
-    "summary_short": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
-    "summary_precise": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
+    # `replacing` / `keeping` are the two lists of keys the save is about to write over
+    # and to leave exactly as they are (final review, BUG-A): every summary is given
+    # them, and the short one - the only summary reached on a window something may
+    # already be stored for - says them out loud.
+    "summary_basic": {
+        "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
+    },
+    "summary_short": {
+        "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
+    },
+    "summary_precise": {
+        "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
+    },
     "saved": {"cover", "profile"},
     "cancelled": set(),
     "expired": {"cover"},
@@ -646,6 +656,44 @@ def test_both_briefings_name_the_motor_the_slats_and_the_base(path: Path) -> Non
         description = steps[briefing]["description"].lower()
         for word in TIMED_VOCABULARY[path.stem]:
             assert word in description, f"{path.name}: {briefing}: {word!r}"
+
+
+# The single most consequential sentence in the whole flow, in the language of each
+# file: **do not press** when the bottom edge touches **the base**, because the curtain
+# goes on moving to close **the slats**. A press at the floor mis-measures the closing
+# run by the whole slat phase, and every position the model computes afterwards is out
+# by it. The three fragments have to appear in one and the same paragraph, so that a
+# translation which keeps the words and loses the warning cannot pass.
+CLOSE_WARNING: dict[str, tuple[str, str, str]] = {
+    "strings": ("do not press", "base", "slats included"),
+    "en": ("do not press", "base", "slats included"),
+    "it": ("non premere", "base", "lamelle comprese"),
+    "fr": ("n'appuyez pas", "base", "lames comprises"),
+    "nl": ("druk niet", "basis", "lamellen inbegrepen"),
+    "es": ("no pulses", "base", "lamas incluidas"),
+    "de": ("drücken sie nicht", "grundlinie", "lamellen eingeschlossen"),
+    "pt": ("não carregue", "base", "lâminas incluídas"),
+}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_closing_briefing_says_not_to_press_at_the_base(path: Path) -> None:
+    """The warning is a negation, and a test that only looks for words cannot see it.
+
+    `test_both_briefings_name_the_motor_the_slats_and_the_base` is satisfied by the
+    three words appearing anywhere, so deleting the whole "Attenzione: non premere
+    quando il bordo inferiore tocca la base" paragraph from the file the owner reads
+    left all 1117 tests green (final review, mutation M22). FLOW asks for that sentence
+    "esplicitamente", and it is the one the second live walk-through got wrong twice.
+
+    Mutation caught: dropping the paragraph, or translating the negation away, in any
+    of the eight files.
+    """
+    paragraphs = options_block(path)["step"]["close_brief"]["description"].lower().split("\n\n")
+    wanted = CLOSE_WARNING[path.stem]
+    assert any(all(fragment in paragraph for fragment in wanted) for paragraph in paragraphs), (
+        f"{path.name}: close_brief never says {wanted!r} in one paragraph"
+    )
 
 
 @pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)

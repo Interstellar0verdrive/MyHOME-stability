@@ -71,6 +71,7 @@ from custom_components.myhome.const import (
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_PROFILE,
+    CONF_PROFILE_WINS,
     CONF_RAW,
     CONF_REFERENCE_HEIGHT,
     CONF_SLAT_TIME,
@@ -195,6 +196,10 @@ PROFILE_YAML = (
       roll: {ROLL_DOWN}
 """
 )
+
+# The same, with no `height:` for the cover: nothing anywhere knows this window's own
+# travel, which is the one case a summary may report "-" for it.
+NO_HEIGHT_PROFILE_YAML = PROFILE_YAML.replace(f"      height: {HEIGHT}\n", "")
 
 # Two basic covers, so the assignment form has more than one row and the second one has
 # no height anywhere.
@@ -1230,13 +1235,14 @@ async def test_path_b_reaches_a_shutter_whose_file_carries_its_own_run_times(
     in the owner's own `myhome.yaml` is written, and a profile does not beat a key
     written in the file (spec 1.3). Storing the profile's name alone therefore left the
     shutter exactly where it was while the summary promised the opposite - the review's
-    BUG-1, and the headline of the release. So path B stores the profile *scaled to
-    this window* as its own overrides, and keeps the name and the height beside them.
+    BUG-1, and the headline of the release. So the record says that *this window*
+    follows that profile (`profile_wins`), which is the one thing that puts the
+    profile's values above the run times the file writes for this cover.
 
-    Mutation caught: writing `{profile, height}` and no overrides (the entity keeps the
-    file's 30 / 29 / 6); scaling by the profile's reference height instead of this
-    window's; stamping the record `guided`, which would make `Calibration source` claim
-    this window was measured when only its height was.
+    Mutation caught: writing a bare `{profile, height}` without the flag (the entity
+    keeps the file's 30 / 29 / 6); baking the numbers into the record instead, which is
+    what went stale; stamping the record `guided`, which would make `Calibration
+    source` claim this window was measured when only its height was.
     """
     async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
@@ -1244,16 +1250,11 @@ async def test_path_b_reaches_a_shutter_whose_file_carries_its_own_run_times(
         assert result["step_id"] == "saved"
         calibration = the_calibration(hass, entry)
         assert calibration[CONF_PROFILE] == "tall"
+        assert calibration[CONF_PROFILE_WINS] is True
         assert calibration[CONF_HEIGHT] == HEIGHT
-        # The profile is this very window's, so scaling it changes nothing: the numbers
-        # stored are the profile's own.
-        assert calibration["overrides"] == {
-            CONF_OPENING_TIME: pytest.approx(OPENING, abs=0.05),
-            CONF_CLOSING_TIME: pytest.approx(CLOSING, abs=0.05),
-            CONF_SLAT_TIME: pytest.approx(SLAT, abs=0.05),
-            CONF_OPENING_ROLL: pytest.approx(ROLL_DOWN, abs=0.01),
-            CONF_CLOSING_ROLL: pytest.approx(ROLL_DOWN, abs=0.01),
-        }
+        # Nothing of the profile is copied: what it comes to is worked out on every
+        # read, so a correction of the profile can never miss this window.
+        assert "overrides" not in calibration
         # One homing, no timed run, no fractional run: the height is the measurement.
         assert runner.started == []
         assert runner.runs == []
@@ -1308,6 +1309,14 @@ async def test_path_b_offers_the_refinement_when_the_check_is_far_out(
         result = await choose(hass, result, "path_c")
         assert result["step_id"] == "path_c"
         assert _suggested_default(result, CONF_PROFILE) == "tall"
+
+
+def _choices(result: dict[str, Any], key: str) -> list[str]:
+    """The options one `vol.In` field of a form really offers."""
+    for marker, validator in result["data_schema"].schema.items():
+        if marker == key:
+            return list(getattr(validator, "container", ()))
+    raise AssertionError(f"{key} is not in this form")
 
 
 def _suggested_default(result: dict[str, Any], key: str) -> Any:
@@ -1437,13 +1446,31 @@ async def test_path_c_starts_from_the_profile_the_cover_already_follows(
 async def test_the_summary_of_a_times_only_refinement_says_nothing_it_did_not_measure(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """No tape was read, so there is neither a travel nor an accuracy to report."""
+    """No tape was read, so there is no accuracy to report.
+
+    The travel is a different matter: it is not measured here either, but it is already
+    known - the file writes it - and the conversation starts from what is known rather
+    than from nothing, so that Save does not write a record that has forgotten it
+    (final review, BUG-A).
+    """
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
         placeholders = result["description_placeholders"]
-        assert placeholders["height"] == "\u2013"
         assert placeholders["accuracy"] == "\u2013"
+        assert placeholders["height"] == f"{HEIGHT:.0f} cm"
+        # ...and the same screen on a window nobody has ever measured says so.
+        assert placeholders["keeping"].endswith(CONF_HEIGHT)
+
+
+async def test_a_refinement_of_a_window_nobody_measured_reports_no_travel(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Nothing knows this window's travel, so the summary says so rather than inventing one."""
+    async with calibrating(hass, tmp_path, NO_HEIGHT_PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
+        assert result["description_placeholders"]["height"] == "\u2013"
 
 
 async def test_paths_b_and_c_begin_at_an_end_stop_the_user_has_confirmed(
@@ -1463,6 +1490,158 @@ async def test_paths_b_and_c_begin_at_an_end_stop_the_user_has_confirmed(
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:6])
         assert result["step_id"] == "home_closed_done"
         assert runner.homed == [DIRECTION_CLOSE]
+
+
+# --------------------------------------------------------------------------------------
+# What a second conversation on the same window is allowed to forget (final review BUG-A)
+# --------------------------------------------------------------------------------------
+async def test_refining_a_window_keeps_the_height_and_the_rolls_it_did_not_measure(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Affina la calibrazione" makes the model better, or it is not a refinement.
+
+    A window measured once - whose travel the guided flow is the only thing that knows,
+    because the file writes no `height:` for it - is refined on its two run times
+    alone. Writing the record whole threw the travel and both roll coefficients away:
+    the shutter fell back to the file's `roll: 1.2` and to no height at all, and the
+    position model came out of the refinement *worse* than it went in, on the one
+    screen whose whole promise is the opposite (final review, BUG-A).
+
+    Mutation caught: building the record from this conversation alone (`overrides=` and
+    `height=` straight off `_Measured`), which is what it used to do.
+    """
+    async with calibrating(hass, tmp_path, NO_HEIGHT_PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        store = the_store(hass, entry)
+        await store.async_set_calibration(
+            UNIQUE_ID,
+            calibration_store.cover_calibration_data(
+                UNIQUE_ID,
+                height=HEIGHT,
+                overrides={
+                    CONF_OPENING_TIME: 27.0,
+                    CONF_CLOSING_TIME: 26.0,
+                    CONF_SLAT_TIME: 4.7,
+                    CONF_OPENING_ROLL: ROLL_UP,
+                    CONF_CLOSING_ROLL: ROLL_DOWN,
+                },
+            ),
+        )
+
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
+        assert result["step_id"] == "saved"
+
+        record = the_store(hass, entry).calibration(UNIQUE_ID)
+        # The two run times and the slat phase are this conversation's...
+        assert record.overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
+        assert record.overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
+        # ...and everything it had no opinion about is exactly as it was.
+        assert record.overrides[CONF_OPENING_ROLL] == ROLL_UP
+        assert record.overrides[CONF_CLOSING_ROLL] == ROLL_DOWN
+        assert record.height == HEIGHT
+
+        # ...which is what the shutter really runs on once the dialog is closed.
+        result = await choose(hass, result, "init")
+        await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        state = hass.states.get(ENTITY)
+        assert state.attributes["Opening roll"] == ROLL_UP
+        assert state.attributes["Closing roll"] == ROLL_DOWN
+        assert state.attributes["Height"] == HEIGHT
+
+
+async def test_the_short_summary_says_what_it_replaces_and_what_it_leaves_alone(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The screen before Save names both lists, by the keys the record is shown under.
+
+    "Nothing is written before Save" is only worth something if the screen that asks
+    says what Save will do. A dash under "Corsa del telo" is not a way of saying "the
+    195 cm you measured last month is about to be deleted" (final review, BUG-A).
+
+    Mutation caught: reporting the whole record as replaced, or the summary computing
+    its two lists from something other than what Save writes.
+    """
+    async with calibrating(hass, tmp_path, NO_HEIGHT_PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await the_store(hass, entry).async_set_calibration(
+            UNIQUE_ID,
+            calibration_store.cover_calibration_data(
+                UNIQUE_ID,
+                height=HEIGHT,
+                overrides={CONF_OPENING_TIME: 27.0, CONF_CLOSING_ROLL: ROLL_DOWN},
+            ),
+        )
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
+        assert result["step_id"] == "summary_short"
+        placeholders = result["description_placeholders"]
+        replacing = placeholders["replacing"].split(", ")
+        keeping = placeholders["keeping"].split(", ")
+        assert set(replacing) == {CONF_OPENING_TIME, CONF_CLOSING_TIME, CONF_SLAT_TIME}
+        assert set(keeping) == {CONF_CLOSING_ROLL, CONF_HEIGHT}
+
+
+async def test_measuring_a_window_again_starts_from_the_travel_it_is_known_to_have(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Misura di nuovo" is a way into the same three paths, not a way to forget.
+
+    It reset the conversation and claimed the cover, and path C then measured two run
+    times against a travel of `None` (final review, BUG-A).
+
+    Mutation caught: not seeding the height on this entrance, after which the refinement
+    of a re-measured window loses it.
+    """
+    async with calibrating(hass, tmp_path, NO_HEIGHT_PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await the_store(hass, entry).async_set_calibration(
+            UNIQUE_ID,
+            calibration_store.cover_calibration_data(
+                UNIQUE_ID, height=HEIGHT, overrides={CONF_OPENING_TIME: 27.0}
+            ),
+        )
+        result = await choose(hass, await open_dialog(hass, entry), "calibrations")
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        result = await choose(hass, result, "calibration_remeasure")
+        assert result["step_id"] == "path"
+
+        result = await drive(hass, freezer, result, PATH_C_TIMES[3:-1])
+        assert result["step_id"] == "summary_short"
+        # The screen before Save says what it is scaling by and what it will keep...
+        assert result["description_placeholders"]["height"] == f"{HEIGHT:.0f} cm"
+        assert CONF_HEIGHT in result["description_placeholders"]["keeping"]
+        result = await choose(hass, result, "save")
+        assert result["step_id"] == "saved"
+        # ...and the record still has it.
+        assert the_store(hass, entry).calibration(UNIQUE_ID).height == HEIGHT
+
+
+async def test_a_refinement_never_copies_the_file_s_height_into_the_record(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The travel it starts from may be the file's, and the file's stays the file's.
+
+    Seeding the conversation with what is known is not the same as claiming it: a copy
+    of the file's `height:` stored here would shadow the very line it was read from,
+    for ever and silently - which is the half of BUG-2 the assignment form was fixed
+    for, and the staleness RISK-A is about.
+
+    Mutation caught: writing `self._measured.height` whatever its provenance.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
+        assert result["step_id"] == "saved"
+        record = the_store(hass, entry).calibration(UNIQUE_ID)
+        assert record.height is None
+        # ...and the cover still has one, because the file says so.
+        result = await choose(hass, result, "init")
+        await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        assert hass.states.get(ENTITY).attributes["Height"] == HEIGHT
+
 
 
 # --------------------------------------------------------------------------------------
@@ -2477,6 +2656,116 @@ async def test_assigning_another_profile_never_borrows_the_first_one_s_height(
         assert record.height == 150.0
 
 
+
+async def test_submitting_the_assignment_form_unchanged_writes_nothing_for_a_file_profile(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The case the "only the rows that moved" guard is really for.
+
+    On a cover nothing assigns, the *other* half of the BUG-2 fix (never passing a
+    height) already makes an unchanged "Nessun profilo" row write nothing - so the
+    guard could be removed and all 1117 tests stayed green (mutation M4). A cover the
+    **file** gives a `profile:` is the case that needs it: the form opens on that
+    profile, and collecting the row would write `{profile: tall, profile_wins: true}`
+    for it, list it under "Calibrazioni" as something the user did, reverse the
+    file's own precedence and reload the gateway - after a screen on which nothing
+    was touched.
+
+    Mutation caught: collecting the rows that did not move.
+    """
+    async with calibrating(hass, tmp_path, FILE_PROFILE_YAML) as (entry, _commands):
+        with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+            result = await _assignment_form(hass, entry)
+            unchanged = {
+                str(marker): _suggestion(result, str(marker))
+                for marker in result["data_schema"].schema
+            }
+            assert unchanged == {COVER_NAME: "tall"}
+            result = await submit(hass, result, unchanged)
+            assert result["step_id"] == "profiles_covers"
+            assert the_store(hass, entry).raw_covers == {}
+
+            result = await choose(hass, result, "init")
+            await choose(hass, result, "finish")
+            await hass.async_block_till_done()
+        assert reload.call_count == 0
+
+
+async def test_a_reload_stops_a_shutter_the_conversation_left_running(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The two ways a conversation ends without the user must not differ silently.
+
+    The watchdog stops a shutter it finds still moving; an unload released the session
+    and let go of it, while the screen the user then finds says "la tapparella è dove
+    l'ha lasciata l'ultimo movimento" (final review, RISK-C).
+
+    Mutation caught: releasing without stopping on the unload path.
+    """
+    async with calibrating(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        runner = FakeRunner(cover)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:7])
+        assert result["step_id"] == "open_lift"
+        cover._moving = "opening"  # noqa: SLF001 - the shutter is still travelling
+        assert runner.stops == 0
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        assert runner.stops >= 1
+        # ...and the conversation is over, as BUG-4 asks.
+        result = await choose(hass, result, "repeat_step")
+        assert result["step_id"] == "expired"
+
+
+async def test_the_reload_waits_for_a_movement_that_was_cut_short(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Closing the dialog mid-movement must not tear the gateway down over the stop.
+
+    Home Assistant cancels the progress task and *then* calls `async_remove`, so the
+    `finally` that shields the stop of a run in flight has not run yet. Two turns of
+    the event loop used to stand in for it: a guess about how many awaits the stop
+    costs, which nothing pinned - removing both sleeps left all 1117 tests green
+    (final review, RISK-D, mutation M11). What is awaited now is the run itself.
+
+    Mutation caught: scheduling the reload without waiting for the cover to be settled.
+    """
+    async with calibrating(hass, tmp_path, TWO_COVERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        # One conversation saved something, so closing the dialog reloads...
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC)
+        assert result["step_id"] == "saved"
+
+        # ...and a second one is half way through a movement on the other shutter.
+        second = entity_object(hass, COVER, "2-82")
+        FakeRunner(second)
+        result = await choose(hass, result, "calibrate")
+        result = await choose(hass, result, "cover")
+        result = await submit(hass, result, {"cover": SECOND_UNIQUE_ID})
+        result = await choose(hass, result, "path_a")
+        assert second.calibrating is True
+
+        order: list[str] = []
+
+        async def _settled(timeout: float | None = None) -> bool:
+            order.append("settled")
+            return True
+
+        second.async_calib_settled = _settled
+        with patch.object(
+            hass.config_entries,
+            "async_schedule_reload",
+            side_effect=lambda entry_id: order.append("reload"),
+        ):
+            hass.config_entries.options.async_abort(result["flow_id"])
+            await hass.async_block_till_done()
+
+        assert order == ["settled", "reload"]
+
+
 async def test_a_dialog_open_across_a_reload_writes_through_the_live_store(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -2510,8 +2799,17 @@ async def test_a_dialog_open_across_a_reload_writes_through_the_live_store(
             ),
         )
 
-        # ...and only then does the old dialog write.
+        # The old dialog *reads* the live store too: a snapshot from before the reload
+        # would list, prefill and confirm against profiles that are no longer what the
+        # gateway is running on, and `calibration_edit` would write that snapshot back
+        # through the live store (review BUG-3, mutation M5).
         result = await choose(hass, dialog, "profiles_covers")
+        result = await choose(hass, result, "pick_profile")
+        assert "written_after_reload" in _choices(result, "profile")
+        result = await submit(hass, result, {"profile": "written_after_reload"})
+        result = await choose(hass, result, "profiles_covers")
+
+        # ...and only then does the old dialog write.
         result = await choose(hass, result, "assign_covers")
         result = await submit(hass, result, {COVER_NAME: "tall"})
         assert result["step_id"] == "profiles_covers"
@@ -2644,19 +2942,20 @@ async def test_a_profile_may_not_be_named_like_the_no_profile_option(
         assert result["errors"] == {CONF_NAME: "invalid_name"}
 
 
-async def test_editing_a_profile_reaches_the_windows_that_inherited_its_numbers(
+async def test_editing_a_profile_reaches_the_windows_that_follow_it(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Path B keeps the name and the height, so a correction can be derived again.
+    """Path B keeps the name and the height, and the numbers are worked out from them.
 
-    That is the whole reason the record carries `{profile, height}` beside the numbers:
-    storing the numbers alone would have made a later correction of the profile stop
-    reaching every window that had inherited it.
+    That is the whole reason the record carries `{profile, height, profile_wins}` and
+    no numbers at all: a copy of the profile would have stopped following it the moment
+    it was corrected.
 
-    Mutation caught: deriving the numbers once and never again.
+    Mutation caught: storing the profile's values in the record, after which the
+    correction below reaches nothing.
     """
     # A *stored* profile, because a `cover_profiles:` block belongs to the file and the
-    # dialog does not edit it.
+    # dialog does not edit it. The file's own case is the test below.
     async with calibrating(hass, tmp_path, OWN_NUMBERS_YAML) as (entry, _commands):
         await the_store(hass, entry).async_set_profile(
             "tall",
@@ -2673,13 +2972,15 @@ async def test_editing_a_profile_reaches_the_windows_that_inherited_its_numbers(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
         assert result["step_id"] == "saved"
-        assert the_store(hass, entry).calibration(UNIQUE_ID).overrides[
-            CONF_OPENING_TIME
-        ] == pytest.approx(OPENING, abs=0.05)
         result = await choose(hass, result, "init")
         await choose(hass, result, "finish")
         await hass.async_block_till_done()
         await set_connected(hass, True)
+        # The file says 30 s for this cover; the profile it was told to follow says
+        # 22.3, and that is what the shutter runs on.
+        assert hass.states.get(ENTITY).attributes["Opening time"] == pytest.approx(
+            OPENING, abs=0.05
+        )
 
         # The profile is corrected by hand: this window is 195 cm, the profile's own
         # reference height, so the numbers reach it unscaled.
@@ -2700,9 +3001,97 @@ async def test_editing_a_profile_reaches_the_windows_that_inherited_its_numbers(
             },
         )
         assert result["step_id"] == "profile_actions"
-        overrides = the_store(hass, entry).calibration(UNIQUE_ID).overrides
-        assert overrides[CONF_OPENING_TIME] == pytest.approx(40.0, abs=0.05)
-        assert overrides[CONF_CLOSING_TIME] == pytest.approx(39.0, abs=0.05)
+        # The record still holds nothing but the name and the height...
+        assert "overrides" not in the_calibration(hass, entry)
+        result = await choose(hass, result, "profiles_covers")
+        result = await choose(hass, result, "init")
+        await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        # ...and the shutter runs on the corrected profile.
+        state = hass.states.get(ENTITY)
+        assert state.attributes["Opening time"] == pytest.approx(40.0, abs=0.05)
+        assert state.attributes["Closing time"] == pytest.approx(39.0, abs=0.05)
+
+
+async def test_a_profile_corrected_in_the_file_reaches_the_windows_that_follow_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A `cover_profiles:` profile is the user's, and correcting it has to be enough.
+
+    The first fix of BUG-1 stored the profile's numbers in the follower's record and
+    derived them again whenever a *stored* profile was written. A profile written by
+    hand in `myhome.yaml` - which this integration has supported since 0.4.x and the
+    release notes still recommend - has no such hook: the numbers were a frozen copy,
+    and the attribute went on naming a profile the window no longer followed (final
+    review, RISK-A).
+
+    Mutation caught: storing what the profile comes to instead of the fact that this
+    window follows it.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
+        assert result["step_id"] == "saved"
+        result = await choose(hass, result, "init")
+        await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        assert hass.states.get(ENTITY).attributes["Opening time"] == pytest.approx(
+            OPENING, abs=0.05
+        )
+
+        # The user corrects the profile in their own file and reloads.
+        (tmp_path / "myhome.yaml").write_text(
+            PROFILE_AND_OWN_NUMBERS_YAML.replace(
+                f"      opening_time: {OPENING}", "      opening_time: 40.0"
+            ),
+            encoding="utf-8",
+        )
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        state = hass.states.get(ENTITY)
+        assert state.attributes["Opening time"] == pytest.approx(40.0, abs=0.05)
+        assert state.attributes[ATTR_CALIBRATION_SOURCE] == "profile tall"
+
+
+async def test_assigning_a_profile_makes_the_cover_follow_it(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """"Assegna un profilo" and path B now mean the same thing by the same sentence.
+
+    The screen says "this cover is built like those ones" and used to change nothing at
+    all on a file that writes its own run times - which is how the owner's is written -
+    while path B, two menus away, changed everything (final review, RISK-B).
+
+    Mutation caught: writing the assignment without `profile_wins`.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        before = hass.states.get(ENTITY)
+        assert before.attributes["Opening time"] == pytest.approx(FILE_OPENING)
+
+        result = await _assignment_form(hass, entry)
+        result = await submit(hass, result, {COVER_NAME: "tall"})
+        assert result["step_id"] == "profiles_covers"
+        record = the_store(hass, entry).calibration(UNIQUE_ID)
+        assert record.follows_a_profile is True
+
+        result = await choose(hass, result, "init")
+        await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        state = hass.states.get(ENTITY)
+        assert state.attributes["Opening time"] == pytest.approx(OPENING, abs=0.05)
+        assert state.attributes["Closing time"] == pytest.approx(CLOSING, abs=0.05)
+        assert state.attributes[ATTR_CALIBRATION_SOURCE] == "profile tall"
+
+        # ...and "Vedi i valori" says so: the flag is a precedence, not a detail.
+        result = await choose(hass, await open_dialog(hass, entry), "calibrations")
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        result = await choose(hass, result, "calibration_view")
+        assert f"{CONF_PROFILE_WINS}: true" in result["description_placeholders"]["values"]
 
 
 # --------------------------------------------------------------------------------------
