@@ -74,6 +74,11 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   that model on your own shutter in centimetres and scale it to every other shutter
   of the same kind by its height (`cover_profiles:`) — see
   [Calibrating a shutter in centimetres](docs/recipes.md#calibrating-a-shutter-in-centimetres)
+- **Guided calibration**: *Configure → "Calibrate a shutter"* drives the shutter,
+  times its runs from the actuator's own status frames and asks for three tape
+  readings; it stores the model where it beats `myhome.yaml`, and writes a profile
+  every similar shutter inherits by its height — see
+  [Guided calibration](docs/guided-calibration.md)
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
 - **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy
@@ -91,7 +96,8 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   discovery, request instant power
 - **Discovery**: devices seen on the bus but not yet configured are written as
   suggestions to `myhome_discovered.yaml` (your `myhome.yaml` is never modified)
-- **Multiple gateways** in one `myhome.yaml`; English, French, Italian and Dutch translations
+- **Multiple gateways** in one `myhome.yaml`; English, French, Italian, Dutch,
+  Spanish, German and Portuguese translations
 - **Resilient by design**: TCP keepalive and idle watchdog on the event session,
   timeout/retry/TTL on the command queue, entity availability that follows the
   real connection state, strict YAML validation with clear error messages
@@ -258,6 +264,9 @@ The [`docs/`](docs/README.md) folder goes deeper than this README:
   icons, and validation errors
 - [Services and events](docs/services-and-events.md) — every service's fields
   and every event's data contract
+- [Guided calibration](docs/guided-calibration.md) — the *Configure → "Calibrate a
+  shutter"* dialog: the three paths, the two levels, the management screens and
+  where the values are kept
 - [Energy monitoring](docs/energy.md) — the instant-power keep-alive, the push
   filter, daily/monthly/total energy, and deriving kWh without gateway totals
 - [Discovery](docs/discovery.md) — what a discovery run writes and does not touch

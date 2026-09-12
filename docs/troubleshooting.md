@@ -123,9 +123,11 @@ way down and too high on the way up. See
    directions carry different coefficients. Covers of `class: shutter` default to
    `1.6` in both directions since 0.4.2; anything else defaults to `1.0`, the old
    linear estimate.
-2. Measure the real values once with
-   [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres)
-   and apply them, on that cover or as a profile shared by every shutter of the same
+2. Measure the real values once with the
+   [guided calibration](guided-calibration.md) — *Configure → "Calibrate a
+   shutter"*, which measures and stores them for you — or by hand with
+   [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres),
+   and apply them on that cover or as a profile shared by every shutter of the same
    kind.
 3. **If it misses going up but not coming down** (or the other way round), one
    coefficient cannot describe both directions — which is common, since a shutter is
@@ -139,6 +141,25 @@ way down and too high on the way up. See
    sits at `0` while the slats are still moving, that is `slat_time`, not the roll:
    stopwatch it (the calibration never solves it for you) — see
    [the two-phase travel model](configuration.md#the-two-phase-travel-model-slat_time).
+
+**The guided calibration will not measure a shutter:**
+
+The dialog under *Configure → "Calibrate a shutter"* times a run from the
+actuator's own "moving" status, so it needs the shutter to report that it has
+started. When it does not, the step stops with *"the shutter did not answer"*; when
+the gateway never wrote the frame at all, with *"the command never reached the
+bus"*. Check that nothing else is driving the shutter — a wall pushbutton, an
+automation, another dialog — and repeat the step. If it fails every time, that
+actuator does not relay its own status and only the manual
+[recipe](recipes.md#calibrating-a-shutter-in-centimetres) can measure it.
+
+A shutter missing from the list is declared `advanced: true` (it reports its own
+position and has nothing to calibrate), and a whole gateway of those hides the menu
+item altogether. A dialog left open too long releases the shutter — 30 minutes on a
+screen with nothing moving, 10 after a movement — and the next click lands on
+*"session expired"*: nothing was saved, and the measurements have to be taken
+again. The rest is in [Guided calibration →
+Troubleshooting](guided-calibration.md#troubleshooting).
 
 **Several covers moved together stop at different heights than one at a time:**
 

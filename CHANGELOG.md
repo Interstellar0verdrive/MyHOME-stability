@@ -5,6 +5,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+A basic shutter can now be calibrated from a dialog instead of from a stopwatch, a
+tape measure and two action calls. **Settings → Devices & services → MyHOME →
+Configure → "Calibrate a shutter"** drives the shutter, times its runs from the
+actuator's own status frames, asks for three tape readings and stores the result
+where the shutter reads it. Nothing changes for a cover that is not calibrated this
+way, and nothing is ever written to `myhome.yaml`.
+
+### Added
+
+- **Guided calibration of a basic cover**, under *Configure → "Calibrate a
+  shutter"*. Three ways in: **(A)** the first shutter of a kind — three button
+  presses and three tape readings, about three minutes, ending on a named
+  **profile** every similar shutter can inherit; **(B)** a shutter similar to one
+  already measured — pick the profile, measure the height, with an optional check at
+  half the travel; **(C)** a shutter that has a profile and stops in the wrong place
+  — its own run times, and its own roll coefficients if it needs them. There is no
+  stopwatch anywhere: the integration knows when the motor started (the actuator
+  says so itself), so a press marks only the end of a run, which halves the human
+  error and leaves the tape as the only tool. Path A can be followed by a **precise
+  level**: four more readings at a quarter and three quarters of the travel in each
+  direction, which fit a scale factor on the times as well as the rolls — the tape
+  corrects the finger — and a verification at 40 %, a position nothing was fitted to,
+  reported as "within X cm". Expect 1–2 cm at the end stops and 2–4 cm between
+  intermediate positions afterwards. Nothing moves before a screen announces it and
+  nothing is written before the last one; every measurement can be repeated on its
+  own, and closing the dialog leaves the configuration untouched. The full page is
+  [docs/guided-calibration.md](docs/guided-calibration.md).
+- **Screens that manage what was measured**, in the same dialog. *Profiles and
+  shutters*: one selector per basic cover to assign a profile (and a follow-up form
+  for the heights nobody knows yet), plus view, hand-edit and delete for each
+  profile — the delete names the shutters that lose it. *Calibrations*: per shutter,
+  view the stored values, correct them by hand, measure again, or delete them and go
+  back to the configuration file. A profile written in `cover_profiles:` is shown
+  and never rewritten.
+- **`Calibration source` and `Calibrating` attributes** on basic covers: where the
+  travel model that is loaded came from, and whether a calibration step owns the
+  shutter right now (`cover.set_cover_position` is refused while it does).
+- **Spanish, German and Portuguese translations** of the whole integration, beside
+  the existing English, French, Italian and Dutch.
+- **Diagrams in the calibration screens** — what "the bottom edge leaves the base"
+  and "measure from the base" mean, drawn rather than described. They are served by
+  the integration itself, from `custom_components/myhome/images`.
+
+### Changed
+
+- **Configure opens a menu.** The connection settings are behind its last item,
+  **"Gateway and connection"**, with exactly the same fields: address, port,
+  password, configuration file path, command sessions, the event option and the
+  session tunables. The other items are the calibration and what it stored. Saving
+  that form still reloads the integration; the calibration screens rebuild the entry
+  once, when the dialog is closed, and only if something was really stored.
+- **`Calibration source` tells a measurement from an inheritance.** It says `guided`
+  for a shutter the dialog measured (or whose stored values were edited by hand),
+  `profile <name>` for one that was only assigned a profile, and `yaml` when nothing
+  is stored for it and the numbers come from the configuration file or the defaults.
+  The distinction matters because a profile does not beat a run time written for the
+  cover itself, while a measurement of that cover does.
+- **`myhome.cover_calibration_run` marks the cover `Calibrating` while it runs**, so
+  `cover.set_cover_position` is refused for the half minute it takes. It is built
+  out of the same primitives as the guided steps, and two things timing one motor
+  would each measure a run the other one stopped. The action already refused to
+  start on a cover that was moving.
+
 ## [0.4.5] - 2026-09-12
 ### Fixed
 

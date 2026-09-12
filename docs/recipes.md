@@ -737,6 +737,16 @@ incoming frames, so both directions stay consistent.
 
 ### Calibrating a shutter in centimetres
 
+> **There is a dialog that does all of this for you.** Since 0.5.0,
+> **Settings → Devices & services → MyHOME → Configure → "Calibrate a shutter"**
+> drives the shutter, times the runs from the actuator's own status frames, asks
+> for the same centimetres and stores the model itself — no stopwatch, no action
+> calls, no pasting. It is the recommended way for a basic cover: see
+> [Guided calibration](guided-calibration.md). The recipe below is the manual
+> alternative, and stays supported: it is what to use when you would rather write
+> the keys yourself, when the actuator does not report its own movement status (the
+> dialog needs that to time a run), or from a script.
+
 The run times and the slat time are a stopwatch job. The roll — how much faster the
 curtain travels when it is up than when it is down, see
 [Configuration → Why the position is not linear](configuration.md#why-the-position-is-not-linear-roll)
@@ -927,6 +937,11 @@ gateway:
 The `opening_time` / `closing_time` / `slat_time` keys can come off the cover now:
 the profile carries them, and at the reference height nothing is scaled.
 
+> **If the same cover also has a stored calibration**, what you paste here will not
+> reach it: the values the [guided calibration](guided-calibration.md) kept for a
+> cover beat the file, key by key. Delete them under **Configure → Calibrations**
+> and the file's keys apply again.
+
 If instead the action refuses the call, it is because the centimetres you gave it
 cannot be produced by any roll coefficient in the accepted range (`1.0` to `5.0`)
 with those run times: the message names the measurement it could not use and the
@@ -1022,9 +1037,10 @@ re-synchronises the estimate.
    seconds are `slat_time`.
 5. Check `set_cover_position` at 50 %: if the cover consistently overshoots the
    times are too large, if it stops short they are too small — but a *systematic*
-   miss at mid-travel with the end stops right is the roll, not the times, and
-   [Calibrating a shutter in centimetres](#calibrating-a-shutter-in-centimetres)
-   solves it properly. A miss in one direction only is a roll that differs per
+   miss at mid-travel with the end stops right is the roll, not the times, and the
+   [guided calibration](guided-calibration.md) — or
+   [Calibrating a shutter in centimetres](#calibrating-a-shutter-in-centimetres),
+   by hand — solves it properly. A miss in one direction only is a roll that differs per
    direction, and the same recipe gives you `opening_roll` and `closing_roll`.
 
 The values are exposed on basic covers as the `Opening time` and `Closing time`
