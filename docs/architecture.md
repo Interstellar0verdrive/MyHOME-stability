@@ -18,6 +18,7 @@ that will ship as the next release) and `OWNd` 0.7.49.
 - [Statistics and diagnostics (0.3.0)](#statistics-and-diagnostics-030)
 - [The dispatcher](#the-dispatcher)
 - [The instant-power throttle](#the-instant-power-throttle)
+- [The calibration store and the options flow](#the-calibration-store-and-the-options-flow)
 - [The validator contract](#the-validator-contract)
 - [Test strategy](#test-strategy)
 
@@ -31,7 +32,10 @@ that will ship as the next release) and `OWNd` 0.7.49.
 | `gateway.py` | One `MyHOMEGatewayHandler` per gateway: the event session loop, the command worker(s), the message dispatcher, the instant-power throttle, availability publication, shutdown. |
 | `own_session.py` | Thin subclasses of `OWNd`'s `OWNSession` that raise instead of returning `None`, add TCP keepalive, and read a command's replies until its ACK/NACK. |
 | `myhome_device.py` | `MyHOMEEntity`, the base class of every entity: availability, device info, registration in `hass.data`, naming rules; plus `address_attributes()`. |
-| `config_flow.py` | Config flow (gateway picker, manual entry, SSDP, port, password), reauth flow, options flow. |
+| `config_flow.py` | Config flow (gateway picker, manual entry, SSDP, port, password), reauth flow, and the options flow, which since 0.5.0 opens on a menu: the guided calibration, the screens that manage what it stored, and the connection form. |
+| `calibration.py` | The maths of the guided calibration, on its own: floats in, floats out, no `hass` and no bus. The roll model, the least-squares fit of a roll and a time scale per direction, the timing of two button presses, and the deviation of a prediction from a tape reading. |
+| `calibration_store.py` | One `homeassistant.helpers.storage.Store` per config entry: the measured profiles, the per-cover records, the precedence that merges them with `myhome.yaml`, and the `Calibration source` attribute. |
+| `calibration_flow.py` | The screens: the guided conversation (three paths, two levels), the management screens, the idle watchdog. Mixed into the options flow handler. |
 | `discovery.py` | The bus-listening discovery service: a 60 s run, message classification, the public `myhome_device_discovered` / `myhome_discovery_completed` events. |
 | `config_flow_discovery.py` | Turns discovered devices into YAML suggestions and writes `myhome_discovered.yaml` atomically. Never touches `myhome.yaml`. |
 | `light.py` | WHO 1 lights and dimmers (brightness, transition, flash). |
@@ -44,7 +48,8 @@ that will ship as the next release) and `OWNd` 0.7.49.
 | `event.py` | WHO 15 / WHO 25 CEN and CEN+ scenario controls: one stateless `EventEntity` per declared keypad, fed by the gateway dispatcher. |
 | `device_trigger.py` | The device-automation platform: per-button, per-event-name triggers for those keypads, delegated to Home Assistant's own event trigger. |
 | `diagnostics.py` | The Download-diagnostics payload: identity masking, the config summary, the handler snapshot and the redacted frame ring buffer. |
-| `services.yaml`, `manifest.json`, `strings.json`, `translations/{en,fr,it,nl}.json` | Service schemas for the UI, integration metadata and SSDP matchers, the source strings and their translations. |
+| `services.yaml`, `manifest.json`, `strings.json`, `translations/{en,fr,it,nl,es,de,pt}.json` | Service schemas for the UI, integration metadata and SSDP matchers, the source strings and their translations. |
+| `images/` | The four diagrams the guided calibration's screens embed, served at `/myhome_static` by a static path registered once per Home Assistant instance. |
 
 ## `hass.data` layout
 
@@ -67,6 +72,10 @@ hass.data["myhome"][mac] = {
     # plus any unrecognised gateway-level keys, kept verbatim
 }
 ```
+
+`hass.data["myhome"]` holds **only** those per-gateway dicts, so the loaded
+calibration stores live beside it under `hass.data["myhome_calibration_stores"]`,
+keyed by config entry id.
 
 The device keys are `"{who}-{where}"`, `"{who}-{where}#4#{interface}"` behind a
 bus interface, and `"{who}-{zone}"` for climate. Entities register themselves in
@@ -457,6 +466,38 @@ Suppressed frames are counted and summarised at DEBUG at most once per
 `suppress_log_interval_sec`. `info_log_interval_sec > 0` additionally writes an
 INFO heartbeat for accepted samples; it is `0` (off) by default so ordinary
 operation stays quiet.
+
+## The calibration store and the options flow
+
+The guided calibration keeps its numbers in Home Assistant's own storage, one
+`Store` per config entry (`myhome.calibration.<entry id>`, version 1). It is loaded
+once in `async_setup_entry`, before the platforms are forwarded, because a basic
+cover reads its travel model in its constructor. It holds two mappings: `profiles`,
+keyed by name, and `covers`, keyed by the cover's `unique_id` (`<mac>-<device
+key>`), each record carrying the profile it was assigned, its height, the values
+measured for it, and whether those were measured, derived from a profile or typed
+by hand.
+
+`resolve_cover_config()` merges that with the validated file, per key: the cover's
+own stored values, then the key as the file writes it, then the profile scaled to
+the height, then what the validator had already resolved. The result is written
+back into the validated cover dict as well as into the entity, so diagnostics and
+everything else read the numbers the shutter really runs on, and it is what
+`Calibration source` reports.
+
+**Config subentries are not used.** The first draft of 0.5.0 modelled a profile and
+a calibration as config subentries, which put a row per profile on the integration
+page, made Home Assistant group every device of the gateway under "devices not
+belonging to a subentry", and offered a *rename* that changed a title and not a
+profile. They are gone; a setup that finds the old subentries imports them into the
+store once and removes them.
+
+The single entry point is therefore the options flow — the **Configure** button —
+which opens on a menu (`MyHomeOptionsFlowHandler.async_step_init`) rather than on
+the connection form. The guided-calibration item is not offered when the gateway has
+no basic cover. Every screen writes straight through to the store, and the config
+entry is rebuilt **once**, in `async_remove` — however the dialog was left, the
+browser's X included — and only when something was really stored.
 
 ## The validator contract
 

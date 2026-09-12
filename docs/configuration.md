@@ -28,7 +28,8 @@ of this schema.
   - [The two-phase travel model (`slat_time`)](#the-two-phase-travel-model-slat_time)
   - [Cover profiles](#cover-profiles)
     - [How a height scales a profile](#how-a-height-scales-a-profile)
-  - [Calibrating a cover](#calibrating-a-cover)
+  - [Guided calibration (recommended)](#guided-calibration-recommended)
+  - [Calibrating a cover by hand](#calibrating-a-cover-by-hand)
 - [Binary sensor](#binary-sensor)
 - [Climate](#climate)
 - [Sensor](#sensor)
@@ -76,8 +77,14 @@ card and enter the current OpenWebNet password.
 
 ### Options
 
-From **Settings → Devices & services → MyHOME → Configure** you can change,
-without removing the integration:
+Since **0.5.0** **Settings → Devices & services → MyHOME → Configure** opens a
+menu rather than a form: **"Calibrate a shutter"**, **"Profiles and shutters"** and
+**"Calibrations"** are the [guided calibration](guided-calibration.md) and what it
+stores, and **"Gateway and connection"** is the form that used to be there, with
+the same fields. Everything below is that form.
+
+From **Configure → Gateway and connection** you can change, without removing the
+integration:
 
 - IP address/hostname, port, password
 - **Configuration file path** — where `myhome.yaml` (and `myhome_discovered.yaml`)
@@ -252,12 +259,45 @@ A device behind an F422 bus interface is addressed on the bus as
 (`slat_time < min(opening_time, closing_time) - 1`), otherwise the configuration is
 rejected with the name of the offending cover.
 
-A key written on the cover always wins. Everything not written there is taken from
-the cover's `profile` (scaled by its `height`, if both are given), and what is left
-falls back to the defaults in the table above. `stop_latency` and `start_delay`
-resolve the same way — cover, then profile, then default — but they are the two
-keys a profile hands over **unscaled**: a shorter window has less curtain to wind,
-not a faster gateway.
+A key written on the cover always wins over a profile. Everything not written there
+is taken from the cover's `profile` (scaled by its `height`, if both are given), and
+what is left falls back to the defaults in the table above. `stop_latency` and
+`start_delay` resolve the same way — cover, then profile, then default — but they
+are the two keys a profile hands over **unscaled**: a shorter window has less
+curtain to wind, not a faster gateway.
+
+Above all of them sits what the [guided calibration](guided-calibration.md) stored
+for that shutter, if it measured one, and a profile assigned to it from that same
+dialog. The full order, per key, highest first:
+
+1. the values the guided calibration stored **for that cover** — a measurement of
+   that one cover (path A, or "Affina la calibrazione"), removable in one click;
+2. a profile **assigned** to the cover — from **Configura → Profili e tapparelle**,
+   or chosen with "È simile a una tapparella già misurata" — scaled to the cover's
+   height. Assigning a profile this way is a statement about that cover made after
+   the configuration file was written, so it is used **instead of** the keys the
+   file writes for that cover;
+3. the key as written for that cover here, in the configuration file (including
+   what the file implies: `roll:` stands for both directional rolls,
+   `opening_time:` for `closing_time:`). A `profile:` the file itself gives the
+   cover is not the statement rule 2 is and does not move here: a key the file
+   writes for that cover still wins over the profile it names;
+4. the file's own profile chain (the `profile:` it names, scaled to the height),
+   and then the defaults.
+
+A measurement of one cover is more specific than a line typed about all of them,
+which is why rule 1 beats everything else; an assigned profile is a statement about
+that one cover too, made after the file, which is why rule 2 beats rule 3; the
+file's own `profile:` is not such a statement, which is why rule 4 does not beat
+rule 3. Stored profiles and `cover_profiles:` share one namespace, and a stored
+profile of the same name wins, with one warning in the log per name.
+
+Nothing of an assigned profile is copied into the cover's stored calibration: only
+the name, the flag and the height are. Correcting the profile afterwards — in
+`cover_profiles:` or from **Configura → Profili e tapparelle → Modifica i
+valori** — reaches every cover that follows it at the next reload, scaled to each
+one's own height. Deleting the assignment leaves the height and any measurement
+alone; the cover goes back to what the file says.
 
 `roll`, `opening_roll`, `closing_roll`, `height`, `profile`, `tilt`, `stop_latency`
 and `start_delay` join `opening_time`, `closing_time`, `slat_time` and `shutter_run`
@@ -404,7 +444,9 @@ roll of 1.7 downwards and 2.1 upwards. One coefficient per direction absorbs tha
 difference; a single one splits it and is a few centimetres out both ways.
 
 The default is a plausible average, not your shutter, and it is the same in both
-directions. Measure yours once with
+directions. Measure yours once with the
+[guided calibration](guided-calibration.md), which measures both directions and
+stores the result, or with
 [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres),
 which returns the roll of that cover in each direction and a ready-to-paste profile.
 
@@ -541,6 +583,14 @@ gateway:
 A profile nobody uses is harmless. A `profile:` naming an entry that does not exist
 is a validation error, and the message lists the names that are defined.
 
+A profile can also be **measured** rather than written: path A of the
+[guided calibration](guided-calibration.md) ends by naming one, and it is then kept
+in the integration's own storage instead of in this file, assigned to the other
+shutters from **Configure → Profiles and shutters**. The two kinds share one
+namespace: a stored profile of the same name shadows a `cover_profiles:` entry —
+the entry in the file is never touched, and applies again the moment the stored one
+is deleted.
+
 #### How a height scales a profile
 
 Everything below happens once, when the file is loaded. Writing a key on the cover
@@ -601,7 +651,28 @@ profile, same tube. A cover with a visibly different motor should be measured on
 own — either with its own keys, or with a second profile.
 
 
-### Calibrating a cover
+### Guided calibration (recommended)
+
+Since **0.5.0** none of the measurements below has to be taken by hand. **Settings
+→ Devices & services → MyHOME → Configure → "Calibrate a shutter"** opens a dialog
+that drives the shutter, times the runs from the actuator's own status frames,
+takes the centimetres you read off a tape and stores the model where it beats the
+configuration file. It measures the same things the sections below describe — the
+two run times, the slat time, one roll coefficient per direction — and it writes a
+profile the other shutters of the same kind inherit by their height alone.
+
+It is the recommended way for a basic cover: three button presses and three tape
+readings, about three minutes, with an optional precise level that adds four
+readings and reports the remaining error in centimetres. See
+[Guided calibration](guided-calibration.md) for the paths, the screens, where the
+values are kept and how to remove them.
+
+Everything below still applies. It is what to do when you would rather write the
+keys yourself, when the actuator does not report its own movement status (the
+guided dialog needs that to time a run), or when you are describing a shutter you
+have already measured elsewhere.
+
+### Calibrating a cover by hand
 
 With a stopwatch, for the two run times:
 
@@ -646,12 +717,16 @@ centimetres you measured on it and solve the model, one direction at a time:
 [Services and events](services-and-events.md#myhomecover_calibration_run)). The
 step-by-step procedure, including how to reuse the result on the other covers of the
 house, is
-[Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres).
+[Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres)
+— the manual alternative to the
+[guided calibration](guided-calibration.md), which asks for the same measurements
+and does the arithmetic and the bookkeeping itself.
 
 The loaded values are exposed on basic covers as the `Opening time` and
 `Closing time` attributes and either `Roll` — when the two directions agree — or
 `Opening roll` and `Closing roll`, plus `Slat time`, `Height` and `Profile` when
-they are set.
+they are set. `Calibration source` says where they came from: `guided`,
+`profile <name>` or `yaml`.
 
 See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
 `set_cover_position` behaviour, "closed with the slats open" and `inverted` wiring.
@@ -899,6 +974,8 @@ States** and in `state_attr(...)` templates.
 | `Where` | The same entities with a General, Area or Group WHERE | The WHERE verbatim: cutting `"0"` or `"#3"` in half would mean nothing. |
 | `Int` | Any of the above with an `interface:` | The F422 bus interface, unpadded (`"3"`). |
 | `Opening time`, `Closing time`, `Roll` / `Opening roll` + `Closing roll`, `Slat time`, `Height`, `Profile` | Basic covers | The cover model actually loaded: the two travel times in seconds and the roll are always there — as a single `Roll` when the two directions carry the same coefficient, as `Opening roll` and `Closing roll` when they differ. `Slat time` appears when it is greater than `0`, `Height` and `Profile` when the keys are written. Times are rounded to 0.1 s and roll coefficients to 0.01 for display. The `Shutter run` attribute of 0.4.1 and earlier is gone — it was `Opening time` under another name. |
+| `Calibration source` | Basic covers | Where the numbers above come from: `guided` (the [guided calibration](guided-calibration.md) measured this shutter — including one that was assigned a profile and then refined, since the refinement is the measurement — or its stored values were edited by hand), `profile <name>` (it follows that profile and was not measured itself), or `yaml` (the configuration file, the file's profile chain, or the defaults). |
+| `Calibrating` | Basic covers, while it lasts | `true` while a guided step owns the shutter — the dialog, or `myhome.cover_calibration_run`. `cover.set_cover_position` is refused for as long as it is there. |
 | `Sensor` | WHO 25 dry contacts | The WHERE split as OpenWebNet writes it, `(<type>)<number>`: `301` renders as `(3)01`, i.e. dry contact number `01`. Type `3` is a dry contact, type `4` an IR detector. A WHERE of any other shape is reported verbatim. |
 | `Auxiliary channel` | WHO 9 auxiliary binary sensors | The WHERE, verbatim. |
 | `Timeout`, `Sensitivity` | WHO 1 motion sensors | How long the entity waits before going back to *off*: the sensor's own motion timeout plus a 15 s margin. Both are requested from the sensor when the entity is added and show a default (`315` s, `medium`) until it answers. `Sensitivity` is the PIR level as a word — `low`, `medium`, `high` or `very high`. |
