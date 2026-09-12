@@ -125,6 +125,7 @@ from .const import (
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
     CONF_PROFILE,
+    CONF_PROFILE_WINS,
     CONF_RAW,
     CONF_REFERENCE_COVER,
     CONF_REFERENCE_HEIGHT,
@@ -409,6 +410,12 @@ class _Measured:
     """
 
     height: float | None = None
+    # True when the height above was read off a tape *in this conversation*. A height
+    # that was merely carried in - the record's, or the file's, so that the summary and
+    # the fits have something to scale by - is not this conversation's to write: a copy
+    # of the file's `height:` stored here would shadow the file for ever (0.5.0 v2
+    # review, BUG-2, and the same staleness RISK-A is about).
+    height_measured: bool = False
     opening: PressTiming | None = None
     closing: PressTiming | None = None
     # (motor seconds of the run, centimetres read off the tape), in the order measured.
@@ -428,18 +435,20 @@ class _Result:
     """What Save is about to write, and what the summary screen shows.
 
     `profile` is filled in by path A alone (it is the path that discovers a kind of
-    shutter); `overrides` by all three, measured by A and C and derived from the
-    profile by B (see `derived` below).
+    shutter); `overrides` by the two paths that measure this window, A and C. Path B
+    measures nothing but the height and writes no overrides at all - what it stores is
+    the intent, `follows_profile` below, and the numbers are derived from the profile
+    on every read (`calibration_store.resolve_cover`).
     """
 
     yaml: str
     profile: dict[str, float] | None = None
     overrides: dict[str, float] = field(default_factory=dict)
     accuracy_cm: float | None = None
-    # True for path B, whose overrides are a profile scaled to this window rather than
-    # a measurement of it: the record says so, so that a later edit of the profile can
-    # derive them again and `Calibration source` goes on naming the profile.
-    derived: bool = False
+    # True for path B: "this window is one of those, and I mean it more than the file
+    # does". Stored as `profile_wins`, which is what puts the profile above the run
+    # times the file writes for this cover and makes `Calibration source` name it.
+    follows_profile: bool = False
 
 
 class CalibrationContextMixin:
@@ -936,6 +945,10 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         if record is not None:
             if record.profile:
                 lines.append(f"{CONF_PROFILE}: {record.profile}")
+            if record.follows_a_profile:
+                # Shown because it is a precedence and not a detail: this is the line
+                # that says the profile beats what the file writes for this cover.
+                lines.append(f"{CONF_PROFILE_WINS}: true")
             if record.height is not None:
                 lines.append(f"{CONF_HEIGHT}: {round(record.height, 1)}")
             lines += [f"{key}: {round(value, 2)}" for key, value in record.overrides.items()]
@@ -1008,6 +1021,11 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                 data = cover_calibration_data(
                     unique_id,
                     profile=record.profile if record else None,
+                    # Correcting a number by hand says nothing about which kind of
+                    # shutter this is: a window that was told to follow a profile goes
+                    # on following it, and the keys typed here sit above it exactly as
+                    # measured ones would.
+                    profile_wins=bool(record and record.profile_wins),
                     height=height,
                     overrides=overrides or None,
                     source=CALIBRATION_SOURCE_MANUAL,
@@ -1089,6 +1107,10 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         self._reset_calibration()
         if (reason := self._claim(unique_id)) is not None:
             return await self._async_claim_refused(reason)
+        # The travel this window is already known to have is seeded in one place, by
+        # the one path that does not measure it (`async_step_path_c`): a refinement
+        # reached from here starts from it exactly as one reached from the menu does,
+        # and paths A and B measure it themselves.
         return await self.async_step_path()
 
 
@@ -1238,10 +1260,21 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
         self._release()
         self._cover = None
-        cover = self._live_cover() or cover
-        if cover is not None and (cover.is_opening or cover.is_closing):
-            with contextlib.suppress(HomeAssistantError):
-                await cover.async_calib_stop()
+        await self._async_stop_if_moving(self._live_cover() or cover)
+
+    async def _async_stop_if_moving(self, cover: Any) -> None:
+        """Stop a shutter that is still running as the conversation ends under it.
+
+        Both ways a conversation can end without the user - the watchdog and an unload
+        of the entry - go through this, because the two used to differ silently: one
+        stopped the shutter and the other only let go of it, while `cancelled` and
+        `expired` both say "la tapparella è dove l'ha lasciata l'ultimo movimento"
+        (final review, RISK-C).
+        """
+        if cover is None or not (cover.is_opening or cover.is_closing):
+            return
+        with contextlib.suppress(HomeAssistantError):
+            await cover.async_calib_stop()
 
     async def async_step_expired(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """What the user finds when they come back to a dialog that timed out."""
@@ -1314,8 +1347,20 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
         self._expired = True
         self._disarm()
+        cover = self._live_cover() or self._cover
         self._release()
         self._cover = None
+        # A free run is heading for an end stop anyway and the gateway is being torn
+        # down, so this may well not reach the bus - but a conversation that ends with
+        # the shutter moving must have *tried* to stop it, exactly as the watchdog
+        # does (final review, RISK-C). Scheduled rather than awaited: `async_on_unload`
+        # callbacks are synchronous.
+        if cover is not None and (cover.is_opening or cover.is_closing):
+            self.hass.async_create_task(
+                self._async_stop_if_moving(cover),
+                "myhome calibration stop on unload",
+                eager_start=False,
+            )
 
     async def _async_claim_refused(self, reason: str) -> ConfigFlowResult:
         """Say why the shutter could not be taken, with a way back to the menu."""
@@ -1433,8 +1478,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             self._path = PATH_REFINE
             self._profile = user_input[CONF_PROFILE]
             # A height already measured (path B's check sent us here) is kept: it is
-            # the same window and the same tape.
-            self._measured = _Measured(height=self._measured.height)
+            # the same window and the same tape. Entered from the menu instead, the
+            # travel this window is already *known* to have is what the conversation
+            # starts from - the summary would otherwise show "-" for it and the Save
+            # would write a record that has forgotten it (final review, BUG-A).
+            measured_here = self._measured.height is not None and self._measured.height_measured
+            self._measured = _Measured(
+                height=self._measured.height or self._own_height(self._cover_unique_id or ""),
+                height_measured=measured_here,
+            )
             return await self.async_step_refine_scope()
         current = self._profile or self._current_profile() or profiles[0]
         return self.async_show_form(
@@ -1846,6 +1898,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                 errors[CONF_HEIGHT] = ERROR_OUT_OF_RANGE
             else:
                 self._measured.height = value
+                self._measured.height_measured = True
                 return await self.async_step_height_result()
         default = (
             self._measured.height
@@ -1880,6 +1933,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         (`repeat_step`), which does re-run the movements.
         """
         self._measured.height = None
+        self._measured.height_measured = False
         return await self.async_step_height()
 
     # --------------------------------------------------------- stages: the measured runs
@@ -2237,20 +2291,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         key = self._yaml_key or _suggested_name(getattr(self._cover, "entity_id", ""))
         if self._path == PATH_PROFILE:
             height = measured.height or 0.0
-            # The profile's numbers, scaled to this window, stored as its own
-            # overrides. A profile is *below* a key written in the configuration file,
-            # and a basic cover's run times usually are written there - so a record
-            # naming the profile alone left the shutter running on the file's numbers
-            # while this very screen promised the opposite (0.5.0 v2 review, BUG-1).
-            # The name and the height are stored beside them, which is what lets a
-            # later correction of the profile derive them again for every window that
-            # inherited it (`CalibrationStore.async_set_profile`).
+            # Nothing of the profile is copied into the record: what is stored is
+            # "this window follows that profile", and the resolution scales it on
+            # every read. The numbers below are for the *screen* - the snippet is
+            # offered as an alternative to saving, and `profile:` + `height:` pasted
+            # into a file that carries its own run times would not change them
+            # (0.5.0 v2 review, BUG-1; final review, RISK-A).
             profile = self._all_profiles().get(self._profile or "")
             derived = profile_overrides(profile, height) if profile is not None else {}
             return _Result(
                 yaml=profile_reference_yaml(key, self._profile or "", height, derived),
-                overrides=dict(derived),
-                derived=True,
+                follows_profile=True,
             )
         fits = self._fits()
         if fits is not None:
@@ -2310,12 +2361,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         # reads "-" rather than "- cm".
         height = f"{self._measured.height:.0f} cm" if self._measured.height else "\u2013"
         accuracy = "\u2013" if result.accuracy_cm is None else f"{result.accuracy_cm:.1f} cm"
+        replaced, kept = self._replaced_and_kept(result)
         return self._placeholders(
             yaml=f"```yaml\n{result.yaml}```",
             height=height,
             accuracy=accuracy,
             percent=round(VERIFY_RUN * 100),
             profile=self._measured_name or self._profile or "",
+            replacing=", ".join(replaced) or "\u2013",
+            keeping=", ".join(kept) or "\u2013",
         )
 
     async def async_step_summary(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -2392,6 +2446,57 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             "deviation_cm": measured.deviation,
         }
 
+    def _merged_with(
+        self, record: Any, result: _Result
+    ) -> tuple[dict[str, float], float | None]:
+        """What Save really writes: this measurement *over* what was already stored.
+
+        A record is not a form. "Affina la calibrazione" measures the two run times and
+        has no opinion whatever about the roll coefficients; "Misura di nuovo" on a
+        window whose height was measured once and whose `myhome.yaml` does not carry a
+        `height:` re-measures nothing of it unless the path asks for it. Writing the
+        record whole threw both of those away - silently, on the one screen whose whole
+        promise is to make the model *better* (final review, BUG-A). So the keys this
+        conversation measured are written over the keys it did not, and a height nobody
+        measured here is the one that was already known.
+
+        Path B is the exception: it is not a measurement of this window but a statement
+        about which kind of shutter it is, and the numbers measured on it before are
+        exactly what it supersedes. Its summary says so.
+        """
+        if result.follows_profile:
+            # Path B measures the height itself, on the screen before the summary.
+            return dict(result.overrides), self._measured.height
+        kept = dict(record.overrides) if record is not None else {}
+        merged = {**kept, **result.overrides}
+        height = (
+            self._measured.height
+            if self._measured.height_measured
+            else (record.height if record is not None else None)
+        )
+        return merged, height
+
+    def _replaced_and_kept(self, result: _Result) -> tuple[list[str], list[str]]:
+        """The keys this Save overwrites, and the ones it leaves exactly as they are.
+
+        Written out by key rather than in prose: these are the names the stored record
+        is shown under two screens away ("Vedi i valori"), the names of the snippet on
+        this very screen, and the same words in all seven languages.
+        """
+        record = self._store.calibration(self._cover_unique_id or "")
+        merged, height = self._merged_with(record, result)
+        before = dict(record.overrides) if record is not None else {}
+        moving = {key for key in set(before) | set(merged) if before.get(key) != merged.get(key)}
+        replaced = sorted(moving)
+        kept = sorted(key for key in merged if key not in moving)
+        if self._measured.height_measured:
+            replaced.append(CONF_HEIGHT)
+        elif self._measured.height or height is not None:
+            # Known, and not by this conversation: it stays exactly where it is said,
+            # which is the record when there is one and the file when there is not.
+            kept.append(CONF_HEIGHT)
+        return replaced, kept
+
     async def async_step_save(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Write the store - the first and only thing this conversation writes."""
         result = self._result()
@@ -2412,14 +2517,21 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                 ),
             )
         store = await self._async_store()
+        record = store.calibration(self._cover_unique_id)
+        merged, height = self._merged_with(record, result)
         await store.async_set_calibration(
             self._cover_unique_id,
             cover_calibration_data(
                 self._cover_unique_id,
                 profile=self._measured_name or self._profile,
-                height=self._measured.height,
-                overrides=result.overrides or None,
-                source=CALIBRATION_SOURCE_PROFILE if result.derived else CALIBRATION_SOURCE_GUIDED,
+                profile_wins=result.follows_profile,
+                height=height,
+                overrides=merged or None,
+                source=(
+                    CALIBRATION_SOURCE_PROFILE
+                    if result.follows_profile
+                    else CALIBRATION_SOURCE_GUIDED
+                ),
                 raw=self._raw(),
             ),
         )

@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Which profile each cover follows",
-        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”, and the profile's values are scaled to this cover's height.\n\nA profile does not beat what is written in the configuration file, if you use one: what always counts for most is what was measured on this cover itself.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it belongs to the file, and the file is yours.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
+        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's height.\n\nYou are saying it here, about this cover, after the configuration file was written, so the profile is used instead of what the file writes for this cover, if you use one. What was measured on this cover itself still counts for more and goes on being used wherever there is any; correcting the profile later reaches every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it belongs to the file, and the file is yours.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
       },
       "assign_heights": {
         "title": "How tall are these covers?",
@@ -468,7 +468,7 @@
       },
       "summary_short": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save, or leave without saving anything.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save, or leave without saving anything.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"

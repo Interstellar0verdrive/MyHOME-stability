@@ -82,6 +82,13 @@ CONF_REFERENCE_COVER = "reference_cover"
 # Keys of a stored record.
 CONF_COVER_UNIQUE_ID = "cover_unique_id"
 CONF_OVERRIDES = "overrides"
+# "This cover follows that profile, and I mean it more than the file does" - what path B
+# of the guided flow and the assignment screen really say (0.5.0 v2 final review,
+# RISK-A/RISK-B). The record stores the *intent*, not the numbers it comes to, so a
+# `cover_profiles:` profile corrected in `myhome.yaml` reaches its followers on the next
+# reload; `resolve_cover` reads it back and puts the profile's values above the keys the
+# file writes for that cover (and still below what a tape measured on it).
+CONF_PROFILE_WINS = "profile_wins"
 CONF_SOURCE = "source"
 CONF_MEASURED_AT = "measured_at"
 CONF_RAW = "raw"

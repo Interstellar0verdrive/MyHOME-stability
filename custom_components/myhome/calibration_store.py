@@ -24,13 +24,15 @@ The precedence, highest first (spec 1.3):
 
 1. an **override** stored for this cover - the guided flow measured *this* window, on
    this installation, with a tape;
-2. the key as **written in the file** for this cover;
-3. the **profile**, scaled to this cover's height: the profile named by the stored
+2. the **profile**, scaled to this cover's height, *when the stored record says this
+   cover follows it* (`profile_wins`, written by path B and by the assignment screen);
+3. the key as **written in the file** for this cover;
+4. the **profile**, scaled to this cover's height: the profile named by the stored
    record if there is one, else the `profile:` in the file, and the height from the
    stored record if there is one, else the `height:` in the file;
-4. what the validator already resolved - the file's own profile chain, and the defaults.
+5. what the validator already resolved - the file's own profile chain, and the defaults.
 
-Rules 1 and 2 are the pair worth stating twice, because the order between them is a
+Rules 1 and 3 are the pair worth stating twice, because the order between them is a
 decision and not an obvious one. A measurement of *this* window beats the file, while a
 *profile* - a measurement of some other window of the same kind - does not. The
 difference is what the number is about: the flow only stores an override after the user
@@ -39,6 +41,17 @@ statement about this window than a line typed in a file about all of them, and i
 removable in one click under "Configura" (`async_remove_calibration`), which is what
 makes "the file wins again" a thing the user can ask for. A profile is the general
 case, so it stays below the particular one the file states.
+
+Rule 2 is the exception the user asks for by name. "(B) È simile a una tapparella già
+misurata" and "Assegna un profilo" are the two screens on which somebody says *of this
+window* "it is one of those" - after the file was written, on this installation - and a
+rule that left them below the file's own run times made both of them do nothing at all
+on a `myhome.yaml` that writes run times per cover (0.5.0 v2 review, BUG-1; final
+review, RISK-A/RISK-B). What is stored for those two is the **intent** and not the
+numbers: `profile_wins`, beside the name and the height. The numbers are derived here,
+on every read, which is what makes a `cover_profiles:` profile corrected in the file
+reach its followers on the next reload - and what makes it impossible for a stored copy
+to go stale behind the user's back.
 """
 
 from __future__ import annotations
@@ -69,6 +82,7 @@ from .const import (
     CONF_OPENING_TIME,
     CONF_OVERRIDES,
     CONF_PROFILE,
+    CONF_PROFILE_WINS,
     CONF_PROFILES,
     CONF_RAW,
     CONF_REFERENCE_COVER,
@@ -136,16 +150,14 @@ _DERIVED_OVERRIDE_KEYS: tuple[tuple[str, int], ...] = (
 
 @callback
 def profile_overrides(profile: Mapping[str, Any], height: float | None) -> dict[str, float]:
-    """A profile, scaled to one window, as that window's own overrides.
+    """A profile, scaled to one window, in the shape that window's own overrides have.
 
-    Path B of the guided flow measures a window's travel and says "it is one of
-    those". A stored profile does *not* beat a key written in the configuration file
-    (spec 1.3), and a basic cover's run times usually are written there - so a record
-    holding the name alone would have left the shutter running on the file's numbers
-    while the summary promised the opposite (0.5.0 v2 review, BUG-1). The values
-    below are what that promise means, derived exactly as `resolve_cover` would have
-    derived them, and stored beside the profile name and the height so that a later
-    edit of the profile can derive them again (`CalibrationStore.async_set_profile`).
+    What "this window is one of those" comes to in numbers, rounded as the flow rounds
+    them. Nothing stores the result any more - a record says `profile_wins` and the
+    resolution derives it again on every read, so a profile corrected in `myhome.yaml`
+    is never a frozen copy (final review, RISK-A). It is the summary screen and the
+    YAML snippet it offers that need the numbers themselves, because a `profile:` line
+    pasted into a file that already carries its own run times would not change them.
     """
     derived = derive_cover_from_profile(profile, height)
     return {key: round(float(derived[key]), digits) for key, digits in _DERIVED_OVERRIDE_KEYS}
@@ -208,6 +220,7 @@ def cover_calibration_data(
     cover_unique_id: str,
     *,
     profile: str | None = None,
+    profile_wins: bool = False,
     height: float | None = None,
     overrides: Mapping[str, float] | None = None,
     source: str = CALIBRATION_SOURCE_GUIDED,
@@ -221,6 +234,11 @@ def cover_calibration_data(
     measured with a tape), a profile and some overrides (it is one of those but its own
     motor is slower), or overrides alone (nothing else is like it).
 
+    `profile_wins` is the first of those two said out loud: the user named the kind of
+    shutter *after* the file was written, so the profile is put above the keys the file
+    writes for this cover (see `resolve_cover`). It is meaningless without a profile and
+    is not written without one.
+
     Keys the travel model does not know are dropped rather than stored: a record is
     read back verbatim into the resolution below, and a typo that survived storage
     would be a key nobody ever notices doing nothing.
@@ -232,6 +250,8 @@ def cover_calibration_data(
     }
     if profile is not None:
         data[CONF_PROFILE] = profile
+        if profile_wins:
+            data[CONF_PROFILE_WINS] = True
     if height is not None:
         data[CONF_HEIGHT] = float(height)
     kept = {
@@ -257,6 +277,7 @@ class StoredCalibration:
 
     cover_unique_id: str
     profile: str | None = None
+    profile_wins: bool = False
     height: float | None = None
     overrides: Mapping[str, float] = field(default_factory=dict)
     source: str = CALIBRATION_SOURCE_GUIDED
@@ -268,28 +289,26 @@ class StoredCalibration:
         return bool(self.overrides) or self.profile is not None or self.height is not None
 
     @property
-    def derived_from_profile(self) -> bool:
-        """True for overrides that are a profile scaled to this window, not a measurement.
+    def follows_a_profile(self) -> bool:
+        """True when this window was *told* which kind of shutter it is.
 
-        Path B stores both: the name and the height it was told, and the numbers those
-        two produce, because a name alone does not reach a cover whose run times are
-        written in the file. The flag is what lets a later edit of the profile derive
-        them again (and its deletion take them away) without ever touching the numbers
-        paths A and C really measured on this window.
+        Path B and the assignment screen; never a hand edit of `myhome.yaml`, whose
+        `profile:` is a line about the file's own precedence and not a statement made
+        on this installation afterwards.
         """
-        return self.source == CALIBRATION_SOURCE_PROFILE and bool(self.overrides)
+        return self.profile is not None and self.profile_wins
 
     @property
     def is_a_measurement(self) -> bool:
         """True when this window itself was measured, rather than merely assigned.
 
-        "Profili e tapparelle" writes a profile and a height; the guided flow writes
-        the numbers it found. Only the second is a calibration in the sense the
-        "Calibrazioni" screen means, and only the second makes `Calibration source`
-        say `guided` - see `resolve_cover`. Path B's derived overrides are not one:
-        they are the profile, arithmetic and all, so the source goes on naming it.
+        "Profili e tapparelle" and path B write a profile and a height; the guided
+        flow writes the numbers it found. Only the second is a calibration in the sense
+        the "Calibrazioni" screen means, and only the second makes `Calibration source`
+        say `guided` - see `resolve_cover`. A window that was only assigned has no
+        overrides at all, so the source goes on naming the profile.
         """
-        return bool(self.overrides) and not self.derived_from_profile
+        return bool(self.overrides)
 
 
 @callback
@@ -299,6 +318,7 @@ def stored_calibration(data: Mapping[str, Any]) -> StoredCalibration:
     return StoredCalibration(
         cover_unique_id=str(data.get(CONF_COVER_UNIQUE_ID, "")),
         profile=data.get(CONF_PROFILE),
+        profile_wins=bool(data.get(CONF_PROFILE_WINS)),
         height=data.get(CONF_HEIGHT),
         overrides={
             key: float(value) for key, value in overrides.items() if key in COVER_CALIBRATION_KEYS
@@ -437,36 +457,12 @@ class CalibrationStore:
 
         Replacing rather than adding: a user who calibrates the same kind of shutter
         twice means the second measurement, and the covers that follow the name go on
-        following it - which here means that the numbers the second measurement implies
-        for them are derived again (`_rederive_followers`). Doing it inside the one
-        method that writes a profile is what makes it impossible to forget.
+        following it. Nothing else has to happen for that to reach them - a follower's
+        record holds the *name*, not a copy of the numbers, and `resolve_cover` scales
+        the profile to it on every read (final review, RISK-A).
         """
         self._profiles[name] = dict(data)
-        self._rederive_followers(name)
         await self._async_save()
-
-    @callback
-    def _rederive_followers(self, name: str) -> None:
-        """Re-scale the profile to every window that inherited its numbers.
-
-        Only the records that say so (`derived_from_profile`): the overrides paths A
-        and C store are measurements of that window and have nothing to do with the
-        profile it is also assigned to.
-        """
-        shaped = profile_as_config(name, self._profiles.get(name) or {})
-        for unique_id in self.covers_following(name):
-            record = dict(self._covers[unique_id])
-            calibration = stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record})
-            if not calibration.derived_from_profile:
-                continue
-            if shaped is None:
-                # A profile this version cannot read: the safe way to be wrong is to
-                # leave the window on the file's numbers rather than on numbers
-                # derived from something unintelligible.
-                record.pop(CONF_OVERRIDES, None)
-            else:
-                record[CONF_OVERRIDES] = profile_overrides(shaped, calibration.height)
-            self._covers[unique_id] = record
 
     async def async_remove_profile(self, name: str) -> list[str]:
         """Forget a profile, and answer with the covers that were following it.
@@ -482,12 +478,10 @@ class CalibrationStore:
         orphans = self.covers_following(name)
         for unique_id in orphans:
             record = dict(self._covers[unique_id])
-            if stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record}).derived_from_profile:
-                # Those numbers *were* the profile. Keeping them would leave a window
-                # running for ever on a profile the user deleted, and beating the file
-                # while doing it; the height stays, because a tape was held against it.
-                record.pop(CONF_OVERRIDES, None)
+            # The assignment goes, and with it the precedence it carried; the height
+            # and the overrides stay, because a tape was held against those.
             record.pop(CONF_PROFILE, None)
+            record.pop(CONF_PROFILE_WINS, None)
             if stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record}).says_anything:
                 self._covers[unique_id] = record
             else:
@@ -516,30 +510,24 @@ class CalibrationStore:
     ) -> bool:
         """Point covers at profiles (and record their heights); True when anything moved.
 
-        The write of the "Profili e tapparelle" screen. A cover assigned to no profile
-        keeps whatever else was measured on it - the overrides are measurements of that
+        The write of the "Profili e tapparelle" screen. Assigning a profile is a
+        statement about this window made after the file was written, so it is stored
+        with `profile_wins` and the profile's values are put above the keys the file
+        writes for that cover (final review, RISK-B: this screen and path B now mean
+        the same thing by the same sentence). A cover assigned to no profile keeps
+        whatever else was measured on it - the overrides are measurements of that
         window and have nothing to do with which kind of shutter it is.
         """
         changed = False
         for unique_id, (profile, height) in assignments.items():
             record = dict(self._covers.get(unique_id) or {})
             before = dict(record)
-            moved = record.get(CONF_PROFILE) != profile
-            if (
-                moved
-                and stored_calibration(
-                    {CONF_COVER_UNIQUE_ID: unique_id, **record}
-                ).derived_from_profile
-            ):
-                # This window was following that profile with its numbers baked in
-                # (path B). Assigning is not measuring, so the new assignment is stored
-                # as a bare one and the old profile's arithmetic goes: keeping it would
-                # leave the window on the numbers of a profile it no longer follows.
-                record.pop(CONF_OVERRIDES, None)
             if profile is None:
                 record.pop(CONF_PROFILE, None)
+                record.pop(CONF_PROFILE_WINS, None)
             else:
                 record[CONF_PROFILE] = profile
+                record[CONF_PROFILE_WINS] = True
             if height is not None:
                 record[CONF_HEIGHT] = float(height)
             if record == before:
@@ -682,6 +670,11 @@ def resolve_cover(
     thing that says which of those values the user actually wrote. See the module
     docstring for the order; the whole of it is the loop below.
 
+    The profile is scaled here, on every read, rather than copied into the record when
+    it is assigned: a `cover_profiles:` profile corrected in `myhome.yaml` therefore
+    reaches every window that follows it on the next reload, which a stored copy could
+    only have managed for the profiles the store itself owns (final review, RISK-A).
+
     Nothing here can fail: a record naming a profile that no longer exists falls back
     to the file, because a shutter that stops working because a profile was renamed
     would be worse than one that stops where it used to.
@@ -706,10 +699,18 @@ def resolve_cover(
         else:
             derived = derive_cover_from_profile(profile, height)
 
+    # "This cover follows that profile, and I mean it": the two screens that say so
+    # (path B, "Assegna un profilo") put the profile above the keys the file writes for
+    # this cover - and still below a tape held against this window. Without the flag
+    # the profile stays where spec 1.3 puts it, under the file.
+    wins = calibration is not None and calibration.follows_a_profile
+
     values: dict[str, Any] = {}
     for key in COVER_CALIBRATION_KEYS:
         if key in overrides:
             values[key] = overrides[key]
+        elif wins and key in derived:
+            values[key] = derived[key]
         elif key in written:
             values[key] = device[key]
         elif key in derived:

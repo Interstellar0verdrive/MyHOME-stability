@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Quale profilo segue ogni tapparella",
-        "description": "**Cosa sta per succedere**: niente si muove. Assegnare un profilo vuol dire dire a Home Assistant “questa tapparella è fatta come quelle lì”, e i valori del profilo vengono riadattati alla sua altezza.\n\nUn profilo non ha la precedenza su quello che è scritto nel file di configurazione, se lo usi: quello che conta di più resta sempre ciò che è stato misurato su questa tapparella.\n\nUn `profile:` scritto nel file di configurazione per una tapparella compare qui come valore attuale e da questa schermata non si può togliere: è del file, e il file è tuo.\n\n**Cosa devi fare tu**: per ogni tapparella scegli un profilo, oppure “Nessun profilo” per lasciarla ai valori del file o a quelli predefiniti."
+        "description": "**Cosa sta per succedere**: niente si muove. Assegnare un profilo vuol dire dire a Home Assistant “questa tapparella è fatta come quelle lì”: da quel momento la tapparella segue quel profilo, tempi di corsa compresi, riadattati alla sua altezza.\n\nLo stai dicendo qui, di questa tapparella, dopo che il file di configurazione è stato scritto: per questo il profilo viene usato al posto di quello che il file scrive per questa tapparella, se lo usi. Quello che è stato misurato su questa tapparella conta ancora di più e continua a essere usato dove c'è; correggere il profilo più avanti arriva a tutte le tapparelle che lo seguono.\n\nUn `profile:` scritto nel file di configurazione per una tapparella compare qui come valore attuale e da questa schermata non si può togliere: è del file, e il file è tuo.\n\n**Cosa devi fare tu**: per ogni tapparella scegli un profilo, oppure “Nessun profilo” per lasciarla ai valori del file o a quelli predefiniti."
       },
       "assign_heights": {
         "title": "Quanto sono alte queste tapparelle?",
@@ -468,7 +468,7 @@
       },
       "summary_short": {
         "title": "Cosa è stato misurato",
-        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n\n**Dove finiscono questi valori**: se salvi, restano dentro Home Assistant, qui in Configura → Calibrazioni, e da subito la tapparella li usa al posto di quelli del file di configurazione, se lo usi. Da quella stessa schermata puoi rivederli, correggerli a mano o cancellarli in qualsiasi momento.\n\nSe preferisci scriverli nel file a mano, qui sotto c'è lo snippet equivalente: copialo prima di chiudere, perché senza salvare non viene conservato nulla.\n\n{yaml}\n**Cosa devi fare tu**: salva, oppure esci senza salvare niente.",
+        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n\n**Dove finiscono questi valori**: se salvi, restano dentro Home Assistant, qui in Configura → Calibrazioni, e da subito la tapparella li usa al posto di quelli del file di configurazione, se lo usi. Da quella stessa schermata puoi rivederli, correggerli a mano o cancellarli in qualsiasi momento.\n\nSe preferisci scriverli nel file a mano, qui sotto c'è lo snippet equivalente: copialo prima di chiudere, perché senza salvare non viene conservato nulla.\n\n{yaml}\n**Cosa viene sostituito e cosa resta**: salvando vengono scritti {replacing}, e tutto il resto di quello che è già memorizzato per questa tapparella resta com'è: {keeping}.\n\n**Cosa devi fare tu**: salva, oppure esci senza salvare niente.",
         "menu_options": {
           "save": "Salva",
           "cancel_flow": "Annulla senza salvare niente"

@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Que perfil segue cada persiana",
-        "description": "**O que vai acontecer**: nada se move. Atribuir um perfil é dizer ao Home Assistant «esta persiana é feita como aquelas», e os valores do perfil são adaptados à sua altura.\n\nUm perfil não tem precedência sobre o que está escrito no ficheiro de configuração, se o usar: o que pesa mais continua a ser sempre o que foi medido nesta persiana.\n\nUm `profile:` escrito no ficheiro de configuração para uma persiana aparece aqui como o valor atual e não pode ser retirado a partir deste ecrã: é do ficheiro, e o ficheiro é seu.\n\n**O que tem de fazer**: escolha um perfil para cada persiana, ou «Sem perfil» para a deixar com os valores do ficheiro ou com os predefinidos."
+        "description": "**O que vai acontecer**: nada se move. Atribuir um perfil é dizer ao Home Assistant «esta persiana é feita como aquelas»: a partir daí a persiana segue esse perfil, tempos de percurso incluídos, adaptados à sua altura.\n\nEstá a dizê-lo aqui, desta persiana, depois de o ficheiro de configuração ter sido escrito: por isso o perfil é usado em vez do que o ficheiro escreve para esta persiana, se o usar. O que foi medido nesta persiana pesa ainda mais e continua a ser usado onde exista; corrigir o perfil mais tarde chega a todas as persianas que o seguem.\n\nUm `profile:` escrito no ficheiro de configuração para uma persiana aparece aqui como o valor atual e não pode ser retirado a partir deste ecrã: é do ficheiro, e o ficheiro é seu.\n\n**O que tem de fazer**: escolha um perfil para cada persiana, ou «Sem perfil» para a deixar com os valores do ficheiro ou com os predefinidos."
       },
       "assign_heights": {
         "title": "Que altura têm estas persianas?",
@@ -468,7 +468,7 @@
       },
       "summary_short": {
         "title": "O que foi medido",
-        "description": "**Persiana**: {cover}\n\n**Percurso da tela**: {height}\n\n**Onde vão parar estes valores**: se guardar, ficam dentro do Home Assistant, aqui em Configurar → Calibrações, e a partir daí a persiana usa-os em vez dos do ficheiro de configuração, se o usar. A partir desse mesmo ecrã pode voltar a vê-los, corrigi-los à mão ou apagá-los a qualquer momento.\n\nSe preferir escrevê-los você mesmo no ficheiro, o excerto equivalente está abaixo: copie-o antes de fechar, porque sem guardar nada é conservado.\n\n{yaml}\n**O que tem de fazer**: guarde, ou saia sem guardar nada.",
+        "description": "**Persiana**: {cover}\n\n**Percurso da tela**: {height}\n\n**Onde vão parar estes valores**: se guardar, ficam dentro do Home Assistant, aqui em Configurar → Calibrações, e a partir daí a persiana usa-os em vez dos do ficheiro de configuração, se o usar. A partir desse mesmo ecrã pode voltar a vê-los, corrigi-los à mão ou apagá-los a qualquer momento.\n\nSe preferir escrevê-los você mesmo no ficheiro, o excerto equivalente está abaixo: copie-o antes de fechar, porque sem guardar nada é conservado.\n\n{yaml}\n**O que é substituído e o que fica**: ao guardar escrevem-se {replacing}, e tudo o resto que já está guardado para esta persiana fica como está: {keeping}.\n\n**O que tem de fazer**: guarde, ou saia sem guardar nada.",
         "menu_options": {
           "save": "Guardar",
           "cancel_flow": "Cancelar sem guardar nada"
