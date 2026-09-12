@@ -69,8 +69,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configuración de {gateway}",
-        "description": "Desde aquí se configura la pasarela y se calibran las persianas «sencillas», aquellas cuya posición Home Assistant tiene que estimar a partir de los tiempos de recorrido.\n\n**Lo que tienes que hacer**: elige una opción. Mientras no se guarde nada no cambia nada, y ninguna persiana se mueve antes de que una pantalla lo anuncie.",
+        "title": "Configuración de esta pasarela",
+        "description": "**Pasarela**: {gateway}\n\nDesde aquí se configura la pasarela y se calibran las persianas «sencillas», aquellas cuya posición Home Assistant tiene que estimar a partir de los tiempos de recorrido.\n\n**Lo que tienes que hacer**: elige una opción. Mientras no se guarde nada no cambia nada, y ninguna persiana se mueve antes de que una pantalla lo anuncie.",
         "menu_options": {
           "calibrate": "Calibrar una persiana",
           "profiles_covers": "Perfiles y persianas",
@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Qué perfil sigue cada persiana",
-        "description": "**Lo que va a pasar**: no se mueve nada. Asignar un perfil significa decirle a Home Assistant «esta persiana es como aquellas», y los valores del perfil se adaptan a su altura.\n\nUn perfil no tiene preferencia sobre lo escrito en el archivo de configuración, si lo usas: lo que más pesa sigue siendo siempre lo que se ha medido en esta persiana.\n\n**Lo que tienes que hacer**: elige un perfil para cada persiana, o «Sin perfil» para dejarla con los valores del archivo o con los predeterminados."
+        "description": "**Lo que va a pasar**: no se mueve nada. Asignar un perfil significa decirle a Home Assistant «esta persiana es como aquellas», y los valores del perfil se adaptan a su altura.\n\nUn perfil no tiene preferencia sobre lo escrito en el archivo de configuración, si lo usas: lo que más pesa sigue siendo siempre lo que se ha medido en esta persiana.\n\nUn `profile:` escrito en el archivo de configuración para una persiana aparece aquí como su valor actual y no se puede quitar desde esta pantalla: es del archivo, y el archivo es tuyo.\n\n**Lo que tienes que hacer**: elige un perfil para cada persiana, o «Sin perfil» para dejarla con los valores del archivo o con los predeterminados."
       },
       "assign_heights": {
         "title": "¿Qué altura tienen estas persianas?",
@@ -129,8 +129,8 @@
         }
       },
       "profile_actions": {
-        "title": "Perfil «{profile}»",
-        "description": "Persianas que lo siguen: {count}.\n\n**Lo que tienes que hacer**: elige qué hacer con él. Ver los valores no cambia nada; modificarlos o eliminar el perfil surte efecto en cuanto cierres esta ventana.",
+        "title": "Perfil de persiana",
+        "description": "**Perfil**: «{profile}»\n\nPersianas que lo siguen: {count}.\n\n**Lo que tienes que hacer**: elige qué hacer con él. Ver los valores no cambia nada; modificarlos o eliminar el perfil surte efecto en cuanto cierres esta ventana.",
         "menu_options": {
           "profile_view": "Ver los valores",
           "profile_edit": "Modificar los valores a mano",
@@ -163,8 +163,8 @@
         }
       },
       "profile_delete": {
-        "title": "¿Eliminar el perfil «{profile}»?",
-        "description": "**Lo que va a pasar**: el perfil se elimina y estas {count} persianas vuelven a los valores del archivo de configuración, si lo usas, o a los predeterminados: {covers}\n\nLo que se midió en cada persiana se queda donde está: solo desaparece la descripción del tipo. Si en `cover_profiles:` existe un perfil con el mismo nombre, a partir de ahora vuelve a valer ese.",
+        "title": "¿Eliminar este perfil?",
+        "description": "**Perfil**: «{profile}»\n\n**Lo que va a pasar**: el perfil se elimina y estas {count} persianas vuelven a los valores del archivo de configuración, si lo usas, o a los predeterminados: {covers}\n\nLo que se midió en cada persiana se queda donde está: solo desaparece la descripción del tipo. Si en `cover_profiles:` existe un perfil con el mismo nombre, a partir de ahora vuelve a valer ese.",
         "menu_options": {
           "profile_delete_confirm": "Sí, eliminar el perfil",
           "profile_actions": "No, volver atrás"
@@ -196,8 +196,8 @@
         }
       },
       "calibration_actions": {
-        "title": "Calibración de {cover}",
-        "description": "Valores guardados para esta persiana:\n\n{values}\n**Lo que tienes que hacer**: elige qué hacer con ellos. «Medir de nuevo» repite la calibración guiada en esta persiana y sustituye lo que hay; «Eliminar» la devuelve al archivo de configuración, si lo usas.",
+        "title": "Calibración de esta persiana",
+        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**Lo que tienes que hacer**: elige qué hacer con ellos. «Medir de nuevo» repite la calibración guiada en esta persiana y sustituye lo que hay; «Eliminar» la devuelve al archivo de configuración, si lo usas.",
         "menu_options": {
           "calibration_view": "Ver los valores",
           "calibration_edit": "Modificar los valores a mano",
@@ -231,8 +231,8 @@
         }
       },
       "calibration_delete": {
-        "title": "¿Eliminar la calibración de {cover}?",
-        "description": "**Lo que va a pasar**: los valores guardados para esta persiana se borran y la persiana vuelve a lo que dice el archivo de configuración, si lo usas, o al perfil que sigue.\n\nLas medidas no se pueden recuperar: para volver a tenerlas hay que repetir la calibración guiada.",
+        "title": "¿Eliminar esta calibración?",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: los valores guardados para esta persiana se borran y la persiana vuelve a lo que dice el archivo de configuración, si lo usas, o al perfil que sigue.\n\nLas medidas no se pueden recuperar: para volver a tenerlas hay que repetir la calibración guiada.",
         "menu_options": {
           "calibration_delete_confirm": "Sí, eliminar la calibración",
           "calibration_actions": "No, volver atrás"
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Calibración guiada de persianas",
-        "description": "Esta herramienta calibra las persianas «sencillas»: aquellas cuyo actuador no informa de su posición. Para esas, el porcentaje que ves en Home Assistant es una estimación calculada a partir de los tiempos de recorrido; la calibración mide esos tiempos y la geometría del eje, para que la estimación sea fiable.\n\nNo será perfecta. Cuenta con unos centímetros de desviación: 1-2 cm cerca de los finales de carrera, 2-4 cm entre las posiciones intermedias. Cada apertura o cierre completo vuelve a alinear la estimación, así que el error no se acumula.\n\nLas persianas «avanzadas» informan de su posición por sí solas y no necesitan nada de esto: por eso no aparecen en la lista.\n\n**Lo que va a pasar**: elegirás una persiana y una de las tres formas de medirla. La persiana se moverá varias veces hasta sus finales de carrera.\n\n**Lo que tienes que hacer**: ten a mano una cinta métrica, asegúrate de que nada estorbe a la persiana y quédate donde puedas verla. No se guarda nada hasta la última pantalla: puedes cerrar esta ventana cuando quieras y no habrá cambiado nada.",
+        "description": "Esta herramienta calibra las persianas «sencillas»: aquellas cuyo actuador no informa de su posición. Para esas, el porcentaje que ves en Home Assistant es una estimación calculada a partir de los tiempos de recorrido; la calibración mide esos tiempos y la geometría del eje, para obtener una estimación más precisa.\n\nNo será perfecta. Cuenta con unos centímetros de desviación: 1-2 cm cerca de los finales de carrera, 2-4 cm entre las posiciones intermedias. Cada apertura o cierre completo vuelve a alinear la estimación, así que el error no se acumula.\n\nLas persianas «avanzadas» informan de su posición por sí solas y no necesitan nada de esto: por eso no aparecen en la lista de los próximos pasos.\n\n**Lo que va a pasar**: elegirás una persiana y una de las tres formas de medirla. La persiana se moverá varias veces hasta sus finales de carrera.\n\n**Lo que tienes que hacer**: ten a mano una cinta métrica, asegúrate de que nada estorbe a la persiana y quédate donde puedas verla. No se guarda nada hasta la última pantalla: puedes cerrar esta ventana cuando quieras y no habrá cambiado nada.",
         "menu_options": {
           "cover": "Empezar",
           "init": "Volver al menú"
@@ -258,8 +258,8 @@
         }
       },
       "path": {
-        "title": "¿Cómo quieres medir {cover}?",
-        "description": "Hay tres formas, y la adecuada depende de lo que ya hayas medido. No son pasos sucesivos: se elige una.\n\nLa primera (A) es la larga, unos tres minutos: tres pulsaciones de un botón y tres lecturas con la cinta. Al final nace un **perfil**, es decir, la descripción de este tipo de persiana, que todas las persianas parecidas (mismo modelo, misma medida, ...) podrán reutilizar.\n\nLa segunda (B) está pensada precisamente para las persianas parecidas a una ya calibrada: eliges el perfil, mides la altura, listo.\n\nLa tercera (C) es para una persiana que sigue un perfil y se sigue parando en el sitio equivocado.\n\n**Lo que tienes que hacer**: elige una de las formas de abajo. Hasta la pantalla siguiente no se mueve nada.",
+        "title": "¿Cómo quieres medir esta persiana?",
+        "description": "**Persiana**: {cover}\n\nHay tres formas, y la adecuada depende de lo que ya hayas medido. No son pasos sucesivos: se elige una.\n\nLa primera (A) es la larga, unos tres minutos: tres pulsaciones de un botón y tres lecturas con la cinta. Al final nace un **perfil**, es decir, la descripción de este tipo de persiana, que todas las persianas parecidas (mismo modelo, misma medida, ...) podrán reutilizar.\n\nLa segunda (B) está pensada precisamente para las persianas parecidas a una ya calibrada: eliges el perfil, mides la altura, listo.\n\nLa tercera (C) es para una persiana que sigue un perfil y se sigue parando en el sitio equivocado.\n\n**Lo que tienes que hacer**: elige una de las formas de abajo. Hasta la pantalla siguiente no se mueve nada.",
         "menu_options": {
           "path_a": "(A) Es la primera persiana de este tipo (medida completa, ~3 minutos)",
           "path_b": "(B) Es parecida a una persiana ya medida (solo la altura)",
@@ -268,8 +268,8 @@
         }
       },
       "path_a": {
-        "title": "Antes de que {cover} empiece a moverse",
-        "description": "**Lo que va a pasar**: la persiana bajará completamente, luego subirá completamente, luego volverá a bajar y finalmente se parará en alguna posición intermedia. Siete movimientos en total, unos tres minutos.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando — ventanas abiertas, plantas en el alféizar, gatos — y ten la cinta métrica a mano. Se te pedirá que pulses un botón cuando ocurra algo y que leas unas cuantas distancias.\n\nEn dos pasos tendrás que ser rápido y preciso, pero las instrucciones llegan siempre antes del movimiento y eres tú quien lo lanza. Puedes interrumpir cuando quieras: no se guarda nada hasta la última pantalla, y los movimientos son comandos normales.",
+        "title": "Antes de que la persiana empiece a moverse",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: la persiana bajará completamente, luego subirá completamente, luego volverá a bajar y finalmente se parará en alguna posición intermedia. Siete movimientos en total, unos tres minutos.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando — ventanas abiertas, plantas en el alféizar, gatos — y ten la cinta métrica a mano. Se te pedirá que pulses un botón cuando ocurra algo y que leas unas cuantas distancias.\n\nEn dos pasos tendrás que ser rápido y preciso, pero las instrucciones llegan siempre antes del movimiento y eres tú quien lo lanza. Puedes interrumpir cuando quieras: no se guarda nada hasta la última pantalla, y los movimientos son comandos normales.",
         "menu_options": {
           "begin": "Entendido, empecemos",
           "cancel_flow": "Cancelar"
@@ -290,8 +290,8 @@
         }
       },
       "refine_scope": {
-        "title": "¿Hasta dónde quieres afinar {cover}?",
-        "description": "**Lo que va a pasar**: o dos recorridos medidos (uno de subida y otro de bajada), o esos más dos lecturas con la cinta.\n\nSolo los tiempos bastan para una persiana cuyo motor es sencillamente más lento o más rápido que aquel en el que se midió el perfil. Añade los coeficientes cuando también se equivoque *a media carrera*: ahí no es el motor el que gira distinto, es la tela la que se enrolla distinto.\n\n**Lo que tienes que hacer**: elige hasta dónde llegar. Siempre puedes volver y hacer el resto.",
+        "title": "¿Hasta dónde quieres afinar la calibración?",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: o dos recorridos medidos (uno de subida y otro de bajada), o esos más dos lecturas con la cinta.\n\nSolo los tiempos bastan para una persiana cuyo motor es sencillamente más lento o más rápido que aquel en el que se midió el perfil. Añade los coeficientes cuando también se equivoque *a media carrera*: ahí no es el motor el que gira distinto, es la tela la que se enrolla distinto.\n\n**Lo que tienes que hacer**: elige hasta dónde llegar. Siempre puedes volver y hacer el resto.",
         "menu_options": {
           "times_only": "Solo sus tiempos de recorrido (2 pulsaciones, ~1 minuto)",
           "times_and_rolls": "Sus tiempos y sus coeficientes (2 pulsaciones y 2 lecturas)",
@@ -299,8 +299,8 @@
         }
       },
       "home_closed_done": {
-        "title": "¿{cover} está completamente cerrada?",
-        "description": "**Lo que ha pasado**: la persiana se ha enviado hasta abajo del todo, para que todo lo que se mida a partir de aquí parta de un punto conocido.\n\n**Lo que tienes que hacer**: míralla. Si está completamente cerrada, con las lamas apretadas y el borde inferior apoyado, continúa. Si todavía se está moviendo, espera y luego continúa. Si no se ha movido nada, o se ha movido hacia el lado equivocado, dilo aquí abajo.",
+        "title": "¿La persiana está completamente cerrada?",
+        "description": "**Persiana**: {cover}\n\n**Lo que ha pasado**: la persiana se ha enviado hasta abajo del todo, para que todo lo que se mida a partir de aquí parta de un punto conocido.\n\n**Lo que tienes que hacer**: míralla. Si está completamente cerrada, con las lamas apretadas y el borde inferior apoyado, continúa. Si todavía se está moviendo, espera y luego continúa. Si no se ha movido nada, o se ha movido hacia el lado equivocado, dilo aquí abajo.",
         "menu_options": {
           "confirm_closed": "Está completamente cerrada",
           "repeat_step": "Repetir este paso",
@@ -308,8 +308,8 @@
         }
       },
       "home_open_done": {
-        "title": "¿{cover} está completamente abierta?",
-        "description": "**Lo que ha pasado**: la persiana se ha enviado hasta arriba del todo, porque lo que sigue baja desde ahí y un recorrido que empezara en otro punto no mediría nada.\n\n**Lo que tienes que hacer**: míralla. Si está completamente abierta, continúa. Si todavía se está moviendo, espera y luego continúa. Si no se ha movido nada, o se ha movido hacia el lado equivocado, dilo aquí abajo.",
+        "title": "¿La persiana está completamente abierta?",
+        "description": "**Persiana**: {cover}\n\n**Lo que ha pasado**: la persiana se ha enviado hasta arriba del todo, porque lo que sigue baja desde ahí y un recorrido que empezara en otro punto no mediría nada.\n\n**Lo que tienes que hacer**: míralla. Si está completamente abierta, continúa. Si todavía se está moviendo, espera y luego continúa. Si no se ha movido nada, o se ha movido hacia el lado equivocado, dilo aquí abajo.",
         "menu_options": {
           "confirm_open": "Está completamente abierta",
           "repeat_step": "Repetir este paso",
@@ -317,8 +317,8 @@
         }
       },
       "open_brief": {
-        "title": "Vamos a medir la subida de {cover}",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia arriba desde abajo. Durante el primer segundo o dos solo se abren las lamas, mientras el borde inferior sigue apoyado; después empieza a subir toda la tela, y arriba la persiana se para sola.\n\n**Lo que tienes que hacer**: aquí tendrás que ser rápido y preciso. Se te pedirán dos pulsaciones, una tras otra: la primera en el instante en que el borde inferior se despega del apoyo, la segunda en el instante en que la persiana se para arriba. No estás cronometrando nada: el instante de la pulsación es la medida.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
+        "title": "Vamos a medir la subida",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia arriba desde abajo. Durante el primer segundo o dos solo se abren las lamas, mientras el borde inferior sigue apoyado; después empieza a subir toda la tela, y arriba la persiana se para sola.\n\n**Lo que tienes que hacer**: aquí tendrás que ser rápido y preciso. Se te pedirán dos pulsaciones, una tras otra: la primera en el instante en que el borde inferior se despega del apoyo, la segunda en el instante en que la persiana se para arriba. No estás cronometrando nada: el instante de la pulsación es la medida.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
         "menu_options": {
           "open_start": "1) Arrancar la persiana",
           "repeat_step": "Bajarla del todo primero",
@@ -326,8 +326,8 @@
         }
       },
       "open_lift": {
-        "title": "{cover} se está abriendo",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Lo que está pasando**: la persiana ha empezado a subir. En este momento se están abriendo las lamas y el borde inferior sigue apoyado.\n\n**Lo que tienes que hacer**: mira el borde inferior y pulsa el botón de abajo **en el instante en que se despega del apoyo**. Después deja que la persiana continúe: llegará arriba sola y se te pedirá la segunda pulsación.",
+        "title": "La persiana se está abriendo",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\n**Lo que está pasando**: la persiana ha empezado a subir. En este momento se están abriendo las lamas y el borde inferior sigue apoyado.\n\n**Lo que tienes que hacer**: mira el borde inferior y pulsa el botón de abajo **en el instante en que se despega del apoyo**. Después deja que la persiana continúe: llegará arriba sola y se te pedirá la segunda pulsación.",
         "menu_options": {
           "lifted_off": "2) Pulsa en el instante en que se despega de la base",
           "repeat_step": "Repetir este paso",
@@ -335,8 +335,8 @@
         }
       },
       "open_top": {
-        "title": "{cover} sigue subiendo",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Lo que está pasando**: la tela se está enrollando y la persiana se parará sola arriba.\n\n**Lo que tienes que hacer**: pulsa el botón de abajo **en el instante en que llega al final de carrera y el motor se para**. Si se te ha escapado el momento, repite el paso en lugar de calcular a ojo: todo el tiempo de apertura viene de esta pulsación.",
+        "title": "La persiana sigue subiendo",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Persiana**: {cover}\n\n**Lo que está pasando**: la tela se está enrollando y la persiana se parará sola arriba.\n\n**Lo que tienes que hacer**: pulsa el botón de abajo **en el instante en que llega al final de carrera y el motor se para**. Si se te ha escapado el momento, repite el paso en lugar de calcular a ojo: todo el tiempo de apertura viene de esta pulsación.",
         "menu_options": {
           "stopped_open": "3) Pulsa en el instante en que se para al final",
           "repeat_step": "Repetir este paso",
@@ -344,16 +344,16 @@
         }
       },
       "open_result": {
-        "title": "Subida de {cover}: {run} s",
-        "description": "**Lo que se ha medido**: lamas {slat} s, subida completa {run} s.\n\n**Lo que tienes que hacer**: si las dos pulsaciones te han parecido correctas, continúa. Si alguna ha salido tarde o pronto, repite la medida: la persiana vuelve abajo y la subida se rehace desde el principio. Una pulsación medio segundo desviada mueve la estimación unos centímetros.",
+        "title": "La subida se ha medido",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha medido**: lamas {slat} s, subida completa {run} s.\n\n**Lo que tienes que hacer**: si las dos pulsaciones te han parecido correctas, continúa. Si alguna ha salido tarde o pronto, repite la medida: la persiana vuelve abajo y la subida se rehace desde el principio. Una pulsación medio segundo desviada mueve la estimación unos centímetros.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_step": "Repetir la medida"
         }
       },
       "close_brief": {
-        "title": "Vamos a medir la bajada de {cover}",
-        "description": "**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia abajo desde arriba y se parará sola cuando la tela esté abajo y las lamas se hayan cerrado.\n\n**Lo que tienes que hacer**: aquí también tendrás que ser rápido y preciso, pero esta vez la pulsación es una sola, en el instante en que la persiana se para abajo. Una persiana baja un poco más deprisa de lo que sube, y por eso se mide aparte.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
+        "title": "Vamos a medir la bajada",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia abajo desde arriba y se parará sola cuando la tela esté abajo y las lamas se hayan cerrado.\n\n**Lo que tienes que hacer**: aquí también tendrás que ser rápido y preciso, pero esta vez la pulsación es una sola, en el instante en que la persiana se para abajo. Una persiana baja un poco más deprisa de lo que sube, y por eso se mide aparte.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
         "menu_options": {
           "close_start": "1) Arrancar la persiana",
           "repeat_step": "Subirla del todo primero",
@@ -361,8 +361,8 @@
         }
       },
       "close_bottom": {
-        "title": "{cover} se está cerrando",
-        "description": "**Lo que está pasando**: la persiana está bajando y se parará sola cuando la tela esté abajo y las lamas se hayan cerrado.\n\n**Lo que tienes que hacer**: pulsa el botón de abajo **en el instante en que llega al final de carrera y el motor se para**. Esa pulsación es todo el tiempo de cierre.",
+        "title": "La persiana se está cerrando",
+        "description": "**Persiana**: {cover}\n\n**Lo que está pasando**: la persiana está bajando y se parará sola cuando la tela esté abajo y las lamas se hayan cerrado.\n\n**Lo que tienes que hacer**: pulsa el botón de abajo **en el instante en que llega al final de carrera y el motor se para**. Esa pulsación es todo el tiempo de cierre.",
         "menu_options": {
           "stopped_closed": "2) Pulsa en el instante en que se para al final",
           "repeat_step": "Repetir este paso",
@@ -370,8 +370,8 @@
         }
       },
       "close_result": {
-        "title": "Bajada de {cover}: {run} s",
-        "description": "**Lo que se ha medido**: bajada completa {run} s.\n\n**Lo que tienes que hacer**: si la pulsación te ha parecido correcta, continúa. Si no, repite la medida: la persiana vuelve arriba y la bajada se rehace desde el principio.",
+        "title": "La bajada se ha medido",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha medido**: bajada completa {run} s.\n\n**Lo que tienes que hacer**: si la pulsación te ha parecido correcta, continúa. Si no, repite la medida: la persiana vuelve arriba y la bajada se rehace desde el principio.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_step": "Repetir la medida"
@@ -388,8 +388,8 @@
         }
       },
       "height_result": {
-        "title": "Carrera de la tela de {cover}: {height} cm",
-        "description": "**Lo que se ha anotado**: {height} cm desde la base hasta el borde inferior con la persiana completamente abierta.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Es la medida a la que se refieren todas las demás, así que merece la pena comprobarla.",
+        "title": "La carrera de la tela se ha anotado",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha anotado**: {height} cm desde la base hasta el borde inferior con la persiana completamente abierta.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Es la medida a la que se refieren todas las demás, así que merece la pena comprobarla.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_measure": "Repetir la medida"
@@ -426,24 +426,24 @@
         }
       },
       "tape_result": {
-        "title": "Leídos {measured} cm al {percent}%",
-        "description": "**Lo que se ha anotado**: {measured} cm desde la base hasta el borde inferior.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Si dudas de haber medido desde el punto correcto, repite la medida: la persiana vuelve al final de carrera y rehace el mismo recorrido, así la lectura se puede repetir en las mismas condiciones.",
+        "title": "La lectura se ha anotado",
+        "description": "**Persiana**: {cover} — lectura al {percent}% del recorrido\n\n**Lo que se ha anotado**: {measured} cm desde la base hasta el borde inferior.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Si dudas de haber medido desde el punto correcto, repite la medida: la persiana vuelve al final de carrera y rehace el mismo recorrido, así la lectura se puede repetir en las mismas condiciones.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_tape": "Repetir la medida"
         }
       },
       "verify_offer": {
-        "title": "¿Quieres comprobar {cover}?",
-        "description": "La altura era todo lo que hacía falta: la calibración ya se puede guardar así.\n\n**Qué es la comprobación**: la persiana se envía a media carrera y tú mides dónde se ha parado de verdad, lo que dice si esta persiana se comporta realmente como el perfil. Lleva alrededor de un minuto y una lectura con la cinta.",
+        "title": "¿Quieres comprobar la persiana?",
+        "description": "**Persiana**: {cover}\n\nLa altura era todo lo que hacía falta: la calibración ya se puede guardar así.\n\n**Qué es la comprobación**: la persiana se envía a media carrera y tú mides dónde se ha parado de verdad, lo que dice si esta persiana se comporta realmente como el perfil. Lleva alrededor de un minuto y una lectura con la cinta.",
         "menu_options": {
           "verify_now": "Comprobar ahora (~1 minuto)",
           "skip_verify": "No, ir al resumen"
         }
       },
       "verify_result": {
-        "title": "{cover} se ha parado a {deviation} cm de la estimación",
-        "description": "Es la distancia entre donde la persiana se ha parado de verdad y donde Home Assistant creía que se pararía. Uno o dos centímetros son normales y ya una aproximación excelente; tres o más quieren decir que esta persiana no se comporta como el perfil que se le ha dado.\n\n**Lo que tienes que hacer**: continúa, o repite la medida si crees que la lectura estaba mal. Si aparece, el afinado mide esta persiana por su cuenta.",
+        "title": "Dónde se ha parado de verdad la persiana",
+        "description": "**Persiana**: {cover} — **desviación**: {deviation} cm\n\nEs la distancia entre donde la persiana se ha parado de verdad y donde Home Assistant creía que se pararía. Uno o dos centímetros son normales y ya una aproximación excelente; tres o más quieren decir que esta persiana no se comporta como el perfil que se le ha dado.\n\n**Lo que tienes que hacer**: continúa, o repite la medida si crees que la lectura estaba mal. Si aparece, el afinado mide esta persiana por su cuenta.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_tape": "Repetir la medida",
@@ -458,25 +458,33 @@
         }
       },
       "summary_basic": {
-        "title": "Lo que se ha medido en {cover}",
-        "description": "**Carrera de la tela**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\nLa precisión todavía no se ha comprobado. Con «Mejorar la precisión» se miden cuatro puntos más y se ve la desviación en centímetros.\n\n**Lo que tienes que hacer**: guarda, o dedica otros dos minutos y cuatro lecturas con la cinta.",
+        "title": "Lo que se ha medido",
+        "description": "**Persiana**: {cover}\n\n**Carrera de la tela**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\nLa precisión todavía no se ha comprobado. Con «Mejorar la precisión» se miden cuatro puntos más y se ve la desviación en centímetros.\n\n**Lo que tienes que hacer**: guarda, o dedica otros dos minutos y cuatro lecturas con la cinta.",
         "menu_options": {
           "save": "Guardar",
           "refine": "Mejorar la precisión (~2 minutos, 4 lecturas más)",
           "cancel_flow": "Cancelar sin guardar nada"
         }
       },
+      "summary_short": {
+        "title": "Lo que se ha medido",
+        "description": "**Persiana**: {cover}\n\n**Carrera de la tela**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Lo que tienes que hacer**: guarda, o sal sin guardar nada.",
+        "menu_options": {
+          "save": "Guardar",
+          "cancel_flow": "Cancelar sin guardar nada"
+        }
+      },
       "summary_precise": {
-        "title": "Lo que se ha medido en {cover}",
-        "description": "**Carrera de la tela**: {height}\n**Precisión**: dentro de {accuracy}, comprobada al {percent}%\n\nLa precisión es la distancia entre donde el modelo coloca el borde inferior y donde la cinta lo ha encontrado de verdad, medida en una posición sobre la que no se ha hecho ningún cálculo.\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Lo que tienes que hacer**: guarda.",
+        "title": "Lo que se ha medido",
+        "description": "**Persiana**: {cover}\n\n**Carrera de la tela**: {height}\n**Precisión**: dentro de {accuracy}, comprobada al {percent}%\n\nLa precisión es la distancia entre donde el modelo coloca el borde inferior y donde la cinta lo ha encontrado de verdad, medida en una posición sobre la que no se ha hecho ningún cálculo.\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Lo que tienes que hacer**: guarda.",
         "menu_options": {
           "save": "Guardar",
           "cancel_flow": "Cancelar sin guardar nada"
         }
       },
       "saved": {
-        "title": "Calibración de {cover} guardada",
-        "description": "Hecho: la calibración de {cover} está guardada y ya en uso. A partir de ahora {cover} se mueve con los valores recién medidos; los encuentras entre los atributos de la entidad, con la indicación «guided».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}» en Configurar → Perfiles y persianas. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar. Las demás persianas parecidas a esta se hacen en dos pantallas eligiendo «(B) Es parecida a una persiana ya medida».",
+        "title": "Calibración guardada",
+        "description": "Hecho: la calibración de {cover} está guardada y ya en uso. A partir de ahora {cover} se mueve con los valores recién medidos; los encuentras entre los atributos de la entidad, en «Calibration source».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}» en Configurar → Perfiles y persianas. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar. Las demás persianas parecidas a esta se hacen en dos pantallas eligiendo «(B) Es parecida a una persiana ya medida».",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -515,8 +523,8 @@
         }
       },
       "problem_no_echo": {
-        "title": "{cover} no ha respondido",
-        "description": "El comando ha llegado al bus pero el actuador no ha señalado nunca haberse puesto en marcha, así que no hay ningún instante respecto al que medir y el paso se ha abandonado.\n\n**La persiana podría seguir en movimiento**: el comando ha salido de verdad, así que lo más probable es que el motor haya arrancado. Justo después del error se ha enviado una parada, pero si la persiana sigue andando, párala tú antes de repetir el paso.\n\n**Lo que tienes que hacer**: comprueba que la persiana no esté atascada, que nadie más (un pulsador de pared, una automatización) la esté reteniendo, y repite el paso. Si pasa cada vez, este actuador no informa de su propio estado y la calibración guiada no puede medirlo.",
+        "title": "La persiana no ha respondido",
+        "description": "**Persiana**: {cover}\n\nEl comando ha llegado al bus pero el actuador no ha señalado nunca haberse puesto en marcha, así que no hay ningún instante respecto al que medir y el paso se ha abandonado.\n\n**La persiana podría seguir en movimiento**: el comando ha salido de verdad, así que lo más probable es que el motor haya arrancado. Justo después del error se ha enviado una parada, pero si la persiana sigue andando, párala tú antes de repetir el paso.\n\n**Lo que tienes que hacer**: comprueba que la persiana no esté atascada, que nadie más (un pulsador de pared, una automatización) la esté reteniendo, y repite el paso. Si pasa cada vez, este actuador no informa de su propio estado y la calibración guiada no puede medirlo.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"
@@ -531,16 +539,16 @@
         }
       },
       "problem_not_stopped": {
-        "title": "No se ha podido parar {cover}",
-        "description": "El comando de parada se ha rechazado o se ha perdido, así que la persiana ha seguido hasta el final de carrera y la posición de la que hablaba este paso no existe.\n\n**Lo que tienes que hacer**: espera a que la persiana esté parada y repite el paso. Suele pasar con una pasarela ocupada con muchísimos comandos.",
+        "title": "No se ha podido parar la persiana",
+        "description": "**Persiana**: {cover}\n\nEl comando de parada se ha rechazado o se ha perdido, así que la persiana ha seguido hasta el final de carrera y la posición de la que hablaba este paso no existe.\n\n**Lo que tienes que hacer**: espera a que la persiana esté parada y repite el paso. Suele pasar con una pasarela ocupada con muchísimos comandos.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"
         }
       },
       "problem_busy": {
-        "title": "{cover} ya se está moviendo",
-        "description": "Un paso tiene que empezar desde parada, y esta persiana ya estaba en movimiento — alguien en un pulsador de pared, una automatización, o un comando todavía sin terminar.\n\n**Lo que tienes que hacer**: espera a que se pare y repite el paso.",
+        "title": "La persiana ya se está moviendo",
+        "description": "**Persiana**: {cover}\n\nUn paso tiene que empezar desde parada, y esta persiana ya estaba en movimiento — alguien en un pulsador de pared, una automatización, o un comando todavía sin terminar.\n\n**Lo que tienes que hacer**: espera a que se pare y repite el paso.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"
@@ -563,8 +571,8 @@
         }
       },
       "problem_unknown": {
-        "title": "Algo ha salido mal con {cover}",
-        "description": "El paso no se ha completado y no se ha medido nada. El detalle está en el registro de Home Assistant.\n\n**Lo que tienes que hacer**: repite el paso. Elijas lo que elijas, no se ha guardado nada.",
+        "title": "Algo ha salido mal",
+        "description": "**Persiana**: {cover}\n\nEl paso no se ha completado y no se ha medido nada. El detalle está en el registro de Home Assistant.\n\n**Lo que tienes que hacer**: repite el paso. Elijas lo que elijas, no se ha guardado nada.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"

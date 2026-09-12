@@ -69,8 +69,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configuring {gateway}",
-        "description": "This is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: pick one. Nothing changes until something is saved, and no cover moves before a screen says it is about to.",
+        "title": "Configuring this gateway",
+        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: pick one. Nothing changes until something is saved, and no cover moves before a screen says it is about to.",
         "menu_options": {
           "calibrate": "Calibrate a cover",
           "profiles_covers": "Profiles and covers",
@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Which profile each cover follows",
-        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”, and the profile's values are scaled to this cover's height.\n\nA profile does not beat what is written in the configuration file, if you use one: what always counts for most is what was measured on this cover itself.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
+        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”, and the profile's values are scaled to this cover's height.\n\nA profile does not beat what is written in the configuration file, if you use one: what always counts for most is what was measured on this cover itself.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it belongs to the file, and the file is yours.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
       },
       "assign_heights": {
         "title": "How tall are these covers?",
@@ -129,8 +129,8 @@
         }
       },
       "profile_actions": {
-        "title": "Profile “{profile}”",
-        "description": "Covers following it: {count}.\n\n**What you have to do**: choose what to do with it. Viewing the values changes nothing; editing them or deleting the profile takes effect as soon as you close this dialog.",
+        "title": "Cover profile",
+        "description": "**Profile**: “{profile}”\n\nCovers following it: {count}.\n\n**What you have to do**: choose what to do with it. Viewing the values changes nothing; editing them or deleting the profile takes effect as soon as you close this dialog.",
         "menu_options": {
           "profile_view": "View the values",
           "profile_edit": "Edit the values by hand",
@@ -163,8 +163,8 @@
         }
       },
       "profile_delete": {
-        "title": "Delete profile “{profile}”?",
-        "description": "**What is about to happen**: the profile is deleted and these {count} covers go back to the values of the configuration file, if you use one, or to the defaults: {covers}\n\nWhat was measured on each cover stays where it is: only the description of the kind is removed. If a profile of the same name exists in `cover_profiles:`, that one applies again from now on.",
+        "title": "Delete this profile?",
+        "description": "**Profile**: “{profile}”\n\n**What is about to happen**: the profile is deleted and these {count} covers go back to the values of the configuration file, if you use one, or to the defaults: {covers}\n\nWhat was measured on each cover stays where it is: only the description of the kind is removed. If a profile of the same name exists in `cover_profiles:`, that one applies again from now on.",
         "menu_options": {
           "profile_delete_confirm": "Yes, delete the profile",
           "profile_actions": "No, go back"
@@ -196,8 +196,8 @@
         }
       },
       "calibration_actions": {
-        "title": "Calibration of {cover}",
-        "description": "What is kept for this cover:\n\n{values}\n**What you have to do**: choose what to do with it. “Measure it again” runs the guided calibration on this cover and replaces what is here; “Delete” hands it back to the configuration file, if you use one.",
+        "title": "Calibration of this cover",
+        "description": "**Cover**: {cover}\n\nWhat is kept for this cover:\n\n{values}\n**What you have to do**: choose what to do with it. “Measure it again” runs the guided calibration on this cover and replaces what is here; “Delete” hands it back to the configuration file, if you use one.",
         "menu_options": {
           "calibration_view": "View the values",
           "calibration_edit": "Edit the values by hand",
@@ -231,8 +231,8 @@
         }
       },
       "calibration_delete": {
-        "title": "Delete the calibration of {cover}?",
-        "description": "**What is about to happen**: the values kept for this cover are removed and the cover goes back to what the configuration file says, if you use one, or to the profile it follows.\n\nThe measurements cannot be recovered: getting them back means running the guided calibration again.",
+        "title": "Delete this calibration?",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: the values kept for this cover are removed and the cover goes back to what the configuration file says, if you use one, or to the profile it follows.\n\nThe measurements cannot be recovered: getting them back means running the guided calibration again.",
         "menu_options": {
           "calibration_delete_confirm": "Yes, delete the calibration",
           "calibration_actions": "No, go back"
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Guided cover calibration",
-        "description": "This tool calibrates “basic” covers: the ones whose actuator does not report its position. For those, the percentage you see in Home Assistant is an estimate computed from the run times; the calibration measures those times and the geometry of the roller, so that the estimate becomes a reliable one.\n\nIt will not be perfect. Expect a few centimetres out: 1-2 cm near the end stops, 2-4 cm between intermediate positions. Every full open or close re-synchronises the estimate, so the error does not build up.\n\n“Advanced” covers report their position by themselves and need none of this, which is why they are not in the list.\n\n**What is about to happen**: you will pick a cover and one of three ways of measuring it. The cover will run to its end stops several times.\n\n**What you have to do**: keep a tape measure to hand, make sure nothing is in the cover's way, and stay where you can see it. Nothing is saved until the last screen: you can close this dialog whenever you like and nothing will have changed.",
+        "description": "This tool calibrates “basic” covers: the ones whose actuator does not report its position. For those, the percentage you see in Home Assistant is an estimate computed from the run times; the calibration measures those times and the geometry of the roller, so as to obtain a more accurate estimate.\n\nIt will not be perfect. Expect a few centimetres out: 1-2 cm near the end stops, 2-4 cm between intermediate positions. Every full open or close re-synchronises the estimate, so the error does not build up.\n\n“Advanced” covers report their position by themselves and need none of this, which is why they do not appear in the list in the next steps.\n\n**What is about to happen**: you will pick a cover and one of three ways of measuring it. The cover will run to its end stops several times.\n\n**What you have to do**: keep a tape measure to hand, make sure nothing is in the cover's way, and stay where you can see it. Nothing is saved until the last screen: you can close this dialog whenever you like and nothing will have changed.",
         "menu_options": {
           "cover": "Start",
           "init": "Back to the menu"
@@ -258,8 +258,8 @@
         }
       },
       "path": {
-        "title": "How do you want to measure {cover}?",
-        "description": "There are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about three minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that follows a profile and keeps stopping in the wrong place.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
+        "title": "How do you want to measure this cover?",
+        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about three minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that follows a profile and keeps stopping in the wrong place.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
         "menu_options": {
           "path_a": "(A) It is the first cover of its kind (full measurement, ~3 minutes)",
           "path_b": "(B) It is similar to a cover already measured (height only)",
@@ -268,8 +268,8 @@
         }
       },
       "path_a": {
-        "title": "Before {cover} starts moving",
-        "description": "**What is about to happen**: the cover will close completely, then open completely, then close again, and finally stop somewhere in between. Seven movements in all, about three minutes.\n\n**What you have to do**: make sure nothing is in the way - open windows, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nTwo of the steps ask you to be quick and precise, but the instructions always come before the movement and you are the one who starts it. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
+        "title": "Before the cover starts moving",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: the cover will close completely, then open completely, then close again, and finally stop somewhere in between. Seven movements in all, about three minutes.\n\n**What you have to do**: make sure nothing is in the way - open windows, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nTwo of the steps ask you to be quick and precise, but the instructions always come before the movement and you are the one who starts it. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
         "menu_options": {
           "begin": "Understood, let's start",
           "cancel_flow": "Cancel"
@@ -290,8 +290,8 @@
         }
       },
       "refine_scope": {
-        "title": "How far do you want to refine {cover}?",
-        "description": "**What is about to happen**: either two measured runs (one up and one down), or those plus two tape readings.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
+        "title": "How far do you want to refine the calibration?",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: either two measured runs (one up and one down), or those plus two tape readings.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
         "menu_options": {
           "times_only": "Its own run times only (2 presses, ~1 minute)",
           "times_and_rolls": "Its own times and its own coefficients (2 presses and 2 readings)",
@@ -299,8 +299,8 @@
         }
       },
       "home_closed_done": {
-        "title": "Is {cover} completely closed?",
-        "description": "**What happened**: the cover was sent all the way down, so that everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "title": "Is the cover completely closed?",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent all the way down, so that everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
         "menu_options": {
           "confirm_closed": "It is completely closed",
           "repeat_step": "Repeat this step",
@@ -308,8 +308,8 @@
         }
       },
       "home_open_done": {
-        "title": "Is {cover} completely open?",
-        "description": "**What happened**: the cover was sent all the way up, because what follows runs down from there and a run that started anywhere else would measure nothing.\n\n**What you have to do**: look at it. If it is completely open, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "title": "Is the cover completely open?",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent all the way up, because what follows runs down from there and a run that started anywhere else would measure nothing.\n\n**What you have to do**: look at it. If it is completely open, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
         "menu_options": {
           "confirm_open": "It is completely open",
           "repeat_step": "Repeat this step",
@@ -317,8 +317,8 @@
         }
       },
       "open_brief": {
-        "title": "We are about to measure {cover} going up",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other: the first at the instant the bottom edge leaves its rest, the second at the instant the cover stops at the top. You are not timing anything - the instant of the press is the measurement.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "title": "We are about to measure the ascent",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other: the first at the instant the bottom edge leaves its rest, the second at the instant the cover stops at the top. You are not timing anything - the instant of the press is the measurement.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "open_start": "1) Start the cover",
           "repeat_step": "Send it back down first",
@@ -326,8 +326,8 @@
         }
       },
       "open_lift": {
-        "title": "{cover} is opening",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**What is happening**: the cover has started to rise. Right now the slats are opening and the bottom edge is still on its rest.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Then let the cover carry on: it will reach the top by itself and you will be asked for the second press.",
+        "title": "The cover is opening",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What is happening**: the cover has started to rise. Right now the slats are opening and the bottom edge is still on its rest.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Then let the cover carry on: it will reach the top by itself and you will be asked for the second press.",
         "menu_options": {
           "lifted_off": "2) Press at the instant it leaves its rest",
           "repeat_step": "Repeat this step",
@@ -335,8 +335,8 @@
         }
       },
       "open_top": {
-        "title": "{cover} is still rising",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**What is happening**: the curtain is winding on and the cover will stop by itself at the top.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. If you missed the moment, repeat the step rather than guessing: the whole opening time comes from this press.",
+        "title": "The cover is still rising",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\n**What is happening**: the curtain is winding on and the cover will stop by itself at the top.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. If you missed the moment, repeat the step rather than guessing: the whole opening time comes from this press.",
         "menu_options": {
           "stopped_open": "3) Press at the instant it stops at the end",
           "repeat_step": "Repeat this step",
@@ -344,16 +344,16 @@
         }
       },
       "open_result": {
-        "title": "{cover} going up: {run} s",
-        "description": "**What was measured**: slats {slat} s, full ascent {run} s.\n\n**What you have to do**: if both presses felt right, go on. If either was late or early, repeat the measurement: the cover is sent back down and the ascent is run again. A press half a second out moves the estimate by a few centimetres.",
+        "title": "The ascent was measured",
+        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s.\n\n**What you have to do**: if both presses felt right, go on. If either was late or early, repeat the measurement: the cover is sent back down and the ascent is run again. A press half a second out moves the estimate by a few centimetres.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_step": "Repeat the measurement"
         }
       },
       "close_brief": {
-        "title": "We are about to measure {cover} going down",
-        "description": "**What is about to happen**: when you press the button below, the cover starts downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time there is only one press, at the instant the cover stops at the bottom. A cover comes down a little faster than it goes up, which is why this is measured separately.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "title": "We are about to measure the descent",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time there is only one press, at the instant the cover stops at the bottom. A cover comes down a little faster than it goes up, which is why this is measured separately.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "close_start": "1) Start the cover",
           "repeat_step": "Send it back up first",
@@ -361,8 +361,8 @@
         }
       },
       "close_bottom": {
-        "title": "{cover} is closing",
-        "description": "**What is happening**: the cover is coming down and will stop by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. That press is the whole closing time.",
+        "title": "The cover is closing",
+        "description": "**Cover**: {cover}\n\n**What is happening**: the cover is coming down and will stop by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. That press is the whole closing time.",
         "menu_options": {
           "stopped_closed": "2) Press at the instant it stops at the end",
           "repeat_step": "Repeat this step",
@@ -370,8 +370,8 @@
         }
       },
       "close_result": {
-        "title": "{cover} going down: {run} s",
-        "description": "**What was measured**: full descent {run} s.\n\n**What you have to do**: if the press felt right, go on. Otherwise repeat the measurement: the cover is sent back up and the descent is run again.",
+        "title": "The descent was measured",
+        "description": "**Cover**: {cover}\n\n**What was measured**: full descent {run} s.\n\n**What you have to do**: if the press felt right, go on. Otherwise repeat the measurement: the cover is sent back up and the descent is run again.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_step": "Repeat the measurement"
@@ -388,8 +388,8 @@
         }
       },
       "height_result": {
-        "title": "Curtain travel of {cover}: {height} cm",
-        "description": "**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. It is the measurement every other one is referred to, so it is worth checking.",
+        "title": "The curtain travel was written down",
+        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. It is the measurement every other one is referred to, so it is worth checking.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_measure": "Repeat the measurement"
@@ -426,24 +426,24 @@
         }
       },
       "tape_result": {
-        "title": "{measured} cm read at {percent}%",
-        "description": "**What was written down**: {measured} cm from the base to the bottom edge.\n\n**What you have to do**: if that is the number you read off the tape, go on. If you suspect you measured from the wrong point, repeat the measurement: the cover goes back to its end stop and runs the same distance again, so the reading can be taken under the same conditions.",
+        "title": "The reading was written down",
+        "description": "**Cover**: {cover} - read at {percent}% of the travel\n\n**What was written down**: {measured} cm from the base to the bottom edge.\n\n**What you have to do**: if that is the number you read off the tape, go on. If you suspect you measured from the wrong point, repeat the measurement: the cover goes back to its end stop and runs the same distance again, so the reading can be taken under the same conditions.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_tape": "Repeat the measurement"
         }
       },
       "verify_offer": {
-        "title": "Do you want to check {cover}?",
-        "description": "The height was all that was needed: the calibration can be saved as it is.\n\n**What the check is**: the cover is sent half way and you measure where it really stopped, which says whether this cover really behaves like the profile. It takes about a minute and one tape reading.",
+        "title": "Do you want to check the cover?",
+        "description": "**Cover**: {cover}\n\nThe height was all that was needed: the calibration can be saved as it is.\n\n**What the check is**: the cover is sent half way and you measure where it really stopped, which says whether this cover really behaves like the profile. It takes about a minute and one tape reading.",
         "menu_options": {
           "verify_now": "Check it now (~1 minute)",
           "skip_verify": "No, go to the summary"
         }
       },
       "verify_result": {
-        "title": "{cover} stopped {deviation} cm from the estimate",
-        "description": "That is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile it was given.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If it appears, the refinement measures this cover on its own.",
+        "title": "Where the cover really stopped",
+        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile it was given.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If it appears, the refinement measures this cover on its own.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_tape": "Repeat the measurement",
@@ -458,25 +458,33 @@
         }
       },
       "summary_basic": {
-        "title": "What was measured on {cover}",
-        "description": "**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” measures four more points and shows the gap in centimetres.\n\n**What you have to do**: save, or spend another two minutes and four tape readings.",
+        "title": "What was measured",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” measures four more points and shows the gap in centimetres.\n\n**What you have to do**: save, or spend another two minutes and four tape readings.",
         "menu_options": {
           "save": "Save",
           "refine": "Improve the accuracy (~2 minutes, 4 more readings)",
           "cancel_flow": "Cancel without saving anything"
         }
       },
+      "summary_short": {
+        "title": "What was measured",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save, or leave without saving anything.",
+        "menu_options": {
+          "save": "Save",
+          "cancel_flow": "Cancel without saving anything"
+        }
+      },
       "summary_precise": {
-        "title": "What was measured on {cover}",
-        "description": "**Curtain travel**: {height}\n**Accuracy**: within {accuracy}, checked at {percent}%\n\nThe accuracy is the distance between where the model puts the bottom edge and where the tape really found it, measured at a position nothing was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save.",
+        "title": "What was measured",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}, checked at {percent}%\n\nThe accuracy is the distance between where the model puts the bottom edge and where the tape really found it, measured at a position nothing was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"
         }
       },
       "saved": {
-        "title": "Calibration of {cover} saved",
-        "description": "Done: the calibration of {cover} is saved and already in use. From now on {cover} moves on the values just measured; you will find them among the entity's attributes, marked “guided”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
+        "title": "Calibration saved",
+        "description": "Done: the calibration of {cover} is saved and already in use. From now on {cover} moves on the values just measured; you will find them among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -515,8 +523,8 @@
         }
       },
       "problem_no_echo": {
-        "title": "{cover} did not answer",
-        "description": "The command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure against and the step was abandoned.\n\n**The cover may still be moving**: the command really did go out, so the motor most likely started. A stop was sent straight after the failure, but if the cover is still running, stop it yourself before repeating the step.\n\n**What you have to do**: check that the cover is not jammed, that nobody else (a wall switch, an automation) is holding it, and repeat the step. If it happens every time, this actuator does not report its own state and the guided calibration cannot measure it.",
+        "title": "The cover did not answer",
+        "description": "**Cover**: {cover}\n\nThe command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure against and the step was abandoned.\n\n**The cover may still be moving**: the command really did go out, so the motor most likely started. A stop was sent straight after the failure, but if the cover is still running, stop it yourself before repeating the step.\n\n**What you have to do**: check that the cover is not jammed, that nobody else (a wall switch, an automation) is holding it, and repeat the step. If it happens every time, this actuator does not report its own state and the guided calibration cannot measure it.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -531,16 +539,16 @@
         }
       },
       "problem_not_stopped": {
-        "title": "{cover} could not be stopped",
-        "description": "The stop command was refused or lost, so the cover carried on to its end stop and the position this step was about does not exist.\n\n**What you have to do**: wait for the cover to be still and repeat the step. This usually happens with a gateway that is busy with a great many commands.",
+        "title": "The cover could not be stopped",
+        "description": "**Cover**: {cover}\n\nThe stop command was refused or lost, so the cover carried on to its end stop and the position this step was about does not exist.\n\n**What you have to do**: wait for the cover to be still and repeat the step. This usually happens with a gateway that is busy with a great many commands.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
         }
       },
       "problem_busy": {
-        "title": "{cover} is already moving",
-        "description": "A step has to start from a standstill, and this cover was already moving - somebody at a wall switch, an automation, or a command that had not finished.\n\n**What you have to do**: wait for it to stop, then repeat the step.",
+        "title": "The cover is already moving",
+        "description": "**Cover**: {cover}\n\nA step has to start from a standstill, and this cover was already moving - somebody at a wall switch, an automation, or a command that had not finished.\n\n**What you have to do**: wait for it to stop, then repeat the step.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -563,8 +571,8 @@
         }
       },
       "problem_unknown": {
-        "title": "Something went wrong with {cover}",
-        "description": "The step did not finish and nothing was measured. The detail is in the Home Assistant log.\n\n**What you have to do**: repeat the step. Whatever you choose, nothing has been saved.",
+        "title": "Something went wrong",
+        "description": "**Cover**: {cover}\n\nThe step did not finish and nothing was measured. The detail is in the Home Assistant log.\n\n**What you have to do**: repeat the step. Whatever you choose, nothing has been saved.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
