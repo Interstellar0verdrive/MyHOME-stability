@@ -123,6 +123,7 @@ from .const import (
     CONF_TILT,
     CONF_WHERE,
     CONF_WHO,
+    CONF_YAML_KEY,
     CONF_ZONE,
     COVER_CALIBRATION_KEYS,
     DEFAULT_KEEPALIVE_MINUTES,
@@ -1078,6 +1079,10 @@ def _finalize_cover(device: MutableMapping, yaml_key: str) -> None:
     is skipped on an ``advanced`` cover, which produces no estimate at all (P4-NIT-1).
     """
     device.setdefault(CONF_DEVICE_CLASS, CoverDeviceClass.SHUTTER)
+    # What the user called this cover in their file. Everything downstream keys covers
+    # by WHO/WHERE, and the guided calibration has to offer a snippet the user can
+    # paste back under the name they actually wrote (0.5.0).
+    device.setdefault(CONF_YAML_KEY, yaml_key)
     _fold_shutter_run_alias(device, [yaml_key], f"cover '{yaml_key}'")
     profile = _cover_profile_values(device, yaml_key)
 

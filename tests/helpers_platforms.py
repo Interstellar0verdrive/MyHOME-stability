@@ -19,9 +19,11 @@ from unittest.mock import patch
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.storage import Store
 from OWNd.message import OWNEvent, OWNMessage
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.myhome.calibration_store import STORAGE_VERSION, storage_key
 from custom_components.myhome.const import (
     CONF_ENTITIES,
     CONF_ENTITY,
@@ -126,9 +128,17 @@ async def setup_myhome(
     connected: bool = True,
     clear_commands: bool = True,
     subentries: Iterable[Any] = (),
+    calibration: dict[str, Any] | None = None,
 ) -> AsyncIterator[tuple[MockConfigEntry, Commands]]:
-    """Set up the integration with ``yaml_text`` and yield the entry and the recorder."""
+    """Set up the integration with ``yaml_text`` and yield the entry and the recorder.
+
+    ``calibration`` is written into this entry's calibration store *before* the setup,
+    which is where a guided calibration lives from 0.5.0 v2 on; ``subentries`` is the
+    first draft's storage, kept so the migration out of it can be tested.
+    """
     entry = make_entry(write_yaml(tmp_path, yaml_text), subentries=subentries)
+    if calibration is not None:
+        await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_save(calibration)
     with mock_gateway(), mock_commands() as commands:
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)

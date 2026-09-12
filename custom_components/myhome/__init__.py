@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -53,6 +54,11 @@ from homeassistant.helpers import (
 from homeassistant.helpers.typing import ConfigType
 from OWNd.message import OWNCommand, OWNGatewayCommand
 
+from .calibration_store import (
+    async_forget_store,
+    async_get_store,
+    async_remove_store,
+)
 from .const import (
     ATTR_GATEWAY,
     ATTR_MESSAGE,
@@ -119,6 +125,14 @@ _LEGACY_LIST_KEYS = (
     CONF_FRIENDLY_NAME,
     CONF_UDN,
 )
+
+# The drawings the guided calibration shows inside its screens.  They ship with the
+# integration (``custom_components/myhome/images``) and are served from one URL, so a
+# screen can point at them with an ordinary Markdown image in its own description.
+STATIC_URL_PATH = "/myhome_static"
+IMAGES_DIR = str(Path(__file__).parent / "images")
+# One registration per Home Assistant run, however many gateways are configured.
+_STATIC_PATH_REGISTERED = "myhome_static_path_registered"
 
 SERVICE_GATEWAY_SCHEMA = vol.Schema({vol.Optional(ATTR_GATEWAY): cv.string})
 SERVICE_SEND_MESSAGE_SCHEMA = SERVICE_GATEWAY_SCHEMA.extend({vol.Required(ATTR_MESSAGE): cv.string})
@@ -418,7 +432,34 @@ def _parse_raw_command(raw: str) -> OWNCommand | None:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration (config entries only; YAML is rejected by CONFIG_SCHEMA)."""
     hass.data.setdefault(DOMAIN, {})
+    await _async_register_images(hass)
     return True
+
+
+async def _async_register_images(hass: HomeAssistant) -> None:
+    """Serve ``custom_components/myhome/images`` at ``/myhome_static``.
+
+    The guided calibration explains its four trickiest moments with a drawing, and
+    a config-flow description is rendered as Markdown: an ``![](/myhome_static/x.webp)``
+    in the text is all it takes, provided the file is reachable at that URL.  Registered
+    here rather than per entry, because the URL is the same for every gateway.
+
+    ``http`` is a stage-0 integration, so in a running Home Assistant ``hass.http`` is
+    always there by the time a custom integration is set up; on a bare ``hass`` - what
+    the test suite builds - the attribute is declared and left at ``None``, and the
+    drawings are the only thing that ``hass`` loses.
+    """
+    if hass.data.get(_STATIC_PATH_REGISTERED) or getattr(hass, "http", None) is None:
+        return
+    from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
+
+    # The flag goes up *after* the registration, not before it: a registration that
+    # raised would otherwise leave the drawings off for the rest of the Home Assistant
+    # run with nothing left to retry them (0.5.0 v2 review, RISK-6).
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(STATIC_URL_PATH, IMAGES_DIR, cache_headers=True)]
+    )
+    hass.data[_STATIC_PATH_REGISTERED] = True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -436,6 +477,26 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         LOGGER.info("Migrated MyHOME config entry %s to version %s", entry.title, CONFIG_ENTRY_VERSION)
     return True
+
+
+# --------------------------------------------------------- guided calibration (0.5.0)
+async def _async_calibration_store(hass: HomeAssistant, entry: ConfigEntry):
+    """Read this gateway's stored calibrations, before any cover is built out of them.
+
+    A cover reads its travel model once, in its constructor, so the store has to be on
+    disk *and* in memory before `async_forward_entry_setups`. The same call also moves
+    an installation written by the first draft of 0.5.0 - which kept this data in two
+    config subentry types - into the store and deletes the subentries, which is what
+    takes the stray rows off the integration page and stops Home Assistant grouping
+    every device under "devices not belonging to a subentry".
+    """
+    # Not reused across a reload: the dialog under "Configura" writes through the
+    # store object it was given, and a reload is exactly when that object has to be
+    # read again from disk.
+    async_forget_store(hass, entry)
+    store = await async_get_store(hass, entry)
+    await store.async_import_legacy_subentries(entry)
+    return store
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -510,6 +571,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Make sure the sessions are closed even when setup fails half way (core-10).
     entry.async_on_unload(handler.close_listener)
+    await _async_calibration_store(hass, entry)
 
     # No "unknown platform keys" check here: `MyHomeConfigSchema.__call__` builds
     # CONF_PLATFORMS from its own list (DEVICE_PLATFORMS, plus `event` for the
@@ -568,6 +630,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
     hass.data.get(DOMAIN, {}).pop(mac, None)
+    async_forget_store(hass, entry)
 
     still_loaded = [e for e in hass.config_entries.async_loaded_entries(DOMAIN) if e.entry_id != entry.entry_id]
     if not still_loaded:
@@ -576,9 +639,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Drop the repair issues of a gateway that is being removed."""
+    """Drop the repair issues - and the stored calibrations - of a gateway being removed."""
     for issue in (ISSUE_YAML_INVALID, ISSUE_UNKNOWN_KEYS, ISSUE_NO_DEVICES_FOR_GATEWAY):
         _async_clear_issue(hass, entry, issue)
+    # The shutters go with the gateway, so their measurements have nobody left to
+    # belong to; leaving the file behind would hand them to the next entry that
+    # happened to be given the same id.
+    await async_remove_store(hass, entry)
 
 
 async def async_remove_config_entry_device(
