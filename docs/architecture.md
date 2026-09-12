@@ -165,7 +165,7 @@ the greeting:
 | Frame | Session | Used for |
 |---|---|---|
 | `*99*1##` | **event** (monitor) | The gateway pushes every bus frame. One per gateway, permanently open. |
-| `*99*0##` | **command** | Send a frame, read its replies, read the ACK/NACK. One per command worker, closed after 60 s idle. |
+| `*99*0##` | **command** | Send a frame, read its replies, read the ACK/NACK. One per command worker, closed after 20 s idle. |
 
 ```mermaid
 stateDiagram-v2
@@ -226,7 +226,7 @@ sequenceDiagram
 
     E->>Q: send(msg) / send_status_request(msg)
     Note over Q: QueueFull -> False + rate-limited WARNING
-    W->>Q: get() with a 60 s timeout
+    W->>Q: get() with a 20 s timeout
     Note over W: timeout -> close the idle command session
     W->>W: drop if age > 60 s TTL
     W->>C: open(10 s) if no session yet
@@ -255,9 +255,9 @@ unknown number of late frames may still be in flight: the caller must discard it
 | TTL | `60 s` | Checked when the item is dequeued, not while it waits. An expired command is dropped with a WARNING, never sent. |
 | Stop priority | WHO 2 `*2*0*<where>##` | A stop overtakes any movement or status frame queued for **other** devices, so it is not delayed by a scene that is still being written. Behind a frame of its own device it is inserted right after that frame, not at the tail of everyone else's — a status request for that device does not hold it back either. "Same device" is `(WHO, WHERE, bus interface)`, so a light and a cover that happen to share a WHERE are told apart. |
 | Timeout | `10 s` | Per `send_command` call: write + drain + read until ACK/NACK. |
-| Delivery report | at the write | A command that asked to be told when it reaches the bus is told the moment the frame is on the socket, before the gateway's answer: a gateway repeats a command on the monitor session before it acknowledges it on the command one, and a caller told only after the acknowledgement is told too late to recognise its own frames coming back. A frame that is written and never acknowledged is still dropped and counted as such, but the caller keeps its delivery — the actuator has the frame either way. |
-| Retry | **once**, in place, and only if the frame never left | On a transport error the session is closed and one fresh session is opened for a second attempt — unless the frame had already reached the socket, in which case there is no second attempt: a lost acknowledgement is not a lost frame, and writing it again would put a second copy of the command on the bus. |
-| Drop | after the second failed write, or the first write nothing answered | A rate-limited WARNING names the command. It is **never re-queued**: a stale command is never replayed minutes later. A frame that was written and never acknowledged is counted here too, even though its caller has already been told it reached the bus. |
+| Delivery report | at the answer | A command that asked to be told when it reaches the bus is told once the gateway has answered it — an acknowledgement or a refusal — and the timestamp it is given is the instant of the write that was answered, not of the report. A write that returns proves nothing: a gateway that has closed an idle session accepts the bytes and drops them, and only the missing answer says so. A command no attempt was answered for is dropped, and its caller is told that instead. |
+| Retry | **once**, in place | On any transport error the session is closed and one fresh session is opened for a second attempt, whether or not the first write returned: a frame that left the socket and was never answered may equally well have gone into a session the gateway had closed, and these commands are harmless to repeat. |
+| Drop | after the second failed attempt | A rate-limited WARNING names the command. It is **never re-queued**: a stale command is never replayed minutes later. A command is dropped when no attempt was answered, and its caller is told it never reached the bus. |
 | Auth failure | immediate stop | `AuthenticationError` on a command session stops both loops and starts the reauth flow. |
 | Backoff | `1 s → 60 s` | Applied inside the sending loop after a failed delivery, reset on the first success. |
 
@@ -300,12 +300,12 @@ all still the **total** of both.
 
 **A queued command reports what became of it.** `send()` and `send_status_request()`
 take two keyword-only callables, `on_delivered(at)` and `on_dropped()`; exactly one of
-the two fires, exactly once, on the event loop. `on_delivered` carries the monotonic
-timestamp taken immediately *before* the write that succeeded, and fires as soon as
-that write returns — before the gateway's answer, and so before the replies of that
-command are dispatched. A NACK, or no answer at all, changes nothing: the frame is on
-the bus and the actuator has it, which is also why such a command is never written a
-second time. `on_dropped` covers every path that loses the command: queue
+the two fires, exactly once, on the event loop. `on_delivered` fires once the gateway has answered the frame, and carries the monotonic
+timestamp taken immediately *before* the write it answered — the second one when the first
+attempt was lost, so a cover times its motor from the write that really reached the bus. A
+NACK counts: the gateway has the frame, and what the bus makes of it is what the monitor
+frames will say. No answer at all does not: the command is retried and then dropped, and
+`on_dropped` is what its caller gets. `on_dropped` covers every path that loses the command: queue
 closed, queue full, TTL expired, authentication failure, attempts exhausted, the
 worker's catch-all arm, the drain in `close_listener()`, and a worker cancelled
 mid-write. An exception raised inside either callback is logged and swallowed, like

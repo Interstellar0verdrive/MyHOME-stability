@@ -5,6 +5,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A command written into a session the gateway had quietly closed is sent again.** A
+  MyHOMEServer1 drops a command session that has had nothing to send for about half a minute,
+  without telling anyone; the next write into that socket succeeds locally while the frame
+  never reaches the bus, and only the acknowledgement that never comes says so. Since 0.4.3
+  such a frame was neither sent again nor treated as lost — it was reported to the caller as
+  delivered — so a light stayed off while Home Assistant showed it switching, and a shutter
+  that never moved ran a phantom estimate to 35 %. Every transport failure is retried on a
+  fresh session again, whatever the write itself returned, and a command counts as delivered
+  only once the gateway has answered it (a refusal included), timed from the write that was
+  answered. A command no attempt was answered for is dropped, so a cover cancels its estimate
+  instead of timing a run that never started. The retry can put a second copy of a command on
+  the bus, which for these commands changes nothing — on twice is on, up twice is up — and is
+  the cheaper mistake by a wide margin.
+- **An idle command session is given back before the gateway takes it.** Home Assistant held
+  it for 60 seconds against the gateway's ~30, so in a quiet house the connection was usually
+  already dead when the next command was written into it. It is now closed after 20 seconds
+  of silence and re-opened on demand.
+
 ## [0.4.4] - 2026-09-08
 Shutters that start half way no longer stop short. Twelve real shutters on one
 MyHOMEServer1, replayed at their real bus timings: every run that started or ended at

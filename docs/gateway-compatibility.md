@@ -112,9 +112,11 @@ command session per command worker** (default 1; the options form offers **1**-*
 `MAX_COMMAND_WORKERS`, because gateways hold only a handful of concurrent
 sessions). An entry saved with a larger number before the form was narrowed — or
 hand-edited — still opens only 4. A command session that has
-had nothing to send for 60 s is
-closed and reopened on demand, specifically so an idle integration does not hold a
-slot on gateways with a small concurrent-session budget.
+had nothing to send for 20 s is
+closed and reopened on demand, so that an idle integration neither holds a slot on
+gateways with a small concurrent-session budget nor keeps a session the gateway has
+already closed behind its back (a MyHOMEServer1 drops an idle command session after
+about 30 s).
 
 No exact limit is documented for any model here. If you see `IncompleteReadError`
 or immediate disconnects after a reload, that is the symptom to report.
@@ -142,7 +144,7 @@ in `myhome.yaml`. Tests override them on the handler instance; nothing else does
 | `COMMAND_TIMEOUT_SEC` | `10.0` s | `gateway.py` | Write a command and wait for the gateway's ACK/NACK. |
 | `COMMAND_QUEUE_MAXSIZE` | `200` | `gateway.py` | Bounded command queue. When full, new commands are refused (the service call raises; entity commands log a rate-limited warning). |
 | `COMMAND_TTL_SEC` | `60.0` s | `gateway.py` | A command dequeued more than this long after being queued is dropped, not sent. |
-| `COMMAND_SESSION_IDLE_SEC` | `60.0` s | `gateway.py` | Idle command session is closed and given back to the gateway. |
+| `COMMAND_SESSION_IDLE_SEC` | `20.0` s | `gateway.py` | Idle command session is closed and given back to the gateway, before the gateway (~30 s) closes it without telling us. |
 | `LOG_RATE_LIMIT_SEC` | `60.0` s | `gateway.py` | Default rate limit for repeated warnings (queue full, dropped command, NACK…). |
 | `RECONNECT_LOG_RATE_LIMIT_SEC` | `300.0` s | `gateway.py` | Rate limit for the "event session lost, reconnecting" warning. |
 | TCP keepalive idle / interval / count | `30` s / `10` s / `3` | `own_session.py` | Applied to both session sockets where the platform supports it (`TCP_KEEPIDLE` on Linux, `TCP_KEEPALIVE` on macOS). A dead peer is detected in about 60 s instead of the kernel default of ~2 hours. |
