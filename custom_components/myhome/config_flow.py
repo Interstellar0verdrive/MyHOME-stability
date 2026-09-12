@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import os
 import re
@@ -586,16 +587,19 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         took effect when the user happened to leave by the front door would be a
         calibration nobody believes in.
         """
+        # The cover this conversation was driving, if any: it is the thing that may
+        # still be writing a stop, and `_reset_calibration` is not called on this path.
+        cover = getattr(self, "_cover", None)
         super().async_remove()
         if self._changed and self.config_entry.state.recoverable:
             self._changed = False
             self.hass.async_create_task(
-                self._async_reload_after_the_tidying_up(),
+                self._async_reload_after_the_tidying_up(cover),
                 "myhome options reload",
                 eager_start=False,
             )
 
-    async def _async_reload_after_the_tidying_up(self) -> None:
+    async def _async_reload_after_the_tidying_up(self, cover: Any = None) -> None:
         """Reload, but not before a movement that was cut short has written its stop.
 
         `FlowManager._async_remove_flow_progress` cancels the progress task and then
@@ -603,12 +607,17 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         (`cover._async_calib_timed_run`) has not run yet when we get here. Reloading
         synchronously could close the gateway sessions first, and the one stop the
         runner goes to some trouble to write would be swallowed while the shutter ran
-        on to its end stop (0.5.0 v2 review, RISK-4). Two turns of the loop cost
-        nothing - the reload itself is a disconnect and a reconnect - and are enough
-        for that `finally` to reach the command queue.
+        on to its end stop (0.5.0 v2 review, RISK-4).
+
+        What is awaited is the run itself: the cover clears an event for the whole of a
+        guided run and sets it again from whatever ends it, the shielded stop included
+        (`MyHOMECover.async_calib_settled`). Two turns of the event loop used to stand
+        in for that, which was a guess about how many awaits the stop costs and which
+        nothing could pin - mutation M11 of the final review survived it.
         """
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
+        if cover is not None:
+            with contextlib.suppress(Exception):
+                await cover.async_calib_settled()
         if self.config_entry.state.recoverable:
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 

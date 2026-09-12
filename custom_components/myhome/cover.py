@@ -462,6 +462,12 @@ CALIBRATION_MOTOR_ECHO_SEC = 3.0
 # measures anything from there. A second of stillness costs nothing and buys the
 # certainty that the actuator has finished with the previous command.
 CALIBRATION_HOME_SETTLE_SEC = 1.0
+# How long a reload of the config entry waits for a run that was cut short to have
+# written its stop (`async_calib_settled`). One stop frame costs a command-queue slot
+# and a delivery report, which is well under a second on a gateway that is answering at
+# all; past that the gateway is not answering and the reload - a disconnect and a
+# reconnect - is the better thing to be doing.
+CALIBRATION_TIDY_UP_SEC = 5.0
 # The fraction of the curtain travel the two 0.4.2 services measure at: a
 # `set_cover_position: 50`, which is where the roll model is most sensitive to the roll
 # and where a descent and an ascent land on the same point of the time axis.
@@ -1043,6 +1049,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # these open around the steps it is made of, so the attribute does not blink
         # between them).
         self._calibrating = 0
+        # Set whenever no guided run of this cover is in flight, cleared for the whole
+        # of one. A run cut short - the dialog closed mid-movement, which cancels the
+        # progress task - writes its stop from a `finally` that the cancellation does
+        # not wait for, so this is what the reload waits on before tearing the gateway
+        # down (`config_flow._async_reload_after_the_tidying_up`, final review,
+        # RISK-D). Set by whatever really ends the run, the shielded stop included.
+        self._calib_settled = asyncio.Event()
+        self._calib_settled.set()
 
     @property
     def _advanced_probe_grace(self) -> float:
@@ -2637,6 +2651,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._calib_idle_guard()
         with self.calibration_session():
             running = False
+            self._calib_settled.clear()
             try:
                 if direction == DIRECTION_OPEN:
                     await self.async_open_cover()
@@ -2655,8 +2670,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                     # Only when the frame really was written: a direction the command
                     # path refused or dropped left the motor standing, and a stop for
                     # it would be noise on the bus. Shielded, because the commonest
-                    # reason to be here after a delivery is a cancellation.
+                    # reason to be here after a delivery is a cancellation - which is
+                    # also why `_calib_settled` is set inside the shielded coroutine
+                    # and not here: the await below re-raises at once while the stop
+                    # is still on its way.
                     await asyncio.shield(self._async_stop_a_run_that_failed())
+                else:
+                    self._calib_settled.set()
 
     async def _async_wait_for_motor_start(self, expected: datetime) -> datetime:
         """Wait for the actuator's own "moving" status, and answer with its instant.
@@ -2680,6 +2700,35 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                     f"{CALIBRATION_MOTOR_ECHO_SEC:.0f} s of the command reaching the bus",
                 ) from None
         return self._motor_started_at or expected
+
+    async def async_calib_settled(self, timeout: float = CALIBRATION_TIDY_UP_SEC) -> bool:
+        """Wait until no guided run of this cover is still writing its stop.
+
+        What "the tidying up" means, for a caller that is about to pull the gateway out
+        from under it. `FlowManager._async_remove_flow_progress` cancels the progress
+        task and then calls `async_remove`, so when the options flow gets there the
+        `finally` that shields the stop has not run yet: sleeping for a turn or two of
+        the loop was a guess about how many awaits it costs, and nothing could pin it
+        (final review, RISK-D / mutation M11). This is the event that guess was about.
+
+        False when the wait ran out, which is a shutter still moving and a reload that
+        cannot be postponed for ever; the caller reloads anyway.
+        """
+        if self._calib_settled.is_set():
+            return True
+        try:
+            async with asyncio.timeout(timeout):
+                await self._calib_settled.wait()
+        except TimeoutError:
+            LOGGER.warning(
+                "%s Cover %s: a calibration run was still tidying up after %.0f s; "
+                "the gateway is being reloaded anyway",
+                self._gateway_handler.log_id,
+                self._where,
+                timeout,
+            )
+            return False
+        return True
 
     async def async_calib_stop(self) -> datetime:
         """Stop the shutter and answer with the instant our stop frame reached the bus.
@@ -2739,6 +2788,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             fraction * 100,
             planned,
         )
+        self._calib_settled.clear()
         if direction == DIRECTION_CLOSE:
             await self.async_close_cover()
         else:
@@ -2785,8 +2835,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 #
                 # Shielded, because the commonest reason to be here is a cancellation:
                 # the await below is interrupted at once and the stop still reaches the
-                # bus in a task of its own.
+                # bus in a task of its own. `_calib_settled` is therefore set by that
+                # task and not here, and is what the reload waits on (RISK-D).
                 await asyncio.shield(self._async_stop_a_run_that_failed())
+            else:
+                self._calib_settled.set()
 
     async def _async_stop_a_run_that_failed(self) -> None:
         """Write a stop nobody is going to read the answer of.
@@ -2804,6 +2857,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 self._gateway_handler.log_id,
                 self._where,
             )
+        finally:
+            # Whatever came of it, this run is over and the entry may be reloaded.
+            self._calib_settled.set()
 
     async def async_calibration_run(self, direction: str) -> dict[str, Any]:
         """Run the cover to the half way point of `direction` and stop it there.
