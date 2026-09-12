@@ -25,7 +25,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.cover import ATTR_POSITION, DOMAIN as COVER, CoverState
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.util import dt as dt_util
 from OWNd.message import OWNEvent
 from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache
@@ -787,3 +787,30 @@ async def test_a_run_cancelled_half_way_still_writes_the_stop(
             for _ in range(20):
                 await asyncio.sleep(0)
         assert path.frames == [LOWER, STOP]
+
+
+async def test_a_stop_the_gateway_cannot_even_take_only_reaches_the_log(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The tidying-up stop must not replace the failure it is tidying up after.
+
+    The caller is waiting to be told why the run failed - `no_echo`, here - and a
+    second exception thrown from the `finally` would hide it behind something about a
+    stop frame, which is not what went wrong.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, None, cover, answer=False)
+
+        async def _send(_self: Any, message: Any, **kwargs: Any) -> bool:
+            if str(message).startswith("*2*0*"):
+                raise HomeAssistantError("the gateway went away")
+            return await path.send(message, **kwargs)
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", _send),
+            patch.object(cover_module, "CALIBRATION_MOTOR_ECHO_SEC", 0.01),
+            pytest.raises(CalibrationError) as err,
+        ):
+            await cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5)
+        assert err.value.reason == REASON_NO_ECHO

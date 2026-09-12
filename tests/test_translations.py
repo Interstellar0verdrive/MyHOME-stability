@@ -18,6 +18,8 @@ from typing import Any
 import pytest
 
 from custom_components.myhome.calibration_flow import (
+    CLAIM_REASONS,
+    HOMING_ACTION,
     PROBLEM_REASONS,
     RUNNING_ACTION,
     CoverCalibrationFlow,
@@ -203,6 +205,7 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "path_c": {"cover"},
     "refine_scope": {"cover"},
     "home_closed_done": {"cover"},
+    "home_open_done": {"cover"},
     "open_lift": {"cover"},
     "open_top": {"cover"},
     "close_bottom": {"cover"},
@@ -219,6 +222,7 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
 }
 PROGRESS_PLACEHOLDERS: dict[str, set[str]] = {
     "homing_closed": {"cover"},
+    "homing_open": {"cover"},
     "starting_open": {"cover"},
     "starting_close": {"cover"},
     "running_down": {"cover", "percent"},
@@ -302,7 +306,11 @@ def test_every_progress_action_the_flow_uses_is_written_down() -> None:
     Mutation caught: a new automatic movement with a new action name (or a renamed one).
     """
     source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
-    used = set(re.findall(r'action="([a-z_]+)"', source)) | set(RUNNING_ACTION.values())
+    used = (
+        set(re.findall(r'action="([a-z_]+)"', source))
+        | set(RUNNING_ACTION.values())
+        | set(HOMING_ACTION.values())
+    )
     written = set(subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["progress"])
     assert used == written
 
@@ -312,9 +320,12 @@ def test_every_abort_reason_the_flow_uses_is_written_down() -> None:
 
     Mutation caught: a new ``async_abort(reason=...)`` with nothing written for it, and
     a reason kept in the files after the branch that raised it was deleted.
+
+    ``CLAIM_REASONS`` is here because ``_claim`` answers *with* a reason rather than
+    aborting itself, so those two never appear at a ``reason="..."``.
     """
     source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
-    used = set(re.findall(r'reason="([a-z_]+)"', source))
+    used = set(re.findall(r'reason="([a-z_]+)"', source)) | set(CLAIM_REASONS)
     written = set()
     for subentry_type in SUBENTRY_FLOWS:
         written |= set(subentry_block(STRINGS, subentry_type)["abort"])

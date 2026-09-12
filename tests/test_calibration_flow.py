@@ -25,13 +25,14 @@ from unittest.mock import patch
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.cover import ATTR_POSITION, DOMAIN as COVER
 from homeassistant.config_entries import ConfigSubentryData
-from homeassistant.const import CONF_NAME
+from homeassistant.const import ATTR_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.myhome import calibration_store
 from custom_components.myhome.calibration import (
@@ -45,6 +46,7 @@ from custom_components.myhome.calibration import (
 )
 from custom_components.myhome.calibration_flow import (
     PRESS_TIMEOUT_SEC,
+    SESSION_IDLE_TIMEOUT_SEC,
     CoverCalibrationFlow,
 )
 from custom_components.myhome.calibration_store import (
@@ -52,6 +54,7 @@ from custom_components.myhome.calibration_store import (
     cover_calibration_data,
 )
 from custom_components.myhome.const import (
+    ATTR_CALIBRATING,
     ATTR_CALIBRATION_SOURCE,
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
@@ -101,6 +104,58 @@ gateway:
       closing_time: {CLOSING}
       slat_time: {SLAT}
       roll: {ROLL_DOWN}
+      height: {HEIGHT}
+"""
+
+# The same window, but a `myhome.yaml` that carries its own run times for it - which
+# is how every basic cover in the owner's file is configured - and carries numbers that
+# are *not* the shutter's. A fixture whose numbers are the fake shutter's own cannot
+# tell "the calibration reached the shutter" from "the file never moved" (0.5.0 review,
+# BUG-1), and its cover is written under a key that is not the entity's object id, which
+# is what the YAML snippet has to be built from.
+FILE_OPENING = 30.0
+FILE_CLOSING = 29.0
+FILE_SLAT = 6.0
+FILE_ROLL = 1.2
+YAML_KEY = "front_hall_roller"
+OWN_NUMBERS_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    {YAML_KEY}:
+      where: '81'
+      name: {COVER_NAME}
+      opening_time: {FILE_OPENING}
+      closing_time: {FILE_CLOSING}
+      slat_time: {FILE_SLAT}
+      roll: {FILE_ROLL}
+      height: {HEIGHT}
+"""
+
+PROFILE_AND_OWN_NUMBERS_YAML = (
+    OWN_NUMBERS_YAML
+    + f"""  cover_profiles:
+    tall:
+      reference_height: {HEIGHT}
+      opening_time: {OPENING}
+      closing_time: {CLOSING}
+      slat_time: {SLAT}
+      roll: {ROLL_DOWN}
+"""
+)
+
+# A shutter whose modelled run outlasts the watchdog's patience, so that a movement
+# started before the clock jumps is still in flight when the watchdog fires. On every
+# other fixture the cover reaches its end stop - and stops itself - on the way.
+SLOW_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    hallway_shutter:
+      where: '81'
+      name: {COVER_NAME}
+      opening_time: 1200
+      closing_time: 1200
       height: {HEIGHT}
 """
 
@@ -381,9 +436,17 @@ async def test_path_a_measures_the_shutter_and_stores_a_profile_and_a_calibratio
     assert calibration[CONF_COVER_UNIQUE_ID] == UNIQUE_ID
     assert calibration[CONF_PROFILE] == "tall"
     assert calibration[CONF_HEIGHT] == HEIGHT
-    # Path A stores no overrides: the numbers live in the profile, which is what makes
-    # the second shutter of the same kind a two-screen job.
-    assert CONF_OVERRIDES not in calibration
+    # ...and the same numbers again as this window's own overrides. The profile is what
+    # the *next* shutter of this kind inherits; the overrides are what make *this* one
+    # run on what was just measured, because a profile does not beat a key written in
+    # `myhome.yaml` and a basic cover's run times usually live there (review BUG-1).
+    assert calibration[CONF_OVERRIDES] == {
+        CONF_OPENING_TIME: pytest.approx(OPENING, abs=0.05),
+        CONF_CLOSING_TIME: pytest.approx(CLOSING, abs=0.05),
+        CONF_SLAT_TIME: pytest.approx(SLAT, abs=0.05),
+        CONF_OPENING_ROLL: pytest.approx(ROLL_UP, abs=0.01),
+        CONF_CLOSING_ROLL: pytest.approx(ROLL_DOWN, abs=0.01),
+    }
 
 
 async def test_path_a_walks_the_screens_in_the_order_the_flow_document_agreed(
@@ -456,9 +519,12 @@ async def test_the_summary_shows_the_values_and_the_yaml_that_would_say_the_same
 
     assert result["step_id"] == "summary"
     placeholders = result["description_placeholders"]
-    assert placeholders["height"] == "195"
-    # Noise-free measurements: the model reproduces them exactly.
-    assert float(placeholders["accuracy"]) == pytest.approx(0.0, abs=0.05)
+    assert placeholders["height"] == "195 cm"
+    # One reading per direction fits exactly by construction, so there is no residual
+    # to report - and "0.0 cm" would read as "perfect" and put the precise level out of
+    # reach in practice (review BUG-2). The unit travels with the value so that a path
+    # which measured nothing does not read "- cm".
+    assert placeholders["accuracy"] == "\u2013"
     snippet = placeholders["yaml"]
     assert "cover_profiles:" in snippet
     assert f"{CONF_OPENING_TIME}: {OPENING}" in snippet
@@ -525,7 +591,7 @@ async def test_the_verification_screen_reports_the_gap_in_centimetres(
         result = await drive(hass, freezer, await start_flow(hass, entry), acts)
 
     assert result["step_id"] == "verify_result"
-    assert result["description_placeholders"]["deviation"] == "6"
+    assert result["description_placeholders"]["deviation"] == "6.0"
     # Path A is already measuring this shutter: refining it again is not on offer.
     assert "path_c" not in result["menu_options"]
 
@@ -765,25 +831,65 @@ async def test_a_profile_name_has_to_be_a_yaml_key(
         assert entry.subentries == {}
 
 
-async def test_a_name_already_taken_by_the_file_is_refused(
+async def test_a_name_already_in_the_file_shadows_it_instead_of_being_refused(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """UI profiles and `cover_profiles:` share one namespace, so the clash is here.
+    """UI profiles and `cover_profiles:` share one namespace, and the measured one wins.
 
-    Mutation caught: checking only the stored profiles (a guided profile would shadow
-    the file's silently, which is the failure the store warns about at every reload).
+    The name form used to refuse a name that existed in either namespace, which is what
+    the profile screen's own text told the user to do - and the commonest reason to
+    walk path A again is that the first measurement was poor. Now the measurement is
+    kept: the file's `tall` is left where it is and stays shadowed, exactly as the
+    store has always resolved a clash (review BUG-3).
     """
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:-1])
 
         result = await submit(hass, result, {CONF_NAME: "tall"})
-        assert result["errors"] == {CONF_NAME: "name_in_use"}
-        assert entry.subentries == {}
-
-        result = await submit(hass, result, {CONF_NAME: "tall_hallway"})
     assert result["reason"] == "calibration_saved"
-    assert the_profile(entry)[CONF_NAME] == "tall_hallway"
+    profile = the_profile(entry)
+    assert profile[CONF_NAME] == "tall"
+    # The measurements, not the file's numbers: the profile that was just walked.
+    assert profile[CONF_REFERENCE_HEIGHT] == HEIGHT
+    assert profile[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
+
+
+async def test_a_second_walk_under_the_same_name_replaces_the_stored_profile(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """One profile per name, however many times the kind of shutter is measured.
+
+    The profile screen tells the user in so many words to measure a shutter of this
+    kind again under the same name; `async_set_cover_profile` has always replaced
+    rather than added, and this is that behaviour reaching the screen.
+
+    Mutation caught: putting the `name_in_use` refusal back, or adding a second
+    subentry with the same name (after which the namespace depends on storage order).
+    """
+    existing = ConfigSubentryData(
+        data={
+            CONF_NAME: "tall",
+            CONF_REFERENCE_HEIGHT: 120.0,
+            CONF_OPENING_TIME: 9.9,
+            CONF_CLOSING_TIME: 9.9,
+            CONF_SLAT_TIME: 1.0,
+            CONF_OPENING_ROLL: 1.1,
+            CONF_CLOSING_ROLL: 1.1,
+        },
+        subentry_type=SUBENTRY_COVER_PROFILE,
+        title="tall",
+        unique_id=f"{SUBENTRY_COVER_PROFILE}-tall",
+    )
+    async with calibrating(hass, tmp_path, YAML, subentries=[existing]) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC)
+
+    assert result["reason"] == "calibration_saved"
+    profile = the_profile(entry)
+    assert profile[CONF_NAME] == "tall"
+    assert profile[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
+    assert profile[CONF_REFERENCE_HEIGHT] == HEIGHT
 
 
 # --------------------------------------------------------------------------------------
@@ -842,6 +948,7 @@ async def test_path_b_offers_the_refinement_when_the_check_is_far_out(
             Act(payload={CONF_PROFILE: "tall"}),
             Act(payload={CONF_HEIGHT: HEIGHT}),
             Act(option="verify_now"),
+            Act(option="confirm_open"),
         )
         result = await drive(hass, freezer, await start_flow(hass, entry), start)
         assert result["step_id"] == "measure_verify"
@@ -849,7 +956,7 @@ async def test_path_b_offers_the_refinement_when_the_check_is_far_out(
         # This window stops eight centimetres below where the profile says it will.
         result = await submit(hass, result, {"measured_cm": descent_cm(0.5) - 8.0})
         assert result["step_id"] == "verify_result"
-        assert result["description_placeholders"]["deviation"] == "8"
+        assert result["description_placeholders"]["deviation"] == "8.0"
         assert "path_c" in result["menu_options"]
 
         # ...and taking that offer keeps the height that was just measured.
@@ -876,6 +983,7 @@ async def test_a_check_that_lands_close_enough_just_carries_on(
                 Act(payload={CONF_PROFILE: "tall"}),
                 Act(payload={CONF_HEIGHT: HEIGHT}),
                 Act(option="verify_now"),
+                Act(option="confirm_open"),
                 Act(payload={"measured_cm": descent_cm(0.5) - 1.0}),
             ),
         )
@@ -923,6 +1031,7 @@ async def test_path_c_times_only_stores_the_two_run_times_as_overrides(
                 Act(option="path_c"),
                 Act(payload={CONF_PROFILE: "tall"}),
                 Act(option="times_only"),
+                Act(option="confirm_closed"),
                 Act(option="lifted_off", tick=SLAT),
                 Act(option="stopped_open", tick=CURTAIN_UP),
                 Act(option="stopped_closed", tick=CLOSING),
@@ -959,6 +1068,7 @@ async def test_path_c_with_the_coefficients_measures_and_overrides_them_too(
                 Act(option="path_c"),
                 Act(payload={CONF_PROFILE: "tall"}),
                 Act(option="times_and_rolls"),
+                Act(option="confirm_closed"),
                 Act(option="lifted_off", tick=SLAT),
                 Act(option="stopped_open", tick=CURTAIN_UP),
                 Act(payload={CONF_HEIGHT: HEIGHT}),
@@ -995,6 +1105,7 @@ async def test_the_refinement_summary_shows_the_cover_s_own_yaml(
                 Act(option="path_c"),
                 Act(payload={CONF_PROFILE: "tall"}),
                 Act(option="times_only"),
+                Act(option="confirm_closed"),
                 Act(option="lifted_off", tick=SLAT),
                 Act(option="stopped_open", tick=CURTAIN_UP),
                 Act(option="stopped_closed", tick=CLOSING),
@@ -1075,16 +1186,30 @@ async def test_reconfiguring_a_calibration_measures_the_same_cover_again(
     assert result["reason"] == "calibration_saved"
     calibration = the_calibration(entry)
     assert calibration[CONF_PROFILE] == "tall"
-    assert CONF_OVERRIDES not in calibration
+    # The 9.9 s slat time of the subentry that was there is gone, replaced by what was
+    # just measured rather than merged with it.
+    assert calibration[CONF_OVERRIDES][CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.05)
 
 
 async def test_saving_reaches_the_shutter_without_a_restart(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A calibration the user does not see take effect is one they do not believe in."""
-    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+    """A calibration the user does not see take effect is one they do not believe in.
+
+    The file here says 30 / 29 / 6 s and a roll of 1.2 - which is how every basic cover
+    in the owner's own `myhome.yaml` is configured, and which the fake shutter is not.
+    That is the whole point: a fixture whose numbers are the shutter's cannot tell "the
+    calibration took effect" from "the file never moved", and path A used to store a
+    profile and a height only - neither of which beats a key written in the file, so
+    three minutes of measuring changed nothing but an attribute (review BUG-1).
+
+    Mutation caught: dropping the overrides from path A's result.
+    """
+    async with calibrating(hass, tmp_path, OWN_NUMBERS_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        assert hass.states.get(ENTITY).attributes[ATTR_CALIBRATION_SOURCE] == "yaml"
+        before = hass.states.get(ENTITY)
+        assert before.attributes[ATTR_CALIBRATION_SOURCE] == "yaml"
+        assert before.attributes["Opening time"] == FILE_OPENING
 
         await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC)
         await hass.async_block_till_done()
@@ -1095,6 +1220,13 @@ async def test_saving_reaches_the_shutter_without_a_restart(
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CALIBRATION_SOURCE] == "guided"
         assert state.attributes["Opening time"] == pytest.approx(OPENING, abs=0.05)
+        assert state.attributes["Closing time"] == pytest.approx(CLOSING, abs=0.05)
+        assert state.attributes["Slat time"] == pytest.approx(SLAT, abs=0.05)
+        # Two rolls that differ are published separately; the file's single `roll: 1.2`
+        # is gone from the entity altogether.
+        assert state.attributes["Opening roll"] == pytest.approx(ROLL_UP, abs=0.01)
+        assert state.attributes["Closing roll"] == pytest.approx(ROLL_DOWN, abs=0.01)
+        assert "Roll" not in state.attributes
 
 
 async def test_deleting_a_calibration_from_the_integration_page_reloads_the_entry(
@@ -1287,6 +1419,7 @@ async def test_every_tape_form_refuses_a_reading_above_the_travel(
                 Act(payload={CONF_PROFILE: "tall"}),
                 Act(payload={CONF_HEIGHT: HEIGHT}),
                 Act(option="verify_now"),
+                Act(option="confirm_open"),
             )
         result = await drive(hass, freezer, await start_flow(hass, entry), acts)
         assert result["step_id"] == step
@@ -1517,6 +1650,7 @@ async def test_a_verification_whose_profile_vanished_reports_no_gap(
                 Act(payload={CONF_PROFILE: "short"}),
                 Act(payload={CONF_HEIGHT: HEIGHT}),
                 Act(option="verify_now"),
+                Act(option="confirm_open"),
             ),
         )
         assert result["step_id"] == "measure_verify"
@@ -1530,7 +1664,7 @@ async def test_a_verification_whose_profile_vanished_reports_no_gap(
         result = await submit(hass, result, {"measured_cm": descent_cm(0.5)})
 
     assert result["step_id"] == "verify_result"
-    assert result["description_placeholders"]["deviation"] == "0"
+    assert result["description_placeholders"]["deviation"] == "0.0"
 
 
 async def test_a_movement_that_ends_in_an_impossible_measurement_has_a_screen_too(
@@ -1577,3 +1711,513 @@ async def test_the_store_still_reloads_an_entry_that_nothing_is_watching(
             await set_connected(hass, True)
 
             assert hass.states.get(ENTITY).attributes["Slat time"] == 9.0
+
+
+# --------------------------------------------------------------------------------------
+# What the phase-3 review asked for: the session, the reload, the second dialog
+# --------------------------------------------------------------------------------------
+async def test_the_shutter_is_marked_calibrating_for_the_whole_conversation(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Phase-2 decision 11, asserted *during* a conversation rather than after one.
+
+    The flow holds one calibration session on the cover from the moment it is chosen
+    until the dialog closes, which is what keeps the attribute from blinking off
+    between two screens and what makes `set_cover_position` refuse the shutter while a
+    step is being read. Everything the suite had asserted it after the abort, where a
+    flow that never took a session at all is indistinguishable from one that did.
+
+    Mutation caught: deleting `self._session.enter_context(entity.calibration_session())`
+    (surviving mutation M11 of the 0.5.0 review), and deleting the `close()` that gives
+    it back.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        result = await start_flow(hass, entry)
+        assert ATTR_CALIBRATING not in hass.states.get(ENTITY).attributes
+
+        seen = []
+        for act in PATH_A_BASIC[:6]:
+            if act.tick:
+                freezer.tick(timedelta(seconds=act.tick))
+            result = (
+                await choose(hass, result, act.option)
+                if act.option is not None
+                else await submit(hass, result, act.payload)
+            )
+            seen.append(hass.states.get(ENTITY).attributes.get(ATTR_CALIBRATING))
+
+        # The first screen is the cover selector, which has not claimed anything yet;
+        # from the moment a shutter is chosen the attribute stays up.
+        assert seen == [None, True, True, True, True, True]
+        assert result["step_id"] == "open_top"
+
+        # ...and the shutter cannot be sent anywhere else meanwhile.
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+
+        hass.config_entries.subentries.async_abort(result["flow_id"])
+        await hass.async_block_till_done()
+        assert ATTR_CALIBRATING not in hass.states.get(ENTITY).attributes
+
+
+async def test_a_dialog_nobody_closed_gives_the_shutter_back_by_itself(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A browser tab that is simply closed used to hold the cover until the next restart.
+
+    Home Assistant never expires a flow: `_progress` is pruned on abort, on finish and
+    on the frontend's explicit `DELETE`, and a closed tab, a sleeping laptop or a phone
+    that kills the tab send none of those. The flow object then lived on holding the
+    calibration session, so `Calibrating` stayed true and every `set_cover_position` on
+    that shutter was refused - with the flow shown nowhere in the UI, so the user had
+    nothing to cancel.
+
+    Mutation caught: dropping the watchdog (0.5.0 review, RISK-1).
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:5])
+        assert result["step_id"] == "open_lift"
+        assert cover.calibrating is True
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=SESSION_IDLE_TIMEOUT_SEC + 1)
+        )
+        await hass.async_block_till_done()
+
+        assert cover.calibrating is False
+        assert ATTR_CALIBRATING not in hass.states.get(ENTITY).attributes
+        # The flow itself is gone too, so Home Assistant is not holding an object
+        # nobody can reach any more.
+        assert hass.config_entries.subentries.async_progress() == []
+        assert entry.subentries == {}
+        # And the shutter takes orders again.
+        await hass.services.async_call(
+            COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+        )
+
+
+async def test_every_screen_puts_the_watchdog_off_again(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Ten minutes of *inactivity*, not ten minutes of conversation.
+
+    Mutation caught: arming the watchdog once, at the claim, so that a careful user
+    measuring a tall window loses the shutter half way through.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:4])
+
+        for _ in range(3):
+            # Two thirds of the window pass on every screen, and the conversation
+            # survives all three because each screen restarts the clock.
+            async_fire_time_changed(
+                hass, dt_util.utcnow() + timedelta(seconds=SESSION_IDLE_TIMEOUT_SEC * 2 / 3)
+            )
+            await hass.async_block_till_done()
+            result = await choose(hass, result, "repeat_step")
+            assert result["step_id"] == "home_closed_done"
+
+        assert cover.calibrating is True
+
+
+async def test_a_second_dialog_on_the_same_shutter_is_refused(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two browser tabs on one shutter would each measure a run the other one stopped.
+
+    The refusal is here, on the screen that chooses the cover, because that is the last
+    moment at which the user has not been asked to do anything yet.
+
+    Mutation caught: claiming a cover that is already being calibrated (0.5.0 review,
+    RISK-3).
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        first = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:3])
+        assert first["step_id"] == "path_a"
+
+        second = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:2])
+        assert second["type"] is FlowResultType.ABORT
+        assert second["reason"] == "already_calibrating"
+        # The first conversation is untouched by the second one's refusal.
+        assert entity_object(hass, COVER, DEVICE_KEY).calibrating is True
+
+
+async def test_saving_reloads_the_gateway_once_and_not_twice(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path A writes two subentries, and each reload is a disconnect/reconnect cycle.
+
+    Home Assistant starts an update listener eagerly, so the listener used to run
+    *between* the profile and the calibration and schedule a reload for each - on a
+    real gateway, two teardowns of every entity while the shutter is probably still
+    moving from the last measurement.
+
+    Mutation caught: writing either subentry with `reload=True`, or dropping the yield
+    that lets the whole burst land before the signature is read (review RISK-2).
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+            result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC)
+            await hass.async_block_till_done()
+
+        assert result["reason"] == "calibration_saved"
+        assert len(subentries_of(entry, SUBENTRY_COVER_PROFILE)) == 1
+        assert len(subentries_of(entry, SUBENTRY_COVER_CALIBRATION)) == 1
+        assert reload.call_count == 1
+
+
+async def test_changing_a_stored_calibration_in_place_reaches_the_shutter(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The listener compares what the subentries *say*, not which ones there are.
+
+    Re-running the flow on a shutter replaces its calibration in place: same subentry,
+    same id, different numbers. A signature built from the ids alone calls that "no
+    change" and the shutter keeps the numbers it was measured against - which is a
+    mutation that survived the 0.5.0 review (M7) because the store's own reload covered
+    for it. Here the store is told not to reload, so the listener is the only thing
+    that can.
+    """
+    existing = ConfigSubentryData(
+        data={CONF_COVER_UNIQUE_ID: UNIQUE_ID, CONF_OVERRIDES: {CONF_OPENING_TIME: 30.0}},
+        subentry_type=SUBENTRY_COVER_CALIBRATION,
+        title=COVER_NAME,
+        unique_id=f"{SUBENTRY_COVER_CALIBRATION}-{UNIQUE_ID}",
+    )
+    async with calibrating(hass, tmp_path, YAML, subentries=[existing]) as (entry, _commands):
+        assert hass.states.get(ENTITY).attributes["Opening time"] == 30.0
+        before = set(entry.subentries)
+
+        async_set_cover_calibration(
+            hass,
+            entry,
+            UNIQUE_ID,
+            cover_calibration_data(UNIQUE_ID, overrides={CONF_OPENING_TIME: 25.0}),
+            reload=False,
+        )
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        assert set(entry.subentries) == before
+        assert hass.states.get(ENTITY).attributes["Opening time"] == 25.0
+
+
+async def test_reconfigure_claims_the_cover_exactly_once(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Home Assistant renders `reconfigure` and then submits it: two calls, one claim.
+
+    A second claim rebound the flow's `ExitStack` without closing the first - a session
+    leaked outright on any runtime that does not refcount, and a spurious `Calibrating`
+    False/True pair even on CPython.
+
+    Mutation caught: claiming on every entry to the step (0.5.0 review, RISK-6).
+    """
+    existing = ConfigSubentryData(
+        data={CONF_COVER_UNIQUE_ID: UNIQUE_ID, CONF_OVERRIDES: {CONF_SLAT_TIME: 9.9}},
+        subentry_type=SUBENTRY_COVER_CALIBRATION,
+        title=COVER_NAME,
+        unique_id=f"{SUBENTRY_COVER_CALIBRATION}-{UNIQUE_ID}",
+    )
+    async with calibrating(hass, tmp_path, YAML, subentries=[existing]) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        sessions = 0
+        real = cover.calibration_session
+
+        def _counted():
+            nonlocal sessions
+            sessions += 1
+            return real()
+
+        cover.calibration_session = _counted
+        subentry_id = next(iter(entry.subentries))
+        result = await hass.config_entries.subentries.async_init(
+            (entry.entry_id, SUBENTRY_COVER_CALIBRATION),
+            context={"source": "reconfigure", "subentry_id": subentry_id},
+        )
+        assert result["step_id"] == "reconfigure"
+        result = await submit(hass, result, None)
+        assert result["step_id"] == "path"
+
+        assert sessions == 1
+
+
+# --------------------------------------------------------------------------------------
+# The screens the review asked for: a real accuracy, a homed end stop, a way back
+# --------------------------------------------------------------------------------------
+async def test_the_precise_level_reports_an_accuracy_the_basic_one_cannot(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Three points per direction leave something over to be a residual of.
+
+    At the basic level one reading per direction is reproduced exactly by construction,
+    so the residual is 0.0 and says nothing at all - and "within 0.0 cm" reads as
+    "perfect", which puts "Improve the accuracy" (the only step that measures the
+    reaction time of the presses) out of reach in practice (review BUG-2).
+
+    Mutation caught: showing `max_residual_cm` whatever the number of points.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_PRECISE[:-2])
+
+    assert result["step_id"] == "summary"
+    accuracy = result["description_placeholders"]["accuracy"]
+    assert accuracy.endswith(" cm")
+    assert float(accuracy.removesuffix(" cm")) == pytest.approx(0.0, abs=0.5)
+    # Nothing left to improve: the option is gone.
+    assert "refine" not in result["menu_options"]
+
+
+async def test_the_summary_of_a_times_only_refinement_says_nothing_it_did_not_measure(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path C with two presses has no height and no fit, and must not pretend otherwise.
+
+    Mutation caught: putting the unit back in the text, which read "the curtain travel
+    is - cm and the model ... within - cm of where it was actually found".
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(
+            hass,
+            freezer,
+            await start_flow(hass, entry),
+            (
+                Act(),
+                Act(payload={"cover": UNIQUE_ID}),
+                Act(option="path_c"),
+                Act(payload={CONF_PROFILE: "tall"}),
+                Act(option="times_only"),
+                Act(option="confirm_closed"),
+                Act(option="lifted_off", tick=SLAT),
+                Act(option="stopped_open", tick=CURTAIN_UP),
+                Act(option="stopped_closed", tick=CLOSING),
+            ),
+        )
+
+    assert result["step_id"] == "summary"
+    placeholders = result["description_placeholders"]
+    assert placeholders["height"] == "\u2013"
+    assert placeholders["accuracy"] == "\u2013"
+
+
+async def test_paths_b_and_c_begin_at_an_end_stop_the_user_has_confirmed(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Every homing's wait is bounded by a model that may well be wrong.
+
+    That is the whole reason a shutter is in path C, and path B's check compares a tape
+    against a profile this window may not follow: a homing that returns while the
+    shutter is still travelling leaves the run that follows starting from an unknown
+    place, with no screen to catch it. Path A has that screen; now so do the other two.
+
+    Mutation caught: taking the homing off the head of either plan (review RISK-4).
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(
+            hass,
+            freezer,
+            await start_flow(hass, entry),
+            (
+                Act(),
+                Act(payload={"cover": UNIQUE_ID}),
+                Act(option="path_c"),
+                Act(payload={CONF_PROFILE: "tall"}),
+                Act(option="times_only"),
+            ),
+        )
+        # Path C stops at the bottom and asks, exactly as path A does.
+        assert result["step_id"] == "home_closed_done"
+        assert runner.homed == [DIRECTION_CLOSE]
+        hass.config_entries.subentries.async_abort(result["flow_id"])
+        await hass.async_block_till_done()
+
+        runner.homed.clear()
+        result = await drive(
+            hass,
+            freezer,
+            await start_flow(hass, entry),
+            (
+                Act(),
+                Act(payload={"cover": UNIQUE_ID}),
+                Act(option="path_b"),
+                Act(payload={CONF_PROFILE: "tall"}),
+                Act(payload={CONF_HEIGHT: HEIGHT}),
+                Act(option="verify_now"),
+            ),
+        )
+        # Path B's check runs downwards, so the end stop it confirms is the open one.
+        assert result["step_id"] == "home_open_done"
+        assert runner.homed == [DIRECTION_OPEN]
+
+        result = await choose(hass, result, "confirm_open")
+        assert result["step_id"] == "measure_verify"
+        assert runner.runs == [(DIRECTION_CLOSE, 0.5)]
+
+
+async def test_a_tape_form_can_run_its_own_step_again(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A user who looks up from the tape and sees the shutter overshot needs a way back.
+
+    Spec 2.2 gives *every* measuring step a "Repeat this step"; the three number forms
+    had none, so the only way out was cancelling the whole conversation. A form cannot
+    carry a second button, so it carries a box - and ticking it re-runs that step's own
+    movements and throws the reading away.
+
+    Mutation caught: keeping the reading anyway (the fit would be handed the discarded
+    point as well as the good one).
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:9])
+        assert result["step_id"] == "measure_descent"
+        assert runner.runs == [(DIRECTION_CLOSE, 0.5)]
+
+        result = await submit(
+            hass, result, {"measured_cm": descent_cm(0.5) - 30.0, "repeat_step": True}
+        )
+        assert result["step_id"] == "measure_descent"
+        # That step's movements, and only that step's.
+        assert runner.runs == [(DIRECTION_CLOSE, 0.5), (DIRECTION_CLOSE, 0.5)]
+
+        # ...and the ascent's form carries it too, not only the first one.
+        result = await submit(hass, result, {"measured_cm": descent_cm(0.5)})
+        assert result["step_id"] == "measure_ascent"
+        result = await submit(
+            hass, result, {"measured_cm": ascent_cm(0.5) + 20.0, "repeat_step": True}
+        )
+        assert result["step_id"] == "measure_ascent"
+        assert runner.runs[-2:] == [(DIRECTION_OPEN, 0.5), (DIRECTION_OPEN, 0.5)]
+
+        result = await drive(hass, freezer, result, PATH_A_BASIC[10:])
+
+    assert result["reason"] == "calibration_saved"
+    profile = the_profile(entry)
+    # The readings that were thrown away are nowhere in the fit.
+    assert len(profile[CONF_RAW]["descent"]) == 1
+    assert len(profile[CONF_RAW]["ascent"]) == 1
+    assert profile[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
+    assert profile[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
+
+
+async def test_the_yaml_snippet_uses_the_key_the_file_knows_the_cover_by(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The snippet is offered as something to paste into `myhome.yaml`.
+
+    It used to be built from the entity's object id, which is the same thing only for
+    as long as nobody renames the entity - and renaming an entity is the first thing
+    many people do.
+
+    Mutation caught: guessing the cover key from `entity_id` (review, minor 4).
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(
+            hass,
+            freezer,
+            await start_flow(hass, entry),
+            (
+                Act(),
+                Act(payload={"cover": UNIQUE_ID}),
+                Act(option="path_b"),
+                Act(payload={CONF_PROFILE: "tall"}),
+                Act(payload={CONF_HEIGHT: 160.0}),
+                Act(option="skip_verify"),
+            ),
+        )
+
+    assert result["step_id"] == "summary"
+    snippet = result["description_placeholders"]["yaml"]
+    assert f"{YAML_KEY}:" in snippet
+    assert "hallway_shutter:" not in snippet
+
+
+async def test_the_deviation_shown_is_the_deviation_compared(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"3 cm" appeared both with and without the refinement, on a digit nobody could see.
+
+    The threshold is three centimetres, the deviation was shown to the whole
+    centimetre, and the comparison used the unrounded value: 3.4 cm read "3 cm" and
+    offered the refinement, 2.6 cm read "3 cm" and did not.
+
+    Mutation caught: comparing before rounding (review, minor 3).
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        start = (
+            Act(),
+            Act(payload={"cover": UNIQUE_ID}),
+            Act(option="path_b"),
+            Act(payload={CONF_PROFILE: "tall"}),
+            Act(payload={CONF_HEIGHT: HEIGHT}),
+            Act(option="verify_now"),
+            Act(option="confirm_open"),
+        )
+        result = await drive(hass, freezer, await start_flow(hass, entry), start)
+        # The check's own form carries the box as well.
+        result = await submit(
+            hass, result, {"measured_cm": descent_cm(0.5), "repeat_step": True}
+        )
+        assert result["step_id"] == "measure_verify"
+
+        # Four hundredths over the threshold: the same "3.0 cm" the user would have
+        # read at 2.96 cm, and the refinement used to hang on that invisible digit.
+        result = await submit(hass, result, {"measured_cm": descent_cm(0.5) - 3.04})
+        assert result["description_placeholders"]["deviation"] == "3.0"
+        assert "path_c" not in result["menu_options"]
+
+        # A tenth over, which is what the screen now says, does offer it. ("Measure
+        # this position again" re-runs the check's own movement and comes straight
+        # back to the tape form: the end stop was confirmed once already.)
+        result = await choose(hass, result, "repeat_step")
+        assert result["step_id"] == "measure_verify"
+        result = await submit(hass, result, {"measured_cm": descent_cm(0.5) - 3.1})
+        assert result["description_placeholders"]["deviation"] == "3.1"
+        assert "path_c" in result["menu_options"]
+
+
+async def test_the_watchdog_stops_a_shutter_it_finds_still_running(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A dialog abandoned mid-movement leaves a motor turning as well as a session held.
+
+    Mutation caught: releasing the session and leaving the shutter to run (0.5.0
+    review, RISK-1: the stop is part of the mechanism, not a nicety).
+    """
+    async with calibrating(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        runner = FakeRunner(cover)
+        result = await drive(hass, freezer, await start_flow(hass, entry), PATH_A_BASIC[:5])
+        assert result["step_id"] == "open_lift"
+
+        # The shutter really is running: the free run of `open_timed` is a movement
+        # like any other, and the estimate is following it.
+        await hass.services.async_call(
+            COVER, "open_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True
+        )
+        assert cover.is_opening is True
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=SESSION_IDLE_TIMEOUT_SEC + 1)
+        )
+        await hass.async_block_till_done()
+
+        assert runner.stops == 1
+        assert cover.calibrating is False
+        assert entry.subentries == {}
