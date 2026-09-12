@@ -1056,6 +1056,26 @@ async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant,
     }
 
 
+async def test_a_registration_that_fails_can_be_tried_again(hass: HomeAssistant, tmp_path) -> None:
+    """The "already registered" guard must not be set by an attempt that did not work.
+
+    The flag used to go up before the await, so a registration that raised left the
+    drawings off for the rest of the Home Assistant run with nothing to retry them
+    (0.5.0 v2 review, RISK-6).
+
+    Mutation caught: setting the flag before awaiting the registration.
+    """
+    failing = AsyncMock(side_effect=RuntimeError("no static paths today"))
+    hass.http = MagicMock(async_register_static_paths=failing)
+    with pytest.raises(RuntimeError):
+        await myhome._async_register_images(hass)
+
+    register = AsyncMock()
+    hass.http = MagicMock(async_register_static_paths=register)
+    await myhome._async_register_images(hass)
+    register.assert_awaited_once()
+
+
 async def test_setup_survives_a_home_assistant_without_http(hass: HomeAssistant, tmp_path) -> None:
     """The drawings are the only thing a bare `hass` loses.
 

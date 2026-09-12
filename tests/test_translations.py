@@ -237,6 +237,7 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "verify_result": {"cover", "deviation"},
     "profile_name": {"cover", "replaced"},
     "summary_basic": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
+    "summary_short": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
     "summary_precise": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
     "saved": {"cover", "profile"},
     "cancelled": set(),
@@ -405,6 +406,81 @@ def test_no_screen_substitutes_something_the_flow_does_not_pass(path: Path) -> N
             assert set(PLACEHOLDER.findall(text)) <= allowed, f"{path.name}: {step_id}"
     for action, text in block["progress"].items():
         assert set(PLACEHOLDER.findall(text)) <= PROGRESS_PLACEHOLDERS[action], action
+
+
+# Every menu option that goes *back* rather than on: the screens they belong to list
+# them last, because Home Assistant renders every menu entry with the same chevron and
+# there is nothing else to tell an action from a way out (FLOW, second live walk-through).
+RETURN_OPTIONS = frozenset(
+    {
+        "init",
+        "finish",
+        "cancel_flow",
+        "profiles_covers",
+        "calibrations",
+        "profile_actions",
+        "calibration_actions",
+    }
+)
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_menu_title_asks_for_a_substitution(path: Path) -> None:
+    """A menu's header is rendered without `description_placeholders`, so it cannot.
+
+    The frontend passes the placeholders to a menu's *description* and not to its
+    title (`renderMenuDescription` against `renderMenuHeader`), and formatjs answers a
+    substitution it was not given by replacing the whole string with "Translation
+    [formatjs Error: MISSING_VALUE] The intl string context variable ...". The second
+    live walk-through read exactly that on the first screen of "Configura", whose
+    title said `{gateway}`. What those titles carried now lives in the descriptions,
+    which do get them.
+
+    Mutation caught: putting `{cover}` back into the title of any screen that is a
+    menu.
+    """
+    for step_id, step in options_block(path)["step"].items():
+        if "menu_options" not in step:
+            continue
+        assert not PLACEHOLDER.findall(step.get("title", "")), f"{path.name}: {step_id}"
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_only_the_summary_that_offers_the_refinement_describes_it(path: Path) -> None:
+    """Two summaries at the basic level, because only path A can do better.
+
+    The unconditional text used to promise "Migliora la precisione" to paths B and C,
+    which have no such button - the one thing the live feedback asked for by name
+    (0.5.0 v2 review, BUG-5).
+
+    Mutation caught: describing the refinement on the short summary, or offering it
+    there.
+    """
+    steps = options_block(path)["step"]
+    assert set(steps["summary_basic"]["menu_options"]) == {"save", "refine", "cancel_flow"}
+    assert set(steps["summary_short"]["menu_options"]) == {"save", "cancel_flow"}
+    assert set(steps["summary_precise"]["menu_options"]) == {"save", "cancel_flow"}
+    # The name of the button, as it appears in the text of the screen that has it.
+    refine = steps["summary_basic"]["menu_options"]["refine"].split("(")[0].strip()
+    assert refine in steps["summary_basic"]["description"], path.name
+    assert refine not in steps["summary_short"]["description"], path.name
+    assert refine not in steps["summary_precise"]["description"], path.name
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_menu_option_draws_an_arrow_of_its_own(path: Path) -> None:
+    """Home Assistant gives every menu entry the same chevron, and only that one.
+
+    An "← Torna al menu" was considered and refused: the arrow in the label would sit
+    next to a chevron pointing the other way. The way back is told from the way on by
+    being last, which `test_calibration_flow.check_the_screen_renders` pins against
+    every menu the dialog really shows.
+    """
+    for step_id, step in options_block(path)["step"].items():
+        for option, label in (step.get("menu_options") or {}).items():
+            assert not re.search(r"[\u2190\u2192\u21e6\u21e8]|<-|->", label), (
+                f"{path.name}: {step_id} -> {option}"
+            )
 
 
 # ------------------------------------------------------------------- the drawings

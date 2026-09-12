@@ -338,8 +338,15 @@ async def test_start_gives_up_when_the_actuator_never_answers(hass: HomeAssistan
     The flow shows that screen with a button to try again on it; what it must not do is
     time a run against a motor that never started, which is a measurement of nothing.
 
+    The direction frame *was* delivered, so the motor is very probably running: the
+    step unwinds through a `try/finally` that writes a best-effort stop, which is what
+    `problem_no_echo` tells the user in seven languages ("a stop was sent right after
+    the error"). Until 0.5.0 v2 that sentence was true of the timed run and false of
+    this one - the primitive behind both *timed press* steps (review BUG-6).
+
     Mutation caught: waiting for ever (the flow would hang on a shutter whose fuse is
-    out), or falling back to `start_delay` the way the 0.4.2 service does.
+    out), falling back to `start_delay` the way the 0.4.2 service does, or leaving the
+    shutter running after the failure.
     """
     async with setup_myhome(hass, tmp_path, RUNNER_YAML):
         cover = entity_object(hass, COVER, DEVICE_KEY)
@@ -354,7 +361,7 @@ async def test_start_gives_up_when_the_actuator_never_answers(hass: HomeAssistan
             await cover.async_calib_start(DIRECTION_OPEN)
         assert err.value.reason == REASON_NO_ECHO
         assert ENTITY in str(err.value)
-        assert path.frames == [RAISE]
+        assert path.frames == [RAISE, STOP]
         # The step is over, so the attribute is gone again even though it failed.
         assert ATTR_CALIBRATING not in hass.states.get(ENTITY).attributes
 
@@ -814,3 +821,30 @@ async def test_a_stop_the_gateway_cannot_even_take_only_reaches_the_log(
         ):
             await cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5)
         assert err.value.reason == REASON_NO_ECHO
+
+
+async def test_the_one_at_a_time_lock_is_one_per_gateway(hass: HomeAssistant, tmp_path) -> None:
+    """A house with two gateways has two buses, two sets of shutters and two people.
+
+    The lock exists so that two guided flows, or a flow and the 0.4.2 service, cannot
+    interleave their runs on one motor: two runs that start within the same tick both
+    pass the idle guard, the first stop ends both, and the fit is handed two plausible
+    and wrong `motor_seconds`. None of that is true across gateways, where a single
+    lock only answered the second house with `problem_busy` - whose screen says "this
+    cover is already moving", which is not what had happened (review RISK-5).
+
+    Mutation caught: going back to one module-level lock.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        mine = cover_module.calibration_lock(MAC)
+        assert mine is cover_module.calibration_lock(MAC)
+        assert mine is not cover_module.calibration_lock("00:11:22:33:44:55")
+        # ...and it really is the one the primitives take.
+        await mine.acquire()
+        try:
+            with pytest.raises(CalibrationError) as err:
+                await cover.async_calib_home(DIRECTION_CLOSE)
+            assert err.value.reason == REASON_BUSY
+        finally:
+            mine.release()

@@ -16,10 +16,13 @@ rather than against themselves.
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -33,6 +36,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
+import custom_components.myhome
 from custom_components.myhome import calibration_store
 from custom_components.myhome.calibration import (
     REASON_BUSY,
@@ -312,15 +316,107 @@ async def open_dialog(hass: HomeAssistant, entry) -> dict[str, Any]:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.MENU, result
     assert result["step_id"] == "init"
+    check_the_screen_renders(result)
     return result
 
 
 async def _resolve(hass: HomeAssistant, result: dict[str, Any]) -> dict[str, Any]:
     """Let a progress screen finish, and answer with the screen that follows it."""
     while result["type"] is FlowResultType.SHOW_PROGRESS:
+        check_the_screen_renders(result)
         await hass.async_block_till_done()
         result = await hass.config_entries.options.async_configure(result["flow_id"])
+    check_the_screen_renders(result)
     return result
+
+
+# --------------------------------------------------------------------------------------
+# The one invariant every screen has to satisfy
+# --------------------------------------------------------------------------------------
+STRINGS = json.loads(
+    (Path(custom_components.myhome.__file__).parent / "strings.json").read_text(encoding="utf-8")
+)
+PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+# Every step id this check has actually looked at, so that a check which silently
+# stopped finding anything can be told from one that passes.
+RENDERED_STEPS: set[str] = set()
+
+
+def check_the_screen_renders(result: dict[str, Any]) -> None:
+    """Every `{placeholder}` in this screen's text is one the step really passed.
+
+    Home Assistant renders a step's texts through formatjs, which answers a
+    substitution it was not given by replacing **the whole string** with
+    "Translation [formatjs Error: MISSING_VALUE] The intl string context variable ...".
+    That is what the second live walk-through found on the very first screen of
+    "Configura" - `init`, whose title said `{gateway}`.
+
+    A menu's title is the case worth stating twice: the frontend renders a menu header
+    with no placeholders at all (`renderMenuHeader` passes none, while
+    `renderMenuDescription` passes them), so a menu title that carries one is broken
+    however carefully the step fills it in. Hence the two different rules below.
+
+    Called from `_resolve`, so every screen every test of this file walks through is
+    checked, which is the only way to be sure the rule holds for screens nobody
+    thought to write a test about.
+    """
+    step_id = result.get("step_id")
+    if step_id is None:
+        return
+    if result["type"] is FlowResultType.SHOW_PROGRESS:
+        text = STRINGS["options"]["progress"][result["progress_action"]]
+        given = set(result.get("description_placeholders") or {})
+        assert set(PLACEHOLDER.findall(text)) <= given, f"progress {result['progress_action']}"
+        return
+    step = STRINGS["options"]["step"].get(step_id)
+    if step is None:  # a screen of the config flow, or one with no text of its own
+        return
+    RENDERED_STEPS.add(step_id)
+    given = set(result.get("description_placeholders") or {})
+    wanted = set(PLACEHOLDER.findall(step.get("description", "")))
+    for description in (step.get("data_description") or {}).values():
+        wanted |= set(PLACEHOLDER.findall(description))
+    title = set(PLACEHOLDER.findall(step.get("title", "")))
+    if result["type"] is FlowResultType.MENU:
+        assert not title, f"{step_id}: a menu title cannot be given placeholders"
+        check_the_ways_back_come_last(result)
+    else:
+        wanted |= title
+    assert wanted <= given, f"{step_id}: {sorted(wanted - given)} never reaches the screen"
+
+
+# Every menu option that goes *back* rather than on. Home Assistant draws the same
+# chevron next to every entry of a menu and allows no other icon, so an arrow in the
+# label would point the wrong way: what tells a way out from an action is that it comes
+# last (FLOW, second live walk-through).
+RETURN_OPTIONS = frozenset(
+    {
+        "init",
+        "finish",
+        "cancel_flow",
+        "profiles_covers",
+        "calibrations",
+        "profile_actions",
+        "calibration_actions",
+    }
+)
+
+
+def check_the_ways_back_come_last(result: dict[str, Any]) -> None:
+    """"Torna al menu", "Annulla" and "Chiudi" are the bottom of every menu.
+
+    "Profili e tapparelle" and "Calibrazioni" are ways *forward* on the dialog's own
+    first screen and ways back everywhere else, which is why the top menu is asked a
+    narrower question.
+    """
+    options = list(result["menu_options"])
+    ways_back = {"init", "finish", "cancel_flow"} if result["step_id"] == "init" else RETURN_OPTIONS
+    back = [index for index, option in enumerate(options) if option in ways_back]
+    if not back:
+        return
+    assert back == list(range(min(back), len(options))), (
+        f"{result['step_id']}: {options} - the ways back are not last"
+    )
 
 
 async def submit(hass: HomeAssistant, result: dict[str, Any], user_input=None) -> dict[str, Any]:
@@ -1125,25 +1221,73 @@ PATH_B: tuple[Act, ...] = (
 )
 
 
-async def test_path_b_stores_the_profile_and_the_height_and_nothing_else(
+async def test_path_b_reaches_a_shutter_whose_file_carries_its_own_run_times(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Two screens for the second window of a kind: that is what the profile is for.
+    """Two screens for the second window of a kind - and they have to *do* something.
 
-    Mutation caught: writing the profile's numbers as this window's overrides, which
-    would make a later correction of the profile stop reaching it.
+    The file here says 30 / 29 / 6 s and a roll of 1.2, which is how every basic cover
+    in the owner's own `myhome.yaml` is written, and a profile does not beat a key
+    written in the file (spec 1.3). Storing the profile's name alone therefore left the
+    shutter exactly where it was while the summary promised the opposite - the review's
+    BUG-1, and the headline of the release. So path B stores the profile *scaled to
+    this window* as its own overrides, and keeps the name and the height beside them.
+
+    Mutation caught: writing `{profile, height}` and no overrides (the entity keeps the
+    file's 30 / 29 / 6); scaling by the profile's reference height instead of this
+    window's; stamping the record `guided`, which would make `Calibration source` claim
+    this window was measured when only its height was.
     """
-    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
         assert result["step_id"] == "saved"
         calibration = the_calibration(hass, entry)
         assert calibration[CONF_PROFILE] == "tall"
         assert calibration[CONF_HEIGHT] == HEIGHT
-        assert "overrides" not in calibration
+        # The profile is this very window's, so scaling it changes nothing: the numbers
+        # stored are the profile's own.
+        assert calibration["overrides"] == {
+            CONF_OPENING_TIME: pytest.approx(OPENING, abs=0.05),
+            CONF_CLOSING_TIME: pytest.approx(CLOSING, abs=0.05),
+            CONF_SLAT_TIME: pytest.approx(SLAT, abs=0.05),
+            CONF_OPENING_ROLL: pytest.approx(ROLL_DOWN, abs=0.01),
+            CONF_CLOSING_ROLL: pytest.approx(ROLL_DOWN, abs=0.01),
+        }
         # One homing, no timed run, no fractional run: the height is the measurement.
         assert runner.started == []
         assert runner.runs == []
+
+        # ...and the shutter really runs on them once the dialog is closed.
+        result = await choose(hass, result, "init")
+        result = await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        state = hass.states.get(ENTITY)
+        assert state.attributes["Opening time"] == pytest.approx(OPENING, abs=0.05)
+        assert state.attributes["Closing time"] == pytest.approx(CLOSING, abs=0.05)
+        assert state.attributes["Slat time"] == pytest.approx(SLAT, abs=0.05)
+        # It was not measured here, it was inherited: the source goes on naming the
+        # profile rather than claiming a guided calibration of this window.
+        assert state.attributes[ATTR_CALIBRATION_SOURCE] == "profile tall"
+
+
+async def test_the_snippet_of_path_b_carries_the_numbers_the_two_lines_come_to(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The snippet is offered as an alternative to saving, so it has to be one.
+
+    `profile:` + `height:` alone would change nothing at all on a file that carries its
+    own run times, which is the same BUG-1 written into the user's configuration.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-1])
+        snippet = result["description_placeholders"]["yaml"]
+        assert f"    {CONF_PROFILE}: tall" in snippet
+        assert f"    {CONF_HEIGHT}: {HEIGHT}" in snippet
+        assert f"    {CONF_OPENING_TIME}: " in snippet
+        assert f"    {CONF_CLOSING_ROLL}: " in snippet
 
 
 async def test_path_b_offers_the_refinement_when_the_check_is_far_out(
@@ -1185,8 +1329,9 @@ async def test_a_check_that_lands_close_enough_just_carries_on(
         result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5) - 1.0)})
         assert result["menu_options"] == ["accept_step", "repeat_tape"]
         result = await choose(hass, result, "accept_step")
-        assert result["step_id"] == "summary_basic"
-        # Path B has nothing of its own to improve: the numbers are the profile's.
+        # Path B has nothing of its own to improve: the numbers are the profile's, so
+        # it gets the summary that does not describe the refinement (review BUG-5).
+        assert result["step_id"] == "summary_short"
         assert result["menu_options"] == ["save", "cancel_flow"]
 
 
@@ -1270,7 +1415,7 @@ async def test_the_refinement_summary_shows_the_cover_s_own_yaml(
     async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
-        assert result["step_id"] == "summary_basic"
+        assert result["step_id"] == "summary_short"
         snippet = result["description_placeholders"]["yaml"]
         assert "cover_profiles:" not in snippet
         assert f"  {YAML_KEY}:" in snippet
@@ -1373,6 +1518,10 @@ async def test_the_gateway_is_reloaded_once_and_only_when_something_changed(
             assert reload.call_count == 0
             result = await choose(hass, result, "init")
             result = await choose(hass, result, "finish")
+            # Not synchronously: the reload waits for the `finally` of a movement that
+            # was cut short to write its stop (review RISK-4).
+            assert reload.call_count == 0
+            await hass.async_block_till_done()
         assert reload.call_count == 1
 
 
@@ -2208,3 +2357,470 @@ async def test_a_movement_that_raises_something_nobody_expected_still_has_a_scre
         cover.async_calib_home = _boom
         result = await choose(hass, result, "begin")
         assert result["step_id"] == "problem_unknown"
+
+
+# --------------------------------------------------------------------------------------
+# What the 0.5.0 v2 review found
+# --------------------------------------------------------------------------------------
+# A cover the *file* assigns to a profile, which is the case the assignment form used to
+# show as "Nessun profilo" - and the case in which a height must never be borrowed from
+# the profile's reference height.
+FILE_PROFILE_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    hallway_shutter:
+      where: '81'
+      name: {COVER_NAME}
+      profile: tall
+      height: {HEIGHT}
+  cover_profiles:
+    tall:
+      reference_height: {HEIGHT}
+      opening_time: {OPENING}
+      closing_time: {CLOSING}
+      slat_time: {SLAT}
+      roll: {ROLL_DOWN}
+    short:
+      reference_height: 120
+      opening_time: 14
+      closing_time: 13
+      slat_time: 3
+      roll: 1.4
+"""
+
+# ...and the same without a `height:`, so that the only travel anybody could name is the
+# one the profile was measured on, which is another window's.
+FILE_PROFILE_NO_HEIGHT_YAML = FILE_PROFILE_YAML.replace(f"      height: {HEIGHT}\n", "")
+
+
+def _suggestion(result: dict[str, Any], key: str) -> Any:
+    """What a form field opens on, as the frontend reads it off the schema."""
+    for marker in result["data_schema"].schema:
+        if marker == key:
+            return (marker.description or {}).get("suggested_value")
+    raise AssertionError(f"{key} is not in this form")
+
+
+async def _assignment_form(hass: HomeAssistant, entry) -> dict[str, Any]:
+    """Open "Profili e tapparelle" -> "Assegna un profilo a ogni tapparella"."""
+    result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+    result = await choose(hass, result, "assign_covers")
+    assert result["step_id"] == "assign_covers"
+    return result
+
+
+async def test_submitting_the_assignment_form_unchanged_writes_nothing(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Looking at the form and pressing Submit is not a calibration.
+
+    Every row used to be collected on submit with a height attached, so a user who
+    changed nothing came away with a record per shutter: stamped `guided`, listed under
+    "Calibrazioni" as something measured, shadowing the file's own `height:` for ever -
+    and the gateway was reloaded to do it (review BUG-2).
+
+    Mutation caught: collecting the rows that did not move, or attaching a height the
+    resolution can read out of the file by itself.
+    """
+    async with calibrating(hass, tmp_path, TWO_COVERS_YAML) as (entry, _commands):
+        with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+            result = await _assignment_form(hass, entry)
+            unchanged = {
+                str(marker): _suggestion(result, str(marker))
+                for marker in result["data_schema"].schema
+            }
+            assert set(unchanged.values()) == {NO_PROFILE}
+            result = await submit(hass, result, unchanged)
+            assert result["step_id"] == "profiles_covers"
+            assert the_store(hass, entry).raw_covers == {}
+
+            result = await choose(hass, result, "init")
+            await choose(hass, result, "finish")
+            await hass.async_block_till_done()
+        assert reload.call_count == 0
+
+
+async def test_the_assignment_form_opens_on_the_profile_the_file_gives_a_cover(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A cover whose `myhome.yaml` says `profile: tall` follows one, and must say so.
+
+    Mutation caught: preselecting the stored assignment alone, which shows "Nessun
+    profilo" for a cover that follows one and offers to remove something it cannot.
+    """
+    async with calibrating(hass, tmp_path, FILE_PROFILE_YAML) as (entry, _commands):
+        result = await _assignment_form(hass, entry)
+        assert _suggestion(result, COVER_NAME) == "tall"
+
+
+async def test_assigning_another_profile_never_borrows_the_first_one_s_height(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A profile's `reference_height` is another window's travel, and is not this one's.
+
+    Without a `height:` of its own, a cover moved from one profile to another used to be
+    scaled by the height the *old* profile had been measured on - silently, with no
+    screen asking for the real one (review BUG-2).
+
+    Mutation caught: falling back to the profile's reference height when deciding which
+    covers still have to be measured.
+    """
+    async with calibrating(hass, tmp_path, FILE_PROFILE_NO_HEIGHT_YAML) as (entry, _commands):
+        result = await _assignment_form(hass, entry)
+        result = await submit(hass, result, {COVER_NAME: "short"})
+        assert result["step_id"] == "assign_heights"
+        result = await submit(hass, result, {COVER_NAME: "150"})
+        assert result["step_id"] == "profiles_covers"
+        record = the_store(hass, entry).calibration(UNIQUE_ID)
+        assert record.profile == "short"
+        assert record.height == 150.0
+
+
+async def test_a_dialog_open_across_a_reload_writes_through_the_live_store(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A reload builds a new store; the dialog must not serialise the old one over it.
+
+    Two dialogs are not a contrived case - the design supports them, and every Save
+    reloads the entry - and the old object's next write used to put a snapshot from
+    before the reload back on disk, deleting whatever had been written since with
+    nothing in the log to say so (review BUG-3).
+
+    Mutation caught: caching the store object on the dialog and writing through it.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        dialog = await open_dialog(hass, entry)  # opened before the reload
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        # Something else writes through the store of the new setup.
+        await the_store(hass, entry).async_set_profile(
+            "written_after_reload",
+            calibration_store.cover_profile_data(
+                "written_after_reload",
+                reference_height=HEIGHT,
+                opening_time=OPENING,
+                closing_time=CLOSING,
+                slat_time=SLAT,
+                opening_roll=ROLL_UP,
+                closing_roll=ROLL_DOWN,
+            ),
+        )
+
+        # ...and only then does the old dialog write.
+        result = await choose(hass, dialog, "profiles_covers")
+        result = await choose(hass, result, "assign_covers")
+        result = await submit(hass, result, {COVER_NAME: "tall"})
+        assert result["step_id"] == "profiles_covers"
+
+        on_disk = calibration_store.CalibrationStore(hass, entry.entry_id)
+        await on_disk.async_load()
+        assert "written_after_reload" in on_disk.raw_profiles
+        assert on_disk.calibration(UNIQUE_ID).profile == "tall"
+
+
+async def test_a_reload_under_a_live_conversation_ends_it_on_the_expired_screen(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Home Assistant cancels no flow when an entry is reloaded, so the dialog must.
+
+    The conversation used to go on driving the entity object of the *old* setup: its
+    gateway sessions are closed, so the frames go nowhere while the screens say the
+    shutter moved; the live entity carries no `Calibrating`, so `set_cover_position` is
+    free to drive the same motor; and the dead entity's 1 Hz position tick is never
+    cancelled (review BUG-4).
+
+    Mutation caught: not marking the conversation expired on unload.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:4])
+        assert result["step_id"] == "path_a"
+        assert hass.states.get(ENTITY).attributes[ATTR_CALIBRATING] is True
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        # The shutter of the new setup is nobody's.
+        assert ATTR_CALIBRATING not in hass.states.get(ENTITY).attributes
+        # ...and the next click lands on the screen that says what happened.
+        result = await choose(hass, result, "begin")
+        assert result["step_id"] == "expired"
+        assert result["menu_options"] == ["calibrate", "init"]
+
+
+async def test_a_movement_whose_cover_went_away_is_refused_rather_than_driven(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Every movement resolves the entity again, and one that is gone has a screen.
+
+    Mutation caught: holding the entity object for the whole conversation.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
+
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:4])
+        # The cover is taken out of the file and the entry rebuilt: the conversation is
+        # pointing at something that is not configured any more.
+        hass.data[DOMAIN][MAC][CONF_PLATFORMS][COVER].pop(DEVICE_KEY)
+        result = await choose(hass, result, "begin")
+        assert result["step_id"] == "refused_unknown_cover"
+
+
+async def test_the_watchdog_is_not_armed_again_by_the_saved_screen(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, caplog
+) -> None:
+    """Half an hour after a Save, the log must not say that nothing was saved.
+
+    The `saved` screen renders through the same overridden `async_show_menu` as every
+    other, which re-armed the watchdog on a conversation that was over (review RISK-2).
+
+    Mutation caught: leaving the cover held after Save.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC)
+        assert result["step_id"] == "saved"
+
+        caplog.clear()
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=IDLE_TIMEOUT_SEC + 1))
+        await hass.async_block_till_done()
+
+        assert [record for record in caplog.records if record.levelname == "WARNING"] == []
+        # ...and the two ways out of the screen still work, including the one that
+        # starts a second conversation in the same dialog.
+        result = await choose(hass, result, "calibrate")
+        assert result["step_id"] == "calibrate"
+        result = await choose(hass, result, "cover")
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        assert result["step_id"] == "path"
+
+
+async def test_clearing_every_field_by_hand_deletes_the_record(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Modifica i valori a mano", emptied, means "forget this shutter".
+
+    A record left holding nothing but a `source` and a timestamp vanishes from the
+    "Calibrazioni" screen, which lists what says something, and stays in `.storage` for
+    ever (review RISK-3).
+
+    Mutation caught: storing the empty record instead of deleting it.
+    """
+    async with calibrating(hass, tmp_path, OWN_NUMBERS_YAML) as (entry, _commands):
+        store = the_store(hass, entry)
+        await store.async_set_calibration(
+            UNIQUE_ID,
+            calibration_store.cover_calibration_data(
+                UNIQUE_ID, height=HEIGHT, overrides={CONF_OPENING_TIME: 20.0}
+            ),
+        )
+        result = await choose(hass, await open_dialog(hass, entry), "calibrations")
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        result = await choose(hass, result, "calibration_edit")
+        result = await submit(hass, result, {CONF_HEIGHT: "", CONF_OPENING_TIME: ""})
+        assert result["step_id"] == "calibration_actions"
+        assert the_store(hass, entry).raw_covers == {}
+
+
+async def test_a_profile_may_not_be_named_like_the_no_profile_option(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`__none__` is a valid YAML key and the assignment select's sentinel.
+
+    Mutation caught: accepting it, after which that profile can never be unassigned
+    from "Profili e tapparelle" again.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:-2])
+        assert result["step_id"] == "profile_name"
+        result = await submit(hass, result, {CONF_NAME: NO_PROFILE})
+        assert result["errors"] == {CONF_NAME: "invalid_name"}
+
+
+async def test_editing_a_profile_reaches_the_windows_that_inherited_its_numbers(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path B keeps the name and the height, so a correction can be derived again.
+
+    That is the whole reason the record carries `{profile, height}` beside the numbers:
+    storing the numbers alone would have made a later correction of the profile stop
+    reaching every window that had inherited it.
+
+    Mutation caught: deriving the numbers once and never again.
+    """
+    # A *stored* profile, because a `cover_profiles:` block belongs to the file and the
+    # dialog does not edit it.
+    async with calibrating(hass, tmp_path, OWN_NUMBERS_YAML) as (entry, _commands):
+        await the_store(hass, entry).async_set_profile(
+            "tall",
+            calibration_store.cover_profile_data(
+                "tall",
+                reference_height=HEIGHT,
+                opening_time=OPENING,
+                closing_time=CLOSING,
+                slat_time=SLAT,
+                opening_roll=ROLL_DOWN,
+                closing_roll=ROLL_DOWN,
+            ),
+        )
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
+        assert result["step_id"] == "saved"
+        assert the_store(hass, entry).calibration(UNIQUE_ID).overrides[
+            CONF_OPENING_TIME
+        ] == pytest.approx(OPENING, abs=0.05)
+        result = await choose(hass, result, "init")
+        await choose(hass, result, "finish")
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+
+        # The profile is corrected by hand: this window is 195 cm, the profile's own
+        # reference height, so the numbers reach it unscaled.
+        result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+        result = await choose(hass, result, "pick_profile")
+        result = await submit(hass, result, {"profile": "tall"})
+        result = await choose(hass, result, "profile_edit")
+        result = await submit(
+            hass,
+            result,
+            {
+                CONF_REFERENCE_HEIGHT: str(HEIGHT),
+                CONF_OPENING_TIME: "40",
+                CONF_CLOSING_TIME: "39",
+                CONF_SLAT_TIME: "5",
+                CONF_OPENING_ROLL: str(ROLL_UP),
+                CONF_CLOSING_ROLL: str(ROLL_DOWN),
+            },
+        )
+        assert result["step_id"] == "profile_actions"
+        overrides = the_store(hass, entry).calibration(UNIQUE_ID).overrides
+        assert overrides[CONF_OPENING_TIME] == pytest.approx(40.0, abs=0.05)
+        assert overrides[CONF_CLOSING_TIME] == pytest.approx(39.0, abs=0.05)
+
+
+# --------------------------------------------------------------------------------------
+# The check every screen above is run through
+# --------------------------------------------------------------------------------------
+async def test_every_screen_of_a_whole_conversation_renders_its_own_text(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`check_the_screen_renders` is called on every screen; this one says which.
+
+    A check that silently stopped finding anything - a renamed key, a step id that no
+    longer matches the strings - would leave every test in this file passing while the
+    invariant it is there for went unchecked.
+    """
+    RENDERED_STEPS.clear()
+    async with calibrating(hass, tmp_path, OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_PRECISE)
+        assert result["step_id"] == "saved"
+        result = await choose(hass, result, "init")
+        result = await choose(hass, result, "profiles_covers")
+        result = await choose(hass, result, "pick_profile")
+        result = await submit(hass, result, {"profile": "tall"})
+        result = await choose(hass, result, "profile_view")
+        result = await submit(hass, result)
+        result = await choose(hass, result, "profile_edit")
+        result = await submit(
+            hass,
+            result,
+            {
+                CONF_REFERENCE_HEIGHT: str(HEIGHT),
+                CONF_OPENING_TIME: str(OPENING),
+                CONF_CLOSING_TIME: str(CLOSING),
+                CONF_SLAT_TIME: str(SLAT),
+                CONF_OPENING_ROLL: str(ROLL_UP),
+                CONF_CLOSING_ROLL: str(ROLL_DOWN),
+            },
+        )
+        result = await choose(hass, result, "profile_delete")
+        result = await choose(hass, result, "profile_actions")
+        result = await choose(hass, result, "profiles_covers")
+        result = await choose(hass, result, "assign_covers")
+        result = await submit(hass, result, {COVER_NAME: "tall"})
+        result = await choose(hass, result, "init")
+        result = await choose(hass, result, "calibrations")
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        result = await choose(hass, result, "calibration_view")
+        result = await submit(hass, result)
+        result = await choose(hass, result, "calibration_edit")
+        result = await submit(hass, result, {})
+        result = await choose(hass, result, "calibration_delete")
+        await choose(hass, result, "calibration_actions")
+
+    assert {
+        "init",
+        "calibrate",
+        "cover",
+        "path",
+        "path_a",
+        "home_closed_done",
+        "open_brief",
+        "open_lift",
+        "open_top",
+        "open_result",
+        "height",
+        "height_result",
+        "close_brief",
+        "close_bottom",
+        "close_result",
+        "measure_descent",
+        "measure_ascent",
+        "tape_result",
+        "profile_name",
+        "summary_basic",
+        "measure_verify",
+        "verify_result",
+        "summary_precise",
+        "saved",
+        "profiles_covers",
+        "assign_covers",
+        "pick_profile",
+        "profile_actions",
+        "profile_view",
+        "profile_edit",
+        "profile_delete",
+        "calibrations",
+        "calibration_actions",
+        "calibration_view",
+        "calibration_edit",
+        "calibration_delete",
+    } <= RENDERED_STEPS
+
+
+def test_the_screen_check_catches_what_the_live_walk_through_found(monkeypatch) -> None:
+    """The checker itself, against the two ways a screen can fail to render.
+
+    Mutation caught: a check that asserts nothing (the menu title rule is the one the
+    second live walk-through paid for, and it has to stay expensive to break).
+    """
+    steps = dict(STRINGS["options"]["step"])
+    steps["init"] = {
+        "title": "Configuring {gateway}",
+        "description": "no placeholders here",
+        "menu_options": {"finish": "Close"},
+    }
+    steps["cover"] = {"title": "Pick a cover", "description": "one of {covers}"}
+    monkeypatch.setitem(STRINGS["options"], "step", steps)
+
+    with pytest.raises(AssertionError, match="menu title"):
+        check_the_screen_renders(
+            {
+                "type": FlowResultType.MENU,
+                "step_id": "init",
+                "menu_options": ["finish"],
+                "description_placeholders": {"gateway": "MyHOMEServer1"},
+            }
+        )
+    with pytest.raises(AssertionError, match="never reaches"):
+        check_the_screen_renders(
+            {"type": FlowResultType.FORM, "step_id": "cover", "description_placeholders": {}}
+        )
