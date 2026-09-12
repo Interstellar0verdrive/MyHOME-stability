@@ -52,7 +52,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
-from math import sqrt
 from typing import Any
 
 import voluptuous as vol
@@ -81,6 +80,7 @@ from OWNd.message import (
     OWNAutomationEvent,
 )
 
+from .calibration import clamped_roll, roll_tau, roll_x
 from .const import (
     ATTR_CLOSED_HALF_CM,
     ATTR_CLOSED_RUN_SECONDS,
@@ -126,7 +126,6 @@ from .const import (
     LOGGER,
     MAX_ROLL,
     MIN_ROLL,
-    ROLL_LINEAR_TOLERANCE,
     SERVICE_COVER_CALIBRATION_COMPUTE,
     SERVICE_COVER_CALIBRATION_RUN,
     bus_full_where,
@@ -381,40 +380,14 @@ class _PendingStop:
 
 
 # ------------------------------------------------------------------ the roll model
-# `x` is the fraction of the CURTAIN travel measured from the top: x = 0 fully open,
-# x = 1 curtain on the floor (so x = 1 - position/100).  `tau` is the fraction of the
-# curtain time.  Descending from the top at constant motor speed, the curtain covers
-# less and less distance per second as the roll on the tube gets thinner, and the two
-# functions below are that relation and its inverse.  They are pure and total: the
-# whole roll model of the integration is these eight lines.
-def _roll_tau(roll: float, x: float) -> float:
-    """Fraction of the curtain time needed to descend from the top to `x`."""
-    x = min(1.0, max(0.0, x))
-    k = max(MIN_ROLL, roll)
-    if k - 1.0 <= ROLL_LINEAR_TOLERANCE:
-        return x
-    return (k - sqrt(k * k - (k * k - 1) * x)) / (k - 1)
-
-
-def _roll_x(roll: float, tau: float) -> float:
-    """Where the curtain is after descending from the top for `tau` of the curtain time."""
-    tau = min(1.0, max(0.0, tau))
-    k = max(MIN_ROLL, roll)
-    if k - 1.0 <= ROLL_LINEAR_TOLERANCE:
-        return tau
-    return (k * k - (k - tau * (k - 1)) ** 2) / (k * k - 1)
-
-
-def _clamped_roll(roll: float | None, fallback: float) -> float:
-    """A roll inside the physical range, falling back when the key was not written.
-
-    Contract A already guarantees both, but the entity is also constructible by hand
-    (tests, a future config flow), and a roll below 1 makes `_roll_x` return a
-    position outside [0, 100] rather than merely a wrong one.
-    """
-    if not roll:
-        return fallback
-    return min(MAX_ROLL, max(MIN_ROLL, float(roll)))
+# The model itself moved to `calibration.py` in 0.5.0, unchanged term for term: the
+# guided calibration is nothing but these two functions read backwards, and a solver
+# that carried its own copy of the equations it is supposed to invert would be free to
+# drift away from the model the shutter actually runs on. They keep their private names
+# here because that is what every line below (and every test) calls them.
+_roll_tau = roll_tau
+_roll_x = roll_x
+_clamped_roll = clamped_roll
 
 
 # ------------------------------------------------------------------ calibration
