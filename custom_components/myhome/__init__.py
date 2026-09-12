@@ -478,18 +478,25 @@ def _async_watch_cover_subentries(hass: HomeAssistant, entry: ConfigEntry) -> No
 
     async def _async_reload_on_subentry_change(hass: HomeAssistant, updated: ConfigEntry) -> None:
         nonlocal known
+        # One Save of path A writes two subentries - the profile and the cover's own
+        # calibration - one after the other, and Home Assistant starts an update
+        # listener *eagerly*: without this yield the listener would run between the two
+        # writes and schedule a reload for each of them, which on a real gateway is two
+        # disconnect/reconnect cycles while the shutter is very likely still moving
+        # from the last measurement. After it, the first of the two tasks to wake up
+        # sees the signature the whole burst ended on and the second sees no change at
+        # all: one reload per Save, whatever a Save turns out to write.
+        await asyncio.sleep(0)
         current = cover_subentry_signature(updated)
         if current == known:
             # An ordinary entry update (the options dialog, a new host): the options
-            # flow reloads for those itself.
+            # flow reloads for those itself. Or the tail of a burst this listener has
+            # already scheduled the reload for.
             return
         known = current
         LOGGER.info("The stored cover calibrations changed; reloading %s", updated.title)
         hass.config_entries.async_schedule_reload(updated.entry_id)
 
-    # Read by `calibration_store._async_reload`, so that a helper writing a subentry
-    # does not schedule a second reload on top of the one this listener is about to.
-    _async_reload_on_subentry_change.reloads_on_subentry_change = True  # type: ignore[attr-defined]
     entry.async_on_unload(entry.add_update_listener(_async_reload_on_subentry_change))
 
 
