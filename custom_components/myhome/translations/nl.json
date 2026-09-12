@@ -66,275 +66,22 @@
       "reauth_successful": "Wachtwoord is gewijzigd"
     }
   },
-  "config_subentries": {
-    "cover_calibration": {
-      "entry_type": "Rolluikkalibratie",
-      "initiate_flow": {
-        "user": "Een rolluik kalibreren",
-        "reconfigure": "Dit rolluik opnieuw meten"
-      },
-      "step": {
-        "user": {
-          "title": "Begeleide rolluikkalibratie",
-          "description": "Dit hulpmiddel kalibreert „eenvoudige” rolluiken: de rolluiken waarvan de motor zijn positie niet doorgeeft. Het percentage dat Home Assistant voor die rolluiken toont is een schatting op basis van looptijden; de kalibratie meet die looptijden en de vorm van de oprolbuis, zodat de schatting betrouwbaar wordt.\n\nPerfect wordt het niet. Reken op een paar centimeter afwijking: 1-2 cm vlak bij de eindstanden, 2-4 cm tussen de tussenliggende standen. Elke volledige opening of sluiting zet de schatting weer gelijk, dus de fout stapelt zich niet op.\n\n„Geavanceerde” rolluiken geven hun eigen positie door en hebben dit alles niet nodig: daarom staan ze niet in de lijst.\n\n**Wat er gaat gebeuren**: u kiest één rolluik en daarna een van drie routes. Het rolluik loopt meerdere keren naar zijn eindstanden.\n\n**Wat u moet doen**: houd een rolmaat bij de hand, zorg dat er niets in de weg staat en blijf waar u het rolluik kunt zien. Er wordt niets opgeslagen tot het allerlaatste scherm: u kunt dit venster op elk moment sluiten zonder dat er iets veranderd is."
-        },
-        "cover": {
-          "title": "Welk rolluik gaan we meten?",
-          "description": "Alleen de eenvoudige rolluiken van deze gateway staan in de lijst: de rolluiken die hun eigen positie niet doorgeven en dus als enige iets te kalibreren hebben.\n\n**Wat u moet doen**: kies het rolluik waar u voor staat. U wordt gevraagd het te zien bewegen en het met een rolmaat op te meten, dus het moet er een zijn die u kunt zien.",
-          "data": {
-            "cover": "Rolluik"
-          }
-        },
-        "path": {
-          "title": "Hoe moet {cover} gemeten worden?",
-          "description": "Er zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt.\n\nDe eerste is de lange, ongeveer drie minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**: de beschrijving van dit soort rolluik, die elk ander raam van hetzelfde model kan hergebruiken.\n\nDe tweede is juist voor die andere ramen: kies het profiel, meet de hoogte, klaar.\n\nDe derde is voor een rolluik dat een profiel volgt en toch op de verkeerde plek stopt.\n\n**Wat u moet doen**: kies er een. Tot het volgende scherm beweegt er niets.",
-          "menu_options": {
-            "path_a": "Dit is het eerste rolluik van zijn soort (volledige meting, ~3 minuten)",
-            "path_b": "Dit is hetzelfde als een al gemeten rolluik (alleen de hoogte)",
-            "path_c": "Dit volgt een profiel maar stopt op de verkeerde plek (bijstellen)"
-          }
-        },
-        "path_a": {
-          "title": "Voordat {cover} gaat bewegen",
-          "description": "**Wat er gaat gebeuren**: het rolluik gaat helemaal omlaag, dan helemaal omhoog, dan weer omlaag, en ten slotte naar een paar tussenstanden. Zeven bewegingen in totaal, ongeveer drie minuten.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat — geen open raam, geen plant op de vensterbank, geen kat — en houd een rolmaat bij de hand. U wordt gevraagd op een knop te drukken wanneer er iets gebeurt, en een paar afstanden op te meten.\n\nU kunt op elk moment stoppen: er wordt niets weggeschreven tot het laatste scherm, en de bewegingen zijn gewone opdrachten."
-        },
-        "path_b": {
-          "title": "Van welk soort is {cover}?",
-          "description": "Een profiel beschrijft één model rolluik: hoe lang het loopt, hoe lang de lamellen duren, en hoe het pantser zich op de buis oprolt. Home Assistant schaalt het naar dit raam zodra het weet hoe hoog dit raam is.\n\n**Wat u moet doen**: kies het profiel dat op een rolluik van hetzelfde soort gemeten is. Op het volgende scherm meet u de hoogte van dit rolluik.",
-          "data": {
-            "profile": "Profiel"
-          }
-        },
-        "path_c": {
-          "title": "{cover} bijstellen",
-          "description": "Dit rolluik volgt een profiel en gedraagt zich er niet naar: de motor kan trager zijn, het pantser zwaarder, de buis dikker. Wat hier gemeten wordt geldt alleen voor dit raam en gaat vóór zowel het profiel als myhome.yaml; alles wat niet gemeten wordt blijft van het profiel komen.\n\n**Wat u moet doen**: bevestig van welk profiel dit rolluik moet uitgaan.",
-          "data": {
-            "profile": "Profiel"
-          }
-        },
-        "refine_scope": {
-          "title": "Hoe ver moet {cover} bijgesteld worden?",
-          "description": "**Wat er gaat gebeuren**: ofwel twee gemeten looprichtingen (een omhoog, een omlaag), ofwel die plus twee metingen met de rolmaat.\n\nDe tijden alleen volstaan voor een rolluik waarvan de motor simpelweg trager of sneller is dan die waarop het profiel gemeten is. Neem de coëfficiënten erbij als het ook *halverwege* verkeerd staat: dan loopt niet de motor anders, maar rolt het pantser anders op.\n\n**Wat u moet doen**: kies hoe ver u wilt gaan. U kunt altijd terugkomen voor de rest.",
-          "menu_options": {
-            "times_only": "Alleen zijn eigen looptijden (2 keer drukken, ~1 minuut)",
-            "times_and_rolls": "Zijn looptijden én zijn eigen coëfficiënten (2 keer drukken en 2 metingen)",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "home_closed_done": {
-          "title": "Is {cover} helemaal dicht?",
-          "description": "**Wat er gebeurd is**: het rolluik is helemaal omlaag gestuurd, zodat alles wat hierna gemeten wordt van een bekend punt vertrekt.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand op zijn aanslag, ga dan verder. Beweegt het nog, wacht dan even en ga verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
-          "menu_options": {
-            "confirm_closed": "Het is helemaal dicht",
-            "repeat_step": "Deze stap herhalen",
-            "not_right": "Het deed niet wat het moest doen"
-          }
-        },
-        "home_open_done": {
-          "title": "Is {cover} helemaal open?",
-          "description": "**Wat er gebeurd is**: het rolluik is helemaal omhoog gestuurd, want wat hierna komt gaat van daar omlaag en een loop die ergens anders begon zou niets meten.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal open, ga dan verder. Beweegt het nog, wacht dan even en ga verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
-          "menu_options": {
-            "confirm_open": "Het is helemaal open",
-            "repeat_step": "Deze stap herhalen",
-            "not_right": "Het deed niet wat het moest doen"
-          }
-        },
-        "open_lift": {
-          "title": "{cover} gaat open",
-          "description": "**Wat er gebeurt**: het rolluik is omhoog gegaan. De eerste seconde of twee gaan alleen de lamellen open terwijl de onderrand op zijn aanslag blijft; daarna komt het hele pantser omhoog.\n\n**Wat u moet doen**: kijk naar de onderrand en druk hieronder op de knop **op het moment dat hij loskomt**. Klok niets: de druk op de knop ís de meting, en Home Assistant weet al precies wanneer de motor begon te draaien.\n\nLaat het rolluik daarna doorlopen: het gaat vanzelf tot bovenaan.",
-          "menu_options": {
-            "lifted_off": "De onderrand is net losgekomen",
-            "repeat_step": "Deze stap herhalen",
-            "not_right": "Het deed niet wat het moest doen"
-          }
-        },
-        "open_top": {
-          "title": "{cover} gaat nog omhoog",
-          "description": "**Wat er gebeurt**: het pantser rolt op en het rolluik stopt vanzelf bovenaan.\n\n**Wat u moet doen**: druk hieronder op de knop **op het moment dat het stopt**. Miste u het moment, herhaal dan de stap in plaats van te gokken: de hele openingstijd komt uit deze druk op de knop.",
-          "menu_options": {
-            "stopped_open": "Het is net bovenaan gestopt",
-            "repeat_step": "Deze stap herhalen",
-            "not_right": "Het deed niet wat het moest doen"
-          }
-        },
-        "close_bottom": {
-          "title": "{cover} gaat dicht",
-          "description": "**Wat er gebeurt**: het rolluik is helemaal geopend en gaat nu omlaag. Het stopt vanzelf wanneer het pantser beneden is en de lamellen gesloten zijn.\n\n**Wat u moet doen**: druk hieronder op de knop **op het moment dat het stopt**. Die druk op de knop is de hele sluitingstijd: een rolluik zakt iets sneller dan het stijgt, en daarom wordt dat apart gemeten.",
-          "menu_options": {
-            "stopped_closed": "Het is net beneden gestopt",
-            "repeat_step": "Deze stap herhalen",
-            "not_right": "Het deed niet wat het moest doen"
-          }
-        },
-        "height": {
-          "title": "Hoe hoog is {cover}?",
-          "description": "**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand rust als het rolluik dicht is tot de onderrand zoals hij nu staat, en vul hieronder de centimeters in.\n\nDie afstand is de loop van het pantser, en het is de maat waarmee elke andere meting vergeleken wordt. Meet het pantser, niet het raam: rust de onderrand op een vensterbank in plaats van op de vloer, meet dan vanaf de vensterbank.",
-          "data": {
-            "height": "Loop van het pantser (cm)"
-          }
-        },
-        "measure_descent": {
-          "title": "Meet {cover} — op {percent}% van de neergang",
-          "description": "**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna {percent}% van zijn loop omlaag gegaan.\n\n**Wat u moet doen**: meet opnieuw van het punt waar de onderrand rust als het rolluik dicht is tot de onderrand zoals hij nu staat, en vul hieronder de centimeters in. Dezelfde maat als bij de hoogte, zodat de twee vergelijkbaar zijn.",
-          "data": {
-            "measured_cm": "Hoogte van de onderrand (cm)",
-            "repeat_step": "Deze stap liever herhalen (de bewegingen opnieuw uitvoeren en opnieuw meten)"
-          }
-        },
-        "measure_ascent": {
-          "title": "Meet {cover} — op {percent}% van de opgang",
-          "description": "**Wat er gebeurd is**: het rolluik is helemaal gesloten en daarna de lamellen plus {percent}% van zijn loop omhoog gegaan.\n\n**Wat u moet doen**: meet van het punt waar de onderrand rust als het rolluik dicht is tot de onderrand zoals hij nu staat, en vul hieronder de centimeters in. Een rolluik wordt omhoog anders belast dan omlaag, en daarom wordt dezelfde fractie twee keer gemeten.",
-          "data": {
-            "measured_cm": "Hoogte van de onderrand (cm)",
-            "repeat_step": "Deze stap liever herhalen (de bewegingen opnieuw uitvoeren en opnieuw meten)"
-          }
-        },
-        "measure_verify": {
-          "title": "Controleer {cover} — op {percent}% van de neergang",
-          "description": "**Wat er gebeurd is**: het rolluik is naar een stand gebracht waar niets gemeten is, dus dit is een echte controle en geen herhaling.\n\n**Wat u moet doen**: meet nog één keer de hoogte van de onderrand, vanaf dezelfde maat als eerder, en vul hieronder de centimeters in. Het volgende scherm zegt hoever het rolluik afwijkt van waar Home Assistant het verwachtte.",
-          "data": {
-            "measured_cm": "Hoogte van de onderrand (cm)",
-            "repeat_step": "Deze stap liever herhalen (de bewegingen opnieuw uitvoeren en opnieuw meten)"
-          }
-        },
-        "verify_offer": {
-          "title": "Wilt u {cover} controleren?",
-          "description": "De hoogte was alles wat nodig was: de kalibratie kan zo opgeslagen worden.\n\n**Wat de controle is**: het rolluik gaat tot halverwege en u meet waar het werkelijk gestopt is, wat laat zien of dit raam zich echt als het profiel gedraagt. Het kost ongeveer een minuut en één meting.",
-          "menu_options": {
-            "verify_now": "Nu controleren (~1 minuut)",
-            "skip_verify": "Nee, naar het overzicht"
-          }
-        },
-        "verify_result": {
-          "title": "{cover} stopte {deviation} cm van de schatting",
-          "description": "Dat is het verschil tussen waar het rolluik werkelijk stopte en waar Home Assistant het verwachtte. Eén of twee centimeter is het beste wat haalbaar is; drie of meer betekent dat dit raam zich niet gedraagt als het profiel dat het gekregen heeft.\n\n**Wat u moet doen**: ga door naar het overzicht, meet dezelfde stand opnieuw als u denkt dat de meting fout was, of stel dit rolluik bij met eigen metingen wanneer die keuze aangeboden wordt.",
-          "menu_options": {
-            "continue_step": "Doorgaan",
-            "repeat_step": "Deze stand opnieuw meten",
-            "path_c": "Dit rolluik bijstellen met eigen metingen"
-          }
-        },
-        "summary": {
-          "title": "Wat er aan {cover} gemeten is",
-          "description": "**Loop van het pantser**: {height}\n**Nauwkeurigheid van het model**: {accuracy}\n\nEen streepje betekent dat het gekozen pad dat niet gemeten heeft. De nauwkeurigheid is de afstand tussen waar het model de onderrand zet en waar de rolmaat hem werkelijk vond, en zegt pas iets zodra een richting meer dan één keer gemeten is — precies wat “Eerst de nauwkeurigheid verbeteren” doet.\n\nHieronder hetzelfde, geschreven zoals het in `myhome.yaml` zou staan, voor wie het bestand verkiest. Opslaan schrijft het bestand **niet**: de getallen blijven bij de integratie, wat aan *dit* rolluik gemeten is gaat vóór het bestand, en wie ze van deze pagina verwijdert geeft het bestand het laatste woord terug. Wie deze metingen de naam geeft van een profiel dat al bestaat, vervangt dat profiel ermee.\n\n{yaml}\n**Wat u moet doen**: opslaan, of nog twee minuten en vier metingen besteden aan een beter antwoord.",
-          "menu_options": {
-            "save": "Opslaan",
-            "refine": "Eerst de nauwkeurigheid verbeteren (~2 minuten, 4 metingen extra)",
-            "cancel_flow": "Annuleren en niets opslaan"
-          }
-        },
-        "profile_name": {
-          "title": "Geef dit soort rolluik een naam",
-          "description": "{cover} is gemeten, en wat gemeten is beschrijft elk raam van hetzelfde model. Geef dat model een naam en de andere rolluiken zijn in twee schermen gekalibreerd in plaats van tien.\n\n**Wat u moet doen**: typ een korte naam — alleen letters, cijfers en liggende streepjes, geen spaties en geen accenten, want het is ook een sleutel in `myhome.yaml`. Iets als `hoog`, `slaapkamers` of `keuken_deur`.\n\nEen naam die al in gebruik is wordt niet geweigerd: het profiel met die naam wordt **vervangen** door wat zojuist gemeten is, en zo meet u een rolluik opnieuw waarvan de eerste meting slecht uitviel. Een `cover_profiles:`-blok met dezelfde naam in `myhome.yaml` blijft onaangeroerd en blijft schuilgaan achter het gemeten profiel.",
-          "data": {
-            "name": "Profielnaam"
-          }
-        },
-        "reconfigure": {
-          "title": "{cover} opnieuw meten",
-          "description": "Dit rolluik heeft al een begeleide kalibratie. Er staat niets in dat de moeite waard is om met de hand te wijzigen — elk getal komt uit een druk op de knop of uit een meting — dus de manier om het te veranderen is opnieuw meten.\n\n**Wat er gaat gebeuren**: hetzelfde gesprek als de eerste keer. Wat er nu opgeslagen is blijft precies zoals het is tot u het laatste scherm bereikt en opslaat."
-        },
-        "problem_no_echo": {
-          "title": "{cover} gaf geen antwoord",
-          "description": "De opdracht is op de bus aangekomen, maar de motor heeft nooit gemeld dat hij begon te draaien, dus er is geen moment om iets tegen af te meten en de stap is afgebroken.\n\n**Het rolluik beweegt mogelijk nog**: de opdracht is wel degelijk verstuurd, dus de motor is vrijwel zeker gaan draaien. Direct na de fout is een stop verstuurd, maar loopt het rolluik nog, stop het dan zelf voordat u de stap herhaalt.\n\n**Wat u moet doen**: controleer of het rolluik niet klem zit en of niets anders (een wandschakelaar, een automatisering) het vasthoudt, en herhaal de stap. Gebeurt het elke keer, dan geeft deze motor zijn status niet door en kan de begeleide kalibratie hem niet meten.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "problem_not_delivered": {
-          "title": "De opdracht bereikte de bus nooit",
-          "description": "De gateway heeft onze opdracht niet weggeschreven en ook niet gemeld dat hij hem opgaf, dus aan {cover} is nooit gevraagd te bewegen en er is niets gemeten.\n\n**Wat u moet doen**: controleer of de gateway verbonden is — de integratiepagina zegt het — en herhaal de stap.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "problem_not_stopped": {
-          "title": "{cover} kon niet gestopt worden",
-          "description": "De stopopdracht is geweigerd of verloren gegaan, dus het rolluik liep door tot zijn eindstand en de stand waar deze stap over ging bestaat niet.\n\n**Wat u moet doen**: wacht tot het rolluik stilstaat en herhaal de stap. Meestal komt dit door een gateway die het heel druk heeft met opdrachten.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "problem_busy": {
-          "title": "{cover} beweegt al",
-          "description": "Een stap moet uit stilstand vertrekken, en dit rolluik was al in beweging — iemand aan een wandschakelaar, een automatisering, of een opdracht die nog niet klaar was.\n\n**Wat u moet doen**: wacht tot het stilstaat en herhaal dan de stap.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "problem_bad_point": {
-          "title": "Die twee drukken kunnen niet allebei kloppen",
-          "description": "De momenten passen niet bij elkaar: het rolluik kan niet gestopt zijn voordat het begon, en ook niet zijn lamellen geopend hebben nadat het al boven was.\n\n**Wat u moet doen**: herhaal de stap en druk één keer per gebeurtenis, op het moment dat die gebeurt.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "problem_timeout": {
-          "title": "Er is niet op tijd gedrukt",
-          "description": "Dit scherm wacht ongeveer anderhalve minuut op de druk op de knop waar het over gaat, veel langer dan welk rolluik ook over zijn loop doet. Daarna meet die druk niets meer, dus is hij weggegooid in plaats van geloofd.\n\n**Wat u moet doen**: herhaal de stap en druk deze keer zodra het rolluik doet wat het scherm beschrijft.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        },
-        "problem_unknown": {
-          "title": "Er ging iets mis met {cover}",
-          "description": "De stap kon niet worden afgerond en er is niets gemeten. Het logboek van Home Assistant heeft de details.\n\n**Wat u moet doen**: herhaal de stap. Wat u ook kiest, er is niets opgeslagen.",
-          "menu_options": {
-            "repeat_step": "Deze stap herhalen",
-            "cancel_flow": "Annuleren"
-          }
-        }
-      },
-      "progress": {
-        "homing_closed": "{cover} wordt helemaal gesloten, zodat de metingen van een bekend punt vertrekken. Even geduld, en zorg dat er niets in de weg staat.",
-        "homing_open": "{cover} wordt helemaal geopend, zodat de volgende beweging van een bekend punt vertrekt. Even geduld, en zorg dat er niets in de weg staat.",
-        "starting_open": "{cover} wordt helemaal gesloten en daarna omhoog gestuurd. Even geduld: het volgende scherm vraagt u te kijken en op een knop te drukken.",
-        "starting_close": "{cover} wordt helemaal geopend en daarna omlaag gestuurd. Even geduld: het volgende scherm vraagt u te kijken en op een knop te drukken.",
-        "running_down": "{cover} wordt helemaal geopend en daarna tot ongeveer {percent}% van zijn loop omlaag gestuurd. Even geduld, en houd de rolmaat klaar.",
-        "running_up": "{cover} wordt helemaal gesloten en daarna tot ongeveer {percent}% van zijn loop omhoog gestuurd. Even geduld, en houd de rolmaat klaar."
-      },
-      "error": {
-        "invalid_name": "Een profielnaam mag alleen letters, cijfers en liggende streepjes bevatten: geen spaties, geen accenten, geen koppeltekens.",
-        "above_the_travel": "Dat is meer dan de hele loop van dit pantser. Meet vanaf het punt waar de onderrand rust als het rolluik dicht is, niet vanaf de vloer."
-      },
-      "abort": {
-        "no_basic_covers": "Alle rolluiken van deze gateway geven hun eigen positie door, dus er valt niets te kalibreren. De begeleide kalibratie is alleen voor rolluiken waarvan Home Assistant de positie uit looptijden moet schatten.",
-        "no_profiles": "Er is nog geen profiel om te volgen. Kalibreer eerst één rolluik met de volledige meting: die maakt een profiel aan.",
-        "unknown_cover": "Dat rolluik hoort niet meer bij de configuratie van deze gateway. Er is niets gemeten en niets opgeslagen.",
-        "already_calibrating": "Dit rolluik wordt al gekalibreerd: er staat een ander dialoogvenster op open, of de dienst cover_calibration_run stuurt het aan. Twee kalibraties op één motor zouden elk een loop meten die de ander stopzette, dus deze is niet gestart. Rond de andere af of sluit hem, en probeer het opnieuw.",
-        "cancelled": "De kalibratie is geannuleerd. Er is niets opgeslagen en het rolluik staat waar de laatste beweging het achterliet.",
-        "calibration_saved": "De kalibratie van {cover} is opgeslagen. Het rolluik gebruikt nu de gemeten waarden, zijn attributen zeggen dat, en wie dit item van de integratiepagina verwijdert geeft myhome.yaml het laatste woord terug."
-      }
-    },
-    "cover_profile": {
-      "entry_type": "Rolluikprofiel",
-      "initiate_flow": {
-        "user": "Een rolluikprofiel toevoegen",
-        "reconfigure": "Dit profiel tonen"
-      },
-      "step": {
-        "reconfigure": {
-          "title": "Profiel „{profile}”",
-          "description": "Dit zijn de metingen die dit profiel draagt. Home Assistant schaalt ze naar elk raam dat het volgt, aan de hand van de hoogte van dat raam.\n\n{values}\n**Hoe u het wijzigt**: meet een rolluik van dit soort opnieuw met de begeleide kalibratie en geef het dezelfde naam, wat vervangt wat hier staat. **Hoe u het verwijdert**: de verwijderknop op de integratiepagina. Rolluiken die het volgen vallen terug op wat `myhome.yaml` over ze zegt. Een profiel met dezelfde naam in `cover_profiles:` wordt door geen van beide aangeraakt en blijft achter dit profiel schuilgaan zolang dit bestaat."
-        }
-      },
-      "abort": {
-        "add_profile_via_calibration": "Een profiel wordt niet ingetypt maar gemeten. Start de begeleide kalibratie op het eerste rolluik van een soort en kies „Dit is het eerste rolluik van zijn soort”: het laatste scherm vraagt om de naam van het profiel.",
-        "profile_unchanged": "Er is niets gewijzigd."
-      }
-    }
-  },
   "options": {
     "step": {
       "init": {
-        "title": "MyHome opties",
-        "description": "Verbindings- en geavanceerde instellingen. De integratie wordt herladen bij het opslaan.",
+        "title": "Configuratie van {gateway}",
+        "description": "Hier wordt de gateway ingesteld en worden “eenvoudige” rolluiken gekalibreerd - de rolluiken waarvan Home Assistant de stand moet schatten uit de looptijden.\n\n**Wat u moet doen**: kies een onderdeel. Er verandert niets tot er iets wordt opgeslagen, en geen enkel rolluik beweegt voordat een scherm het aankondigt.",
+        "menu_options": {
+          "calibrate": "Kalibreer een rolluik",
+          "profiles_covers": "Profielen en rolluiken",
+          "calibrations": "Kalibraties",
+          "gateway": "Gateway en verbinding",
+          "finish": "Sluiten"
+        }
+      },
+      "gateway": {
+        "title": "Gateway en verbinding",
+        "description": "Waar de gateway staat, hoe ermee gesproken wordt en waar het configuratiebestand staat. Bij opslaan wordt de integratie met de nieuwe waarden herladen.",
         "data": {
           "address": "IP-adres of hostnaam",
           "port": "Poort",
@@ -356,11 +103,496 @@
           "queue_ttl_sec": "Commando's die na deze tijd nog in de wachtrij staan worden verworpen in plaats van te laat verstuurd. Standaard 60 s (10-600).",
           "default_keepalive_minutes": "Keep-alive die aan de energiemeters wordt gevraagd wanneer keepalive_minutes noch op de sensor noch in het sensor_defaults:-blok (alias energy:) van de gateway in myhome.yaml is ingesteld. 0 schakelt het uit. Standaard 125 min (0-255)."
         }
+      },
+      "profiles_covers": {
+        "title": "Profielen en rolluiken",
+        "description": "Een **profiel** beschrijft één soort rolluik: hoe lang het erover doet, hoe lang de lamellen duren en hoe het doek op de as wordt gewikkeld. Elk rolluik kan er een volgen, en Home Assistant past het aan de eigen hoogte van dat rolluik aan.\n\nEr zijn nu {profiles} profielen en {covers} eenvoudige rolluiken op deze gateway.",
+        "menu_options": {
+          "assign_covers": "Geef elk rolluik een profiel",
+          "pick_profile": "Een profiel bekijken, wijzigen of verwijderen",
+          "init": "Terug naar het menu"
+        }
+      },
+      "assign_covers": {
+        "title": "Welk profiel elk rolluik volgt",
+        "description": "**Wat er gaat gebeuren**: er beweegt niets. Een profiel toewijzen betekent Home Assistant vertellen “dit rolluik is gemaakt zoals die daar”, en de waarden van het profiel worden aan de hoogte van dit rolluik aangepast.\n\nEen profiel gaat niet voor op wat in het configuratiebestand staat, als u dat gebruikt: wat het zwaarst weegt blijft altijd wat op dít rolluik is gemeten.\n\n**Wat u moet doen**: kies voor elk rolluik een profiel, of “Geen profiel” om het op de waarden van het bestand of op de standaardwaarden te laten."
+      },
+      "assign_heights": {
+        "title": "Hoe hoog zijn deze rolluiken?",
+        "description": "Een profiel is de meting van een rolluik van een bepaalde hoogte, en wordt naar verhouding op de andere toegepast. Van deze is de hoogte niet bekend, dus is er niets om op te schalen: {covers}.\n\n**Wat u moet doen**: meet voor elk van hen de afstand die de onderrand aflegt van helemaal dicht naar helemaal open, en schrijf die in centimeters. Decimalen mogen met een komma of met een punt."
+      },
+      "pick_profile": {
+        "title": "Welk profiel?",
+        "description": "**Wat u moet doen**: kies het profiel waarvan u de waarden wilt zien of wijzigen. Het volgende scherm toont ook de rolluiken die het volgen.",
+        "data": {
+          "profile": "Profiel"
+        }
+      },
+      "profile_actions": {
+        "title": "Profiel “{profile}”",
+        "description": "Rolluiken die het volgen: {count}.\n\n**Wat u moet doen**: kies wat ermee moet gebeuren. De waarden bekijken verandert niets; ze wijzigen of het profiel verwijderen werkt zodra u dit venster sluit.",
+        "menu_options": {
+          "profile_view": "Bekijk de waarden",
+          "profile_edit": "Wijzig de waarden met de hand",
+          "profile_delete": "Verwijder het profiel",
+          "profiles_covers": "Terug"
+        }
+      },
+      "profile_view": {
+        "title": "Waarden van profiel “{profile}”",
+        "description": "Dit zijn de waarden die het profiel met zich meedraagt. Home Assistant past ze toe op elk rolluik dat het volgt, naar verhouding van de hoogte van dat rolluik.\n\n{values}\nRolluiken die het volgen: {covers}"
+      },
+      "profile_edit": {
+        "title": "Profiel “{profile}” wijzigen",
+        "description": "**Wat er gaat gebeuren**: de waarden hieronder vervangen de gemeten waarden, voor alle rolluiken die dit profiel volgen. Er beweegt niets: dit is schrijven, geen meten.\n\n**Wat u moet doen**: verbeter wat u beter weet dan de kalibratie - bijvoorbeeld de looptijden van de fabrikant - en laat de rest staan. Decimalen mogen met een komma of met een punt.",
+        "data": {
+          "reference_height": "Referentiehoogte (cm)",
+          "opening_time": "Openingstijd (s)",
+          "closing_time": "Sluitingstijd (s)",
+          "slat_time": "Lamellentijd (s)",
+          "opening_roll": "Wikkelfactor bij het openen",
+          "closing_roll": "Wikkelfactor bij het sluiten"
+        },
+        "data_description": {
+          "reference_height": "De doekloop van het rolluik waarop dit profiel is gemeten (20-500).",
+          "opening_time": "Seconden van helemaal dicht tot helemaal open, lamellen inbegrepen (1-600).",
+          "closing_time": "Seconden van helemaal open tot helemaal dicht (1-600).",
+          "slat_time": "Seconden waarin de lamellen opengaan voordat het doek begint te stijgen (0-60).",
+          "opening_roll": "Hoeveel het opgewikkelde doek het stijgen versnelt: 1 is een kale as, 2 een goed gevulde (1-5).",
+          "closing_roll": "Hetzelfde bij het dalen (1-5)."
+        }
+      },
+      "profile_delete": {
+        "title": "Profiel “{profile}” verwijderen?",
+        "description": "**Wat er gaat gebeuren**: het profiel wordt verwijderd en deze {count} rolluiken vallen terug op de waarden van het configuratiebestand, als u dat gebruikt, of op de standaardwaarden: {covers}\n\nWat op elk rolluik zelf is gemeten blijft staan: alleen de beschrijving van de soort verdwijnt. Bestaat er in `cover_profiles:` een profiel met dezelfde naam, dan geldt dat vanaf nu weer.",
+        "menu_options": {
+          "profile_delete_confirm": "Ja, verwijder het profiel",
+          "profile_actions": "Nee, terug"
+        }
+      },
+      "profile_deleted": {
+        "title": "Profiel “{profile}” verwijderd",
+        "description": "Het profiel is weg. Rolluiken die het volgden en zijn teruggevallen op de waarden van het bestand of op de standaardwaarden: {count} - {covers}\n\nWas dat een vergissing, dan is de weg terug een rolluik van deze soort opnieuw te kalibreren met de volledige meting en het dezelfde naam te geven."
+      },
+      "calibrations": {
+        "title": "Kalibraties",
+        "description": "Dit zijn de rolluiken waarvoor de integratie iets eigens bewaart: {count}. Wat hier bewaard wordt, gaat voor op het configuratiebestand, als u dat gebruikt.\n\n**Wat u moet doen**: kies het rolluik waarvan u de waarden wilt zien, verbeteren of verwijderen.",
+        "data": {
+          "cover": "Rolluik"
+        }
+      },
+      "no_calibrations": {
+        "title": "Er is nog niets bewaard",
+        "description": "Geen enkel rolluik van deze gateway heeft eigen waarden die de integratie bewaart: ze lopen allemaal op wat het configuratiebestand zegt, als u dat gebruikt, of op de standaardwaarden.\n\n**Wat u moet doen**: ga terug naar het menu en kies “Kalibreer een rolluik” om er een te meten.",
+        "menu_options": {
+          "init": "Terug naar het menu"
+        }
+      },
+      "no_basic_covers": {
+        "title": "Er valt niets te kalibreren",
+        "description": "Alle rolluiken van deze gateway melden hun stand zelf, dus hoeft Home Assistant die niet te schatten en is er geen looptijd te meten.\n\nDe begeleide kalibratie is alleen voor “eenvoudige” rolluiken, waarvan de aandrijving niet zegt waar ze staat.",
+        "menu_options": {
+          "init": "Terug naar het menu"
+        }
+      },
+      "calibration_actions": {
+        "title": "Kalibratie van {cover}",
+        "description": "Bewaarde waarden voor dit rolluik:\n\n{values}\n**Wat u moet doen**: kies wat ermee moet gebeuren. “Opnieuw meten” voert de begeleide kalibratie op dit rolluik opnieuw uit en vervangt wat er staat; “Verwijderen” geeft het terug aan het configuratiebestand, als u dat gebruikt.",
+        "menu_options": {
+          "calibration_view": "Bekijk de waarden",
+          "calibration_edit": "Wijzig de waarden met de hand",
+          "calibration_remeasure": "Opnieuw meten",
+          "calibration_delete": "Verwijder de kalibratie",
+          "calibrations": "Terug"
+        }
+      },
+      "calibration_view": {
+        "title": "Waarden van {cover}",
+        "description": "Dit is wat de integratie voor dit rolluik bewaart:\n\n{values}\nDe sleutels die hier staan gaan voor op die in het configuratiebestand, als u dat gebruikt; de sleutels die er niet staan blijven van het bestand, van het profiel of van de standaardwaarden komen."
+      },
+      "calibration_edit": {
+        "title": "De waarden van {cover} wijzigen",
+        "description": "**Wat er gaat gebeuren**: de waarden hieronder gelden alleen voor dit rolluik en gaan voor op zowel het profiel als het configuratiebestand. Er beweegt niets: dit is schrijven, geen meten.\n\n**Wat u moet doen**: schrijf alleen op wat u dit rolluik wilt opleggen. Een leeg veld is geen nul: het betekent “hierover heb ik niets te zeggen”, en de waarde komt weer van het profiel of van het bestand. Decimalen mogen met een komma of met een punt.",
+        "data": {
+          "height": "Doekloop (cm)",
+          "opening_time": "Openingstijd (s)",
+          "closing_time": "Sluitingstijd (s)",
+          "slat_time": "Lamellentijd (s)",
+          "opening_roll": "Wikkelfactor bij het openen",
+          "closing_roll": "Wikkelfactor bij het sluiten"
+        },
+        "data_description": {
+          "height": "Hoe ver de onderrand aflegt van helemaal dicht naar helemaal open (20-500).",
+          "opening_time": "Seconden van helemaal dicht tot helemaal open, lamellen inbegrepen (1-600).",
+          "closing_time": "Seconden van helemaal open tot helemaal dicht (1-600).",
+          "slat_time": "Seconden waarin de lamellen opengaan voordat het doek begint te stijgen (0-60).",
+          "opening_roll": "Hoeveel het opgewikkelde doek het stijgen versnelt: 1 is een kale as, 2 een goed gevulde (1-5).",
+          "closing_roll": "Hetzelfde bij het dalen (1-5)."
+        }
+      },
+      "calibration_delete": {
+        "title": "De kalibratie van {cover} verwijderen?",
+        "description": "**Wat er gaat gebeuren**: de voor dit rolluik bewaarde waarden worden gewist en het rolluik valt terug op wat het configuratiebestand zegt, als u dat gebruikt, of op het profiel dat het volgt.\n\nDe metingen zijn niet terug te halen: om ze terug te krijgen moet de begeleide kalibratie opnieuw worden gedaan.",
+        "menu_options": {
+          "calibration_delete_confirm": "Ja, verwijder de kalibratie",
+          "calibration_actions": "Nee, terug"
+        }
+      },
+      "calibration_deleted": {
+        "title": "Kalibratie verwijderd",
+        "description": "{cover} heeft geen eigen waarden meer die de integratie bewaart: het loopt op wat het configuratiebestand zegt, als u dat gebruikt, op het profiel dat het volgt of op de standaardwaarden."
+      },
+      "calibrate": {
+        "title": "Begeleide kalibratie van rolluiken",
+        "description": "Dit hulpmiddel kalibreert “eenvoudige” rolluiken: die waarvan de aandrijving haar stand niet meldt. Voor die rolluiken is het percentage dat u in Home Assistant ziet een schatting uit de looptijden; de kalibratie meet die tijden en de vorm van de as, zodat de schatting betrouwbaar wordt.\n\nPerfect wordt het niet. Reken op een paar centimeter afwijking: 1-2 cm bij de eindposities, 2-4 cm tussen de standen daartussen. Elke volledige opening of sluiting zet de schatting weer gelijk, dus de fout stapelt zich niet op.\n\n“Geavanceerde” rolluiken melden hun stand zelf en hebben dit alles niet nodig: daarom staan ze niet in de lijst.\n\n**Wat er gaat gebeuren**: u kiest een rolluik en een van de drie manieren om het te meten. Het rolluik zal meermaals naar zijn eindposities lopen.\n\n**Wat u moet doen**: houd een rolmaat bij de hand, zorg dat niets het rolluik in de weg staat en blijf waar u het kunt zien. Er wordt niets opgeslagen tot het laatste scherm: u kunt dit venster sluiten wanneer u wilt en er zal niets veranderd zijn.",
+        "menu_options": {
+          "cover": "Beginnen",
+          "init": "Terug naar het menu"
+        }
+      },
+      "cover": {
+        "title": "Welk rolluik meten we?",
+        "description": "Alleen de “eenvoudige” rolluiken van deze gateway staan in de lijst: die hun eigen stand niet melden en dus de enige zijn die het zin heeft met dit hulpmiddel te kalibreren.\n\n**Welk te kiezen**: is dit de eerste keer, kies dan een rolluik dat representatief is voor zijn soort en gemakkelijk te meten - een waar u voor kunt staan zonder meubels te verschuiven, waarvan de onderrand met de rolmaat bereikbaar is. Wat u op dit rolluik meet, geldt voor alle vergelijkbare rolluiken.\n\n**Wat u moet doen**: ga voor het gekozen rolluik staan, met dit hulpmiddel bij de hand (uw telefoon of laptop), en bevestig het dan hieronder. U wordt gevraagd het te zien bewegen en het met de rolmaat te meten, dus u moet fysiek bij het gekozen rolluik zijn.",
+        "data": {
+          "cover": "Rolluik"
+        }
+      },
+      "path": {
+        "title": "Hoe wilt u {cover} meten?",
+        "description": "Er zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is de lange, ongeveer drie minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is juist bedoeld voor rolluiken die lijken op een al gekalibreerd rolluik: u kiest het profiel, meet de hoogte, klaar.\n\nDe derde (C) is voor een rolluik dat een profiel volgt en steeds op de verkeerde plek stopt.\n\n**Wat u moet doen**: kies een van de manieren hieronder. Tot het volgende scherm beweegt er niets.",
+        "menu_options": {
+          "path_a": "(A) Het is het eerste rolluik van deze soort (volledige meting, ~3 minuten)",
+          "path_b": "(B) Het lijkt op een al gemeten rolluik (alleen de hoogte)",
+          "path_c": "(C) Het volgt een profiel maar stopt op de verkeerde plek (verfijn het)",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "path_a": {
+        "title": "Voordat {cover} begint te bewegen",
+        "description": "**Wat er gaat gebeuren**: het rolluik gaat helemaal dicht, dan helemaal open, dan weer omlaag, en stopt ten slotte ergens halverwege. Zeven bewegingen in totaal, ongeveer drie minuten.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat - open ramen, planten op de vensterbank, katten - en houd de rolmaat bij de hand. U wordt gevraagd op een knop te drukken wanneer er iets gebeurt, en een paar afstanden af te lezen.\n\nBij twee stappen moet u snel en nauwkeurig zijn, maar de uitleg komt altijd vóór de beweging en u start die zelf. U kunt altijd stoppen: er wordt niets opgeslagen tot het laatste scherm, en de bewegingen zijn gewone commando's.",
+        "menu_options": {
+          "begin": "Begrepen, we beginnen",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "path_b": {
+        "title": "Van welke soort is {cover}?",
+        "description": "Een profiel beschrijft een model rolluik: hoe lang het erover doet, hoe lang de lamellen duren en hoe het doek op de as wordt gewikkeld. Home Assistant past het op dit rolluik toe zodra het weet hoe hoog het is.\n\n**Wat u moet doen**: kies het profiel dat op een vergelijkbaar rolluik is gemeten. Op het volgende scherm meet u de hoogte van dit rolluik.",
+        "data": {
+          "profile": "Profiel"
+        }
+      },
+      "path_c": {
+        "title": "{cover} verfijnen",
+        "description": "Dit rolluik volgt een profiel en gedraagt zich er niet naar: de motor kan langzamer zijn, het doek zwaarder, de as dikker. Wat u hier meet geldt alleen voor dit rolluik en gaat voor op zowel het profiel als het configuratiebestand, als u dat gebruikt; alles wat u niet meet blijft van het profiel komen.\n\n**Wat u moet doen**: bevestig van welk profiel dit rolluik moet uitgaan.",
+        "data": {
+          "profile": "Profiel"
+        }
+      },
+      "refine_scope": {
+        "title": "Hoe ver wilt u {cover} verfijnen?",
+        "description": "**Wat er gaat gebeuren**: ofwel twee gemeten ritten (één omhoog en één omlaag), ofwel die plus twee metingen met de rolmaat.\n\nAlleen de tijden volstaan voor een rolluik waarvan de motor eenvoudig langzamer of sneller is dan die waarop het profiel is gemeten. Voeg de factoren toe wanneer het ook *halverwege* misgaat: daar draait niet de motor anders, daar wikkelt het doek zich anders.\n\n**Wat u moet doen**: kies hoe ver u wilt gaan. U kunt altijd terugkomen voor de rest.",
+        "menu_options": {
+          "times_only": "Alleen de eigen looptijden (2 keer drukken, ~1 minuut)",
+          "times_and_rolls": "De eigen tijden en de eigen factoren (2 keer drukken en 2 metingen)",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "home_closed_done": {
+        "title": "Is {cover} helemaal dicht?",
+        "description": "**Wat er gebeurd is**: het rolluik is helemaal omlaag gestuurd, zodat alles wat hierna gemeten wordt van een bekend punt vertrekt.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
+        "menu_options": {
+          "confirm_closed": "Het is helemaal dicht",
+          "repeat_step": "Herhaal deze stap",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "home_open_done": {
+        "title": "Is {cover} helemaal open?",
+        "description": "**Wat er gebeurd is**: het rolluik is helemaal omhoog gestuurd, want wat hierna komt daalt vandaar en een rit die ergens anders begint meet niets.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal open, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
+        "menu_options": {
+          "confirm_open": "Het is helemaal open",
+          "repeat_step": "Herhaal deze stap",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "open_brief": {
+        "title": "We gaan {cover} omhoog meten",
+        "description": "**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van onderen omhoog. De eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten; daarna begint het hele doek te stijgen, en bovenaan stopt het rolluik vanzelf.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Er worden twee drukken gevraagd, de een na de ander: de eerste op het moment dat de onderrand loskomt, de tweede op het moment dat het rolluik bovenaan stopt. U klokt niets - het moment van drukken ís de meting.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "menu_options": {
+          "open_start": "1) Start het rolluik",
+          "repeat_step": "Stuur het eerst weer omlaag",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "open_lift": {
+        "title": "{cover} gaat open",
+        "description": "**Wat er gebeurt**: het rolluik is begonnen te stijgen. Op dit moment gaan de lamellen open en rust de onderrand nog.\n\n**Wat u moet doen**: kijk naar de onderrand en druk op de knop hieronder **op het moment dat hij loskomt**. Laat het rolluik daarna doorlopen: het komt vanzelf boven en dan wordt de tweede druk gevraagd.",
+        "menu_options": {
+          "lifted_off": "2) Druk op het moment dat hij van de basis loskomt",
+          "repeat_step": "Herhaal deze stap",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "open_top": {
+        "title": "{cover} stijgt nog",
+        "description": "**Wat er gebeurt**: het doek wikkelt zich op en het rolluik stopt vanzelf bovenaan.\n\n**Wat u moet doen**: druk op de knop hieronder **op het moment dat het de eindstand bereikt en de motor stopt**. Hebt u het moment gemist, herhaal dan de stap in plaats van te gokken: de hele openingstijd komt van deze druk.",
+        "menu_options": {
+          "stopped_open": "3) Druk op het moment dat het aan het eind stopt",
+          "repeat_step": "Herhaal deze stap",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "open_result": {
+        "title": "{cover} omhoog: {run} s",
+        "description": "**Wat er gemeten is**: lamellen {slat} s, volledige stijging {run} s.\n\n**Wat u moet doen**: leken beide drukken goed, ga dan verder. Was er een te laat of te vroeg, herhaal dan de meting: het rolluik wordt weer omlaag gestuurd en de stijging wordt opnieuw gedaan. Een druk die er een halve seconde naast zit, verschuift de schatting een paar centimeter.",
+        "menu_options": {
+          "accept_step": "Goed zo, verder",
+          "repeat_step": "Herhaal de meting"
+        }
+      },
+      "close_brief": {
+        "title": "We gaan {cover} omlaag meten",
+        "description": "**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van boven omlaag en stopt vanzelf zodra het doek beneden is en de lamellen gesloten zijn.\n\n**Wat u moet doen**: ook hier moet u snel en nauwkeurig zijn, maar dit keer is er maar één druk, op het moment dat het rolluik beneden stopt. Een rolluik daalt iets sneller dan het stijgt, en daarom wordt dit apart gemeten.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "menu_options": {
+          "close_start": "1) Start het rolluik",
+          "repeat_step": "Stuur het eerst weer omhoog",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "close_bottom": {
+        "title": "{cover} gaat dicht",
+        "description": "**Wat er gebeurt**: het rolluik daalt en stopt vanzelf zodra het doek beneden is en de lamellen gesloten zijn.\n\n**Wat u moet doen**: druk op de knop hieronder **op het moment dat het de eindstand bereikt en de motor stopt**. Die druk is de hele sluitingstijd.",
+        "menu_options": {
+          "stopped_closed": "2) Druk op het moment dat het aan het eind stopt",
+          "repeat_step": "Herhaal deze stap",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "close_result": {
+        "title": "{cover} omlaag: {run} s",
+        "description": "**Wat er gemeten is**: volledige daling {run} s.\n\n**Wat u moet doen**: leek de druk goed, ga dan verder. Zo niet, herhaal dan de meting: het rolluik wordt weer omhoog gestuurd en de daling wordt opnieuw gedaan.",
+        "menu_options": {
+          "accept_step": "Goed zo, verder",
+          "repeat_step": "Herhaal de meting"
+        }
+      },
+      "height": {
+        "title": "Hoe hoog is {cover}?",
+        "description": "**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand rust als het dicht is (de basis) tot de onderrand in de huidige stand. Met andere woorden: meet de afstand die het rolluik aflegt van helemaal open naar helemaal dicht (of omgekeerd), en schrijf de centimeters hieronder.\n\nDie afstand is de doekloop, en dat is de maat waarmee elke andere meting wordt vergeleken. Meet het doek, niet het raam: rust de onderrand op een vensterbank en niet op de vloer, meet dan vanaf de vensterbank.",
+        "data": {
+          "height": "Doekloop (cm)"
+        },
+        "data_description": {
+          "height": "In centimeters. Decimalen mogen met een komma of met een punt: 198,5 of 198.5."
+        }
+      },
+      "height_result": {
+        "title": "Doekloop van {cover}: {height} cm",
+        "description": "**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Het is de meting waaraan alle andere worden afgemeten, dus even nakijken loont.",
+        "menu_options": {
+          "accept_step": "Goed zo, verder",
+          "repeat_measure": "Herhaal de meting"
+        }
+      },
+      "measure_descent": {
+        "title": "Meet {cover} - op {percent}% van de daling",
+        "description": "**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna {percent}% van zijn loop omlaag gestuurd.\n\n**Wat u moet doen**: meet opnieuw van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Dezelfde maat als bij de hoogte, zodat de twee metingen vergeleken kunnen worden.",
+        "data": {
+          "measured_cm": "Hoogte van de onderrand (cm)"
+        },
+        "data_description": {
+          "measured_cm": "Verwacht ongeveer {expected} cm; binnen {tolerance} cm is volkomen normaal. Decimalen mogen met een komma of met een punt."
+        }
+      },
+      "measure_ascent": {
+        "title": "Meet {cover} - op {percent}% van de stijging",
+        "description": "**Wat er gebeurd is**: het rolluik is helemaal gesloten en daarna de lamellen plus {percent}% van zijn loop omhoog gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Een rolluik wordt omhoog en omlaag niet gelijk belast: daarom wordt dezelfde fractie twee keer gemeten.",
+        "data": {
+          "measured_cm": "Hoogte van de onderrand (cm)"
+        },
+        "data_description": {
+          "measured_cm": "Verwacht ongeveer {expected} cm; binnen {tolerance} cm is volkomen normaal. Decimalen mogen met een komma of met een punt."
+        }
+      },
+      "measure_verify": {
+        "title": "Controleer {cover} - op {percent}% van de daling",
+        "description": "**Wat er gebeurd is**: het rolluik is naar een stand gebracht waar niets gemeten is, dus dit is een echte controle en geen herhaling.\n\n**Wat u moet doen**: meet een laatste keer de hoogte van de onderrand, vanaf dezelfde maat als eerder, en schrijf de centimeters hieronder. Het volgende scherm zegt hoever het rolluik afwijkt van waar Home Assistant het dacht.",
+        "data": {
+          "measured_cm": "Hoogte van de onderrand (cm)"
+        },
+        "data_description": {
+          "measured_cm": "Verwacht ongeveer {expected} cm; binnen {tolerance} cm is volkomen normaal. Decimalen mogen met een komma of met een punt."
+        }
+      },
+      "tape_result": {
+        "title": "{measured} cm gemeten op {percent}%",
+        "description": "**Wat er genoteerd is**: {measured} cm van de basis tot de onderrand.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Twijfelt u of u vanaf het juiste punt gemeten hebt, herhaal dan de meting: het rolluik gaat terug naar de eindstand en legt dezelfde weg opnieuw af, zodat de meting onder dezelfde omstandigheden kan worden overgedaan.",
+        "menu_options": {
+          "accept_step": "Goed zo, verder",
+          "repeat_tape": "Herhaal de meting"
+        }
+      },
+      "verify_offer": {
+        "title": "Wilt u {cover} controleren?",
+        "description": "De hoogte was alles wat nodig was: de kalibratie kan zo al worden opgeslagen.\n\n**Wat de controle is**: het rolluik wordt naar halverwege gestuurd en u meet waar het werkelijk gestopt is, wat zegt of dit rolluik zich echt als het profiel gedraagt. Het kost ongeveer een minuut en één meting met de rolmaat.",
+        "menu_options": {
+          "verify_now": "Nu controleren (~1 minuut)",
+          "skip_verify": "Nee, naar de samenvatting"
+        }
+      },
+      "verify_result": {
+        "title": "{cover} stopte {deviation} cm van de schatting",
+        "description": "Dat is de afstand tussen waar het rolluik werkelijk gestopt is en waar Home Assistant dacht dat het zou stoppen. Een of twee centimeter is normaal en al een uitstekende benadering; drie of meer betekent dat dit rolluik zich niet gedraagt als het profiel dat het gekregen heeft.\n\n**Wat u moet doen**: ga verder, of herhaal de meting als u denkt dat de aflezing verkeerd was. Verschijnt ze, dan meet de verfijning dit rolluik voor zichzelf.",
+        "menu_options": {
+          "accept_step": "Goed zo, verder",
+          "repeat_tape": "Herhaal de meting",
+          "path_c": "Verfijn dit rolluik met eigen metingen"
+        }
+      },
+      "profile_name": {
+        "title": "Geef dit soort rolluik een naam",
+        "description": "{cover} is gemeten, en wat gemeten is beschrijft elk rolluik dat op dit lijkt. Geef dat soort een naam en de andere worden in twee schermen gekalibreerd in plaats van tien.\n\n**Wat u moet doen**: schrijf een korte naam - alleen letters, cijfers en liggende streepjes, geen spaties en geen accenten, want het is ook een sleutel van het configuratiebestand. Iets als `hoog`, `slaapkamers` of `keukendeur`.\n\nDe naam wordt nu gevraagd omdat hij in de samenvatting op het volgende scherm staat. Een naam die al in gebruik is wordt niet geweigerd: het profiel met die naam wordt **vervangen** door het zojuist gemetene, en zo meet men een rolluik opnieuw waarvan de eerste meting slecht uitviel. Een `cover_profiles:`-blok met dezelfde naam in het configuratiebestand blijft onaangeroerd en blijft achter het gemeten profiel staan.",
+        "data": {
+          "name": "Naam van het profiel"
+        }
+      },
+      "summary_basic": {
+        "title": "Wat er op {cover} gemeten is",
+        "description": "**Doekloop**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties, en het rolluik gebruikt ze meteen in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hieronder: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\nDe nauwkeurigheid is nog niet gecontroleerd. Met “Verbeter de nauwkeurigheid” worden vier punten extra gemeten en ziet u de afwijking in centimeters.\n\n**Wat u moet doen**: sla op, of besteed nog twee minuten en vier metingen met de rolmaat.",
+        "menu_options": {
+          "save": "Opslaan",
+          "refine": "Verbeter de nauwkeurigheid (~2 minuten, 4 metingen extra)",
+          "cancel_flow": "Annuleren zonder iets op te slaan"
+        }
+      },
+      "summary_precise": {
+        "title": "Wat er op {cover} gemeten is",
+        "description": "**Doekloop**: {height}\n**Nauwkeurigheid**: binnen {accuracy}, gecontroleerd op {percent}%\n\nDe nauwkeurigheid is de afstand tussen waar het model de onderrand plaatst en waar de rolmaat hem werkelijk vond, gemeten op een stand waarop niets berekend is.\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties, en het rolluik gebruikt ze meteen in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hieronder: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat u moet doen**: sla op.",
+        "menu_options": {
+          "save": "Opslaan",
+          "cancel_flow": "Annuleren zonder iets op te slaan"
+        }
+      },
+      "saved": {
+        "title": "Kalibratie van {cover} opgeslagen",
+        "description": "Klaar: de kalibratie van {cover} is opgeslagen en al in gebruik. Vanaf nu beweegt {cover} met de zojuist gemeten waarden; u vindt ze bij de attributen van de entiteit, met de aanduiding “guided”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten. De andere rolluiken die op dit lijken kosten twee schermen, met de keuze “(B) Het lijkt op een al gemeten rolluik”.",
+        "menu_options": {
+          "calibrate": "Kalibreer nog een rolluik",
+          "init": "Terug naar het menu"
+        }
+      },
+      "cancelled": {
+        "title": "Kalibratie geannuleerd",
+        "description": "Er is niets opgeslagen. Het rolluik staat waar de laatste beweging het achterliet en beweegt verder zoals voorheen.",
+        "menu_options": {
+          "calibrate": "Opnieuw beginnen",
+          "init": "Terug naar het menu"
+        }
+      },
+      "expired": {
+        "title": "Sessie verlopen door inactiviteit",
+        "description": "Deze kalibratie heeft te lang stilgestaan, dus is {cover} vrijgegeven: het wordt niet meer gekalibreerd en reageert weer op gewone commando's.\n\n**Er is niets opgeslagen**, en het rolluik staat waar de laatste beweging het achterliet. De tot nu toe gedane metingen zijn weggegooid: om ze terug te krijgen moet u opnieuw bij het begin beginnen.",
+        "menu_options": {
+          "calibrate": "Opnieuw beginnen",
+          "init": "Sluiten"
+        }
+      },
+      "refused_unknown_cover": {
+        "title": "Dat rolluik bestaat niet meer",
+        "description": "Het rolluik maakt geen deel meer uit van de configuratie van deze gateway, dus valt er niets te meten. Er is niets opgeslagen.\n\nHebt u het in het configuratiebestand hernoemd of verplaatst, herlaad dan de integratie en probeer het opnieuw.",
+        "menu_options": {
+          "calibrate": "Kies een ander rolluik",
+          "init": "Terug naar het menu"
+        }
+      },
+      "refused_already_calibrating": {
+        "title": "Dit rolluik wordt al gekalibreerd",
+        "description": "Er staat een ander dialoogvenster open op dit rolluik, of de dienst `cover_calibration_run` stuurt het aan. Twee kalibraties op dezelfde motor zouden elk een rit meten die de ander heeft gestopt, dus deze is niet gestart.\n\n**Wat u moet doen**: rond de andere af of sluit hem, en probeer het dan opnieuw.",
+        "menu_options": {
+          "calibrate": "Opnieuw proberen",
+          "init": "Terug naar het menu"
+        }
+      },
+      "problem_no_echo": {
+        "title": "{cover} heeft niet geantwoord",
+        "description": "Het commando kwam op de bus aan, maar de aandrijving heeft nooit gemeld dat ze in beweging was gekomen, dus is er geen moment om tegen af te meten en is de stap afgebroken.\n\n**Het rolluik kan nog in beweging zijn**: het commando is echt verstuurd, dus is de motor hoogstwaarschijnlijk gestart. Meteen na de fout is een stop gestuurd, maar loopt het rolluik nog, stop het dan zelf voordat u de stap herhaalt.\n\n**Wat u moet doen**: controleer of het rolluik niet klemt, of niemand anders (een wandschakelaar, een automatisering) het vasthoudt, en herhaal de stap. Gebeurt het elke keer, dan meldt deze aandrijving haar eigen toestand niet en kan de begeleide kalibratie haar niet meten.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "problem_not_delivered": {
+        "title": "Het commando is nooit op de bus aangekomen",
+        "description": "De gateway heeft ons commando niet geschreven en ook niet gezegd het te hebben opgegeven, dus is {cover} nooit gevraagd te bewegen en is er niets gemeten.\n\n**Wat u moet doen**: controleer of de gateway verbonden is - de integratiepagina zegt dat - en herhaal de stap.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "problem_not_stopped": {
+        "title": "{cover} kon niet worden gestopt",
+        "description": "Het stopcommando is geweigerd of verloren gegaan, dus is het rolluik doorgelopen tot zijn eindstand en bestaat de stand waarover deze stap ging niet.\n\n**Wat u moet doen**: wacht tot het rolluik stilstaat en herhaal de stap. Dit gebeurt meestal bij een gateway die het erg druk heeft met commando's.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "problem_busy": {
+        "title": "{cover} beweegt al",
+        "description": "Een stap moet vanuit stilstand vertrekken, en dit rolluik was al in beweging - iemand aan een wandschakelaar, een automatisering, of een commando dat nog niet af was.\n\n**Wat u moet doen**: wacht tot het stilstaat en herhaal dan de stap.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "problem_bad_point": {
+        "title": "Die twee drukken kunnen niet allebei kloppen",
+        "description": "De momenten passen niet bij elkaar: het rolluik kan niet gestopt zijn voordat het vertrok, en ook niet zijn lamellen hebben geopend nadat het aankwam.\n\n**Wat u moet doen**: herhaal de stap en druk één keer per gebeurtenis, op het moment dat ze plaatsvindt.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "problem_timeout": {
+        "title": "Er is niet op tijd gedrukt",
+        "description": "Dit scherm wacht ongeveer anderhalve minuut op de druk waarover het gaat, veel langer dan welk rolluik ook over zijn rit doet. Voorbij die grens meet de druk niets meer, dus is ze weggegooid in plaats van geloofd.\n\n**Wat u moet doen**: herhaal de stap en druk dit keer zodra het rolluik doet wat het scherm beschrijft.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
+      },
+      "problem_unknown": {
+        "title": "Er ging iets mis met {cover}",
+        "description": "De stap is niet afgerond en er is niets gemeten. De details staan in het logboek van Home Assistant.\n\n**Wat u moet doen**: herhaal de stap. Wat u ook kiest, er is niets opgeslagen.",
+        "menu_options": {
+          "repeat_step": "Herhaal deze stap",
+          "cancel_flow": "Annuleren"
+        }
       }
     },
+    "progress": {
+      "homing_closed": "{cover} wordt helemaal gesloten, zodat de metingen van een bekend punt vertrekken. Even geduld, en zorg dat er niets in de weg staat.",
+      "homing_open": "{cover} wordt helemaal geopend, zodat de volgende beweging van een bekend punt vertrekt. Even geduld, en zorg dat er niets in de weg staat.",
+      "starting_open": "{cover} vertrekt omhoog. Kijk ernaar: zo meteen wordt de eerste druk gevraagd.",
+      "starting_close": "{cover} vertrekt omlaag. Kijk ernaar: zo meteen wordt de druk gevraagd.",
+      "running_down": "{cover} wordt helemaal geopend en daarna tot ongeveer {percent}% van zijn loop omlaag gestuurd. Even geduld, en houd de rolmaat klaar.",
+      "running_up": "{cover} wordt helemaal gesloten en daarna tot ongeveer {percent}% van zijn loop omhoog gestuurd. Even geduld, en houd de rolmaat klaar."
+    },
     "error": {
-      "invalid_host": "Ongeldig IP-adres of hostnaam",
-      "invalid_config_path": "Het configuratiebestand bestaat niet op dit pad"
+      "invalid_host": "Dit is geen geldig IP-adres of hostnaam.",
+      "invalid_config_path": "Er staat geen leesbaar bestand op dit pad.",
+      "not_a_number": "Schrijf een getal. Decimalen mogen met een komma of met een punt: 198,5 of 198.5.",
+      "out_of_range": "Het getal ligt buiten het bereik dat dit veld aanvaardt.",
+      "above_the_travel": "Dat is meer dan de hele loop van dit doek. Meet vanaf het punt waar de onderrand rust wanneer het rolluik dicht is, niet vanaf de vloer.",
+      "invalid_name": "Een profielnaam mag alleen letters, cijfers en liggende streepjes bevatten: geen spaties, geen accenten, geen koppeltekens."
+    }
+  },
+  "selector": {
+    "profile_choice": {
+      "options": {
+        "__none__": "Geen profiel (de waarden van het bestand, of de standaardwaarden)"
+      }
     }
   },
   "issues": {
