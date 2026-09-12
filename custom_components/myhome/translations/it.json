@@ -101,7 +101,7 @@
           "probe_window_sec": "Quanto tempo viene concesso alla sonda per ricevere risposta. Se entro questo tempo non arriva nulla sulla sessione di monitoraggio e il gateway non conferma alcuna richiesta di stato sulla sessione comandi, la connessione viene ricostruita. Predefinito 30 s (5-300).",
           "command_timeout_sec": "Tempo massimo per scrivere un comando e riceverne la conferma, prima di un unico nuovo tentativo e poi dello scarto. Predefinito 10 s (2-60).",
           "queue_ttl_sec": "I comandi ancora in coda dopo questo tempo vengono scartati invece di essere inviati in ritardo. Predefinito 60 s (10-600).",
-          "default_keepalive_minutes": "Keep-alive richiesto ai contatori di energia quando keepalive_minutes non è impostato né sul sensore né nel blocco sensor_defaults: (alias energy:) del gateway in myhome.yaml. 0 lo disabilita. Predefinito 125 min (0-255)."
+          "default_keepalive_minutes": "Keep-alive richiesto ai contatori di energia quando keepalive_minutes non è impostato né sul sensore né nel blocco sensor_defaults: (alias energy:) del gateway nel file di configurazione. 0 lo disabilita. Predefinito 125 min (0-255)."
         }
       },
       "profiles_covers": {
@@ -130,7 +130,7 @@
       },
       "profile_actions": {
         "title": "Profilo di tapparella",
-        "description": "**Profilo**: “{profile}”\n\nTapparelle che lo seguono: {count}.\n\n**Cosa devi fare tu**: scegli cosa farne. Vedere i valori non cambia niente; modificarli o eliminare il profilo ha effetto appena chiudi questa finestra.",
+        "description": "**Profilo**: “{profile}”\n\nTapparelle che lo seguono: {count}.\n\n**Cosa devi fare tu**: scegli cosa farne. Vedere i valori non cambia niente; modificarli o eliminare il profilo ha effetto appena chiudi il dialogo.",
         "menu_options": {
           "profile_view": "Vedi i valori",
           "profile_edit": "Modifica i valori a mano",
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Calibrazione guidata delle tapparelle",
-        "description": "Questo strumento calibra le tapparelle “semplici”: quelle il cui attuatore non riporta la posizione. La percentuale che vedi in Home Assistant, per quelle, è una stima calcolata sui tempi di corsa; la calibrazione misura quei tempi e la geometria del rullo, per ottenere una stima più precisa.\n\nNon sarà perfetta. Aspettati qualche centimetro di scarto: 1-2 cm vicino ai fine corsa, 2-4 cm tra le posizioni intermedie. Ogni apertura o chiusura completa riallinea la stima, quindi l'errore non si accumula.\n\nLe tapparelle “avanzate” riportano la posizione da sole e non hanno bisogno di tutto questo: per questo non compaiono nell'elenco nei prossimi passaggi.\n\n**Cosa sta per succedere**: sceglierai una tapparella e uno dei tre modi di misurarla. La tapparella si muoverà più volte fino ai fine corsa.\n\n**Cosa devi fare tu**: tieni a portata di mano un metro, assicurati che nulla sia d'intralcio alla tapparella e resta dove puoi vederla. Non viene salvato niente fino all'ultima schermata: puoi chiudere questa finestra quando vuoi e non sarà cambiato nulla.",
+        "description": "Questo strumento calibra le tapparelle “semplici”: quelle il cui attuatore non riporta la posizione. La percentuale che vedi in Home Assistant, per quelle, è una stima calcolata sui tempi di corsa; la calibrazione misura quei tempi e la geometria del rullo, per ottenere una stima più precisa.\n\nNon sarà perfetta. Aspettati qualche centimetro di scarto: 1-2 cm vicino ai fine corsa, 2-4 cm tra le posizioni intermedie. Ogni apertura o chiusura completa riallinea la stima, quindi l'errore non si accumula.\n\nLe tapparelle “avanzate” riportano la posizione da sole e non hanno bisogno di tutto questo: per questo non compaiono nell'elenco nei prossimi passaggi.\n\n**Cosa sta per succedere**: sceglierai una tapparella e uno dei tre modi di misurarla. La tapparella si muoverà più volte fino ai fine corsa.\n\n**Cosa devi fare tu**: tieni a portata di mano un metro, assicurati che nulla sia d'intralcio alla tapparella e resta dove puoi vederla. Non viene salvato niente fino all'ultima schermata: puoi chiudere il dialogo quando vuoi e non sarà cambiato nulla.",
         "menu_options": {
           "cover": "Inizia",
           "init": "Torna al menu"
@@ -259,17 +259,17 @@
       },
       "path": {
         "title": "Come vuoi misurare questa tapparella?",
-        "description": "**Tapparella**: {cover}\n\nCi sono tre modi, e quello giusto dipende da cosa hai già misurato. Non sono passi in sequenza: se ne sceglie uno.\n\nIl primo (A) è quello lungo, circa tre minuti: tre pressioni di un pulsante e tre letture col metro. Alla fine nasce un **profilo**, cioè la descrizione di questo tipo di tapparella, che tutte le altre tapparelle simili (stesso modello, dimensione, ...) potranno riutilizzare.\n\nIl secondo (B) è pensato proprio per le tapparelle simili a una già calibrata: scegli il profilo, misuri l'altezza, fatto.\n\nIl terzo (C) è per una tapparella che segue un profilo e continua a fermarsi nel posto sbagliato.\n\n**Cosa devi fare tu**: scegli un modo tra quelli sottostanti. Fino alla prossima schermata non si muove niente.",
+        "description": "**Tapparella**: {cover}\n\nCi sono tre modi, e quello giusto dipende da cosa hai già misurato. Non sono passi in sequenza: se ne sceglie uno.\n\nIl primo (A) è quello lungo, circa tre minuti: tre pressioni di un pulsante e tre letture col metro. Alla fine nasce un **profilo**, cioè la descrizione di questo tipo di tapparella, che tutte le altre tapparelle simili (stesso modello, dimensione, ...) potranno riutilizzare.\n\nIl secondo (B) è pensato proprio per le tapparelle simili a una già calibrata: scegli il profilo, misuri l'altezza, fatto.\n\nIl terzo (C) è per una tapparella a cui è stato assegnato un profilo ma che si ferma nel posto sbagliato: in questo caso va affinata la calibrazione di questa tapparella.\n\n**Cosa devi fare tu**: scegli un modo tra quelli sottostanti. Fino alla prossima schermata non si muove niente.",
         "menu_options": {
           "path_a": "(A) È la prima tapparella di questo tipo (misura completa, ~3 minuti)",
           "path_b": "(B) È simile a una tapparella già misurata (solo l'altezza)",
-          "path_c": "(C) Segue un profilo ma si ferma nel posto sbagliato (affinala)",
+          "path_c": "(C) Ha un profilo ma si ferma nel posto sbagliato (affina la calibrazione)",
           "cancel_flow": "Annulla"
         }
       },
       "path_a": {
         "title": "Prima che la tapparella cominci a muoversi",
-        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: la tapparella scenderà completamente, poi salirà completamente, poi scenderà di nuovo e infine si fermerà in qualche posizione intermedia. Sette movimenti in tutto, circa tre minuti.\n\n**Cosa devi fare tu**: assicurati che non ci sia niente d'intralcio — finestre aperte, piante sul davanzale, gatti — e tieni il metro a portata di mano. Ti sarà chiesto di premere un pulsante quando succede qualcosa e di leggere qualche distanza.\n\nIn due passi dovrai essere veloce e preciso, ma ogni volta le istruzioni arrivano prima del movimento e sei tu ad avviarlo. Puoi interrompere quando vuoi: non viene salvato niente fino all'ultima schermata, e i movimenti sono comandi normali.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: la calibrazione è divisa in passi. A ogni passo la tapparella fa un solo movimento, e prima di ciascuno arrivano le istruzioni e tutto il tempo per prepararsi: nessun movimento parte senza che tu lo avvii. In tutto sono sette movimenti, circa tre minuti.\n\n**Cosa devi fare tu**: assicurati che non ci sia niente d'intralcio — un'anta aperta, piante sul davanzale, gatti — e tieni il metro a portata di mano. Ti sarà chiesto di premere un pulsante quando succede qualcosa e di leggere qualche distanza.\n\nSe qualcosa va storto, ogni passo si può ripetere da solo, senza rifare quelli già fatti. Puoi interrompere quando vuoi: non viene salvato niente fino all'ultima schermata, e i movimenti sono comandi normali.",
         "menu_options": {
           "begin": "Ho capito, cominciamo",
           "cancel_flow": "Annulla"
@@ -284,7 +284,7 @@
       },
       "path_c": {
         "title": "Affina {cover}",
-        "description": "Questa tapparella segue un profilo e non si comporta come lui: il motore può essere più lento, il telo più pesante, il rullo più grosso. Quello che misuri qui vale solo per questa tapparella e ha la precedenza sia sul profilo sia sul file di configurazione, se lo usi; tutto quello che non misuri continua a venire dal profilo.\n\n**Cosa devi fare tu**: conferma da quale profilo deve partire questa tapparella.",
+        "description": "A questa tapparella è stato assegnato un profilo, ma non si comporta come il profilo prevede: il motore può essere più lento, il telo più pesante, il rullo più grosso. Quello che misuri qui vale solo per questa tapparella e ha la precedenza sia sul profilo sia sul file di configurazione, se lo usi; tutto quello che non misuri continua a venire dal profilo.\n\n**Cosa devi fare tu**: conferma da quale profilo deve partire questa tapparella.",
         "data": {
           "profile": "Profilo"
         }
@@ -300,7 +300,7 @@
       },
       "home_closed_done": {
         "title": "La tapparella è chiusa completamente?",
-        "description": "**Tapparella**: {cover}\n\n**Cosa è successo**: la tapparella è stata mandata giù fino in fondo, così che tutto quello che si misura da qui in poi parta da un punto noto.\n\n**Cosa devi fare tu**: guardala. Se è chiusa completamente, con le lamelle serrate e il bordo inferiore in appoggio, vai avanti. Se si sta ancora muovendo, aspetta e poi vai avanti. Se non si è mossa affatto, o si è mossa dalla parte sbagliata, dillo qui sotto.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa è successo**: la tapparella è stata chiusa completamente: in questo modo tutto quello che si misura da qui in poi parte da un punto noto.\n\n**Cosa devi fare tu**: guardala. Se è chiusa completamente, con le lamelle serrate e il bordo inferiore in appoggio, vai avanti. Se si sta ancora muovendo, aspetta e poi vai avanti. Se non si è mossa affatto, o si è mossa dalla parte sbagliata, dillo qui sotto.",
         "menu_options": {
           "confirm_closed": "È chiusa completamente",
           "repeat_step": "Ripeti questo passo",
@@ -309,7 +309,7 @@
       },
       "home_open_done": {
         "title": "La tapparella è aperta completamente?",
-        "description": "**Tapparella**: {cover}\n\n**Cosa è successo**: la tapparella è stata mandata su fino in fondo, perché quello che segue scende da lì e una corsa partita da un altro punto non misurerebbe niente.\n\n**Cosa devi fare tu**: guardala. Se è aperta completamente, vai avanti. Se si sta ancora muovendo, aspetta e poi vai avanti. Se non si è mossa affatto, o si è mossa dalla parte sbagliata, dillo qui sotto.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa è successo**: la tapparella è stata aperta completamente, perché quello che segue scende da lì e una corsa partita da un altro punto non misurerebbe niente.\n\n**Cosa devi fare tu**: guardala. Se è aperta completamente, vai avanti. Se si sta ancora muovendo, aspetta e poi vai avanti. Se non si è mossa affatto, o si è mossa dalla parte sbagliata, dillo qui sotto.",
         "menu_options": {
           "confirm_open": "È aperta completamente",
           "repeat_step": "Ripeti questo passo",
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Stiamo per misurare la salita",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in salita dal basso. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo, e in cima la tapparella si ferma da sola.\n\n**Cosa devi fare tu**: qui dovrai essere veloce e preciso. Ti verranno chieste due pressioni, una dopo l'altra: la prima nell'istante in cui il bordo inferiore si stacca dall'appoggio, la seconda nell'istante in cui la tapparella si ferma in cima. Non devi cronometrare niente — l'istante della pressione è la misura.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in salita dal basso. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo, e in cima la tapparella si ferma da sola.\n\n**Cosa devi fare tu**: qui dovrai essere veloce e preciso. Ti verranno chieste due pressioni, una dopo l'altra:\n\n1. la prima nell'istante in cui il bordo inferiore si stacca dalla base;\n2. la seconda nell'istante in cui la tapparella arriva a fine corsa e il motore si ferma, che si riconosce dal rumore che cessa.\n\nNon devi cronometrare niente: l'istante della pressione è la misura. Le schermate che seguono hanno una riga sola, perché non c'è tempo per leggere mentre guardi la tapparella.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
         "menu_options": {
           "open_start": "1) Avvia la tapparella",
           "repeat_step": "Riportala prima in basso",
@@ -327,18 +327,18 @@
       },
       "open_lift": {
         "title": "La tapparella si sta aprendo",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Tapparella**: {cover}\n\n**Cosa sta succedendo**: la tapparella ha cominciato a salire. In questo momento si stanno aprendo le lamelle e il bordo inferiore è ancora in appoggio.\n\n**Cosa devi fare tu**: guarda il bordo inferiore e premi il pulsante qui sotto **nell'istante in cui si stacca dall'appoggio**. Poi lascia che la tapparella continui: arriverà in cima da sola e ti sarà chiesta la seconda pressione.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Tapparella**: {cover}\n\nPremi nell'istante in cui il bordo inferiore si stacca dalla base.",
         "menu_options": {
-          "lifted_off": "2) Premi nell'istante in cui si stacca dalla base",
+          "lifted_off": "2) Premi quando il bordo si stacca dalla base",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }
       },
       "open_top": {
         "title": "La tapparella sta ancora salendo",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Tapparella**: {cover}\n\n**Cosa sta succedendo**: il telo si sta avvolgendo e la tapparella si fermerà da sola in cima.\n\n**Cosa devi fare tu**: premi il pulsante qui sotto **nell'istante in cui arriva a fine corsa e il motore si ferma**. Se ti è sfuggito il momento, ripeti il passo invece di andare a occhio: tutto il tempo di apertura viene da questa pressione.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Tapparella**: {cover}\n\nPremi nell'istante in cui il motore si ferma in alto.",
         "menu_options": {
-          "stopped_open": "3) Premi nell'istante in cui si ferma a fine corsa",
+          "stopped_open": "3) Premi quando il motore si ferma in alto",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }
@@ -353,7 +353,7 @@
       },
       "close_brief": {
         "title": "Stiamo per misurare la discesa",
-        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in discesa dall'alto e si ferma da sola quando il telo è giù e le lamelle si sono chiuse.\n\n**Cosa devi fare tu**: anche qui dovrai essere veloce e preciso, ma questa volta la pressione è una sola, nell'istante in cui la tapparella si ferma in basso. Una tapparella scende un po' più in fretta di quanto salga, ed è per questo che si misura a parte.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in discesa dall'alto e si ferma da sola quando il telo è giù e le lamelle si sono chiuse.\n\n**Cosa devi fare tu**: anche qui dovrai essere veloce e preciso, ma questa volta la pressione è una sola, nell'istante in cui il motore si ferma in basso.\n\n**Attenzione**: non premere quando il bordo inferiore tocca la base. Da lì la tapparella continua a muoversi ancora per un momento, per chiudere le lamelle. Premi solo quando smette del tutto di muoversi, lamelle comprese, cioè quando il motore si ferma: si riconosce dal rumore che cessa.\n\nUna tapparella scende un po' più in fretta di quanto salga, ed è per questo che si misura a parte. La schermata durante il movimento ha una riga sola, perché non c'è tempo per leggere mentre guardi la tapparella.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
         "menu_options": {
           "close_start": "1) Avvia la tapparella",
           "repeat_step": "Riportala prima in alto",
@@ -362,9 +362,9 @@
       },
       "close_bottom": {
         "title": "La tapparella si sta chiudendo",
-        "description": "**Tapparella**: {cover}\n\n**Cosa sta succedendo**: la tapparella sta scendendo e si fermerà da sola quando il telo sarà giù e le lamelle si saranno chiuse.\n\n**Cosa devi fare tu**: premi il pulsante qui sotto **nell'istante in cui arriva a fine corsa e il motore si ferma**. Quella pressione è tutto il tempo di chiusura.",
+        "description": "**Tapparella**: {cover}\n\nPremi nell'istante in cui il motore si ferma in basso.",
         "menu_options": {
-          "stopped_closed": "2) Premi nell'istante in cui si ferma a fine corsa",
+          "stopped_closed": "2) Premi quando il motore si ferma in basso",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "Quanto è alta {cover}?",
-        "description": "![](/myhome_static/height.webp)\n\n**Cosa devi fare tu**: con la tapparella completamente aperta, misura dal punto dove il bordo inferiore appoggia quando è chiusa (la base) fino al bordo inferiore della posizione attuale. In altre parole, misura la distanza che percorre la tapparella da tutta aperta a tutta chiusa (o viceversa), e scrivi qui sotto i centimetri.\n\nQuella distanza è la corsa del telo, ed è il riferimento con cui viene confrontata ogni altra misura. Misura il telo, non la finestra: se il bordo inferiore appoggia su un davanzale e non sul pavimento, misura dal davanzale.",
+        "description": "![](/myhome_static/height.webp)\n\n**Cosa devi fare tu**: con la tapparella completamente aperta, misura dal punto dove il bordo inferiore della tapparella appoggia quando è chiusa (la base) fino al bordo inferiore della tapparella nella posizione attuale (completamente aperta). In altre parole, misura la distanza che percorre la tapparella da tutta aperta a tutta chiusa (o viceversa), e scrivi qui sotto i centimetri.\n\nQuella distanza è la corsa del telo, ed è il riferimento con cui viene confrontata ogni altra misura. Misura il telo, non il vano: se il bordo inferiore appoggia su un davanzale e non sul pavimento, misura dal davanzale.",
         "data": {
           "height": "Corsa del telo (cm)"
         },
@@ -389,7 +389,7 @@
       },
       "height_result": {
         "title": "La corsa del telo è stata scritta",
-        "description": "**Tapparella**: {cover}\n\n**Cosa è stato scritto**: {height} cm dalla base al bordo inferiore con la tapparella completamente aperta.\n\n**Cosa devi fare tu**: se è il numero che hai letto sul metro, vai avanti. È la misura su cui vengono riportate tutte le altre, quindi vale la pena controllarla.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa è stato scritto**: {height} cm dalla base al bordo inferiore con la tapparella completamente aperta.\n\n**Cosa devi fare tu**: se è il numero che hai letto sul metro, vai avanti. Controlla il valore: le letture col metro dei prossimi passi vengono confrontate con questa altezza.",
         "menu_options": {
           "accept_step": "Va bene, avanti",
           "repeat_measure": "Ripeti la misura"
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Misura {cover} — al {percent}% della discesa",
-        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata aperta completamente e poi fatta scendere per il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura di nuovo dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Lo stesso riferimento dell'altezza, così le due misure si possono confrontare.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata aperta completamente e poi fatta scendere per circa il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Lo stesso riferimento dell'altezza, così le due misure si possono confrontare.",
         "data": {
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Misura {cover} — al {percent}% della salita",
-        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata chiusa completamente e poi fatta salire per le lamelle più il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata chiusa completamente e poi fatta salire per le lamelle più circa il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
         "data": {
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
@@ -443,7 +443,7 @@
       },
       "verify_result": {
         "title": "Dove si è fermata davvero la tapparella",
-        "description": "**Tapparella**: {cover} — **scarto**: {deviation} cm\n\nÈ la distanza tra dove la tapparella si è fermata davvero e dove Home Assistant credeva che si fermasse. Uno o due centimetri sono normali e già un'ottima approssimazione; tre o più vogliono dire che questa tapparella non si comporta come il profilo che le è stato dato.\n\n**Cosa devi fare tu**: vai avanti, oppure ripeti la misura se pensi che la lettura sia sbagliata. Se compare, l'affinamento misura questa tapparella per conto suo.",
+        "description": "**Tapparella**: {cover} — **scarto**: {deviation} cm\n\nÈ la distanza tra dove la tapparella si è fermata davvero e dove Home Assistant credeva che si fermasse. Uno o due centimetri sono normali e già un'ottima approssimazione; tre o più vogliono dire che questa tapparella non si comporta come il profilo assegnato.\n\n**Cosa devi fare tu**: vai avanti, oppure ripeti la misura se pensi che la lettura sia sbagliata. Se compare, l'affinamento misura questa tapparella per conto suo.",
         "menu_options": {
           "accept_step": "Va bene, avanti",
           "repeat_tape": "Ripeti la misura",
@@ -452,7 +452,7 @@
       },
       "profile_name": {
         "title": "Dai un nome a questo tipo di tapparella",
-        "description": "{cover} è stata misurata, e quello che è stato misurato descrive ogni tapparella simile a questa. Dai un nome a quel tipo e le altre si calibreranno in due schermate invece che in dieci.\n\n**Cosa devi fare tu**: scrivi un nome breve — solo lettere, cifre e trattini bassi, niente spazi e niente accenti, perché è anche una chiave del file di configurazione. Qualcosa come `alte`, `camere` oppure `porta_cucina`.\n\nIl nome viene chiesto adesso perché compare nel riepilogo della schermata successiva. Un nome già in uso non viene rifiutato: il profilo con quel nome viene **sostituito** da quello appena misurato, ed è così che si rimisura una tapparella la cui prima misura era venuta male. Un blocco `cover_profiles:` con lo stesso nome nel file di configurazione resta intatto e continua a stare nascosto dietro a quello misurato.",
+        "description": "{cover} è stata misurata, e quello che è stato misurato descrive ogni tapparella simile a questa. Dai un nome a quel tipo e le altre si calibreranno in due schermate invece che in dieci.\n\n**Cosa devi fare tu**: scrivi un nome breve — solo lettere, cifre e trattini bassi, niente spazi e niente accenti, perché è anche una chiave del file di configurazione. Qualcosa come `alte`, `camere` oppure `porta_cucina`.\n\nIl nome viene chiesto adesso perché compare nel riepilogo della schermata successiva. Un nome già in uso non viene rifiutato: il profilo con quel nome viene **sostituito** da quello appena misurato, ed è in questo modo che si rimisura una tapparella la cui prima misura era venuta male. Un blocco `cover_profiles:` con lo stesso nome nel file di configurazione resta intatto e continua a stare nascosto dietro a quello misurato.",
         "data": {
           "name": "Nome del profilo"
         }
@@ -516,7 +516,7 @@
       },
       "refused_already_calibrating": {
         "title": "Questa tapparella è già in calibrazione",
-        "description": "C'è un'altra finestra di dialogo aperta su questa tapparella, oppure la sta guidando il servizio `cover_calibration_run`. Due calibrazioni sullo stesso motore misurerebbero ciascuna una corsa che l'altra ha fermato, quindi questa non è stata avviata.\n\n**Cosa devi fare tu**: concludi o chiudi l'altra, poi riprova.",
+        "description": "C'è un altro dialogo aperto su questa tapparella, oppure la sta guidando il servizio `cover_calibration_run`. Due calibrazioni sullo stesso motore misurerebbero ciascuna una corsa che l'altra ha fermato, quindi questa non è stata avviata.\n\n**Cosa devi fare tu**: concludi o chiudi quello, poi riprova.",
         "menu_options": {
           "calibrate": "Riprova",
           "init": "Torna al menu"
@@ -580,8 +580,8 @@
       }
     },
     "progress": {
-      "homing_closed": "{cover} viene chiusa completamente, così che le misure partano da un punto noto. Attendi, e assicurati che non ci sia niente d'intralcio.",
-      "homing_open": "{cover} viene aperta completamente, così che il movimento successivo parta da un punto noto. Attendi, e assicurati che non ci sia niente d'intralcio.",
+      "homing_closed": "{cover} viene chiusa completamente: in questo modo le misure partono da un punto noto. Attendi, e assicurati che non ci sia niente d'intralcio.",
+      "homing_open": "{cover} viene aperta completamente: in questo modo il movimento successivo parte da un punto noto. Attendi, e assicurati che non ci sia niente d'intralcio.",
       "starting_open": "{cover} sta partendo in salita. Guardala: tra un istante ti sarà chiesta la prima pressione.",
       "starting_close": "{cover} sta partendo in discesa. Guardala: tra un istante ti sarà chiesta la pressione.",
       "running_down": "{cover} viene aperta completamente e poi fatta scendere fino a circa il {percent}% della corsa. Attendi, e tieni pronto il metro.",
@@ -805,7 +805,7 @@
       "fields": {
         "height": {
           "name": "Corsa del telo",
-          "description": "Distanza in centimetri fra la stecca tutta alzata e quella tutta abbassata (la corsa, non la finestra)."
+          "description": "Distanza in centimetri fra la stecca tutta alzata e quella tutta abbassata (la corsa, non il vano)."
         },
         "closed_half_cm": {
           "name": "Altezza dopo la mezza chiusura",

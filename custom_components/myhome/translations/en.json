@@ -101,7 +101,7 @@
           "probe_window_sec": "How long the probe is given to be answered. If nothing arrives on the monitor session and the gateway acknowledges no status request on the command session within this time, the connection is rebuilt. Default 30 s (5-300).",
           "command_timeout_sec": "How long a single command may take to be written and acknowledged before it is retried once and then dropped. Default 10 s (2-60).",
           "queue_ttl_sec": "Commands still queued after this long are dropped instead of being sent late. Default 60 s (10-600).",
-          "default_keepalive_minutes": "Keep-alive requested from the energy meters when keepalive_minutes is set neither on the sensor nor in the gateway's sensor_defaults: block (alias energy:) of myhome.yaml. 0 disables it. Default 125 min (0-255)."
+          "default_keepalive_minutes": "Keep-alive requested from the energy meters when keepalive_minutes is set neither on the sensor nor in the gateway's sensor_defaults: block (alias energy:) of the configuration file. 0 disables it. Default 125 min (0-255)."
         }
       },
       "profiles_covers": {
@@ -259,17 +259,17 @@
       },
       "path": {
         "title": "How do you want to measure this cover?",
-        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about three minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that follows a profile and keeps stopping in the wrong place.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
+        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about three minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be refined.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
         "menu_options": {
           "path_a": "(A) It is the first cover of its kind (full measurement, ~3 minutes)",
           "path_b": "(B) It is similar to a cover already measured (height only)",
-          "path_c": "(C) It follows a profile but stops in the wrong place (refine it)",
+          "path_c": "(C) It has a profile but stops in the wrong place (refine the calibration)",
           "cancel_flow": "Cancel"
         }
       },
       "path_a": {
         "title": "Before the cover starts moving",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: the cover will close completely, then open completely, then close again, and finally stop somewhere in between. Seven movements in all, about three minutes.\n\n**What you have to do**: make sure nothing is in the way - open windows, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nTwo of the steps ask you to be quick and precise, but the instructions always come before the movement and you are the one who starts it. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes a single movement, and before each one come the instructions and all the time you need to get ready: no movement starts unless you start it. Seven movements in all, about three minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
         "menu_options": {
           "begin": "Understood, let's start",
           "cancel_flow": "Cancel"
@@ -284,7 +284,7 @@
       },
       "path_c": {
         "title": "Refine {cover}",
-        "description": "This cover follows a profile and does not behave like it: the motor may be slower, the curtain heavier, the roller thicker. What you measure here applies to this cover alone and beats both the profile and the configuration file, if you use one; everything you do not measure goes on coming from the profile.\n\n**What you have to do**: confirm which profile this cover should start from.",
+        "description": "This cover has been given a profile but does not behave as the profile says: the motor may be slower, the curtain heavier, the roller thicker. What you measure here applies to this cover alone and beats both the profile and the configuration file, if you use one; everything you do not measure goes on coming from the profile.\n\n**What you have to do**: confirm which profile this cover should start from.",
         "data": {
           "profile": "Profile"
         }
@@ -300,7 +300,7 @@
       },
       "home_closed_done": {
         "title": "Is the cover completely closed?",
-        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent all the way down, so that everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was closed completely: this way everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
         "menu_options": {
           "confirm_closed": "It is completely closed",
           "repeat_step": "Repeat this step",
@@ -309,7 +309,7 @@
       },
       "home_open_done": {
         "title": "Is the cover completely open?",
-        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent all the way up, because what follows runs down from there and a run that started anywhere else would measure nothing.\n\n**What you have to do**: look at it. If it is completely open, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was opened completely, because what follows runs down from there and a run that started anywhere else would measure nothing.\n\n**What you have to do**: look at it. If it is completely open, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
         "menu_options": {
           "confirm_open": "It is completely open",
           "repeat_step": "Repeat this step",
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "We are about to measure the ascent",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other: the first at the instant the bottom edge leaves its rest, the second at the instant the cover stops at the top. You are not timing anything - the instant of the press is the measurement.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other:\n\n1. the first at the instant the bottom edge leaves the base;\n2. the second at the instant the cover reaches the end stop and the motor stops, which you recognise by the noise ceasing.\n\nYou are not timing anything: the instant of the press is the measurement. The screens that follow carry a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "open_start": "1) Start the cover",
           "repeat_step": "Send it back down first",
@@ -327,18 +327,18 @@
       },
       "open_lift": {
         "title": "The cover is opening",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What is happening**: the cover has started to rise. Right now the slats are opening and the bottom edge is still on its rest.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Then let the cover carry on: it will reach the top by itself and you will be asked for the second press.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\nPress at the instant the bottom edge leaves the base.",
         "menu_options": {
-          "lifted_off": "2) Press at the instant it leaves its rest",
+          "lifted_off": "2) Press when the bottom edge leaves the base",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }
       },
       "open_top": {
         "title": "The cover is still rising",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\n**What is happening**: the curtain is winding on and the cover will stop by itself at the top.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. If you missed the moment, repeat the step rather than guessing: the whole opening time comes from this press.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\nPress at the instant the motor stops at the top.",
         "menu_options": {
-          "stopped_open": "3) Press at the instant it stops at the end",
+          "stopped_open": "3) Press when the motor stops at the top",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }
@@ -353,7 +353,7 @@
       },
       "close_brief": {
         "title": "We are about to measure the descent",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time there is only one press, at the instant the cover stops at the bottom. A cover comes down a little faster than it goes up, which is why this is measured separately.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time there is only one press, at the instant the motor stops at the bottom.\n\n**Careful**: do not press when the bottom edge touches the base. From there the cover goes on moving for a moment longer, to close the slats. Press only when it stops moving altogether, slats included, that is when the motor stops: you recognise it by the noise ceasing.\n\nA cover comes down a little faster than it goes up, which is why this is measured separately. The screen during the movement carries a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "close_start": "1) Start the cover",
           "repeat_step": "Send it back up first",
@@ -362,9 +362,9 @@
       },
       "close_bottom": {
         "title": "The cover is closing",
-        "description": "**Cover**: {cover}\n\n**What is happening**: the cover is coming down and will stop by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. That press is the whole closing time.",
+        "description": "**Cover**: {cover}\n\nPress at the instant the motor stops at the bottom.",
         "menu_options": {
-          "stopped_closed": "2) Press at the instant it stops at the end",
+          "stopped_closed": "2) Press when the motor stops at the bottom",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "How tall is {cover}?",
-        "description": "![](/myhome_static/height.webp)\n\n**What you have to do**: with the cover completely open, measure from the point where the bottom edge rests when it is closed (the base) up to the bottom edge where it is now. In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres below.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the window: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
+        "description": "![](/myhome_static/height.webp)\n\n**What you have to do**: with the cover completely open, measure from the point where the bottom edge of the cover rests when it is closed (the base) up to the bottom edge of the cover in its present position (completely open). In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres below.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the opening: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
         "data": {
           "height": "Curtain travel (cm)"
         },
@@ -389,7 +389,7 @@
       },
       "height_result": {
         "title": "The curtain travel was written down",
-        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. It is the measurement every other one is referred to, so it is worth checking.",
+        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this height.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_measure": "Repeat the measurement"
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Measure {cover} - {percent}% of the way down",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down {percent}% of its travel.\n\n**What you have to do**: measure again from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the height, so that the two measurements can be compared.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the height, so that the two measurements can be compared.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Measure {cover} - {percent}% of the way up",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run up through the slats plus {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run up through the slats plus about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -443,7 +443,7 @@
       },
       "verify_result": {
         "title": "Where the cover really stopped",
-        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile it was given.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If it appears, the refinement measures this cover on its own.",
+        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile assigned to it.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If it appears, the refinement measures this cover on its own.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_tape": "Repeat the measurement",
@@ -580,8 +580,8 @@
       }
     },
     "progress": {
-      "homing_closed": "{cover} is being closed completely, so that the measurements start from a known point. Please wait, and make sure nothing is in the way.",
-      "homing_open": "{cover} is being opened completely, so that the next movement starts from a known point. Please wait, and make sure nothing is in the way.",
+      "homing_closed": "{cover} is being closed completely: this way the measurements start from a known point. Please wait, and make sure nothing is in the way.",
+      "homing_open": "{cover} is being opened completely: this way the next movement starts from a known point. Please wait, and make sure nothing is in the way.",
       "starting_open": "{cover} is starting upwards. Watch it: in a moment you will be asked for the first press.",
       "starting_close": "{cover} is starting downwards. Watch it: in a moment you will be asked for the press.",
       "running_down": "{cover} is being opened completely and then run down to about {percent}% of its travel. Please wait, and have the tape measure ready.",
@@ -805,7 +805,7 @@
       "fields": {
         "height": {
           "name": "Curtain travel",
-          "description": "Distance in centimetres between the fully open and the fully closed bar (the travel, not the window)."
+          "description": "Distance in centimetres between the fully open and the fully closed bar (the travel, not the opening)."
         },
         "closed_half_cm": {
           "name": "Height after the closing half run",

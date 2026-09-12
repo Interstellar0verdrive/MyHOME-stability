@@ -184,9 +184,11 @@ REFINE_THRESHOLD_CM = 3.0
 
 # What the tape form promises next to the expected value. The precise level knows the
 # model it is checking, so it can afford to be strict; the basic level's expectation is
-# drawn from the default roll of an ordinary shutter and deserves a wider margin.
+# drawn from the default roll of an ordinary shutter and deserves a wider margin - the
+# live walk-through read fifteen centimetres off the default geometry on a shutter that
+# turned out to be perfectly ordinary, and a band of ten made that look like a fault.
 EXPECTED_TOLERANCE_CM = 3.0
-ROUGH_TOLERANCE_CM = 10.0
+ROUGH_TOLERANCE_CM = 15.0
 
 # The tape is read to the nearest centimetre; a window is at most a few metres of
 # curtain. The bounds are checked in the flow rather than by a number selector, because

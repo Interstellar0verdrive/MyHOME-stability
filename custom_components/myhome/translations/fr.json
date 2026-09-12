@@ -101,7 +101,7 @@
           "probe_window_sec": "Délai accordé à la sonde pour obtenir une réponse. Si rien n'arrive sur la session de monitorage et que la passerelle n'acquitte aucune demande d'état sur la session de commande dans ce délai, la connexion est reconstruite. Par défaut 30 s (5-300).",
           "command_timeout_sec": "Durée maximale d'écriture et d'acquittement d'une commande avant un unique réessai puis son abandon. Par défaut 10 s (2-60).",
           "queue_ttl_sec": "Les commandes encore en file après cette durée sont abandonnées au lieu d'être envoyées en retard. Par défaut 60 s (10-600).",
-          "default_keepalive_minutes": "Maintien demandé aux compteurs d'énergie quand keepalive_minutes n'est défini ni sur le capteur ni dans le bloc sensor_defaults: (alias energy:) de la passerelle dans myhome.yaml. 0 le désactive. Par défaut 125 min (0-255)."
+          "default_keepalive_minutes": "Maintien demandé aux compteurs d'énergie quand keepalive_minutes n'est défini ni sur le capteur ni dans le bloc sensor_defaults: (alias energy:) de la passerelle dans le fichier de configuration. 0 le désactive. Par défaut 125 min (0-255)."
         }
       },
       "profiles_covers": {
@@ -130,7 +130,7 @@
       },
       "profile_actions": {
         "title": "Profil de volet",
-        "description": "**Profil** : « {profile} »\n\nVolets qui le suivent : {count}.\n\n**Ce que vous devez faire** : choisissez quoi en faire. Voir les valeurs ne change rien ; les modifier ou supprimer le profil prend effet dès que vous fermez cette fenêtre.",
+        "description": "**Profil** : « {profile} »\n\nVolets qui le suivent : {count}.\n\n**Ce que vous devez faire** : choisissez quoi en faire. Voir les valeurs ne change rien ; les modifier ou supprimer le profil prend effet dès que vous fermez cette boîte de dialogue.",
         "menu_options": {
           "profile_view": "Voir les valeurs",
           "profile_edit": "Modifier les valeurs à la main",
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Calibration guidée des volets",
-        "description": "Cet outil calibre les volets « simples » : ceux dont l'actionneur ne rapporte pas sa position. Pour ceux-là, le pourcentage affiché dans Home Assistant est une estimation calculée à partir des temps de course ; la calibration mesure ces temps et la géométrie de l'axe, pour obtenir une estimation plus précise.\n\nElle ne sera pas parfaite. Attendez-vous à quelques centimètres d'écart : 1 à 2 cm près des fins de course, 2 à 4 cm entre les positions intermédiaires. Chaque ouverture ou fermeture complète recale l'estimation, l'erreur ne s'accumule donc pas.\n\nLes volets « avancés » rapportent leur position eux-mêmes et n'ont besoin de rien de tout cela : c'est pourquoi ils ne figurent pas dans la liste des étapes suivantes.\n\n**Ce qui va se passer** : vous choisirez un volet et l'une des trois façons de le mesurer. Le volet ira plusieurs fois jusqu'à ses fins de course.\n\n**Ce que vous devez faire** : gardez un mètre à portée de main, assurez-vous que rien ne gêne le volet et restez là où vous pouvez le voir. Rien n'est enregistré jusqu'au dernier écran : vous pouvez fermer cette fenêtre quand vous voulez, rien n'aura changé.",
+        "description": "Cet outil calibre les volets « simples » : ceux dont l'actionneur ne rapporte pas sa position. Pour ceux-là, le pourcentage affiché dans Home Assistant est une estimation calculée à partir des temps de course ; la calibration mesure ces temps et la géométrie de l'axe, pour obtenir une estimation plus précise.\n\nElle ne sera pas parfaite. Attendez-vous à quelques centimètres d'écart : 1 à 2 cm près des fins de course, 2 à 4 cm entre les positions intermédiaires. Chaque ouverture ou fermeture complète recale l'estimation, l'erreur ne s'accumule donc pas.\n\nLes volets « avancés » rapportent leur position eux-mêmes et n'ont besoin de rien de tout cela : c'est pourquoi ils ne figurent pas dans la liste des étapes suivantes.\n\n**Ce qui va se passer** : vous choisirez un volet et l'une des trois façons de le mesurer. Le volet ira plusieurs fois jusqu'à ses fins de course.\n\n**Ce que vous devez faire** : gardez un mètre à portée de main, assurez-vous que rien ne gêne le volet et restez là où vous pouvez le voir. Rien n'est enregistré jusqu'au dernier écran : vous pouvez fermer cette boîte de dialogue quand vous voulez, rien n'aura changé.",
         "menu_options": {
           "cover": "Commencer",
           "init": "Retour au menu"
@@ -259,17 +259,17 @@
       },
       "path": {
         "title": "Comment voulez-vous mesurer ce volet ?",
-        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ trois minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet qui suit un profil et continue de s'arrêter au mauvais endroit.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
+        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ trois minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être affinée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
         "menu_options": {
           "path_a": "(A) C'est le premier volet de ce type (mesure complète, ~3 minutes)",
           "path_b": "(B) Il est semblable à un volet déjà mesuré (la hauteur seulement)",
-          "path_c": "(C) Il suit un profil mais s'arrête au mauvais endroit (l'affiner)",
+          "path_c": "(C) Il a un profil mais s'arrête au mauvais endroit (affiner la calibration)",
           "cancel_flow": "Annuler"
         }
       },
       "path_a": {
         "title": "Avant que le volet ne commence à bouger",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : le volet descendra complètement, puis montera complètement, puis redescendra, et s'arrêtera enfin dans une position intermédiaire. Sept mouvements en tout, environ trois minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne - fenêtres ouvertes, plantes sur l'appui, chats - et gardez le mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de lire quelques distances.\n\nDeux étapes vous demanderont d'être rapide et précis, mais les instructions arrivent toujours avant le mouvement et c'est vous qui le lancez. Vous pouvez interrompre quand vous voulez : rien n'est enregistré jusqu'au dernier écran, et les mouvements sont des commandes ordinaires.",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : la calibration est découpée en étapes. À chaque étape, le volet effectue un seul mouvement, et avant chacun arrivent les instructions et tout le temps de se préparer : aucun mouvement ne part sans que vous le lanciez. Sept mouvements en tout, environ trois minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne - un battant ouvert, des plantes sur l'appui, des chats - et gardez le mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de lire quelques distances.\n\nSi quelque chose se passe mal, chaque étape peut être répétée seule, sans refaire celles qui sont déjà faites. Vous pouvez interrompre quand vous voulez : rien n'est enregistré jusqu'au dernier écran, et les mouvements sont des commandes ordinaires.",
         "menu_options": {
           "begin": "J'ai compris, commençons",
           "cancel_flow": "Annuler"
@@ -284,7 +284,7 @@
       },
       "path_c": {
         "title": "Affiner {cover}",
-        "description": "Ce volet suit un profil et ne se comporte pas comme lui : le moteur peut être plus lent, le tablier plus lourd, l'axe plus gros. Ce que vous mesurez ici ne vaut que pour ce volet et l'emporte à la fois sur le profil et sur le fichier de configuration, si vous en utilisez un ; tout ce que vous ne mesurez pas continue de venir du profil.\n\n**Ce que vous devez faire** : confirmez de quel profil ce volet doit partir.",
+        "description": "Un profil a été attribué à ce volet, mais il ne se comporte pas comme le profil le prévoit : le moteur peut être plus lent, le tablier plus lourd, l'axe plus gros. Ce que vous mesurez ici ne vaut que pour ce volet et l'emporte à la fois sur le profil et sur le fichier de configuration, si vous en utilisez un ; tout ce que vous ne mesurez pas continue de venir du profil.\n\n**Ce que vous devez faire** : confirmez de quel profil ce volet doit partir.",
         "data": {
           "profile": "Profil"
         }
@@ -300,7 +300,7 @@
       },
       "home_closed_done": {
         "title": "Le volet est-il complètement fermé ?",
-        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été envoyé jusqu'en bas, pour que tout ce qui sera mesuré à partir d'ici parte d'un point connu.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement fermé, lames serrées et bord inférieur en appui, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
+        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été fermé complètement : ainsi, tout ce qui sera mesuré à partir d'ici part d'un point connu.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement fermé, lames serrées et bord inférieur en appui, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
         "menu_options": {
           "confirm_closed": "Il est complètement fermé",
           "repeat_step": "Répéter cette étape",
@@ -309,7 +309,7 @@
       },
       "home_open_done": {
         "title": "Le volet est-il complètement ouvert ?",
-        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été envoyé jusqu'en haut, parce que ce qui suit descend de là et qu'une course partie d'ailleurs ne mesurerait rien.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement ouvert, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
+        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été ouvert complètement, parce que ce qui suit descend de là et qu'une course partie d'ailleurs ne mesurerait rien.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement ouvert, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
         "menu_options": {
           "confirm_open": "Il est complètement ouvert",
           "repeat_step": "Répéter cette étape",
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Nous allons mesurer la montée",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre : le premier à l'instant où le bord inférieur se décolle de son appui, le second à l'instant où le volet s'arrête en haut. Vous ne chronométrez rien - l'instant de l'appui est la mesure.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre :\n\n1. le premier à l'instant où le bord inférieur se décolle de la base ;\n2. le second à l'instant où le volet arrive en fin de course et où le moteur s'arrête, ce qui se reconnaît au bruit qui cesse.\n\nVous ne chronométrez rien : l'instant de l'appui est la mesure. Les écrans qui suivent ne comportent qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
         "menu_options": {
           "open_start": "1) Lancer le volet",
           "repeat_step": "Le redescendre d'abord",
@@ -327,18 +327,18 @@
       },
       "open_lift": {
         "title": "Le volet est en train de s'ouvrir",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\n**Ce qui se passe** : le volet a commencé à monter. En ce moment, les lames s'ouvrent et le bord inférieur est encore en appui.\n\n**Ce que vous devez faire** : regardez le bord inférieur et appuyez sur le bouton ci-dessous **à l'instant où il se décolle de son appui**. Laissez ensuite le volet continuer : il arrivera en haut tout seul et le second appui vous sera demandé.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\nAppuyez à l'instant où le bord inférieur se décolle de la base.",
         "menu_options": {
-          "lifted_off": "2) Appuyez à l'instant où il se décolle de sa base",
+          "lifted_off": "2) Appuyez quand le bord inférieur se décolle de la base",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
       },
       "open_top": {
         "title": "Le volet monte encore",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Volet** : {cover}\n\n**Ce qui se passe** : le tablier s'enroule et le volet s'arrêtera tout seul en haut.\n\n**Ce que vous devez faire** : appuyez sur le bouton ci-dessous **à l'instant où il arrive en fin de course et où le moteur s'arrête**. Si le moment vous a échappé, répétez l'étape plutôt que d'estimer : tout le temps d'ouverture vient de cet appui.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Volet** : {cover}\n\nAppuyez à l'instant où le moteur s'arrête en haut.",
         "menu_options": {
-          "stopped_open": "3) Appuyez à l'instant où il s'arrête en fin de course",
+          "stopped_open": "3) Appuyez quand le moteur s'arrête en haut",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
@@ -353,7 +353,7 @@
       },
       "close_brief": {
         "title": "Nous allons mesurer la descente",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le bas depuis le haut et s'arrêtera tout seul quand le tablier sera en bas et que les lames se seront refermées.\n\n**Ce que vous devez faire** : ici aussi il faudra être rapide et précis, mais cette fois il n'y a qu'un seul appui, à l'instant où le volet s'arrête en bas. Un volet descend un peu plus vite qu'il ne monte, c'est pourquoi cela se mesure à part.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le bas depuis le haut et s'arrêtera tout seul quand le tablier sera en bas et que les lames se seront refermées.\n\n**Ce que vous devez faire** : ici aussi il faudra être rapide et précis, mais cette fois il n'y a qu'un seul appui, à l'instant où le moteur s'arrête en bas.\n\n**Attention** : n'appuyez pas quand le bord inférieur touche la base. À partir de là, le volet continue de bouger encore un moment, pour refermer les lames. N'appuyez que lorsqu'il cesse complètement de bouger, lames comprises, c'est-à-dire quand le moteur s'arrête : cela se reconnaît au bruit qui cesse.\n\nUn volet descend un peu plus vite qu'il ne monte, c'est pourquoi cela se mesure à part. L'écran pendant le mouvement ne comporte qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
         "menu_options": {
           "close_start": "1) Lancer le volet",
           "repeat_step": "Le remonter d'abord",
@@ -362,9 +362,9 @@
       },
       "close_bottom": {
         "title": "Le volet est en train de se fermer",
-        "description": "**Volet** : {cover}\n\n**Ce qui se passe** : le volet descend et s'arrêtera tout seul quand le tablier sera en bas et que les lames se seront refermées.\n\n**Ce que vous devez faire** : appuyez sur le bouton ci-dessous **à l'instant où il arrive en fin de course et où le moteur s'arrête**. Cet appui, c'est tout le temps de fermeture.",
+        "description": "**Volet** : {cover}\n\nAppuyez à l'instant où le moteur s'arrête en bas.",
         "menu_options": {
-          "stopped_closed": "2) Appuyez à l'instant où il s'arrête en fin de course",
+          "stopped_closed": "2) Appuyez quand le moteur s'arrête en bas",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "Quelle est la hauteur de {cover} ?",
-        "description": "![](/myhome_static/height.webp)\n\n**Ce que vous devez faire** : le volet étant complètement ouvert, mesurez depuis le point où le bord inférieur repose quand il est fermé (la base) jusqu'au bord inférieur dans sa position actuelle. Autrement dit, mesurez la distance que parcourt le volet de complètement ouvert à complètement fermé (ou l'inverse), et écrivez les centimètres ci-dessous.\n\nCette distance est la course du tablier, et c'est la référence à laquelle toute autre mesure est comparée. Mesurez le tablier, pas la fenêtre : si le bord inférieur repose sur un appui et non sur le sol, mesurez depuis l'appui.",
+        "description": "![](/myhome_static/height.webp)\n\n**Ce que vous devez faire** : le volet étant complètement ouvert, mesurez depuis le point où le bord inférieur du volet repose quand il est fermé (la base) jusqu'au bord inférieur du volet dans sa position actuelle (complètement ouvert). Autrement dit, mesurez la distance que parcourt le volet de complètement ouvert à complètement fermé (ou l'inverse), et écrivez les centimètres ci-dessous.\n\nCette distance est la course du tablier, et c'est la référence à laquelle toute autre mesure est comparée. Mesurez le tablier, pas la baie : si le bord inférieur repose sur un appui et non sur le sol, mesurez depuis l'appui.",
         "data": {
           "height": "Course du tablier (cm)"
         },
@@ -389,7 +389,7 @@
       },
       "height_result": {
         "title": "La course du tablier a été notée",
-        "description": "**Volet** : {cover}\n\n**Ce qui a été noté** : {height} cm de la base au bord inférieur, le volet étant complètement ouvert.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. C'est la mesure à laquelle toutes les autres sont rapportées, elle mérite une vérification.",
+        "description": "**Volet** : {cover}\n\n**Ce qui a été noté** : {height} cm de la base au bord inférieur, le volet étant complètement ouvert.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Vérifiez la valeur : les lectures au mètre des prochaines étapes sont comparées à cette hauteur.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
           "repeat_measure": "Répéter la mesure"
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Mesurez {cover} - à {percent} % de la descente",
-        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été ouvert complètement puis descendu de {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez de nouveau depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. La même référence que la hauteur, pour que les deux mesures puissent être comparées.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été ouvert complètement puis descendu d'environ {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. La même référence que la hauteur, pour que les deux mesures puissent être comparées.",
         "data": {
           "measured_cm": "Hauteur du bord inférieur (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Mesurez {cover} - à {percent} % de la montée",
-        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été fermé complètement puis monté des lames plus {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. Un volet n'est pas chargé de la même façon à la montée et à la descente : c'est pourquoi la même fraction se mesure deux fois.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été fermé complètement puis monté des lames plus environ {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. Un volet n'est pas chargé de la même façon à la montée et à la descente : c'est pourquoi la même fraction se mesure deux fois.",
         "data": {
           "measured_cm": "Hauteur du bord inférieur (cm)"
         },
@@ -443,7 +443,7 @@
       },
       "verify_result": {
         "title": "Où le volet s'est réellement arrêté",
-        "description": "**Volet** : {cover} — **écart** : {deviation} cm\n\nC'est la distance entre l'endroit où le volet s'est réellement arrêté et celui où Home Assistant croyait qu'il s'arrêterait. Un ou deux centimètres sont normaux et déjà une très bonne approximation ; trois ou plus veulent dire que ce volet ne se comporte pas comme le profil qui lui a été donné.\n\n**Ce que vous devez faire** : continuez, ou répétez la mesure si vous pensez que la lecture était fausse. Si elle apparaît, l'option d'affinage mesure ce volet pour lui-même.",
+        "description": "**Volet** : {cover} — **écart** : {deviation} cm\n\nC'est la distance entre l'endroit où le volet s'est réellement arrêté et celui où Home Assistant croyait qu'il s'arrêterait. Un ou deux centimètres sont normaux et déjà une très bonne approximation ; trois ou plus veulent dire que ce volet ne se comporte pas comme le profil attribué.\n\n**Ce que vous devez faire** : continuez, ou répétez la mesure si vous pensez que la lecture était fausse. Si elle apparaît, l'option d'affinage mesure ce volet pour lui-même.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
           "repeat_tape": "Répéter la mesure",
@@ -516,7 +516,7 @@
       },
       "refused_already_calibrating": {
         "title": "Ce volet est déjà en calibration",
-        "description": "Une autre fenêtre de dialogue est ouverte sur ce volet, ou le service `cover_calibration_run` le pilote. Deux calibrations sur le même moteur mesureraient chacune une course que l'autre a arrêtée, celle-ci n'a donc pas été lancée.\n\n**Ce que vous devez faire** : terminez ou fermez l'autre, puis réessayez.",
+        "description": "Une autre boîte de dialogue est ouverte sur ce volet, ou le service `cover_calibration_run` le pilote. Deux calibrations sur le même moteur mesureraient chacune une course que l'autre a arrêtée, celle-ci n'a donc pas été lancée.\n\n**Ce que vous devez faire** : terminez ou fermez l'autre, puis réessayez.",
         "menu_options": {
           "calibrate": "Réessayer",
           "init": "Retour au menu"
@@ -580,8 +580,8 @@
       }
     },
     "progress": {
-      "homing_closed": "{cover} est fermé complètement, pour que les mesures partent d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
-      "homing_open": "{cover} est ouvert complètement, pour que le mouvement suivant parte d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
+      "homing_closed": "{cover} est fermé complètement : ainsi, les mesures partent d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
+      "homing_open": "{cover} est ouvert complètement : ainsi, le mouvement suivant part d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
       "starting_open": "{cover} part vers le haut. Regardez-le : dans un instant, le premier appui vous sera demandé.",
       "starting_close": "{cover} part vers le bas. Regardez-le : dans un instant, l'appui vous sera demandé.",
       "running_down": "{cover} est ouvert complètement puis descendu jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
@@ -805,7 +805,7 @@
       "fields": {
         "height": {
           "name": "Course du tablier",
-          "description": "Distance en centimètres entre la lame entièrement relevée et entièrement abaissée (la course, pas la fenêtre)."
+          "description": "Distance en centimètres entre la lame entièrement relevée et entièrement abaissée (la course, pas la baie)."
         },
         "closed_half_cm": {
           "name": "Hauteur après la demi-fermeture",
