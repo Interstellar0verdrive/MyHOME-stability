@@ -453,10 +453,13 @@ async def _async_register_images(hass: HomeAssistant) -> None:
         return
     from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
 
-    hass.data[_STATIC_PATH_REGISTERED] = True
+    # The flag goes up *after* the registration, not before it: a registration that
+    # raised would otherwise leave the drawings off for the rest of the Home Assistant
+    # run with nothing left to retry them (0.5.0 v2 review, RISK-6).
     await hass.http.async_register_static_paths(
         [StaticPathConfig(STATIC_URL_PATH, IMAGES_DIR, cache_headers=True)]
     )
+    hass.data[_STATIC_PATH_REGISTERED] = True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

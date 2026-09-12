@@ -102,13 +102,19 @@ from .calibration import (
 from .calibration_store import (
     PROFILE_NAME_PATTERN,
     CalibrationStore,
+    async_get_store,
     cover_calibration_data,
     cover_profile_data,
     describe_profile,
+    loaded_store,
     merged_profiles,
+    profile_overrides,
+    stored_calibration,
 )
 from .const import (
+    CALIBRATION_SOURCE_GUIDED,
     CALIBRATION_SOURCE_MANUAL,
+    CALIBRATION_SOURCE_PROFILE,
     CONF_ADVANCED_SHUTTER,
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
@@ -371,9 +377,25 @@ def overrides_yaml(cover_key: str, overrides: Mapping[str, float], height: float
     return "\n".join(lines) + "\n"
 
 
-def profile_reference_yaml(cover_key: str, profile: str, height: float) -> str:
-    """The two lines path B is really about: follow that profile, at this height."""
-    return f"cover:\n  {cover_key}:\n    {CONF_PROFILE}: {profile}\n    {CONF_HEIGHT}: {round(height, 1)}\n"
+def profile_reference_yaml(
+    cover_key: str, profile: str, height: float, values: Mapping[str, float] | None = None
+) -> str:
+    """The two lines path B is really about - and the numbers they come to.
+
+    The two lines say what was decided: this window is one of those, and it is this
+    tall. The numbers under them are what those two lines *mean* for this window, and
+    they are there for the same reason the flow stores them: a `profile:` does not beat
+    a run time written for the cover itself (spec 1.3), so on a file that carries its
+    own times the two lines alone would change nothing at all (0.5.0 v2 review, BUG-1).
+    """
+    lines = [
+        "cover:",
+        f"  {cover_key}:",
+        f"    {CONF_PROFILE}: {profile}",
+        f"    {CONF_HEIGHT}: {round(height, 1)}",
+    ]
+    lines += [f"    {key}: {round(value, 2)}" for key, value in (values or {}).items()]
+    return "\n".join(lines) + "\n"
 
 
 @dataclass(slots=True)
@@ -404,14 +426,18 @@ class _Result:
     """What Save is about to write, and what the summary screen shows.
 
     `profile` is filled in by path A alone (it is the path that discovers a kind of
-    shutter); `overrides` by paths A and C; path B fills in neither and carries the
-    height.
+    shutter); `overrides` by all three, measured by A and C and derived from the
+    profile by B (see `derived` below).
     """
 
     yaml: str
     profile: dict[str, float] | None = None
     overrides: dict[str, float] = field(default_factory=dict)
     accuracy_cm: float | None = None
+    # True for path B, whose overrides are a profile scaled to this window rather than
+    # a measurement of it: the record says so, so that a later edit of the profile can
+    # derive them again and `Calibration source` goes on naming the profile.
+    derived: bool = False
 
 
 class CalibrationContextMixin:
@@ -423,8 +449,30 @@ class CalibrationContextMixin:
 
     hass: Any
     config_entry: Any
-    _store: CalibrationStore
+    _store_ref: CalibrationStore | None
     _changed: bool
+
+    @property
+    def _store(self) -> CalibrationStore:
+        """The store this gateway is running on *now*, for reading.
+
+        Never the object this dialog was handed when it opened. The entry is reloaded
+        by plenty of things the dialog knows nothing about - the "Ricarica" button
+        after an edit of `myhome.yaml`, a re-auth finishing, a *second* "Configura"
+        dialog closing after a Save, which this release reloads on purpose - and each
+        setup builds a new `CalibrationStore` from disk. A write through the old one
+        serialises a snapshot from before the reload over everything written since
+        (0.5.0 v2 review, BUG-3). The fall-back is for the moment of the reload
+        itself, when the entry is unloaded and there is no live store to be had; every
+        *write* re-fetches with `_async_store` instead, which reads the file rather
+        than trusting anything held here.
+        """
+        return loaded_store(self.hass, self.config_entry) or self._store_ref  # type: ignore[return-value]
+
+    async def _async_store(self) -> CalibrationStore:
+        """The live store, fetched again before every write (see `_store`)."""
+        self._store_ref = await async_get_store(self.hass, self.config_entry)
+        return self._store_ref
 
     @property
     def _mac(self) -> str:
@@ -466,13 +514,25 @@ class CalibrationContextMixin:
         """Both namespaces at once, exactly as a cover resolves them."""
         return merged_profiles(self._yaml_profiles(), self._store.profiles)
 
-    def _known_height(self, unique_id: str) -> float | None:
-        """The travel this window is already said to have, from wherever it is said.
+    def _assigned_profile(self, unique_id: str) -> str | None:
+        """The profile this window follows today, from wherever it is said.
 
-        In the order the resolution uses it: what was measured on this window, then
-        what the file says about it, then the reference height of the profile it
-        follows. `None` when nobody has ever said - which is the one case the height
-        screen falls back to a round 200.
+        The stored assignment first, then the `profile:` written in the file - which is
+        what the assignment form has to preselect, because a form that opens on
+        "Nessun profilo" for a cover the file assigns is telling the user something
+        untrue about their own installation (0.5.0 v2 review, RISK-1).
+        """
+        stored = self._store.calibration(unique_id)
+        if stored is not None and stored.profile:
+            return str(stored.profile)
+        name = self._cover_config(unique_id).get(CONF_PROFILE)
+        return str(name) if name else None
+
+    def _own_height(self, unique_id: str) -> float | None:
+        """The travel *this* window is known to have: its record's, else the file's.
+
+        Never a profile's `reference_height`, which is another window's travel and
+        would silently scale a newly assigned profile by the old one's reference.
         """
         stored = self._store.calibration(unique_id)
         if stored is not None and stored.height:
@@ -480,7 +540,25 @@ class CalibrationContextMixin:
         cfg = self._cover_config(unique_id)
         if cfg.get(CONF_HEIGHT):
             return float(cfg[CONF_HEIGHT])
-        name = (stored.profile if stored else None) or cfg.get(CONF_PROFILE)
+        return None
+
+    def _known_height(self, unique_id: str) -> float | None:
+        """The travel this window is already said to have, from wherever it is said.
+
+        In the order the resolution uses it: what was measured on this window, then
+        what the file says about it, then the reference height of the profile it
+        follows. `None` when nobody has ever said - which is the one case the height
+        screen falls back to a round 200.
+
+        Only the guided height form uses the last of those three, and only as the
+        number the field opens on, with the user standing in front of the window with
+        a tape. Nothing is ever *stored* from it: see `_own_height`, which is what the
+        assignment form asks.
+        """
+        own = self._own_height(unique_id)
+        if own is not None:
+            return own
+        name = self._assigned_profile(unique_id)
         profile = self._all_profiles().get(name or "")
         if profile and profile.get(CONF_REFERENCE_HEIGHT):
             return float(profile[CONF_REFERENCE_HEIGHT])
@@ -542,12 +620,24 @@ class CalibrationManagementMixin(CalibrationContextMixin):
             for label, unique_id in fields.items():
                 chosen = user_input.get(label, NO_PROFILE)
                 profile = None if chosen == NO_PROFILE else str(chosen)
-                assignments[unique_id] = (profile, self._known_height(unique_id))
+                if profile == self._assigned_profile(unique_id):
+                    # This row was left as it was. Collecting it anyway wrote a record
+                    # for every shutter the form had ever shown - stamped `guided`,
+                    # listed under "Calibrazioni" as something measured, and (with a
+                    # height copied out of the file) shadowing that very file for ever
+                    # - after a screen on which the user changed nothing, and it
+                    # reloaded the gateway to do it (0.5.0 v2 review, BUG-2).
+                    continue
+                # Never a height: what this window's own is, the resolution already
+                # knows (the record's, else the file's). A height *invented* here from
+                # the reference height of the profile being assigned would scale the
+                # new profile by another window's travel.
+                assignments[unique_id] = (profile, None)
             self._pending_assignments = assignments
             missing = [
                 unique_id
-                for unique_id, (profile, height) in assignments.items()
-                if profile is not None and height is None
+                for unique_id, (profile, _height) in assignments.items()
+                if profile is not None and self._own_height(unique_id) is None
             ]
             if missing:
                 self._missing_heights = missing
@@ -555,8 +645,7 @@ class CalibrationManagementMixin(CalibrationContextMixin):
             return await self._async_write_assignments()
         schema = {}
         for label, unique_id in fields.items():
-            stored = self._store.calibration(unique_id)
-            current = (stored.profile if stored else None) or NO_PROFILE
+            current = self._assigned_profile(unique_id) or NO_PROFILE
             if current not in (*names, NO_PROFILE):
                 current = NO_PROFILE
             schema[vol.Required(label, description={"suggested_value": current})] = SelectSelector(
@@ -639,7 +728,8 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         )
 
     async def _async_write_assignments(self) -> ConfigFlowResult:
-        if await self._store.async_set_assignments(self._pending_assignments):
+        store = await self._async_store()
+        if self._pending_assignments and await store.async_set_assignments(self._pending_assignments):
             self._mark_changed()
         self._pending_assignments = {}
         self._missing_heights = []
@@ -726,7 +816,8 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                 else:
                     values[key] = value
             if not errors:
-                await self._store.async_set_profile(
+                store = await self._async_store()
+                await store.async_set_profile(
                     name,
                     cover_profile_data(
                         name,
@@ -772,8 +863,10 @@ class CalibrationManagementMixin(CalibrationContextMixin):
     ) -> ConfigFlowResult:
         """Delete it, and say which shutters went back to the file."""
         name = self._profile_name or ""
-        orphans = await self._store.async_remove_profile(name)
-        if orphans or self._store.profile(name) is None:
+        store = await self._async_store()
+        had_it = store.profile(name) is not None
+        orphans = await store.async_remove_profile(name)
+        if orphans or had_it:
             self._mark_changed()
         LOGGER.info(
             "Cover profile '%s' deleted; %s shutter(s) went back to the configuration file",
@@ -910,16 +1003,24 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                 else:
                     overrides[key] = value
             if not errors:
-                await self._store.async_set_calibration(
+                data = cover_calibration_data(
                     unique_id,
-                    cover_calibration_data(
-                        unique_id,
-                        profile=record.profile if record else None,
-                        height=height,
-                        overrides=overrides or None,
-                        source=CALIBRATION_SOURCE_MANUAL,
-                    ),
+                    profile=record.profile if record else None,
+                    height=height,
+                    overrides=overrides or None,
+                    source=CALIBRATION_SOURCE_MANUAL,
                 )
+                store = await self._async_store()
+                if stored_calibration(data).says_anything:
+                    await store.async_set_calibration(unique_id, data)
+                else:
+                    # Every field cleared: that is "forget what you know about this
+                    # shutter", not "remember nothing about it". A record holding only
+                    # a `source` and a timestamp is invisible on the "Calibrazioni"
+                    # screen (which lists what `says_anything`) and immortal in
+                    # `.storage` (0.5.0 v2 review, RISK-3) - the assignment writer has
+                    # deleted such a record all along.
+                    await store.async_remove_calibration(unique_id)
                 self._mark_changed()
                 return await self.async_step_calibration_actions()
         current: Mapping[str, Any] = user_input or {
@@ -958,7 +1059,8 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         """Delete it: this shutter goes back to the configuration file."""
         unique_id = self._cover_unique_id or ""
         self._deleted_covers = [self._cover_name(unique_id)]
-        if await self._store.async_remove_calibration(unique_id):
+        store = await self._async_store()
+        if await store.async_remove_calibration(unique_id):
             self._mark_changed()
         LOGGER.info("The stored calibration of %s was deleted", self._deleted_covers[0])
         return await self.async_step_calibration_deleted()
@@ -1060,6 +1162,35 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._disarm()
         self._watchdog = async_call_later(self.hass, timeout, self._async_session_expired)
 
+    # -------------------------------------------------------------- the live cover
+    def _live_cover(self) -> Any:
+        """The entity of the cover being calibrated, looked up again right now.
+
+        Not the object `_claim` took hold of. A config entry that is reloaded while a
+        conversation is open - the "Ricarica" button, a re-auth, a second "Configura"
+        dialog closing after a Save - tears every cover entity down and builds new
+        ones, and Home Assistant cancels no flow when it does (0.5.0 v2 review,
+        BUG-4). The old object then drives frames into a gateway handler whose sessions
+        are closed, leaves the *live* shutter unmarked (so `set_cover_position` is free
+        to run the same motor), and restarts a 1 Hz position tick nothing will cancel.
+        """
+        unique_id = self._cover_unique_id or ""
+        for key, cfg in self._covers().items():
+            if f"{self._mac}-{key}" == unique_id:
+                return (cfg.get(CONF_ENTITIES) or {}).get(COVER)
+        return None
+
+    def _cover_to_drive(self) -> Any:
+        """The live cover, or a refusal that has a screen of its own."""
+        cover = self._live_cover()
+        if cover is None:
+            raise CalibrationError(
+                REASON_UNKNOWN_COVER,
+                f"{self._cover_label} is not configured on this gateway any more",
+            )
+        self._cover = cover
+        return cover
+
     @callback
     def _disarm(self) -> None:
         if self._watchdog is not None:
@@ -1105,6 +1236,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
         self._release()
         self._cover = None
+        cover = self._live_cover() or cover
         if cover is not None and (cover.is_opening or cover.is_closing):
             with contextlib.suppress(HomeAssistantError):
                 await cover.async_calib_stop()
@@ -1143,8 +1275,45 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             self._cover_label = str(cfg.get(CONF_NAME) or entity.entity_id)
             self._session = contextlib.ExitStack()
             self._session.enter_context(entity.calibration_session())
+            self._watch_for_unload()
             return None
         return REASON_UNKNOWN_COVER
+
+    @callback
+    def _watch_for_unload(self) -> None:
+        """Expire this conversation if the entry is unloaded (or reloaded) under it.
+
+        Home Assistant never cancels a flow when a config entry is reloaded, and this
+        release reloads on purpose whenever a dialog that stored something is closed -
+        including a *second* dialog, opened on another shutter while this conversation
+        was half way through. The expiry screen is exactly the right thing to find
+        afterwards: it says nothing was saved and offers to start again.
+
+        `ConfigEntry.async_on_unload` hands back no way to unregister, so the callback
+        outlives the conversation - but the list it goes on is drained by the very
+        unload that runs it, and the callback's first question is whether there is a
+        conversation left to expire.
+        """
+        if self._unload_watched:
+            return
+        self._unload_watched = True
+        self.config_entry.async_on_unload(self._async_entry_unloaded)
+
+    @callback
+    def _async_entry_unloaded(self) -> None:
+        """The gateway went away: give the shutter back and stop the clock."""
+        self._unload_watched = False
+        if self._cover is None:
+            return
+        LOGGER.info(
+            "Guided calibration of %s: the gateway was reloaded, so this conversation "
+            "was ended. Nothing was saved; start again to measure it",
+            self._cover_label,
+        )
+        self._expired = True
+        self._disarm()
+        self._release()
+        self._cover = None
 
     async def _async_claim_refused(self, reason: str) -> ConfigFlowResult:
         """Say why the shutter could not be taken, with a way back to the menu."""
@@ -1280,11 +1449,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
 
     def _current_profile(self) -> str | None:
         """The profile this cover follows today, stored one first, then the file's."""
-        stored = self._store.calibration(self._cover_unique_id or "")
-        if stored is not None and stored.profile:
-            return stored.profile
-        cfg = self._covers().get(self._cover_key) or {}
-        return cfg.get(CONF_PROFILE)
+        return self._assigned_profile(self._cover_unique_id or "")
 
     async def async_step_refine_scope(
         self, user_input: dict[str, Any] | None = None
@@ -1366,11 +1531,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             if self._stop_first:
                 self._stop_first = False
                 with contextlib.suppress(CalibrationError):
-                    await self._cover.async_calib_stop()
+                    await self._cover_to_drive().async_calib_stop()
             await job()
         except CalibrationError as err:
             LOGGER.warning("Guided calibration of %s: %s", self._cover_label, err)
-            self._error = err.reason if err.reason in PROBLEM_REASONS else REASON_UNKNOWN
+            self._error = (
+                err.reason
+                if err.reason in PROBLEM_REASONS or err.reason == REASON_UNKNOWN_COVER
+                else REASON_UNKNOWN
+            )
         except HomeAssistantError as err:
             LOGGER.warning("Guided calibration of %s: %s", self._cover_label, err)
             self._error = REASON_UNKNOWN
@@ -1407,20 +1576,25 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                 description_placeholders=self._placeholders(**extra),
             )
         self._task = None
+        if self._error == REASON_UNKNOWN_COVER:
+            # The cover went away under the conversation; the screen that says so is
+            # already written in seven languages.
+            return self.async_show_progress_done(next_step_id="refused_unknown_cover")
         if self._error is not None:
             return self.async_show_progress_done(next_step_id=f"problem_{self._error}")
         return self.async_show_progress_done(next_step_id=done_step)
 
     async def _job_home(self, direction: str) -> None:
-        await self._cover.async_calib_home(direction)
+        await self._cover_to_drive().async_calib_home(direction)
 
     async def _job_start(self, direction: str) -> None:
         """Let it run free while we watch (it is already at the far end stop)."""
-        self._motor_start = await self._cover.async_calib_start(direction)
+        self._motor_start = await self._cover_to_drive().async_calib_start(direction)
 
     async def _job_fraction(self, direction: str, fraction: float) -> None:
-        await self._cover.async_calib_home(_other_end(direction))
-        self._report = await self._cover.async_calib_run_fraction(direction, fraction)
+        cover = self._cover_to_drive()
+        await cover.async_calib_home(_other_end(direction))
+        self._report = await cover.async_calib_run_fraction(direction, fraction)
 
     # ------------------------------------------------------------------ the presses
     def _timed_out(self) -> bool:
@@ -1989,7 +2163,10 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = str(user_input[CONF_NAME]).strip()
-            if not _NAME_RE.match(name):
+            # `NO_PROFILE` is a valid YAML key and the sentinel the assignment select
+            # uses for "Nessun profilo": a profile really called that would be
+            # unassignable from that form for ever.
+            if not _NAME_RE.match(name) or name == NO_PROFILE:
                 errors[CONF_NAME] = ERROR_INVALID_NAME
             else:
                 # A name already in use *replaces* that profile. The commonest reason to
@@ -2058,7 +2235,21 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         key = self._yaml_key or _suggested_name(getattr(self._cover, "entity_id", ""))
         if self._path == PATH_PROFILE:
             height = measured.height or 0.0
-            return _Result(yaml=profile_reference_yaml(key, self._profile or "", height))
+            # The profile's numbers, scaled to this window, stored as its own
+            # overrides. A profile is *below* a key written in the configuration file,
+            # and a basic cover's run times usually are written there - so a record
+            # naming the profile alone left the shutter running on the file's numbers
+            # while this very screen promised the opposite (0.5.0 v2 review, BUG-1).
+            # The name and the height are stored beside them, which is what lets a
+            # later correction of the profile derive them again for every window that
+            # inherited it (`CalibrationStore.async_set_profile`).
+            profile = self._all_profiles().get(self._profile or "")
+            derived = profile_overrides(profile, height) if profile is not None else {}
+            return _Result(
+                yaml=profile_reference_yaml(key, self._profile or "", height, derived),
+                overrides=dict(derived),
+                derived=True,
+            )
         fits = self._fits()
         if fits is not None:
             down, up = fits
@@ -2135,19 +2326,31 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         """
         if self._measured.precise:
             return await self.async_step_summary_precise()
-        return await self.async_step_summary_basic()
+        if self._path == PATH_FIRST:
+            return await self.async_step_summary_basic()
+        return await self.async_step_summary_short()
 
     async def async_step_summary_basic(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """What was measured, what it will do, and where it goes if it is saved."""
-        result = self._result()
-        options = ["save"]
-        if self._path == PATH_FIRST:
-            options.append("refine")
-        options.append("cancel_flow")
+        """Path A at the basic level: what was measured, and the offer to do better.
+
+        Reached from path A alone, because its text ends on "Migliora la precisione" -
+        four more readings and a gap in centimetres - and paths B and C have nothing of
+        their own to improve: their numbers are the profile's. A screen that described a
+        button two of the three paths did not have was the one thing the live
+        walk-through asked for by name (0.5.0 v2 review, BUG-5).
+        """
         return self.async_show_menu(
             step_id="summary_basic",
-            menu_options=options,
-            description_placeholders=self._summary_placeholders(result),
+            menu_options=["save", "refine", "cancel_flow"],
+            description_placeholders=self._summary_placeholders(self._result()),
+        )
+
+    async def async_step_summary_short(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The same summary for paths B and C, with nothing left to offer but Save."""
+        return self.async_show_menu(
+            step_id="summary_short",
+            menu_options=["save", "cancel_flow"],
+            description_placeholders=self._summary_placeholders(self._result()),
         )
 
     async def async_step_summary_precise(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -2192,7 +2395,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         result = self._result()
         assert self._cover_unique_id is not None
         if result.profile is not None and self._measured_name:
-            await self._store.async_set_profile(
+            await (await self._async_store()).async_set_profile(
                 self._measured_name,
                 cover_profile_data(
                     self._measured_name,
@@ -2206,13 +2409,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                     raw=self._raw(),
                 ),
             )
-        await self._store.async_set_calibration(
+        store = await self._async_store()
+        await store.async_set_calibration(
             self._cover_unique_id,
             cover_calibration_data(
                 self._cover_unique_id,
                 profile=self._measured_name or self._profile,
                 height=self._measured.height,
                 overrides=result.overrides or None,
+                source=CALIBRATION_SOURCE_PROFILE if result.derived else CALIBRATION_SOURCE_GUIDED,
                 raw=self._raw(),
             ),
         )
@@ -2226,6 +2431,11 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._saved_profile = self._measured_name or self._profile or ""
         self._disarm()
         self._release()
+        # ...and the conversation is over: without this, rendering the `saved` screen
+        # re-arms the watchdog through `_touch`, and half an hour later the log carries
+        # a WARNING saying nothing was saved about a calibration that was (0.5.0 v2
+        # review, RISK-2).
+        self._cover = None
         return await self.async_step_saved()
 
     async def async_step_saved(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

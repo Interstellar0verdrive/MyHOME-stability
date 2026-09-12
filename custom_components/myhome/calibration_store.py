@@ -120,6 +120,36 @@ _IMPLIED_BY_THE_FILE: dict[str, tuple[str, ...]] = {
 # per name and not once per cover per reload.
 _CLASH_REPORTED: set[str] = set()
 
+# The keys a profile really states about a window, in the shape a per-cover override
+# is written in. The two bus costs (`stop_latency`, `start_delay`) are deliberately
+# left out - they are the gateway's answer time and the motor's brake, constants of the
+# installation rather than of the window (0.4.4) - and so is `roll`, which is only the
+# fallback of the two directional ones.
+_DERIVED_OVERRIDE_KEYS: tuple[tuple[str, int], ...] = (
+    (CONF_OPENING_TIME, 1),
+    (CONF_CLOSING_TIME, 1),
+    (CONF_SLAT_TIME, 1),
+    (CONF_OPENING_ROLL, 2),
+    (CONF_CLOSING_ROLL, 2),
+)
+
+
+@callback
+def profile_overrides(profile: Mapping[str, Any], height: float | None) -> dict[str, float]:
+    """A profile, scaled to one window, as that window's own overrides.
+
+    Path B of the guided flow measures a window's travel and says "it is one of
+    those". A stored profile does *not* beat a key written in the configuration file
+    (spec 1.3), and a basic cover's run times usually are written there - so a record
+    holding the name alone would have left the shutter running on the file's numbers
+    while the summary promised the opposite (0.5.0 v2 review, BUG-1). The values
+    below are what that promise means, derived exactly as `resolve_cover` would have
+    derived them, and stored beside the profile name and the height so that a later
+    edit of the profile can derive them again (`CalibrationStore.async_set_profile`).
+    """
+    derived = derive_cover_from_profile(profile, height)
+    return {key: round(float(derived[key]), digits) for key, digits in _DERIVED_OVERRIDE_KEYS}
+
 
 @callback
 def reset_name_clash_warnings() -> None:
@@ -238,15 +268,28 @@ class StoredCalibration:
         return bool(self.overrides) or self.profile is not None or self.height is not None
 
     @property
+    def derived_from_profile(self) -> bool:
+        """True for overrides that are a profile scaled to this window, not a measurement.
+
+        Path B stores both: the name and the height it was told, and the numbers those
+        two produce, because a name alone does not reach a cover whose run times are
+        written in the file. The flag is what lets a later edit of the profile derive
+        them again (and its deletion take them away) without ever touching the numbers
+        paths A and C really measured on this window.
+        """
+        return self.source == CALIBRATION_SOURCE_PROFILE and bool(self.overrides)
+
+    @property
     def is_a_measurement(self) -> bool:
         """True when this window itself was measured, rather than merely assigned.
 
         "Profili e tapparelle" writes a profile and a height; the guided flow writes
         the numbers it found. Only the second is a calibration in the sense the
         "Calibrazioni" screen means, and only the second makes `Calibration source`
-        say `guided` - see `resolve_cover`.
+        say `guided` - see `resolve_cover`. Path B's derived overrides are not one:
+        they are the profile, arithmetic and all, so the source goes on naming it.
         """
-        return bool(self.overrides)
+        return bool(self.overrides) and not self.derived_from_profile
 
 
 @callback
@@ -394,10 +437,36 @@ class CalibrationStore:
 
         Replacing rather than adding: a user who calibrates the same kind of shutter
         twice means the second measurement, and the covers that follow the name go on
-        following it.
+        following it - which here means that the numbers the second measurement implies
+        for them are derived again (`_rederive_followers`). Doing it inside the one
+        method that writes a profile is what makes it impossible to forget.
         """
         self._profiles[name] = dict(data)
+        self._rederive_followers(name)
         await self._async_save()
+
+    @callback
+    def _rederive_followers(self, name: str) -> None:
+        """Re-scale the profile to every window that inherited its numbers.
+
+        Only the records that say so (`derived_from_profile`): the overrides paths A
+        and C store are measurements of that window and have nothing to do with the
+        profile it is also assigned to.
+        """
+        shaped = profile_as_config(name, self._profiles.get(name) or {})
+        for unique_id in self.covers_following(name):
+            record = dict(self._covers[unique_id])
+            calibration = stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record})
+            if not calibration.derived_from_profile:
+                continue
+            if shaped is None:
+                # A profile this version cannot read: the safe way to be wrong is to
+                # leave the window on the file's numbers rather than on numbers
+                # derived from something unintelligible.
+                record.pop(CONF_OVERRIDES, None)
+            else:
+                record[CONF_OVERRIDES] = profile_overrides(shaped, calibration.height)
+            self._covers[unique_id] = record
 
     async def async_remove_profile(self, name: str) -> list[str]:
         """Forget a profile, and answer with the covers that were following it.
@@ -413,6 +482,11 @@ class CalibrationStore:
         orphans = self.covers_following(name)
         for unique_id in orphans:
             record = dict(self._covers[unique_id])
+            if stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record}).derived_from_profile:
+                # Those numbers *were* the profile. Keeping them would leave a window
+                # running for ever on a profile the user deleted, and beating the file
+                # while doing it; the height stays, because a tape was held against it.
+                record.pop(CONF_OVERRIDES, None)
             record.pop(CONF_PROFILE, None)
             if stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record}).says_anything:
                 self._covers[unique_id] = record
@@ -450,6 +524,18 @@ class CalibrationStore:
         for unique_id, (profile, height) in assignments.items():
             record = dict(self._covers.get(unique_id) or {})
             before = dict(record)
+            moved = record.get(CONF_PROFILE) != profile
+            if (
+                moved
+                and stored_calibration(
+                    {CONF_COVER_UNIQUE_ID: unique_id, **record}
+                ).derived_from_profile
+            ):
+                # This window was following that profile with its numbers baked in
+                # (path B). Assigning is not measuring, so the new assignment is stored
+                # as a bare one and the old profile's arithmetic goes: keeping it would
+                # leave the window on the numbers of a profile it no longer follows.
+                record.pop(CONF_OVERRIDES, None)
             if profile is None:
                 record.pop(CONF_PROFILE, None)
             else:
@@ -697,6 +783,7 @@ __all__ = [
     "loaded_store",
     "merged_profiles",
     "profile_as_config",
+    "profile_overrides",
     "reset_name_clash_warnings",
     "resolve_cover",
     "resolve_cover_config",

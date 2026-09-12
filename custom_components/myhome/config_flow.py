@@ -46,7 +46,7 @@ from .calibration_flow import (
     CalibrationManagementMixin,
     GuidedCalibrationMixin,
 )
-from .calibration_store import CalibrationStore, async_get_store
+from .calibration_store import CalibrationStore
 from .const import (
     CONF_ADDRESS,
     CONF_COMMAND_TIMEOUT_SEC,
@@ -516,8 +516,14 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
 
     def __init__(self) -> None:
         """No store yet: `async_step_init` is the first thing that can await one."""
-        self._store: CalibrationStore = None  # type: ignore[assignment]
+        # Only ever a fall-back: `_store` reads the *live* store of the entry and
+        # `_async_store` fetches it again before every write, so that a dialog left
+        # open across a reload cannot serialise a snapshot of the old one over the file
+        # (0.5.0 v2 review, BUG-3).
+        self._store_ref: CalibrationStore | None = None
         self._changed = False
+        # Whether this dialog has asked to be told when the entry is unloaded.
+        self._unload_watched = False
         # The management screens' pointers.
         self._profile_name: str | None = None
         self._cover_unique_id: str | None = None
@@ -536,8 +542,7 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
     # ------------------------------------------------------------------ the menu
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The first screen: what this dialog can do, and what it will not do by itself."""
-        if self._store is None:
-            self._store = await async_get_store(self.hass, self.config_entry)
+        await self._async_store()
         options = []
         if self._covers():
             options.append("calibrate")
@@ -584,6 +589,27 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         super().async_remove()
         if self._changed and self.config_entry.state.recoverable:
             self._changed = False
+            self.hass.async_create_task(
+                self._async_reload_after_the_tidying_up(),
+                "myhome options reload",
+                eager_start=False,
+            )
+
+    async def _async_reload_after_the_tidying_up(self) -> None:
+        """Reload, but not before a movement that was cut short has written its stop.
+
+        `FlowManager._async_remove_flow_progress` cancels the progress task and then
+        calls `async_remove`, so the `finally` that shields the stop of a run in flight
+        (`cover._async_calib_timed_run`) has not run yet when we get here. Reloading
+        synchronously could close the gateway sessions first, and the one stop the
+        runner goes to some trouble to write would be swallowed while the shutter ran
+        on to its end stop (0.5.0 v2 review, RISK-4). Two turns of the loop cost
+        nothing - the reload itself is a disconnect and a reconnect - and are enough
+        for that `finally` to reach the command queue.
+        """
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        if self.config_entry.state.recoverable:
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
     # ------------------------------------------------------------------ the gateway

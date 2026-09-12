@@ -494,7 +494,22 @@ async def _async_sleep(seconds: float) -> None:
 # several: the whole point is that somebody is standing in front of the shutter with a
 # tape measure, and Home Assistant would otherwise run every targeted entity in
 # parallel (`helpers.service.entity_service_call` gathers them).
-_CALIBRATION_LOCK = asyncio.Lock()
+#
+# One lock per gateway, and not one for the whole integration. A house with two
+# gateways has two buses, two sets of shutters and very possibly two people: a single
+# lock answered the second of them with `problem_busy`, whose text says "this shutter
+# is already moving" - which is not what had happened (0.5.0 v2 review, RISK-5). The
+# dict is never pruned: one `asyncio.Lock` per MAC address for the life of the
+# process, which is a handful of objects on the largest installation imaginable.
+_CALIBRATION_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def calibration_lock(mac: str) -> asyncio.Lock:
+    """The one-cover-at-a-time lock of one gateway."""
+    lock = _CALIBRATION_LOCKS.get(mac)
+    if lock is None:
+        lock = _CALIBRATION_LOCKS[mac] = asyncio.Lock()
+    return lock
 
 
 def calibration_run_seconds(
@@ -2466,7 +2481,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     async def _calibration_claim(self) -> AsyncIterator[None]:
         """Hold the one-cover-at-a-time lock for one guided movement, or refuse it.
 
-        The same `_CALIBRATION_LOCK` the 0.4.2 service takes, so that two guided flows
+        The same per-gateway lock the 0.4.2 service takes, so that two guided flows
         (two browser tabs on the same shutter) and a flow racing
         `myhome.cover_calibration_run` cannot interleave their runs on one motor. Two
         runs that start within the same tick both pass `_calib_idle_guard`, the first
@@ -2480,13 +2495,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         There is no await between the test and the acquisition - an uncontended
         `asyncio.Lock.acquire` returns without yielding - so the pair is atomic.
         """
-        if _CALIBRATION_LOCK.locked():
+        lock = calibration_lock(self._gateway_handler.mac)
+        if lock.locked():
             raise CalibrationError(
                 REASON_BUSY,
-                f"{self.entity_id}: another calibration is driving a shutter right now; "
-                f"finish or close it and try this step again",
+                f"{self.entity_id}: another calibration is driving a shutter of this "
+                f"gateway right now; finish or close it and try this step again",
             )
-        async with _CALIBRATION_LOCK:
+        async with lock:
             yield
 
     async def _async_sleep_until_stopped(self, seconds: float) -> bool:
@@ -2534,7 +2550,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         unless it is made from a known end, and the model's own idea of where the cover
         is cannot be trusted - that is what is being calibrated.
 
-        Takes `_CALIBRATION_LOCK` (see `_calibration_claim`); the 0.4.2 service, which
+        Takes the gateway's calibration lock (see `_calibration_claim`); the 0.4.2 service, which
         holds that lock around the whole of its own run, calls `_async_calib_home`
         below instead.
         """
@@ -2601,22 +2617,46 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         "the shutter did not do what it should", and the screen that says so has a
         button to try again with.
 
-        Takes `_CALIBRATION_LOCK`, like every other primitive that drives the motor.
+        Takes the gateway's calibration lock, like every primitive that drives the motor.
         """
         async with self._calibration_claim():
             return await self._async_calib_start(direction)
 
     async def _async_calib_start(self, direction: str) -> datetime:
-        """One free run, without the lock (the caller holds it)."""
+        """One free run, without the lock (the caller holds it).
+
+        Every way out of this method that is not the instant the motor began writes a
+        stop, for the same reason the timed run does (`_async_calib_timed_run`): past
+        the line below the frame is on its way and the motor is about to turn, while
+        `no_echo` - raised *after* the direction frame was delivered - and a
+        cancellation both used to unwind without one. The screen the flow then shows
+        (`problem_no_echo`) says in seven languages that a stop was sent right after
+        the error, and the two timed-press steps are exactly the ones that raise it.
+        """
         self._calib_guard()
         self._calib_idle_guard()
         with self.calibration_session():
-            if direction == DIRECTION_OPEN:
-                await self.async_open_cover()
-            else:
-                await self.async_close_cover()
-            expected = await self._async_calibration_started()
-            return await self._async_wait_for_motor_start(expected)
+            running = False
+            try:
+                if direction == DIRECTION_OPEN:
+                    await self.async_open_cover()
+                else:
+                    await self.async_close_cover()
+                expected = await self._async_calibration_started()
+                started = await self._async_wait_for_motor_start(expected)
+                # The run is *meant* to go on from here - it is free, and the presses
+                # are measured against it - so this is the one way out that must not
+                # write a stop.
+                running = True
+                return started
+            finally:
+                delivery = self._direction_delivery
+                if not running and delivery is not None and delivery.delivered_at is not None:
+                    # Only when the frame really was written: a direction the command
+                    # path refused or dropped left the motor standing, and a stop for
+                    # it would be noise on the bus. Shielded, because the commonest
+                    # reason to be here after a delivery is a cancellation.
+                    await asyncio.shield(self._async_stop_a_run_that_failed())
 
     async def _async_wait_for_motor_start(self, expected: datetime) -> datetime:
         """Wait for the actuator's own "moving" status, and answer with its instant.
@@ -2668,7 +2708,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         asked for (a command queue that held the stop back for half a second is half a
         second of real travel, and 4 cm of bar on the reference window).
 
-        Takes `_CALIBRATION_LOCK`, like every other primitive that drives the motor.
+        Takes the gateway's calibration lock, like every primitive that drives the motor.
         """
         async with self._calibration_claim():
             self._calib_guard()
@@ -2793,7 +2833,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} is being calibrated "
                 f"through the guided calibration; finish or close that dialog first"
             )
-        async with _CALIBRATION_LOCK:
+        async with calibration_lock(self._gateway_handler.mac):
             if self._moving is not None:
                 raise ServiceValidationError(
                     f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} is already moving; "
@@ -2801,7 +2841,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 )
             far_end = DIRECTION_OPEN if direction == DIRECTION_CLOSE else DIRECTION_CLOSE
             with self.calibration_session():
-                # The unlocked homing: this service holds `_CALIBRATION_LOCK` for its
+                # The unlocked homing: this service holds the gateway's calibration lock for its
                 # whole run, and the public primitive would refuse itself.
                 await self._async_calib_home(far_end)
                 # `require_echo=False`: this service has fallen back to `start_delay`
