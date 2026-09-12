@@ -784,8 +784,18 @@ attributes of the entity: they are what the calibration will use. The slat time 
 never solved for — a stopwatch reads it directly, and it is the one part of the run
 you can actually watch happen.
 
-Measure the **height** as well — floor to the bottom edge with the shutter fully
-open, in centimetres. It is 195 cm in this example.
+> **Measure every centimetre from the same point: where the bottom edge rests with
+> the shutter fully closed.** Not the floor, a sill or a threshold — on some windows
+> those coincide with it, on others they sit a few centimetres above or below it.
+> Use that one reference for the height below, for both calibration readings, and
+> for every check afterwards. A different reference shows up as a constant offset of
+> a few centimetres at every position and in both directions, which looks like the
+> model got something wrong but is not: a constant offset like that is the sign of a
+> reference mismatch, while an error that grows with the length of the run points at
+> the times or the roll coefficient instead.
+
+Measure the **height** as well — from that reference point to the bottom edge with
+the shutter fully open, in centimetres. It is 195 cm in this example.
 
 #### Step 1 — the half descent
 
@@ -801,8 +811,8 @@ data:
 
 The cover opens fully, waits until it is certainly against the top end stop, then
 closes for the seconds a linear *set position 50 %* would use — here
-`(21.7 − 4.7) / 2` = 8.5 s — and stops. **Measure the centimetres from the floor to
-the bottom edge** and write the number down (85 cm here). The action reports the
+`(21.7 − 4.7) / 2` = 8.5 s — and stops. **Measure the centimetres from the same
+reference point to the bottom edge** and write the number down (85 cm here). The action reports the
 seconds it used as `motor_seconds` — the *measured* motor time, from the actuator's
 own "moving" status to its own "stopped" when it sends them, which can differ from
 the planned 8.5 s by a tenth of a second or two; note it down too if you like, though
@@ -979,6 +989,11 @@ A cover that misses by a lot has no business in that profile: measure it with st
 1-3 and give it a profile of its own.
 
 #### What accuracy to expect
+
+After calibration, runs from the end stops land within 1–2 cm and chained runs
+between intermediate positions within about 2 cm, with the occasional shutter at
+4 cm; no drift accumulates across runs, because every full open or close
+re-synchronises the estimate.
 
 - **On the calibrated cover**: 2-3 cm at mid-travel on a 2 m shutter, which is as
   good as the measurements you fed it. Each solved coefficient reproduces its own

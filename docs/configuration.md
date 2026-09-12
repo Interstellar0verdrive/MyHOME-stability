@@ -242,7 +242,7 @@ A device behind an F422 bus interface is addressed on the bus as
 | `opening_roll` | number, `1.0`-`5.0` | = `roll` | The roll used for **upward** runs, when the shutter does not behave the same way going up. Mirrors `opening_time` exactly: write it only when you have measured it. |
 | `closing_roll` | number, `1.0`-`5.0` | = `roll` | The roll used for **downward** runs. Mirrors `closing_time`. Writing both directional keys makes `roll` irrelevant for the estimate; it is still what the attributes fall back on when the two are equal. |
 | `tilt` | boolean | `false` | Offer the tilt controls (`cover.open_cover_tilt` and friends, and the `current_tilt_position` attribute). **Default `false` since 0.4.2**, even with `slat_time` set: the two-phase timing model runs underneath either way, only the tilt entity features are opt-in. Has no effect on an `advanced` cover, which never has tilt controls. |
-| `height` | number (cm) | – | Curtain travel height, floor to fully open, in centimetres. On its own it does nothing but show up as an attribute; with `profile` it is what scales the profile's times and roll to this cover (see [Cover profiles](#cover-profiles)). |
+| `height` | number (cm) | – | Curtain travel height, floor to fully open, in centimetres. On its own it does nothing but show up as an attribute; with `profile` it is what scales the profile's times and roll to this cover (see [Cover profiles](#cover-profiles)). Measure it from the same reference every other centimetre in the calibration uses: where the bottom edge rests with the shutter fully closed — not the floor, a sill or a threshold when those differ from it. A different reference shows up as a constant offset of a few centimetres at every position and in both directions, not as an error that grows with the length of the run; the first is a reference mismatch, the second is the times or the roll coefficient. |
 | `profile` | string | – | Name of an entry of the gateway-level [`cover_profiles:`](#cover-profiles) mapping. An unknown name is a validation error listing the names that are defined. |
 | `inverted` | boolean | `false` | The actuator is wired the other way round: `open_cover` sends *lower*, a bus "raising" frame is read as closing and an advanced actuator's reported level is mirrored. Home Assistant's own convention is unchanged: position `0` is still closed, `100` still open. |
 | `class` | cover device class | `shutter` | Any Home Assistant cover class (`shutter`, `blind`, `awning`, `garage`, ...). It also decides the default `roll`. |
@@ -528,7 +528,7 @@ gateway:
 
 | Key | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `reference_height` | number (cm) > 0 | **required** | Curtain travel height of the cover the profile was measured on. |
+| `reference_height` | number (cm) > 0 | **required** | Curtain travel height of the cover the profile was measured on, from the same reference as `height`: where the bottom edge rests with the shutter fully closed, not the floor, a sill or a threshold when those differ from it. |
 | `opening_time` | number (s) ≥ 1 | **required** | Full upward run of that cover, slats included. `shutter_run` is accepted here as an alias too. |
 | `closing_time` | number (s) ≥ 1 | = `opening_time` | Full downward run of that cover. |
 | `slat_time` | number (s) ≥ 0 | `0` | Slat phase of that cover. |
