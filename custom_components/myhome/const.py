@@ -51,6 +51,17 @@ DIRECTION_OPEN = "open"
 DIRECTION_CLOSE = "close"
 CALIBRATION_DIRECTIONS: tuple[str, ...] = (DIRECTION_CLOSE, DIRECTION_OPEN)
 
+# Guided calibration (0.5.0). Two entity attributes: one says a guided step is driving
+# this shutter right now (and that the ordinary position controls are refused while it
+# is), the other where the numbers of the travel model came from.
+ATTR_CALIBRATING = "Calibrating"
+ATTR_CALIBRATION_SOURCE = "Calibration source"
+# The three things `Calibration source` can say: the guided flow measured this shutter,
+# a profile (named) supplies its numbers, or they come from `myhome.yaml` as written.
+CALIBRATION_SOURCE_GUIDED = "guided"
+CALIBRATION_SOURCE_YAML = "yaml"
+CALIBRATION_SOURCE_PROFILE = "profile"
+
 # Request timeout constants
 GATEWAY_TEST_TIMEOUT_SEC = 20
 

@@ -48,7 +48,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
@@ -69,7 +70,7 @@ from homeassistant.components.cover import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
@@ -80,8 +81,20 @@ from OWNd.message import (
     OWNAutomationEvent,
 )
 
-from .calibration import clamped_roll, roll_tau, roll_x
+from .calibration import (
+    REASON_ADVANCED,
+    REASON_BUSY,
+    REASON_NO_ECHO,
+    REASON_NOT_DELIVERED,
+    REASON_NOT_STOPPED,
+    CalibrationError,
+    RunReport,
+    clamped_roll,
+    roll_tau,
+    roll_x,
+)
 from .const import (
+    ATTR_CALIBRATING,
     ATTR_CLOSED_HALF_CM,
     ATTR_CLOSED_RUN_SECONDS,
     ATTR_DIRECTION,
@@ -122,6 +135,7 @@ from .const import (
     DEFAULT_STOP_LATENCY,
     DEFAULT_TILT,
     DIRECTION_CLOSE,
+    DIRECTION_OPEN,
     DOMAIN,
     LOGGER,
     MAX_ROLL,
@@ -427,6 +441,27 @@ CALIBRATION_BISECTION_STEPS = 60
 CALIBRATION_SAME_ROLL_TOLERANCE = 0.1
 # Name of the profile in the generated snippet when the entity has no object id yet.
 CALIBRATION_FALLBACK_PROFILE = "standard"
+# ------------------------------------------------------- the guided calibration (0.5.0)
+# How long a guided step waits for the actuator to answer our direction frame with its
+# own "moving" status before it gives up on the step. The measured gateway answers in
+# about 0.57 s (see `MOTOR_START_WINDOW_SEC`); three seconds is five times that, which
+# is long enough that nothing but a shutter that really did not move can exhaust it -
+# and short enough that the user is told so while still standing in front of the window.
+#
+# The service (`cover_calibration_run`) does NOT wait for it: it has always fallen back
+# to `start_delay` when the gateway relays no status, and a release that made the old
+# service fail where it used to answer would be a regression. The guided flow can
+# afford to be stricter, because it has a screen to say "the shutter did not respond"
+# on and a button to try again with.
+CALIBRATION_MOTOR_ECHO_SEC = 3.0
+# How long a guided step waits once the shutter has reached its end stop, before it
+# measures anything from there. A second of stillness costs nothing and buys the
+# certainty that the actuator has finished with the previous command.
+CALIBRATION_HOME_SETTLE_SEC = 1.0
+# The fraction of the curtain travel the two 0.4.2 services measure at: a
+# `set_cover_position: 50`, which is where the roll model is most sensitive to the roll
+# and where a descent and an ascent land on the same point of the time axis.
+CALIBRATION_HALF_RUN = 0.5
 
 CALIBRATION_RUN_SCHEMA = {
     vol.Required(ATTR_DIRECTION): vol.In(list(CALIBRATION_DIRECTIONS)),
@@ -458,24 +493,37 @@ async def _async_sleep(seconds: float) -> None:
 _CALIBRATION_LOCK = asyncio.Lock()
 
 
-def calibration_close_run_seconds(closing_time: float, slat_time: float) -> float:
-    """Motor seconds a `set_cover_position: 50` spends closing from fully open.
+def calibration_run_seconds(
+    direction: str, opening_time: float, closing_time: float, slat_time: float, fraction: float
+) -> float:
+    """Motor seconds a run of `fraction` of the curtain travel spends, from the end stop.
 
-    Closing starts with the curtain at the top and the slats already open, so every
-    second of the run is curtain time and the slat phase - which only happens once the
-    curtain is on the floor - is never reached.
+    The two directions are not symmetric, and that asymmetry is the whole of this
+    function: closing starts with the curtain at the top and the slats already open, so
+    every second of the run is curtain time (the slat phase only happens once the
+    curtain is on the floor and is never reached); opening starts on the floor with the
+    slats shut, so the first `slat_time` seconds only turn the slats and the curtain
+    gets its fraction of what is left.
+
+    `fraction` is a fraction of the CURTAIN travel, not of the run: the guided flow
+    measures at 25 %, 50 % and 75 % of the curtain's journey, and half of a run that
+    includes a slat phase would not be half of anything the model can invert (0.5 is
+    the `set_cover_position: 50` the two 0.4.2 services are built on).
     """
-    return max(0.0, closing_time - slat_time) / 2
+    fraction = min(1.0, max(0.0, fraction))
+    if direction == DIRECTION_CLOSE:
+        return max(0.0, closing_time - slat_time) * fraction
+    return slat_time + max(0.0, opening_time - slat_time) * fraction
+
+
+def calibration_close_run_seconds(closing_time: float, slat_time: float) -> float:
+    """Motor seconds a `set_cover_position: 50` spends closing from fully open."""
+    return calibration_run_seconds(DIRECTION_CLOSE, 0.0, closing_time, slat_time, 0.5)
 
 
 def calibration_open_run_seconds(opening_time: float, slat_time: float) -> float:
-    """Motor seconds a `set_cover_position: 50` spends opening from fully closed.
-
-    The mirror case is not symmetric: opening starts on the floor with the slats shut,
-    so the first `slat_time` seconds only turn the slats and the curtain gets half of
-    what is left.
-    """
-    return slat_time + max(0.0, opening_time - slat_time) / 2
+    """Motor seconds a `set_cover_position: 50` spends opening from fully closed."""
+    return calibration_run_seconds(DIRECTION_OPEN, opening_time, 0.0, slat_time, 0.5)
 
 
 def calibration_descent_cm(
@@ -930,6 +978,21 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._move_delivered_at: datetime | None = None
         self._motor_started_at: datetime | None = None
         self._stop_status_at: datetime | None = None
+        # 0.5.0, the guided calibration. The two events are how a guided step waits for
+        # the bus instead of for the clock: one is set when the actuator says the motor
+        # is running (`_apply_motor_start`), the other when the movement is over,
+        # whatever ended it (`_finish_movement`). Both are cleared by the step before
+        # it commands anything, so what they report is always this step's own movement.
+        self._motor_start_event = asyncio.Event()
+        self._movement_end_event = asyncio.Event()
+        # What to call the instant the movement ends, set only while a guided step is
+        # sitting in `_async_sleep_until_stopped` (which is how that wait gives up on
+        # the modelled run as soon as the bus says the shutter is home).
+        self._calib_end_hook: Callable[[], None] | None = None
+        # How many guided steps are running on this cover (a whole flow holds one of
+        # these open around the steps it is made of, so the attribute does not blink
+        # between them).
+        self._calibrating = 0
 
     @property
     def _advanced_probe_grace(self) -> float:
@@ -1198,6 +1261,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         )
         self._move_delivered_at = None
         self._motor_started_at = None
+        # A guided step waits on these, and what it waits for is *this* movement: a
+        # motor start or an end left over from the previous one would answer its
+        # question before the shutter had moved (0.5.0).
+        self._motor_start_event.clear()
+        self._movement_end_event.clear()
         self._moving = direction
         self._target_position = target_position
         if own_command:
@@ -1419,6 +1487,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         )
         self._motor_started_at = now
         self._move_started_at = now
+        self._motor_start_event.set()
         if self._move_duration is not None:
             # As at the delivery: the run ends `duration` of motor after this instant,
             # whatever timer is or is not left over from the clock this replaces. No
@@ -1445,6 +1514,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._attr_current_cover_position = frozen_position
             self._attr_current_cover_tilt_position = frozen_tilt
             self._attr_is_closed = frozen_position == 0 and (not self._has_tilt or frozen_tilt == 0)
+        # Whatever ended it - our own stop, the actuator's, the end of the run - the
+        # movement a guided step was waiting on is over (0.5.0).
+        self._movement_end_event.set()
+        hook, self._calib_end_hook = self._calib_end_hook, None
+        if hook is not None:
+            hook()
 
     @callback
     def _async_position_tick(self, now: datetime) -> None:
@@ -2070,6 +2145,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """
         if ATTR_POSITION not in kwargs:
             return
+        if self.calibrating:
+            # A guided calibration owns the shutter: it is timing a run of its own, and
+            # a position command in the middle of one would not merely be lost - it
+            # would leave the flow measuring a movement it did not make. The refusal is
+            # a `ServiceValidationError` so it reaches the user who sent it, in their
+            # own language, instead of a traceback in the log.
+            raise ServiceValidationError(
+                f"{self.entity_id} is being calibrated; finish or cancel the calibration "
+                f"before moving it to a position"
+            )
         position = int(kwargs[ATTR_POSITION])
 
         if self._advanced:
@@ -2210,28 +2295,52 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 bound,
             )
 
-    async def _async_calibration_started(self) -> datetime:
+    async def _async_calibration_started(self, what: str = SERVICE_COVER_CALIBRATION_RUN) -> datetime:
         """When the motor of the calibration run is expected to start.
 
         Read off the frame itself rather than off the estimate: what is being timed is
         the motor, and the motor starts `start_delay` after the gateway writes the
         frame - or when the actuator says so, which arrives while the run is already
-        waiting and is picked up there (`async_calibration_run`).
+        waiting and is picked up there (`_async_calib_timed_run`).
         """
         delivery = self._direction_delivery
         await self._async_await_delivery(delivery)
         if delivery is None or delivery.delivered_at is None:
-            raise HomeAssistantError(
-                f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} did not start moving - "
-                f"the gateway never took the command; nothing was measured"
+            raise CalibrationError(
+                REASON_NOT_DELIVERED,
+                f"{what}: {self.entity_id} did not start moving - "
+                f"the gateway never took the command; nothing was measured",
             )
         return delivery.delivered_at + timedelta(seconds=self._start_delay)
 
-    async def _async_calibration_motor_seconds(self, started: datetime, planned: float) -> float:
+    async def _async_calibration_stopped(self, what: str = SERVICE_COVER_CALIBRATION_RUN) -> datetime:
+        """When our stop frame really reached the bus, which is where the run ends.
+
+        A stop the command path refused, or one it queued and then dropped, stopped
+        nothing at all: the shutter runs on to its end stop, so there is no half run
+        left to measure and the caller is told rather than handed the seconds it had
+        planned for (which is what would send the user off to tape a shutter parked at
+        its end stop).
+        """
+        pending = self._pending_stop
+        await self._async_await_delivery(None if pending is None else pending.delivery)
+        stopped = self._stop_delivered_at
+        if stopped is None:
+            raise CalibrationError(
+                REASON_NOT_STOPPED,
+                f"{what}: {self.entity_id} was never stopped - "
+                f"the gateway did not take the stop; the shutter runs on to its end stop "
+                f"and nothing was measured",
+            )
+        return stopped
+
+    async def _async_calibration_motor_seconds(
+        self, started: datetime, stopped: datetime, planned: float
+    ) -> float:
         """How long the motor really ran, motor-on to motor-off.
 
         Both ends are the actuator's own word whenever it gives it: the "moving" status
-        that started the run (`started`, from `async_calibration_run`) and the "stopped"
+        that started the run (`started`, from `_async_calib_timed_run`) and the "stopped"
         status that ends it. Where it says nothing the two frames are used instead, with
         the model's own `start_delay` and `stop_latency` on either side of them - which
         is the same measurement, made with the numbers the user can tune.
@@ -2239,15 +2348,6 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         What is reported is always the measurement, unless the clock did not move at
         all - which only happens where the waits themselves are replaced.
         """
-        pending = self._pending_stop
-        await self._async_await_delivery(None if pending is None else pending.delivery)
-        stopped = self._stop_delivered_at
-        if stopped is None:
-            raise HomeAssistantError(
-                f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} was never stopped - "
-                f"the gateway did not take the stop; the shutter runs on to its end stop "
-                f"and nothing was measured"
-            )
         if self._stop_status_at is None:
             # The actuator answers our stop a moment later, on the monitor session:
             # wait for it rather than report a measurement the bus was about to correct.
@@ -2262,6 +2362,274 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # a little less. What is refused is a clock that did not move at all (a test
         # that replaces the waits), which measures the bus costs and nothing else.
         return measured if measured > 0 else planned
+
+    # ------------------------------------------------- the guided runner (0.5.0, § 1.2)
+    # Four primitives, and the two services above are now made of them. The flow of
+    # phase 2 drives a shutter with nothing else: it homes it, starts it and waits for
+    # the user to press a button, or runs it for a fraction of its travel and asks for
+    # a tape measure. Everything goes through the ordinary entity methods, so the
+    # estimate, the echo window and the safety timers see a guided run exactly as they
+    # see a user's - and a user who moves the shutter from the wall keypad in the middle
+    # of one is seen in return.
+    @property
+    def calibrating(self) -> bool:
+        """True while a guided step (or a whole flow) owns this cover."""
+        return self._calibrating > 0
+
+    @contextmanager
+    def calibration_session(self) -> Iterator[None]:
+        """Mark the cover as calibrating for as long as the block runs.
+
+        Re-entrant on purpose: every primitive opens one, and the flow opens one around
+        the whole conversation, so the attribute does not blink off between two steps
+        while the user is reading a screen.
+        """
+        self._calibrating += 1
+        if self._calibrating == 1:
+            self._attr_extra_state_attributes[ATTR_CALIBRATING] = True
+            self._write_state_if_added()
+        try:
+            yield
+        finally:
+            self._calibrating -= 1
+            if self._calibrating == 0:
+                self._attr_extra_state_attributes.pop(ATTR_CALIBRATING, None)
+                self._write_state_if_added()
+
+    @callback
+    def _write_state_if_added(self) -> None:
+        """Publish the state, unless the entity is not in Home Assistant yet.
+
+        A calibration primitive is reachable from a subentry flow, and a flow can be
+        driven against an entity object that was never added (tests, and the moment
+        between construction and `async_added_to_hass`).
+        """
+        if self.hass is not None and self.entity_id:
+            self.async_write_ha_state()
+
+    def _calib_guard(self) -> None:
+        """Refuse a guided step this cover cannot take part in."""
+        if self._advanced:
+            raise CalibrationError(
+                REASON_ADVANCED,
+                f"{self.entity_id} is an 'advanced' cover, which reports its real position; "
+                f"there is no travel model to calibrate",
+            )
+
+    def _calib_idle_guard(self) -> None:
+        """Refuse a step that has to start from a standstill while the cover moves.
+
+        `async_calib_home` is deliberately not guarded by this: bringing a shutter to
+        an end stop is exactly what to do with one that is running the wrong way.
+        """
+        if self._moving is not None:
+            raise CalibrationError(
+                REASON_BUSY, f"{self.entity_id} is already moving; stop it and try again"
+            )
+
+    async def _async_sleep_until_stopped(self, seconds: float) -> bool:
+        """Wait for the movement to end, giving up after `seconds`; True if it ended.
+
+        Two waits in one: the modelled one (`_async_sleep`, the run the configuration
+        predicts) and the bus (`_finish_movement`, reached whenever the estimate stops -
+        the actuator's own "stopped" status, the end stop, somebody at the keypad). The
+        first is all a gateway that relays nothing leaves us with, the second is what a
+        real actuator answers with, and the wait ends on whichever comes first.
+
+        The sleep stays in *this* task and the end of the movement interrupts it
+        through `asyncio.timeout`, rather than the obvious shape of two tasks raced with
+        `asyncio.wait`. That is not a matter of taste: a `_async_sleep` replaced by a
+        test double routinely calls `hass.async_block_till_done()` inside itself, which
+        waits for every task Home Assistant knows about *except the current one* - so
+        running the sleep in a second task makes it wait for the service call that is
+        waiting for it. The shape below has the sleep exactly where the caller is.
+        """
+        loop = asyncio.get_running_loop()
+        ended = False
+
+        @callback
+        def _movement_ended() -> None:
+            nonlocal ended
+            ended = True
+            # Due now: the timeout fires on the next turn of the loop and cancels the
+            # sleep this method is sitting in, which is the whole trick.
+            deadline.reschedule(loop.time())
+
+        try:
+            async with asyncio.timeout(None) as deadline:
+                self._calib_end_hook = _movement_ended
+                await _async_sleep(seconds)
+        except TimeoutError:
+            pass
+        finally:
+            self._calib_end_hook = None
+        return ended
+
+    async def async_calib_home(self, direction: str, timeout: float | None = None) -> None:
+        """Send the shutter to one end stop and wait until it is really there.
+
+        Every measuring step of the flow starts with this: a measurement means nothing
+        unless it is made from a known end, and the model's own idea of where the cover
+        is cannot be trusted - that is what is being calibrated.
+
+        The wait ends when the actuator says it has stopped or when the estimate reaches
+        the end of its modelled run, whichever comes first, and then a second of
+        stillness (`CALIBRATION_HOME_SETTLE_SEC`) before anything else happens. A
+        shutter that is already at that end stop skips the run and waits out the second.
+        """
+        self._calib_guard()
+        with self.calibration_session():
+            full_run = self._opening_time if direction == DIRECTION_OPEN else self._closing_time
+            bound = full_run + CALIBRATION_SETTLE_SEC if timeout is None else timeout
+            LOGGER.info(
+                "%s Cover %s: calibration - going to the %s end stop (at most %.1fs)",
+                self._gateway_handler.log_id,
+                self._where,
+                direction,
+                bound,
+            )
+            if direction == DIRECTION_OPEN:
+                await self.async_open_cover()
+            else:
+                await self.async_close_cover()
+            if self._movement_end_event.is_set():
+                # There was nothing to run: the cover was already at that end stop (or
+                # the frame never left, which `_apply_movement_delivery` has already
+                # settled). Either way the next step may start after the settle.
+                await _async_sleep(CALIBRATION_HOME_SETTLE_SEC)
+                return
+            if await self._async_sleep_until_stopped(bound):
+                await _async_sleep(CALIBRATION_HOME_SETTLE_SEC)
+
+    async def async_calib_start(self, direction: str) -> datetime:
+        """Start a free run and answer with the instant the motor really began to turn.
+
+        The run is free: nothing stops it but the end stop, or an `async_calib_stop` of
+        ours. This is the primitive behind the two *measured* runs of the flow, where
+        the shutter runs and the user presses a button when something happens - the
+        instant returned here is what those presses are measured against
+        (`calibration.timing_from_presses`).
+
+        Raises `CalibrationError` when the gateway never wrote the frame
+        (`not_delivered`) or when the actuator did not answer it with its own "moving"
+        status within `CALIBRATION_MOTOR_ECHO_SEC` (`no_echo`) - which is the flow's
+        "the shutter did not do what it should", and the screen that says so has a
+        button to try again with.
+        """
+        self._calib_guard()
+        self._calib_idle_guard()
+        with self.calibration_session():
+            if direction == DIRECTION_OPEN:
+                await self.async_open_cover()
+            else:
+                await self.async_close_cover()
+            expected = await self._async_calibration_started()
+            return await self._async_wait_for_motor_start(expected)
+
+    async def _async_wait_for_motor_start(self, expected: datetime) -> datetime:
+        """Wait for the actuator's own "moving" status, and answer with its instant.
+
+        The window is measured from here, which is the moment the frame was written
+        (the caller has just awaited its delivery), so it is the "within three seconds
+        of the frame reaching the bus" the specification asks for.
+
+        `expected` - the frame plus `start_delay` - is what comes back if the status
+        arrived while the caller was still awaiting the delivery report, which is the
+        commonest case of all on a gateway whose queue is empty.
+        """
+        if self._motor_started_at is None:
+            try:
+                async with asyncio.timeout(CALIBRATION_MOTOR_ECHO_SEC):
+                    await self._motor_start_event.wait()
+            except TimeoutError:
+                raise CalibrationError(
+                    REASON_NO_ECHO,
+                    f"{self.entity_id} did not report that it started moving within "
+                    f"{CALIBRATION_MOTOR_ECHO_SEC:.0f} s of the command reaching the bus",
+                ) from None
+        return self._motor_started_at or expected
+
+    async def async_calib_stop(self) -> datetime:
+        """Stop the shutter and answer with the instant our stop frame reached the bus.
+
+        That instant, not the one we asked for it at: on a busy command queue the two
+        are a second apart and the motor runs for all of it (0.4.3). A stop the command
+        path would not take, or took and then dropped, raises `CalibrationError`
+        (`not_stopped`) - the shutter is running on to its end stop and there is no half
+        run left to measure.
+        """
+        self._calib_guard()
+        with self.calibration_session():
+            await self.async_stop_cover()
+            return await self._async_calibration_stopped()
+
+    async def async_calib_run_fraction(self, direction: str, fraction: float) -> RunReport:
+        """Run the motor for `fraction` of the curtain travel and stop it there.
+
+        Started from the end stop the direction requires (the caller homes it first with
+        `async_calib_home`), so what the user then measures with a tape is one known
+        point of the travel: `fraction` of the curtain time closing, the slat phase plus
+        `fraction` of the curtain time opening.
+
+        The seconds in the report are the ones the *motor* really ran, as the actuator
+        timed them - which is what the fit must be given, not the seconds that were
+        asked for (a command queue that held the stop back for half a second is half a
+        second of real travel, and 4 cm of bar on the reference window).
+        """
+        self._calib_guard()
+        self._calib_idle_guard()
+        with self.calibration_session():
+            return await self._async_calib_timed_run(direction, fraction)
+
+    async def _async_calib_timed_run(
+        self, direction: str, fraction: float, *, require_echo: bool = True
+    ) -> RunReport:
+        """One timed run, shared by the guided primitive and the 0.4.2 service.
+
+        The clock of the run is the motor's, not ours: the frame may sit in the command
+        queue for a second (0.4.3) and the motor starts later again (0.4.4), so the wait
+        begins at the delivery plus `start_delay` and is topped up if the actuator says,
+        while we are waiting, when it really started. The stop is written
+        `stop_latency` early, exactly as a `set_cover_position` writes it, so the motor
+        runs the seconds this run is about.
+        """
+        planned = calibration_run_seconds(
+            direction, self._opening_time, self._closing_time, self._slat_time, fraction
+        )
+        LOGGER.info(
+            "%s Cover %s: calibration run '%s' - %.0f%% of the curtain, %.1fs of travel",
+            self._gateway_handler.log_id,
+            self._where,
+            direction,
+            fraction * 100,
+            planned,
+        )
+        if direction == DIRECTION_CLOSE:
+            await self.async_close_cover()
+        else:
+            await self.async_open_cover()
+        started = await self._async_calibration_started()
+        if require_echo:
+            started = await self._async_wait_for_motor_start(started)
+        spent = (dt_util.utcnow() - started).total_seconds()
+        await _async_sleep(max(0.0, planned - self._stop_latency - spent))
+        if self._motor_started_at is not None and self._motor_started_at != started:
+            # The actuator said, while we waited, when the motor really started: that
+            # is what the run is timed from, so top the wait up to it.
+            started = self._motor_started_at
+            spent = (dt_util.utcnow() - started).total_seconds()
+            await _async_sleep(max(0.0, planned - self._stop_latency - spent))
+        await self.async_stop_cover()
+        stopped = await self._async_calibration_stopped()
+        measured = await self._async_calibration_motor_seconds(started, stopped, planned)
+        return RunReport(
+            motor_start=started,
+            stop_written=stopped,
+            motor_seconds=measured,
+            planned_seconds=planned,
+            fraction=fraction,
+            direction=direction,
+        )
 
     async def async_calibration_run(self, direction: str) -> dict[str, Any]:
         """Run the cover to the half way point of `direction` and stop it there.
@@ -2287,47 +2655,17 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                     f"{SERVICE_COVER_CALIBRATION_RUN}: {self.entity_id} is already moving; "
                     f"stop it and try again"
                 )
-            closing = direction == DIRECTION_CLOSE
-            full_run = self._opening_time if closing else self._closing_time
-            motor_seconds = (
-                calibration_close_run_seconds(self._closing_time, self._slat_time)
-                if closing
-                else calibration_open_run_seconds(self._opening_time, self._slat_time)
-            )
-            LOGGER.info(
-                "%s Cover %s: calibration run '%s' - going to the far end (%.1fs), then %.1fs of travel",
-                self._gateway_handler.log_id,
-                self._where,
-                direction,
-                full_run,
-                motor_seconds,
-            )
-            if closing:
-                await self.async_open_cover()
-            else:
-                await self.async_close_cover()
-            await _async_sleep(full_run + CALIBRATION_SETTLE_SEC)
-
-            if closing:
-                await self.async_close_cover()
-            else:
-                await self.async_open_cover()
-            # Measured from the moment the motor starts, not from the service call and
-            # not from the frame: the frame may sit in the command queue for a second
-            # (0.4.3) and the motor starts later again (0.4.4). The stop is written
-            # `stop_latency` early, exactly as a `set_cover_position` writes it, so the
-            # motor runs the seconds this run is about.
-            started = await self._async_calibration_started()
-            spent = (dt_util.utcnow() - started).total_seconds()
-            await _async_sleep(max(0.0, motor_seconds - self._stop_latency - spent))
-            if self._motor_started_at is not None and self._motor_started_at != started:
-                # The actuator said, while we waited, when the motor really started:
-                # that is what the run is timed from, so top the wait up to it.
-                started = self._motor_started_at
-                spent = (dt_util.utcnow() - started).total_seconds()
-                await _async_sleep(max(0.0, motor_seconds - self._stop_latency - spent))
-            await self.async_stop_cover()
-            motor_seconds = await self._async_calibration_motor_seconds(started, motor_seconds)
+            far_end = DIRECTION_OPEN if direction == DIRECTION_CLOSE else DIRECTION_CLOSE
+            with self.calibration_session():
+                await self.async_calib_home(far_end)
+                # `require_echo=False`: this service has fallen back to `start_delay`
+                # since 0.4.4 when the gateway relays no status, and going strict here
+                # would break a bus that answers today. The guided flow, which has a
+                # screen to say "it did not respond" on, asks for the echo instead.
+                report = await self._async_calib_timed_run(
+                    direction, CALIBRATION_HALF_RUN, require_echo=False
+                )
+            motor_seconds = report.motor_seconds
         return {
             ATTR_DIRECTION: direction,
             ATTR_MOTOR_SECONDS: round(motor_seconds, 1),
