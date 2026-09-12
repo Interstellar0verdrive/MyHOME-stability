@@ -50,6 +50,7 @@ from custom_components.myhome.const import (
 )
 from custom_components.myhome.gateway import (
     COMMAND_ATTEMPTS,
+    COMMAND_SESSION_IDLE_SEC,
     EVENT_LONG_PRESS_REPEAT,
     EVENT_ROTATE_CCW_FAST,
     EVENT_ROTATE_CCW_SLOW,
@@ -502,6 +503,21 @@ async def test_command_auth_failure_starts_reauth() -> None:
     handler.config_entry.async_start_reauth.assert_called_once_with(handler.hass)
     assert len(command.instances) == 1
     assert handler.stats.commands_dropped == 1  # the lost command is counted
+
+
+async def test_the_command_session_is_given_back_before_the_gateway_takes_it() -> None:
+    """0.4.5: our idle timer must fire well inside the gateway's own.
+
+    A MyHOMEServer1 closes an idle command session after about 30 s without a word.
+    Whoever writes into it next writes into a half-open socket: the write succeeds,
+    the frame never reaches the bus, and only the missing ACK says so. The retry now
+    saves that frame; this constant is what keeps the situation rare, by giving the
+    session back while it is still ours. Anything from 30 s up is the bug by default.
+
+    Mutation caught: restoring the 60 s of 0.4.4.
+    """
+    assert COMMAND_SESSION_IDLE_SEC <= 20.0
+    assert make_handler(fast=False).command_session_idle == COMMAND_SESSION_IDLE_SEC
 
 
 async def test_idle_command_session_is_closed() -> None:

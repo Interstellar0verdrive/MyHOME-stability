@@ -156,7 +156,14 @@ COMMAND_QUEUE_MAXSIZE = 200
 # behind the movement and status frames of the covers that come after them.
 STOP_FRAME_PREFIX = "*2*0*"
 COMMAND_TTL_SEC = float(DEFAULT_QUEUE_TTL_SEC)  # commands older than this are dropped when dequeued
-COMMAND_SESSION_IDLE_SEC = 60.0  # close an unused command session (gateway session limit)
+# Close an unused command session before the gateway does it for us. A MyHOMEServer1
+# drops an idle command session after about 30 s and says nothing: the next write goes
+# into a half-open socket, "succeeds" locally and never reaches the bus (0.4.5). The
+# retry on a fresh session is what saves that frame; this value is what makes it rare,
+# by giving the session back while it is still ours. 20 s leaves a third of the
+# gateway's window as margin and costs one extra connect in a house that sends
+# something every half minute - a tenth of a second, on the command path only.
+COMMAND_SESSION_IDLE_SEC = 20.0
 # Event path.
 IDLE_TIMEOUT_SEC = float(DEFAULT_IDLE_WATCHDOG_SEC)  # no monitor frame for this long -> probe
 PROBE_WINDOW_SEC = float(DEFAULT_PROBE_WINDOW_SEC)  # probe sent, still nothing on the monitor -> reconnect
