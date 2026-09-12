@@ -17,12 +17,20 @@ from typing import Any
 
 import pytest
 
+from custom_components.myhome.calibration_flow import (
+    PROBLEM_REASONS,
+    RUNNING_ACTION,
+    CoverCalibrationFlow,
+    CoverProfileFlow,
+)
 from custom_components.myhome.config_flow import TUNABLE_OPTIONS
 from custom_components.myhome.const import (
     CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_SENSOR_DEFAULTS,
     CONF_WORKER_COUNT,
     MAX_COMMAND_WORKERS,
+    SUBENTRY_COVER_CALIBRATION,
+    SUBENTRY_COVER_PROFILE,
 )
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
 from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
@@ -169,3 +177,177 @@ def test_no_dead_error_keys(path: Path) -> None:
     that does not exist.
     """
     assert [key for key in leaf_keys(load(path)) if key.endswith(".invalid_port")] == []
+
+
+# --------------------------------------------------------------- config_subentries
+# The guided calibration of 0.5.0 is two config subentry flows, and every screen of it
+# is a step id, a menu option, a progress action, an error key or an abort reason that
+# has to exist in five files. The tests below pin the two halves to each other: a step
+# the code can show and nobody wrote a text for renders as a raw key, and a text nobody
+# can reach is a translation five people maintain for nothing.
+SUBENTRY_FLOWS = {
+    SUBENTRY_COVER_CALIBRATION: CoverCalibrationFlow,
+    SUBENTRY_COVER_PROFILE: CoverProfileFlow,
+}
+
+# What each screen is given to substitute into its text. Anything else in a `{...}`
+# renders as braces to the user, and a placeholder the code passes and no text uses is
+# merely unused - so this is the upper bound, not the exact set.
+STEP_PLACEHOLDERS: dict[str, set[str]] = {
+    "user": set(),
+    "cover": set(),
+    "reconfigure": {"cover", "profile", "values"},
+    "path": {"cover"},
+    "path_a": {"cover"},
+    "path_b": {"cover"},
+    "path_c": {"cover"},
+    "refine_scope": {"cover"},
+    "home_closed_done": {"cover"},
+    "open_lift": {"cover"},
+    "open_top": {"cover"},
+    "close_bottom": {"cover"},
+    "height": {"cover"},
+    "measure_descent": {"cover", "percent", "direction"},
+    "measure_ascent": {"cover", "percent", "direction"},
+    "measure_verify": {"cover", "percent", "direction"},
+    "verify_offer": {"cover"},
+    "verify_result": {"cover", "deviation"},
+    "summary": {"cover", "yaml", "accuracy", "height"},
+    "profile_name": {"cover"},
+    # Every `problem_*` screen, which are generated from `PROBLEM_REASONS`.
+    **{f"problem_{reason}": {"cover"} for reason in PROBLEM_REASONS},
+}
+PROGRESS_PLACEHOLDERS: dict[str, set[str]] = {
+    "homing_closed": {"cover"},
+    "starting_open": {"cover"},
+    "starting_close": {"cover"},
+    "running_down": {"cover", "percent"},
+    "running_up": {"cover", "percent"},
+}
+
+
+def subentry_block(path: Path, subentry_type: str) -> dict[str, Any]:
+    return load(path)["config_subentries"][subentry_type]
+
+
+@pytest.mark.parametrize("subentry_type", sorted(SUBENTRY_FLOWS))
+def test_every_subentry_type_declares_the_structure_hassfest_expects(subentry_type: str) -> None:
+    """`entry_type` and `initiate_flow` name the rows and buttons of the integration page.
+
+    Without them the page shows the raw subentry type as the name of the thing the user
+    is about to add, in every language.
+
+    Mutation caught: adding a subentry type to ``async_get_supported_subentry_types``
+    and only writing its steps.
+    """
+    for path in [STRINGS, *TRANSLATIONS]:
+        block = subentry_block(path, subentry_type)
+        assert block["entry_type"], path.name
+        assert block["initiate_flow"]["user"], path.name
+        assert block["initiate_flow"]["reconfigure"], path.name
+
+
+@pytest.mark.parametrize("subentry_type", sorted(SUBENTRY_FLOWS))
+def test_every_written_step_is_one_the_flow_can_show(subentry_type: str) -> None:
+    """A step id in the strings with no ``async_step_`` behind it is a dead text.
+
+    Mutation caught: renaming a step in the code and leaving five translations behind
+    (or the reverse, which the next test catches).
+    """
+    flow = SUBENTRY_FLOWS[subentry_type]
+    for step in subentry_block(STRINGS, subentry_type)["step"]:
+        assert hasattr(flow, f"async_step_{step}"), step
+
+
+@pytest.mark.parametrize("subentry_type", sorted(SUBENTRY_FLOWS))
+def test_every_menu_option_is_a_step_and_is_labelled(subentry_type: str) -> None:
+    """Home Assistant routes a menu choice straight to ``async_step_<option>``.
+
+    An option with no method raises ``UnknownStep`` inside the dialog; one with no label
+    is shown to the user as its own key.
+
+    Mutation caught: offering an option the flow does not implement (which no happy
+    path would reach, because the happy path never clicks it).
+    """
+    flow = SUBENTRY_FLOWS[subentry_type]
+    steps = subentry_block(STRINGS, subentry_type)["step"]
+    for step_id, step in steps.items():
+        for option in step.get("menu_options", {}):
+            assert hasattr(flow, f"async_step_{option}"), f"{step_id} -> {option}"
+
+
+def test_every_failure_of_the_engine_has_a_screen_of_its_own() -> None:
+    """One screen per reason, because each one needs something different done about it.
+
+    ``PROBLEM_REASONS`` is what the flow maps an engine failure onto; the steps named
+    ``problem_*`` are what it shows. A reason with no screen would raise ``UnknownStep``
+    at the worst possible moment - just after a shutter misbehaved.
+
+    Mutation caught: adding a reason to the engine and to ``PROBLEM_REASONS`` without
+    writing the screen that explains it.
+    """
+    steps = subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["step"]
+    written = {step for step in steps if step.startswith("problem_")}
+    assert written == {f"problem_{reason}" for reason in PROBLEM_REASONS}
+    for step in written:
+        assert set(steps[step]["menu_options"]) == {"repeat_step", "cancel_flow"}, step
+
+
+def test_every_progress_action_the_flow_uses_is_written_down() -> None:
+    """A progress screen shows ``progress.<action>``, and nothing else.
+
+    It is the only kind of screen with no step text at all, so a missing action leaves
+    the user watching a spinner with no idea what is moving.
+
+    Mutation caught: a new automatic movement with a new action name (or a renamed one).
+    """
+    source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
+    used = set(re.findall(r'action="([a-z_]+)"', source)) | set(RUNNING_ACTION.values())
+    written = set(subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["progress"])
+    assert used == written
+
+
+def test_every_abort_reason_the_flow_uses_is_written_down() -> None:
+    """An abort with no text closes the dialog on a raw key.
+
+    Mutation caught: a new ``async_abort(reason=...)`` with nothing written for it, and
+    a reason kept in the files after the branch that raised it was deleted.
+    """
+    source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
+    used = set(re.findall(r'reason="([a-z_]+)"', source))
+    written = set()
+    for subentry_type in SUBENTRY_FLOWS:
+        written |= set(subentry_block(STRINGS, subentry_type)["abort"])
+    assert used == written
+
+
+def test_every_form_error_the_flow_sets_is_written_down() -> None:
+    """The three ways a form can be answered wrongly, and their sentences."""
+    source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
+    used = set(re.findall(r'errors=\{[^}]*: "([a-z_]+)"', source))
+    used |= set(re.findall(r'errors\[[A-Z_a-z]+\] = "([a-z_]+)"', source))
+    written = set(subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["error"])
+    assert used == written
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_screen_substitutes_something_the_flow_does_not_pass(path: Path) -> None:
+    """A ``{placeholder}`` the step is never given renders as braces to the user.
+
+    The parity test above only checks that the five files agree with each other, so a
+    placeholder invented in ``strings.json`` and faithfully copied into the other four
+    would pass it. This one checks them against the code.
+
+    Mutation caught: writing ``{cover}`` into the two screens that run before a cover
+    has been chosen, or ``{percent}`` into a screen that is not about a fraction.
+    """
+    for subentry_type in SUBENTRY_FLOWS:
+        block = subentry_block(path, subentry_type)
+        for step_id, step in block["step"].items():
+            allowed = STEP_PLACEHOLDERS[step_id]
+            for text in flatten(step).values():
+                assert set(PLACEHOLDER.findall(text)) <= allowed, f"{path.name}: {step_id}"
+        for action, text in block.get("progress", {}).items():
+            assert set(PLACEHOLDER.findall(text)) <= PROGRESS_PLACEHOLDERS[action], action
+        for reason, text in block["abort"].items():
+            assert set(PLACEHOLDER.findall(text)) <= {"cover"}, reason
