@@ -130,6 +130,15 @@
             "not_right": "Non ha fatto quello che doveva"
           }
         },
+        "home_open_done": {
+          "title": "{cover} è aperta del tutto?",
+          "description": "**Cosa è successo**: la tapparella è stata mandata su fino in fondo, perché quello che segue scende da lì e una corsa partita da un altro punto non misurerebbe niente.\n\n**Cosa devi fare tu**: guardala. Se è aperta del tutto, vai avanti. Se si sta ancora muovendo, aspetta e poi vai avanti. Se non si è mossa affatto, o si è mossa dalla parte sbagliata, dillo qui sotto.",
+          "menu_options": {
+            "confirm_open": "È aperta del tutto",
+            "repeat_step": "Ripeti questo passo",
+            "not_right": "Non ha fatto quello che doveva"
+          }
+        },
         "open_lift": {
           "title": "{cover} si sta aprendo",
           "description": "**Cosa sta succedendo**: la tapparella ha cominciato a salire. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo.\n\n**Cosa devi fare tu**: guarda il bordo inferiore e premi il pulsante qui sotto **nell'istante in cui si stacca dall'appoggio**. Non devi cronometrare niente: la pressione è la misura, e Home Assistant sa già esattamente quando è partito il motore.\n\nPoi lascia che la tapparella continui: arriverà in cima da sola.",
@@ -168,21 +177,24 @@
           "title": "Misura {cover} — al {percent}% della discesa",
           "description": "**Cosa è successo**: la tapparella è stata aperta del tutto e poi fatta scendere per il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura di nuovo dal punto dove il bordo inferiore appoggia da chiusa fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Lo stesso riferimento dell'altezza, così le due misure si possono confrontare.",
           "data": {
-            "measured_cm": "Altezza del bordo inferiore (cm)"
+            "measured_cm": "Altezza del bordo inferiore (cm)",
+            "repeat_step": "Ripeti invece questo passo (rifai i suoi movimenti e misura di nuovo)"
           }
         },
         "measure_ascent": {
           "title": "Misura {cover} — al {percent}% della salita",
           "description": "**Cosa è successo**: la tapparella è stata chiusa del tutto e poi fatta salire per le lamelle più il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura dal punto dove il bordo inferiore appoggia da chiusa fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
           "data": {
-            "measured_cm": "Altezza del bordo inferiore (cm)"
+            "measured_cm": "Altezza del bordo inferiore (cm)",
+            "repeat_step": "Ripeti invece questo passo (rifai i suoi movimenti e misura di nuovo)"
           }
         },
         "measure_verify": {
           "title": "Verifica {cover} — al {percent}% della discesa",
           "description": "**Cosa è successo**: la tapparella è stata portata in una posizione in cui non è stato misurato niente, quindi questa è una verifica vera e non una ripetizione.\n\n**Cosa devi fare tu**: misura un'ultima volta l'altezza del bordo inferiore, dallo stesso riferimento di prima, e scrivi qui sotto i centimetri. La schermata successiva dice di quanto la tapparella si discosta da dove Home Assistant la credeva.",
           "data": {
-            "measured_cm": "Altezza del bordo inferiore (cm)"
+            "measured_cm": "Altezza del bordo inferiore (cm)",
+            "repeat_step": "Ripeti invece questo passo (rifai i suoi movimenti e misura di nuovo)"
           }
         },
         "verify_offer": {
@@ -204,7 +216,7 @@
         },
         "summary": {
           "title": "Cosa è stato misurato su {cover}",
-          "description": "La corsa del telo è di {height} cm e il modello costruito con queste misure colloca il bordo inferiore entro {accuracy} cm da dove è stato davvero trovato.\n\nQui sotto la stessa cosa scritta come andrebbe in `myhome.yaml`, per chi preferisce il file. Salvando **non** si scrive il file: i numeri restano nella memoria dell'integrazione, hanno la precedenza sul file, e togliendoli da questa pagina il file torna a comandare.\n\n{yaml}\n**Cosa devi fare tu**: salva, oppure spendi altri due minuti e quattro letture col metro per una risposta migliore.",
+          "description": "**Corsa del telo**: {height}\n**Precisione del modello**: {accuracy}\n\nUn trattino vuol dire che il percorso scelto non ha misurato quella cosa. La precisione è la distanza fra dove il modello colloca il bordo inferiore e dove il metro lo ha davvero trovato, e dice qualcosa solo quando una direzione è stata misurata più di una volta — che è esattamente quello che fa “Prima migliora la precisione”.\n\nQui sotto la stessa cosa scritta come andrebbe in `myhome.yaml`, per chi preferisce il file. Salvando **non** si scrive il file: i numeri restano nella memoria dell'integrazione, quello che è stato misurato su *questa* tapparella ha la precedenza sul file, e togliendolo da questa pagina il file torna a comandare. Dare a queste misure il nome di un profilo che esiste già sostituisce quel profilo con loro.\n\n{yaml}\n**Cosa devi fare tu**: salva, oppure spendi altri due minuti e quattro letture col metro per una risposta migliore.",
           "menu_options": {
             "save": "Salva",
             "refine": "Prima migliora la precisione (~2 minuti, altre 4 letture)",
@@ -213,7 +225,7 @@
         },
         "profile_name": {
           "title": "Dai un nome a questo tipo di tapparella",
-          "description": "{cover} è stata misurata, e quello che è stato misurato descrive ogni finestra dello stesso modello. Dai un nome a quel modello e le altre tapparelle si calibreranno in due schermate invece che in dieci.\n\n**Cosa devi fare tu**: scrivi un nome breve — solo lettere, cifre e trattini bassi, niente spazi e niente accenti, perché è anche una chiave di `myhome.yaml`. Qualcosa come `alte`, `camere` oppure `porta_cucina`.",
+          "description": "{cover} è stata misurata, e quello che è stato misurato descrive ogni finestra dello stesso modello. Dai un nome a quel modello e le altre tapparelle si calibreranno in due schermate invece che in dieci.\n\n**Cosa devi fare tu**: scrivi un nome breve — solo lettere, cifre e trattini bassi, niente spazi e niente accenti, perché è anche una chiave di `myhome.yaml`. Qualcosa come `alte`, `camere` oppure `porta_cucina`.\n\nUn nome già in uso non viene rifiutato: il profilo con quel nome viene **sostituito** da quello che è stato appena misurato, ed è così che si rimisura una tapparella la cui prima misura era venuta male. Un blocco `cover_profiles:` con lo stesso nome in `myhome.yaml` resta intatto e continua a stare nascosto dietro a quello misurato.",
           "data": {
             "name": "Nome del profilo"
           }
@@ -224,7 +236,7 @@
         },
         "problem_no_echo": {
           "title": "{cover} non ha risposto",
-          "description": "Il comando è arrivato sul bus ma l'attuatore non ha mai segnalato di essersi messo in moto, quindi non c'è nessun istante rispetto a cui misurare e il passo è stato abbandonato.\n\n**Cosa devi fare tu**: controlla che la tapparella non sia bloccata, che nessun altro (un pulsante a muro, un'automazione) la stia tenendo, e ripeti il passo. Se succede ogni volta, questo attuatore non riporta il proprio stato e la calibrazione guidata non può misurarlo.",
+          "description": "Il comando è arrivato sul bus ma l'attuatore non ha mai segnalato di essersi messo in moto, quindi non c'è nessun istante rispetto a cui misurare e il passo è stato abbandonato.\n\n**La tapparella potrebbe essere ancora in movimento**: il comando è partito davvero, quindi con ogni probabilità il motore si è avviato. Subito dopo l'errore è stato mandato uno stop, ma se la tapparella sta ancora andando, fermala tu prima di ripetere il passo.\n\n**Cosa devi fare tu**: controlla che la tapparella non sia bloccata, che nessun altro (un pulsante a muro, un'automazione) la stia tenendo, e ripeti il passo. Se succede ogni volta, questo attuatore non riporta il proprio stato e la calibrazione guidata non può misurarlo.",
           "menu_options": {
             "repeat_step": "Ripeti questo passo",
             "cancel_flow": "Annulla"
@@ -281,6 +293,7 @@
       },
       "progress": {
         "homing_closed": "{cover} viene chiusa fino in fondo, così che le misure partano da un punto noto. Attendi, e assicurati che non ci sia niente d'intralcio.",
+        "homing_open": "{cover} viene aperta fino in fondo, così che il movimento successivo parta da un punto noto. Attendi, e assicurati che non ci sia niente d'intralcio.",
         "starting_open": "{cover} viene chiusa fino in fondo e poi fatta partire in salita. Attendi: la schermata successiva ti chiederà di guardarla e premere un pulsante.",
         "starting_close": "{cover} viene aperta fino in fondo e poi fatta partire in discesa. Attendi: la schermata successiva ti chiederà di guardarla e premere un pulsante.",
         "running_down": "{cover} viene aperta fino in fondo e poi fatta scendere fino a circa il {percent}% della corsa. Attendi, e tieni pronto il metro.",
@@ -288,13 +301,13 @@
       },
       "error": {
         "invalid_name": "Il nome di un profilo può contenere solo lettere, cifre e trattini bassi: niente spazi, niente accenti, niente trattini.",
-        "name_in_use": "Esiste già un profilo con questo nome. Scegline un altro, oppure elimina prima quello esistente.",
         "above_the_travel": "È più dell'intera corsa di questo telo. Misura dal punto dove il bordo inferiore appoggia quando la tapparella è chiusa, non dal pavimento."
       },
       "abort": {
         "no_basic_covers": "Tutte le tapparelle di questo gateway riportano la propria posizione, quindi non c'è niente da calibrare. La calibrazione guidata serve solo alle tapparelle la cui posizione Home Assistant deve stimare dai tempi di corsa.",
         "no_profiles": "Non c'è ancora nessun profilo da seguire. Calibra prima una tapparella con la misura completa: è quella che crea un profilo.",
         "unknown_cover": "Quella tapparella non fa più parte della configurazione di questo gateway. Non è stato misurato né salvato niente.",
+        "already_calibrating": "Questa tapparella è già in calibrazione: c'è un'altra finestra di dialogo aperta su di lei, oppure la sta guidando il servizio cover_calibration_run. Due calibrazioni sullo stesso motore misurerebbero ciascuna una corsa che l'altra ha fermato, quindi questa non è stata avviata. Concludi o chiudi l'altra e riprova.",
         "cancelled": "La calibrazione è stata annullata. Non è stato salvato niente e la tapparella è dove l'ha lasciata l'ultimo movimento.",
         "calibration_saved": "La calibrazione di {cover} è stata salvata. La tapparella usa adesso i valori misurati, i suoi attributi lo dicono, e togliendo questa voce dalla pagina dell'integrazione torna a comandare myhome.yaml."
       }
@@ -308,7 +321,7 @@
       "step": {
         "reconfigure": {
           "title": "Profilo “{profile}”",
-          "description": "Queste sono le misure che questo profilo porta con sé. Home Assistant le adatta a ogni finestra che lo segue, usando l'altezza di quella finestra.\n\n{values}\n**Come si cambia**: rimisura una tapparella di questo tipo con la calibrazione guidata e dalle lo stesso nome, che sostituisce quello che c'è qui. **Come si elimina**: il pulsante di eliminazione nella pagina dell'integrazione. Le tapparelle che lo seguono tornano a quello che dice `myhome.yaml` su di loro."
+          "description": "Queste sono le misure che questo profilo porta con sé. Home Assistant le adatta a ogni finestra che lo segue, usando l'altezza di quella finestra.\n\n{values}\n**Come si cambia**: rimisura una tapparella di questo tipo con la calibrazione guidata e dalle lo stesso nome, che sostituisce quello che c'è qui. **Come si elimina**: il pulsante di eliminazione nella pagina dell'integrazione. Le tapparelle che lo seguono tornano a quello che dice `myhome.yaml` su di loro. Un profilo con lo stesso nome scritto in `cover_profiles:` non viene toccato né dall'una né dall'altra cosa, e resta nascosto dietro a questo finché questo esiste."
         }
       },
       "abort": {

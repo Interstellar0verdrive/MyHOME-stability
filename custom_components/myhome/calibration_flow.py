@@ -56,9 +56,12 @@ import voluptuous as vol
 from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 from homeassistant.const import CONF_MAC, CONF_NAME
-from homeassistant.core import callback
+from homeassistant.core import CALLBACK_TYPE, callback
+from homeassistant.data_entry_flow import UnknownFlow
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -106,6 +109,7 @@ from .const import (
     CONF_RAW,
     CONF_REFERENCE_HEIGHT,
     CONF_SLAT_TIME,
+    CONF_YAML_KEY,
     DIRECTION_CLOSE,
     DIRECTION_OPEN,
     DOMAIN,
@@ -122,6 +126,22 @@ from .validate import derive_cover_from_profile
 # with a "measurement" of four thousand seconds. A flow cannot push a new screen at a
 # browser, so the window is checked when the press finally arrives (see `_timed_out`).
 PRESS_TIMEOUT_SEC = 90.0
+
+# How long a conversation may sit on one screen before the shutter is given back.
+#
+# Home Assistant never expires a flow of its own accord: `_progress` in
+# `data_entry_flow` is pruned on abort, on finish and on the frontend's explicit
+# `DELETE`, and a browser tab that is simply closed - a laptop that sleeps, a phone
+# that kills the tab - sends none of those. The flow object would then live for the
+# rest of the Home Assistant run holding a calibration session, so `Calibrating` would
+# stay true and `set_cover_position` on that shutter would keep raising until the entry
+# was reloaded. Subentry flows in progress are shown nowhere in the UI, so the user
+# would have nothing to cancel either.
+#
+# Ten minutes is comfortably longer than `PRESS_TIMEOUT_SEC` and than the slowest
+# screen (a progress screen bounded by a modelled run plus its settle), so it can only
+# be reached by a conversation nobody is having any more.
+SESSION_IDLE_TIMEOUT_SEC = 600.0
 
 # Where the automatic runs stop. The three fractions of the precise level bracket the
 # travel (a quarter, a half, three quarters); the verification deliberately lands
@@ -181,8 +201,18 @@ PLAN_PRECISE: tuple[str, ...] = (
     "summary",
 )
 PLAN_PROFILE: tuple[str, ...] = ("height", "verify_offer", "summary")
-PLAN_TIMES: tuple[str, ...] = ("open_timed", "close_timed", "summary")
+# Paths B and C open the way path A does: the shutter is brought to an end stop and the
+# user is asked whether it really got there (the question is the homing stage's
+# `done_step`, not a stage of its own - `home_closed` is followed by
+# `home_closed_done`, which advances the pointer past the homing). Every homing's wait
+# is bounded by the
+# *modelled* run of a model that is, in path C, wrong by hypothesis - that is why the
+# user is in path C - so without the confirmation the first measured run can start from
+# a shutter that is still travelling. The homing costs nothing when it is already
+# there, and `open_timed` re-homes anyway.
+PLAN_TIMES: tuple[str, ...] = ("home_closed", "open_timed", "close_timed", "summary")
 PLAN_TIMES_AND_ROLLS: tuple[str, ...] = (
+    "home_closed",
     "open_timed",
     "height",
     "close_timed",
@@ -190,11 +220,23 @@ PLAN_TIMES_AND_ROLLS: tuple[str, ...] = (
     "half_up",
     "summary",
 )
+# What path B's optional check is preceded by: its run goes *down* from the top, so the
+# end stop it needs confirming is the open one.
+PLAN_VERIFY_B: tuple[str, ...] = ("home_open", "verify_b")
 
 # The progress text of an automatic run, by the direction it runs in. A mapping rather
 # than a conditional expression so that every progress action of the flow can be found
 # (and checked against the translations) without reading the code that uses it.
 RUNNING_ACTION = {DIRECTION_CLOSE: "running_down", DIRECTION_OPEN: "running_up"}
+# ...and of a homing, by the end stop it is heading for.
+HOMING_ACTION = {DIRECTION_CLOSE: "homing_closed", DIRECTION_OPEN: "homing_open"}
+
+# Why a conversation may not start on the cover it was pointed at. They are abort
+# reasons like any other, but they are returned by `_claim` rather than written at an
+# `async_abort` call, so they are named here for the translations to be checked against.
+REASON_UNKNOWN_COVER = "unknown_cover"
+REASON_ALREADY_CALIBRATING = "already_calibrating"
+CLAIM_REASONS: tuple[str, ...] = (REASON_UNKNOWN_COVER, REASON_ALREADY_CALIBRATING)
 
 PATH_FIRST = "path_a"
 PATH_PROFILE = "path_b"
@@ -202,6 +244,12 @@ PATH_REFINE = "path_c"
 
 FIELD_COVER = "cover"
 FIELD_MEASURED_CM = "measured_cm"
+# Every tape form carries this: a user who looks up from the tape and realises the
+# shutter overshot had no way back but cancelling the whole conversation. A form cannot
+# have a second button, so it is a box to tick - and ticking it re-runs that step's own
+# movements and asks for the reading again, exactly as the menus' "Repeat this step"
+# does (spec 2.2: *every* measuring step carries it).
+FIELD_REPEAT = "repeat_step"
 
 _NAME_RE = re.compile(PROFILE_NAME_PATTERN)
 _NOT_A_NAME = re.compile(r"[^A-Za-z0-9_]+")
@@ -319,6 +367,8 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         self._report: RunReport | None = None
         self._pending: tuple[str, float] | None = None
         self._session: contextlib.ExitStack | None = None
+        self._yaml_key: str = ""
+        self._watchdog: CALLBACK_TYPE | None = None
 
     # ------------------------------------------------------------------ housekeeping
     @callback
@@ -330,9 +380,74 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         reads one), and a flow that is abandoned - the X, a browser closed, a timeout -
         gets no other chance to give it back.
         """
+        self._disarm()
         if self._session is not None:
             self._session.close()
             self._session = None
+
+    # ---------------------------------------------------------------- the watchdog
+    # Every screen restarts the clock. Overriding the three `async_show_*` is what
+    # makes that exhaustive: a step added later cannot forget to do it, because there
+    # is no other way for this flow to put anything in front of a user.
+    @callback
+    def async_show_form(self, *args: Any, **kwargs: Any) -> SubentryFlowResult:
+        """A form, and one more `SESSION_IDLE_TIMEOUT_SEC` of patience."""
+        self._touch()
+        return super().async_show_form(*args, **kwargs)
+
+    @callback
+    def async_show_menu(self, *args: Any, **kwargs: Any) -> SubentryFlowResult:
+        """A menu, and one more `SESSION_IDLE_TIMEOUT_SEC` of patience."""
+        self._touch()
+        return super().async_show_menu(*args, **kwargs)
+
+    @callback
+    def async_show_progress(self, *args: Any, **kwargs: Any) -> SubentryFlowResult:
+        """A progress bar: a movement is activity too."""
+        self._touch()
+        return super().async_show_progress(*args, **kwargs)
+
+    @callback
+    def _touch(self) -> None:
+        """Restart the watchdog: somebody is still having this conversation."""
+        if self._cover is None:
+            # Nothing has been claimed yet, so there is nothing to give back.
+            return
+        self._disarm()
+        self._watchdog = async_call_later(
+            self.hass, SESSION_IDLE_TIMEOUT_SEC, self._async_session_expired
+        )
+
+    @callback
+    def _disarm(self) -> None:
+        if self._watchdog is not None:
+            self._watchdog()
+            self._watchdog = None
+
+    async def _async_session_expired(self, _now: datetime) -> None:
+        """Give the shutter back: this dialog was abandoned without being closed.
+
+        See `SESSION_IDLE_TIMEOUT_SEC` for why nothing else would ever do it. Three
+        things, in this order, because each one has to happen even if the next cannot:
+        the session is released (the shutter stops being `Calibrating` and can be moved
+        again), a shutter still running under a step of ours is stopped, and the flow
+        itself is removed so that Home Assistant is not holding an object nobody can
+        reach.
+        """
+        self._watchdog = None
+        cover = self._cover
+        LOGGER.warning(
+            "Guided calibration of %s: nothing happened for %.0f minutes, so the shutter "
+            "is being given back. Nothing was saved; open the dialog again to measure it",
+            self._cover_name,
+            SESSION_IDLE_TIMEOUT_SEC / 60,
+        )
+        self.async_remove()
+        if cover is not None and (cover.is_opening or cover.is_closing):
+            with contextlib.suppress(HomeAssistantError):
+                await cover.async_calib_stop()
+        with contextlib.suppress(UnknownFlow):
+            self.hass.config_entries.subentries.async_abort(self.flow_id)
 
     @property
     def _mac(self) -> str:
@@ -362,22 +477,32 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         return {"cover": self._cover_name, **{key: str(value) for key, value in extra.items()}}
 
     @callback
-    def _claim(self, unique_id: str) -> bool:
-        """Take hold of one cover for the rest of the conversation."""
+    def _claim(self, unique_id: str) -> str | None:
+        """Take hold of one cover for the rest of the conversation.
+
+        Answers with the abort reason, or None when the shutter is ours. A cover that
+        is already being calibrated - a second browser tab on the same shutter, or the
+        0.4.2 service in the middle of a run - is refused here rather than half way
+        through the first movement, because that is the only moment at which the user
+        has not yet been asked to do anything.
+        """
         for key, cfg in self._covers().items():
             if f"{self._mac}-{key}" != unique_id:
                 continue
             entity = (cfg.get(CONF_ENTITIES) or {}).get(COVER)
             if entity is None:
-                return False
+                return REASON_UNKNOWN_COVER
+            if entity.calibrating:
+                return REASON_ALREADY_CALIBRATING
             self._cover = entity
             self._cover_unique_id = unique_id
             self._cover_key = key
+            self._yaml_key = str(cfg.get(CONF_YAML_KEY) or "")
             self._cover_name = str(cfg.get(CONF_NAME) or entity.entity_id)
             self._session = contextlib.ExitStack()
             self._session.enter_context(entity.calibration_session())
-            return True
-        return False
+            return None
+        return REASON_UNKNOWN_COVER
 
     # ------------------------------------------------------------------ the entrances
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -403,8 +528,12 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         """
         subentry = self._get_reconfigure_subentry()
         unique_id = str(subentry.data.get(CONF_COVER_UNIQUE_ID, ""))
-        if not self._claim(unique_id):
-            return self.async_abort(reason="unknown_cover")
+        # Once, and not once per render: Home Assistant calls this step twice (the form
+        # and its submit), and a second `_claim` would rebind `self._session` without
+        # closing the first - a session leaked outright on any runtime that does not
+        # refcount, and a spurious `Calibrating` False/True pair even on CPython.
+        if self._cover is None and (reason := self._claim(unique_id)) is not None:
+            return self.async_abort(reason=reason)
         if user_input is None:
             return self.async_show_form(
                 step_id="reconfigure", data_schema=vol.Schema({}), description_placeholders=self._placeholders()
@@ -417,8 +546,8 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
             f"{self._mac}-{key}": str(cfg.get(CONF_NAME) or key) for key, cfg in self._covers().items()
         }
         if user_input is not None:
-            if not self._claim(user_input[FIELD_COVER]):
-                return self.async_abort(reason="unknown_cover")
+            if (reason := self._claim(user_input[FIELD_COVER])) is not None:
+                return self.async_abort(reason=reason)
             return await self.async_step_path()
         return self.async_show_form(
             step_id="cover",
@@ -662,7 +791,7 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         """Send the shutter all the way down, so every later measurement has an origin."""
         return await self._async_movement(
             step_id="home_closed",
-            action="homing_closed",
+            action=HOMING_ACTION[DIRECTION_CLOSE],
             job=lambda: self._job_home(DIRECTION_CLOSE),
             done_step="home_closed_done",
         )
@@ -678,6 +807,29 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
 
     async def async_step_confirm_closed(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """It is closed: on to the measured opening."""
+        return await self._async_advance()
+
+    # ------------------------------------------------------------------ stage: open
+    async def async_step_home_open(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Send the shutter all the way up: the end a downward check starts from."""
+        return await self._async_movement(
+            step_id="home_open",
+            action=HOMING_ACTION[DIRECTION_OPEN],
+            job=lambda: self._job_home(DIRECTION_OPEN),
+            done_step="home_open_done",
+        )
+
+    async def async_step_home_open_done(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The same question path A asks at the bottom, asked at the top."""
+        self._shown_at = dt_util.utcnow()
+        return self.async_show_menu(
+            step_id="home_open_done",
+            menu_options=["confirm_open", "repeat_step", "not_right"],
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_confirm_open(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """It is fully open: the check can start from a place we both agree on."""
         return await self._async_advance()
 
     # ------------------------------------------------------------------ stage: open run
@@ -815,7 +967,12 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         direction, fraction = self._pending or (DIRECTION_CLOSE, HALF_RUN)
         return self.async_show_form(
             step_id=step_id,
-            data_schema=vol.Schema({vol.Required(FIELD_MEASURED_CM): _measurement_selector()}),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(FIELD_MEASURED_CM): _measurement_selector(),
+                    vol.Optional(FIELD_REPEAT, default=False): BooleanSelector(),
+                }
+            ),
             errors=errors,
             description_placeholders=self._placeholders(
                 percent=round(fraction * 100), direction=direction
@@ -839,6 +996,8 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         """How far the bar came down: one point of the descent."""
         if user_input is None:
             return self._measurement_form("measure_descent")
+        if user_input.get(FIELD_REPEAT):
+            return await self.async_step_repeat_step()
         value = self._accept_measurement(user_input)
         if value is None or self._report is None:
             return self._measurement_form("measure_descent", errors={FIELD_MEASURED_CM: "above_the_travel"})
@@ -849,6 +1008,8 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         """How far the bar came up: one point of the ascent."""
         if user_input is None:
             return self._measurement_form("measure_ascent")
+        if user_input.get(FIELD_REPEAT):
+            return await self.async_step_repeat_step()
         value = self._accept_measurement(user_input)
         if value is None or self._report is None:
             return self._measurement_form("measure_ascent", errors={FIELD_MEASURED_CM: "above_the_travel"})
@@ -871,8 +1032,8 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         )
 
     async def async_step_verify_now(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """Graft the check onto the plan, right here."""
-        self._plan.insert(self._index + 1, "verify_b")
+        """Graft the check - and the homing it has to start from - onto the plan here."""
+        self._plan[self._index + 1 : self._index + 1] = list(PLAN_VERIFY_B)
         return await self._async_advance()
 
     async def async_step_skip_verify(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -889,6 +1050,8 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         """The reading the model is compared against, rather than fitted to."""
         if user_input is None:
             return self._measurement_form("measure_verify")
+        if user_input.get(FIELD_REPEAT):
+            return await self.async_step_repeat_step()
         value = self._accept_measurement(user_input)
         if value is None:
             return self._measurement_form("measure_verify", errors={FIELD_MEASURED_CM: "above_the_travel"})
@@ -942,14 +1105,17 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
     async def async_step_verify_result(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Show the deviation in centimetres, and what can be done about it."""
         deviation = self._measured.deviation
-        off_by = abs(deviation) if deviation is not None else 0.0
+        # Rounded *before* the threshold is applied, so that the number on the screen is
+        # the number that decided: comparing the unrounded value showed "3 cm" both
+        # with and without the refinement on offer, on a digit the user cannot see.
+        off_by = round(abs(deviation), 1) if deviation is not None else 0.0
         options = ["continue_step", "repeat_step"]
         if self._path == PATH_PROFILE and off_by > REFINE_THRESHOLD_CM:
             options = ["path_c", "continue_step", "repeat_step"]
         return self.async_show_menu(
             step_id="verify_result",
             menu_options=options,
-            description_placeholders=self._placeholders(deviation=f"{off_by:.0f}"),
+            description_placeholders=self._placeholders(deviation=f"{off_by:.1f}"),
         )
 
     async def async_step_continue_step(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -989,7 +1155,10 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         """What Save would write, computed from what has been measured so far."""
         measured = self._measured
         name = self._profile_name or _suggested_name(getattr(self._cover, "entity_id", ""))
-        key = _suggested_name(getattr(self._cover, "entity_id", ""))
+        # The key the *file* knows this cover by, not the entity's object id: the
+        # snippet is offered as something to paste into `myhome.yaml`, and an entity
+        # the user has since renamed would make it paste into nothing.
+        key = self._yaml_key or _suggested_name(getattr(self._cover, "entity_id", ""))
         if self._path == PATH_PROFILE:
             height = measured.height or 0.0
             return _Result(yaml=profile_reference_yaml(key, self._profile or "", height))
@@ -1003,7 +1172,17 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
                 CONF_OPENING_ROLL: round(up.fit.roll, 2),
                 CONF_CLOSING_ROLL: round(down.fit.roll, 2),
             }
-            accuracy = max(down.fit.max_residual_cm, up.fit.max_residual_cm)
+            # A direction fitted through a single point is reproduced exactly by
+            # construction, so its residual is 0.0 and means nothing at all: showing it
+            # as "the model is within 0.0 cm" reads as "perfect" and puts the precise
+            # level - the only thing that measures the reaction time of the presses -
+            # out of reach in practice. It takes two points per direction before there
+            # is anything left over to be a residual of.
+            accuracy = (
+                max(down.fit.max_residual_cm, up.fit.max_residual_cm)
+                if min(down.fit.points, up.fit.points) > 1
+                else None
+            )
             if self._path == PATH_FIRST:
                 return _Result(
                     yaml=calibration_yaml(
@@ -1016,6 +1195,15 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
                         values[CONF_OPENING_ROLL],
                     ),
                     profile={CONF_REFERENCE_HEIGHT: measured.height or 0.0, **values},
+                    # The same numbers again, as this window's own overrides. The
+                    # profile is what the *next* shutter of this kind inherits; the
+                    # overrides are what makes this one run on what was just measured,
+                    # because a profile does not beat a key written in `myhome.yaml`
+                    # (spec 1.3) and the file is where a basic cover's run times
+                    # usually live. Without them the user walks seven movements, reads
+                    # a summary that says the numbers beat the file, and the shutter
+                    # goes on running on the file's (0.5.0 review, BUG-1).
+                    overrides=dict(values),
                     accuracy_cm=accuracy,
                 )
             return _Result(
@@ -1038,14 +1226,18 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
         if self._path == PATH_FIRST and not self._measured.precise:
             options.append("refine")
         options.append("cancel_flow")
-        accuracy = "-" if result.accuracy_cm is None else f"{result.accuracy_cm:.1f}"
+        # The unit travels with the value, so that a path which did not measure
+        # something reads "-" rather than "- cm" (path C's times-only summary used to
+        # say "the curtain travel is - cm and the model ... within - cm").
+        accuracy = "\u2013" if result.accuracy_cm is None else f"{result.accuracy_cm:.1f} cm"
+        height = f"{self._measured.height:.0f} cm" if self._measured.height else "\u2013"
         return self.async_show_menu(
             step_id="summary",
             menu_options=options,
             description_placeholders=self._placeholders(
                 yaml=f"```yaml\n{result.yaml}```",
                 accuracy=accuracy,
-                height=f"{self._measured.height:.0f}" if self._measured.height else "-",
+                height=height,
             ),
         )
 
@@ -1074,9 +1266,16 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
             name = str(user_input[CONF_NAME]).strip()
             if not _NAME_RE.match(name):
                 errors[CONF_NAME] = "invalid_name"
-            elif name in self._all_profiles():
-                errors[CONF_NAME] = "name_in_use"
             else:
+                # A name already in use *replaces* that profile (owner's decision,
+                # phase 3). The commonest reason to walk path A again is that the first
+                # measurement was poor, and the profile screen's own text tells the
+                # user to re-measure under the same name; refusing it here sent them
+                # back to the name form with three minutes of measurements about to be
+                # thrown away. `async_set_cover_profile` has always replaced rather
+                # than added, so this is the store's behaviour reaching the screen.
+                # A `cover_profiles:` entry of the same name in `myhome.yaml` is not
+                # touched and goes on being shadowed, exactly as before.
                 self._profile_name = name
                 return self._async_store()
         suggested = (user_input or {}).get(CONF_NAME) or _suggested_name(
@@ -1153,6 +1352,12 @@ class CoverCalibrationFlow(ConfigSubentryFlow):
                 raw=self._raw(),
             ),
             title=self._cover_name,
+            # Neither write reloads: path A writes two subentries and would otherwise
+            # cost two reloads, which on a real gateway is two disconnect/reconnect
+            # cycles with the shutter still moving from the last measurement. The
+            # entry's update listener coalesces the whole burst into one
+            # (`__init__._async_watch_cover_subentries`).
+            reload=False,
         )
         LOGGER.info(
             "Guided calibration of %s saved (%s)",
@@ -1209,10 +1414,13 @@ def async_get_subentry_types() -> dict[str, type[ConfigSubentryFlow]]:
 
 
 __all__ = [
+    "CLAIM_REASONS",
+    "HOMING_ACTION",
     "PRESS_TIMEOUT_SEC",
     "PROBLEM_REASONS",
     "REFINE_THRESHOLD_CM",
     "RUNNING_ACTION",
+    "SESSION_IDLE_TIMEOUT_SEC",
     "CoverCalibrationFlow",
     "CoverProfileFlow",
     "async_get_subentry_types",

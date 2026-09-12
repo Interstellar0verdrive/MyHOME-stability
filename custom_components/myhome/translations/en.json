@@ -130,6 +130,15 @@
             "not_right": "It did not do what it should"
           }
         },
+        "home_open_done": {
+          "title": "Is {cover} fully open?",
+          "description": "**What has happened**: the shutter was sent all the way up, because what follows runs downwards from there and a run that started anywhere else would measure nothing.\n\n**What you have to do**: look at it. If it is fully open, carry on. If it is still moving, wait and then carry on. If it did not move at all, or moved the wrong way, say so below.",
+          "menu_options": {
+            "confirm_open": "It is fully open",
+            "repeat_step": "Repeat this step",
+            "not_right": "It did not do what it should"
+          }
+        },
         "open_lift": {
           "title": "{cover} is opening",
           "description": "**What is happening**: the shutter has started to rise. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain begins to lift.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Do not time anything — the press is the measurement, and Home Assistant knows exactly when the motor started.\n\nLet the shutter carry on afterwards: it will run to the top on its own.",
@@ -168,21 +177,24 @@
           "title": "Measure {cover} — {percent}% of the way down",
           "description": "**What has happened**: the shutter was opened fully and then run down for {percent}% of its travel.\n\n**What you have to do**: measure again from the point where the bottom edge rests when the shutter is closed up to the bottom edge as it is now, and write the centimetres below. The same reference as the height, so the two can be compared.",
           "data": {
-            "measured_cm": "Height of the bottom edge (cm)"
+            "measured_cm": "Height of the bottom edge (cm)",
+            "repeat_step": "Repeat this step instead (run its movements again and measure afresh)"
           }
         },
         "measure_ascent": {
           "title": "Measure {cover} — {percent}% of the way up",
           "description": "**What has happened**: the shutter was closed fully and then run up for the slats plus {percent}% of its travel.\n\n**What you have to do**: measure from the point where the bottom edge rests when the shutter is closed up to the bottom edge as it is now, and write the centimetres below. A shutter is not equally loaded going up and going down, which is why the same fraction is measured twice.",
           "data": {
-            "measured_cm": "Height of the bottom edge (cm)"
+            "measured_cm": "Height of the bottom edge (cm)",
+            "repeat_step": "Repeat this step instead (run its movements again and measure afresh)"
           }
         },
         "measure_verify": {
           "title": "Check {cover} — {percent}% of the way down",
           "description": "**What has happened**: the shutter was run to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen says how far the shutter is from where Home Assistant thought it would be.",
           "data": {
-            "measured_cm": "Height of the bottom edge (cm)"
+            "measured_cm": "Height of the bottom edge (cm)",
+            "repeat_step": "Repeat this step instead (run its movements again and measure afresh)"
           }
         },
         "verify_offer": {
@@ -204,7 +216,7 @@
         },
         "summary": {
           "title": "What was measured on {cover}",
-          "description": "The curtain travel is {height} cm and the model built from these measurements puts the bottom edge within {accuracy} cm of where it was actually found.\n\nThis is the same thing written as it would be in `myhome.yaml`, for anyone who prefers the file. Saving does **not** write the file: the numbers are kept by the integration, they beat the file, and removing them from this page gives the file back.\n\n{yaml}\n**What you have to do**: save, or spend two more minutes and four more tape readings on a better answer.",
+          "description": "**Curtain travel**: {height}\n**Accuracy of the model**: {accuracy}\n\nA dash means the path you took did not measure that one. The accuracy is the distance between where the model puts the bottom edge and where the tape really found it, and it only says something once a direction has been measured more than once — which is exactly what “Improve the accuracy” does.\n\nBelow is the same thing written as it would be in `myhome.yaml`, for anyone who prefers the file. Saving does **not** write the file: the numbers are kept by the integration, what was measured on *this* shutter beats the file, and removing them from this page gives the file back. Giving these measurements the name of a profile that already exists replaces that profile with them.\n\n{yaml}\n**What you have to do**: save, or spend two more minutes and four more tape readings on a better answer.",
           "menu_options": {
             "save": "Save",
             "refine": "Improve the accuracy first (~2 minutes, 4 more readings)",
@@ -213,7 +225,7 @@
         },
         "profile_name": {
           "title": "Name this kind of shutter",
-          "description": "{cover} has been measured, and what was measured describes every window of the same model. Give that model a name and the other shutters can be calibrated in two screens instead of ten.\n\n**What you have to do**: type a short name — letters, digits and underscores only, no spaces and no accents, because it is also a key in `myhome.yaml`. Something like `tall`, `bedrooms` or `kitchen_door`.",
+          "description": "{cover} has been measured, and what was measured describes every window of the same model. Give that model a name and the other shutters can be calibrated in two screens instead of ten.\n\n**What you have to do**: type a short name — letters, digits and underscores only, no spaces and no accents, because it is also a key in `myhome.yaml`. Something like `tall`, `bedrooms` or `kitchen_door`.\n\nA name that is already in use is not refused: the profile of that name is **replaced** by what has just been measured, which is how a shutter whose first measurement was poor is measured again. A `cover_profiles:` block of the same name in `myhome.yaml` is left untouched and goes on being hidden behind the measured one.",
           "data": {
             "name": "Profile name"
           }
@@ -224,7 +236,7 @@
         },
         "problem_no_echo": {
           "title": "{cover} did not answer",
-          "description": "The command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure anything against and the step was abandoned.\n\n**What you have to do**: check that the shutter is not blocked, that nothing else (a wall switch, an automation) is holding it, and try the step again. If it happens every time, this actuator does not relay its status and the guided calibration cannot measure it.",
+          "description": "The command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure anything against and the step was abandoned.\n\n**The shutter may still be moving**: the command did go out, so the motor has very probably started. A stop was sent straight after the failure, but if the shutter is still running, stop it yourself before repeating the step.\n\n**What you have to do**: check that the shutter is not blocked, that nothing else (a wall switch, an automation) is holding it, and try the step again. If it happens every time, this actuator does not relay its status and the guided calibration cannot measure it.",
           "menu_options": {
             "repeat_step": "Repeat this step",
             "cancel_flow": "Cancel"
@@ -281,6 +293,7 @@
       },
       "progress": {
         "homing_closed": "{cover} is being closed all the way, so that the measurements start from a known point. Please wait, and make sure nothing is in its way.",
+        "homing_open": "{cover} is being opened all the way, so that the movement that follows starts from a known point. Please wait, and make sure nothing is in its way.",
         "starting_open": "{cover} is being closed all the way and then started upwards. Please wait: the next screen asks you to watch it and press a button.",
         "starting_close": "{cover} is being opened all the way and then started downwards. Please wait: the next screen asks you to watch it and press a button.",
         "running_down": "{cover} is being opened all the way and then run down to about {percent}% of its travel. Please wait, and have the tape measure ready.",
@@ -288,13 +301,13 @@
       },
       "error": {
         "invalid_name": "A profile name may only contain letters, digits and underscores — no spaces, no accents, no dashes.",
-        "name_in_use": "There is already a profile with this name. Pick another one, or delete the existing profile first.",
         "above_the_travel": "That is more than the whole travel of this curtain. Measure from where the bottom edge rests when the shutter is closed, not from the floor."
       },
       "abort": {
         "no_basic_covers": "Every cover of this gateway reports its own position, so there is nothing to calibrate. The guided calibration is only for covers whose position Home Assistant has to estimate from run times.",
         "no_profiles": "There is no profile to follow yet. Calibrate one shutter with the full measurement first: that is what creates a profile.",
         "unknown_cover": "That cover is no longer part of this gateway's configuration. Nothing was measured and nothing was saved.",
+        "already_calibrating": "This shutter is already being calibrated: another dialog is open on it, or the cover_calibration_run service is driving it. Two calibrations on one motor would each measure a run the other one stopped, so this one was not started. Finish or close the other one and try again.",
         "cancelled": "The calibration was cancelled. Nothing was saved and the shutter is where the last movement left it.",
         "calibration_saved": "The calibration of {cover} has been saved. The shutter now uses the measured values, its attributes say so, and removing this entry from the integration page gives it back to myhome.yaml."
       }
@@ -308,7 +321,7 @@
       "step": {
         "reconfigure": {
           "title": "Profile “{profile}”",
-          "description": "These are the measurements this profile carries. Home Assistant scales them to each window that follows it, using that window's own height.\n\n{values}\n**How to change it**: measure a shutter of this kind again with the guided calibration and give it this same name, which replaces what is here. **How to remove it**: the delete button on the integration page. Shutters that follow it go back to what `myhome.yaml` says about them."
+          "description": "These are the measurements this profile carries. Home Assistant scales them to each window that follows it, using that window's own height.\n\n{values}\n**How to change it**: measure a shutter of this kind again with the guided calibration and give it this same name, which replaces what is here. **How to remove it**: the delete button on the integration page. Shutters that follow it go back to what `myhome.yaml` says about them. A profile of the same name written in `cover_profiles:` is touched by neither, and stays hidden behind this one for as long as this one exists."
         }
       },
       "abort": {
