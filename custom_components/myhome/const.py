@@ -78,6 +78,12 @@ CONF_RAW = "raw"
 # Where the validator records which travel keys `myhome.yaml` really carries for a
 # cover, so a stored calibration can be given its place in the precedence (0.5.0).
 CONF_KEYS_FROM_FILE = "keys_from_file"
+# The key a cover is written under in ``myhome.yaml``. The validated device dicts are
+# re-keyed by WHO/WHERE before they reach ``hass.data`` (``validate.device_key``), so
+# this is the one place that remembers what the user called it - and the guided
+# calibration's YAML snippet is something they are meant to paste back into their file
+# under exactly that name, whatever they have since renamed the entity to.
+CONF_YAML_KEY = "yaml_key"
 
 # Request timeout constants
 GATEWAY_TEST_TIMEOUT_SEC = 20
