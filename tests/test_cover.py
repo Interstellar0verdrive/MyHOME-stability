@@ -2391,6 +2391,9 @@ FRAME_GAP_SEC = 0.1
 # The queue delay that broke a cover on the real bus (addendum 9): eleven frames
 # ahead of the twelfth, plus the gateway's own pace.
 QUEUE_WAIT_SEC = 1.6
+# How long a frame written into a session the gateway had closed takes to reach the
+# bus on the second attempt (0.4.5): the ACK that never comes, plus a fresh session.
+DEAD_SESSION_RETRY_SEC = 1.5
 # 0 -> 40 on a 30 s linear run.
 RUN_TO_40_SEC = 12.0
 # One frame of queue in the echo replay below, chosen so that the covers written last
@@ -2467,7 +2470,7 @@ class SlowCommandPath:
         self.stops: list[tuple[str, Any, Any]] = []
         self.queued: list[tuple[str, Any, Any]] = []
         self.written: list[tuple[str, datetime]] = []
-        self.unreported: list[tuple[str, Any, datetime]] = []
+        self.unreported: list[tuple[str, Any, Any, datetime]] = []
 
     async def send(
         self,
@@ -2495,12 +2498,14 @@ class SlowCommandPath:
     def write_next(self, report: bool = True) -> str:
         """Write the next frame *now*, and tell its caller so.
 
-        `report=False` writes the frame and says nothing yet: that is the race the
-        addendum to 0.4.3 is about - the gateway answers a command on the *monitor*
-        session as soon as it has it, and those frames can reach the entity before
-        the write is reported back to it. `report_next` then does the telling.
+        `report=False` writes the frame and says nothing yet: the real handler always
+        writes before it reports, because the report waits for the gateway's answer
+        and the gateway answers the command on the *monitor* session first. It is
+        also what a write into a session the gateway has quietly closed looks like
+        for ever (0.4.5): written, never answered, so never reported. `report_next`,
+        `write_again` and `give_up` are the three ways that ends.
         """
-        frame, on_delivered, _ = self._take()
+        frame, on_delivered, on_dropped = self._take()
         written_at = dt_util.utcnow()
         self.written.append((frame, written_at))
         if on_delivered is None:
@@ -2508,7 +2513,7 @@ class SlowCommandPath:
         if report:
             on_delivered(time.monotonic())
         else:
-            self.unreported.append((frame, on_delivered, written_at))
+            self.unreported.append((frame, on_delivered, on_dropped, written_at))
         return frame
 
     def report_next(self) -> str:
@@ -2519,8 +2524,28 @@ class SlowCommandPath:
         have to be taken back off by hand - otherwise a report made "later" would
         claim the frame left later than it did.
         """
-        frame, on_delivered, written_at = self.unreported.pop(0)
+        frame, on_delivered, _, written_at = self.unreported.pop(0)
         on_delivered(time.monotonic() - (dt_util.utcnow() - written_at).total_seconds())
+        return frame
+
+    def write_again(self) -> str:
+        """Write an unanswered frame a second time, on a fresh session, and report it.
+
+        What the handler does with every transport error since 0.4.5: the first write
+        returned and nothing ever answered it, so the frame goes out again. Only the
+        attempt the gateway answered is reported, and it carries *its own* instant -
+        the motor, if it starts at all, starts here.
+        """
+        frame, on_delivered, _, _ = self.unreported.pop(0)
+        self.written.append((frame, dt_util.utcnow()))
+        on_delivered(time.monotonic())
+        return frame
+
+    def give_up(self) -> str:
+        """No attempt was answered: the frame counts as never delivered."""
+        frame, _, on_dropped, _ = self.unreported.pop(0)
+        if on_dropped is not None:
+            on_dropped()
         return frame
 
     def drop_next(self) -> str:
@@ -3199,6 +3224,101 @@ async def test_a_keypad_stop_while_our_own_frame_is_still_queued(
         state = hass.states.get(ENTITY)
         assert state.attributes[ATTR_CURRENT_POSITION] == 40
         assert state.state == CoverState.OPEN
+
+
+async def test_a_frame_written_into_a_dead_session_is_timed_from_the_second_write(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """0.4.5: the write that counted is the one the gateway answered.
+
+    The command session had been idle long enough for the MyHOMEServer1 to close it.
+    The frame is written into the half-open socket - the write returns, the bus sees
+    nothing - and only the missing ACK says so; a second and a half later the handler
+    writes it again on a fresh session, and *that* is when the motor starts. The first
+    write is never reported, so the estimate keeps waiting instead of running.
+
+    The gateway here never relays a status frame, so the clock is the model's own
+    `start_delay` after the write that worked. Timed from the first write instead, the
+    stop would leave a second and a half of motor early; timed from the service call
+    (0.4.2), two and a bit.
+
+    Mutations caught: reporting the delivery at the write (the first attempt is
+    reported and the stop goes out early), and re-basing on the first write's
+    timestamp while answering on the second.
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.CLOSED, {ATTR_CURRENT_POSITION: 0}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(
+                COVER, "set_cover_position", {ATTR_ENTITY_ID: ENTITY, ATTR_POSITION: 40}, blocking=True
+            )
+            # Written into the dead session: nothing on the bus, nothing reported.
+            assert slow.write_next(report=False) == "*2*1*81##"
+            await _advance_exact(hass, freezer, DEAD_SESSION_RETRY_SEC)
+            # The optimistic estimate has been running since the service call...
+            assert hass.states.get(ENTITY).state == CoverState.OPENING
+
+            second_write = dt_util.utcnow()
+            assert slow.write_again() == "*2*1*81##"
+            await hass.async_block_till_done()
+            # ...and goes back to the start: this is where the motor really starts.
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 0
+
+            await _advance_exact(hass, freezer, RUN_TO_40_SEC - STOP_LATENCY_SEC)
+            assert slow.queue == [], "the stop was timed from a write the bus never saw"
+            await _advance_exact(hass, freezer, START_DELAY_SEC)
+            assert len(slow.queue) == 1
+            assert slow.write_next() == "*2*0*81##"
+            await hass.async_block_till_done()
+
+        # Two writes of the direction frame, one stop, and a run of exactly the
+        # modelled time counted from the second one.
+        assert slow.frames == ["*2*1*81##", "*2*1*81##", "*2*0*81##"]
+        started = second_write + timedelta(seconds=START_DELAY_SEC)
+        assert abs(_motor_seconds(slow, "81", "1", started=started) - RUN_TO_40_SEC) < 0.001
+        state = hass.states.get(ENTITY)
+        assert state.attributes[ATTR_CURRENT_POSITION] == 40
+        assert state.state == CoverState.OPEN
+
+
+async def test_a_movement_no_attempt_delivered_is_cancelled(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same frame, when the retry does not save it either: nothing moved.
+
+    Written twice into sockets that answered nothing, the command is dropped, and a
+    dropped command is one the bus never saw - whatever the writes returned. The
+    estimate goes back where the movement started from instead of running on to an
+    end stop nothing is travelling towards, which is what the entity would have done
+    under 0.4.3: reported delivered at the first write, it timed a whole phantom run.
+
+    Mutation caught: reporting a delivery for a frame that was written but never
+    answered (the cover reads 40 % and sends a stop for a motor that never turned).
+    """
+    mock_restore_cache(hass, (State(ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, BASIC_YAML):
+        cover = entity_object(hass, COVER, "2-81")
+        slow = SlowCommandPath()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", slow.send):
+            await hass.services.async_call(COVER, "close_cover", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+            assert slow.write_next(report=False) == "*2*2*81##"
+            await _advance_exact(hass, freezer, DEAD_SESSION_RETRY_SEC)
+            assert hass.states.get(ENTITY).state == CoverState.CLOSING
+
+            assert slow.give_up() == "*2*2*81##"
+            await hass.async_block_till_done()
+
+            state = hass.states.get(ENTITY)
+            assert state.attributes[ATTR_CURRENT_POSITION] == 100
+            assert state.state == CoverState.OPEN
+            # The gateway has nothing to echo either, so no window is left armed.
+            assert cover._own_command_at is None  # noqa: SLF001
+            # And no stop is ever sent for a run that never started.
+            await _advance_exact(hass, freezer, 40)
+            assert hass.states.get(ENTITY).attributes[ATTR_CURRENT_POSITION] == 100
+        assert slow.frames == ["*2*2*81##"]
+        assert slow.queue == []
 
 
 @pytest.mark.slow

@@ -18,8 +18,9 @@ OWNd's (the package is pinned and untouched) but:
 - :meth:`OWNCommandChannel.send_command` writes one command and reads EVERY reply
   frame until the gateway's ACK/NACK (under a timeout), so multi-frame status and
   energy replies never desynchronise the session and reach the caller.  Its
-  ``on_written`` hook (0.4.3) reports the frame the moment it leaves the socket,
-  which is a good fraction of a second before the ACK comes back.
+  ``on_written`` hook (0.4.3) says that the frame has left the socket, which is a
+  good fraction of a second before the ACK comes back - and, since 0.4.5, is not
+  the same thing as the frame having reached the bus.
 - :meth:`OWNChannel.close` never raises and is safe before ``open()`` and twice.
 """
 
@@ -247,11 +248,16 @@ class OWNCommandChannel(OWNChannel):
         must close it and use a fresh one.
 
         ``on_written`` (0.4.3) is called once the frame has left the socket and
-        *before* the ACK is waited for.  That is the moment a motor starts, and the
-        gateway answers the command on the monitor session before it answers it
-        here: a caller that waits for the ACK to learn its frame is out learns it
-        too late.  A write that raises never calls it.  Exceptions from it are the
-        caller's business - it runs inside this call, so it must not raise.
+        *before* the ACK is waited for.  A write that raises never calls it.
+        Exceptions from it are the caller's business - it runs inside this call, so
+        it must not raise.
+
+        What it does **not** mean is that the frame reached the bus: a gateway that
+        has closed an idle session says nothing, and the write into that half-open
+        socket returns as if nothing were wrong (0.4.5).  Only the ACK/NACK proves
+        delivery, which is what the gateway handler reports; this hook is what lets
+        it tell a frame that never left from one that left and was never answered,
+        in the log and nowhere else.
         """
         writer = self._stream_writer
         if not self._is_open or writer is None:

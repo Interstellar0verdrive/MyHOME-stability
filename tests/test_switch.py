@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from homeassistant.components.switch import DOMAIN as SWITCH, SwitchDeviceClass
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
@@ -12,12 +14,15 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from OWNd.message import OWNLightingCommand
 
 from custom_components.myhome import expected_unique_ids
 from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
+from custom_components.myhome.own_session import CommandResult, SessionError
 
 from .helpers_core import MAC
 from .helpers_platforms import GATEWAY_DIAG_UNIQUE_IDS, entity_object, feed_event, set_connected, setup_myhome
+from .test_gateway import Factory, FakeCommandChannel, fake_channels, make_handler, running
 
 SWITCH_YAML = f"""
 gateway:
@@ -136,3 +141,40 @@ async def test_icon_and_icon_on_swap_on_a_switch(hass: HomeAssistant, tmp_path) 
         assert hass.states.get("switch.pump").attributes["icon"] == "mdi:pump"
         await feed_event(hass, pump, "*1*0*42##")
         assert hass.states.get("switch.pump").attributes["icon"] == "mdi:pump-off"
+
+
+async def test_a_command_lost_with_a_dead_session_is_sent_again(hass: HomeAssistant, tmp_path) -> None:
+    """0.4.5: the same dead command session, seen from a switch.
+
+    A gateway that has closed an idle command session accepts the write and drops the
+    bytes; the frame is written again on a fresh session rather than abandoned, and a
+    WHO 1 "on" sent twice is still a relay that is on. The entity meanwhile waits for
+    the bus: `turn_on` sends a frame, it does not decide a state.
+
+    Mutations caught: giving up on a transport error once the frame has left the
+    socket, and an optimistic state in `async_turn_on`.
+    """
+    handler = make_handler()
+
+    def configure(channel: FakeCommandChannel, index: int) -> None:
+        if index == 0:
+
+            def dead(message: str) -> CommandResult:
+                raise SessionError("command session closed by the gateway")
+
+            channel.responder = dead
+
+    with fake_channels(command=Factory(FakeCommandChannel, configure)) as (_, command, _):
+        async with running(handler, listening=False):
+            assert await handler.send(OWNLightingCommand.switch_on("31"))
+            await asyncio.wait_for(handler.send_buffer.join(), 2)
+    assert [channel.sent for channel in command.instances] == [["*1*1*31##"], ["*1*1*31##"]]
+    assert handler.stats.commands_dropped == 0
+
+    async with setup_myhome(hass, tmp_path, SWITCH_YAML) as (_entry, commands):
+        relay = entity_object(hass, SWITCH, "1-31")
+        await hass.services.async_call(SWITCH, "turn_on", {ATTR_ENTITY_ID: "switch.test_relay"}, blocking=True)
+        assert commands.sent_frames == ["*1*1*31##"]
+        assert hass.states.get("switch.test_relay").state != STATE_ON
+        await feed_event(hass, relay, "*1*1*31##")
+        assert hass.states.get("switch.test_relay").state == STATE_ON
