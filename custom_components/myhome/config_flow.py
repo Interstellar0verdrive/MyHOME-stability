@@ -17,7 +17,8 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlowWithReload,
+    ConfigSubentryFlow,
+    OptionsFlow,
 )
 from homeassistant.const import (
     CONF_FRIENDLY_NAME,
@@ -41,6 +42,7 @@ from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from OWNd.connection import OWNGateway, OWNSession
 from OWNd.discovery import find_gateways, get_port
 
+from .calibration_flow import async_get_subentry_types
 from .const import (
     CONF_ADDRESS,
     CONF_COMMAND_TIMEOUT_SEC,
@@ -104,7 +106,7 @@ PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWO
 # Session tunables exposed in the options flow (0.3.0, G1-D): option key, default
 # (= the value hard-coded in 0.2.x, so leaving them alone changes nothing), range and
 # unit.  gateway.py / sensor.py read them from ``entry.options`` with the same
-# defaults; ``OptionsFlowWithReload`` reloads the entry when any of them changes.
+# defaults; ``MyHomeOptionsFlowHandler`` reloads the entry when any of them changes.
 TUNABLE_OPTIONS: tuple[tuple[str, int, int, int, str], ...] = (
     (CONF_IDLE_WATCHDOG_SEC, DEFAULT_IDLE_WATCHDOG_SEC, 60, 3600, "s"),
     (CONF_PROBE_WINDOW_SEC, DEFAULT_PROBE_WINDOW_SEC, 5, 300, "s"),
@@ -189,6 +191,22 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: ConfigEntry) -> MyHomeOptionsFlowHandler:
         """Get the options flow for this handler."""
         return MyHomeOptionsFlowHandler()
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """The two things that can be added to a gateway besides the gateway (0.5.0).
+
+        `cover_calibration` is the guided calibration itself - "Add" on the integration
+        page opens it, and it is offered whatever the configuration holds, because the
+        cover it is about is chosen inside it (and it says so plainly when there is no
+        basic cover to calibrate). `cover_profile` is there so a profile the flow
+        created is a first-class row on that page, with a delete button of Home
+        Assistant's own; it cannot be added by hand, only measured.
+        """
+        return async_get_subentry_types()
 
     def __init__(self) -> None:
         """Initialize the MyHOME flow."""
@@ -486,8 +504,17 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_test_connection()
 
 
-class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
-    """Handle MyHOME options; the entry is reloaded automatically when they change."""
+class MyHomeOptionsFlowHandler(OptionsFlow):
+    """Handle MyHOME options; the entry is reloaded here when anything changed.
+
+    Plain `OptionsFlow` and a reload of our own rather than `OptionsFlowWithReload`,
+    which Home Assistant refuses to combine with a config entry update listener
+    (`ValueError: Config entry update listeners should not be used with
+    OptionsFlowWithReload`). 0.5.0 registers one, because a subentry deleted from the
+    integration page reaches the integration through no other hook - see
+    `__init__._async_reload_on_subentry_change`. The behaviour the user sees is
+    unchanged: the entry is rebuilt whenever this dialog changed anything.
+    """
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the MyHOME options."""
@@ -533,8 +560,11 @@ class MyHomeOptionsFlowHandler(OptionsFlowWithReload):
                     **{key: int(user_input[key]) for key, *_ in TUNABLE_OPTIONS},
                 }
                 data_changed = self.hass.config_entries.async_update_entry(entry, data=new_data)
-                if data_changed and new_options == dict(entry.options):
-                    # OptionsFlowWithReload reloads only when the options changed.
+                # Scheduled before the options are written (Home Assistant writes them
+                # when this step returns) and run after, because a scheduled reload is
+                # a task and the write is synchronous: the rebuilt entry reads the new
+                # options and the new data alike.
+                if data_changed or new_options != dict(entry.options):
                     self.hass.config_entries.async_schedule_reload(entry.entry_id)
                 return self.async_create_entry(title="", data=new_options)
 

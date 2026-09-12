@@ -499,7 +499,10 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     }
     # The floats of the selector are stored as ints for the handler / sensors.
     assert all(isinstance(entry.options[key], int) for key in (CONF_IDLE_WATCHDOG_SEC, CONF_DEFAULT_KEEPALIVE_MINUTES))
-    assert mock_setup_entry.await_count == 2  # OptionsFlowWithReload reloaded the entry
+    # The dialog reloads the entry itself (0.5.0): `OptionsFlowWithReload` cannot be
+    # used on an entry that has update listeners, and the guided calibration registers
+    # one so that a subentry deleted from the integration page takes effect at once.
+    assert mock_setup_entry.await_count == 2
 
     # Only the connection data changes -> still exactly one reload.
     result = await hass.config_entries.options.async_init(entry.entry_id)

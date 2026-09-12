@@ -20,6 +20,7 @@ Contract D (see .audit-2026-09/CONTRACTS.md):
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -85,6 +86,8 @@ from .const import (
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
     SERVICE_SYNC_TIME,
+    SUBENTRY_COVER_CALIBRATION,
+    SUBENTRY_COVER_PROFILE,
     clamp_worker_count,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -438,6 +441,58 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+# --------------------------------------------------------- guided calibration (0.5.0)
+# The two subentry types the guided calibration stores its results in. A cover reads
+# its travel model once, in its constructor, so any change to them has to rebuild the
+# entities - and the one path that does not go through our own helpers is Home
+# Assistant's own delete button on the integration page, which removes a subentry and
+# tells nobody. The listener below is that hook: config entry update listeners fire on
+# every subentry change, and this one reloads when the *calibration* subentries are not
+# what they were. (It is also why the options flow is a plain `OptionsFlow` with a
+# reload of its own: Home Assistant refuses `OptionsFlowWithReload` on an entry that
+# has update listeners.)
+_COVER_SUBENTRY_TYPES = (SUBENTRY_COVER_CALIBRATION, SUBENTRY_COVER_PROFILE)
+
+
+@callback
+def cover_subentry_signature(entry: ConfigEntry) -> tuple[str, ...]:
+    """What the stored calibrations say, in a form two of them can be compared by.
+
+    The data and not only the set of ids: re-running the flow on the same shutter
+    replaces one subentry in place, and a signature of ids alone would call that "no
+    change" and leave the shutter on the numbers it was measured against.
+    """
+    return tuple(
+        sorted(
+            json.dumps(subentry.as_dict(), sort_keys=True, default=str)
+            for subentry in entry.subentries.values()
+            if subentry.subentry_type in _COVER_SUBENTRY_TYPES
+        )
+    )
+
+
+@callback
+def _async_watch_cover_subentries(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry whenever a stored calibration appears, changes or goes."""
+    known = cover_subentry_signature(entry)
+
+    async def _async_reload_on_subentry_change(hass: HomeAssistant, updated: ConfigEntry) -> None:
+        nonlocal known
+        current = cover_subentry_signature(updated)
+        if current == known:
+            # An ordinary entry update (the options dialog, a new host): the options
+            # flow reloads for those itself.
+            return
+        known = current
+        LOGGER.info("The stored cover calibrations changed; reloading %s", updated.title)
+        hass.config_entries.async_schedule_reload(updated.entry_id)
+
+    # Read by `calibration_store._async_reload`, so that a helper writing a subentry
+    # does not schedule a second reload on top of the one this listener is about to.
+    _async_reload_on_subentry_change.reloads_on_subentry_change = True  # type: ignore[attr-defined]
+    entry.async_on_unload(entry.add_update_listener(_async_reload_on_subentry_change))
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a MyHOME gateway from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -510,6 +565,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Make sure the sessions are closed even when setup fails half way (core-10).
     entry.async_on_unload(handler.close_listener)
+    _async_watch_cover_subentries(hass, entry)
 
     # No "unknown platform keys" check here: `MyHomeConfigSchema.__call__` builds
     # CONF_PLATFORMS from its own list (DEVICE_PLATFORMS, plus `event` for the
