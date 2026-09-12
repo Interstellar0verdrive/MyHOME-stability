@@ -20,7 +20,6 @@ Contract D (see .audit-2026-09/CONTRACTS.md):
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -54,6 +53,11 @@ from homeassistant.helpers import (
 from homeassistant.helpers.typing import ConfigType
 from OWNd.message import OWNCommand, OWNGatewayCommand
 
+from .calibration_store import (
+    async_forget_store,
+    async_get_store,
+    async_remove_store,
+)
 from .const import (
     ATTR_GATEWAY,
     ATTR_MESSAGE,
@@ -86,8 +90,6 @@ from .const import (
     SERVICE_START_DISCOVERY,
     SERVICE_STOP_DISCOVERY,
     SERVICE_SYNC_TIME,
-    SUBENTRY_COVER_CALIBRATION,
-    SUBENTRY_COVER_PROFILE,
     clamp_worker_count,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -442,62 +444,23 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 # --------------------------------------------------------- guided calibration (0.5.0)
-# The two subentry types the guided calibration stores its results in. A cover reads
-# its travel model once, in its constructor, so any change to them has to rebuild the
-# entities - and the one path that does not go through our own helpers is Home
-# Assistant's own delete button on the integration page, which removes a subentry and
-# tells nobody. The listener below is that hook: config entry update listeners fire on
-# every subentry change, and this one reloads when the *calibration* subentries are not
-# what they were. (It is also why the options flow is a plain `OptionsFlow` with a
-# reload of its own: Home Assistant refuses `OptionsFlowWithReload` on an entry that
-# has update listeners.)
-_COVER_SUBENTRY_TYPES = (SUBENTRY_COVER_CALIBRATION, SUBENTRY_COVER_PROFILE)
+async def _async_calibration_store(hass: HomeAssistant, entry: ConfigEntry):
+    """Read this gateway's stored calibrations, before any cover is built out of them.
 
-
-@callback
-def cover_subentry_signature(entry: ConfigEntry) -> tuple[str, ...]:
-    """What the stored calibrations say, in a form two of them can be compared by.
-
-    The data and not only the set of ids: re-running the flow on the same shutter
-    replaces one subentry in place, and a signature of ids alone would call that "no
-    change" and leave the shutter on the numbers it was measured against.
+    A cover reads its travel model once, in its constructor, so the store has to be on
+    disk *and* in memory before `async_forward_entry_setups`. The same call also moves
+    an installation written by the first draft of 0.5.0 - which kept this data in two
+    config subentry types - into the store and deletes the subentries, which is what
+    takes the stray rows off the integration page and stops Home Assistant grouping
+    every device under "devices not belonging to a subentry".
     """
-    return tuple(
-        sorted(
-            json.dumps(subentry.as_dict(), sort_keys=True, default=str)
-            for subentry in entry.subentries.values()
-            if subentry.subentry_type in _COVER_SUBENTRY_TYPES
-        )
-    )
-
-
-@callback
-def _async_watch_cover_subentries(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry whenever a stored calibration appears, changes or goes."""
-    known = cover_subentry_signature(entry)
-
-    async def _async_reload_on_subentry_change(hass: HomeAssistant, updated: ConfigEntry) -> None:
-        nonlocal known
-        # One Save of path A writes two subentries - the profile and the cover's own
-        # calibration - one after the other, and Home Assistant starts an update
-        # listener *eagerly*: without this yield the listener would run between the two
-        # writes and schedule a reload for each of them, which on a real gateway is two
-        # disconnect/reconnect cycles while the shutter is very likely still moving
-        # from the last measurement. After it, the first of the two tasks to wake up
-        # sees the signature the whole burst ended on and the second sees no change at
-        # all: one reload per Save, whatever a Save turns out to write.
-        await asyncio.sleep(0)
-        current = cover_subentry_signature(updated)
-        if current == known:
-            # An ordinary entry update (the options dialog, a new host): the options
-            # flow reloads for those itself. Or the tail of a burst this listener has
-            # already scheduled the reload for.
-            return
-        known = current
-        LOGGER.info("The stored cover calibrations changed; reloading %s", updated.title)
-        hass.config_entries.async_schedule_reload(updated.entry_id)
-
-    entry.async_on_unload(entry.add_update_listener(_async_reload_on_subentry_change))
+    # Not reused across a reload: the dialog under "Configura" writes through the
+    # store object it was given, and a reload is exactly when that object has to be
+    # read again from disk.
+    async_forget_store(hass, entry)
+    store = await async_get_store(hass, entry)
+    await store.async_import_legacy_subentries(entry)
+    return store
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -572,7 +535,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Make sure the sessions are closed even when setup fails half way (core-10).
     entry.async_on_unload(handler.close_listener)
-    _async_watch_cover_subentries(hass, entry)
+    await _async_calibration_store(hass, entry)
 
     # No "unknown platform keys" check here: `MyHomeConfigSchema.__call__` builds
     # CONF_PLATFORMS from its own list (DEVICE_PLATFORMS, plus `event` for the
@@ -631,6 +594,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
     hass.data.get(DOMAIN, {}).pop(mac, None)
+    async_forget_store(hass, entry)
 
     still_loaded = [e for e in hass.config_entries.async_loaded_entries(DOMAIN) if e.entry_id != entry.entry_id]
     if not still_loaded:
@@ -639,9 +603,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Drop the repair issues of a gateway that is being removed."""
+    """Drop the repair issues - and the stored calibrations - of a gateway being removed."""
     for issue in (ISSUE_YAML_INVALID, ISSUE_UNKNOWN_KEYS, ISSUE_NO_DEVICES_FOR_GATEWAY):
         _async_clear_issue(hass, entry, issue)
+    # The shutters go with the gateway, so their measurements have nobody left to
+    # belong to; leaving the file behind would hand them to the next entry that
+    # happened to be given the same id.
+    await async_remove_store(hass, entry)
 
 
 async def async_remove_config_entry_device(

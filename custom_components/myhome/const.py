@@ -61,15 +61,25 @@ ATTR_CALIBRATION_SOURCE = "Calibration source"
 CALIBRATION_SOURCE_GUIDED = "guided"
 CALIBRATION_SOURCE_YAML = "yaml"
 CALIBRATION_SOURCE_PROFILE = "profile"
+# ...and what a record says about itself when the numbers in it were typed rather than
+# measured ("Modifica i valori a mano"). The entity still reports `guided`: what the
+# attribute answers is "do these numbers come from the file or from the integration",
+# and a hand-edited record is as much the integration's as a measured one.
+CALIBRATION_SOURCE_MANUAL = "manual"
 
-# The two config subentry types the guided calibration stores its results in (0.5.0).
-# One profile describes a *model* of shutter at one reference height and is shared by
-# every window of that kind; one calibration belongs to a single cover, names the
-# profile it follows (if any) and carries whatever that particular window needed
-# overriding. The flows that create them are phase 2; the engine only reads and writes.
-SUBENTRY_COVER_PROFILE = "cover_profile"
-SUBENTRY_COVER_CALIBRATION = "cover_calibration"
-# Keys of a stored subentry.
+# Where a guided calibration lives (0.5.0 v2): one `homeassistant.helpers.storage.Store`
+# per config entry, holding every profile and every per-cover record. Up to 0.5.0's first
+# draft the same data was kept in two *config subentry* types, whose names are still
+# needed to read an installation written by that draft and to throw it away afterwards
+# (`calibration_store.async_import_legacy_subentries`).
+LEGACY_SUBENTRY_COVER_PROFILE = "cover_profile"
+LEGACY_SUBENTRY_COVER_CALIBRATION = "cover_calibration"
+# The two sections of the store, and the profile key that names the window a profile was
+# measured on (shown by "Vedi i valori", never read by the travel model).
+CONF_PROFILES = "profiles"
+CONF_COVERS = "covers"
+CONF_REFERENCE_COVER = "reference_cover"
+# Keys of a stored record.
 CONF_COVER_UNIQUE_ID = "cover_unique_id"
 CONF_OVERRIDES = "overrides"
 CONF_SOURCE = "source"
