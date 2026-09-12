@@ -405,3 +405,55 @@ def test_no_screen_substitutes_something_the_flow_does_not_pass(path: Path) -> N
             assert set(PLACEHOLDER.findall(text)) <= allowed, f"{path.name}: {step_id}"
     for action, text in block["progress"].items():
         assert set(PLACEHOLDER.findall(text)) <= PROGRESS_PLACEHOLDERS[action], action
+
+
+# ------------------------------------------------------------------- the drawings
+# Three moments of the guided calibration are hard to put into words and easy to draw:
+# where the tape goes, which instant "it leaves its rest" means, and which one "it
+# stops at the top" means. A config-flow description is rendered as Markdown, so each
+# of those screens opens with an image served from `/myhome_static` (registered once in
+# `__init__.async_setup`, out of `custom_components/myhome/images`).
+STEP_IMAGES: dict[str, str] = {
+    "height": "height.webp",
+    "open_brief": "lift_off.webp",
+    "open_lift": "lift_off.webp",
+    "open_top": "top_stop.webp",
+    "measure_descent": "reading.webp",
+    "measure_ascent": "reading.webp",
+    "measure_verify": "reading.webp",
+}
+
+
+def test_the_drawings_are_shipped_with_the_integration() -> None:
+    """A Markdown image pointing at a file that is not in the package renders broken."""
+    images = COMPONENT / "images"
+    assert {path.name for path in images.glob("*.webp")} == set(STEP_IMAGES.values())
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_each_illustrated_screen_opens_with_its_drawing(path: Path) -> None:
+    """The image comes first, then the text, in all seven languages.
+
+    Mutation caught: adding a screen to `STEP_IMAGES` and illustrating it in Italian
+    only, or renaming a file under `images/` and leaving the eight files pointing at
+    the old name.
+    """
+    steps = options_block(path)["step"]
+    for step_id, image in STEP_IMAGES.items():
+        description = steps[step_id]["description"]
+        assert description.startswith(f"![](/myhome_static/{image})\n\n"), f"{path.name}: {step_id}"
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_other_screen_points_at_the_static_path(path: Path) -> None:
+    """Every `/myhome_static/` reference is one of the drawings above.
+
+    Mutation caught: a screen left pointing at a file the merge never brought in.
+    """
+    for key, text in flatten(load(path)).items():
+        if "/myhome_static/" not in text:
+            continue
+        step_id = key.split(".")[2]
+        assert key == f"options.step.{step_id}.description", key
+        assert text.count("/myhome_static/") == 1, key
+        assert f"/myhome_static/{STEP_IMAGES[step_id]}" in text, key

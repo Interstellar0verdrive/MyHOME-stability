@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import threading
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
@@ -13,7 +14,9 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er, 
 from OWNd.message import OWNGatewayCommand
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import custom_components.myhome as myhome
 from custom_components.myhome import (
+    STATIC_URL_PATH,
     async_migrate_entry,
     async_remove_config_entry_device,
     expected_unique_ids,
@@ -1013,3 +1016,57 @@ async def test_a_service_call_the_queue_refuses_is_reported_to_the_caller(
     assert err.value.translation_key == "send_failed"
     assert err.value.translation_domain == DOMAIN
     assert "message" in err.value.translation_placeholders
+
+
+# --------------------------------------------------------------- the drawings' URL
+async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant, tmp_path) -> None:
+    """Seven screens of the guided calibration open with `![](/myhome_static/...)`.
+
+    A config-flow description is Markdown, so the drawing costs nothing but the file
+    being reachable at that URL. It is registered in `async_setup` -- once per Home
+    Assistant run, not once per gateway -- out of the directory that ships inside the
+    integration, and the files the descriptions name have to be in it.
+
+    Mutation caught: registering the path under another URL (or another directory),
+    dropping `cache_headers`, or moving the call somewhere a second gateway would run
+    it again, which Home Assistant refuses with "Static path already registered".
+    """
+    register = AsyncMock()
+    hass.http = MagicMock(async_register_static_paths=register)
+
+    path = write_yaml(tmp_path)
+    entry = make_entry(path)
+    entry2 = make_entry(path, mac=MAC2)
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        assert await _setup(hass, entry2)
+
+    register.assert_awaited_once()
+    (configs,) = register.await_args.args
+    (config,) = configs
+    assert config.url_path == STATIC_URL_PATH
+    assert config.cache_headers is True
+    images = Path(config.path)
+    assert images == Path(myhome.__file__).parent / "images"
+    assert {path.name for path in images.glob("*.webp")} == {
+        "height.webp",
+        "lift_off.webp",
+        "reading.webp",
+        "top_stop.webp",
+    }
+
+
+async def test_setup_survives_a_home_assistant_without_http(hass: HomeAssistant, tmp_path) -> None:
+    """The drawings are the only thing a bare `hass` loses.
+
+    Every other test in the suite runs against exactly such a `hass`, so the guard is
+    what keeps them green; this one says so out loud.
+
+    Mutation caught: dropping the `hass.http is None` guard, after which the whole
+    integration fails to set up wherever `http` is not loaded.
+    """
+    assert hass.http is None
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED

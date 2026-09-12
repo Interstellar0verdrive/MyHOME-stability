@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Wir messen gleich die Auffahrt von {cover}",
-        "description": "**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von unten nach oben los. In der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt; dann beginnt der ganze Panzer zu steigen, und oben hält der Rollladen von selbst an.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Sie werden um zwei Tastendrücke gebeten, einen nach dem anderen: den ersten in dem Augenblick, in dem sich die Unterkante von der Auflage löst, den zweiten in dem Augenblick, in dem der Rollladen oben anhält. Sie stoppen nichts – der Augenblick des Drückens ist die Messung.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von unten nach oben los. In der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt; dann beginnt der ganze Panzer zu steigen, und oben hält der Rollladen von selbst an.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Sie werden um zwei Tastendrücke gebeten, einen nach dem anderen: den ersten in dem Augenblick, in dem sich die Unterkante von der Auflage löst, den zweiten in dem Augenblick, in dem der Rollladen oben anhält. Sie stoppen nichts – der Augenblick des Drückens ist die Messung.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
           "open_start": "1) Den Rollladen starten",
           "repeat_step": "Ihn erst wieder herunterfahren",
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "{cover} öffnet sich",
-        "description": "**Was gerade geschieht**: der Rollladen hat zu steigen begonnen. In diesem Augenblick öffnen sich die Lamellen, und die Unterkante liegt noch auf.\n\n**Was Sie tun müssen**: beobachten Sie die Unterkante und drücken Sie den Knopf unten **in dem Augenblick, in dem sie sich von der Auflage löst**. Lassen Sie den Rollladen danach weiterlaufen: er kommt von selbst oben an, und dann wird um den zweiten Tastendruck gebeten.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Was gerade geschieht**: der Rollladen hat zu steigen begonnen. In diesem Augenblick öffnen sich die Lamellen, und die Unterkante liegt noch auf.\n\n**Was Sie tun müssen**: beobachten Sie die Unterkante und drücken Sie den Knopf unten **in dem Augenblick, in dem sie sich von der Auflage löst**. Lassen Sie den Rollladen danach weiterlaufen: er kommt von selbst oben an, und dann wird um den zweiten Tastendruck gebeten.",
         "menu_options": {
           "lifted_off": "2) Drücken Sie in dem Augenblick, in dem er sich von der Auflage löst",
           "repeat_step": "Diesen Schritt wiederholen",
@@ -336,7 +336,7 @@
       },
       "open_top": {
         "title": "{cover} steigt noch",
-        "description": "**Was gerade geschieht**: der Panzer wickelt sich auf, und der Rollladen hält oben von selbst an.\n\n**Was Sie tun müssen**: drücken Sie den Knopf unten **in dem Augenblick, in dem er die Endlage erreicht und der Motor anhält**. Haben Sie den Augenblick verpasst, wiederholen Sie den Schritt, statt zu schätzen: die ganze Öffnungszeit kommt aus diesem Tastendruck.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Was gerade geschieht**: der Panzer wickelt sich auf, und der Rollladen hält oben von selbst an.\n\n**Was Sie tun müssen**: drücken Sie den Knopf unten **in dem Augenblick, in dem er die Endlage erreicht und der Motor anhält**. Haben Sie den Augenblick verpasst, wiederholen Sie den Schritt, statt zu schätzen: die ganze Öffnungszeit kommt aus diesem Tastendruck.",
         "menu_options": {
           "stopped_open": "3) Drücken Sie in dem Augenblick, in dem er in der Endlage anhält",
           "repeat_step": "Diesen Schritt wiederholen",
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "Wie hoch ist {cover}?",
-        "description": "**Was Sie tun müssen**: messen Sie bei vollständig geöffnetem Rollladen von der Stelle, an der die Unterkante im geschlossenen Zustand aufliegt (der Grundlinie), bis zur Unterkante in ihrer jetzigen Stellung. Mit anderen Worten: messen Sie den Weg, den der Rollladen von ganz geöffnet bis ganz geschlossen zurücklegt (oder umgekehrt), und tragen Sie die Zentimeter unten ein.\n\nDieser Weg ist der Panzerweg, und er ist der Bezug, mit dem jede andere Messung verglichen wird. Messen Sie den Panzer, nicht das Fenster: liegt die Unterkante auf einer Fensterbank und nicht auf dem Boden auf, messen Sie ab der Fensterbank.",
+        "description": "![](/myhome_static/height.webp)\n\n**Was Sie tun müssen**: messen Sie bei vollständig geöffnetem Rollladen von der Stelle, an der die Unterkante im geschlossenen Zustand aufliegt (der Grundlinie), bis zur Unterkante in ihrer jetzigen Stellung. Mit anderen Worten: messen Sie den Weg, den der Rollladen von ganz geöffnet bis ganz geschlossen zurücklegt (oder umgekehrt), und tragen Sie die Zentimeter unten ein.\n\nDieser Weg ist der Panzerweg, und er ist der Bezug, mit dem jede andere Messung verglichen wird. Messen Sie den Panzer, nicht das Fenster: liegt die Unterkante auf einer Fensterbank und nicht auf dem Boden auf, messen Sie ab der Fensterbank.",
         "data": {
           "height": "Panzerweg (cm)"
         },
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Messen Sie {cover} – bei {percent}% der Abfahrt",
-        "description": "**Was geschehen ist**: der Rollladen wurde vollständig geöffnet und dann um {percent}% seines Weges heruntergefahren.\n\n**Was Sie tun müssen**: messen Sie erneut von der Grundlinie bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Derselbe Bezug wie bei der Höhe, damit sich die beiden Messungen vergleichen lassen.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geöffnet und dann um {percent}% seines Weges heruntergefahren.\n\n**Was Sie tun müssen**: messen Sie erneut von der Grundlinie bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Derselbe Bezug wie bei der Höhe, damit sich die beiden Messungen vergleichen lassen.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Messen Sie {cover} – bei {percent}% der Auffahrt",
-        "description": "**Was geschehen ist**: der Rollladen wurde vollständig geschlossen und dann um die Lamellen plus {percent}% seines Weges hinaufgefahren.\n\n**Was Sie tun müssen**: messen Sie von der Grundlinie bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Ein Rollladen ist beim Steigen und beim Sinken nicht gleich belastet: deshalb wird derselbe Bruchteil zweimal gemessen.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geschlossen und dann um die Lamellen plus {percent}% seines Weges hinaufgefahren.\n\n**Was Sie tun müssen**: messen Sie von der Grundlinie bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Ein Rollladen ist beim Steigen und beim Sinken nicht gleich belastet: deshalb wird derselbe Bruchteil zweimal gemessen.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },
@@ -417,7 +417,7 @@
       },
       "measure_verify": {
         "title": "Prüfen Sie {cover} – bei {percent}% der Abfahrt",
-        "description": "**Was geschehen ist**: der Rollladen wurde in eine Stellung gefahren, in der nichts gemessen wurde, das hier ist also eine echte Prüfung und keine Wiederholung.\n\n**Was Sie tun müssen**: messen Sie ein letztes Mal die Höhe der Unterkante, vom selben Bezug wie zuvor, und tragen Sie die Zentimeter unten ein. Der nächste Bildschirm sagt, wie weit der Rollladen von dort abweicht, wo Home Assistant ihn vermutet hat.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde in eine Stellung gefahren, in der nichts gemessen wurde, das hier ist also eine echte Prüfung und keine Wiederholung.\n\n**Was Sie tun müssen**: messen Sie ein letztes Mal die Höhe der Unterkante, vom selben Bezug wie zuvor, und tragen Sie die Zentimeter unten ein. Der nächste Bildschirm sagt, wie weit der Rollladen von dort abweicht, wo Home Assistant ihn vermutet hat.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },

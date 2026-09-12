@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "We gaan {cover} omhoog meten",
-        "description": "**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van onderen omhoog. De eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten; daarna begint het hele doek te stijgen, en bovenaan stopt het rolluik vanzelf.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Er worden twee drukken gevraagd, de een na de ander: de eerste op het moment dat de onderrand loskomt, de tweede op het moment dat het rolluik bovenaan stopt. U klokt niets - het moment van drukken ís de meting.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van onderen omhoog. De eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten; daarna begint het hele doek te stijgen, en bovenaan stopt het rolluik vanzelf.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Er worden twee drukken gevraagd, de een na de ander: de eerste op het moment dat de onderrand loskomt, de tweede op het moment dat het rolluik bovenaan stopt. U klokt niets - het moment van drukken ís de meting.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
         "menu_options": {
           "open_start": "1) Start het rolluik",
           "repeat_step": "Stuur het eerst weer omlaag",
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "{cover} gaat open",
-        "description": "**Wat er gebeurt**: het rolluik is begonnen te stijgen. Op dit moment gaan de lamellen open en rust de onderrand nog.\n\n**Wat u moet doen**: kijk naar de onderrand en druk op de knop hieronder **op het moment dat hij loskomt**. Laat het rolluik daarna doorlopen: het komt vanzelf boven en dan wordt de tweede druk gevraagd.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Wat er gebeurt**: het rolluik is begonnen te stijgen. Op dit moment gaan de lamellen open en rust de onderrand nog.\n\n**Wat u moet doen**: kijk naar de onderrand en druk op de knop hieronder **op het moment dat hij loskomt**. Laat het rolluik daarna doorlopen: het komt vanzelf boven en dan wordt de tweede druk gevraagd.",
         "menu_options": {
           "lifted_off": "2) Druk op het moment dat hij van de basis loskomt",
           "repeat_step": "Herhaal deze stap",
@@ -336,7 +336,7 @@
       },
       "open_top": {
         "title": "{cover} stijgt nog",
-        "description": "**Wat er gebeurt**: het doek wikkelt zich op en het rolluik stopt vanzelf bovenaan.\n\n**Wat u moet doen**: druk op de knop hieronder **op het moment dat het de eindstand bereikt en de motor stopt**. Hebt u het moment gemist, herhaal dan de stap in plaats van te gokken: de hele openingstijd komt van deze druk.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Wat er gebeurt**: het doek wikkelt zich op en het rolluik stopt vanzelf bovenaan.\n\n**Wat u moet doen**: druk op de knop hieronder **op het moment dat het de eindstand bereikt en de motor stopt**. Hebt u het moment gemist, herhaal dan de stap in plaats van te gokken: de hele openingstijd komt van deze druk.",
         "menu_options": {
           "stopped_open": "3) Druk op het moment dat het aan het eind stopt",
           "repeat_step": "Herhaal deze stap",
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "Hoe hoog is {cover}?",
-        "description": "**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand rust als het dicht is (de basis) tot de onderrand in de huidige stand. Met andere woorden: meet de afstand die het rolluik aflegt van helemaal open naar helemaal dicht (of omgekeerd), en schrijf de centimeters hieronder.\n\nDie afstand is de doekloop, en dat is de maat waarmee elke andere meting wordt vergeleken. Meet het doek, niet het raam: rust de onderrand op een vensterbank en niet op de vloer, meet dan vanaf de vensterbank.",
+        "description": "![](/myhome_static/height.webp)\n\n**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand rust als het dicht is (de basis) tot de onderrand in de huidige stand. Met andere woorden: meet de afstand die het rolluik aflegt van helemaal open naar helemaal dicht (of omgekeerd), en schrijf de centimeters hieronder.\n\nDie afstand is de doekloop, en dat is de maat waarmee elke andere meting wordt vergeleken. Meet het doek, niet het raam: rust de onderrand op een vensterbank en niet op de vloer, meet dan vanaf de vensterbank.",
         "data": {
           "height": "Doekloop (cm)"
         },
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Meet {cover} - op {percent}% van de daling",
-        "description": "**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna {percent}% van zijn loop omlaag gestuurd.\n\n**Wat u moet doen**: meet opnieuw van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Dezelfde maat als bij de hoogte, zodat de twee metingen vergeleken kunnen worden.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna {percent}% van zijn loop omlaag gestuurd.\n\n**Wat u moet doen**: meet opnieuw van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Dezelfde maat als bij de hoogte, zodat de twee metingen vergeleken kunnen worden.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Meet {cover} - op {percent}% van de stijging",
-        "description": "**Wat er gebeurd is**: het rolluik is helemaal gesloten en daarna de lamellen plus {percent}% van zijn loop omhoog gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Een rolluik wordt omhoog en omlaag niet gelijk belast: daarom wordt dezelfde fractie twee keer gemeten.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal gesloten en daarna de lamellen plus {percent}% van zijn loop omhoog gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Een rolluik wordt omhoog en omlaag niet gelijk belast: daarom wordt dezelfde fractie twee keer gemeten.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },
@@ -417,7 +417,7 @@
       },
       "measure_verify": {
         "title": "Controleer {cover} - op {percent}% van de daling",
-        "description": "**Wat er gebeurd is**: het rolluik is naar een stand gebracht waar niets gemeten is, dus dit is een echte controle en geen herhaling.\n\n**Wat u moet doen**: meet een laatste keer de hoogte van de onderrand, vanaf dezelfde maat als eerder, en schrijf de centimeters hieronder. Het volgende scherm zegt hoever het rolluik afwijkt van waar Home Assistant het dacht.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is naar een stand gebracht waar niets gemeten is, dus dit is een echte controle en geen herhaling.\n\n**Wat u moet doen**: meet een laatste keer de hoogte van de onderrand, vanaf dezelfde maat als eerder, en schrijf de centimeters hieronder. Het volgende scherm zegt hoever het rolluik afwijkt van waar Home Assistant het dacht.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },

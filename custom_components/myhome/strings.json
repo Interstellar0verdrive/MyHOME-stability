@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "We are about to measure {cover} going up",
-        "description": "**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other: the first at the instant the bottom edge leaves its rest, the second at the instant the cover stops at the top. You are not timing anything - the instant of the press is the measurement.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other: the first at the instant the bottom edge leaves its rest, the second at the instant the cover stops at the top. You are not timing anything - the instant of the press is the measurement.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "open_start": "1) Start the cover",
           "repeat_step": "Send it back down first",
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "{cover} is opening",
-        "description": "**What is happening**: the cover has started to rise. Right now the slats are opening and the bottom edge is still on its rest.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Then let the cover carry on: it will reach the top by itself and you will be asked for the second press.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**What is happening**: the cover has started to rise. Right now the slats are opening and the bottom edge is still on its rest.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Then let the cover carry on: it will reach the top by itself and you will be asked for the second press.",
         "menu_options": {
           "lifted_off": "2) Press at the instant it leaves its rest",
           "repeat_step": "Repeat this step",
@@ -336,7 +336,7 @@
       },
       "open_top": {
         "title": "{cover} is still rising",
-        "description": "**What is happening**: the curtain is winding on and the cover will stop by itself at the top.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. If you missed the moment, repeat the step rather than guessing: the whole opening time comes from this press.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**What is happening**: the curtain is winding on and the cover will stop by itself at the top.\n\n**What you have to do**: press the button below **at the instant it reaches the end stop and the motor stops**. If you missed the moment, repeat the step rather than guessing: the whole opening time comes from this press.",
         "menu_options": {
           "stopped_open": "3) Press at the instant it stops at the end",
           "repeat_step": "Repeat this step",
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "How tall is {cover}?",
-        "description": "**What you have to do**: with the cover completely open, measure from the point where the bottom edge rests when it is closed (the base) up to the bottom edge where it is now. In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres below.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the window: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
+        "description": "![](/myhome_static/height.webp)\n\n**What you have to do**: with the cover completely open, measure from the point where the bottom edge rests when it is closed (the base) up to the bottom edge where it is now. In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres below.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the window: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
         "data": {
           "height": "Curtain travel (cm)"
         },
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Measure {cover} - {percent}% of the way down",
-        "description": "**What happened**: the cover was opened completely and then run down {percent}% of its travel.\n\n**What you have to do**: measure again from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the height, so that the two measurements can be compared.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down {percent}% of its travel.\n\n**What you have to do**: measure again from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the height, so that the two measurements can be compared.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Measure {cover} - {percent}% of the way up",
-        "description": "**What happened**: the cover was closed completely and then run up through the slats plus {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run up through the slats plus {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -417,7 +417,7 @@
       },
       "measure_verify": {
         "title": "Check {cover} - {percent}% of the way down",
-        "description": "**What happened**: the cover was taken to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen says how far the cover is from where Home Assistant believed it to be.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was taken to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen says how far the cover is from where Home Assistant believed it to be.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },

@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Stiamo per misurare la salita di {cover}",
-        "description": "**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in salita dal basso. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo, e in cima la tapparella si ferma da sola.\n\n**Cosa devi fare tu**: qui dovrai essere veloce e preciso. Ti verranno chieste due pressioni, una dopo l'altra: la prima nell'istante in cui il bordo inferiore si stacca dall'appoggio, la seconda nell'istante in cui la tapparella si ferma in cima. Non devi cronometrare niente — l'istante della pressione è la misura.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in salita dal basso. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo, e in cima la tapparella si ferma da sola.\n\n**Cosa devi fare tu**: qui dovrai essere veloce e preciso. Ti verranno chieste due pressioni, una dopo l'altra: la prima nell'istante in cui il bordo inferiore si stacca dall'appoggio, la seconda nell'istante in cui la tapparella si ferma in cima. Non devi cronometrare niente — l'istante della pressione è la misura.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
         "menu_options": {
           "open_start": "1) Avvia la tapparella",
           "repeat_step": "Riportala prima in basso",
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "{cover} si sta aprendo",
-        "description": "**Cosa sta succedendo**: la tapparella ha cominciato a salire. In questo momento si stanno aprendo le lamelle e il bordo inferiore è ancora in appoggio.\n\n**Cosa devi fare tu**: guarda il bordo inferiore e premi il pulsante qui sotto **nell'istante in cui si stacca dall'appoggio**. Poi lascia che la tapparella continui: arriverà in cima da sola e ti sarà chiesta la seconda pressione.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cosa sta succedendo**: la tapparella ha cominciato a salire. In questo momento si stanno aprendo le lamelle e il bordo inferiore è ancora in appoggio.\n\n**Cosa devi fare tu**: guarda il bordo inferiore e premi il pulsante qui sotto **nell'istante in cui si stacca dall'appoggio**. Poi lascia che la tapparella continui: arriverà in cima da sola e ti sarà chiesta la seconda pressione.",
         "menu_options": {
           "lifted_off": "2) Premi nell'istante in cui si stacca dalla base",
           "repeat_step": "Ripeti questo passo",
@@ -336,7 +336,7 @@
       },
       "open_top": {
         "title": "{cover} sta ancora salendo",
-        "description": "**Cosa sta succedendo**: il telo si sta avvolgendo e la tapparella si fermerà da sola in cima.\n\n**Cosa devi fare tu**: premi il pulsante qui sotto **nell'istante in cui arriva a fine corsa e il motore si ferma**. Se ti è sfuggito il momento, ripeti il passo invece di andare a occhio: tutto il tempo di apertura viene da questa pressione.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Cosa sta succedendo**: il telo si sta avvolgendo e la tapparella si fermerà da sola in cima.\n\n**Cosa devi fare tu**: premi il pulsante qui sotto **nell'istante in cui arriva a fine corsa e il motore si ferma**. Se ti è sfuggito il momento, ripeti il passo invece di andare a occhio: tutto il tempo di apertura viene da questa pressione.",
         "menu_options": {
           "stopped_open": "3) Premi nell'istante in cui si ferma a fine corsa",
           "repeat_step": "Ripeti questo passo",
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "Quanto è alta {cover}?",
-        "description": "**Cosa devi fare tu**: con la tapparella completamente aperta, misura dal punto dove il bordo inferiore appoggia quando è chiusa (la base) fino al bordo inferiore della posizione attuale. In altre parole, misura la distanza che percorre la tapparella da tutta aperta a tutta chiusa (o viceversa), e scrivi qui sotto i centimetri.\n\nQuella distanza è la corsa del telo, ed è il riferimento con cui viene confrontata ogni altra misura. Misura il telo, non la finestra: se il bordo inferiore appoggia su un davanzale e non sul pavimento, misura dal davanzale.",
+        "description": "![](/myhome_static/height.webp)\n\n**Cosa devi fare tu**: con la tapparella completamente aperta, misura dal punto dove il bordo inferiore appoggia quando è chiusa (la base) fino al bordo inferiore della posizione attuale. In altre parole, misura la distanza che percorre la tapparella da tutta aperta a tutta chiusa (o viceversa), e scrivi qui sotto i centimetri.\n\nQuella distanza è la corsa del telo, ed è il riferimento con cui viene confrontata ogni altra misura. Misura il telo, non la finestra: se il bordo inferiore appoggia su un davanzale e non sul pavimento, misura dal davanzale.",
         "data": {
           "height": "Corsa del telo (cm)"
         },
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Misura {cover} — al {percent}% della discesa",
-        "description": "**Cosa è successo**: la tapparella è stata aperta completamente e poi fatta scendere per il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura di nuovo dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Lo stesso riferimento dell'altezza, così le due misure si possono confrontare.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata aperta completamente e poi fatta scendere per il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura di nuovo dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Lo stesso riferimento dell'altezza, così le due misure si possono confrontare.",
         "data": {
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Misura {cover} — al {percent}% della salita",
-        "description": "**Cosa è successo**: la tapparella è stata chiusa completamente e poi fatta salire per le lamelle più il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata chiusa completamente e poi fatta salire per le lamelle più il {percent}% della sua corsa.\n\n**Cosa devi fare tu**: misura dalla base fino al bordo inferiore com'è adesso, e scrivi qui sotto i centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
         "data": {
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
@@ -417,7 +417,7 @@
       },
       "measure_verify": {
         "title": "Verifica {cover} — al {percent}% della discesa",
-        "description": "**Cosa è successo**: la tapparella è stata portata in una posizione in cui non è stato misurato niente, quindi questa è una verifica vera e non una ripetizione.\n\n**Cosa devi fare tu**: misura un'ultima volta l'altezza del bordo inferiore, dallo stesso riferimento di prima, e scrivi qui sotto i centimetri. La schermata successiva dice di quanto la tapparella si discosta da dove Home Assistant la credeva.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata portata in una posizione in cui non è stato misurato niente, quindi questa è una verifica vera e non una ripetizione.\n\n**Cosa devi fare tu**: misura un'ultima volta l'altezza del bordo inferiore, dallo stesso riferimento di prima, e scrivi qui sotto i centimetri. La schermata successiva dice di quanto la tapparella si discosta da dove Home Assistant la credeva.",
         "data": {
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },

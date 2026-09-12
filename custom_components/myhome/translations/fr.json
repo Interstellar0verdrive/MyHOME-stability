@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Nous allons mesurer la montée de {cover}",
-        "description": "**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre : le premier à l'instant où le bord inférieur se décolle de son appui, le second à l'instant où le volet s'arrête en haut. Vous ne chronométrez rien - l'instant de l'appui est la mesure.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre : le premier à l'instant où le bord inférieur se décolle de son appui, le second à l'instant où le volet s'arrête en haut. Vous ne chronométrez rien - l'instant de l'appui est la mesure.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
         "menu_options": {
           "open_start": "1) Lancer le volet",
           "repeat_step": "Le redescendre d'abord",
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "{cover} est en train de s'ouvrir",
-        "description": "**Ce qui se passe** : le volet a commencé à monter. En ce moment, les lames s'ouvrent et le bord inférieur est encore en appui.\n\n**Ce que vous devez faire** : regardez le bord inférieur et appuyez sur le bouton ci-dessous **à l'instant où il se décolle de son appui**. Laissez ensuite le volet continuer : il arrivera en haut tout seul et le second appui vous sera demandé.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Ce qui se passe** : le volet a commencé à monter. En ce moment, les lames s'ouvrent et le bord inférieur est encore en appui.\n\n**Ce que vous devez faire** : regardez le bord inférieur et appuyez sur le bouton ci-dessous **à l'instant où il se décolle de son appui**. Laissez ensuite le volet continuer : il arrivera en haut tout seul et le second appui vous sera demandé.",
         "menu_options": {
           "lifted_off": "2) Appuyez à l'instant où il se décolle de sa base",
           "repeat_step": "Répéter cette étape",
@@ -336,7 +336,7 @@
       },
       "open_top": {
         "title": "{cover} monte encore",
-        "description": "**Ce qui se passe** : le tablier s'enroule et le volet s'arrêtera tout seul en haut.\n\n**Ce que vous devez faire** : appuyez sur le bouton ci-dessous **à l'instant où il arrive en fin de course et où le moteur s'arrête**. Si le moment vous a échappé, répétez l'étape plutôt que d'estimer : tout le temps d'ouverture vient de cet appui.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Ce qui se passe** : le tablier s'enroule et le volet s'arrêtera tout seul en haut.\n\n**Ce que vous devez faire** : appuyez sur le bouton ci-dessous **à l'instant où il arrive en fin de course et où le moteur s'arrête**. Si le moment vous a échappé, répétez l'étape plutôt que d'estimer : tout le temps d'ouverture vient de cet appui.",
         "menu_options": {
           "stopped_open": "3) Appuyez à l'instant où il s'arrête en fin de course",
           "repeat_step": "Répéter cette étape",
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "Quelle est la hauteur de {cover} ?",
-        "description": "**Ce que vous devez faire** : le volet étant complètement ouvert, mesurez depuis le point où le bord inférieur repose quand il est fermé (la base) jusqu'au bord inférieur dans sa position actuelle. Autrement dit, mesurez la distance que parcourt le volet de complètement ouvert à complètement fermé (ou l'inverse), et écrivez les centimètres ci-dessous.\n\nCette distance est la course du tablier, et c'est la référence à laquelle toute autre mesure est comparée. Mesurez le tablier, pas la fenêtre : si le bord inférieur repose sur un appui et non sur le sol, mesurez depuis l'appui.",
+        "description": "![](/myhome_static/height.webp)\n\n**Ce que vous devez faire** : le volet étant complètement ouvert, mesurez depuis le point où le bord inférieur repose quand il est fermé (la base) jusqu'au bord inférieur dans sa position actuelle. Autrement dit, mesurez la distance que parcourt le volet de complètement ouvert à complètement fermé (ou l'inverse), et écrivez les centimètres ci-dessous.\n\nCette distance est la course du tablier, et c'est la référence à laquelle toute autre mesure est comparée. Mesurez le tablier, pas la fenêtre : si le bord inférieur repose sur un appui et non sur le sol, mesurez depuis l'appui.",
         "data": {
           "height": "Course du tablier (cm)"
         },
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Mesurez {cover} - à {percent} % de la descente",
-        "description": "**Ce qui s'est passé** : le volet a été ouvert complètement puis descendu de {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez de nouveau depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. La même référence que la hauteur, pour que les deux mesures puissent être comparées.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été ouvert complètement puis descendu de {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez de nouveau depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. La même référence que la hauteur, pour que les deux mesures puissent être comparées.",
         "data": {
           "measured_cm": "Hauteur du bord inférieur (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Mesurez {cover} - à {percent} % de la montée",
-        "description": "**Ce qui s'est passé** : le volet a été fermé complètement puis monté des lames plus {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. Un volet n'est pas chargé de la même façon à la montée et à la descente : c'est pourquoi la même fraction se mesure deux fois.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été fermé complètement puis monté des lames plus {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. Un volet n'est pas chargé de la même façon à la montée et à la descente : c'est pourquoi la même fraction se mesure deux fois.",
         "data": {
           "measured_cm": "Hauteur du bord inférieur (cm)"
         },
@@ -417,7 +417,7 @@
       },
       "measure_verify": {
         "title": "Vérifiez {cover} - à {percent} % de la descente",
-        "description": "**Ce qui s'est passé** : le volet a été amené dans une position où rien n'a été mesuré, c'est donc une vraie vérification et non une répétition.\n\n**Ce que vous devez faire** : mesurez une dernière fois la hauteur du bord inférieur, depuis la même référence qu'avant, et écrivez les centimètres ci-dessous. L'écran suivant dit de combien le volet s'écarte de l'endroit où Home Assistant le croyait.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été amené dans une position où rien n'a été mesuré, c'est donc une vraie vérification et non une répétition.\n\n**Ce que vous devez faire** : mesurez une dernière fois la hauteur du bord inférieur, depuis la même référence qu'avant, et écrivez les centimètres ci-dessous. L'écran suivant dit de combien le volet s'écarte de l'endroit où Home Assistant le croyait.",
         "data": {
           "measured_cm": "Hauteur du bord inférieur (cm)"
         },

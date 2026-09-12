@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Vamos a medir la subida de {cover}",
-        "description": "**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia arriba desde abajo. Durante el primer segundo o dos solo se abren las lamas, mientras el borde inferior sigue apoyado; después empieza a subir toda la tela, y arriba la persiana se para sola.\n\n**Lo que tienes que hacer**: aquí tendrás que ser rápido y preciso. Se te pedirán dos pulsaciones, una tras otra: la primera en el instante en que el borde inferior se despega del apoyo, la segunda en el instante en que la persiana se para arriba. No estás cronometrando nada: el instante de la pulsación es la medida.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia arriba desde abajo. Durante el primer segundo o dos solo se abren las lamas, mientras el borde inferior sigue apoyado; después empieza a subir toda la tela, y arriba la persiana se para sola.\n\n**Lo que tienes que hacer**: aquí tendrás que ser rápido y preciso. Se te pedirán dos pulsaciones, una tras otra: la primera en el instante en que el borde inferior se despega del apoyo, la segunda en el instante en que la persiana se para arriba. No estás cronometrando nada: el instante de la pulsación es la medida.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
         "menu_options": {
           "open_start": "1) Arrancar la persiana",
           "repeat_step": "Bajarla del todo primero",
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "{cover} se está abriendo",
-        "description": "**Lo que está pasando**: la persiana ha empezado a subir. En este momento se están abriendo las lamas y el borde inferior sigue apoyado.\n\n**Lo que tienes que hacer**: mira el borde inferior y pulsa el botón de abajo **en el instante en que se despega del apoyo**. Después deja que la persiana continúe: llegará arriba sola y se te pedirá la segunda pulsación.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Lo que está pasando**: la persiana ha empezado a subir. En este momento se están abriendo las lamas y el borde inferior sigue apoyado.\n\n**Lo que tienes que hacer**: mira el borde inferior y pulsa el botón de abajo **en el instante en que se despega del apoyo**. Después deja que la persiana continúe: llegará arriba sola y se te pedirá la segunda pulsación.",
         "menu_options": {
           "lifted_off": "2) Pulsa en el instante en que se despega de la base",
           "repeat_step": "Repetir este paso",
@@ -336,7 +336,7 @@
       },
       "open_top": {
         "title": "{cover} sigue subiendo",
-        "description": "**Lo que está pasando**: la tela se está enrollando y la persiana se parará sola arriba.\n\n**Lo que tienes que hacer**: pulsa el botón de abajo **en el instante en que llega al final de carrera y el motor se para**. Si se te ha escapado el momento, repite el paso en lugar de calcular a ojo: todo el tiempo de apertura viene de esta pulsación.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Lo que está pasando**: la tela se está enrollando y la persiana se parará sola arriba.\n\n**Lo que tienes que hacer**: pulsa el botón de abajo **en el instante en que llega al final de carrera y el motor se para**. Si se te ha escapado el momento, repite el paso en lugar de calcular a ojo: todo el tiempo de apertura viene de esta pulsación.",
         "menu_options": {
           "stopped_open": "3) Pulsa en el instante en que se para al final",
           "repeat_step": "Repetir este paso",
@@ -379,7 +379,7 @@
       },
       "height": {
         "title": "¿Qué altura tiene {cover}?",
-        "description": "**Lo que tienes que hacer**: con la persiana completamente abierta, mide desde el punto donde el borde inferior apoya cuando está cerrada (la base) hasta el borde inferior en su posición actual. Dicho de otro modo, mide la distancia que recorre la persiana de completamente abierta a completamente cerrada (o al revés), y escribe abajo los centímetros.\n\nEsa distancia es la carrera de la tela, y es la referencia con la que se compara cualquier otra medida. Mide la tela, no la ventana: si el borde inferior apoya en un alféizar y no en el suelo, mide desde el alféizar.",
+        "description": "![](/myhome_static/height.webp)\n\n**Lo que tienes que hacer**: con la persiana completamente abierta, mide desde el punto donde el borde inferior apoya cuando está cerrada (la base) hasta el borde inferior en su posición actual. Dicho de otro modo, mide la distancia que recorre la persiana de completamente abierta a completamente cerrada (o al revés), y escribe abajo los centímetros.\n\nEsa distancia es la carrera de la tela, y es la referencia con la que se compara cualquier otra medida. Mide la tela, no la ventana: si el borde inferior apoya en un alféizar y no en el suelo, mide desde el alféizar.",
         "data": {
           "height": "Carrera de la tela (cm)"
         },
@@ -397,7 +397,7 @@
       },
       "measure_descent": {
         "title": "Mide {cover} — al {percent}% de la bajada",
-        "description": "**Lo que ha pasado**: la persiana se ha abierto completamente y luego se ha bajado el {percent}% de su carrera.\n\n**Lo que tienes que hacer**: mide de nuevo desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. La misma referencia que la altura, para que las dos medidas se puedan comparar.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha abierto completamente y luego se ha bajado el {percent}% de su carrera.\n\n**Lo que tienes que hacer**: mide de nuevo desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. La misma referencia que la altura, para que las dos medidas se puedan comparar.",
         "data": {
           "measured_cm": "Altura del borde inferior (cm)"
         },
@@ -407,7 +407,7 @@
       },
       "measure_ascent": {
         "title": "Mide {cover} — al {percent}% de la subida",
-        "description": "**Lo que ha pasado**: la persiana se ha cerrado completamente y luego se ha subido las lamas más el {percent}% de su carrera.\n\n**Lo que tienes que hacer**: mide desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. Una persiana no está cargada igual al subir que al bajar: por eso la misma fracción se mide dos veces.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha cerrado completamente y luego se ha subido las lamas más el {percent}% de su carrera.\n\n**Lo que tienes que hacer**: mide desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. Una persiana no está cargada igual al subir que al bajar: por eso la misma fracción se mide dos veces.",
         "data": {
           "measured_cm": "Altura del borde inferior (cm)"
         },
@@ -417,7 +417,7 @@
       },
       "measure_verify": {
         "title": "Comprueba {cover} — al {percent}% de la bajada",
-        "description": "**Lo que ha pasado**: la persiana se ha llevado a una posición en la que no se ha medido nada, así que esto es una comprobación de verdad y no una repetición.\n\n**Lo que tienes que hacer**: mide por última vez la altura del borde inferior, desde la misma referencia de antes, y escribe abajo los centímetros. La pantalla siguiente dice cuánto se aparta la persiana de donde Home Assistant la creía.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha llevado a una posición en la que no se ha medido nada, así que esto es una comprobación de verdad y no una repetición.\n\n**Lo que tienes que hacer**: mide por última vez la altura del borde inferior, desde la misma referencia de antes, y escribe abajo los centímetros. La pantalla siguiente dice cuánto se aparta la persiana de donde Home Assistant la creía.",
         "data": {
           "measured_cm": "Altura del borde inferior (cm)"
         },
