@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-09-12
 ### Fixed
 
 - **A command written into a session the gateway had quietly closed is sent again.** A
@@ -1021,7 +1022,8 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
 
-[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.4...HEAD
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.5
 [0.4.4]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.4
 [0.4.3]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.3
 [0.4.2]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.2
