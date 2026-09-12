@@ -18,21 +18,17 @@ from typing import Any
 import pytest
 
 from custom_components.myhome.calibration_flow import (
-    CLAIM_REASONS,
     HOMING_ACTION,
+    NO_PROFILE,
     PROBLEM_REASONS,
     RUNNING_ACTION,
-    CoverCalibrationFlow,
-    CoverProfileFlow,
 )
-from custom_components.myhome.config_flow import TUNABLE_OPTIONS
+from custom_components.myhome.config_flow import TUNABLE_OPTIONS, MyHomeOptionsFlowHandler
 from custom_components.myhome.const import (
     CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_SENSOR_DEFAULTS,
     CONF_WORKER_COUNT,
     MAX_COMMAND_WORKERS,
-    SUBENTRY_COVER_CALIBRATION,
-    SUBENTRY_COVER_PROFILE,
 )
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
 from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
@@ -70,7 +66,7 @@ PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 def test_the_translation_files_are_found() -> None:
     """A glob that silently matches nothing would make every test below vacuous."""
     assert STRINGS.is_file()
-    assert {path.stem for path in TRANSLATIONS} == {"en", "fr", "it", "nl"}
+    assert {path.stem for path in TRANSLATIONS} == {"de", "en", "es", "fr", "it", "nl", "pt"}
 
 
 @pytest.mark.parametrize("path", TRANSLATIONS, ids=lambda path: path.stem)
@@ -112,7 +108,7 @@ def test_every_options_tunable_documents_its_range() -> None:
     five sentences that quote it.
     """
     for path in [STRINGS, *TRANSLATIONS]:
-        step = load(path)["options"]["step"]["init"]
+        step = load(path)["options"]["step"]["gateway"]
         assert set(step["data_description"]) == set(step["data"]) - {
             "address",
             "port",
@@ -138,7 +134,7 @@ def test_the_keepalive_option_names_both_blocks_that_beat_it() -> None:
     Mutation caught: dropping the alias from the sentence in any of the five files.
     """
     for path in [STRINGS, *TRANSLATIONS]:
-        description = load(path)["options"]["step"]["init"]["data_description"][
+        description = load(path)["options"]["step"]["gateway"]["data_description"][
             CONF_DEFAULT_KEEPALIVE_MINUTES
         ]
         # The trailing colon is what makes these YAML keys rather than ordinary words:
@@ -181,24 +177,42 @@ def test_no_dead_error_keys(path: Path) -> None:
     assert [key for key in leaf_keys(load(path)) if key.endswith(".invalid_port")] == []
 
 
-# --------------------------------------------------------------- config_subentries
-# The guided calibration of 0.5.0 is two config subentry flows, and every screen of it
-# is a step id, a menu option, a progress action, an error key or an abort reason that
-# has to exist in five files. The tests below pin the two halves to each other: a step
-# the code can show and nobody wrote a text for renders as a raw key, and a text nobody
-# can reach is a translation five people maintain for nothing.
-SUBENTRY_FLOWS = {
-    SUBENTRY_COVER_CALIBRATION: CoverCalibrationFlow,
-    SUBENTRY_COVER_PROFILE: CoverProfileFlow,
-}
+# ------------------------------------------------------------------- the options flow
+# 0.5.0 v2 put the guided calibration and the management of what it stores inside the
+# options flow, so every screen of both is a step id, a menu option, a progress action,
+# an error key or a selector option that has to exist in seven files. The tests below
+# pin the two halves to each other: a step the code can show and nobody wrote a text
+# for renders as a raw key, and a text nobody can reach is a translation seven people
+# maintain for nothing.
+FLOW = MyHomeOptionsFlowHandler
 
 # What each screen is given to substitute into its text. Anything else in a `{...}`
 # renders as braces to the user, and a placeholder the code passes and no text uses is
 # merely unused - so this is the upper bound, not the exact set.
 STEP_PLACEHOLDERS: dict[str, set[str]] = {
-    "user": set(),
+    "init": {"gateway"},
+    "gateway": set(),
+    # management
+    "profiles_covers": {"profiles", "covers"},
+    "assign_covers": {"covers"},
+    "assign_heights": {"covers"},
+    "pick_profile": set(),
+    "profile_actions": {"profile", "covers", "values", "count"},
+    "profile_view": {"profile", "covers", "values", "count"},
+    "profile_edit": {"profile", "covers", "values", "count"},
+    "profile_delete": {"profile", "covers", "values", "count"},
+    "profile_deleted": {"profile", "covers", "count"},
+    "calibrations": {"count"},
+    "no_calibrations": set(),
+    "no_basic_covers": set(),
+    "calibration_actions": {"cover", "values", "profile", "measured_at"},
+    "calibration_view": {"cover", "values", "profile", "measured_at"},
+    "calibration_edit": {"cover", "values", "profile", "measured_at"},
+    "calibration_delete": {"cover", "values", "profile", "measured_at"},
+    "calibration_deleted": {"cover"},
+    # the guided flow
+    "calibrate": set(),
     "cover": set(),
-    "reconfigure": {"cover", "profile", "values"},
     "path": {"cover"},
     "path_a": {"cover"},
     "path_b": {"cover"},
@@ -206,17 +220,29 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "refine_scope": {"cover"},
     "home_closed_done": {"cover"},
     "home_open_done": {"cover"},
+    "open_brief": {"cover"},
     "open_lift": {"cover"},
     "open_top": {"cover"},
+    "open_result": {"cover", "slat", "run"},
+    "close_brief": {"cover"},
     "close_bottom": {"cover"},
+    "close_result": {"cover", "run"},
     "height": {"cover"},
-    "measure_descent": {"cover", "percent", "direction"},
-    "measure_ascent": {"cover", "percent", "direction"},
-    "measure_verify": {"cover", "percent", "direction"},
+    "height_result": {"cover", "height"},
+    "measure_descent": {"cover", "percent", "direction", "expected", "tolerance"},
+    "measure_ascent": {"cover", "percent", "direction", "expected", "tolerance"},
+    "measure_verify": {"cover", "percent", "direction", "expected", "tolerance"},
+    "tape_result": {"cover", "percent", "measured"},
     "verify_offer": {"cover"},
     "verify_result": {"cover", "deviation"},
-    "summary": {"cover", "yaml", "accuracy", "height"},
-    "profile_name": {"cover"},
+    "profile_name": {"cover", "replaced"},
+    "summary_basic": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
+    "summary_precise": {"cover", "yaml", "height", "accuracy", "percent", "profile"},
+    "saved": {"cover", "profile"},
+    "cancelled": set(),
+    "expired": {"cover"},
+    "refused_unknown_cover": set(),
+    "refused_already_calibrating": set(),
     # Every `problem_*` screen, which are generated from `PROBLEM_REASONS`.
     **{f"problem_{reason}": {"cover"} for reason in PROBLEM_REASONS},
 }
@@ -230,41 +256,21 @@ PROGRESS_PLACEHOLDERS: dict[str, set[str]] = {
 }
 
 
-def subentry_block(path: Path, subentry_type: str) -> dict[str, Any]:
-    return load(path)["config_subentries"][subentry_type]
+def options_block(path: Path) -> dict[str, Any]:
+    return load(path)["options"]
 
 
-@pytest.mark.parametrize("subentry_type", sorted(SUBENTRY_FLOWS))
-def test_every_subentry_type_declares_the_structure_hassfest_expects(subentry_type: str) -> None:
-    """`entry_type` and `initiate_flow` name the rows and buttons of the integration page.
-
-    Without them the page shows the raw subentry type as the name of the thing the user
-    is about to add, in every language.
-
-    Mutation caught: adding a subentry type to ``async_get_supported_subentry_types``
-    and only writing its steps.
-    """
-    for path in [STRINGS, *TRANSLATIONS]:
-        block = subentry_block(path, subentry_type)
-        assert block["entry_type"], path.name
-        assert block["initiate_flow"]["user"], path.name
-        assert block["initiate_flow"]["reconfigure"], path.name
-
-
-@pytest.mark.parametrize("subentry_type", sorted(SUBENTRY_FLOWS))
-def test_every_written_step_is_one_the_flow_can_show(subentry_type: str) -> None:
+def test_every_written_step_is_one_the_flow_can_show() -> None:
     """A step id in the strings with no ``async_step_`` behind it is a dead text.
 
-    Mutation caught: renaming a step in the code and leaving five translations behind
+    Mutation caught: renaming a step in the code and leaving seven translations behind
     (or the reverse, which the next test catches).
     """
-    flow = SUBENTRY_FLOWS[subentry_type]
-    for step in subentry_block(STRINGS, subentry_type)["step"]:
-        assert hasattr(flow, f"async_step_{step}"), step
+    for step in options_block(STRINGS)["step"]:
+        assert hasattr(FLOW, f"async_step_{step}"), step
 
 
-@pytest.mark.parametrize("subentry_type", sorted(SUBENTRY_FLOWS))
-def test_every_menu_option_is_a_step_and_is_labelled(subentry_type: str) -> None:
+def test_every_menu_option_is_a_step_and_is_labelled() -> None:
     """Home Assistant routes a menu choice straight to ``async_step_<option>``.
 
     An option with no method raises ``UnknownStep`` inside the dialog; one with no label
@@ -273,11 +279,48 @@ def test_every_menu_option_is_a_step_and_is_labelled(subentry_type: str) -> None
     Mutation caught: offering an option the flow does not implement (which no happy
     path would reach, because the happy path never clicks it).
     """
-    flow = SUBENTRY_FLOWS[subentry_type]
-    steps = subentry_block(STRINGS, subentry_type)["step"]
-    for step_id, step in steps.items():
+    for step_id, step in options_block(STRINGS)["step"].items():
         for option in step.get("menu_options", {}):
-            assert hasattr(flow, f"async_step_{option}"), f"{step_id} -> {option}"
+            assert hasattr(FLOW, f"async_step_{option}"), f"{step_id} -> {option}"
+
+
+def test_every_screen_the_flow_can_show_is_written_down() -> None:
+    """The other direction: a ``step_id=`` in the code with no text renders as a key.
+
+    The step ids are read out of the source rather than off the class, because a
+    ``async_step_`` method is not necessarily a screen - half of them route.
+
+    Mutation caught: a new screen with no text in any of the seven files.
+    """
+    source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
+    source += (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+    shown = set(re.findall(r'step_id="([a-z_]+)"', source))
+    # The press menus and the tape forms name their step in a positional argument.
+    shown |= {"open_lift", "open_top", "close_bottom"}
+    shown |= {"measure_descent", "measure_ascent", "measure_verify"}
+    shown |= {f"problem_{reason}" for reason in PROBLEM_REASONS}
+    shown |= {"refused_unknown_cover", "refused_already_calibrating"}
+    # ...and the config flow's own steps, which live under `config`, not `options`.
+    shown -= {"user", "custom", "port", "password", "reauth_confirm", "ssdp_confirm"}
+    # A progress screen has a `progress` text and no step text.
+    shown -= set(PROGRESS_PLACEHOLDERS) | {
+        "home_closed",
+        "home_open",
+        "open_timed",
+        "open_start",
+        "close_timed",
+        "close_start",
+        "half_down",
+        "half_up",
+        "quarter_down",
+        "quarter_up",
+        "three_quarter_down",
+        "three_quarter_up",
+        "verify",
+        "verify_b",
+    }
+    written = set(options_block(STRINGS)["step"])
+    assert shown == written
 
 
 def test_every_failure_of_the_engine_has_a_screen_of_its_own() -> None:
@@ -290,7 +333,7 @@ def test_every_failure_of_the_engine_has_a_screen_of_its_own() -> None:
     Mutation caught: adding a reason to the engine and to ``PROBLEM_REASONS`` without
     writing the screen that explains it.
     """
-    steps = subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["step"]
+    steps = options_block(STRINGS)["step"]
     written = {step for step in steps if step.startswith("problem_")}
     assert written == {f"problem_{reason}" for reason in PROBLEM_REASONS}
     for step in written:
@@ -311,54 +354,54 @@ def test_every_progress_action_the_flow_uses_is_written_down() -> None:
         | set(RUNNING_ACTION.values())
         | set(HOMING_ACTION.values())
     )
-    written = set(subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["progress"])
-    assert used == written
-
-
-def test_every_abort_reason_the_flow_uses_is_written_down() -> None:
-    """An abort with no text closes the dialog on a raw key.
-
-    Mutation caught: a new ``async_abort(reason=...)`` with nothing written for it, and
-    a reason kept in the files after the branch that raised it was deleted.
-
-    ``CLAIM_REASONS`` is here because ``_claim`` answers *with* a reason rather than
-    aborting itself, so those two never appear at a ``reason="..."``.
-    """
-    source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
-    used = set(re.findall(r'reason="([a-z_]+)"', source)) | set(CLAIM_REASONS)
-    written = set()
-    for subentry_type in SUBENTRY_FLOWS:
-        written |= set(subentry_block(STRINGS, subentry_type)["abort"])
+    written = set(options_block(STRINGS)["progress"])
     assert used == written
 
 
 def test_every_form_error_the_flow_sets_is_written_down() -> None:
-    """The three ways a form can be answered wrongly, and their sentences."""
+    """Every way a form of this dialog can be answered wrongly, and its sentence."""
     source = (COMPONENT / "calibration_flow.py").read_text(encoding="utf-8")
-    used = set(re.findall(r'errors=\{[^}]*: "([a-z_]+)"', source))
-    used |= set(re.findall(r'errors\[[A-Z_a-z]+\] = "([a-z_]+)"', source))
-    written = set(subentry_block(STRINGS, SUBENTRY_COVER_CALIBRATION)["error"])
+    # `config_flow.py` also carries the config flow's own errors, which live under
+    # `config.error`; only the ones the *options* flow sets belong here.
+    source += "\n".join(
+        line
+        for line in (COMPONENT / "config_flow.py").read_text(encoding="utf-8").splitlines()
+        if "invalid_host" in line or "invalid_config_path" in line
+    )
+    used = set(re.findall(r'errors\[[A-Za-z_]+\] = "([a-z_]+)"', source))
+    used |= set(re.findall(r'ERROR_[A-Z_]+ = "([a-z_]+)"', source))
+    written = set(options_block(STRINGS)["error"])
     assert used == written
+
+
+def test_the_no_profile_option_of_the_assignment_form_is_translated() -> None:
+    """The one select option that is a sentence rather than a name the user gave.
+
+    Its value is `NO_PROFILE`, and Home Assistant looks its label up under
+    ``selector.profile_choice.options``. Without the text the user is offered a
+    dropdown whose first entry reads ``__none__``.
+    """
+    for path in [STRINGS, *TRANSLATIONS]:
+        options = load(path)["selector"]["profile_choice"]["options"]
+        assert set(options) == {NO_PROFILE}, path.name
+        assert options[NO_PROFILE], path.name
 
 
 @pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
 def test_no_screen_substitutes_something_the_flow_does_not_pass(path: Path) -> None:
     """A ``{placeholder}`` the step is never given renders as braces to the user.
 
-    The parity test above only checks that the five files agree with each other, so a
-    placeholder invented in ``strings.json`` and faithfully copied into the other four
+    The parity test above only checks that the seven files agree with each other, so a
+    placeholder invented in ``strings.json`` and faithfully copied into the other six
     would pass it. This one checks them against the code.
 
     Mutation caught: writing ``{cover}`` into the two screens that run before a cover
     has been chosen, or ``{percent}`` into a screen that is not about a fraction.
     """
-    for subentry_type in SUBENTRY_FLOWS:
-        block = subentry_block(path, subentry_type)
-        for step_id, step in block["step"].items():
-            allowed = STEP_PLACEHOLDERS[step_id]
-            for text in flatten(step).values():
-                assert set(PLACEHOLDER.findall(text)) <= allowed, f"{path.name}: {step_id}"
-        for action, text in block.get("progress", {}).items():
-            assert set(PLACEHOLDER.findall(text)) <= PROGRESS_PLACEHOLDERS[action], action
-        for reason, text in block["abort"].items():
-            assert set(PLACEHOLDER.findall(text)) <= {"cover"}, reason
+    block = options_block(path)
+    for step_id, step in block["step"].items():
+        allowed = STEP_PLACEHOLDERS[step_id]
+        for text in flatten(step).values():
+            assert set(PLACEHOLDER.findall(text)) <= allowed, f"{path.name}: {step_id}"
+    for action, text in block["progress"].items():
+        assert set(PLACEHOLDER.findall(text)) <= PROGRESS_PLACEHOLDERS[action], action

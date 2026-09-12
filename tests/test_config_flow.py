@@ -440,6 +440,25 @@ def _suggested(result) -> dict:
     return suggested
 
 
+async def open_gateway_options(hass: HomeAssistant, entry) -> dict:
+    """Open the options dialog and walk its menu to the gateway form.
+
+    0.5.0 v2 made "Configura" a menu - the guided cover calibration and everything it
+    stores live behind it too - so the connection settings are one click in rather than
+    the first screen.
+    """
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.MENU, result
+    assert result["step_id"] == "init"
+    assert "gateway" in result["menu_options"]
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "gateway"}
+    )
+    assert result["type"] is FlowResultType.FORM, result
+    assert result["step_id"] == "gateway"
+    return result
+
+
 async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> None:
     """cf-01 / cf-10 / core-09: options flow opens, validates and reloads."""
     path = write_yaml(tmp_path)
@@ -449,9 +468,7 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     await hass.async_block_till_done()
     assert mock_setup_entry.await_count == 1
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "init"
+    result = await open_gateway_options(hass, entry)
     # G1-D: unset tunables are pre-filled with the values 0.2.x used internally.
     assert _suggested(result) == {
         CONF_IDLE_WATCHDOG_SEC: DEFAULT_IDLE_WATCHDOG_SEC,
@@ -499,13 +516,12 @@ async def test_options_flow(hass: HomeAssistant, mock_setup_entry, tmp_path) -> 
     }
     # The floats of the selector are stored as ints for the handler / sensors.
     assert all(isinstance(entry.options[key], int) for key in (CONF_IDLE_WATCHDOG_SEC, CONF_DEFAULT_KEEPALIVE_MINUTES))
-    # The dialog reloads the entry itself (0.5.0): `OptionsFlowWithReload` cannot be
-    # used on an entry that has update listeners, and the guided calibration registers
-    # one so that a subentry deleted from the integration page takes effect at once.
+    # The dialog reloads the entry itself (0.5.0): it is a menu with several screens
+    # behind it, and the reload happens once, when it closes, only if something changed.
     assert mock_setup_entry.await_count == 2
 
     # Only the connection data changes -> still exactly one reload.
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await open_gateway_options(hass, entry)
     assert _suggested(result)[CONF_IDLE_WATCHDOG_SEC] == 120
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**good, "address": "10.0.0.2", "password": "999"}
@@ -553,7 +569,7 @@ async def test_a_stored_worker_count_the_form_refuses_is_pre_filled_clamped(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await open_gateway_options(hass, entry)
     assert result["type"] is FlowResultType.FORM
     prefilled = form_suggested_values(result["data_schema"])
     assert prefilled[CONF_WORKER_COUNT] == MAX_COMMAND_WORKERS
@@ -589,7 +605,7 @@ async def test_options_flow_refuses_more_workers_than_the_setup_will_start(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await open_gateway_options(hass, entry)
     submission = {
         "address": HOST,
         CONF_PORT: 20000,
@@ -640,7 +656,7 @@ async def test_options_flow_keeps_no_password_as_none(hass: HomeAssistant, mock_
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await open_gateway_options(hass, entry)
 
     # The *read* half of the same problem: the form must suggest "" and not None.
     # A selector rendered from None shows the literal string "None", so a user who
