@@ -519,8 +519,10 @@ async def test_a_fraction_run_needs_the_actuator_to_confirm_the_start(
         ):
             await cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5)
         assert err.value.reason == REASON_NO_ECHO
-        # It stopped where it was: no stop frame was sent, because the run never began.
-        assert path.frames == [LOWER]
+        # The direction frame *was* written, so the motor is very probably turning: the
+        # run is abandoned with a stop, not with a shrug. (0.5.0 review, RISK-5: this
+        # used to unwind past the stop and leave a shutter with no end limit running.)
+        assert path.frames == [LOWER, STOP]
 
 
 # --------------------------------------------------------------------------------------
@@ -646,3 +648,142 @@ async def test_every_primitive_refuses_an_advanced_cover(
                 await call
             assert err.value.reason == REASON_ADVANCED
         assert commands.sent_frames == []
+
+
+# --------------------------------------------------------------------------------------
+# The frame that never left, the lock, and the stop that has to happen anyway (0.5.0 R3)
+# --------------------------------------------------------------------------------------
+async def test_homing_says_so_when_the_gateway_would_not_take_the_frame(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A homing nobody wrote left the shutter where it was, and must not report success.
+
+    The two cases arrive here as one: a cover that is already at that end stop and a
+    cover whose frame the command path refused both reach `async_calib_home` with
+    `_movement_end_event` set, because only a *delivered* frame ever clears it. The
+    first is fine - there was nothing to run - and the second is the one failure mode
+    the whole release exists to avoid: the step returns after a second, the next one
+    runs "50 % from the top" from half way down, and the user tapes a movement that
+    never happened.
+
+    Mutation caught: reading the event alone (0.5.0 review, BUG-4).
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        # The previous movement has ended, which is how a real shutter arrives here.
+        cover._movement_end_event.set()  # noqa: SLF001 - the state this bug lives in
+        path = GuidedPath(hass, freezer, cover, refuse_prefix="*2*")
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", new=AsyncMock()) as sleep,
+            pytest.raises(CalibrationError) as err,
+        ):
+            await cover.async_calib_home(DIRECTION_CLOSE)
+        assert err.value.reason == REASON_NOT_DELIVERED
+        assert ENTITY in str(err.value)
+        # And it did not sit out the settle as if it had arrived.
+        assert sleep.await_args_list == []
+
+
+async def test_two_guided_movements_cannot_drive_the_same_shutter_at_once(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two browser tabs, or a flow and the 0.4.2 service, on one motor.
+
+    `_calib_idle_guard` samples `_moving` once, before the first await, so two runs
+    that start within the same tick both pass it; the first stop then ends both and the
+    second arrives on a standing shutter with a plausible, wrong `motor_seconds`. The
+    lock is what makes that impossible, and refusing rather than queueing is what gives
+    the second conversation a screen to say so on.
+
+    Mutation caught: dropping `_calibration_claim` from any of the three primitives
+    that drive the motor (0.5.0 review, RISK-3).
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        running = asyncio.Event()
+        release = asyncio.Event()
+
+        async def _gate(seconds: float) -> None:
+            running.set()
+            await release.wait()
+            await path.sleep(seconds)
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", _gate),
+        ):
+            first = hass.async_create_task(cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5))
+            await running.wait()
+
+            for call in (
+                cover.async_calib_run_fraction(DIRECTION_OPEN, 0.25),
+                cover.async_calib_start(DIRECTION_OPEN),
+                cover.async_calib_home(DIRECTION_OPEN),
+            ):
+                with pytest.raises(CalibrationError) as err:
+                    await call
+                assert err.value.reason == REASON_BUSY
+
+            release.set()
+            report = await first
+        assert report.motor_seconds > 0
+        # Only the first run's frames ever reached the bus.
+        assert path.frames == [LOWER, STOP]
+
+
+async def test_the_old_service_refuses_a_shutter_a_guided_flow_is_holding(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`cover_calibration_run` and the guided flow are two ways to drive one shutter.
+
+    The flow holds a calibration session for the whole conversation and only takes the
+    lock around its own movements, so the lock alone would let the service in between
+    two screens - and the flow would then time a run somebody else stopped.
+
+    Mutation caught: dropping the `calibrating` test from the service (0.5.0 review,
+    RISK-3).
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML) as (_entry, commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        with cover.calibration_session(), pytest.raises(ServiceValidationError) as err:
+            await cover.async_calibration_run(DIRECTION_CLOSE)
+        assert "guided calibration" in str(err.value)
+        assert commands.sent_frames == []
+
+
+async def test_a_run_cancelled_half_way_still_writes_the_stop(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Closing the dialog during a measured run must not leave the motor turning.
+
+    Home Assistant cancels the progress task of a flow it removes
+    (`FlowManager._async_remove_flow_progress` -> `async_cancel_progress_task`), which
+    unwinds the run mid-sleep. The stop is written from the `finally`, shielded, so the
+    cancellation reaches the caller at once and the frame still reaches the bus.
+
+    Mutation caught: dropping the `try`/`finally` (0.5.0 review, RISK-5).
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        running = asyncio.Event()
+
+        async def _never(seconds: float) -> None:
+            running.set()
+            await asyncio.Event().wait()
+
+        with (
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", path.send),
+            patch.object(cover_module, "_async_sleep", _never),
+        ):
+            run = hass.async_create_task(cover.async_calib_run_fraction(DIRECTION_CLOSE, 0.5))
+            await running.wait()
+            run.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await run
+            # The shielded stop lives in a task of its own: let it finish.
+            for _ in range(20):
+                await asyncio.sleep(0)
+        assert path.frames == [LOWER, STOP]
