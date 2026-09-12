@@ -66,6 +66,257 @@
       "reauth_successful": "Password change successful"
     }
   },
+  "config_subentries": {
+    "cover_calibration": {
+      "entry_type": "Cover calibration",
+      "initiate_flow": {
+        "user": "Calibrate a cover",
+        "reconfigure": "Measure this cover again"
+      },
+      "step": {
+        "user": {
+          "title": "Guided cover calibration",
+          "description": "This tool calibrates “basic” covers: the ones whose actuator does not report where it is. The percentage you see in Home Assistant for those is an estimate, computed from how long the motor has been running; the calibration measures those run times and the geometry of the roll, so that the estimate becomes one you can rely on.\n\nIt will not be perfect. Expect a few centimetres of error: 1-2 cm near the end stops, 2-4 cm between intermediate positions. Every full opening or closing re-synchronises the estimate, so the error does not accumulate.\n\n“Advanced” covers report their own position and do not need any of this, which is why they are not in the list.\n\n**What is about to happen**: you will pick one shutter, then one of three ways of measuring it. The shutter will run to its end stops several times.\n\n**What you have to do**: have a tape measure to hand, make sure nothing is in the way of the shutter, and stay where you can see it. Nothing is saved until the very last screen, so you can close this window at any moment and nothing will have changed."
+        },
+        "cover": {
+          "title": "Which shutter are we measuring?",
+          "description": "Only the basic covers of this gateway are listed: the ones that do not report their own position, and are therefore the only ones with something to calibrate.\n\n**What you have to do**: choose the shutter you are standing in front of. You will be asked to watch it move and to measure it with a tape, so it has to be the one you can see.",
+          "data": {
+            "cover": "Shutter"
+          }
+        },
+        "path": {
+          "title": "How should {cover} be measured?",
+          "description": "There are three ways to do this, and the right one depends on what you have measured already.\n\nThe first is the long one, about three minutes: three button presses and three readings with a tape. It ends with a **profile**, a description of this kind of shutter that every other window of the same model can reuse.\n\nThe second is for those other windows: pick the profile, measure the height, done.\n\nThe third is for a shutter that follows a profile and still stops in the wrong place.\n\n**What you have to do**: pick one. Nothing moves until the next screen.",
+          "menu_options": {
+            "path_a": "This is the first shutter of its kind (full measurement, ~3 minutes)",
+            "path_b": "This one is the same as a shutter already measured (height only)",
+            "path_c": "This one follows a profile but stops in the wrong place (refine it)"
+          }
+        },
+        "path_a": {
+          "title": "Before {cover} starts moving",
+          "description": "**What is about to happen**: the shutter will run all the way down, then all the way up, then down again, and then to a few positions in between. Seven movements in all, about three minutes.\n\n**What you have to do**: make sure nothing is in its way — no open window, no plant on the sill, no cat — and keep a tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nYou can stop at any moment: nothing is written until the last screen, and the movements are ordinary commands."
+        },
+        "path_b": {
+          "title": "Which kind of shutter is {cover}?",
+          "description": "A profile describes one model of shutter: how long it takes to run, how long the slats take, and how the curtain winds on its tube. Home Assistant scales it to this window once it knows how tall this window is.\n\n**What you have to do**: pick the profile that was measured on a shutter of the same kind. On the next screen you will measure the height of this one.",
+          "data": {
+            "profile": "Profile"
+          }
+        },
+        "path_c": {
+          "title": "Refine {cover}",
+          "description": "This shutter follows a profile and does not behave like it: its motor may be slower, its curtain heavier, its tube thicker. What is measured here is stored for this window alone and beats both the profile and myhome.yaml; everything that is not measured keeps coming from the profile.\n\n**What you have to do**: confirm which profile this shutter should start from.",
+          "data": {
+            "profile": "Profile"
+          }
+        },
+        "refine_scope": {
+          "title": "How far should {cover} be refined?",
+          "description": "**What is about to happen**: either two measured runs (one up, one down) or those plus two tape readings.\n\nThe times alone are enough for a shutter whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it also stops in the wrong place *half way* — that is the curtain winding differently, not the motor running differently.\n\n**What you have to do**: pick how far to go. You can always come back and do more.",
+          "menu_options": {
+            "times_only": "Its own run times (2 button presses, ~1 minute)",
+            "times_and_rolls": "Its own run times and its own coefficients (2 presses and 2 readings)",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "home_closed_done": {
+          "title": "Is {cover} fully closed?",
+          "description": "**What has happened**: the shutter was sent all the way down, so that everything measured from now on starts from a known point.\n\n**What you have to do**: look at it. If it is fully closed, with the slats shut and the bottom edge resting, carry on. If it is still moving, wait and then carry on. If it did not move at all, or moved the wrong way, say so below.",
+          "menu_options": {
+            "confirm_closed": "It is fully closed",
+            "repeat_step": "Repeat this step",
+            "not_right": "It did not do what it should"
+          }
+        },
+        "open_lift": {
+          "title": "{cover} is opening",
+          "description": "**What is happening**: the shutter has started to rise. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain begins to lift.\n\n**What you have to do**: watch the bottom edge and press the button below **at the instant it leaves its rest**. Do not time anything — the press is the measurement, and Home Assistant knows exactly when the motor started.\n\nLet the shutter carry on afterwards: it will run to the top on its own.",
+          "menu_options": {
+            "lifted_off": "The bottom edge has just lifted off",
+            "repeat_step": "Repeat this step",
+            "not_right": "It did not do what it should"
+          }
+        },
+        "open_top": {
+          "title": "{cover} is still opening",
+          "description": "**What is happening**: the curtain is winding up and the shutter will stop by itself at the top.\n\n**What you have to do**: press the button below **at the instant it stops**. If you missed the moment, repeat the step rather than guessing: the whole opening time comes from this press.",
+          "menu_options": {
+            "stopped_open": "It has just stopped at the top",
+            "repeat_step": "Repeat this step",
+            "not_right": "It did not do what it should"
+          }
+        },
+        "close_bottom": {
+          "title": "{cover} is closing",
+          "description": "**What is happening**: the shutter was opened fully and is now running down. It will stop by itself when the curtain is down and the slats have closed.\n\n**What you have to do**: press the button below **at the instant it stops**. That press is the whole closing time; a shutter closes a little faster than it opens, which is why it is measured separately.",
+          "menu_options": {
+            "stopped_closed": "It has just stopped at the bottom",
+            "repeat_step": "Repeat this step",
+            "not_right": "It did not do what it should"
+          }
+        },
+        "height": {
+          "title": "How tall is {cover}?",
+          "description": "**What you have to do**: with the shutter fully open, measure from the point where the bottom edge rests when the shutter is closed up to the bottom edge as it is now, and write the centimetres below.\n\nThat distance is the travel of the curtain, and it is what every other measurement is compared against. Measure the curtain, not the window: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
+          "data": {
+            "height": "Curtain travel (cm)"
+          }
+        },
+        "measure_descent": {
+          "title": "Measure {cover} — {percent}% of the way down",
+          "description": "**What has happened**: the shutter was opened fully and then run down for {percent}% of its travel.\n\n**What you have to do**: measure again from the point where the bottom edge rests when the shutter is closed up to the bottom edge as it is now, and write the centimetres below. The same reference as the height, so the two can be compared.",
+          "data": {
+            "measured_cm": "Height of the bottom edge (cm)"
+          }
+        },
+        "measure_ascent": {
+          "title": "Measure {cover} — {percent}% of the way up",
+          "description": "**What has happened**: the shutter was closed fully and then run up for the slats plus {percent}% of its travel.\n\n**What you have to do**: measure from the point where the bottom edge rests when the shutter is closed up to the bottom edge as it is now, and write the centimetres below. A shutter is not equally loaded going up and going down, which is why the same fraction is measured twice.",
+          "data": {
+            "measured_cm": "Height of the bottom edge (cm)"
+          }
+        },
+        "measure_verify": {
+          "title": "Check {cover} — {percent}% of the way down",
+          "description": "**What has happened**: the shutter was run to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen says how far the shutter is from where Home Assistant thought it would be.",
+          "data": {
+            "measured_cm": "Height of the bottom edge (cm)"
+          }
+        },
+        "verify_offer": {
+          "title": "Would you like to check {cover}?",
+          "description": "The height is all that was needed, and the calibration can be saved as it is.\n\n**What the check is**: the shutter is sent half way down and you measure where it really stopped, which says whether this window really behaves like the profile. It takes about a minute and one tape reading.",
+          "menu_options": {
+            "verify_now": "Check it now (~1 minute)",
+            "skip_verify": "No, go to the summary"
+          }
+        },
+        "verify_result": {
+          "title": "{cover} stopped {deviation} cm from the estimate",
+          "description": "That is the distance between where the shutter really stopped and where Home Assistant believed it would. One or two centimetres is as good as this gets; three or more means this window does not behave like the profile it was given.\n\n**What you have to do**: carry on to the summary, measure the same position again if you think the reading was wrong, or refine this shutter with measurements of its own when the option is offered.",
+          "menu_options": {
+            "continue_step": "Carry on",
+            "repeat_step": "Measure this position again",
+            "path_c": "Refine this shutter with its own measurements"
+          }
+        },
+        "summary": {
+          "title": "What was measured on {cover}",
+          "description": "The curtain travel is {height} cm and the model built from these measurements puts the bottom edge within {accuracy} cm of where it was actually found.\n\nThis is the same thing written as it would be in `myhome.yaml`, for anyone who prefers the file. Saving does **not** write the file: the numbers are kept by the integration, they beat the file, and removing them from this page gives the file back.\n\n{yaml}\n**What you have to do**: save, or spend two more minutes and four more tape readings on a better answer.",
+          "menu_options": {
+            "save": "Save",
+            "refine": "Improve the accuracy first (~2 minutes, 4 more readings)",
+            "cancel_flow": "Cancel and save nothing"
+          }
+        },
+        "profile_name": {
+          "title": "Name this kind of shutter",
+          "description": "{cover} has been measured, and what was measured describes every window of the same model. Give that model a name and the other shutters can be calibrated in two screens instead of ten.\n\n**What you have to do**: type a short name — letters, digits and underscores only, no spaces and no accents, because it is also a key in `myhome.yaml`. Something like `tall`, `bedrooms` or `kitchen_door`.",
+          "data": {
+            "name": "Profile name"
+          }
+        },
+        "reconfigure": {
+          "title": "Measure {cover} again",
+          "description": "This shutter already has a guided calibration. There is nothing in it worth editing by hand — every number came from a button press or a tape — so the way to change it is to measure it again.\n\n**What is about to happen**: the same conversation as the first time. What is stored now stays exactly as it is until you reach the last screen and save."
+        },
+        "problem_no_echo": {
+          "title": "{cover} did not answer",
+          "description": "The command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure anything against and the step was abandoned.\n\n**What you have to do**: check that the shutter is not blocked, that nothing else (a wall switch, an automation) is holding it, and try the step again. If it happens every time, this actuator does not relay its status and the guided calibration cannot measure it.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "problem_not_delivered": {
+          "title": "The command never reached the bus",
+          "description": "The gateway neither wrote our command nor said it had given up on it, so {cover} was never asked to move and nothing was measured.\n\n**What you have to do**: check that the gateway is connected — the integration page says so — and try the step again.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "problem_not_stopped": {
+          "title": "{cover} could not be stopped",
+          "description": "The stop command was refused or dropped, so the shutter ran on to its end stop and the position this step was about does not exist.\n\n**What you have to do**: wait until the shutter is standing still and try the step again. A gateway that is busy with a great many commands is the usual reason.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "problem_busy": {
+          "title": "{cover} is already moving",
+          "description": "A step has to start from a standstill, and this shutter was already running — somebody at a wall switch, an automation, or a command that had not finished.\n\n**What you have to do**: wait until it has stopped, then try the step again.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "problem_bad_point": {
+          "title": "Those two presses cannot both be right",
+          "description": "The instants do not make sense together: the shutter cannot have stopped before it started, nor have opened its slats after it had finished.\n\n**What you have to do**: try the step again and press once for each event, as it happens.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "problem_timeout": {
+          "title": "Nothing was pressed in time",
+          "description": "This screen waits about a minute and a half for the press it is about, which is far longer than any shutter takes to run. Past that the press no longer measures anything, so it was discarded rather than believed.\n\n**What you have to do**: try the step again, and this time press as soon as the shutter does what the screen describes.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        },
+        "problem_unknown": {
+          "title": "Something went wrong with {cover}",
+          "description": "The step could not be completed and nothing was measured. The Home Assistant log has the detail.\n\n**What you have to do**: try the step again. Nothing has been saved, whatever you choose.",
+          "menu_options": {
+            "repeat_step": "Repeat this step",
+            "cancel_flow": "Cancel"
+          }
+        }
+      },
+      "progress": {
+        "homing_closed": "{cover} is being closed all the way, so that the measurements start from a known point. Please wait, and make sure nothing is in its way.",
+        "starting_open": "{cover} is being closed all the way and then started upwards. Please wait: the next screen asks you to watch it and press a button.",
+        "starting_close": "{cover} is being opened all the way and then started downwards. Please wait: the next screen asks you to watch it and press a button.",
+        "running_down": "{cover} is being opened all the way and then run down to about {percent}% of its travel. Please wait, and have the tape measure ready.",
+        "running_up": "{cover} is being closed all the way and then run up to about {percent}% of its travel. Please wait, and have the tape measure ready."
+      },
+      "error": {
+        "invalid_name": "A profile name may only contain letters, digits and underscores — no spaces, no accents, no dashes.",
+        "name_in_use": "There is already a profile with this name. Pick another one, or delete the existing profile first.",
+        "above_the_travel": "That is more than the whole travel of this curtain. Measure from where the bottom edge rests when the shutter is closed, not from the floor."
+      },
+      "abort": {
+        "no_basic_covers": "Every cover of this gateway reports its own position, so there is nothing to calibrate. The guided calibration is only for covers whose position Home Assistant has to estimate from run times.",
+        "no_profiles": "There is no profile to follow yet. Calibrate one shutter with the full measurement first: that is what creates a profile.",
+        "unknown_cover": "That cover is no longer part of this gateway's configuration. Nothing was measured and nothing was saved.",
+        "cancelled": "The calibration was cancelled. Nothing was saved and the shutter is where the last movement left it.",
+        "calibration_saved": "The calibration of {cover} has been saved. The shutter now uses the measured values, its attributes say so, and removing this entry from the integration page gives it back to myhome.yaml."
+      }
+    },
+    "cover_profile": {
+      "entry_type": "Cover profile",
+      "initiate_flow": {
+        "user": "Add a cover profile",
+        "reconfigure": "Show this profile"
+      },
+      "step": {
+        "reconfigure": {
+          "title": "Profile “{profile}”",
+          "description": "These are the measurements this profile carries. Home Assistant scales them to each window that follows it, using that window's own height.\n\n{values}\n**How to change it**: measure a shutter of this kind again with the guided calibration and give it this same name, which replaces what is here. **How to remove it**: the delete button on the integration page. Shutters that follow it go back to what `myhome.yaml` says about them."
+        }
+      },
+      "abort": {
+        "add_profile_via_calibration": "A profile is not typed in, it is measured. Run the guided calibration on the first shutter of a kind and choose “This is the first shutter of its kind”: the last screen asks for the name of the profile.",
+        "profile_unchanged": "Nothing was changed."
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {

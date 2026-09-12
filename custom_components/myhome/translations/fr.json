@@ -66,6 +66,257 @@
       "reauth_successful": "Changement de mot de passe réussi"
     }
   },
+  "config_subentries": {
+    "cover_calibration": {
+      "entry_type": "Calibration de volet",
+      "initiate_flow": {
+        "user": "Calibrer un volet",
+        "reconfigure": "Mesurer à nouveau ce volet"
+      },
+      "step": {
+        "user": {
+          "title": "Calibration guidée des volets",
+          "description": "Cet outil calibre les volets « simples » : ceux dont l'actionneur n'indique pas sa position. Le pourcentage affiché par Home Assistant pour ceux-là est une estimation calculée à partir des temps de course ; la calibration mesure ces temps et la géométrie du rouleau, afin que l'estimation devienne fiable.\n\nElle ne sera pas parfaite. Attendez-vous à quelques centimètres d'écart : 1-2 cm près des fins de course, 2-4 cm entre les positions intermédiaires. Chaque ouverture ou fermeture complète resynchronise l'estimation, l'erreur ne s'accumule donc pas.\n\nLes volets « avancés » indiquent eux-mêmes leur position et n'ont besoin de rien de tout cela : c'est pourquoi ils ne figurent pas dans la liste.\n\n**Ce qui va se passer** : vous choisirez un volet, puis l'un des trois parcours. Le volet ira plusieurs fois jusqu'à ses fins de course.\n\n**Ce que vous devez faire** : gardez un mètre à portée de main, assurez-vous que rien n'entrave le volet et restez là où vous pouvez le voir. Rien n'est enregistré avant le tout dernier écran : vous pouvez fermer cette fenêtre à tout moment sans que rien n'ait changé."
+        },
+        "cover": {
+          "title": "Quel volet allons-nous mesurer ?",
+          "description": "Seuls les volets simples de cette passerelle sont listés : ceux qui n'indiquent pas leur propre position, et qui sont donc les seuls à avoir quelque chose à calibrer.\n\n**Ce que vous devez faire** : choisissez le volet devant lequel vous vous trouvez. Il vous sera demandé de le regarder bouger et de le mesurer au mètre : ce doit donc être celui que vous voyez.",
+          "data": {
+            "cover": "Volet"
+          }
+        },
+        "path": {
+          "title": "Comment mesurer {cover} ?",
+          "description": "Il y a trois façons de procéder, et la bonne dépend de ce que vous avez déjà mesuré.\n\nLa première est la longue, environ trois minutes : trois appuis sur un bouton et trois relevés au mètre. Elle aboutit à un **profil**, la description de ce type de volet, que toutes les autres fenêtres du même modèle pourront réutiliser.\n\nLa deuxième est précisément pour ces autres fenêtres : choisissez le profil, mesurez la hauteur, c'est fait.\n\nLa troisième est pour un volet qui suit un profil et s'arrête quand même au mauvais endroit.\n\n**Ce que vous devez faire** : choisissez-en une. Rien ne bouge avant l'écran suivant.",
+          "menu_options": {
+            "path_a": "C'est le premier volet de ce type (mesure complète, ~3 minutes)",
+            "path_b": "Celui-ci est identique à un volet déjà mesuré (hauteur seulement)",
+            "path_c": "Celui-ci suit un profil mais s'arrête au mauvais endroit (l'affiner)"
+          }
+        },
+        "path_a": {
+          "title": "Avant que {cover} ne se mette en mouvement",
+          "description": "**Ce qui va se passer** : le volet descendra entièrement, puis remontera entièrement, puis redescendra, et s'arrêtera enfin à quelques positions intermédiaires. Sept mouvements en tout, environ trois minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien n'entrave sa course — fenêtre ouverte, plante sur l'appui, chat — et gardez un mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de relever quelques distances.\n\nVous pouvez interrompre à tout moment : rien n'est écrit avant le dernier écran, et les mouvements sont des commandes ordinaires."
+        },
+        "path_b": {
+          "title": "De quel type est {cover} ?",
+          "description": "Un profil décrit un modèle de volet : le temps de sa course, la durée des lames et la façon dont le tablier s'enroule sur son tube. Home Assistant l'adapte à cette fenêtre dès qu'il connaît sa hauteur.\n\n**Ce que vous devez faire** : choisissez le profil mesuré sur un volet du même type. À l'écran suivant vous mesurerez la hauteur de celui-ci.",
+          "data": {
+            "profile": "Profil"
+          }
+        },
+        "path_c": {
+          "title": "Affiner {cover}",
+          "description": "Ce volet suit un profil et ne se comporte pas comme lui : son moteur peut être plus lent, son tablier plus lourd, son tube plus épais. Ce qui est mesuré ici ne vaut que pour cette fenêtre et l'emporte sur le profil comme sur myhome.yaml ; tout ce qui n'est pas mesuré continue de venir du profil.\n\n**Ce que vous devez faire** : confirmez le profil dont ce volet doit partir.",
+          "data": {
+            "profile": "Profil"
+          }
+        },
+        "refine_scope": {
+          "title": "Jusqu'où affiner {cover} ?",
+          "description": "**Ce qui va se passer** : soit deux courses mesurées (une à la montée, une à la descente), soit celles-ci plus deux relevés au mètre.\n\nLes temps seuls suffisent pour un volet dont le moteur est simplement plus lent ou plus rapide que celui sur lequel le profil a été mesuré. Ajoutez les coefficients quand il se trompe aussi à *mi-course* : là, ce n'est pas le moteur qui tourne autrement, c'est le tablier qui s'enroule autrement.\n\n**Ce que vous devez faire** : choisissez jusqu'où aller. Vous pourrez toujours revenir faire le reste.",
+          "menu_options": {
+            "times_only": "Ses propres temps de course (2 appuis, ~1 minute)",
+            "times_and_rolls": "Ses temps et ses propres coefficients (2 appuis et 2 relevés)",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "home_closed_done": {
+          "title": "{cover} est-il complètement fermé ?",
+          "description": "**Ce qui s'est passé** : le volet a été envoyé tout en bas, afin que tout ce qui sera mesuré ensuite parte d'un point connu.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement fermé, lames jointes et bord inférieur en appui, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou dans le mauvais sens, dites-le ci-dessous.",
+          "menu_options": {
+            "confirm_closed": "Il est complètement fermé",
+            "repeat_step": "Répéter cette étape",
+            "not_right": "Il n'a pas fait ce qu'il devait"
+          }
+        },
+        "open_lift": {
+          "title": "{cover} est en train de s'ouvrir",
+          "description": "**Ce qui se passe** : le volet a commencé à monter. Pendant une seconde ou deux, seules les lames s'ouvrent tandis que le bord inférieur reste en appui ; puis tout le tablier commence à se lever.\n\n**Ce que vous devez faire** : regardez le bord inférieur et appuyez sur le bouton ci-dessous **à l'instant où il quitte son appui**. Ne chronométrez rien : l'appui est la mesure, et Home Assistant sait déjà exactement quand le moteur a démarré.\n\nLaissez ensuite le volet continuer : il montera tout seul jusqu'en haut.",
+          "menu_options": {
+            "lifted_off": "Le bord inférieur vient de se décoller",
+            "repeat_step": "Répéter cette étape",
+            "not_right": "Il n'a pas fait ce qu'il devait"
+          }
+        },
+        "open_top": {
+          "title": "{cover} monte encore",
+          "description": "**Ce qui se passe** : le tablier s'enroule et le volet s'arrêtera tout seul en haut.\n\n**Ce que vous devez faire** : appuyez sur le bouton ci-dessous **à l'instant où il s'arrête**. Si le moment vous a échappé, répétez l'étape plutôt que de deviner : tout le temps d'ouverture vient de cet appui.",
+          "menu_options": {
+            "stopped_open": "Il vient de s'arrêter en haut",
+            "repeat_step": "Répéter cette étape",
+            "not_right": "Il n'a pas fait ce qu'il devait"
+          }
+        },
+        "close_bottom": {
+          "title": "{cover} est en train de se fermer",
+          "description": "**Ce qui se passe** : le volet a été ouvert entièrement et descend maintenant. Il s'arrêtera tout seul quand le tablier sera en bas et les lames fermées.\n\n**Ce que vous devez faire** : appuyez sur le bouton ci-dessous **à l'instant où il s'arrête**. Cet appui donne tout le temps de fermeture : un volet descend un peu plus vite qu'il ne monte, c'est pourquoi on le mesure séparément.",
+          "menu_options": {
+            "stopped_closed": "Il vient de s'arrêter en bas",
+            "repeat_step": "Répéter cette étape",
+            "not_right": "Il n'a pas fait ce qu'il devait"
+          }
+        },
+        "height": {
+          "title": "Quelle est la hauteur de {cover} ?",
+          "description": "**Ce que vous devez faire** : volet complètement ouvert, mesurez depuis le point où le bord inférieur repose lorsque le volet est fermé jusqu'au bord inférieur tel qu'il est maintenant, et inscrivez les centimètres ci-dessous.\n\nCette distance est la course du tablier, et c'est la référence à laquelle toutes les autres mesures sont comparées. Mesurez le tablier, pas la fenêtre : si le bord inférieur repose sur un appui et non sur le sol, mesurez depuis l'appui.",
+          "data": {
+            "height": "Course du tablier (cm)"
+          }
+        },
+        "measure_descent": {
+          "title": "Mesurer {cover} — à {percent} % de la descente",
+          "description": "**Ce qui s'est passé** : le volet a été ouvert entièrement puis descendu de {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez à nouveau depuis le point où le bord inférieur repose volet fermé jusqu'au bord inférieur tel qu'il est maintenant, et inscrivez les centimètres ci-dessous. La même référence que la hauteur, pour que les deux soient comparables.",
+          "data": {
+            "measured_cm": "Hauteur du bord inférieur (cm)"
+          }
+        },
+        "measure_ascent": {
+          "title": "Mesurer {cover} — à {percent} % de la montée",
+          "description": "**Ce qui s'est passé** : le volet a été fermé entièrement puis remonté des lames plus {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis le point où le bord inférieur repose volet fermé jusqu'au bord inférieur tel qu'il est maintenant, et inscrivez les centimètres ci-dessous. Un volet n'est pas chargé de la même façon à la montée et à la descente : c'est pourquoi la même fraction est mesurée deux fois.",
+          "data": {
+            "measured_cm": "Hauteur du bord inférieur (cm)"
+          }
+        },
+        "measure_verify": {
+          "title": "Vérifier {cover} — à {percent} % de la descente",
+          "description": "**Ce qui s'est passé** : le volet a été amené à une position où rien n'a été mesuré ; c'est donc une vraie vérification et non une répétition.\n\n**Ce que vous devez faire** : mesurez une dernière fois la hauteur du bord inférieur, depuis la même référence, et inscrivez les centimètres ci-dessous. L'écran suivant indique de combien le volet s'écarte de là où Home Assistant le croyait.",
+          "data": {
+            "measured_cm": "Hauteur du bord inférieur (cm)"
+          }
+        },
+        "verify_offer": {
+          "title": "Voulez-vous vérifier {cover} ?",
+          "description": "La hauteur était tout ce qu'il fallait : la calibration peut être enregistrée telle quelle.\n\n**Ce qu'est la vérification** : le volet est envoyé à mi-course et vous mesurez où il s'est réellement arrêté, ce qui dit si cette fenêtre se comporte vraiment comme le profil. Cela prend environ une minute et un relevé.",
+          "menu_options": {
+            "verify_now": "Vérifier maintenant (~1 minute)",
+            "skip_verify": "Non, aller au récapitulatif"
+          }
+        },
+        "verify_result": {
+          "title": "{cover} s'est arrêté à {deviation} cm de l'estimation",
+          "description": "C'est l'écart entre l'endroit où le volet s'est réellement arrêté et celui où Home Assistant le croyait. Un ou deux centimètres, c'est le mieux que l'on puisse obtenir ; trois ou plus signifient que cette fenêtre ne se comporte pas comme le profil qu'on lui a donné.\n\n**Ce que vous devez faire** : continuez vers le récapitulatif, remesurez la même position si vous pensez que le relevé était faux, ou affinez ce volet avec ses propres mesures lorsque l'option est proposée.",
+          "menu_options": {
+            "continue_step": "Continuer",
+            "repeat_step": "Mesurer à nouveau cette position",
+            "path_c": "Affiner ce volet avec ses propres mesures"
+          }
+        },
+        "summary": {
+          "title": "Ce qui a été mesuré sur {cover}",
+          "description": "La course du tablier est de {height} cm et le modèle construit à partir de ces mesures place le bord inférieur à moins de {accuracy} cm de là où il a réellement été trouvé.\n\nVoici la même chose écrite comme elle le serait dans `myhome.yaml`, pour qui préfère le fichier. Enregistrer n'écrit **pas** le fichier : les nombres sont conservés par l'intégration, ils l'emportent sur le fichier, et les retirer de cette page rend la main au fichier.\n\n{yaml}\n**Ce que vous devez faire** : enregistrez, ou consacrez deux minutes et quatre relevés de plus à une meilleure réponse.",
+          "menu_options": {
+            "save": "Enregistrer",
+            "refine": "Améliorer d'abord la précision (~2 minutes, 4 relevés de plus)",
+            "cancel_flow": "Annuler sans rien enregistrer"
+          }
+        },
+        "profile_name": {
+          "title": "Nommez ce type de volet",
+          "description": "{cover} a été mesuré, et ce qui a été mesuré décrit toutes les fenêtres du même modèle. Donnez un nom à ce modèle et les autres volets se calibreront en deux écrans au lieu de dix.\n\n**Ce que vous devez faire** : saisissez un nom court — uniquement des lettres, des chiffres et des tirets bas, sans espaces ni accents, car c'est aussi une clé de `myhome.yaml`. Quelque chose comme `hauts`, `chambres` ou `porte_cuisine`.",
+          "data": {
+            "name": "Nom du profil"
+          }
+        },
+        "reconfigure": {
+          "title": "Mesurer à nouveau {cover}",
+          "description": "Ce volet a déjà une calibration guidée. Il n'y a rien là-dedans qui mérite d'être modifié à la main — chaque nombre vient d'un appui ou d'un relevé — la façon de la changer est donc de la remesurer.\n\n**Ce qui va se passer** : la même conversation que la première fois. Ce qui est enregistré aujourd'hui reste exactement tel quel jusqu'à ce que vous atteigniez le dernier écran et enregistriez."
+        },
+        "problem_no_echo": {
+          "title": "{cover} n'a pas répondu",
+          "description": "La commande est arrivée sur le bus mais l'actionneur n'a jamais signalé qu'il se mettait en mouvement : il n'y a donc aucun instant auquel comparer quoi que ce soit et l'étape a été abandonnée.\n\n**Ce que vous devez faire** : vérifiez que le volet n'est pas bloqué, que rien d'autre (un interrupteur mural, une automatisation) ne le retient, et répétez l'étape. Si cela se produit à chaque fois, cet actionneur ne relaie pas son état et la calibration guidée ne peut pas le mesurer.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "problem_not_delivered": {
+          "title": "La commande n'est jamais arrivée sur le bus",
+          "description": "La passerelle n'a ni écrit notre commande ni dit qu'elle y renonçait : il n'a donc jamais été demandé à {cover} de bouger et rien n'a été mesuré.\n\n**Ce que vous devez faire** : vérifiez que la passerelle est connectée — la page de l'intégration le dit — et répétez l'étape.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "problem_not_stopped": {
+          "title": "Impossible d'arrêter {cover}",
+          "description": "La commande d'arrêt a été refusée ou perdue : le volet a continué jusqu'à sa fin de course et la position dont parlait cette étape n'existe pas.\n\n**Ce que vous devez faire** : attendez que le volet soit immobile et répétez l'étape. C'est en général le fait d'une passerelle occupée par énormément de commandes.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "problem_busy": {
+          "title": "{cover} est déjà en mouvement",
+          "description": "Une étape doit partir à l'arrêt, et ce volet bougeait déjà — quelqu'un à un interrupteur mural, une automatisation, ou une commande non terminée.\n\n**Ce que vous devez faire** : attendez qu'il s'arrête, puis répétez l'étape.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "problem_bad_point": {
+          "title": "Ces deux appuis ne peuvent pas être justes tous les deux",
+          "description": "Les instants ne tiennent pas ensemble : le volet ne peut pas s'être arrêté avant d'avoir démarré, ni avoir ouvert ses lames après être arrivé.\n\n**Ce que vous devez faire** : répétez l'étape et appuyez une fois par événement, au moment où il se produit.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "problem_timeout": {
+          "title": "Rien n'a été pressé à temps",
+          "description": "Cet écran attend environ une minute et demie l'appui dont il parle, bien plus longtemps que la course de n'importe quel volet. Au-delà, l'appui ne mesure plus rien : il a donc été écarté plutôt que cru.\n\n**Ce que vous devez faire** : répétez l'étape et appuyez cette fois dès que le volet fait ce que l'écran décrit.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        },
+        "problem_unknown": {
+          "title": "Quelque chose s'est mal passé avec {cover}",
+          "description": "L'étape n'a pas pu être menée à bien et rien n'a été mesuré. Le journal de Home Assistant en donne le détail.\n\n**Ce que vous devez faire** : répétez l'étape. Quoi que vous choisissiez, rien n'a été enregistré.",
+          "menu_options": {
+            "repeat_step": "Répéter cette étape",
+            "cancel_flow": "Annuler"
+          }
+        }
+      },
+      "progress": {
+        "homing_closed": "{cover} est fermé complètement, afin que les mesures partent d'un point connu. Patientez, et assurez-vous que rien n'entrave sa course.",
+        "starting_open": "{cover} est fermé complètement puis lancé vers le haut. Patientez : l'écran suivant vous demandera de le regarder et d'appuyer sur un bouton.",
+        "starting_close": "{cover} est ouvert complètement puis lancé vers le bas. Patientez : l'écran suivant vous demandera de le regarder et d'appuyer sur un bouton.",
+        "running_down": "{cover} est ouvert complètement puis descendu à environ {percent} % de sa course. Patientez, et préparez le mètre.",
+        "running_up": "{cover} est fermé complètement puis remonté à environ {percent} % de sa course. Patientez, et préparez le mètre."
+      },
+      "error": {
+        "invalid_name": "Un nom de profil ne peut contenir que des lettres, des chiffres et des tirets bas : ni espaces, ni accents, ni tirets.",
+        "name_in_use": "Un profil porte déjà ce nom. Choisissez-en un autre, ou supprimez d'abord le profil existant.",
+        "above_the_travel": "C'est plus que toute la course de ce tablier. Mesurez depuis le point où le bord inférieur repose volet fermé, pas depuis le sol."
+      },
+      "abort": {
+        "no_basic_covers": "Tous les volets de cette passerelle indiquent leur propre position : il n'y a donc rien à calibrer. La calibration guidée ne sert qu'aux volets dont Home Assistant doit estimer la position à partir des temps de course.",
+        "no_profiles": "Il n'y a encore aucun profil à suivre. Calibrez d'abord un volet avec la mesure complète : c'est elle qui crée un profil.",
+        "unknown_cover": "Ce volet ne fait plus partie de la configuration de cette passerelle. Rien n'a été mesuré ni enregistré.",
+        "cancelled": "La calibration a été annulée. Rien n'a été enregistré et le volet est là où le dernier mouvement l'a laissé.",
+        "calibration_saved": "La calibration de {cover} a été enregistrée. Le volet utilise désormais les valeurs mesurées, ses attributs le disent, et retirer cette entrée de la page de l'intégration rend la main à myhome.yaml."
+      }
+    },
+    "cover_profile": {
+      "entry_type": "Profil de volet",
+      "initiate_flow": {
+        "user": "Ajouter un profil de volet",
+        "reconfigure": "Afficher ce profil"
+      },
+      "step": {
+        "reconfigure": {
+          "title": "Profil « {profile} »",
+          "description": "Voici les mesures que porte ce profil. Home Assistant les adapte à chaque fenêtre qui le suit, d'après la hauteur de cette fenêtre.\n\n{values}\n**Comment le modifier** : remesurez un volet de ce type avec la calibration guidée et donnez-lui ce même nom, ce qui remplace ce qui est ici. **Comment le supprimer** : le bouton de suppression sur la page de l'intégration. Les volets qui le suivent reviennent à ce que `myhome.yaml` dit d'eux."
+        }
+      },
+      "abort": {
+        "add_profile_via_calibration": "Un profil ne se saisit pas, il se mesure. Lancez la calibration guidée sur le premier volet d'un type et choisissez « C'est le premier volet de ce type » : le dernier écran demande le nom du profil.",
+        "profile_unchanged": "Rien n'a été modifié."
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {
