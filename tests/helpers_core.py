@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -106,8 +106,14 @@ def make_entry(
     version: int = 2,
     mac: str = MAC,
     options: dict[str, Any] | None = None,
+    subentries: Iterable[Any] = (),
 ) -> MockConfigEntry:
-    """Config entry pointing at ``config_path``."""
+    """Config entry pointing at ``config_path``.
+
+    ``subentries`` are ``ConfigSubentryData`` dicts (0.5.0: the guided calibration
+    stores its profiles and its per-cover results in config subentries of the
+    gateway's entry, and the cover platform reads them at setup).
+    """
     entry_data = dict(data or ENTRY_DATA_V2)
     entry_data["mac"] = mac
     entry_data["id"] = mac
@@ -119,6 +125,7 @@ def make_entry(
         minor_version=1,
         data=entry_data,
         options={CONF_WORKER_COUNT: 1, CONF_FILE_PATH: str(config_path), **(options or {})},
+        subentries_data=tuple(subentries),
     )
 
 
