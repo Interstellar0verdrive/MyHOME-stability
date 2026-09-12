@@ -17,7 +17,6 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    ConfigSubentryFlow,
     OptionsFlow,
 )
 from homeassistant.const import (
@@ -42,7 +41,12 @@ from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from OWNd.connection import OWNGateway, OWNSession
 from OWNd.discovery import find_gateways, get_port
 
-from .calibration_flow import async_get_subentry_types
+from .calibration_flow import (
+    IDLE_TIMEOUT_SEC,
+    CalibrationManagementMixin,
+    GuidedCalibrationMixin,
+)
+from .calibration_store import CalibrationStore, async_get_store
 from .const import (
     CONF_ADDRESS,
     CONF_COMMAND_TIMEOUT_SEC,
@@ -191,22 +195,6 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: ConfigEntry) -> MyHomeOptionsFlowHandler:
         """Get the options flow for this handler."""
         return MyHomeOptionsFlowHandler()
-
-    @classmethod
-    @callback
-    def async_get_supported_subentry_types(
-        cls, config_entry: ConfigEntry
-    ) -> dict[str, type[ConfigSubentryFlow]]:
-        """The two things that can be added to a gateway besides the gateway (0.5.0).
-
-        `cover_calibration` is the guided calibration itself - "Add" on the integration
-        page opens it, and it is offered whatever the configuration holds, because the
-        cover it is about is chosen inside it (and it says so plainly when there is no
-        basic cover to calibrate). `cover_profile` is there so a profile the flow
-        created is a first-class row on that page, with a delete button of Home
-        Assistant's own; it cannot be added by hand, only measured.
-        """
-        return async_get_subentry_types()
 
     def __init__(self) -> None:
         """Initialize the MyHOME flow."""
@@ -504,20 +492,103 @@ class MyHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_test_connection()
 
 
-class MyHomeOptionsFlowHandler(OptionsFlow):
-    """Handle MyHOME options; the entry is reloaded here when anything changed.
+class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixin, OptionsFlow):
+    """Everything the user can change about a gateway, behind one "Configura" button.
 
-    Plain `OptionsFlow` and a reload of our own rather than `OptionsFlowWithReload`,
-    which Home Assistant refuses to combine with a config entry update listener
-    (`ValueError: Config entry update listeners should not be used with
-    OptionsFlowWithReload`). 0.5.0 registers one, because a subentry deleted from the
-    integration page reaches the integration through no other hook - see
-    `__init__._async_reload_on_subentry_change`. The behaviour the user sees is
-    unchanged: the entry is rebuilt whenever this dialog changed anything.
+    Up to 0.5.0's first draft this dialog was a single form of connection settings, and
+    the guided cover calibration lived behind "Aggiungi" as a pair of config subentries.
+    That put stray rows on the integration page, made Home Assistant file every device
+    under "devices not belonging to a subentry", and left the stored numbers with
+    nowhere to be looked at. So the dialog now opens on a menu:
+
+    * **Calibra una tapparella** - the guided measurement (`GuidedCalibrationMixin`).
+      Hidden outright when this gateway has no basic cover, because the tool would have
+      nothing to offer and an empty list is not an explanation.
+    * **Profili e tapparelle** and **Calibrazioni** - what is stored, who follows it,
+      and how to correct or remove it (`CalibrationManagementMixin`).
+    * **Gateway e connessione** - the form this dialog used to be.
+
+    The entry is reloaded **once**, when the dialog closes, and only if something was
+    actually changed: a cover reads its travel model in its constructor, so a stored
+    calibration only reaches the shutter through a reload - and a reload per screen
+    would be a disconnect and reconnect per screen.
     """
 
+    def __init__(self) -> None:
+        """No store yet: `async_step_init` is the first thing that can await one."""
+        self._store: CalibrationStore = None  # type: ignore[assignment]
+        self._changed = False
+        # The management screens' pointers.
+        self._profile_name: str | None = None
+        self._cover_unique_id: str | None = None
+        self._pending_assignments: dict[str, tuple[str | None, float | None]] = {}
+        self._missing_heights: list[str] = []
+        self._deleted: str = ""
+        self._deleted_covers: list[str] = []
+        self._saved_cover: str = ""
+        self._saved_profile: str = ""
+        # ...and the guided conversation's.
+        self._session: Any = None
+        self._watchdog: Any = None
+        self._idle_timeout: float = IDLE_TIMEOUT_SEC
+        self._reset_calibration()
+
+    # ------------------------------------------------------------------ the menu
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Manage the MyHOME options."""
+        """The first screen: what this dialog can do, and what it will not do by itself."""
+        if self._store is None:
+            self._store = await async_get_store(self.hass, self.config_entry)
+        options = []
+        if self._covers():
+            options.append("calibrate")
+        options += ["profiles_covers", "calibrations", "gateway", "finish"]
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=options,
+            description_placeholders={"gateway": self.config_entry.title},
+        )
+
+    async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Close the dialog, rebuilding the gateway when something was stored."""
+        return self._async_done()
+
+    @callback
+    def _async_done(self, options: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Close the dialog.
+
+        `async_create_entry` on an options flow writes the options and closes it;
+        passing back the options unchanged is how a dialog that only touched the
+        calibration store closes without pretending the options moved. The reload is
+        not here but in `async_remove`, which Home Assistant calls however the dialog
+        was left - including the X, which is how half of these screens are left.
+        """
+        return self.async_create_entry(
+            title="", data=options if options is not None else dict(self.config_entry.options)
+        )
+
+    @callback
+    def async_remove(self) -> None:
+        """Rebuild the gateway if anything was stored, whatever way the dialog was left.
+
+        Once, at the end, and only if something changed: a cover reads its travel model
+        in its constructor, so a stored calibration reaches the shutter through a
+        reload and through nothing else - and a reload on a real gateway is a
+        disconnect and a reconnect, very likely while the shutter is still moving from
+        the last measurement.
+
+        `async_remove` rather than the "Chiudi" step because there are several ways out
+        of a menu this deep, the browser's X among them, and a calibration that only
+        took effect when the user happened to leave by the front door would be a
+        calibration nobody believes in.
+        """
+        super().async_remove()
+        if self._changed and self.config_entry.state.recoverable:
+            self._changed = False
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+
+    # ------------------------------------------------------------------ the gateway
+    async def async_step_gateway(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Where the gateway is, how it is spoken to, and where the file lives."""
         entry = self.config_entry
         errors: dict[str, str] = {}
         options = {
@@ -559,18 +630,17 @@ class MyHomeOptionsFlowHandler(OptionsFlow):
                     # NumberSelector yields floats; the consumers expect ints.
                     **{key: int(user_input[key]) for key, *_ in TUNABLE_OPTIONS},
                 }
-                data_changed = self.hass.config_entries.async_update_entry(entry, data=new_data)
-                # Scheduled before the options are written (Home Assistant writes them
-                # when this step returns) and run after, because a scheduled reload is
-                # a task and the write is synchronous: the rebuilt entry reads the new
-                # options and the new data alike.
-                if data_changed or new_options != dict(entry.options):
-                    self.hass.config_entries.async_schedule_reload(entry.entry_id)
-                return self.async_create_entry(title="", data=new_options)
+                if self.hass.config_entries.async_update_entry(entry, data=new_data):
+                    self._changed = True
+                if new_options != dict(entry.options):
+                    self._changed = True
+                # The gateway settings are written by closing the dialog, because that
+                # is the only moment Home Assistant lets an options flow write them.
+                return self._async_done(new_options)
 
         suggestions = user_input or {}
         return self.async_show_form(
-            step_id="init",
+            step_id="gateway",
             data_schema=vol.Schema(
                 {
                     vol.Required(
