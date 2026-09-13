@@ -7,10 +7,16 @@
 // screen engine, the views and the assignment gestures are lots 5 to 8, and they hang
 // off this file without changing it.
 //
-// **The element contract.** Home Assistant sets four *properties* (never attributes) on
-// the element: `hass`, `narrow`, `route` and `panel`. That is frontend-repo behaviour
+// **The element contract.** Home Assistant sets four *properties* on the element:
+// `hass`, `narrow`, `route` and `panel`. That is frontend-repo behaviour
 // (`src/panels/custom/ha-panel-custom.ts`); the Python side only proves what is *sent*
-// (`frontend.Panel.to_response`). All four are declared `attribute: false` accordingly.
+// (`frontend.Panel.to_response`), so none of it is verified from this repository. The
+// three that can only be objects are declared `attribute: false`; `narrow` keeps its
+// attribute as well, because a boolean is the one of the four a host could plausibly
+// set either way and accepting both costs nothing.
+//
+// Because it is unverified, nothing here may *depend* on it: the bootstrap waits for
+// `hass` rather than assuming it is already there (see `_bootstrap`).
 //
 // **`hass` changes identity on every state update in the whole installation** - a light
 // switched on at the other end of the house replaces it. `shouldUpdate` therefore asks
@@ -63,6 +69,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _error: WsError | null = null;
   private _ready = false;
   private _language = "";
+  private _started = false;
 
   constructor() {
     super();
@@ -162,7 +169,16 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   protected override updated(changed: PropertyValues): void {
-    if (changed.has("hass") && this._ready && this._languageOf(this.hass) !== this._language) {
+    if (!changed.has("hass") || !this.hass) {
+      return;
+    }
+    // The first `hass` the element ever sees, if it did not have one when it first
+    // rendered. `_bootstrap` is what makes that harmless rather than permanent.
+    if (!this._started) {
+      void this._bootstrap();
+      return;
+    }
+    if (this._ready && this._languageOf(this.hass) !== this._language) {
       void this._loadTexts();
     }
   }
@@ -180,6 +196,16 @@ export class MyHomeCalibrationPanel extends LitElement {
    * remains a complete path to everything the panel does.
    */
   private async _bootstrap(): Promise<void> {
+    // Home Assistant sets `hass` as a property before it appends the element, so in
+    // practice this runs on the first update - but that is frontend-repo behaviour this
+    // repository cannot check, and reading `undefined.connection` once would leave the
+    // error card up for the rest of the session: `shouldUpdate` deliberately ignores a
+    // `hass` that only changed identity, so nothing would ever come back to retry. Wait
+    // instead, and let `updated` start us when the property arrives.
+    if (this._started || !this.hass) {
+      return;
+    }
+    this._started = true;
     await this._loadTexts();
     try {
       this._overview = await overview(this.hass.connection);
