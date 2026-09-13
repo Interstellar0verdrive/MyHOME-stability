@@ -173,6 +173,26 @@ MATRIX: list[tuple[str, str, dict[str, Any] | None, str]] = [
         CALIBRATION_ORIGIN_ADJUSTED,
     ),
     (
+        # ...and the same state reached from the other side: the two coefficients
+        # corrected by hand and every run time still the profile's. `adjusted` is one
+        # word for two quite different shutters, and a panel that got the second of
+        # them wrong would be wrong about the very screen that produced it.
+        "the two rolls of its own over a profile that answers for the times",
+        BARE_YAML,
+        store_file(
+            profiles={"tall": PROFILE},
+            covers={
+                UNIQUE_ID: record(
+                    profile="tall",
+                    profile_wins=True,
+                    height=HEIGHT,
+                    overrides={CONF_OPENING_ROLL: 2.5, CONF_CLOSING_ROLL: 2.6},
+                )
+            },
+        ),
+        CALIBRATION_ORIGIN_ADJUSTED,
+    ),
+    (
         "assigned to a profile that is not defined any more",
         FILE_YAML,
         store_file(covers={UNIQUE_ID: record(profile="gone", profile_wins=True)}),

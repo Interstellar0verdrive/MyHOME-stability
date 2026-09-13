@@ -73,7 +73,21 @@ from custom_components.myhome.const import (
 )
 
 from .helpers_core import MAC
-from .helpers_platforms import device_config, set_connected, setup_myhome
+from .helpers_platforms import device_config, entity_object, set_connected, setup_myhome
+
+# The guided conversation's own harness, so that "the flow writes it" is tested by
+# running the flow and not by reading the call site. `tests/test_calibration_flow.py`
+# is imported rather than extended: it is the acceptance criterion of this branch and
+# stays byte for byte what 0.5.0 shipped.
+from .test_calibration_flow import (
+    PATH_A_BASIC,
+    YAML as GUIDED_YAML,
+    FakeRunner,
+    calibrating,
+    drive,
+    open_dialog,
+    the_profile,
+)
 
 ENTITY = "cover.hallway_shutter"
 DEVICE_KEY = "2-81"
@@ -1409,6 +1423,33 @@ async def test_a_profile_remembers_the_window_it_was_measured_on(
             UNIQUE_ID,
             "2026-09-04T18:12:00+00:00",
         )
+
+
+async def test_the_guided_conversation_is_what_writes_where_a_profile_came_from(
+    hass: HomeAssistant, tmp_path, freezer
+) -> None:
+    """Path A, end to end: the profile it stores names the window it was measured on.
+
+    The only path that ever writes `measured_on` is the one that really held a tape
+    against a shutter, so it is the only path this can be tested on. The id and not the
+    name beside it: the name is the one that window had on the day, the id is what a
+    screen follows back to the cover that is there now.
+
+    Mutation caught: dropping `measured_on=self._cover_unique_id` at the save step (the
+    panel would say "provenance not recorded" for a profile measured five minutes ago,
+    which is the one case it is supposed to be able to answer).
+    """
+    async with calibrating(hass, tmp_path, GUIDED_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC)
+        assert result["step_id"] == "saved"
+
+        profile = the_profile(hass, entry)
+        measured_on, measured_at = profile_provenance(profile)
+        assert measured_on == UNIQUE_ID
+        assert measured_at
+        # The name the window had on the day is still beside it, and is not the id.
+        assert profile[CONF_REFERENCE_COVER] == "Hallway Shutter"
 
 
 def test_a_profiles_provenance_never_reaches_the_travel_model() -> None:
