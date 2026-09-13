@@ -29,25 +29,45 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 
 import { I18n } from "./engine/i18n";
 import { defined, toggleSidebar } from "./engine/ha";
+import { assignItems, needsTravel, travelProblem, withPending } from "./engine/assign";
 import { Router, type Route } from "./engine/router";
-import { Store } from "./engine/store";
+import { NOTHING_PENDING, Store } from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
 import { liveRegion } from "./engine/a11y";
 import {
   asWsError,
+  assign as sendAssign,
   isUnknownCommand,
   overview as fetchOverview,
+  preview as fetchPreview,
+  reorder as sendReorder,
   subscribe,
+  undo as sendUndo,
   type CalibrationEvent,
   type CoverRow,
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
-import { FLOW_URL, MyHomeOverview } from "./views/overview";
+import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
 import { MyHomeScreen, type ScreenModel } from "./engine/screen";
 
 /** How often the panel asks again when the backend has no subscription to offer. */
 const POLL_MS = 30_000;
+
+/**
+ * How long the feedback strip stays, with "Annulla" on it. The design fixes seven seconds.
+ *
+ * The *server's* undo slot is five minutes (contract §9.9) and is withdrawn by the next
+ * write of the same gateway, so the strip is the shorter of the two on purpose: an offer
+ * that is still on the screen after the thing behind it has expired is worse than no offer.
+ */
+const SNACK_MS = 7_000;
+
+/**
+ * How long the review panel waits after a keystroke before asking the server what the
+ * batch would come to. Long enough that typing "145" is one question and not three.
+ */
+const PREVIEW_DEBOUNCE_MS = 400;
 
 export class MyHomeCalibrationPanel extends LitElement {
   static override properties = {
@@ -70,6 +90,10 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _poll: ReturnType<typeof setInterval> | null = null;
   private _language = "";
   private _started = false;
+  private _snackTimer: ReturnType<typeof setTimeout> | null = null;
+  private _previewTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Every preview answer but the last is thrown away: they arrive out of order. */
+  private _previewSeq = 0;
 
   constructor() {
     super();
@@ -186,6 +210,14 @@ export class MyHomeCalibrationPanel extends LitElement {
     window.removeEventListener("location-changed", this._onReturn);
     document.removeEventListener("visibilitychange", this._onReturn);
     this._stopPolling();
+    if (this._snackTimer) {
+      clearTimeout(this._snackTimer);
+      this._snackTimer = null;
+    }
+    if (this._previewTimer) {
+      clearTimeout(this._previewTimer);
+      this._previewTimer = null;
+    }
     const unsubscribe = this._unsubscribeWs;
     this._unsubscribeWs = null;
     // The socket outlives the element, so a subscription that is not given back keeps a
@@ -297,7 +329,14 @@ export class MyHomeCalibrationPanel extends LitElement {
 
   private _onEvent(event: CalibrationEvent): void {
     if (event.type === "overview") {
+      // The model is replaced whole and the pending changes are kept beside it: a write
+      // another browser tab made is not a reason to throw away six assignments somebody
+      // is halfway through composing here. What the new model *can* change is what those
+      // assignments would come to, so the preview is asked again.
       this._store.setOverview(event.overview);
+      if (this._store.state.review) {
+        this._schedulePreview();
+      }
       return;
     }
     if (event.type === "measuring") {
@@ -315,11 +354,15 @@ export class MyHomeCalibrationPanel extends LitElement {
             : null,
         },
       });
-      this._store.announce(
-        event.cover_unique_id
-          ? this._i18n.t("panel.banner.measuring.body", { cover: event.name ?? "" })
-          : "",
-      );
+      if (event.cover_unique_id) {
+        // The lock is announced *before* anything is attempted, which is the rule. A
+        // gesture already in the air is given back: a drop that landed the moment a
+        // measurement started would be a change the user could not then confirm.
+        this._store.set({ armed: null, drag: null });
+        this._store.announce(
+          this._i18n.t("panel.banner.measuring.body", { cover: event.name ?? "" }),
+        );
+      }
     }
   }
 
@@ -420,6 +463,293 @@ export class MyHomeCalibrationPanel extends LitElement {
     ></myhome-screen>`;
   }
 
+  // --- the assignment ------------------------------------------------------------------
+  //
+  // Every write the panel makes is here, in one object, beside the socket. The view does
+  // the gestures and knows nothing about the API; this knows the API and nothing about
+  // pointers. A reviewer asking "what can this screen change" reads the interface in
+  // `views/overview.ts` and then these twenty methods, and there is nowhere else to look.
+
+  /** True while nothing may be written: a measurement, or a write already in the air. */
+  private get _locked(): boolean {
+    const state = this._store.state;
+    return state.overview?.measuring != null || state.applying;
+  }
+
+  private _assignActions: AssignActions = {
+    search: (value) => this._store.set({ search: value }),
+    room: (value) => this._store.set({ room: value }),
+    clearFilters: () => this._store.set({ search: "", room: "" }),
+    openCover: (uniqueId) => this._navigate(`/cover/${encodeURIComponent(uniqueId)}`),
+    openProfile: (name) => this._navigate(`/profile/${encodeURIComponent(name)}`),
+
+    /**
+     * A gesture ended on a destination.
+     *
+     * Sending a shutter back where it already is withdraws its change rather than
+     * recording one, which is what keeps the count on the bar equal to the number of
+     * things the batch would really write.
+     */
+    assign: (cover, to) => {
+      if (this._locked) {
+        return;
+      }
+      const { pending, withdrawn } = withPending(this._store.state.pending, cover, to);
+      this._store.set({ pending, dialog: null, armed: null, writeError: null });
+      this._store.announce(
+        withdrawn
+          ? this._i18n.t("panel.assign.announce.withdrawn", { cover: cover.name })
+          : this._i18n.t("panel.assign.announce.pending", {
+              cover: cover.name,
+              target:
+                to === null
+                  ? this._i18n.t("panel.assign.target_none")
+                  : this._i18n.t("panel.assign.target_profile", { profile: to }),
+            }),
+      );
+      this._schedulePreview();
+    },
+
+    withdraw: (cover) => {
+      this._store.set({
+        pending: this._store.state.pending.filter((item) => item.cover !== cover.unique_id),
+      });
+      this._store.announce(
+        this._i18n.t("panel.assign.announce.withdrawn", { cover: cover.name }),
+      );
+      this._schedulePreview();
+    },
+
+    discardAll: () => {
+      this._store.set({ ...NOTHING_PENDING });
+      this._store.announce(this._i18n.t("panel.assign.announce.discarded"));
+    },
+
+    /**
+     * A drop that only moved a row inside its group, with nothing pending to carry it.
+     *
+     * The order is *remembered*, not confirmed: the design says so ("l'ordine è ricordato
+     * tra le sessioni") and it is the one thing on this screen that changes no travel
+     * model, so making the user confirm it would be a dialog about a list.
+     */
+    reorder: (order) => {
+      if (this._locked || !this._store.state.entryId) {
+        return;
+      }
+      this._store.set({ order });
+      void this._write(
+        () => sendReorder(this.hass.connection, this._store.state.entryId as string, order),
+        (result) => {
+          this._store.set({ order: null });
+          this._store.setOverview(result.overview);
+          this._snack(this._i18n.t("panel.toast.order_saved"), result.undo_token);
+          this._store.announce(this._i18n.t("panel.assign.announce.reordered"));
+        },
+      );
+    },
+
+    setOrder: (order) => this._store.set({ order }),
+
+    drag: (cover) =>
+      this._store.set({
+        drag: cover ? { cover: cover.unique_id, name: cover.name, over: null, insert: null } : null,
+      }),
+
+    over: (target) => {
+      const drag = this._store.state.drag;
+      if (!drag) {
+        return;
+      }
+      this._store.set({
+        drag: { ...drag, over: target?.group ?? null, insert: target ? { ...target } : null },
+      });
+    },
+
+    arm: (cover) => {
+      this._store.set({ armed: cover ? cover.unique_id : null });
+      if (cover) {
+        this._store.announce(this._i18n.t("panel.assign.announce.armed"));
+      }
+    },
+
+    dialog: (cover) => this._store.set({ dialog: cover ? cover.unique_id : null }),
+
+    review: (open) => {
+      this._store.set({ review: open, writeError: null, heightsForced: false });
+      if (open) {
+        void this._refreshPreview();
+      }
+    },
+
+    height: (cover, value) => {
+      this._store.set({ heights: { ...this._store.state.heights, [cover]: value } });
+      this._schedulePreview();
+    },
+
+    toggleShowAll: () => this._store.set({ showAll: !this._store.state.showAll }),
+
+    confirm: () => void this._confirm(),
+
+    undo: () => void this._undo(),
+
+    announce: (message) => this._store.announce(message),
+  };
+
+  /**
+   * The batch, in one write.
+   *
+   * The travels are checked here first so that the user is told which fields are missing
+   * rather than being handed one refusal about the whole batch; the server checks them
+   * again, and where the two disagree the server's sentence is the one that is shown.
+   */
+  private async _confirm(): Promise<void> {
+    const state = this._store.state;
+    const entryId = state.entryId;
+    if (this._locked || !entryId || state.pending.length === 0) {
+      return;
+    }
+    const missing = state.pending.filter((change) => {
+      const cover = state.overview?.covers.find((row) => row.unique_id === change.cover);
+      return (
+        cover !== undefined &&
+        needsTravel(cover, change) &&
+        travelProblem(state.heights[change.cover]) !== null
+      );
+    });
+    if (missing.length > 0) {
+      this._store.set({ heightsForced: true });
+      this._store.announce(this._i18n.t("panel.assign.announce.missing_travel"));
+      return;
+    }
+    const items = assignItems(state.pending, state.heights);
+    const order = state.order ?? undefined;
+    const count = items.length;
+    this._store.announce(this._i18n.t("panel.assign.announce.applying"));
+    await this._write(
+      () => sendAssign(this.hass.connection, entryId, items, order),
+      (result) => {
+        this._store.set({ ...NOTHING_PENDING });
+        this._store.setOverview(result.overview);
+        this._snack(
+          count === 1
+            ? this._i18n.t("panel.toast.assigned_one")
+            : this._i18n.t("panel.toast.assigned", { count }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  private async _undo(): Promise<void> {
+    const state = this._store.state;
+    const token = state.snack?.undoToken;
+    if (!token || !state.entryId) {
+      return;
+    }
+    const entryId = state.entryId;
+    this._clearSnack();
+    await this._write(
+      () => sendUndo(this.hass.connection, entryId, token),
+      (result) => {
+        this._store.setOverview(result.overview);
+        this._snack(this._i18n.t("panel.toast.undone"), null);
+      },
+    );
+  }
+
+  /**
+   * One write, its "applying" state and its refusal.
+   *
+   * A refusal is kept **where the user was working** - `writeError`, shown at the top of
+   * the review panel - and never promoted to the whole-page error card: the pending
+   * changes are still there, still correct, and a screen that threw them away because the
+   * gateway was busy for a second would be a screen nobody trusts with twelve of them.
+   */
+  private async _write<T>(
+    send: () => Promise<T>,
+    onDone: (result: T) => void,
+  ): Promise<void> {
+    this._store.set({ applying: true, writeError: null });
+    try {
+      const result = await send();
+      this._store.set({ applying: false });
+      onDone(result);
+    } catch (error) {
+      const refusal = asWsError(error);
+      this._store.set({ applying: false, writeError: refusal });
+      this._store.announce(
+        this._i18n.refusal(refusal.translation_key, refusal.translation_placeholders ?? {}),
+      );
+    }
+  }
+
+  private _snack(message: string, undoToken: string | null): void {
+    this._clearSnack();
+    this._store.set({ snack: { message, undoToken } });
+    this._store.announce(message);
+    this._snackTimer = setTimeout(() => {
+      this._snackTimer = null;
+      this._store.set({ snack: null });
+    }, SNACK_MS);
+  }
+
+  private _clearSnack(): void {
+    if (this._snackTimer) {
+      clearTimeout(this._snackTimer);
+      this._snackTimer = null;
+    }
+    this._store.set({ snack: null });
+  }
+
+  /** Ask again in a moment, so that typing a travel is one question and not five. */
+  private _schedulePreview(): void {
+    if (!this._store.state.review) {
+      return;
+    }
+    if (this._previewTimer) {
+      clearTimeout(this._previewTimer);
+    }
+    this._previewTimer = setTimeout(() => {
+      this._previewTimer = null;
+      void this._refreshPreview();
+    }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  /**
+   * What the batch would come to, from the server (contract §11).
+   *
+   * The panel does not scale a profile: that is `derive_cover_from_profile`'s job and a
+   * second copy of it here would drift from the one the shutter runs on. A preview that
+   * fails leaves the last answer on the screen rather than blanking the table - the rows
+   * are still the right rows, and the alternative to a slightly stale number is no number.
+   */
+  private async _refreshPreview(): Promise<void> {
+    const state = this._store.state;
+    if (!state.entryId || state.pending.length === 0) {
+      this._store.set({ preview: null });
+      return;
+    }
+    const seq = ++this._previewSeq;
+    this._store.set({ previewing: true });
+    try {
+      const answer = await fetchPreview(
+        this.hass.connection,
+        state.entryId,
+        assignItems(state.pending, state.heights),
+      );
+      if (seq === this._previewSeq) {
+        this._store.set({ preview: answer.items, previewing: false });
+      }
+    } catch (error) {
+      if (seq === this._previewSeq) {
+        this._store.set({ previewing: false });
+      }
+      if (!isUnknownCommand(error)) {
+        console.warn("MyHOME panel: the preview could not be read", asWsError(error));
+      }
+    }
+  }
+
   private _renderView(): TemplateResult {
     const state = this._store.state;
     if (state.status === "loading") {
@@ -474,16 +804,8 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
     return html`<myhome-overview
       .i18n=${this._i18n}
-      .overview=${state.overview}
-      .search=${state.search}
-      .room=${state.room}
-      @myhome-search=${(event: CustomEvent<string>) => this._store.set({ search: event.detail })}
-      @myhome-room=${(event: CustomEvent<string>) => this._store.set({ room: event.detail })}
-      @myhome-clear-filters=${() => this._store.set({ search: "", room: "" })}
-      @myhome-open-cover=${(event: CustomEvent<string>) =>
-        this._navigate(`/cover/${encodeURIComponent(event.detail)}`)}
-      @myhome-open-profile=${(event: CustomEvent<string>) =>
-        this._navigate(`/profile/${encodeURIComponent(event.detail)}`)}
+      .state=${state}
+      .actions=${this._assignActions}
     ></myhome-overview>`;
   }
 
