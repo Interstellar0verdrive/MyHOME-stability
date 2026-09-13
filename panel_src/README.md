@@ -100,6 +100,7 @@ src/engine/a11y.ts      the live region and focus return
 src/engine/ha.ts        customElements.get() guards for every ha-* element used
 src/engine/ws.ts        typed wrappers over every command; mirrors panel_schemas.py
 src/i18n/keys.ts        every panel.* key the bundle asks for, and its English stand-in
+src/i18n/fallback.json  the stand-ins themselves, held equal to en.json by the suite
 src/templates/*.ts      the eight wizard step templates
 src/components/*.ts     origin chip, cover row, group card, measuring banner
 src/views/overview.ts   <myhome-overview>, the management screen
@@ -165,10 +166,18 @@ therefore added in three files — `strings.json`, `translations/en.json`,
    the only reason the two can be trusted to agree.
 2. **No sentence is compiled into the bundle.** Texts come from
    `myhome/calibration/texts`, out of the same eight translation files the guided dialog
-   reads. A missing key renders as the key, so that it looks like the bug it is. (The
-   English stand-ins in `src/i18n/keys.ts` suspend that rule for the `panel.*` block only,
-   and only until the texts lot writes it; the server's answer always wins where it has
-   one.)
+   reads. A missing key renders as the key, so that it looks like the bug it is. The one
+   exception is the offline stand-in: `src/i18n/fallback.json` carries the English
+   sentence for every `panel.*` key the bundle uses, because the panel paints before that
+   call has answered and paints again when it fails, and four screens of dotted
+   identifiers is not a better answer than four screens of English. The server's answer
+   always wins where it has one, and `tests/test_translations.py` holds the stand-ins word
+   for word to `strings.json` — and fails on a key the bundle asks for and the files do
+   not have, and on a stand-in nobody asks for.
+   The five origin phrases, the six value labels and the fourteen refusals are **not**
+   among them: they are read from `selector.*`, `options.*` and `exceptions.*` in the same
+   answer, because the panel is forbidden from keeping its own copy of a sentence the
+   guided flow already says, and a fallback is a copy.
 3. **Every `ha-*` element goes through `defined()` with a rendered fallback.** They are
    private API and Home Assistant has renamed them before. A rename must cost chrome,
    never a screen.

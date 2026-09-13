@@ -63,9 +63,9 @@ export const originChip = (
   const kind = origin === "measured" ? "measured" : origin === "adjusted" ? "adjusted" : "neutral";
   let label: string;
   if (short && origin === "inherited") {
-    label = i18n.t("panel.overview.origin_short_inherited");
+    label = i18n.t("panel.overview.cover.origin_inherited");
   } else if (short && origin === "adjusted") {
-    label = i18n.t("panel.overview.origin_short_adjusted");
+    label = i18n.t("panel.overview.cover.origin_adjusted");
   } else {
     label = i18n.origin(origin, profile);
   }

@@ -709,9 +709,13 @@ def test_no_menu_option_draws_an_arrow_of_its_own(path: Path) -> None:
 # against; the tests below are written on the file's name, `PANEL_BLOCK`, which is
 # declared beside the two-language rule at the top of this module.
 
-# The eleven views, in the order `.audit-2026-09/PANEL-TEXT-KEYS.md` lists them. A twelfth
-# view is a decision, not an accident: it changes what lots 5, 7 and 8 may reach for, so
-# it goes through this list first.
+# The twelve views, in the order `.audit-2026-09/PANEL-TEXT-KEYS.md` lists them. A
+# thirteenth view is a decision, not an accident: it changes what lots 7 and 8 may reach
+# for, so it goes through this list first. `screen` is the twelfth, added by the
+# reconciliation of lot 6b: it is the wizard engine's own chrome - the phase line, the
+# two live rows of a timed run, the stub a template renders when 0.7.0 has not filled it -
+# and it is a view because it belongs to `<myhome-screen>` and to none of the eleven
+# screens that use it.
 PANEL_VIEWS: tuple[str, ...] = (
     "common",
     "firstrun",
@@ -723,6 +727,7 @@ PANEL_VIEWS: tuple[str, ...] = (
     "detail",
     "profile",
     "banner",
+    "screen",
     "error",
 )
 
@@ -754,6 +759,8 @@ PANEL_PLACEHOLDERS: dict[str, str] = {
     "min": "the lowest number a field accepts",
     "max": "the highest number a field accepts",
     "entry_id": "the id of a config entry",
+    "phase": "the name of one phase of the guided calibration",
+    "index": "which step of that phase this is",
 }
 
 
@@ -763,13 +770,14 @@ def panel_block(path: Path) -> dict[str, Any]:
 
 @pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
 def test_the_panel_has_its_own_block_in_every_file(path: Path) -> None:
-    """Eight files, eleven views, and not a single sentence baked into the bundle.
+    """Eight files, twelve views, and not a single sentence baked into the bundle.
 
     The panel resolves every word through `myhome/calibration/texts`; a key it asks for
     and nobody wrote renders as the dotted key itself, on screen, in production. The key
-    sets are already held equal by `test_each_locale_has_the_same_keys_as_strings_json`;
-    what this adds is that the block is *there* at all, and that its top level is the
-    eleven views and nothing else - a stray `panel.misc` is where a twelfth view starts.
+    sets are already held by `test_each_locale_has_the_same_keys_as_strings_json` and by
+    the two-language rule above; what this adds is that the block is *there* at all, and
+    that its top level is the twelve views and nothing else - a stray `panel.misc` is
+    where a thirteenth view starts.
 
     Mutation caught: translating the block into six languages and forgetting the seventh;
     adding a view without deciding it belongs.
@@ -854,6 +862,95 @@ def test_the_panel_says_none_of_the_words_the_lexicon_struck_out(path: Path) -> 
     assert not offences, "\n".join(
         f"{path.name}: {key}: {word!r} - say {instead}" for key, word, instead in offences
     )
+
+
+# ------------------------------------------------ the bundle and the keys it asks for
+# The panel paints before `myhome/calibration/texts` has answered, and it paints when that
+# call fails, so the bundle carries one English sentence per key it uses. Those stand-ins
+# are a *copy* of the English block, and a copy that nobody checks is a copy that drifts -
+# which is how "Search for a shutter" in the bundle and "Search for a cover" in the file
+# coexisted for a lot.
+#
+# They live in `panel_src/src/i18n/fallback.json`, imported by `src/i18n/keys.ts`, for the
+# sake of this test: a suite that runs with no Node can read JSON exactly, and can only
+# guess at a TypeScript object literal with sentences wrapped over three lines in it.
+PANEL_SRC = ROOT / "panel_src" / "src"
+PANEL_FALLBACK = PANEL_SRC / "i18n" / "fallback.json"
+PANEL_KEYS_TS = PANEL_SRC / "i18n" / "keys.ts"
+# `"panel.overview.title"` in a `t(...)` call. Every key the bundle asks for is written as
+# one string literal on one line - the one exception, the refusal path, asks for
+# `exceptions.<key>.message` and is held by `test_every_refusal_the_panel_can_send_has_a_-
+# sentence` instead.
+PANEL_KEY_LITERAL = re.compile(r'"(panel\.[a-z0-9_.]+)"')
+
+
+def bundle_stand_ins() -> dict[str, str]:
+    return json.loads(PANEL_FALLBACK.read_text(encoding="utf-8"))
+
+
+def test_the_bundle_asks_only_for_keys_the_files_have() -> None:
+    """A key in the bundle and not in `strings.json` renders as a dotted identifier.
+
+    Nothing else catches it: the frontend has a fallback for exactly these keys, so the
+    panel looks right in English and shows `panel.overview.group_values` to everybody
+    else. The reconciliation of lot 6b made the two lists one; this is what keeps them
+    one.
+
+    Mutation caught: adding a `t("panel.…")` call for a key nobody wrote; renaming a key
+    in the files and leaving the bundle behind.
+    """
+    written = {key for key in leaf_keys(load(STRINGS)) if key.startswith(PANEL_PREFIX)}
+    # `config_panel` in the file, `panel` in the payload, and the bundle speaks payload.
+    written = {key.replace(PANEL_BLOCK, "panel", 1) for key in written}
+    asked = set(bundle_stand_ins())
+    assert asked, "the bundle declares no keys at all"
+    assert asked - written == set(), "the bundle asks for keys strings.json does not have"
+
+
+def test_the_offline_stand_ins_are_the_english_sentences() -> None:
+    """Word for word, because the stand-in is what an English user actually reads first.
+
+    Mutation caught: rewording a sentence in the eight files and leaving the bundle's copy
+    saying the old thing - which shows up as a flash of the previous wording on every load
+    and nowhere else.
+    """
+    english = {
+        key.replace(PANEL_BLOCK, "panel", 1): text
+        for key, text in flatten(load(STRINGS)).items()
+        if key.startswith(PANEL_PREFIX)
+    }
+    wrong = {
+        key: (text, english[key])
+        for key, text in bundle_stand_ins().items()
+        if key in english and text != english[key]
+    }
+    assert not wrong, "\n".join(
+        f"{key}: bundle says {mine!r}, the file says {theirs!r}"
+        for key, (mine, theirs) in sorted(wrong.items())
+    )
+
+
+def test_every_key_the_sources_use_is_declared_and_every_declared_key_is_used() -> None:
+    """The stand-in list is the bundle's worklist, so it is neither short nor long.
+
+    A key used and not declared has no fallback and no test behind it; a key declared and
+    not used is an English sentence shipped in the bundle for nobody - the decision of 13
+    September about dead keys, applied to this file. `keys.ts` is read too, because a
+    `fallback.json` nothing imports would pass every assertion above while the bundle
+    carried whatever it liked.
+
+    Mutation caught: a `t()` call the reconciliation missed; a stand-in kept after the
+    call that used it went away.
+    """
+    assert "fallback.json" in PANEL_KEYS_TS.read_text(encoding="utf-8")
+    used: set[str] = set()
+    for source in sorted(PANEL_SRC.rglob("*.ts")):
+        if source.name == "keys.ts":
+            continue
+        used |= set(PANEL_KEY_LITERAL.findall(source.read_text(encoding="utf-8")))
+    declared = set(bundle_stand_ins())
+    assert used - declared == set(), "a panel key is used with no stand-in beside it"
+    assert declared - used == set(), "a stand-in nobody asks for"
 
 
 # ------------------------------------------------------- the refusals of the panel

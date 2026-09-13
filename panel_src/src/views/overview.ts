@@ -207,12 +207,12 @@ export class MyHomeOverview extends LitElement {
    */
   private _valuesLine(profile: ProfileRow): string {
     if (profile.missing || !profile.values || profile.values.opening_time === undefined) {
-      return this.i18n.t("panel.overview.group_values_unknown");
+      return this.i18n.t("panel.overview.group.values_unknown");
     }
-    return this.i18n.t("panel.overview.group_values", {
+    return this.i18n.t("panel.overview.group.values", {
       travel: profile.reference_height === null ? "?" : this.i18n.number(profile.reference_height, 0),
-      up: this.i18n.number(profile.values.opening_time, 1),
-      down: this.i18n.number(profile.values.closing_time, 1),
+      opening: this.i18n.number(profile.values.opening_time, 1),
+      closing: this.i18n.number(profile.values.closing_time, 1),
       slat: this.i18n.number(profile.values.slat_time, 1),
     });
   }
@@ -225,16 +225,16 @@ export class MyHomeOverview extends LitElement {
    */
   private _provenanceLine(profile: ProfileRow): string {
     if (profile.source === "yaml") {
-      return this.i18n.t("panel.overview.group_from_file");
+      return this.i18n.t("panel.overview.group.from_file");
     }
     if (!profile.measured_on) {
-      return this.i18n.t("panel.overview.provenance_unknown");
+      return this.i18n.t("panel.overview.group.provenance_missing");
     }
     const date = profile.measured_at ? this.i18n.date(profile.measured_at) : "";
     if (!profile.measured_on_name) {
-      return this.i18n.t("panel.overview.provenance_gone", { date });
+      return this.i18n.t("panel.overview.group.measured_on_gone", { date });
     }
-    let line = this.i18n.t("panel.overview.provenance", {
+    let line = this.i18n.t("panel.overview.group.measured_on", {
       cover: profile.measured_on_name,
       date,
     });
@@ -242,8 +242,8 @@ export class MyHomeOverview extends LitElement {
       (cover) => cover.unique_id === profile.measured_on,
     );
     if (reference && reference.profile !== profile.name) {
-      const now = reference.profile ?? this.i18n.t("panel.overview.group_none");
-      line += ` · ${this.i18n.t("panel.overview.provenance_follows", { profile: now })}`;
+      const now = reference.profile ?? this.i18n.t("panel.overview.group.no_profile");
+      line += ` · ${this.i18n.t("panel.profile.provenance_now_profile", { profile: now })}`;
     }
     return line;
   }
@@ -260,17 +260,17 @@ export class MyHomeOverview extends LitElement {
     const groups: PanelGroup[] = overview.profiles.map((profile, index) => ({
       key: profile.name,
       id: `group-${index}`,
-      title: this.i18n.t("panel.overview.group_profile", { profile: profile.name }),
+      title: this.i18n.t("panel.overview.group.profile", { profile: profile.name }),
       values: this._valuesLine(profile),
       provenance: this._provenanceLine(profile),
-      warning: profile.missing ? this.i18n.t("panel.overview.group_missing") : "",
+      warning: profile.missing ? this.i18n.t("panel.overview.group.missing") : "",
       covers: inGroup(profile.name),
     }));
     groups.push({
       key: null,
       id: "group-none",
-      title: this.i18n.t("panel.overview.group_none"),
-      values: this.i18n.t("panel.overview.group_none_meta"),
+      title: this.i18n.t("panel.overview.group.no_profile"),
+      values: this.i18n.t("panel.overview.group.no_profile_note"),
       provenance: "",
       warning: "",
       covers: inGroup(null),
@@ -302,8 +302,8 @@ export class MyHomeOverview extends LitElement {
         </select>
       </span>
       <span class="spacer"></span>
-      <a class="cta secondary compact" href=${FLOW_URL} title=${this.i18n.t("panel.overview.measure_hint")}
-        >${this.i18n.t("panel.overview.action.measure")}</a
+      <a class="cta secondary compact" href=${FLOW_URL} title=${this.i18n.t("panel.firstrun.note")}
+        >${this.i18n.t("panel.firstrun.action.measure")}</a
       >
     </div>`;
   }
@@ -315,11 +315,11 @@ export class MyHomeOverview extends LitElement {
    */
   private _renderFirstRun(): TemplateResult {
     return html`<section class="card welcome">
-      <h2>${this.i18n.t("panel.overview.first_run_title")}</h2>
-      <div>${this.i18n.md("panel.overview.first_run_body")}</div>
-      <div class="soft">${this.i18n.md("panel.overview.first_run_more")}</div>
-      <a class="cta" href=${FLOW_URL}>${this.i18n.t("panel.overview.action.measure")}</a>
-      <p class="after">${this.i18n.t("panel.overview.measure_hint")}</p>
+      <h2>${this.i18n.t("panel.firstrun.title")}</h2>
+      <div>${this.i18n.md("panel.firstrun.body")}</div>
+      <div class="soft">${this.i18n.md("panel.firstrun.how")}</div>
+      <a class="cta" href=${FLOW_URL}>${this.i18n.t("panel.firstrun.action.measure")}</a>
+      <p class="after">${this.i18n.t("panel.firstrun.note")}</p>
     </section>`;
   }
 
@@ -342,9 +342,9 @@ export class MyHomeOverview extends LitElement {
     const shown = groups.reduce((total, group) => total + group.covers.length, 0);
     const filtering = this.search.trim() !== "" || this.room !== "";
     return html`
-      <div class="intro">${this.i18n.md("panel.overview.intro")}</div>
+      <div class="intro">${this.i18n.md("panel.overview.explanation")}</div>
       <p class="counts">
-        ${this.i18n.t("panel.overview.counts", {
+        ${this.i18n.t("panel.overview.summary", {
           profiles: overview.profiles.length,
           covers: overview.covers.length,
         })}

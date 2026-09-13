@@ -8,15 +8,17 @@
 //
 // Two things this class does beyond looking a key up.
 //
-// **Placeholders.** `t("panel.overview.provenance", {cover: "…", date: "…"})`. They are
-// named, never positional, because a translator reorders a sentence and a number does not
-// survive that.
+// **Placeholders.** `t("panel.overview.group.measured_on", {cover: "…", date: "…"})`. They
+// are named, never positional, because a translator reorders a sentence and a number does
+// not survive that.
 //
-// **A temporary English fallback.** The standing rule is that a missing key renders as the
-// key. `src/i18n/keys.ts` suspends it for the `panel.*` block only, and only until the
-// texts lot writes that block: the server's answer always wins where it has one, so a key
-// that exists is never shadowed by the word beside it in that file. A key in neither place
-// still renders as itself.
+// **An offline English fallback.** The standing rule is that a missing key renders as the
+// key. `src/i18n/keys.ts` suspends it for the `panel.*` block only, and for one reason: a
+// panel whose `texts` call has not answered yet - or could not - would otherwise be four
+// screens of dotted identifiers. Those words are English on purpose and they are the
+// English file's own, key for key (`tests/test_translations.py`); the server's answer
+// always wins where it has one, so a key that exists is never shadowed by the word beside
+// it in that file. A key in neither place still renders as itself.
 
 import { FALLBACK_TEXTS } from "../i18n/keys";
 import { type HaConnection } from "../types/ha";
@@ -70,6 +72,23 @@ export class I18n {
   /** The same sentence, rendered as the little Markdown the texts contain. */
   md(key: string, placeholders?: Placeholders): TemplateResult {
     return renderMarkdown(this.t(key, placeholders));
+  }
+
+  /**
+   * The sentence behind a refusal, which is **not** duplicated under `panel.*` either.
+   * Every `send_error` of the panel's API carries `translation_domain: "myhome"` and a
+   * `translation_key`, and Home Assistant resolves that pair against the top-level
+   * `exceptions` block - `component.myhome.exceptions.<key>.message`. That block travels
+   * in the same answer, so the panel says exactly what Home Assistant would say. A key
+   * the files do not carry (or a failure with no key at all) falls back to the panel's
+   * own sentence about a gateway it could not read.
+   */
+  refusal(key: string | null | undefined, placeholders?: Placeholders): string {
+    const served = key ? this._lookup(`exceptions.${key}.message`) : null;
+    if (served !== null) {
+      return fill(served, placeholders);
+    }
+    return this.t("panel.error.not_found");
   }
 
   /**

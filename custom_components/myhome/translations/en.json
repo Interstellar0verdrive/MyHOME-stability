@@ -715,12 +715,15 @@
       "all_rooms": "All rooms",
       "opens_configure": "This opens the Configure dialog. The panel refreshes on its own when it closes.",
       "not_loaded": "This gateway is not loaded, so there is nothing to read here yet.",
+      "not_yet": "This screen arrives in a later version. Until then “Configure” does everything it will do.",
+      "polling": "Live updates are not available on this version: the page refreshes on its own every 30 seconds.",
       "action": {
         "menu": "Open the Home Assistant menu",
         "configure": "Open Configure",
         "close": "Close",
         "cancel": "Cancel",
         "back": "Back",
+        "retry": "Try again",
         "save": "Save",
         "show_all": "Show every value, roll coefficients included",
         "hide_all": "Hide the roll coefficients"
@@ -745,10 +748,14 @@
       "explanation": "A profile describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
       "group": {
         "profile": "Profile “{profile}”",
+        "missing": "This profile is not defined any more: the covers below have quietly fallen back to their own configuration.",
+        "from_file": "Defined in the configuration file, and read-only from here.",
         "no_profile": "No profile",
         "no_profile_note": "Values from the configuration file, or the defaults. It is not a fault: a cover with measurements of its own sits perfectly well here.",
         "values": "Reference travel {travel} cm · ascent {opening} s · descent {closing} s · slats {slat} s",
+        "values_unknown": "Nobody defines this profile, so it has no values.",
         "measured_on": "Measured on {cover} · {date}",
+        "measured_on_gone": "Measured on a cover this gateway no longer has · {date}",
         "provenance_missing": "Where it was measured is not recorded.",
         "count": "{count} covers",
         "count_one": "1 cover",
@@ -761,13 +768,20 @@
         "travel_needed": "travel to be entered",
         "follows": "follows “{profile}”",
         "profile_missing": "The profile “{profile}” is no longer defined: this cover is running on its own configuration.",
-        "from_file": "The configuration file assigns this profile: it is changed there, not here."
+        "from_file": "The configuration file assigns this profile: it is changed there, not here.",
+        "origin_inherited": "Inherited",
+        "origin_adjusted": "Adjusted"
       },
-      "no_basic_covers": "Every cover of this gateway reports its own position, so there is no travel model to calibrate and nothing for this panel to do."
+      "no_basic_covers": "Every cover of this gateway reports its own position, so there is no travel model to calibrate and nothing for this panel to do.",
+      "no_results": "No cover matches this search.",
+      "action": {
+        "clear_filters": "Clear the search and the filter"
+      }
     },
     "assign": {
       "handle": "Move {cover} to another group, or reorder it",
       "handle_hint": "Drag to assign or reorder, Enter to pick from a list",
+      "handle_inert": "Assignment and reordering arrive in a later version",
       "drop_zone": "Take out of the profile — drop here",
       "armed": "Tap the destination group for “{cover}”",
       "target_profile": "the profile “{profile}”",
@@ -852,6 +866,8 @@
     },
     "detail": {
       "title": "Cover detail",
+      "named": "Cover “{cover}”",
+      "unknown": "This gateway has no cover with that identifier.",
       "measured_at": "Measured on {date}",
       "level_basic": "basic calibration",
       "level_thorough": "thorough calibration",
@@ -912,6 +928,7 @@
       "name": "Profile “{profile}”",
       "stored": "Stored profile",
       "from_file": "Profile of the configuration file: read-only here.",
+      "unknown": "No profile of that name is defined or followed here.",
       "reference_travel": "Reference travel",
       "provenance": "Measured on {cover} · {date}",
       "provenance_missing": "Where it was measured is not recorded.",
@@ -976,6 +993,14 @@
         "title": "The changes are being applied…",
         "body": "The covers are unavailable for a few seconds"
       }
+    },
+    "screen": {
+      "phase": "{phase} · {index} of {count}",
+      "new_text": "new text — not translated yet",
+      "not_in_this_version": "This step belongs to the guided calibration, which moves into the panel in a later version.",
+      "motor": "Motor",
+      "position": "Estimated position",
+      "completed": "Completed"
     },
     "error": {
       "not_found": "The panel could not read this gateway.",

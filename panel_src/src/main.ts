@@ -317,7 +317,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       });
       this._store.announce(
         event.cover_unique_id
-          ? this._i18n.t("panel.banner.measuring_body", { cover: event.name ?? "" })
+          ? this._i18n.t("panel.banner.measuring.body", { cover: event.name ?? "" })
           : "",
       );
     }
@@ -429,9 +429,10 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
     if (state.status === "error" || !state.overview) {
       const error = state.error;
-      const key = error?.translation_key ? `panel.error.${error.translation_key}` : "panel.error.unreachable";
       return html`<div class="card problem" role="alert">
-        <div>${this._i18n.t(key, error?.translation_placeholders ?? {})}</div>
+        <div>
+          ${this._i18n.refusal(error?.translation_key, error?.translation_placeholders ?? {})}
+        </div>
         <div class="soft">${error ? `${error.code}: ${error.message}` : ""}</div>
         <div class="soft">
           <button class="cta text" type="button" @click=${() => void this._refresh()}>
@@ -449,8 +450,8 @@ export class MyHomeCalibrationPanel extends LitElement {
       );
       return this._renderPlaceholder(
         cover
-          ? this._i18n.t("panel.cover.title", { cover: cover.name })
-          : this._i18n.t("panel.cover.unknown"),
+          ? this._i18n.t("panel.detail.named", { cover: cover.name })
+          : this._i18n.t("panel.detail.unknown"),
         this._i18n.t("panel.common.not_yet"),
       );
     }
@@ -459,7 +460,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       const known = state.overview.profiles.some((profile) => profile.name === name);
       return this._renderPlaceholder(
         known
-          ? this._i18n.t("panel.profile.title", { profile: name })
+          ? this._i18n.t("panel.profile.name", { profile: name })
           : this._i18n.t("panel.profile.unknown"),
         this._i18n.t("panel.common.not_yet"),
       );
@@ -497,7 +498,7 @@ export class MyHomeCalibrationPanel extends LitElement {
         <h1 class="title">${title}</h1>
         ${gateway && (state.overview?.entries.length ?? 0) > 1
           ? html`<div class="gateway">
-              ${this._i18n.t("panel.overview.gateway", { gateway: gateway.title })}
+              ${this._i18n.t("panel.common.gateway", { gateway: gateway.title })}
             </div>`
           : nothing}
       </div>

@@ -23,11 +23,11 @@ export const renderRiepilogo = (
         (row) => html`<div class="summary-row">
           <span class="label">${row.label}</span>
           ${row.before
-            ? html`<span class="before" aria-label=${context.i18n.t("panel.screen.before")}
+            ? html`<span class="before" aria-label=${context.i18n.t("panel.review.before")}
                 >${row.before}</span
               >`
             : nothing}
-          <span class="after" aria-label=${context.i18n.t("panel.screen.after")}>${row.after}</span>
+          <span class="after" aria-label=${context.i18n.t("panel.review.after")}>${row.after}</span>
         </div>`,
       )}
       ${summary.note ? html`<p class="note-line">${summary.note}</p>` : nothing}
