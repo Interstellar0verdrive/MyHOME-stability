@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Quel profil suit chaque volet",
-        "description": "**Ce qui va se passer** : rien ne bouge. Attribuer un profil, c'est dire à Home Assistant « ce volet est fait comme ceux-là » : à partir de là, le volet suit ce profil, temps de course comprises, adaptées à sa course du tablier.\n\nLe profil est attribué ici après la rédaction du fichier de configuration. Il est donc prioritaire sur les valeurs du fichier pour ce volet, si vous en utilisez un. Les valeurs mesurées sur ce volet restent prioritaires lorsqu'elles sont disponibles. Toute modification ultérieure du profil s'applique à tous les volets qui le suivent.\n\nUn `profile:` écrit dans le fichier de configuration pour un volet apparaît ici comme sa valeur actuelle et ne peut pas être retiré depuis cet écran : il est défini dans le fichier et doit y être géré.\n\n**Ce que vous devez faire** : choisissez un profil pour chaque volet, ou « Aucun profil » pour le laisser aux valeurs du fichier ou aux valeurs par défaut."
+        "description": "**Ce qui va se passer** : rien ne bouge. Attribuer un profil, c'est dire à Home Assistant « ce volet est fait comme ceux-là » : à partir de là, le volet suit ce profil, temps de course comprises, adaptées à sa course du tablier.\n\nLe profil est attribué ici après la rédaction du fichier de configuration. Il est donc prioritaire sur les valeurs du fichier pour ce volet, si vous en utilisez un. Les valeurs mesurées sur ce volet restent prioritaires lorsqu'elles sont disponibles. Toute modification ultérieure du profil s'applique à tous les volets qui le suivent.\n\nUn `profile:` écrit dans le fichier de configuration pour un volet apparaît ici comme sa valeur actuelle et ne peut pas être retiré depuis cet écran : il est défini dans le fichier et doit y être géré.\n\n**D'où viennent aujourd'hui les valeurs de chaque volet** : {covers}.\n\n**Ce que vous devez faire** : choisissez un profil pour chaque volet, ou « Aucun profil » pour le laisser aux valeurs du fichier ou aux valeurs par défaut."
       },
       "assign_heights": {
         "title": "Quelle est la course du tablier de ces volets ?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Valeurs du profil « {profile} »",
-        "description": "Voici les valeurs du profil. Home Assistant les adapte à chaque volet qui le suit, proportionnellement à la course du tablier de ce volet.\n\n{values}\nVolets qui le suivent : {covers}"
+        "description": "Voici les valeurs du profil. Home Assistant les adapte à chaque volet qui le suit, proportionnellement à la course du tablier de ce volet.\n\n{values}\nVolets qui le suivent : {followers}"
       },
       "profile_edit": {
         "title": "Modifier le profil « {profile} »",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibration de ce volet",
-        "description": "**Volet** : {cover}\n\nValeurs conservées pour ce volet :\n\n{values}\n**Ce que vous devez faire** : choisissez quoi en faire. « Mesurer de nouveau » relance la calibration guidée sur ce volet et remplace ce qui est là ; « Supprimer la calibration » rend ce volet au fichier de configuration, si vous en utilisez un, au profil qu'il suit, ou aux valeurs par défaut.",
+        "description": "**Volet** : {cover}\n\nValeurs conservées pour ce volet :\n\n{values}\n**D'où viennent les valeurs en usage** : {origin}.\n\n**Ce que vous devez faire** : choisissez quoi en faire. « Mesurer de nouveau » relance la calibration guidée sur ce volet et remplace ce qui est là ; « Supprimer la calibration » rend ce volet au fichier de configuration, si vous en utilisez un, au profil qu'il suit, ou aux valeurs par défaut.",
         "menu_options": {
           "calibration_view": "Voir les valeurs",
           "calibration_edit": "Modifier les valeurs à la main",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Valeurs de {cover}",
-        "description": "Voici ce que l'intégration conserve pour ce volet :\n\n{values}\nLes clés énumérées ici l'emportent sur celles écrites dans le fichier de configuration, si vous en utilisez un ; celles qui n'y figurent pas continuent de venir du fichier, du profil ou des valeurs par défaut."
+        "description": "Voici ce que l'intégration conserve pour ce volet :\n\n{values}\n**D'où viennent les valeurs en usage** : {origin}.\n\nLes clés énumérées ici l'emportent sur celles écrites dans le fichier de configuration, si vous en utilisez un ; celles qui n'y figurent pas continuent de venir du fichier, du profil ou des valeurs par défaut."
       },
       "calibration_edit": {
         "title": "Modifier les valeurs de {cover}",
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Calibration enregistrée",
-        "description": "C'est fait : la calibration de {cover} est enregistrée et s'applique à la fermeture de cette boîte de dialogue ; à partir de là, {cover} fonctionne avec les valeurs qui viennent d'être mesurées sur lui. Les attributs de l'entité indiquent alors `guided` sous « Calibration source », et portent les valeurs elles-mêmes sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} », mesuré sur ce volet, sous Configurer → Profils et volets. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer. Les autres volets semblables à celui-ci se font en deux écrans en choisissant « (B) Il est semblable à un volet déjà mesuré ».",
+        "description": "C'est fait : la calibration de {cover} est enregistrée et s'applique à la fermeture de cette boîte de dialogue ; à partir de là, {cover} fonctionne avec les valeurs qui viennent d'être mesurées sur lui. Les attributs de l'entité indiquent alors `guided` sous « Calibration source » — c'est-à-dire **{origin}** — et portent les valeurs elles-mêmes sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} », mesuré sur ce volet, sous Configurer → Profils et volets. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer. Les autres volets semblables à celui-ci se font en deux écrans en choisissant « (B) Il est semblable à un volet déjà mesuré ».",
         "menu_options": {
           "calibrate": "Calibrer un autre volet",
           "init": "Retour au menu"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibration enregistrée",
-        "description": "C'est fait : {cover} suit désormais le profil « {profile} », et ce dès la fermeture de cette boîte de dialogue. Aucun temps de course propre à ce volet n'a été mesuré ici : la seule chose mesurée sur ce volet est sa course du tablier, et les temps du profil y sont ramenés. Les attributs de l'entité indiquent alors `profile {profile}` sous « Calibration source », et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} » sous Configurer → Profils et volets, où il est partagé par tous les volets qui le suivent. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : donner le même profil à un autre volet, ou fermer. Si {cover} s'arrête au mauvais endroit, « (C) Il a un profil mais s'arrête au mauvais endroit » mesure ses propres temps de course.",
+        "description": "C'est fait : {cover} suit désormais le profil « {profile} », et ce dès la fermeture de cette boîte de dialogue. Aucun temps de course propre à ce volet n'a été mesuré ici : la seule chose mesurée sur ce volet est sa course du tablier, et les temps du profil y sont ramenés. Les attributs de l'entité indiquent alors `profile {profile}` sous « Calibration source » — c'est-à-dire **{origin}** — et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} » sous Configurer → Profils et volets, où il est partagé par tous les volets qui le suivent. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : donner le même profil à un autre volet, ou fermer. Si {cover} s'arrête au mauvais endroit, « (C) Il a un profil mais s'arrête au mauvais endroit » mesure ses propres temps de course.",
         "menu_options": {
           "calibrate": "Calibrer un autre volet",
           "init": "Retour au menu"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibration enregistrée",
-        "description": "C'est fait : la calibration de {cover} est enregistrée et s'applique à la fermeture de cette boîte de dialogue. {cover} continue de suivre le profil « {profile} », et ce qui vient d'être mesuré sur ce volet seul l'emporte désormais sur lui ; tout ce qui n'a pas été mesuré ici continue de venir du profil. Les attributs de l'entité indiquent alors `{source}` sous « Calibration source », et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, où vous pouvez revoir les valeurs, les corriger à la main ou les supprimer. Le profil lui-même n'a pas été touché : les autres volets qui le suivent ne changent pas.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer.",
+        "description": "C'est fait : la calibration de {cover} est enregistrée et s'applique à la fermeture de cette boîte de dialogue. {cover} continue de suivre le profil « {profile} », et ce qui vient d'être mesuré sur ce volet seul l'emporte désormais sur lui ; tout ce qui n'a pas été mesuré ici continue de venir du profil. Les attributs de l'entité indiquent alors `{source}` sous « Calibration source » — c'est-à-dire **{origin}** — et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, où vous pouvez revoir les valeurs, les corriger à la main ou les supprimer. Le profil lui-même n'a pas été touché : les autres volets qui le suivent ne changent pas.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer.",
         "menu_options": {
           "calibrate": "Calibrer un autre volet",
           "init": "Retour au menu"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Mesurée",
+        "inherited": "Héritée du profil « {profile} »",
+        "adjusted": "Ajustée du profil « {profile} »",
+        "from_the_file": "Du fichier",
+        "defaults": "Valeurs par défaut"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "Aucun profil (les valeurs du fichier, ou celles par défaut)"

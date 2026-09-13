@@ -67,6 +67,11 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CALIBRATION_ORIGIN_ADJUSTED,
+    CALIBRATION_ORIGIN_DEFAULTS,
+    CALIBRATION_ORIGIN_FILE,
+    CALIBRATION_ORIGIN_INHERITED,
+    CALIBRATION_ORIGIN_MEASURED,
     CALIBRATION_SOURCE_ADJUSTED,
     CALIBRATION_SOURCE_GUIDED,
     CALIBRATION_SOURCE_PROFILE,
@@ -645,10 +650,17 @@ def merged_profiles(
 # ----------------------------------------------------------------------- precedence
 @dataclass(frozen=True, slots=True)
 class ResolvedCover:
-    """The travel model one cover really runs on, and where it came from."""
+    """The travel model one cover really runs on, and where it came from.
+
+    `source` is the token the `Calibration source` attribute carries and `origin` the
+    same answer as one of `CALIBRATION_ORIGINS`, for the screens that say it in words.
+    Both are decided in one place (`resolve_cover`), so a shutter the attribute calls
+    `profile tall, adjusted` cannot be a shutter the dialog calls measured.
+    """
 
     values: dict[str, Any]
     source: str
+    origin: str = CALIBRATION_ORIGIN_DEFAULTS
     profile: str | None = None
     height: float | None = None
 
@@ -713,6 +725,7 @@ def resolve_cover(
     measurable = {key for key, _digits in _DERIVED_OVERRIDE_KEYS}
     from_the_profile = False
     of_its_own = False
+    of_the_file = False
     for key in COVER_CALIBRATION_KEYS:
         if key in overrides:
             values[key] = overrides[key]
@@ -722,6 +735,7 @@ def resolve_cover(
             from_the_profile = from_the_profile or key in measurable
         elif key in written:
             values[key] = device[key]
+            of_the_file = of_the_file or key in measurable
         elif key in derived:
             values[key] = derived[key]
             from_the_profile = from_the_profile or key in measurable
@@ -736,16 +750,32 @@ def resolve_cover(
     if calibration is not None and calibration.is_a_measurement:
         # Measured, and then: adjusted when the profile is still answering for some of
         # the keys this window did not measure, plain `guided` when it is not.
-        source = (
-            f"{CALIBRATION_SOURCE_PROFILE} {name}, {CALIBRATION_SOURCE_ADJUSTED}"
+        origin = (
+            CALIBRATION_ORIGIN_ADJUSTED
             if named and from_the_profile and of_its_own
-            else CALIBRATION_SOURCE_GUIDED
+            else CALIBRATION_ORIGIN_MEASURED
         )
     elif named:
-        source = f"{CALIBRATION_SOURCE_PROFILE} {name}"
+        origin = CALIBRATION_ORIGIN_INHERITED
+    elif of_the_file:
+        origin = CALIBRATION_ORIGIN_FILE
     else:
-        source = CALIBRATION_SOURCE_YAML
-    return ResolvedCover(values=values, source=source, profile=name, height=height)
+        # Nothing stored, nothing written: the shutter is running on the numbers this
+        # integration would give any shutter. The attribute says `yaml` for this and
+        # for the line above alike, because what it answers is "the file or the store";
+        # the screens tell the two apart, because "somebody wrote this" and "nobody
+        # ever said" are different news to the person reading them.
+        origin = CALIBRATION_ORIGIN_DEFAULTS
+    source = {
+        CALIBRATION_ORIGIN_MEASURED: CALIBRATION_SOURCE_GUIDED,
+        CALIBRATION_ORIGIN_ADJUSTED: (
+            f"{CALIBRATION_SOURCE_PROFILE} {name}, {CALIBRATION_SOURCE_ADJUSTED}"
+        ),
+        CALIBRATION_ORIGIN_INHERITED: f"{CALIBRATION_SOURCE_PROFILE} {name}",
+    }.get(origin, CALIBRATION_SOURCE_YAML)
+    return ResolvedCover(
+        values=values, source=source, origin=origin, profile=name, height=height
+    )
 
 
 @callback

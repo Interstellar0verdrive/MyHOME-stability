@@ -356,6 +356,59 @@ def test_the_source_says_where_the_numbers_came_from(
     assert resolve_cover(device, profiles=profiles, calibration=calibration).source == expected
 
 
+@pytest.mark.parametrize(
+    ("calibration", "profiles", "written", "origin", "source"),
+    [
+        # Nobody has ever said anything about this shutter: it runs on the numbers this
+        # integration gives any shutter.
+        (None, {}, (), "defaults", "yaml"),
+        # Somebody wrote them in `myhome.yaml`. The attribute says `yaml` for this and
+        # for the line above alike - both come from outside the store - and the screens
+        # tell them apart, because "you wrote this" and "nobody ever said" are not the
+        # same news.
+        (None, {}, (CONF_OPENING_TIME,), "from_the_file", "yaml"),
+        (None, {"tall": PROFILE}, (), "inherited", "profile tall"),
+        (
+            StoredCalibration(UNIQUE_ID, overrides={CONF_OPENING_TIME: 22.3}),
+            {},
+            (),
+            "measured",
+            "guided",
+        ),
+        (
+            StoredCalibration(UNIQUE_ID, profile="tall", overrides={CONF_OPENING_TIME: 22.3}),
+            {"tall": PROFILE},
+            (),
+            "adjusted",
+            "profile tall, adjusted",
+        ),
+    ],
+)
+def test_the_origin_is_the_attribute_said_in_words(
+    calibration: StoredCalibration | None,
+    profiles: dict,
+    written: tuple[str, ...],
+    origin: str,
+    source: str,
+) -> None:
+    """The five states the screens print, decided where the attribute's token is.
+
+    They are one computation on purpose: a screen that called a shutter measured while
+    its attribute called it adjusted would send the reader looking for a second bug
+    that is not there. The five are four plus one - `yaml` is split into "from the
+    file" and "defaults", which the attribute has no room to distinguish and a sentence
+    does.
+
+    Mutation caught: deciding the origin a second time from the record rather than from
+    the resolution, or letting a cover whose file writes nothing read "from the file".
+    """
+    device = _validated(
+        **{CONF_KEYS_FROM_FILE: list(written)}, **({CONF_PROFILE: "tall"} if profiles else {})
+    )
+    resolved = resolve_cover(device, profiles=profiles, calibration=calibration)
+    assert (resolved.origin, resolved.source) == (origin, source)
+
+
 # --------------------------------------------------------------------------------------
 # One namespace for both kinds of profile
 # --------------------------------------------------------------------------------------

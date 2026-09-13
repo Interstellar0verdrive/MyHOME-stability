@@ -76,6 +76,33 @@ CALIBRATION_SOURCE_ADJUSTED = "adjusted"
 # attribute answers is "do these numbers come from the file or from the integration",
 # and a hand-edited record is as much the integration's as a measured one.
 CALIBRATION_SOURCE_MANUAL = "manual"
+# The same question the attribute answers, asked for the *screens* rather than for a
+# reader of the state machine: where does this cover's travel model come from, in
+# words. Five answers rather than the attribute's four, because a shutter nothing is
+# stored for is running either on what somebody wrote for it in `myhome.yaml` or on the
+# integration's own defaults, and those are not the same news - the attribute lumps
+# both under `yaml`, which is where the numbers come from and not who chose them.
+#
+# They are slugs because each is a translation key under
+# `selector.calibration_origin.options`; the two that name a profile carry `{profile}`
+# in their text, which the flow substitutes. `resolve_cover` decides which one applies
+# in the same breath as the attribute's token, so the two can never drift apart
+# (lexicon of 13 Sep, "Origin of the values in use").
+CALIBRATION_ORIGIN_MEASURED = "measured"
+CALIBRATION_ORIGIN_INHERITED = "inherited"
+CALIBRATION_ORIGIN_ADJUSTED = "adjusted"
+CALIBRATION_ORIGIN_FILE = "from_the_file"
+CALIBRATION_ORIGIN_DEFAULTS = "defaults"
+CALIBRATION_ORIGINS: tuple[str, ...] = (
+    CALIBRATION_ORIGIN_MEASURED,
+    CALIBRATION_ORIGIN_INHERITED,
+    CALIBRATION_ORIGIN_ADJUSTED,
+    CALIBRATION_ORIGIN_FILE,
+    CALIBRATION_ORIGIN_DEFAULTS,
+)
+# The translation key the five live under, and the one substitution two of them make.
+CALIBRATION_ORIGIN_SELECTOR = "calibration_origin"
+CALIBRATION_ORIGIN_PROFILE_SLOT = "{profile}"
 
 # Where a guided calibration lives (0.5.0 v2): one `homeassistant.helpers.storage.Store`
 # per config entry, holding every profile and every per-cover record. Up to 0.5.0's first

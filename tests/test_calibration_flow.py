@@ -2737,6 +2737,81 @@ async def test_a_cover_corrected_in_part_says_its_values_are_adjusted(
         )
 
 
+async def test_the_screens_say_where_a_covers_values_come_from_in_words(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`Calibration source` is a token; these screens are sentences saying the same thing.
+
+    A user looking at "Calibrazioni" is asking "which of these is running on what I
+    measured?", and a list of names answers none of it. The five states come from
+    `resolve_cover` through `_origin_in_words`, so the sentence and the attribute
+    cannot disagree, and the words themselves come from the translations - this test
+    runs in English because that is what `hass.config.language` is here.
+
+    Mutation caught: printing the raw token on the screens, or reading the origin off
+    the path that was walked rather than off the record that was written.
+    """
+    async with calibrating(hass, tmp_path, FOLLOWER_ONLY_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
+        assert result["step_id"] == "saved_refined"
+        # The token the attribute carries and the same answer in words, side by side.
+        assert result["description_placeholders"]["source"] == "profile tall, adjusted"
+        assert result["description_placeholders"]["origin"] == 'Adjusted from profile “tall”'
+        result = await choose(hass, result, "init")
+
+        # The list of what is stored: the name, and then what that shutter runs on.
+        result = await choose(hass, result, "calibrations")
+        assert result["data_schema"].schema["cover"].container == {
+            UNIQUE_ID: f"{COVER_NAME} - Adjusted from profile “tall”"
+        }
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        assert result["step_id"] == "calibration_actions"
+        assert result["description_placeholders"]["origin"] == 'Adjusted from profile “tall”'
+        result = await choose(hass, result, "calibration_view")
+        assert result["description_placeholders"]["origin"] == 'Adjusted from profile “tall”'
+        result = await submit(hass, result)
+        assert result["step_id"] == "calibration_actions"
+
+        # The profile's own screen names its followers and what each one is running on.
+        result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+        result = await choose(hass, result, "pick_profile")
+        result = await submit(hass, result, {"profile": "tall"})
+        result = await choose(hass, result, "profile_view")
+        assert result["description_placeholders"]["followers"] == (
+            f"{COVER_NAME} (Adjusted from profile “tall”)"
+        )
+        # ...and the plain list is still there for the screens that are about deleting it.
+        assert result["description_placeholders"]["covers"] == COVER_NAME
+        result = await submit(hass, result)
+        assert result["step_id"] == "profile_actions"
+
+        # The assignment form is the screen that *changes* the origin, so it says it.
+        result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+        result = await choose(hass, result, "assign_covers")
+        assert result["description_placeholders"]["covers"] == (
+            f"{COVER_NAME} (Adjusted from profile “tall”)"
+        )
+
+
+async def test_a_cover_nobody_has_said_anything_about_reads_defaults(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """"Dal file" and "Predefiniti" are two different pieces of news.
+
+    `Calibration source` says `yaml` for both - what it answers is "the file or the
+    store" - but the person reading the assignment form wants to know whether somebody
+    wrote those times or whether nobody ever did.
+
+    Mutation caught: collapsing the two back into one phrase, or calling a cover the
+    file writes nothing for "from the file".
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+        result = await choose(hass, result, "assign_covers")
+        assert result["description_placeholders"]["covers"] == f"{COVER_NAME} (From the file)"
+
+
 async def test_a_cover_corrected_throughout_is_measured_and_not_adjusted(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -3488,7 +3563,11 @@ async def test_a_stored_calibration_can_be_looked_at_and_deleted(
 
         result = await choose(hass, await open_dialog(hass, entry), "calibrations")
         assert result["step_id"] == "calibrations"
-        assert result["data_schema"].schema["cover"].container == {UNIQUE_ID: COVER_NAME}
+        # The entry names the shutter and then says where its values come from: this
+        # one was measured by path A and nothing of a profile is left in use.
+        assert result["data_schema"].schema["cover"].container == {
+            UNIQUE_ID: f"{COVER_NAME} - Measured"
+        }
         result = await submit(hass, result, {"cover": UNIQUE_ID})
         assert result["step_id"] == "calibration_actions"
         assert result["menu_options"] == [

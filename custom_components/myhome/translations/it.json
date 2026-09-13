@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Quale profilo segue ogni tapparella",
-        "description": "**Cosa sta per succedere**: niente si muove. Assegnare un profilo indica a Home Assistant che questa tapparella è dello stesso tipo di quelle descritte dal profilo: da quel momento la tapparella segue quel profilo, tempi di corsa compresi, adattati alla sua corsa del telo.\n\nL'assegnazione viene effettuata qui, dopo la scrittura del file di configurazione. Il profilo ha quindi la precedenza sui valori del file per questa tapparella, se presente. I valori misurati su questa tapparella mantengono la precedenza, dove disponibili. Le successive modifiche al profilo si applicano a tutte le tapparelle che lo seguono.\n\nUn `profile:` scritto nel file di configurazione per una tapparella compare qui come valore attuale e da questa schermata non si può togliere: è definito nel file e va gestito da lì.\n\n**Cosa fare**: scegliere un profilo per ogni tapparella, oppure “Nessun profilo” per mantenere i valori del file o quelli predefiniti."
+        "description": "**Cosa sta per succedere**: niente si muove. Assegnare un profilo indica a Home Assistant che questa tapparella è dello stesso tipo di quelle descritte dal profilo: da quel momento la tapparella segue quel profilo, tempi di corsa compresi, adattati alla sua corsa del telo.\n\nL'assegnazione viene effettuata qui, dopo la scrittura del file di configurazione. Il profilo ha quindi la precedenza sui valori del file per questa tapparella, se presente. I valori misurati su questa tapparella mantengono la precedenza, dove disponibili. Le successive modifiche al profilo si applicano a tutte le tapparelle che lo seguono.\n\nUn `profile:` scritto nel file di configurazione per una tapparella compare qui come valore attuale e da questa schermata non si può togliere: è definito nel file e va gestito da lì.\n\n**Da dove arrivano oggi i valori di ogni tapparella**: {covers}.\n\n**Cosa fare**: scegliere un profilo per ogni tapparella, oppure “Nessun profilo” per mantenere i valori del file o quelli predefiniti."
       },
       "assign_heights": {
         "title": "Qual è la corsa del telo di queste tapparelle?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Valori del profilo “{profile}”",
-        "description": "Questi sono i valori del profilo. Home Assistant li adatta a ogni tapparella che lo segue, in proporzione alla corsa del telo di quella tapparella.\n\n{values}\nTapparelle che lo seguono: {covers}"
+        "description": "Questi sono i valori del profilo. Home Assistant li adatta a ogni tapparella che lo segue, in proporzione alla corsa del telo di quella tapparella.\n\n{values}\nTapparelle che lo seguono: {followers}"
       },
       "profile_edit": {
         "title": "Modificare il profilo “{profile}”",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibrazione di questa tapparella",
-        "description": "**Tapparella**: {cover}\n\nValori conservati per questa tapparella:\n\n{values}\n**Cosa fare**: scegliere un'operazione. “Misura di nuovo” ripete la calibrazione guidata su questa tapparella e sostituisce i valori presenti. “Elimina la calibrazione” riporta questa tapparella ai valori del file di configurazione, se presente, al profilo che segue o ai valori predefiniti.",
+        "description": "**Tapparella**: {cover}\n\nValori conservati per questa tapparella:\n\n{values}\n**Da dove arrivano i valori in uso**: {origin}.\n\n**Cosa fare**: scegliere un'operazione. “Misura di nuovo” ripete la calibrazione guidata su questa tapparella e sostituisce i valori presenti. “Elimina la calibrazione” riporta questa tapparella ai valori del file di configurazione, se presente, al profilo che segue o ai valori predefiniti.",
         "menu_options": {
           "calibration_view": "Vedi i valori",
           "calibration_edit": "Modifica i valori a mano",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Valori di {cover}",
-        "description": "Questo è quello che l'integrazione conserva per questa tapparella:\n\n{values}\nLe chiavi elencate qui hanno la precedenza su quelle scritte nel file di configurazione, se presente; quelle che non compaiono continuano ad arrivare dal file, dal profilo o dai valori predefiniti."
+        "description": "Questo è quello che l'integrazione conserva per questa tapparella:\n\n{values}\n**Da dove arrivano i valori in uso**: {origin}.\n\nLe chiavi elencate qui hanno la precedenza su quelle scritte nel file di configurazione, se presente; quelle che non compaiono continuano ad arrivare dal file, dal profilo o dai valori predefiniti."
       },
       "calibration_edit": {
         "title": "Modificare i valori di {cover}",
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Calibrazione salvata",
-        "description": "La calibrazione di {cover} è salvata e viene applicata alla chiusura del dialogo: da quel momento {cover} si muove con i valori appena misurati su questa tapparella. Gli attributi dell'entità indicano allora `guided` sotto “Calibration source”, mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}”, misurato su questa tapparella, in Configura → Profili e tapparelle. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere. Le altre tapparelle simili a questa si calibrano in due schermate scegliendo “(B) È simile a una tapparella già misurata”.",
+        "description": "La calibrazione di {cover} è salvata e viene applicata alla chiusura del dialogo: da quel momento {cover} si muove con i valori appena misurati su questa tapparella. Gli attributi dell'entità indicano allora `guided` sotto “Calibration source” — cioè **{origin}** — mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}”, misurato su questa tapparella, in Configura → Profili e tapparelle. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere. Le altre tapparelle simili a questa si calibrano in due schermate scegliendo “(B) È simile a una tapparella già misurata”.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibrazione salvata",
-        "description": "{cover} adesso segue il profilo “{profile}”, e lo segue dalla chiusura del dialogo. Non sono stati misurati i tempi di corsa di questa tapparella: l'unica cosa misurata su questa tapparella è la sua corsa del telo, e i tempi del profilo vengono adattati a quella. Gli attributi dell'entità indicano allora `profile {profile}` sotto “Calibration source”, mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}” in Configura → Profili e tapparelle, dove è condiviso con tutte le tapparelle che lo seguono. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: dare lo stesso profilo a un'altra tapparella, oppure chiudere. Se {cover} dovesse fermarsi nel posto sbagliato, “(C) Ha un profilo ma si ferma nel posto sbagliato” misura i tempi di corsa di questa tapparella.",
+        "description": "{cover} adesso segue il profilo “{profile}”, e lo segue dalla chiusura del dialogo. Non sono stati misurati i tempi di corsa di questa tapparella: l'unica cosa misurata su questa tapparella è la sua corsa del telo, e i tempi del profilo vengono adattati a quella. Gli attributi dell'entità indicano allora `profile {profile}` sotto “Calibration source” — cioè **{origin}** — mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}” in Configura → Profili e tapparelle, dove è condiviso con tutte le tapparelle che lo seguono. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: dare lo stesso profilo a un'altra tapparella, oppure chiudere. Se {cover} dovesse fermarsi nel posto sbagliato, “(C) Ha un profilo ma si ferma nel posto sbagliato” misura i tempi di corsa di questa tapparella.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibrazione salvata",
-        "description": "La calibrazione di {cover} è salvata e viene applicata alla chiusura del dialogo. {cover} continua a seguire il profilo “{profile}”, e quello che è appena stato misurato su questa sola tapparella adesso ha la precedenza sul profilo; tutto quello che qui non è stato misurato continua a venire dal profilo. Gli attributi dell'entità indicano allora `{source}` sotto “Calibration source”, mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, dove è possibile visualizzare i valori, correggerli a mano o eliminarli. Il profilo non è stato toccato: le altre tapparelle che lo seguono restano come sono.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere.",
+        "description": "La calibrazione di {cover} è salvata e viene applicata alla chiusura del dialogo. {cover} continua a seguire il profilo “{profile}”, e quello che è appena stato misurato su questa sola tapparella adesso ha la precedenza sul profilo; tutto quello che qui non è stato misurato continua a venire dal profilo. Gli attributi dell'entità indicano allora `{source}` sotto “Calibration source” — cioè **{origin}** — mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, dove è possibile visualizzare i valori, correggerli a mano o eliminarli. Il profilo non è stato toccato: le altre tapparelle che lo seguono restano come sono.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Misurata",
+        "inherited": "Ereditata dal profilo “{profile}”",
+        "adjusted": "Adattata dal profilo “{profile}”",
+        "from_the_file": "Dal file",
+        "defaults": "Predefiniti"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "Nessun profilo (i valori del file, o quelli predefiniti)"

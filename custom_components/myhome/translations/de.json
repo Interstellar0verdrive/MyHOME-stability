@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Welchem Profil jeder Rollladen folgt",
-        "description": "**Was gleich passiert**: nichts bewegt sich. Ein Profil zuzuweisen heißt, Home Assistant zu sagen „dieser Rollladen ist gebaut wie jene dort“: von da an folgt der Rollladen diesem Profil, Laufzeiten eingeschlossen, auf seinen Panzerweg umgerechnet.\n\nSie weisen das Profil hier zu, nachdem die Konfigurationsdatei erstellt wurde. Es hat daher Vorrang vor den Werten für diesen Rollladen in der Datei, falls Sie eine verwenden. An diesem Rollladen gemessene Werte behalten ihren Vorrang, soweit sie vorhanden sind. Spätere Änderungen am Profil gelten für alle Rollläden, die ihm folgen.\n\nEin `profile:`, das in der Konfigurationsdatei für einen Rollladen steht, erscheint hier als aktueller Wert und kann von diesem Bildschirm aus nicht entfernt werden: es ist in der Datei definiert und muss dort verwaltet werden.\n\n**Was Sie tun müssen**: wählen Sie für jeden Rollladen ein Profil oder „Kein Profil“, um ihn bei den Werten der Datei oder bei den Vorgaben zu belassen."
+        "description": "**Was gleich passiert**: nichts bewegt sich. Ein Profil zuzuweisen heißt, Home Assistant zu sagen „dieser Rollladen ist gebaut wie jene dort“: von da an folgt der Rollladen diesem Profil, Laufzeiten eingeschlossen, auf seinen Panzerweg umgerechnet.\n\nSie weisen das Profil hier zu, nachdem die Konfigurationsdatei erstellt wurde. Es hat daher Vorrang vor den Werten für diesen Rollladen in der Datei, falls Sie eine verwenden. An diesem Rollladen gemessene Werte behalten ihren Vorrang, soweit sie vorhanden sind. Spätere Änderungen am Profil gelten für alle Rollläden, die ihm folgen.\n\nEin `profile:`, das in der Konfigurationsdatei für einen Rollladen steht, erscheint hier als aktueller Wert und kann von diesem Bildschirm aus nicht entfernt werden: es ist in der Datei definiert und muss dort verwaltet werden.\n\n**Woher die Werte jedes Rollladens heute kommen**: {covers}.\n\n**Was Sie tun müssen**: wählen Sie für jeden Rollladen ein Profil oder „Kein Profil“, um ihn bei den Werten der Datei oder bei den Vorgaben zu belassen."
       },
       "assign_heights": {
         "title": "Wie groß ist der Panzerweg dieser Rollläden?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Werte des Profils „{profile}“",
-        "description": "Dies sind die Werte des Profils. Home Assistant rechnet sie auf jeden Rollladen um, der ihm folgt, im Verhältnis zum Panzerweg jenes Rollladens.\n\n{values}\nRollläden, die ihm folgen: {covers}"
+        "description": "Dies sind die Werte des Profils. Home Assistant rechnet sie auf jeden Rollladen um, der ihm folgt, im Verhältnis zum Panzerweg jenes Rollladens.\n\n{values}\nRollläden, die ihm folgen: {followers}"
       },
       "profile_edit": {
         "title": "Profil „{profile}“ ändern",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Kalibrierung dieses Rollladens",
-        "description": "**Rollladen**: {cover}\n\nFür diesen Rollladen aufbewahrte Werte:\n\n{values}\n**Was Sie tun müssen**: wählen Sie, was damit geschehen soll. „Neu messen“ führt die geführte Kalibrierung an diesem Rollladen erneut aus und ersetzt, was da ist; „Die Kalibrierung löschen“ gibt diesen Rollladen an die Konfigurationsdatei zurück, falls Sie eine verwenden, an das Profil, dem er folgt, oder an die Vorgaben.",
+        "description": "**Rollladen**: {cover}\n\nFür diesen Rollladen aufbewahrte Werte:\n\n{values}\n**Woher die benutzten Werte kommen**: {origin}.\n\n**Was Sie tun müssen**: wählen Sie, was damit geschehen soll. „Neu messen“ führt die geführte Kalibrierung an diesem Rollladen erneut aus und ersetzt, was da ist; „Die Kalibrierung löschen“ gibt diesen Rollladen an die Konfigurationsdatei zurück, falls Sie eine verwenden, an das Profil, dem er folgt, oder an die Vorgaben.",
         "menu_options": {
           "calibration_view": "Die Werte ansehen",
           "calibration_edit": "Die Werte von Hand ändern",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Werte von {cover}",
-        "description": "Das bewahrt die Integration für diesen Rollladen auf:\n\n{values}\nDie hier aufgeführten Schlüssel haben Vorrang vor den in der Konfigurationsdatei geschriebenen, falls Sie eine verwenden; die nicht aufgeführten kommen weiterhin aus der Datei, aus dem Profil oder aus den Vorgaben."
+        "description": "Das bewahrt die Integration für diesen Rollladen auf:\n\n{values}\n**Woher die benutzten Werte kommen**: {origin}.\n\nDie hier aufgeführten Schlüssel haben Vorrang vor den in der Konfigurationsdatei geschriebenen, falls Sie eine verwenden; die nicht aufgeführten kommen weiterhin aus der Datei, aus dem Profil oder aus den Vorgaben."
       },
       "calibration_edit": {
         "title": "Die Werte von {cover} ändern",
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und wird wirksam, sobald dieser Dialog geschlossen wird; von da an fährt {cover} mit den eben an ihm gemessenen Werten. Die Attribute der Entität sagen dann `guided` unter „Calibration source“ und tragen die Zahlen selbst unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“, an diesem Rollladen gemessen, unter Konfigurieren → Profile und Rollläden. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen. Die übrigen Rollläden, die diesem ähneln, sind in zwei Bildschirmen erledigt, mit der Wahl „(B) Er ähnelt einem bereits gemessenen Rollladen“.",
+        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und wird wirksam, sobald dieser Dialog geschlossen wird; von da an fährt {cover} mit den eben an ihm gemessenen Werten. Die Attribute der Entität sagen dann `guided` unter „Calibration source“ — also **{origin}** — und tragen die Zahlen selbst unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“, an diesem Rollladen gemessen, unter Konfigurieren → Profile und Rollläden. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen. Die übrigen Rollläden, die diesem ähneln, sind in zwei Bildschirmen erledigt, mit der Wahl „(B) Er ähnelt einem bereits gemessenen Rollladen“.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“, und zwar ab dem Augenblick, in dem dieser Dialog geschlossen wird. Hier wurde keine eigene Laufzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist sein Panzerweg, und die Zeiten des Profils werden darauf umgerechnet. Die Attribute der Entität sagen dann `profile {profile}` unter „Calibration source“, und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Laufzeiten.",
+        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“, und zwar ab dem Augenblick, in dem dieser Dialog geschlossen wird. Hier wurde keine eigene Laufzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist sein Panzerweg, und die Zeiten des Profils werden darauf umgerechnet. Die Attribute der Entität sagen dann `profile {profile}` unter „Calibration source“ — also **{origin}** — und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Laufzeiten.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und wird wirksam, sobald dieser Dialog geschlossen wird. {cover} folgt weiterhin dem Profil „{profile}“, und was eben an diesem einen Rollladen gemessen wurde, geht jetzt vor; alles, was hier nicht gemessen wurde, kommt weiterhin aus dem Profil. Die Attribute der Entität sagen dann `{source}` unter „Calibration source“, und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, wo Sie die Werte wieder ansehen, von Hand korrigieren oder löschen können. Das Profil selbst wurde nicht angerührt: die anderen Rollläden, die ihm folgen, bleiben, wie sie sind.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen.",
+        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und wird wirksam, sobald dieser Dialog geschlossen wird. {cover} folgt weiterhin dem Profil „{profile}“, und was eben an diesem einen Rollladen gemessen wurde, geht jetzt vor; alles, was hier nicht gemessen wurde, kommt weiterhin aus dem Profil. Die Attribute der Entität sagen dann `{source}` unter „Calibration source“ — also **{origin}** — und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, wo Sie die Werte wieder ansehen, von Hand korrigieren oder löschen können. Das Profil selbst wurde nicht angerührt: die anderen Rollläden, die ihm folgen, bleiben, wie sie sind.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Gemessen",
+        "inherited": "Vom Profil „{profile}“ übernommen",
+        "adjusted": "Vom Profil „{profile}“ angepasst",
+        "from_the_file": "Aus der Datei",
+        "defaults": "Vorgaben"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "Kein Profil (die Werte der Datei oder die Vorgaben)"

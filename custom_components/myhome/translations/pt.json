@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Que perfil segue cada persiana",
-        "description": "**O que vai acontecer**: nada se move. Atribuir um perfil é dizer ao Home Assistant «esta persiana é feita como aquelas»: a partir daí a persiana segue esse perfil, tempos de percurso incluídos, adaptados ao seu percurso do pano.\n\nO perfil é atribuído aqui depois de o ficheiro de configuração ter sido escrito. Por isso, tem precedência sobre os valores do ficheiro para esta persiana, se o usar. Os valores medidos nesta persiana continuam a ter precedência quando estão disponíveis. As alterações posteriores ao perfil aplicam-se a todas as persianas que o seguem.\n\nUm `profile:` escrito no ficheiro de configuração para uma persiana aparece aqui como o valor atual e não pode ser retirado a partir deste ecrã: está definido no ficheiro e tem de ser gerido aí.\n\n**O que tem de fazer**: escolha um perfil para cada persiana, ou «Sem perfil» para a deixar com os valores do ficheiro ou com os predefinidos."
+        "description": "**O que vai acontecer**: nada se move. Atribuir um perfil é dizer ao Home Assistant «esta persiana é feita como aquelas»: a partir daí a persiana segue esse perfil, tempos de percurso incluídos, adaptados ao seu percurso do pano.\n\nO perfil é atribuído aqui depois de o ficheiro de configuração ter sido escrito. Por isso, tem precedência sobre os valores do ficheiro para esta persiana, se o usar. Os valores medidos nesta persiana continuam a ter precedência quando estão disponíveis. As alterações posteriores ao perfil aplicam-se a todas as persianas que o seguem.\n\nUm `profile:` escrito no ficheiro de configuração para uma persiana aparece aqui como o valor atual e não pode ser retirado a partir deste ecrã: está definido no ficheiro e tem de ser gerido aí.\n\n**De onde vêm hoje os valores de cada persiana**: {covers}.\n\n**O que tem de fazer**: escolha um perfil para cada persiana, ou «Sem perfil» para a deixar com os valores do ficheiro ou com os predefinidos."
       },
       "assign_heights": {
         "title": "Qual é o percurso do pano destas persianas?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Valores do perfil «{profile}»",
-        "description": "Estes são os valores do perfil. O Home Assistant adapta-os a cada persiana que o segue, na proporção do percurso do pano dessa persiana.\n\n{values}\nPersianas que o seguem: {covers}"
+        "description": "Estes são os valores do perfil. O Home Assistant adapta-os a cada persiana que o segue, na proporção do percurso do pano dessa persiana.\n\n{values}\nPersianas que o seguem: {followers}"
       },
       "profile_edit": {
         "title": "Alterar o perfil «{profile}»",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibração desta persiana",
-        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**O que tem de fazer**: escolha o que fazer com eles. «Medir de novo» repete a calibração guiada nesta persiana e substitui o que existe; «Eliminar a calibração» devolve esta persiana ao ficheiro de configuração, se o usar, ao perfil que segue, ou aos valores predefinidos.",
+        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**De onde vêm os valores em uso**: {origin}.\n\n**O que tem de fazer**: escolha o que fazer com eles. «Medir de novo» repete a calibração guiada nesta persiana e substitui o que existe; «Eliminar a calibração» devolve esta persiana ao ficheiro de configuração, se o usar, ao perfil que segue, ou aos valores predefinidos.",
         "menu_options": {
           "calibration_view": "Ver os valores",
           "calibration_edit": "Alterar os valores à mão",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Valores de {cover}",
-        "description": "Isto é o que a integração guarda para esta persiana:\n\n{values}\nAs chaves aqui listadas têm precedência sobre as escritas no ficheiro de configuração, se o usar; as que não aparecem continuam a vir do ficheiro, do perfil ou dos valores predefinidos."
+        "description": "Isto é o que a integração guarda para esta persiana:\n\n{values}\n**De onde vêm os valores em uso**: {origin}.\n\nAs chaves aqui listadas têm precedência sobre as escritas no ficheiro de configuração, se o usar; as que não aparecem continuam a vir do ficheiro, do perfil ou dos valores predefinidos."
       },
       "calibration_edit": {
         "title": "Alterar os valores de {cover}",
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Calibração guardada",
-        "description": "Feito: a calibração de {cover} está guardada e aplica-se quando esta caixa de diálogo for fechada; a partir daí {cover} move-se com os valores acabados de medir nela. Os atributos da entidade dizem então `guided` em «Calibration source», e levam os números em «Opening time», «Closing time», «Slat time», os coeficientes de eixo e «Height».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}», medido nesta persiana, em Configurar → Perfis e persianas. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar. As outras persianas semelhantes a esta fazem-se em dois ecrãs escolhendo «(B) É semelhante a uma persiana já medida».",
+        "description": "Feito: a calibração de {cover} está guardada e aplica-se quando esta caixa de diálogo for fechada; a partir daí {cover} move-se com os valores acabados de medir nela. Os atributos da entidade dizem então `guided` em «Calibration source» — ou seja, **{origin}** — e levam os números em «Opening time», «Closing time», «Slat time», os coeficientes de eixo e «Height».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}», medido nesta persiana, em Configurar → Perfis e persianas. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar. As outras persianas semelhantes a esta fazem-se em dois ecrãs escolhendo «(B) É semelhante a uma persiana já medida».",
         "menu_options": {
           "calibrate": "Calibrar outra persiana",
           "init": "Voltar ao menu"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibração guardada",
-        "description": "Feito: {cover} segue agora o perfil «{profile}», e segue-o a partir do momento em que esta caixa de diálogo for fechada. Aqui não foi cronometrado nenhum percurso seu: a única coisa medida nesta persiana é o seu percurso do pano, e os tempos do perfil são ajustados a ela. Os atributos da entidade dizem então `profile {profile}` em «Calibration source», e os números estão em «Opening time», «Closing time», «Slat time», os coeficientes de eixo e «Height».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}» em Configurar → Perfis e persianas, onde é partilhado por todas as persianas que o seguem. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: dar o mesmo perfil a outra persiana, ou fechar. Se {cover} vier a parar no sítio errado, «(C) Tem um perfil mas para no sítio errado» mede os tempos de percurso dela própria.",
+        "description": "Feito: {cover} segue agora o perfil «{profile}», e segue-o a partir do momento em que esta caixa de diálogo for fechada. Aqui não foi cronometrado nenhum percurso seu: a única coisa medida nesta persiana é o seu percurso do pano, e os tempos do perfil são ajustados a ela. Os atributos da entidade dizem então `profile {profile}` em «Calibration source» — ou seja, **{origin}** — e os números estão em «Opening time», «Closing time», «Slat time», os coeficientes de eixo e «Height».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}» em Configurar → Perfis e persianas, onde é partilhado por todas as persianas que o seguem. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: dar o mesmo perfil a outra persiana, ou fechar. Se {cover} vier a parar no sítio errado, «(C) Tem um perfil mas para no sítio errado» mede os tempos de percurso dela própria.",
         "menu_options": {
           "calibrate": "Calibrar outra persiana",
           "init": "Voltar ao menu"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibração guardada",
-        "description": "Feito: a calibração de {cover} está guardada e aplica-se quando esta caixa de diálogo for fechada. {cover} continua a seguir o perfil «{profile}», e o que acabou de ser medido nesta persiana em particular passa a ter precedência sobre o perfil; tudo o que aqui não foi medido continua a vir do perfil. Os atributos da entidade dizem então `{source}` em «Calibration source», e os números estão em «Opening time», «Closing time», «Slat time», os coeficientes de eixo e «Height».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, onde pode rever os valores, corrigi-los à mão ou eliminá-los. O perfil não foi tocado: as outras persianas que o seguem ficam como estão.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar.",
+        "description": "Feito: a calibração de {cover} está guardada e aplica-se quando esta caixa de diálogo for fechada. {cover} continua a seguir o perfil «{profile}», e o que acabou de ser medido nesta persiana em particular passa a ter precedência sobre o perfil; tudo o que aqui não foi medido continua a vir do perfil. Os atributos da entidade dizem então `{source}` em «Calibration source» — ou seja, **{origin}** — e os números estão em «Opening time», «Closing time», «Slat time», os coeficientes de eixo e «Height».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, onde pode rever os valores, corrigi-los à mão ou eliminá-los. O perfil não foi tocado: as outras persianas que o seguem ficam como estão.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar.",
         "menu_options": {
           "calibrate": "Calibrar outra persiana",
           "init": "Voltar ao menu"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Medida",
+        "inherited": "Herdada do perfil «{profile}»",
+        "adjusted": "Ajustada do perfil «{profile}»",
+        "from_the_file": "Do ficheiro",
+        "defaults": "Predefinições"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "Sem perfil (os valores do ficheiro, ou os predefinidos)"

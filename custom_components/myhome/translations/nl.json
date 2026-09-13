@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Welk profiel elk rolluik volgt",
-        "description": "**Wat er gaat gebeuren**: er beweegt niets. Een profiel toewijzen betekent Home Assistant vertellen “dit rolluik is gemaakt zoals die daar”: vanaf dat moment volgt het rolluik dat profiel, looptijden inbegrepen, aangepast aan de loopafstand van het pantser van dit rolluik.\n\nU wijst het profiel hier toe nadat het configuratiebestand is geschreven. Het profiel krijgt daarom voorrang op de waarden voor dit rolluik in dat bestand, als u dat gebruikt. Waarden die op dit rolluik zijn gemeten, blijven voorrang houden waar ze beschikbaar zijn. Latere wijzigingen aan het profiel gelden voor alle rolluiken die het volgen.\n\nEen `profile:` dat in het configuratiebestand voor een rolluik staat, verschijnt hier als de huidige waarde en kan vanaf dit scherm niet worden weggehaald: het staat in het bestand en moet daar worden beheerd.\n\n**Wat u moet doen**: kies voor elk rolluik een profiel, of “Geen profiel” om het op de waarden van het bestand of op de standaardwaarden te laten."
+        "description": "**Wat er gaat gebeuren**: er beweegt niets. Een profiel toewijzen betekent Home Assistant vertellen “dit rolluik is gemaakt zoals die daar”: vanaf dat moment volgt het rolluik dat profiel, looptijden inbegrepen, aangepast aan de loopafstand van het pantser van dit rolluik.\n\nU wijst het profiel hier toe nadat het configuratiebestand is geschreven. Het profiel krijgt daarom voorrang op de waarden voor dit rolluik in dat bestand, als u dat gebruikt. Waarden die op dit rolluik zijn gemeten, blijven voorrang houden waar ze beschikbaar zijn. Latere wijzigingen aan het profiel gelden voor alle rolluiken die het volgen.\n\nEen `profile:` dat in het configuratiebestand voor een rolluik staat, verschijnt hier als de huidige waarde en kan vanaf dit scherm niet worden weggehaald: het staat in het bestand en moet daar worden beheerd.\n\n**Waar de waarden van elk rolluik vandaag vandaan komen**: {covers}.\n\n**Wat u moet doen**: kies voor elk rolluik een profiel, of “Geen profiel” om het op de waarden van het bestand of op de standaardwaarden te laten."
       },
       "assign_heights": {
         "title": "Wat is de loopafstand van het pantser van deze rolluiken?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Waarden van profiel “{profile}”",
-        "description": "Dit zijn de waarden van het profiel. Home Assistant past ze toe op elk rolluik dat het volgt, naar verhouding van de loopafstand van het pantser van dat rolluik.\n\n{values}\nRolluiken die het volgen: {covers}"
+        "description": "Dit zijn de waarden van het profiel. Home Assistant past ze toe op elk rolluik dat het volgt, naar verhouding van de loopafstand van het pantser van dat rolluik.\n\n{values}\nRolluiken die het volgen: {followers}"
       },
       "profile_edit": {
         "title": "Profiel “{profile}” wijzigen",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Kalibratie van dit rolluik",
-        "description": "**Rolluik**: {cover}\n\nBewaarde waarden voor dit rolluik:\n\n{values}\n**Wat u moet doen**: kies wat ermee moet gebeuren. “Opnieuw meten” voert de begeleide kalibratie op dit rolluik opnieuw uit en vervangt wat er staat; “De kalibratie verwijderen” geeft dit rolluik terug aan het configuratiebestand, als u dat gebruikt, aan het profiel dat het volgt, of aan de standaardwaarden.",
+        "description": "**Rolluik**: {cover}\n\nBewaarde waarden voor dit rolluik:\n\n{values}\n**Waar de gebruikte waarden vandaan komen**: {origin}.\n\n**Wat u moet doen**: kies wat ermee moet gebeuren. “Opnieuw meten” voert de begeleide kalibratie op dit rolluik opnieuw uit en vervangt wat er staat; “De kalibratie verwijderen” geeft dit rolluik terug aan het configuratiebestand, als u dat gebruikt, aan het profiel dat het volgt, of aan de standaardwaarden.",
         "menu_options": {
           "calibration_view": "Bekijk de waarden",
           "calibration_edit": "Wijzig de waarden met de hand",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Waarden van {cover}",
-        "description": "Dit is wat de integratie voor dit rolluik bewaart:\n\n{values}\nDe sleutels die hier staan gaan voor op die in het configuratiebestand, als u dat gebruikt; de sleutels die er niet staan blijven van het bestand, van het profiel of van de standaardwaarden komen."
+        "description": "Dit is wat de integratie voor dit rolluik bewaart:\n\n{values}\n**Waar de gebruikte waarden vandaan komen**: {origin}.\n\nDe sleutels die hier staan gaan voor op die in het configuratiebestand, als u dat gebruikt; de sleutels die er niet staan blijven van het bestand, van het profiel of van de standaardwaarden komen."
       },
       "calibration_edit": {
         "title": "De waarden van {cover} wijzigen",
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Kalibratie opgeslagen",
-        "description": "Klaar: de kalibratie van {cover} is opgeslagen en gaat in zodra dit dialoogvenster gesloten wordt; vanaf dan beweegt {cover} met de waarden die er zojuist op gemeten zijn. De attributen van de entiteit zeggen dan `guided` onder “Calibration source”, en dragen de getallen zelf onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}”, op dit rolluik gemeten, onder Configureren → Profielen en rolluiken. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten. De andere rolluiken die op dit lijken kosten twee schermen, met de keuze “(B) Het lijkt op een al gemeten rolluik”.",
+        "description": "Klaar: de kalibratie van {cover} is opgeslagen en gaat in zodra dit dialoogvenster gesloten wordt; vanaf dan beweegt {cover} met de waarden die er zojuist op gemeten zijn. De attributen van de entiteit zeggen dan `guided` onder “Calibration source” — dat wil zeggen **{origin}** — en dragen de getallen zelf onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}”, op dit rolluik gemeten, onder Configureren → Profielen en rolluiken. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten. De andere rolluiken die op dit lijken kosten twee schermen, met de keuze “(B) Het lijkt op een al gemeten rolluik”.",
         "menu_options": {
           "calibrate": "Kalibreer nog een rolluik",
           "init": "Terug naar het menu"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Kalibratie opgeslagen",
-        "description": "Klaar: {cover} volgt nu het profiel “{profile}”, en doet dat zodra dit dialoogvenster gesloten wordt. Er is hier geen eigen beweging geklokt: het enige wat op dit rolluik gemeten is, is de loopafstand van het pantser, en de tijden van het profiel worden daarop geschaald. De attributen van de entiteit zeggen dan `profile {profile}` onder “Calibration source”, en de getallen zelf staan onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken, waar het gedeeld wordt met elk rolluik dat het volgt. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: hetzelfde profiel aan een ander rolluik geven, of sluiten. Blijkt {cover} op de verkeerde plek te stoppen, dan meet “(C) Het heeft een profiel maar stopt op de verkeerde plek” zijn eigen looptijden.",
+        "description": "Klaar: {cover} volgt nu het profiel “{profile}”, en doet dat zodra dit dialoogvenster gesloten wordt. Er is hier geen eigen beweging geklokt: het enige wat op dit rolluik gemeten is, is de loopafstand van het pantser, en de tijden van het profiel worden daarop geschaald. De attributen van de entiteit zeggen dan `profile {profile}` onder “Calibration source” — dat wil zeggen **{origin}** — en de getallen zelf staan onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken, waar het gedeeld wordt met elk rolluik dat het volgt. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: hetzelfde profiel aan een ander rolluik geven, of sluiten. Blijkt {cover} op de verkeerde plek te stoppen, dan meet “(C) Het heeft een profiel maar stopt op de verkeerde plek” zijn eigen looptijden.",
         "menu_options": {
           "calibrate": "Kalibreer nog een rolluik",
           "init": "Terug naar het menu"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Kalibratie opgeslagen",
-        "description": "Klaar: de kalibratie van {cover} is opgeslagen en gaat in zodra dit dialoogvenster gesloten wordt. {cover} blijft het profiel “{profile}” volgen, en wat zojuist op dit ene rolluik gemeten is, krijgt nu voorrang op het profiel; alles wat hier niet gemeten is, komt nog steeds van het profiel. De attributen van de entiteit zeggen dan `{source}` onder “Calibration source”, en de getallen zelf staan onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, waar u de waarden kunt nakijken, met de hand corrigeren of verwijderen. Het profiel zelf is niet aangeraakt: de andere rolluiken die het volgen blijven zoals ze zijn.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten.",
+        "description": "Klaar: de kalibratie van {cover} is opgeslagen en gaat in zodra dit dialoogvenster gesloten wordt. {cover} blijft het profiel “{profile}” volgen, en wat zojuist op dit ene rolluik gemeten is, krijgt nu voorrang op het profiel; alles wat hier niet gemeten is, komt nog steeds van het profiel. De attributen van de entiteit zeggen dan `{source}` onder “Calibration source” — dat wil zeggen **{origin}** — en de getallen zelf staan onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, waar u de waarden kunt nakijken, met de hand corrigeren of verwijderen. Het profiel zelf is niet aangeraakt: de andere rolluiken die het volgen blijven zoals ze zijn.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten.",
         "menu_options": {
           "calibrate": "Kalibreer nog een rolluik",
           "init": "Terug naar het menu"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Gemeten",
+        "inherited": "Geërfd van profiel “{profile}”",
+        "adjusted": "Aangepast van profiel “{profile}”",
+        "from_the_file": "Uit het bestand",
+        "defaults": "Standaardwaarden"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "Geen profiel (de waarden van het bestand, of de standaardwaarden)"

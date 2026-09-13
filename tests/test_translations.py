@@ -25,6 +25,10 @@ from custom_components.myhome.calibration_flow import (
 )
 from custom_components.myhome.config_flow import TUNABLE_OPTIONS, MyHomeOptionsFlowHandler
 from custom_components.myhome.const import (
+    CALIBRATION_ORIGIN_ADJUSTED,
+    CALIBRATION_ORIGIN_INHERITED,
+    CALIBRATION_ORIGIN_SELECTOR,
+    CALIBRATION_ORIGINS,
     CONF_DEFAULT_KEEPALIVE_MINUTES,
     CONF_SENSOR_DEFAULTS,
     CONF_WORKER_COUNT,
@@ -203,17 +207,26 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     # names it. The deletion reaches the two differently, so the two screens that are
     # about it say both numbers.
     "profile_actions": {"profile", "covers", "values", "count", "assigned", "from_file"},
-    "profile_view": {"profile", "covers", "values", "count", "assigned", "from_file"},
+    # `followers` is `covers` with each shutter's origin after its name. Only the screen
+    # that *shows* the profile prints it: the two that are about deleting it name the
+    # shutters plainly, because there the question is which of them lose the profile.
+    "profile_view": {
+        "profile", "covers", "values", "count", "assigned", "from_file", "followers"
+    },
     "profile_edit": {"profile", "covers", "values", "count", "assigned", "from_file"},
     "profile_delete": {"profile", "covers", "values", "count", "assigned", "from_file"},
     "profile_deleted": {"profile", "covers", "count", "assigned", "from_file"},
     "calibrations": {"count"},
     "no_calibrations": set(),
     "no_basic_covers": set(),
-    "calibration_actions": {"cover", "values", "profile", "measured_at"},
-    "calibration_view": {"cover", "values", "profile", "measured_at"},
-    "calibration_edit": {"cover", "values", "profile", "measured_at"},
-    "calibration_delete": {"cover", "values", "profile", "measured_at"},
+    # `origin` is where the values the shutter runs on come from, in words - the same
+    # answer `Calibration source` gives, said as a sentence. The four screens are given
+    # it; the two that show the stored keys print it, because "these are the keys" and
+    # "this is what wins" are two different statements.
+    "calibration_actions": {"cover", "values", "profile", "measured_at", "origin"},
+    "calibration_view": {"cover", "values", "profile", "measured_at", "origin"},
+    "calibration_edit": {"cover", "values", "profile", "measured_at", "origin"},
+    "calibration_delete": {"cover", "values", "profile", "measured_at", "origin"},
     "calibration_deleted": {"cover"},
     # the guided flow
     "calibrate": set(),
@@ -276,9 +289,12 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     # record that was just written: a correction leaves `guided` or
     # `profile <name>, adjusted` depending on whether the profile still answers for
     # anything, and the screen that sends the user to look at the attribute quotes it.
-    "saved": {"cover", "profile", "source"},
-    "saved_profile": {"cover", "profile", "source"},
-    "saved_refined": {"cover", "profile", "source"},
+    # `source` is the token the attribute carries, `origin` the same answer in words:
+    # the three screens print both, side by side, so that what the dialog says and what
+    # Developer tools shows can be recognised as one statement.
+    "saved": {"cover", "profile", "source", "origin"},
+    "saved_profile": {"cover", "profile", "source", "origin"},
+    "saved_refined": {"cover", "profile", "source", "origin"},
     # Every way out of the conversation is given `_placeholders()`, so every one of
     # them may name the shutter it is about.
     "cancelled": {"cover"},
@@ -435,6 +451,37 @@ def test_the_no_profile_option_of_the_assignment_form_is_translated() -> None:
         options = load(path)["selector"]["profile_choice"]["options"]
         assert set(options) == {NO_PROFILE}, path.name
         assert options[NO_PROFILE], path.name
+
+
+# The two of the five origin phrases that name the profile a shutter is running on.
+# They are the only ones with anything to substitute, and the substitution is done by
+# the flow rather than by the frontend - these are selector options and not a step's
+# `description_placeholders`.
+ORIGINS_THAT_NAME_A_PROFILE = {CALIBRATION_ORIGIN_INHERITED, CALIBRATION_ORIGIN_ADJUSTED}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_five_origins_are_written_in_every_language(path: Path) -> None:
+    """Where a cover's values come from, said in words, in all seven languages.
+
+    The screens that print it (`calibration_view` and the action menu above it, the
+    "Calibrazioni" list, the assignment form, the three saved screens and a profile's
+    followers) are given a phrase this side of the wire, because `resolve_cover` is
+    what decides which of the five applies and the frontend never sees that. A
+    language missing one of them would show the raw `guided` on those screens.
+
+    Mutation caught: adding an origin to `const.py` and to one file only, or writing
+    `{profile}` into the three that have no profile to name - which would leave the
+    slot in the text, since only the flow substitutes it.
+    """
+    options = load(path)["selector"][CALIBRATION_ORIGIN_SELECTOR]["options"]
+    assert set(options) == set(CALIBRATION_ORIGINS), path.name
+    for key, text in options.items():
+        assert text.strip(), f"{path.name}: {key} is empty"
+        assert ("{profile}" in text) is (key in ORIGINS_THAT_NAME_A_PROFILE), (
+            f"{path.name}: {key}"
+        )
+        assert set(PLACEHOLDER.findall(text)) <= {"profile"}, f"{path.name}: {key}"
 
 
 # hassfest's rule for a translation key: lowercase letters, digits, hyphen and

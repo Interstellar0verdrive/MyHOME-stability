@@ -115,7 +115,7 @@
       },
       "assign_covers": {
         "title": "Which profile each cover follows",
-        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's curtain travel.\n\nThe profile is assigned here after the configuration file was written, so it takes precedence over the file's values for this cover, if you use one. Values measured on this cover still take precedence wherever they are available. Later changes to the profile apply to every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it is defined in the file and must be managed there.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
+        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's curtain travel.\n\nThe profile is assigned here after the configuration file was written, so it takes precedence over the file's values for this cover, if you use one. Values measured on this cover still take precedence wherever they are available. Later changes to the profile apply to every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it is defined in the file and must be managed there.\n\n**Where each cover's values come from today**: {covers}.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
       },
       "assign_heights": {
         "title": "What is the curtain travel of these covers?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Values of profile “{profile}”",
-        "description": "These are the profile values. Home Assistant scales them to every cover that follows it, in proportion to that cover's curtain travel.\n\n{values}\nCovers following it: {covers}"
+        "description": "These are the profile values. Home Assistant scales them to every cover that follows it, in proportion to that cover's curtain travel.\n\n{values}\nCovers following it: {followers}"
       },
       "profile_edit": {
         "title": "Edit profile “{profile}”",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibration of this cover",
-        "description": "**Cover**: {cover}\n\nWhat is kept for this cover:\n\n{values}\n**What you have to do**: choose what to do with it. “Measure it again” runs the guided calibration on this cover and replaces what is here; “Delete the calibration” hands this cover back to the configuration file, if you use one, to the profile it follows, or to the defaults.",
+        "description": "**Cover**: {cover}\n\nWhat is kept for this cover:\n\n{values}\n**Where its values come from**: {origin}.\n\n**What you have to do**: choose what to do with it. “Measure it again” runs the guided calibration on this cover and replaces what is here; “Delete the calibration” hands this cover back to the configuration file, if you use one, to the profile it follows, or to the defaults.",
         "menu_options": {
           "calibration_view": "View the values",
           "calibration_edit": "Edit the values by hand",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Values of {cover}",
-        "description": "This is what the integration keeps for this cover:\n\n{values}\nThe keys listed here take precedence over those in the configuration file, if you use one; the ones that do not appear go on coming from the file, from the profile or from the defaults."
+        "description": "This is what the integration keeps for this cover:\n\n{values}\n**Where its values come from**: {origin}.\n\nThe keys listed here take precedence over those in the configuration file, if you use one; the ones that do not appear go on coming from the file, from the profile or from the defaults."
       },
       "calibration_edit": {
         "title": "Edit the values of {cover}",
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved. It is applied when this dialog is closed, and from then on {cover} moves on the values measured on it just now. The entity's attributes then say `guided` under “Calibration source”, and carry the numbers themselves under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}”, measured on this cover, under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
+        "description": "Done: the calibration of {cover} is saved. It is applied when this dialog is closed, and from then on {cover} moves on the values measured on it just now. The entity's attributes then say `guided` under “Calibration source” — that is, **{origin}** — and carry the numbers themselves under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}”, measured on this cover, under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibration saved",
-        "description": "Done: {cover} now follows the profile “{profile}”, and does so from the moment this dialog is closed. No run of its own was timed here: the only thing measured on this cover is its curtain travel, and the profile's times are scaled to it. The entity's attributes then say `profile {profile}` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
+        "description": "Done: {cover} now follows the profile “{profile}”, and does so from the moment this dialog is closed. No run of its own was timed here: the only thing measured on this cover is its curtain travel, and the profile's times are scaled to it. The entity's attributes then say `profile {profile}` under “Calibration source” — that is, **{origin}** — and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved, and it is applied when this dialog is closed. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. The entity's attributes then say `{source}` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
+        "description": "Done: the calibration of {cover} is saved, and it is applied when this dialog is closed. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. The entity's attributes then say `{source}` under “Calibration source” — that is, **{origin}** — and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Measured",
+        "inherited": "Inherited from profile “{profile}”",
+        "adjusted": "Adjusted from profile “{profile}”",
+        "from_the_file": "From the file",
+        "defaults": "Defaults"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "No profile (the file's values, or the defaults)"
