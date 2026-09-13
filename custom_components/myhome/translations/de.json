@@ -259,9 +259,9 @@
       },
       "path": {
         "title": "Wie wollen Sie diesen Rollladen messen?",
-        "description": "**Rollladen**: {cover}\n\nEs gibt drei Wege, und der richtige hängt davon ab, was Sie schon gemessen haben. Es sind keine aufeinanderfolgenden Schritte: Sie wählen einen.\n\nDer erste (A) ist der lange, etwa drei Minuten: dreimal einen Knopf drücken und dreimal mit dem Maßband messen. Am Ende entsteht ein **Profil**, also die Beschreibung dieser Rollladenart, die alle ähnlichen Rollläden (gleiches Modell, gleiche Größe, ...) wiederverwenden können.\n\nDer zweite (B) ist gerade für Rollläden gedacht, die einem bereits kalibrierten ähneln: Sie wählen das Profil, messen die Höhe, fertig.\n\nDer dritte (C) ist für einen Rollladen, dem ein Profil zugewiesen wurde, der aber an der falschen Stelle stehen bleibt: in diesem Fall muss die Kalibrierung dieses Rollladens verfeinert werden.\n\n**Was Sie tun müssen**: wählen Sie einen der Wege unten. Bis zum nächsten Bildschirm bewegt sich nichts.",
+        "description": "**Rollladen**: {cover}\n\nEs gibt drei Wege, und der richtige hängt davon ab, was Sie schon gemessen haben. Es sind keine aufeinanderfolgenden Schritte: Sie wählen einen.\n\nDer erste (A) ist der lange, etwa vier Minuten: dreimal einen Knopf drücken und dreimal mit dem Maßband messen. Am Ende entsteht ein **Profil**, also die Beschreibung dieser Rollladenart, die alle ähnlichen Rollläden (gleiches Modell, gleiche Größe, ...) wiederverwenden können.\n\nDer zweite (B) ist gerade für Rollläden gedacht, die einem bereits kalibrierten ähneln: Sie wählen das Profil, messen die Höhe, fertig.\n\nDer dritte (C) ist für einen Rollladen, dem ein Profil zugewiesen wurde, der aber an der falschen Stelle stehen bleibt: in diesem Fall muss die Kalibrierung dieses Rollladens verfeinert werden.\n\n**Was Sie tun müssen**: wählen Sie einen der Wege unten. Bis zum nächsten Bildschirm bewegt sich nichts.",
         "menu_options": {
-          "path_a": "(A) Es ist der erste Rollladen dieser Art (vollständige Messung, ~3 Minuten)",
+          "path_a": "(A) Es ist der erste Rollladen dieser Art (vollständige Messung, ~4 Minuten)",
           "path_b": "(B) Er ähnelt einem bereits gemessenen Rollladen (nur die Höhe)",
           "path_c": "(C) Er hat ein Profil, hält aber an der falschen Stelle (die Kalibrierung verfeinern)",
           "cancel_flow": "Abbrechen"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Bevor der Rollladen zu fahren beginnt",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: die Kalibrierung ist in Schritte geteilt. In jedem Schritt macht der Rollladen eine einzige Bewegung, und vor jeder kommen die Anweisungen und alle Zeit, sich vorzubereiten: keine Bewegung startet, ohne dass Sie sie starten. Sieben Bewegungen insgesamt, etwa drei Minuten.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht – ein offener Fensterflügel, Pflanzen auf der Fensterbank, Katzen – und halten Sie das Maßband bereit. Sie werden gebeten, einen Knopf zu drücken, wenn etwas geschieht, und einige Abstände abzulesen.\n\nGeht etwas schief, lässt sich jeder Schritt für sich wiederholen, ohne die bereits erledigten noch einmal zu machen. Sie können jederzeit abbrechen: bis zum letzten Bildschirm wird nichts gespeichert, und die Bewegungen sind gewöhnliche Befehle.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: die Kalibrierung ist in Schritte geteilt. In jedem Schritt macht der Rollladen die Bewegungen, die dieser Schritt braucht, und vor jeder kommen die Anweisungen und alle Zeit, sich vorzubereiten: keine gemessene Bewegung startet, ohne dass Sie sie starten. Neun Bewegungen insgesamt, etwa vier Minuten.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht – ein offener Fensterflügel, Pflanzen auf der Fensterbank, Katzen – und halten Sie das Maßband bereit. Sie werden gebeten, einen Knopf zu drücken, wenn etwas geschieht, und einige Abstände abzulesen.\n\nGeht etwas schief, lässt sich jeder Schritt für sich wiederholen, ohne die bereits erledigten noch einmal zu machen. Sie können jederzeit abbrechen: bis zum letzten Bildschirm wird nichts gespeichert, und die Bewegungen sind gewöhnliche Befehle.",
         "menu_options": {
           "begin": "Verstanden, fangen wir an",
           "cancel_flow": "Abbrechen"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "Wie weit wollen Sie die Kalibrierung verfeinern?",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: entweder zwei gemessene Fahrten (eine hinauf und eine herunter) oder diese plus zwei Messungen mit dem Maßband.\n\nDie Zeiten allein genügen für einen Rollladen, dessen Motor schlicht langsamer oder schneller ist als jener, an dem das Profil gemessen wurde. Nehmen Sie die Faktoren dazu, wenn er auch *auf halbem Weg* danebenliegt: dort dreht sich nicht der Motor anders, dort wickelt sich der Panzer anders.\n\n**Was Sie tun müssen**: wählen Sie, wie weit Sie gehen wollen. Sie können immer zurückkommen und den Rest tun.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: entweder drei gemessene Fahrten (zwei hinauf und eine herunter) oder diese plus zwei Messungen mit dem Maßband.\n\nDie Zeiten allein genügen für einen Rollladen, dessen Motor schlicht langsamer oder schneller ist als jener, an dem das Profil gemessen wurde. Nehmen Sie die Faktoren dazu, wenn er auch *auf halbem Weg* danebenliegt: dort dreht sich nicht der Motor anders, dort wickelt sich der Panzer anders.\n\n**Was Sie tun müssen**: wählen Sie, wie weit Sie gehen wollen. Sie können immer zurückkommen und den Rest tun.",
         "menu_options": {
-          "times_only": "Nur seine eigenen Laufzeiten (2 Tastendrücke, ~1 Minute)",
-          "times_and_rolls": "Seine Zeiten und seine Faktoren (2 Tastendrücke und 2 Messungen)",
+          "times_only": "Nur seine eigenen Laufzeiten (3 Tastendrücke, ~2 Minuten)",
+          "times_and_rolls": "Seine Zeiten und seine Faktoren (3 Tastendrücke und 2 Messungen)",
           "cancel_flow": "Abbrechen"
         }
       },
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Wir messen gleich die Auffahrt",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von unten nach oben los. In der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt; dann beginnt der ganze Panzer zu steigen, und oben hält der Rollladen von selbst an.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Sie werden um zwei Tastendrücke gebeten, einen nach dem anderen:\n\n1. den ersten in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst;\n2. den zweiten in dem Augenblick, in dem der Rollladen die Endlage erreicht und der Motor anhält, woran man es am aufhörenden Geräusch erkennt.\n\nSie stoppen nichts: der Augenblick des Drückens ist die Messung. Die folgenden Bildschirme tragen nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: die Auffahrt wird mit zwei Fahrten gemessen, je einem Tastendruck, und dies ist die erste. Wenn Sie den Knopf unten drücken, fährt der Rollladen von der Grundlinie nach oben los: in der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt, und dann beginnt der ganze Panzer zu steigen. Der Rollladen wird in dem Augenblick angehalten, in dem Sie drücken, einige Zentimeter höher, und der nächste Bildschirm bittet Sie nachzusehen, wo er stehen geblieben ist.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Ein einziger Tastendruck, in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst. Sie stoppen nichts: der Augenblick des Drückens ist die Messung.\n\nDie zweite Fahrt folgt danach, wieder von der Grundlinie aus, und verlangt den anderen Tastendruck: den Augenblick, in dem der Rollladen oben die Endlage erreicht und der Motor anhält, woran man es am aufhörenden Geräusch erkennt. Die Zeichnung zeigt beide.\n\nDie folgenden Bildschirme tragen nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
           "open_start": "Den Rollladen starten",
           "repeat_step": "Ihn erst wieder herunterfahren",
@@ -334,6 +334,63 @@
           "not_right": "Er hat nicht getan, was er sollte"
         }
       },
+      "lift_check": {
+        "title": "Wo steht die Unterkante jetzt?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde in dem Augenblick angehalten, in dem Sie gedrückt haben. Zwischen einem Tastendruck und dem Stillstand des Motors vergeht immer ein Moment — Ihre eigene Reaktion, der Befehl bis zum Gateway, der bremsende Motor — und die ganze Zeit über steigt der Panzer weiter.\n\n**Was Sie tun müssen**: sehen Sie die Unterkante an und sagen Sie, welcher der drei Fälle es ist. Einige Zentimeter über der Grundlinie, so sieht ein gelungener Tastendruck aus. Liegt sie noch auf der Grundlinie auf, kam der Tastendruck, bevor sich die Kante gelöst hat: diese Messung lässt sich nicht ausbessern, nur wiederholen. Eine Handbreit oder mehr heißt, der Tastendruck kam zu spät, und der zu späte Tastendruck ist der einzige Fall, den ein Maßband geradebiegen kann.\n\nIm Zweifel messen: die Ablesung ist die genaueste der drei Antworten, denn sie setzt den Augenblick, in dem sich die Kante von der Grundlinie gelöst hat, an seine Stelle zurück, statt sich auf den Tastendruck zu verlassen.",
+        "menu_options": {
+          "lift_too_early": "Sie liegt noch auf der Grundlinie auf",
+          "lift_accept": "Sie steht einige Zentimeter höher, weiter",
+          "lift_gap": "Ich möchte den Abstand messen, für mehr Genauigkeit",
+          "not_right": "Er hat nicht getan, was er sollte"
+        }
+      },
+      "lift_check_late": {
+        "title": "Wo steht die Unterkante jetzt?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde in dem Augenblick angehalten, in dem Sie gedrückt haben — aber das Gateway hatte noch andere Befehle in der Warteschlange und brauchte über eine Sekunde, um unseren auf den Bus zu schreiben. Die ganze Zeit über ist der Panzer weiter gestiegen: der Abstand, den Sie gleich sehen, ist also größer als üblich, und er liegt nicht an Ihnen.\n\n**Was Sie tun müssen**: sehen Sie die Unterkante an und sagen Sie, welcher der drei Fälle es ist. Liegt sie noch auf der Grundlinie auf, kam der Tastendruck, bevor sich die Kante gelöst hat: diese Messung lässt sich nicht ausbessern, nur wiederholen. In allen anderen Fällen lohnt das Messen hier, denn bei dieser Fahrt kann nur das Maßband sagen, wann sich die Kante wirklich gelöst hat.",
+        "menu_options": {
+          "lift_too_early": "Sie liegt noch auf der Grundlinie auf",
+          "lift_accept": "Sie steht einige Zentimeter höher, weiter",
+          "lift_gap": "Ich möchte den Abstand messen, für mehr Genauigkeit",
+          "not_right": "Er hat nicht getan, was er sollte"
+        }
+      },
+      "lift_gap": {
+        "title": "Den Abstand messen — {cover}",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Was Sie tun müssen**: messen Sie von der Grundlinie — dem Punkt, auf dem die Unterkante aufliegt, wenn der Rollladen geschlossen ist — bis zur Unterkante dort, wo sie jetzt steht, und schreiben Sie die Zentimeter unten hin. Dieser Abstand sagt genau, wann sich die Kante wirklich von der Grundlinie gelöst hat, sodass die Lamellenzeit nicht mehr davon abhängt, wie schnell Ihr Finger war.\n\nLassen Sie das Feld leer, geht es ohne Messung weiter, und der Tastendruck bleibt, wie er gemacht wurde.",
+        "data": {
+          "gap_cm": "Abstand zwischen Unterkante und Grundlinie (cm)"
+        },
+        "data_description": {
+          "gap_cm": "In Zentimetern, meist zwischen 2 und 5. Dezimalstellen dürfen mit Komma oder Punkt geschrieben werden: 3,5 oder 3.5. Leer lassen, um ohne Messung weiterzugehen."
+        }
+      },
+      "lift_early": {
+        "title": "Der Tastendruck kam zu früh",
+        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: ein Abstand von weniger als einem Zentimeter heißt, dass der Rollladen noch auf seiner Grundlinie auflag, als der Motor anhielt — der Tastendruck kam also, bevor sich die Unterkante gelöst hatte. Die Lamellenzeit, die dabei herauskommt, ist um einen unbekannten Betrag zu kurz, und keine Messung kann eine Strecke zurückgeben, die nie zurückgelegt wurde.\n\n**Was Sie tun müssen**: die Auffahrt noch einmal messen. Der Rollladen wird wieder heruntergefahren und startet erneut; warten Sie diesmal, bis sich die Unterkante wirklich gelöst hat, bevor Sie drücken.",
+        "menu_options": {
+          "repeat_step": "Die Auffahrt noch einmal messen",
+          "lift_gap": "Den Abstand noch einmal eintragen",
+          "not_right": "Er hat nicht getan, was er sollte"
+        }
+      },
+      "closed_again": {
+        "title": "Ist der Rollladen wieder vollständig geschlossen?",
+        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde wieder bis zur Grundlinie heruntergefahren, denn die vollständige Auffahrt muss genau wie die erste Fahrt von dort ausgehen.\n\n**Was Sie tun müssen**: sehen Sie ihn an. Ist er vollständig geschlossen, mit geschlossenen Lamellen und aufliegender Unterkante, fahren Sie fort. Bewegt er sich noch, warten Sie und fahren dann fort. Hat er sich gar nicht bewegt oder in die falsche Richtung, sagen Sie es unten.",
+        "menu_options": {
+          "confirm_closed_again": "Er ist vollständig geschlossen",
+          "repeat_step": "Diesen Schritt wiederholen",
+          "not_right": "Er hat nicht getan, was er sollte"
+        }
+      },
+      "open_full_brief": {
+        "title": "Jetzt die vollständige Auffahrt",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen wieder von der Grundlinie nach oben los, und diesmal lässt man ihn laufen — die Lamellen öffnen sich, der ganze Panzer steigt, und oben hält der Rollladen von selbst in seiner Endlage an.\n\n**Was Sie tun müssen**: nur ein Tastendruck, in dem Augenblick, in dem der Motor oben anhält. Man erkennt es am aufhörenden Geräusch. An der Grundlinie wird Ihnen diesmal nichts abverlangt: diese Messung ist bereits gemacht.\n\nDer Bildschirm während der Bewegung trägt nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "menu_options": {
+          "open_full_start": "Den Rollladen starten",
+          "repeat_step": "Die Auffahrt von vorn messen",
+          "cancel_flow": "Abbrechen"
+        }
+      },
       "open_top": {
         "title": "Der Rollladen steigt noch",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem der Motor oben anhält.",
@@ -345,7 +402,15 @@
       },
       "open_result": {
         "title": "Die Auffahrt wurde gemessen",
-        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s.\n\n**Was Sie tun müssen**: kamen Ihnen beide Tastendrücke richtig vor, fahren Sie fort. Kam einer zu spät oder zu früh, wiederholen Sie die Messung: der Rollladen wird wieder nach unten gefahren und die Auffahrt von vorn gemessen. Ein Tastendruck, der eine halbe Sekunde danebenliegt, verschiebt die Schätzung um einige Zentimeter.",
+        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s.\n\n**Was Sie tun müssen**: kamen Ihnen beide Tastendrücke richtig vor, fahren Sie fort. Kam einer zu spät oder zu früh, wiederholen Sie die Messung: beide Fahrten der Auffahrt werden von der Grundlinie aus neu gemacht, denn eine Lamellenzeit aus dem einen Versuch gehört nicht zu einer Auffahrt aus dem anderen. Ein Tastendruck, der eine halbe Sekunde danebenliegt, verschiebt die Schätzung um einige Zentimeter.",
+        "menu_options": {
+          "accept_step": "Passt, weiter",
+          "repeat_step": "Die Messung wiederholen"
+        }
+      },
+      "open_result_gap": {
+        "title": "Die Auffahrt wurde gemessen",
+        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s, und ein Abstand von {gap} cm über der Grundlinie.\n\nDie Lamellenzeit oben ist die des Tastendrucks. Der gemessene Abstand ersetzt sie, sobald die Werte berechnet werden: was am Ende gespeichert wird, kann also um einige Zehntelsekunden davon abweichen — genau dafür wurde er gemessen.\n\n**Was Sie tun müssen**: kamen Ihnen der Tastendruck oben und die Ablesung richtig vor, fahren Sie fort. Die Messung zu wiederholen macht beide Fahrten der Auffahrt von der Grundlinie aus neu.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_step": "Die Messung wiederholen"
@@ -598,10 +663,12 @@
     "progress": {
       "homing_closed": "{cover} wird vollständig geschlossen: so gehen die Messungen von einem bekannten Punkt aus. Bitte warten, und sorgen Sie dafür, dass nichts im Weg steht.",
       "homing_open": "{cover} wird vollständig geöffnet: so geht die nächste Bewegung von einem bekannten Punkt aus. Bitte warten, und sorgen Sie dafür, dass nichts im Weg steht.",
-      "starting_open": "{cover} fährt nach oben los. Sehen Sie hin: gleich werden Sie um den ersten Tastendruck gebeten.",
+      "starting_open": "{cover} fährt nach oben los. Sehen Sie hin: gleich werden Sie um den Tastendruck an der Grundlinie gebeten.",
       "starting_close": "{cover} fährt nach unten los. Sehen Sie hin: gleich werden Sie um den Tastendruck gebeten.",
       "running_down": "{cover} wird vollständig geöffnet und dann bis auf etwa {percent}% seines Weges heruntergefahren. Bitte warten, und halten Sie das Maßband bereit.",
-      "running_up": "{cover} wird vollständig geschlossen und dann bis auf etwa {percent}% seines Weges hinaufgefahren. Bitte warten, und halten Sie das Maßband bereit."
+      "running_up": "{cover} wird vollständig geschlossen und dann bis auf etwa {percent}% seines Weges hinaufgefahren. Bitte warten, und halten Sie das Maßband bereit.",
+      "stopping_lift": "{cover} wird genau dort angehalten, wo Ihr Tastendruck ihn angetroffen hat. Einen Augenblick.",
+      "starting_open_full": "{cover} fährt wieder nach oben los, diesmal ganz hinauf. Sehen Sie hin: gleich werden Sie um den Tastendruck oben gebeten."
     },
     "error": {
       "invalid_host": "Das ist weder eine gültige IP-Adresse noch ein gültiger Hostname.",

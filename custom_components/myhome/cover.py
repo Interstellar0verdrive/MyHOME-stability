@@ -2744,6 +2744,32 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             await self.async_stop_cover()
             return await self._async_calibration_stopped()
 
+    async def async_calib_motor_stop(self) -> datetime:
+        """When the motor really came to rest after an `async_calib_stop` of ours.
+
+        The companion of `async_calib_stop`, which answers with the instant our *frame*
+        reached the bus: the motor goes on turning for a moment after that, and the
+        guided ascent measures a distance against it. The actuator's own "stopped"
+        status is the answer whenever it gives one - it arrives on the monitor session a
+        fraction of a second later, which is what the wait below is for - and the model's
+        `stop_latency` past the frame is the answer when it does not, exactly as
+        `_async_calibration_motor_seconds` decides the same question for a timed run.
+
+        Raises `CalibrationError` (`not_stopped`) when there was no stop to speak of,
+        which is the same failure `async_calib_stop` reports and the same screen.
+        """
+        if self._stop_status_at is None:
+            await _async_sleep(CALIBRATION_STOP_STATUS_SEC)
+        if self._stop_status_at is not None:
+            return self._stop_status_at
+        if self._stop_delivered_at is None:
+            raise CalibrationError(
+                REASON_NOT_STOPPED,
+                f"{self.entity_id}: the gateway did not take the stop, so there is no "
+                f"instant the motor came to rest",
+            )
+        return self._stop_delivered_at + timedelta(seconds=self._stop_latency)
+
     async def async_calib_run_fraction(self, direction: str, fraction: float) -> RunReport:
         """Run the motor for `fraction` of the curtain travel and stop it there.
 

@@ -16,14 +16,18 @@ way, and nothing is ever written to `myhome.yaml`.
 
 - **Guided calibration of a basic cover**, under *Configure → "Calibrate a
   cover"*. Three ways in: **(A)** the first shutter of a kind — three button
-  presses and three tape readings, about three minutes, ending on a named
+  presses and three tape readings, about four minutes, ending on a named
   **profile** every similar shutter can inherit; **(B)** a shutter similar to one
   already measured — pick the profile, measure the height, with an optional check at
   half the travel; **(C)** a shutter that has a profile and stops in the wrong place
   — its own run times, and its own roll coefficients if it needs them. There is no
   stopwatch anywhere: the integration knows when the motor started (the actuator
   says so itself), so a press marks only the end of a run, which halves the human
-  error and leaves the tape as the only tool. Path A can be followed by a **precise
+  error and leaves the tape as the only tool. The ascent is measured by **two runs
+  of one press each**: the first ends on the press that marks the bottom edge
+  leaving its base — the dialog stops the shutter there, so the press can be
+  checked by looking at it and, where it went in late, corrected with the tape —
+  and the second runs the whole travel for the press at the top. Path A can be followed by a **precise
   level**: four more readings at a quarter and three quarters of the travel in each
   direction, which fit a scale factor on the times as well as the rolls — the tape
   corrects the finger — and a verification at 40 %, a position nothing was fitted to,

@@ -25,10 +25,14 @@ from custom_components.myhome.calibration import (
     CalibrationError,
     FitPoint,
     FitResult,
+    curtain_speed_at_the_closed_end,
     fit_direction,
     fit_from_run,
     predict_cm,
+    slat_time_from_gap,
+    slat_time_from_press,
     timing_from_presses,
+    timing_with_slat,
 )
 from custom_components.myhome.const import DIRECTION_CLOSE, DIRECTION_OPEN
 
@@ -487,6 +491,138 @@ def test_deviation_is_measured_against_the_model_as_it_stands() -> None:
         motor_seconds=RUN_UP,
         measured_cm=up_predicted - 3.0,
     ) == pytest.approx(-3.0)
+
+
+# --------------------------------------------------------------------------------------
+# The ascent measured by two runs (0.5.0, "path A ascent")
+# --------------------------------------------------------------------------------------
+def test_the_lift_off_run_gives_the_slat_phase_on_its_own() -> None:
+    """One press, one number: the same arithmetic the two-press run did, alone."""
+    start = datetime(2026, 9, 13, 9, 0, 0)
+    assert slat_time_from_press(start, start + timedelta(seconds=4.8)) == pytest.approx(4.8)
+    assert slat_time_from_press(100.0, 104.8) == pytest.approx(4.8)
+    with patch_reaction(0.2):
+        assert slat_time_from_press(0.0, 5.0) == pytest.approx(4.8)
+
+
+def test_a_lift_off_press_before_the_motor_is_refused() -> None:
+    """A press a minute before the motor started is a clock, not a shutter."""
+    with pytest.raises(CalibrationError, match="before the motor started") as err:
+        slat_time_from_press(10.0, 9.0)
+    assert err.value.reason == calibration.REASON_BAD_POINT
+
+
+def test_the_two_runs_are_put_together_with_the_same_check_as_one() -> None:
+    """The slat phase of the first run has to fit inside the ascent of the second."""
+    run = timing_from_presses(0.0, None, 22.3)
+    assert timing_with_slat(run, 4.7) == calibration.PressTiming(4.7, pytest.approx(22.3))
+    with pytest.raises(CalibrationError, match="outside the ascent"):
+        timing_with_slat(run, 30.0)
+    with pytest.raises(CalibrationError, match="outside the ascent"):
+        timing_with_slat(run, -1.0)
+
+
+@pytest.mark.parametrize("roll", [1.0, 1.4, 1.69, 2.12, 3.0])
+def test_the_closed_end_speed_is_the_slope_of_the_roll_model(roll: float) -> None:
+    """`2 / (k + 1)`, checked against the model it was differentiated from.
+
+    Mutation caught: any other constant in the formula - the curve is nearly straight
+    over the first centimetres, so an arithmetic slip would still look plausible on a
+    single reading.
+    """
+    curtain = 17.6
+    speed = curtain_speed_at_the_closed_end(roll, HEIGHT, curtain)
+    # The same slope, measured on `predict_cm` itself over a hundredth of the run.
+    step = curtain / 1000
+    numeric = predict_cm(DIRECTION_OPEN, roll, 1.0, step / curtain, HEIGHT) / step
+    assert speed == pytest.approx(numeric, rel=0.01)
+
+
+def test_a_window_with_no_travel_has_no_speed() -> None:
+    """The one shape of question this cannot be asked: a height or a time of zero."""
+    for height, curtain in ((0.0, 17.6), (HEIGHT, 0.0)):
+        with pytest.raises(CalibrationError) as err:
+            curtain_speed_at_the_closed_end(2.0, height, curtain)
+        assert err.value.reason == calibration.REASON_BAD_POINT
+
+
+def _lift_off_run(reaction: float, stop_latency: float, roll: float = 2.12):
+    """One lift-off run of the reference window, with a late finger and a slow bus.
+
+    Answers with (seconds from the motor starting to it stopping, the gap in cm the
+    user would tape, the slat phase the press alone would have produced) - all three
+    from the model, so the test knows what the right answer is.
+    """
+    curtain = OPENING - SLAT
+    # The true lift-off is SLAT; the press is `reaction` later, the motor stops
+    # `stop_latency` after that, and the bar has been rising since the true lift-off.
+    stop_seconds = SLAT + reaction + stop_latency
+    travelled = stop_seconds - SLAT
+    gap = predict_cm(DIRECTION_OPEN, roll, 1.0, travelled / curtain, HEIGHT)
+    return stop_seconds, gap, SLAT + reaction
+
+
+def test_a_taped_gap_puts_a_late_press_back_where_it_belongs() -> None:
+    """Half a second of reaction and a third of a second of bus, undone by a tape.
+
+    The press said 5.5 s of slats where the shutter took 4.7; the gap it left says 4.7
+    again, to within the tenth of a second the linearisation costs.
+    """
+    stop_seconds, gap, pressed = _lift_off_run(reaction=0.5, stop_latency=0.3)
+    assert pressed == pytest.approx(SLAT + 0.5)
+    corrected = slat_time_from_gap(
+        stop_seconds=stop_seconds,
+        gap_cm=gap,
+        roll=2.12,
+        height=HEIGHT,
+        curtain_time=OPENING - SLAT,
+    )
+    assert corrected == pytest.approx(SLAT, abs=0.1)
+
+
+def test_a_gap_of_nothing_says_the_lift_off_was_the_stop() -> None:
+    """Zero centimetres of travel after the lift-off means the two instants are one.
+
+    Which is also why the flow refuses it as a measurement: a shutter still resting on
+    its base when the motor stopped was pressed *before* it lifted, and the number this
+    returns is a lower bound rather than an answer (`async_step_lift_early`).
+    """
+    corrected = slat_time_from_gap(
+        stop_seconds=4.7, gap_cm=0.0, roll=2.12, height=HEIGHT, curtain_time=OPENING - SLAT
+    )
+    assert corrected == pytest.approx(4.7)
+
+
+def test_the_gap_correction_does_not_take_the_reaction_constant_off_as_well() -> None:
+    """A gap replaces the press; it does not correct it.
+
+    `PRESS_REACTION_SEC` is the flow's answer to a press it has to believe. Once the
+    tape has said where the bar really was, the press is out of the arithmetic
+    altogether, and taking the constant off a second time would move the instant twice.
+
+    Mutation caught: subtracting `PRESS_REACTION_SEC` inside `slat_time_from_gap`.
+    """
+    stop_seconds, gap, _pressed = _lift_off_run(reaction=0.5, stop_latency=0.3)
+    plain = slat_time_from_gap(
+        stop_seconds=stop_seconds, gap_cm=gap, roll=2.12, height=HEIGHT, curtain_time=OPENING - SLAT
+    )
+    with patch_reaction(0.25):
+        with_constant = slat_time_from_gap(
+            stop_seconds=stop_seconds,
+            gap_cm=gap,
+            roll=2.12,
+            height=HEIGHT,
+            curtain_time=OPENING - SLAT,
+        )
+    assert with_constant == pytest.approx(plain)
+
+
+def test_a_gap_bigger_than_the_slat_phase_is_clamped_rather_than_negative() -> None:
+    """A tape read from the floor cannot make the slats take less than no time."""
+    corrected = slat_time_from_gap(
+        stop_seconds=4.7, gap_cm=150.0, roll=2.12, height=HEIGHT, curtain_time=OPENING - SLAT
+    )
+    assert corrected == 0.0
 
 
 # --------------------------------------------------------------------------------------

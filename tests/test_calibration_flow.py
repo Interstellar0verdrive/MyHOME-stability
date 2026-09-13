@@ -248,12 +248,19 @@ class FakeRunner:
         self.started: list[str] = []
         self.runs: list[tuple[str, float]] = []
         self.stops = 0
+        self.stopped_at = dt_util.utcnow()
         self.fail: CalibrationError | None = None
         self.fail_on: str | None = None
         cover.async_calib_home = self._home
         cover.async_calib_start = self._start
         cover.async_calib_stop = self._stop
+        cover.async_calib_motor_stop = self._motor_stop
         cover.async_calib_run_fraction = self._run_fraction
+        # How long the motor goes on turning after our stop frame reaches the bus, and
+        # how long the gateway sat on that frame before writing it. Both are zero on a
+        # shutter that behaves, and both are what the lift-off check screen is about.
+        self.stop_coast = 0.0
+        self.stop_queue = 0.0
 
     def _maybe_fail(self, what: str) -> None:
         if self.fail is not None and self.fail_on in (None, what):
@@ -272,7 +279,14 @@ class FakeRunner:
     async def _stop(self):
         self._maybe_fail("stop")
         self.stops += 1
-        return dt_util.utcnow()
+        # The instant our frame reached the bus, which is not the instant it was asked
+        # for: a busy command queue holds it back, and the motor runs for all of it.
+        self.stopped_at = dt_util.utcnow() + timedelta(seconds=self.stop_queue)
+        return self.stopped_at
+
+    async def _motor_stop(self):
+        """The actuator's own "stopped", `stop_coast` after the frame went out."""
+        return self.stopped_at + timedelta(seconds=self.stop_coast)
 
     async def _run_fraction(self, direction: str, fraction: float) -> RunReport:
         self._maybe_fail("run")
@@ -479,9 +493,14 @@ PATH_A_BASIC: tuple[Act, ...] = (
     Act(option="path_a"),
     Act(option="begin"),
     Act(option="confirm_closed"),
+    # The ascent, in two runs of one press each: the lift-off run, the check screen it
+    # ends on, the shutter closed again, and then the whole ascent.
     Act(option="open_start"),
     Act(option="lifted_off", tick=SLAT),
-    Act(option="stopped_open", tick=CURTAIN_UP),
+    Act(option="lift_accept"),
+    Act(option="confirm_closed_again"),
+    Act(option="open_full_start"),
+    Act(option="stopped_open", tick=OPENING),
     Act(option="accept_step"),
     Act(payload={CONF_HEIGHT: str(HEIGHT)}),
     Act(option="accept_step"),
@@ -678,6 +697,9 @@ async def test_path_a_walks_the_screens_in_the_order_the_flow_document_agreed(
         "home_closed_done",
         "open_brief",
         "open_lift",
+        "lift_check",
+        "closed_again",
+        "open_full_brief",
         "open_top",
         "open_result",
         "height",
@@ -693,16 +715,20 @@ async def test_path_a_walks_the_screens_in_the_order_the_flow_document_agreed(
         "summary_basic",
         "saved",
     ]
-    # Closed for the first press, open for the descent, and the far end stop before
-    # each of the two timed runs.
+    # Closed for the lift-off run, closed again for the full ascent, open for the
+    # descent, and the far end stop before each of the two automatic runs.
     assert runner.homed == [
         DIRECTION_CLOSE,  # home_closed
         DIRECTION_CLOSE,  # open_timed brings it back to the bottom
+        DIRECTION_CLOSE,  # open_home_again, between the two runs of the ascent
         DIRECTION_OPEN,  # close_timed takes it to the top
         DIRECTION_OPEN,  # half_down
         DIRECTION_CLOSE,  # half_up
     ]
-    assert runner.started == [DIRECTION_OPEN, DIRECTION_CLOSE]
+    # Three free runs now, not two: the ascent is measured by a short one and a whole
+    # one, and only the short one is stopped by us.
+    assert runner.started == [DIRECTION_OPEN, DIRECTION_OPEN, DIRECTION_CLOSE]
+    assert runner.stops == 1
     assert runner.runs == [(DIRECTION_CLOSE, 0.5), (DIRECTION_OPEN, 0.5)]
 
 
@@ -738,7 +764,7 @@ async def test_every_measurement_is_confirmed_before_the_next_one(
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:9])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:12])
         assert result["step_id"] == "open_result"
         assert result["description_placeholders"]["slat"] == f"{SLAT:.1f}"
         assert result["description_placeholders"]["run"] == f"{OPENING:.1f}"
@@ -756,7 +782,7 @@ async def test_repeating_a_measurement_throws_the_first_one_away(
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         # ... as far as the descent's confirmation screen.
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:16])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
         assert result["step_id"] == "tape_result"
         runs_before = len(runner.runs)
 
@@ -777,6 +803,307 @@ async def test_repeating_a_measurement_throws_the_first_one_away(
         ]
 
 
+# --------------------------------------------------------------------------------------
+# The ascent, in two runs of one press each (0.5.0, "path A ascent")
+# --------------------------------------------------------------------------------------
+# How late a press has to be, on the reference window, to leave a gap worth taping.
+LATE_PRESS_SEC = 0.6
+# ...and how wide that gap is, out of the model the fake shutter is.
+LATE_PRESS_GAP_CM = ascent_cm(LATE_PRESS_SEC / CURTAIN_UP)
+# How long the motor of that shutter goes on turning after our stop frame reaches the
+# bus. The bar rises for all of it too, so the tape reads the distance to the *motor*
+# stop and not to the frame.
+STOP_COAST_SEC = 0.4
+COASTED_GAP_CM = ascent_cm((LATE_PRESS_SEC + STOP_COAST_SEC) / CURTAIN_UP)
+
+# As far as the check screen the lift-off run ends on.
+TO_THE_LIFT_CHECK: tuple[Act, ...] = PATH_A_BASIC[:8]
+
+
+async def test_the_lift_off_press_stops_the_shutter_where_it_found_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The press ends its run: the frame goes out at once, before any screen is drawn.
+
+    That stop is what turns the first press into something a tape can check - the bar
+    comes to rest a few centimetres up, and where it rests says how late the press was.
+
+    Mutation caught: showing the check screen without stopping (the shutter would sail
+    on to the top and the "gap" would be the whole window).
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:7])
+        assert result["step_id"] == "open_lift"
+        assert runner.stops == 0
+
+        result = await choose(hass, result, "lifted_off")
+        assert result["step_id"] == "lift_check"
+        assert runner.stops == 1
+
+
+async def test_the_check_screen_offers_the_three_things_the_user_can_see(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Still on the base, a few centimetres up, a hand's breadth up - in that order.
+
+    Mutation caught: dropping "it is still touching the base", which is the only exit
+    for the one case the arithmetic cannot repair.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        assert result["menu_options"] == [
+            "lift_too_early",
+            "lift_accept",
+            "lift_gap",
+            "not_right",
+        ]
+
+
+async def test_a_shutter_still_on_its_base_sends_the_run_back_to_the_start(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A press before the edge moved cannot be corrected, only made again.
+
+    Mutation caught: treating "still touching" as a gap of zero, which would hand the
+    fit a slat phase that is short by however early the press was.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        homed = len(runner.homed)
+
+        result = await choose(hass, result, "lift_too_early")
+        assert result["step_id"] == "open_brief"
+        # The stage starts again from the bottom: the shutter is parked a few
+        # centimetres up and the run has to begin at the end stop.
+        assert len(runner.homed) == homed + 1
+        assert runner.homed[-1] == DIRECTION_CLOSE
+
+
+async def test_accepting_the_lift_off_closes_the_shutter_before_the_full_ascent(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The second run starts from the end stop too, and asks before it is believed.
+
+    Mutation caught: running the full ascent from wherever the first run stopped, which
+    would make the opening time short by the whole first run.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+
+        result = await choose(hass, result, "lift_accept")
+        assert result["step_id"] == "closed_again"
+        assert runner.homed[-1] == DIRECTION_CLOSE
+        # Nothing has started yet: the briefing comes first, then the button.
+        started = list(runner.started)
+        result = await choose(hass, result, "confirm_closed_again")
+        assert result["step_id"] == "open_full_brief"
+        assert runner.started == started
+        result = await choose(hass, result, "open_full_start")
+        assert result["step_id"] == "open_top"
+        assert runner.started == [*started, DIRECTION_OPEN]
+
+
+async def test_the_gap_form_may_be_left_empty_and_then_the_press_stands(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The way out of a screen the precise level arrives on without being asked.
+
+    Mutation caught: making the field required, which would trap somebody who opened
+    the form and then decided not to measure.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        result = await choose(hass, result, "lift_gap")
+        assert result["step_id"] == "lift_gap"
+
+        result = await submit(hass, result, {"gap_cm": "  "})
+        assert result["step_id"] == "closed_again"
+        result = await drive(hass, freezer, result, PATH_A_BASIC[9:12])
+        # No gap was taped, so the result screen is the one that does not mention one.
+        assert result["step_id"] == "open_result"
+        assert result["description_placeholders"]["slat"] == f"{SLAT:.1f}"
+
+
+async def test_the_gap_form_refuses_what_is_not_a_gap(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same field as every other reading, with its own bounds."""
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        result = await choose(hass, result, "lift_gap")
+
+        result = await submit(hass, result, {"gap_cm": "a couple of fingers"})
+        assert result["errors"] == {"gap_cm": "not_a_number"}
+        result = await submit(hass, result, {"gap_cm": "-2"})
+        assert result["errors"] == {"gap_cm": "out_of_range"}
+        result = await submit(hass, result, {"gap_cm": "120"})
+        assert result["errors"] == {"gap_cm": "out_of_range"}
+        # ...and the comma every other numeric field of this dialog accepts.
+        result = await submit(hass, result, {"gap_cm": "3,5"})
+        assert result["step_id"] == "closed_again"
+
+
+async def test_a_gap_of_nothing_is_a_press_that_came_too_early(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Under a centimetre is not a small gap, it is a shutter still on its base.
+
+    Mutation caught: accepting it as a very good press, which would put the lift-off at
+    the motor stop and make the slat phase *longer* than the press said rather than
+    shorter.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        result = await choose(hass, result, "lift_gap")
+        result = await submit(hass, result, {"gap_cm": "0.5"})
+        assert result["step_id"] == "lift_early"
+        assert result["menu_options"] == ["repeat_step", "lift_gap", "not_right"]
+
+        # ...and the way out of it is the run again, from the end stop.
+        homed = len(runner.homed)
+        result = await choose(hass, result, "repeat_step")
+        assert result["step_id"] == "open_brief"
+        assert len(runner.homed) == homed + 1
+
+
+async def test_a_stop_the_gateway_sat_on_says_so_on_the_check_screen(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A wide gap is the command queue's doing, and the user is told rather than blamed.
+
+    Mutation caught: one check screen for both cases, which would leave somebody
+    measuring a fifteen-centimetre gap wondering what they did wrong.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        runner.stop_queue = 1.5
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        assert result["step_id"] == "lift_check_late"
+        assert result["menu_options"] == [
+            "lift_too_early",
+            "lift_accept",
+            "lift_gap",
+            "not_right",
+        ]
+
+
+async def test_a_taped_gap_corrects_the_slat_time_that_is_stored(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The whole point of the split: a late press repaired by a tape measure.
+
+    The press goes in 0.6 s after the bottom edge really left the base, so on its own
+    it would store 5.3 s of slats instead of 4.7. The bar it left standing says how far
+    the curtain moved in that 0.6 s, and the fit is given the instant back.
+
+    Mutation caught: storing the press's own slat time when a gap was measured, which
+    is the number `open_result` shows and the one that must *not* be saved.
+    """
+    late_ascent: tuple[Act, ...] = (
+        *PATH_A_BASIC[:7],
+        Act(option="lifted_off", tick=SLAT + LATE_PRESS_SEC),
+        Act(option="lift_gap"),
+        Act(payload={"gap_cm": f"{LATE_PRESS_GAP_CM:.1f}"}),
+        *PATH_A_BASIC[9:],
+    )
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), late_ascent[:10])
+        assert result["step_id"] == "closed_again"
+        result = await drive(hass, freezer, result, late_ascent[10:13])
+        # The screen shows the press's number and says the tape will replace it.
+        assert result["step_id"] == "open_result_gap"
+        assert result["description_placeholders"]["slat"] == f"{SLAT + LATE_PRESS_SEC:.1f}"
+        assert result["description_placeholders"]["gap"] == f"{LATE_PRESS_GAP_CM:.1f}"
+
+        result = await drive(hass, freezer, result, late_ascent[13:])
+        assert result["step_id"] == "saved"
+        profile = the_profile(hass, entry)
+        assert profile[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.15)
+
+
+async def test_without_a_gap_the_late_press_is_stored_as_it_was_made(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The other half of the test above: nothing corrects a press nobody measured.
+
+    Mutation caught: a correction applied to every ascent, gap or no gap, out of a
+    `lift_run_sec` that is always there.
+    """
+    late_ascent: tuple[Act, ...] = (
+        *PATH_A_BASIC[:7],
+        Act(option="lifted_off", tick=SLAT + LATE_PRESS_SEC),
+        *PATH_A_BASIC[8:],
+    )
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), late_ascent)
+        assert result["step_id"] == "saved"
+        assert the_profile(hass, entry)[CONF_SLAT_TIME] == pytest.approx(
+            SLAT + LATE_PRESS_SEC, abs=0.05
+        )
+
+
+async def test_the_gap_is_measured_against_the_motor_stop_and_not_the_stop_frame(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The motor turns on past our stop frame, and the bar rises for all of it.
+
+    `async_calib_stop` answers with the instant the frame reached the bus;
+    `async_calib_motor_stop` with the instant the motor really came to rest, which is
+    the actuator's own word where it gives one and `stop_latency` past the frame where
+    it does not. The tape reads the distance to *that* instant, so that is the far end
+    the correction is computed against.
+
+    Mutation caught: measuring the lift-off run to the stop frame, which would put the
+    true lift-off the whole braking time early and take it off every corrected slat
+    phase - the very error the reading exists to remove.
+    """
+    coasting: tuple[Act, ...] = (
+        *PATH_A_BASIC[:7],
+        Act(option="lifted_off", tick=SLAT + LATE_PRESS_SEC),
+        Act(option="lift_gap"),
+        Act(payload={"gap_cm": f"{COASTED_GAP_CM:.1f}"}),
+        *PATH_A_BASIC[9:],
+    )
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        runner.stop_coast = STOP_COAST_SEC
+        result = await drive(hass, freezer, await open_dialog(hass, entry), coasting)
+        assert result["step_id"] == "saved"
+        assert the_profile(hass, entry)[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.15)
+
+
+async def test_repeating_the_ascent_throws_both_of_its_runs_away(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A slat phase from one attempt does not belong with an ascent from another.
+
+    Mutation caught: keeping the taped gap across a repeat, which would correct a
+    lift-off instant that no longer exists.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), TO_THE_LIFT_CHECK)
+        result = await choose(hass, result, "lift_gap")
+        result = await submit(hass, result, {"gap_cm": "4"})
+        result = await drive(hass, freezer, result, PATH_A_BASIC[9:12])
+        assert result["step_id"] == "open_result_gap"
+
+        result = await choose(hass, result, "repeat_step")
+        assert result["step_id"] == "open_brief"
+        result = await drive(hass, freezer, result, PATH_A_BASIC[6:12])
+        assert result["step_id"] == "open_result"
+        assert result["description_placeholders"]["gap"] == "-"
+
+
 async def test_the_height_can_be_written_again_without_moving_anything(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -787,7 +1114,7 @@ async def test_the_height_can_be_written_again_without_moving_anything(
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:11])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:14])
         assert result["step_id"] == "height_result"
         homed_before = list(runner.homed)
 
@@ -859,7 +1186,7 @@ async def test_the_precise_level_adds_four_readings_and_ends_on_its_own_summary(
             (DIRECTION_OPEN, 0.75),
             (DIRECTION_CLOSE, 0.40),
         ]
-        assert runner.started == [DIRECTION_OPEN, DIRECTION_CLOSE]
+        assert runner.started == [DIRECTION_OPEN, DIRECTION_OPEN, DIRECTION_CLOSE]
 
         profile = the_profile(hass, entry)
         assert profile[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.05)
@@ -900,13 +1227,13 @@ async def test_the_precise_tape_screens_say_what_is_expected(
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:15])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
         assert result["step_id"] == "measure_descent"
         rough = result["description_placeholders"]
         assert rough["tolerance"] == "15"
         assert float(rough["expected"]) > 0
 
-        result = await drive(hass, freezer, result, (*PATH_A_BASIC[15:-1], Act(option="refine")))
+        result = await drive(hass, freezer, result, (*PATH_A_BASIC[18:-1], Act(option="refine")))
         assert result["step_id"] == "measure_descent"
         precise = result["description_placeholders"]
         assert precise["tolerance"] == "3"
@@ -1073,7 +1400,7 @@ async def test_a_tape_reading_written_with_a_comma_is_accepted(
     """End to end, on the one field every path goes through."""
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:10])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:13])
         assert result["step_id"] == "height"
         result = await submit(hass, result, {CONF_HEIGHT: "195,5"})
         assert result["description_placeholders"]["height"] == "195.5"
@@ -1085,7 +1412,7 @@ async def test_something_that_is_not_a_number_is_sent_back_to_the_form(
     """Every numeric field is text, so every one of them has to say what it wants."""
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:10])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:13])
         result = await submit(hass, result, {CONF_HEIGHT: "about two metres"})
         assert result["errors"] == {CONF_HEIGHT: "not_a_number"}
         result = await submit(hass, result, {CONF_HEIGHT: "5"})
@@ -1098,7 +1425,7 @@ async def test_a_tape_reading_above_the_travel_is_sent_back_to_the_form(
     """A bar above the whole travel is a tape read from the floor, not from the rest."""
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:15])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
         result = await submit(hass, result, {"measured_cm": str(HEIGHT + 10)})
         assert result["step_id"] == "measure_descent"
         assert result["errors"] == {"measured_cm": "above_the_travel"}
@@ -1119,7 +1446,7 @@ async def test_the_height_defaults_to_what_is_known_and_otherwise_to_two_hundred
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:10])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:13])
         assert _suggested(result, CONF_HEIGHT) == "195"
 
     async with calibrating(hass, tmp_path, TWO_COVERS_YAML) as (entry, _commands):
@@ -1127,7 +1454,7 @@ async def test_the_height_defaults_to_what_is_known_and_otherwise_to_two_hundred
         acts = (
             *ENTER,
             Act(payload={"cover": SECOND_UNIQUE_ID}),
-            *PATH_A_BASIC[3:10],
+            *PATH_A_BASIC[3:13],
         )
         result = await drive(hass, freezer, await open_dialog(hass, entry), acts)
         assert result["step_id"] == "height"
@@ -1203,10 +1530,15 @@ async def test_a_press_that_never_came_is_not_believed(
 async def test_presses_in_an_impossible_order_are_refused(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A shutter cannot have stopped before it started."""
+    """A shutter cannot have stopped before it started.
+
+    Now that the two presses are on two separate runs, each one is refused by its own
+    run: the lift-off press on the screen right after it - the shutter is stopped
+    first, whatever the clock says - and the press at the top on its own.
+    """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         cover = entity_object(hass, COVER, DEVICE_KEY)
-        FakeRunner(cover)
+        runner = FakeRunner(cover)
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:6])
         # The motor "started" a minute in the future.
         async def _late(direction: str):
@@ -1215,6 +1547,18 @@ async def test_presses_in_an_impossible_order_are_refused(
         cover.async_calib_start = _late
         result = await choose(hass, result, "open_start")
         result = await choose(hass, result, "lifted_off")
+        assert result["step_id"] == "problem_bad_point"
+        # The run was stopped all the same: a press that cannot be believed is still a
+        # user asking for the shutter to stop.
+        assert runner.stops == 1
+
+        # ...and the same on the second run, whose press stands on its own.
+        cover.async_calib_start = runner._start  # noqa: SLF001 - back to a shutter that works
+        result = await choose(hass, result, "repeat_step")
+        result = await drive(hass, freezer, result, PATH_A_BASIC[6:10])
+        assert result["step_id"] == "open_full_brief"
+        cover.async_calib_start = _late
+        result = await choose(hass, result, "open_full_start")
         result = await choose(hass, result, "stopped_open")
         assert result["step_id"] == "problem_bad_point"
 
@@ -1402,7 +1746,10 @@ PATH_C_TIMES: tuple[Act, ...] = (
     Act(option="confirm_closed"),
     Act(option="open_start"),
     Act(option="lifted_off", tick=SLAT),
-    Act(option="stopped_open", tick=CURTAIN_UP),
+    Act(option="lift_accept"),
+    Act(option="confirm_closed_again"),
+    Act(option="open_full_start"),
+    Act(option="stopped_open", tick=OPENING),
     Act(option="accept_step"),
     Act(option="close_start"),
     Act(option="stopped_closed", tick=CLOSING),
@@ -1431,6 +1778,36 @@ async def test_path_c_times_only_stores_the_two_run_times_as_overrides(
             CONF_CLOSING_TIME: pytest.approx(CLOSING, abs=0.05),
             CONF_SLAT_TIME: pytest.approx(SLAT, abs=0.05),
         }
+
+
+async def test_a_taped_gap_corrects_the_slat_time_a_refinement_stores_too(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path C fits nothing, so the roll the correction needs is the profile's own.
+
+    The refinement always follows a profile - that is what brought the user here - so
+    the one thing the arithmetic is missing is there to be borrowed, scaled to whatever
+    this window's travel is known to be. Nothing else about the refinement moves: the
+    two run times are still exactly what the presses said.
+
+    Mutation caught: correcting the ascent of path A alone, which would leave the one
+    path that always has a roll to hand storing the finger's number.
+    """
+    late_ascent: tuple[Act, ...] = (
+        *PATH_C_TIMES[:8],
+        Act(option="lifted_off", tick=SLAT + LATE_PRESS_SEC),
+        Act(option="lift_gap"),
+        Act(payload={"gap_cm": f"{LATE_PRESS_GAP_CM:.1f}"}),
+        *PATH_C_TIMES[10:],
+    )
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), late_ascent)
+        assert result["step_id"] == "saved_refined"
+        overrides = the_calibration(hass, entry)["overrides"]
+        assert overrides[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.15)
+        assert overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
+        assert overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
 
 
 async def test_path_c_with_the_coefficients_measures_and_overrides_them_too(
@@ -1817,7 +2194,7 @@ async def test_the_shutter_is_marked_calibrating_for_the_whole_conversation(
         cover = entity_object(hass, COVER, DEVICE_KEY)
         FakeRunner(cover)
         result = await open_dialog(hass, entry)
-        for act in PATH_A_BASIC[:8]:
+        for act in PATH_A_BASIC[:11]:
             if act.tick:
                 freezer.tick(timedelta(seconds=act.tick))
             result = (
@@ -2366,7 +2743,7 @@ async def test_the_second_press_is_timed_too_and_can_be_impossible(
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:8])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:11])
         assert result["step_id"] == "open_top"
         freezer.tick(timedelta(seconds=PRESS_TIMEOUT_SEC + 1))
         result = await choose(hass, result, "stopped_open")
@@ -2380,7 +2757,7 @@ async def test_the_closing_press_is_timed_and_checked_like_the_opening_ones(
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         cover = entity_object(hass, COVER, DEVICE_KEY)
         FakeRunner(cover)
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:13])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:16])
         assert result["step_id"] == "close_bottom"
         freezer.tick(timedelta(seconds=PRESS_TIMEOUT_SEC + 1))
         result = await choose(hass, result, "stopped_closed")
@@ -2419,7 +2796,7 @@ async def test_a_tape_reading_that_is_not_a_number_is_refused_on_every_form(
     """The descent, the ascent and the check all read the same field the same way."""
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:15])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
         result = await submit(hass, result, {"measured_cm": "a bit less than a metre"})
         assert result["errors"] == {"measured_cm": "not_a_number"}
         result = await submit(hass, result, {"measured_cm": "-3"})
@@ -2500,7 +2877,7 @@ async def test_an_assigned_profile_supplies_the_height_the_guided_flow_offers(
         await store.async_set_assignments({SECOND_UNIQUE_ID: ("tall", None)})
 
         FakeRunner(entity_object(hass, COVER, "2-82"))
-        acts = (*ENTER, Act(payload={"cover": SECOND_UNIQUE_ID}), *PATH_A_BASIC[3:10])
+        acts = (*ENTER, Act(payload={"cover": SECOND_UNIQUE_ID}), *PATH_A_BASIC[3:13])
         result = await drive(hass, freezer, await open_dialog(hass, entry), acts)
         assert result["step_id"] == "height"
         assert _suggested(result, CONF_HEIGHT) == "195"
@@ -3262,6 +3639,9 @@ async def test_every_screen_of_a_whole_conversation_renders_its_own_text(
         "home_closed_done",
         "open_brief",
         "open_lift",
+        "lift_check",
+        "closed_again",
+        "open_full_brief",
         "open_top",
         "open_result",
         "height",
