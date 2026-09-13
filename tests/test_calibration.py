@@ -22,6 +22,7 @@ import pytest
 
 from custom_components.myhome import calibration, cover as cover_module
 from custom_components.myhome.calibration import (
+    FIXED_SCALE_BOUNDS,
     CalibrationError,
     FitPoint,
     FitResult,
@@ -336,6 +337,41 @@ def test_fit_from_run_converts_seconds_into_fractions_once() -> None:
         DIRECTION_CLOSE, run_time=21.7, slat_time=4.7, measurements=[(60.0, 0.0)], height=HEIGHT
     )
     assert long_run.points[0].fraction == 1.0
+
+
+def test_a_fit_with_no_press_to_correct_keeps_the_run_time_it_was_given() -> None:
+    """`FIXED_SCALE_BOUNDS` pins the time scale at 1, and the roll takes what is left.
+
+    The time scale measures the finger: the seconds a press was late by, spread over
+    the run that press ended. "Solo la calibrazione approfondita" presses for nothing -
+    its run times are the ones the cover already moves on - so there is no reaction time
+    in them to fit out, and a scale fitted there would be silently discarded by the one
+    scope that stores the roll without the times. Pinned, the model that is stored is
+    the model the readings were fitted to.
+
+    The second half of the test is what makes the first half mean something: on the same
+    two readings the free fit really does move the scale, so the pinning is doing work
+    and is not a coincidence of the numbers.
+    """
+    readings = [(4.25, 155.0), (12.75, 60.0)]
+    pinned = fit_from_run(
+        DIRECTION_CLOSE,
+        run_time=21.7,
+        slat_time=4.7,
+        measurements=readings,
+        height=HEIGHT,
+        scale_bounds=FIXED_SCALE_BOUNDS,
+    )
+    assert pinned.fit.time_scale == 1.0
+    assert pinned.corrected_run_time == pytest.approx(21.7)
+    # Two readings and one unknown: something is left over to be a residual of.
+    assert max(abs(residual) for residual in pinned.fit.residuals_cm) > 0.0
+
+    free = fit_from_run(
+        DIRECTION_CLOSE, run_time=21.7, slat_time=4.7, measurements=readings, height=HEIGHT
+    )
+    assert free.fit.time_scale != 1.0
+    assert free.corrected_run_time != pytest.approx(21.7)
 
 
 def test_a_fitted_scale_corrects_the_run_times() -> None:

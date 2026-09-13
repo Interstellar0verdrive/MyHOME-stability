@@ -2488,12 +2488,13 @@ async def test_the_thorough_scope_reads_the_tape_and_times_nothing(
         overrides = the_calibration(hass, entry)["overrides"]
         assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
         assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
-        # ...and the run times, which the four readings scale rather than re-time.
-        assert overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
-        assert overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
-        assert overrides[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.05)
-        # The measurements kept beside the conclusions say the times were not pressed
-        # for, so that a reader six months later does not take them for a measurement.
+        # ...and *only* the rolls. The run times this scope starts from were not
+        # measured here - nobody pressed anything - so they are not written as this
+        # cover's own: they go on coming from the profile, and correcting the profile
+        # goes on reaching this window like every other one that follows it.
+        assert set(overrides) == {CONF_OPENING_ROLL, CONF_CLOSING_ROLL}
+        # The measurements kept beside the conclusions say the same thing, so that a
+        # reader six months later does not take the times for a measurement.
         assert the_calibration(hass, entry)[CONF_RAW]["times_measured"] is False
 
 
@@ -2613,10 +2614,13 @@ async def test_the_thorough_scope_starts_from_the_times_the_cover_moves_on_today
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS)
         assert result["step_id"] == "saved_refined"
         overrides = the_calibration(hass, entry)["overrides"]
-        assert overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
-        assert overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
+        # The rolls are the discriminator, and the only thing this scope stores: they
+        # come back right only if the fractions were computed against the profile's
+        # times. Adopting the file's 30 / 29 / 6 s would put every fraction out by a
+        # third and the roll with it.
         assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
         assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
+        assert set(overrides) == {CONF_OPENING_ROLL, CONF_CLOSING_ROLL}
 
 
 async def test_the_thorough_scope_writes_over_the_record_and_keeps_the_rest(
@@ -2812,20 +2816,146 @@ async def test_a_cover_nobody_has_said_anything_about_reads_defaults(
         assert result["description_placeholders"]["covers"] == f"{COVER_NAME} (From the file)"
 
 
+# --------------------------------------------------------------------------------------
+# What a correction is allowed to take away from a cover that follows a profile
+# --------------------------------------------------------------------------------------
+# `PROFILE_AND_OWN_NUMBERS_YAML` is the one fixture where the flip is visible: the file
+# writes this cover its own (wrong) times and `roll: 1.2`, and the profile it is
+# assigned carries the shutter's real numbers. Only a profile that *wins* is above
+# those keys, so what a correction does to `profile_wins` can be read straight off the
+# roll coefficients the entity ends up with.
+PROFILE_ROLL = ROLL_DOWN  # the profile declares one `roll:`, so both directions get it
+FILE_ROLLS = (FILE_ROLL, FILE_ROLL)
+
+
+async def _assigned_to_tall(hass: HomeAssistant, entry) -> None:
+    """What "Give each cover a profile" (and path B) leaves behind: the winning flag."""
+    await the_store(hass, entry).async_set_assignments({UNIQUE_ID: ("tall", HEIGHT)})
+
+
+async def _closed_and_reloaded(hass: HomeAssistant, result) -> dict[str, Any]:
+    """Leave the dialog the way the X does, and read what the cover really runs on."""
+    result = await choose(hass, result, "init")
+    await choose(hass, result, "finish")
+    await hass.async_block_till_done()
+    await set_connected(hass, True)
+    return dict(hass.states.get(ENTITY).attributes)
+
+
+async def test_a_correction_does_not_take_the_profile_out_from_under_the_cover(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Solo i tempi" measured three times; it must not move the two it did not.
+
+    `profile_wins` is what puts a profile above the keys the configuration file writes
+    for this cover. Save read it off `follows_profile`, which only path B sets, so every
+    correction took the flag away: a cover assigned `tall` and then corrected on its run
+    times alone fell back under its own file for everything else, and both roll
+    coefficients silently went from the profile's 1.69 to the file's 1.2 - on the screen
+    whose whole promise is that "everything you do not measure goes on coming from the
+    profile". `Calibration source` then said `guided`, because after the flip the
+    profile answered for nothing at all.
+
+    Mutation caught: writing `profile_wins=result.follows_profile` again, which puts the
+    file's rolls back on this cover and the word `guided` back on its attribute.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await _assigned_to_tall(hass, entry)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
+        assert result["step_id"] == "saved_refined"
+        assert result["description_placeholders"]["source"] == "profile tall, adjusted"
+        assert result["description_placeholders"]["origin"] == 'Adjusted from profile “tall”'
+        assert the_calibration(hass, entry)[CONF_PROFILE_WINS] is True
+
+        attributes = await _closed_and_reloaded(hass, result)
+        # The three times are this cover's own now...
+        assert attributes["Opening time"] == pytest.approx(OPENING, abs=0.05)
+        assert attributes["Closing time"] == pytest.approx(CLOSING, abs=0.05)
+        # ...and the two it never measured are still the profile's, not the file's.
+        assert attributes["Roll"] == pytest.approx(PROFILE_ROLL, abs=0.01)
+        assert attributes["Roll"] not in FILE_ROLLS
+        assert attributes[ATTR_CALIBRATION_SOURCE] == "profile tall, adjusted"
+
+
+async def test_the_thorough_scope_leaves_the_times_to_the_profile_and_owns_the_rolls(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The scope that times nothing measures the rolls, and claims nothing else.
+
+    Writing the adopted run times as this cover's own would be a measurement nobody
+    made, and would freeze the profile's times into the one window that was measured
+    most carefully: correcting the profile afterwards would reach every shutter that
+    follows it except that one.
+
+    Mutation caught: storing the five keys the fit produces rather than the two it
+    measured - which also reads `guided`, since the profile would then answer for
+    nothing.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await _assigned_to_tall(hass, entry)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS)
+        assert result["step_id"] == "saved_refined"
+        assert result["description_placeholders"]["source"] == "profile tall, adjusted"
+        assert set(the_calibration(hass, entry)["overrides"]) == {
+            CONF_OPENING_ROLL,
+            CONF_CLOSING_ROLL,
+        }
+
+        attributes = await _closed_and_reloaded(hass, result)
+        # The times are the profile's, scaled to this window (which is its reference).
+        assert attributes["Opening time"] == pytest.approx(OPENING, abs=0.05)
+        assert attributes["Closing time"] == pytest.approx(CLOSING, abs=0.05)
+        assert attributes["Slat time"] == pytest.approx(SLAT, abs=0.05)
+        # The two rolls are this window's own, and they are no longer one number.
+        assert attributes["Opening roll"] == pytest.approx(ROLL_UP, abs=0.01)
+        assert attributes["Closing roll"] == pytest.approx(ROLL_DOWN, abs=0.01)
+        assert attributes[ATTR_CALIBRATION_SOURCE] == "profile tall, adjusted"
+
+
+async def test_the_scope_that_measures_everything_leaves_the_profile_answering_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Tempi e rulli" covers all five keys, so the cover is measured outright.
+
+    The flag is still there - this shutter is still a `tall`, and says so - but there is
+    no key left for the profile to answer, which is what `guided` means.
+
+    Mutation caught: reporting "adjusted" for every record that carries the flag.
+    """
+    acts = (*PATH_C_TIMES[:5], Act(option="times_and_rolls"), *PATH_A_BASIC[5:-2], Act(option="save"))
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await _assigned_to_tall(hass, entry)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), acts)
+        assert result["step_id"] == "saved_refined"
+        assert result["description_placeholders"]["source"] == "guided"
+        assert the_calibration(hass, entry)[CONF_PROFILE_WINS] is True
+
+        attributes = await _closed_and_reloaded(hass, result)
+        assert attributes["Opening roll"] == pytest.approx(ROLL_UP, abs=0.01)
+        assert attributes["Closing roll"] == pytest.approx(ROLL_DOWN, abs=0.01)
+        assert attributes[ATTR_CALIBRATION_SOURCE] == "guided"
+
+
 async def test_a_cover_corrected_throughout_is_measured_and_not_adjusted(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
     """The scope that measures every key of the model leaves nothing of the profile in use.
 
     The same cover as the test above, and the same profile: what decides the word is
-    what the cover is running on afterwards, not which path was walked.
+    what the cover is running on afterwards, not which path was walked. "Tempi e rulli"
+    is the one scope that covers all five keys.
 
     Mutation caught: saying "adjusted" for every record that names a profile.
     """
+    acts = (*PATH_C_TIMES[:5], Act(option="times_and_rolls"), *PATH_A_BASIC[5:-2], Act(option="save"))
     async with calibrating(hass, tmp_path, FOLLOWER_ONLY_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), acts)
         assert result["description_placeholders"]["source"] == "guided"
+        assert result["description_placeholders"]["origin"] == "Measured"
 
 
 # --------------------------------------------------------------------------------------

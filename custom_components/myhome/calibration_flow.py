@@ -91,6 +91,7 @@ from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
 from .calibration import (
+    FIXED_SCALE_BOUNDS,
     REASON_BAD_POINT,
     REASON_BUSY,
     REASON_NO_ECHO,
@@ -3059,15 +3060,29 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
 
     # ------------------------------------------------------------------ the summary
     def _fit_both(self, slat: float) -> tuple[DirectionFit, DirectionFit]:
-        """One fit per direction, both told the same slat phase."""
+        """One fit per direction, both told the same slat phase.
+
+        The time scale is fitted with the roll wherever the run times were *pressed*
+        for: it is the reaction time of those presses, measured on the shutter instead
+        of guessed at. "Solo la calibrazione approfondita" pressed for nothing - its
+        times are the ones the cover already moves on - so there is no finger in them
+        to correct and the scale is pinned at 1. That is also what makes the two
+        readings per direction fit one unknown rather than two, which leaves a residual
+        worth reading, and what makes the model that is stored the same model the check
+        at 40 % was asked about.
+        """
         measured = self._measured
         height = measured.height or 0.0
+        scale_bounds = (
+            {"scale_bounds": FIXED_SCALE_BOUNDS} if measured.times_adopted else {}
+        )
         down = fit_from_run(
             DIRECTION_CLOSE,
             run_time=measured.closing.run_time if measured.closing else 0.0,
             slat_time=slat,
             measurements=measured.descent,
             height=height,
+            **scale_bounds,
         )
         up = fit_from_run(
             DIRECTION_OPEN,
@@ -3075,6 +3090,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             slat_time=slat,
             measurements=measured.ascent,
             height=height,
+            **scale_bounds,
         )
         return down, up
 
@@ -3189,6 +3205,23 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                     # file (spec 1.3) and the file is where a basic cover's run times
                     # usually live.
                     overrides=dict(values),
+                    accuracy_cm=accuracy,
+                )
+            if measured.times_adopted:
+                # The scope that timed nothing measured the two roll coefficients and
+                # nothing else. Writing the run times it *started from* as this cover's
+                # own would be a measurement nobody made - `raw` already says
+                # `times_measured: false` - and worse than idle: an override freezes
+                # the profile's times into this cover, so correcting the profile would
+                # afterwards reach every window that follows it except the one that was
+                # measured most carefully.
+                rolls = {
+                    CONF_OPENING_ROLL: values[CONF_OPENING_ROLL],
+                    CONF_CLOSING_ROLL: values[CONF_CLOSING_ROLL],
+                }
+                return _Result(
+                    yaml=overrides_yaml(key, rolls, measured.height),
+                    overrides=rolls,
                     accuracy_cm=accuracy,
                 )
             return _Result(
@@ -3419,6 +3452,33 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             kept.append(CONF_HEIGHT)
         return replaced, kept
 
+    @callback
+    def _profile_still_wins(self, record: Any, result: _Result) -> bool:
+        """Whether the cover goes on following its profile *above* what the file writes.
+
+        `profile_wins` is the flag that puts a profile over the keys the configuration
+        file writes for this cover: it means "somebody said, on this installation and
+        after that file was written, that this shutter is one of those". A correction
+        was taking it away, because the flag was read off `follows_profile` and only
+        path B sets that. The cover then fell back under its own file for every key the
+        correction did not measure - three run times measured, and both roll
+        coefficients silently moved from the profile's to the file's - and
+        `Calibration source` reported `guided`, because after the flip the profile
+        answered for nothing at all. That is the opposite of what `path_c` promises
+        ("everything you do not measure goes on coming from the profile"), on the one
+        screen whose whole purpose is to make the model better.
+
+        So a correction keeps it: the profile confirmed on `path_c` is that statement
+        being made, and a record that already carried the flag keeps carrying it. The
+        same reasoning as `async_step_calibration_edit`, which has never let a hand edit
+        of one number change which kind of shutter this is.
+        """
+        if result.follows_profile:  # path B, which is the statement itself
+            return True
+        if self._path != PATH_REFINE:
+            return False
+        return self._profile is not None or bool(record is not None and record.profile_wins)
+
     async def async_step_save(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Write the store - the first and only thing this conversation writes."""
         result = self._result()
@@ -3446,7 +3506,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             cover_calibration_data(
                 self._cover_unique_id,
                 profile=self._measured_name or self._profile,
-                profile_wins=result.follows_profile,
+                profile_wins=self._profile_still_wins(record, result),
                 height=height,
                 overrides=merged or None,
                 source=(

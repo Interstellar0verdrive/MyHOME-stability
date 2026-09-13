@@ -163,16 +163,24 @@ a heavier curtain, a fatter tube. It asks how far to go:
   quarter and at three quarters of the travel in each direction, and the check that
   closes them. Ten movements. For a shutter that has already been measured and whose
   times are right: it keeps every time that shutter runs on today — its own stored
-  values, or the profile it follows scaled to its travel — and the readings refit
-  both roll coefficients **and** a scale on those times. A curtain travel already
-  known is not asked for again; one nobody has ever measured is asked for first, and
-  costs no movement of its own, because the shutter has to be taken to the top for it
-  in any case.
+  values, or the profile it follows scaled to its travel — and the readings fit the
+  two roll coefficients over them. It stores **only those two**: nobody pressed
+  anything here, so the run times are not claimed as this shutter's own measurements
+  and go on coming from wherever they came from, which means a later correction of the
+  profile still reaches this window like every other one that follows it. A curtain
+  travel already known is not asked for again; one nobody has ever measured is asked
+  for first, and costs no movement of its own, because the shutter has to be taken to
+  the top for it in any case.
 
 Only the keys it actually measured are stored, and only for this shutter — merged
 into whatever was already stored for it, so the curtain travel and any other override
 this run did not re-measure stay exactly as they were. Everything still not covered
-goes on coming from the profile.
+goes on coming from the profile, and the shutter goes on following it: a correction
+confirms which profile this shutter starts from, which is the same statement the
+assignment form makes, so the profile keeps its place **above** the keys the
+configuration file writes for this cover. A correction of the run times alone
+therefore leaves `Calibration source` reading `profile <name>, adjusted`; only the
+scope that covers all five keys leaves it reading `guided`.
 
 The first two scopes end on a summary that offers **"Continue with the thorough
 calibration"**, which is the third scope run there and then, on the times just

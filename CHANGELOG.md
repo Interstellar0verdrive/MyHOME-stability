@@ -22,7 +22,10 @@ way, and nothing is ever written to `myhome.yaml`.
   check at half of it; **(C)** a shutter that has a profile and stops in the wrong place
   — its own run times, its own roll coefficients if it needs them, or the **thorough
   calibration on its own**: no timed run at all, four tape readings and a check, on
-  the times the shutter already moves on. There is no
+  the times the shutter already moves on, of which it stores the two roll coefficients
+  and nothing else. A correction measures some of the model and leaves the shutter
+  following its profile for the rest, which is what `profile <name>, adjusted` says.
+  There is no
   stopwatch anywhere: the integration knows when the motor started (the actuator
   says so itself), so a press marks only the end of a run, which halves the human
   error and leaves the tape as the only tool. The ascent is measured by **two runs
