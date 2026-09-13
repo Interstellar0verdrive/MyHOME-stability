@@ -1,0 +1,18 @@
+{
+  "name": "myhome-panel",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Source of the MyHOME calibration panel. Built into custom_components/myhome/frontend/myhome-panel.js, which is what ships.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lit": "3.3.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,2 +1,7 @@
 # Normalise line endings: four files were tracked with CRLF (upstream legacy).
 * text=auto eol=lf
+
+# The panel's bundle is generated (`panel_src/`, `npm run build`): keep it out of
+# diffs and out of the language statistics.  CI rebuilds it and fails on a
+# difference, which is what makes the committed file trustworthy.
+custom_components/myhome/frontend/** -diff linguist-generated

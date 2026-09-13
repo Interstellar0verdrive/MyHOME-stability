@@ -140,3 +140,8 @@ dmypy.json
 
 # local agent worktrees / tool state
 .claude/
+
+# The panel's build dependencies. The *built* bundle is committed on purpose
+# (custom_components/myhome/frontend/), because HACS copies the integration
+# directory as it is at the tag and there is no build step at the user's end.
+panel_src/node_modules/
