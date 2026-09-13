@@ -599,7 +599,7 @@
   "selector": {
     "profile_choice": {
       "options": {
-        "__none__": "Nessun profilo (i valori del file, o quelli predefiniti)"
+        "no_profile": "Nessun profilo (i valori del file, o quelli predefiniti)"
       }
     }
   },

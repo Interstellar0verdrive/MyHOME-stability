@@ -2929,7 +2929,7 @@ async def test_clearing_every_field_by_hand_deletes_the_record(
 async def test_a_profile_may_not_be_named_like_the_no_profile_option(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """`__none__` is a valid YAML key and the assignment select's sentinel.
+    """`no_profile` is a valid YAML key and the assignment select's sentinel.
 
     Mutation caught: accepting it, after which that profile can never be unassigned
     from "Profili e tapparelle" again.

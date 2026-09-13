@@ -390,12 +390,33 @@ def test_the_no_profile_option_of_the_assignment_form_is_translated() -> None:
 
     Its value is `NO_PROFILE`, and Home Assistant looks its label up under
     ``selector.profile_choice.options``. Without the text the user is offered a
-    dropdown whose first entry reads ``__none__``.
+    dropdown whose first entry reads ``no_profile``.
     """
     for path in [STRINGS, *TRANSLATIONS]:
         options = load(path)["selector"]["profile_choice"]["options"]
         assert set(options) == {NO_PROFILE}, path.name
         assert options[NO_PROFILE], path.name
+
+
+# hassfest's rule for a translation key: lowercase letters, digits, hyphen and
+# underscore, and neither a hyphen nor an underscore at either end.
+TRANSLATION_KEY_RE = re.compile(r"^(?![-_])(?!.*[-_]$)[a-z0-9_-]+$")
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_every_selector_option_key_is_a_valid_translation_key(path: Path) -> None:
+    """hassfest refuses the whole file over one option key that is not a slug.
+
+    The assignment select's "no profile" sentinel used to be spelled `__none__`, which
+    reads as "not a name anybody would give a profile" and is exactly what hassfest
+    rejects - it failed "Validate with hassfest" on every push until it was renamed.
+
+    Mutation caught: spelling any sentinel with a leading or trailing underscore again.
+    """
+    for key, selector in load(path)["selector"].items():
+        assert TRANSLATION_KEY_RE.match(key), f"{path.name}: selector.{key}"
+        for option in selector.get("options", {}):
+            assert TRANSLATION_KEY_RE.match(option), f"{path.name}: selector.{key}.{option}"
 
 
 @pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)

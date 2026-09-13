@@ -599,7 +599,7 @@
   "selector": {
     "profile_choice": {
       "options": {
-        "__none__": "Geen profiel (de waarden van het bestand, of de standaardwaarden)"
+        "no_profile": "Geen profiel (de waarden van het bestand, of de standaardwaarden)"
       }
     }
   },

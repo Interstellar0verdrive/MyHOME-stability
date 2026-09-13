@@ -290,8 +290,10 @@ FIELD_COVER = "cover"
 FIELD_MEASURED_CM = "measured_cm"
 FIELD_PROFILE = "profile"
 # "Nessun profilo" in the assignment form. Not the empty string: a select whose option
-# is "" renders as a blank line the user cannot tell from an unset field.
-NO_PROFILE = "__none__"
+# is "" renders as a blank line the user cannot tell from an unset field. It is also a
+# translation key under `selector.profile_choice.options`, so it has to be a slug
+# (`[a-z0-9-_]+`, no leading or trailing separator) or hassfest refuses `strings.json`.
+NO_PROFILE = "no_profile"
 
 _NAME_RE = re.compile(PROFILE_NAME_PATTERN)
 _NOT_A_NAME = re.compile(r"[^A-Za-z0-9_]+")
@@ -625,7 +627,10 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         fields = self._cover_fields()
         if not fields:
             return await self.async_step_no_basic_covers()
-        names = sorted(self._all_profiles())
+        # A profile the *file* calls `no_profile` would otherwise put the sentinel in
+        # the list twice; `async_step_profile_name` refuses the name, so the file is the
+        # only door it can come through.
+        names = sorted(name for name in self._all_profiles() if name != NO_PROFILE)
         if user_input is not None:
             assignments: dict[str, tuple[str | None, float | None]] = {}
             for label, unique_id in fields.items():
@@ -664,7 +669,7 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                     options=[NO_PROFILE, *names],
                     mode=SelectSelectorMode.DROPDOWN,
                     custom_value=False,
-                    # Only `__none__` is translated; a profile name has no text of its
+                    # Only `no_profile` is translated; a profile name has no text of its
                     # own and Home Assistant falls back to showing the value itself,
                     # which is the name the user gave it.
                     translation_key="profile_choice",
