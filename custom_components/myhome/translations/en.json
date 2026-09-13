@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Before the cover starts moving",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes the movements that step needs, and before each one come the instructions and all the time you need to get ready: no movement that has to be timed starts unless you start it. Nine movements in all, about four minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can close whenever you like: nothing is saved until the last screen, and a run already under way ends by itself at the end stop.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes the movements that step needs. Where there is a button to press, the instructions come first and the movement waits for you to start it; the steps measured with the tape move by themselves, and a screen warns you before the first of them. Eight movements in all, about four minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can close whenever you like: nothing is saved until the last screen, and a run already under way ends by itself at the end stop.",
         "menu_options": {
           "begin": "Understood, let's start",
           "cancel_flow": "Cancel"
@@ -303,15 +303,6 @@
         "description": "**Cover**: {cover}\n\n**What happened**: the cover was closed completely: this way everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
         "menu_options": {
           "confirm_closed": "It is completely closed",
-          "repeat_step": "Repeat this step",
-          "not_right": "It did not do what it should"
-        }
-      },
-      "home_open_done": {
-        "title": "Is the cover completely open?",
-        "description": "**Cover**: {cover}\n\n**What happened**: the cover was opened completely, because what follows runs down from there and a run that started anywhere else would measure nothing.\n\n**What you have to do**: look at it. If it is completely open, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
-        "menu_options": {
-          "confirm_open": "It is completely open",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "The curtain travel was written down",
-        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this height.",
+        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this height. If the cover is not completely open, so that this is not the whole travel, say so below: it is opened again and the reading is taken again.",
         "menu_options": {
           "accept_step": "That is right, go on",
-          "repeat_measure": "Repeat the measurement"
+          "repeat_measure": "Repeat the measurement",
+          "not_right": "It did not do what it should"
+        }
+      },
+      "tape_brief": {
+        "title": "Before the automatic readings",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: from here on the cover moves by itself. Readings to take: {readings}. Each one begins by taking the cover to the end stop that reading is taken from, and where there is a run to measure the cover makes it and stops there on its own. There is nothing to press and nothing to catch in time: after each movement a screen asks for the distance in centimetres.\n\n**What you have to do**: make sure nothing is in the way, keep the tape measure to hand and stand clear while the cover is moving. If a movement does not do what it should, say so on the screen that follows the reading: the step is made again.",
+        "menu_options": {
+          "tape_start": "Understood, start the readings",
+          "cancel_flow": "Cancel"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "The reading was written down",
-        "description": "**Cover**: {cover} - read at {percent}% of the travel\n\n**What was written down**: {measured} cm from the base to the bottom edge.\n\n**What you have to do**: if that is the number you read off the tape, go on. If you suspect you measured from the wrong point, repeat the measurement: the cover goes back to its end stop and runs the same distance again, so the reading can be taken under the same conditions.",
+        "description": "**Cover**: {cover} - read at {percent}% of the travel\n\n**What was written down**: {measured} cm from the base to the bottom edge.\n\n**What you have to do**: if that is the number you read off the tape, go on. If you suspect you measured from the wrong point, repeat the measurement: the cover goes back to its end stop and runs the same distance again, so the reading can be taken under the same conditions. If the cover did not do what it should (it never moved, or it moved the wrong way), say so below: it is stopped and the movements of this step are made again.",
         "menu_options": {
           "accept_step": "That is right, go on",
-          "repeat_tape": "Repeat the measurement"
+          "repeat_tape": "Repeat the measurement",
+          "tape_not_right": "It did not do what it should"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} is being opened completely: this way the next movement starts from a known point. Please wait, and make sure nothing is in the way.",
       "starting_open": "{cover} is starting upwards. Watch it: in a moment you will be asked for the press at the base.",
       "starting_close": "{cover} is starting downwards. Watch it: in a moment you will be asked for the press.",
-      "running_down": "{cover} is being opened completely and then run down to about {percent}% of its travel. Please wait, and have the tape measure ready.",
-      "running_up": "{cover} is being closed completely and then run up to about {percent}% of its travel. Please wait, and have the tape measure ready.",
+      "running_down": "{cover} is being run down to about {percent}% of its travel. Please wait, and have the tape measure ready.",
+      "running_up": "{cover} is being run up to about {percent}% of its travel. Please wait, and have the tape measure ready.",
       "stopping_lift": "{cover} is being stopped right where your press found it. One moment.",
       "starting_open_full": "{cover} is starting upwards again, all the way this time. Watch it: in a moment you will be asked for the press at the top."
     },

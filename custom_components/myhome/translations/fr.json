@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Avant que le volet ne commence à bouger",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : la calibration est découpée en étapes. À chaque étape, le volet effectue les mouvements que cette étape demande, et avant chacun arrivent les instructions et tout le temps de se préparer : aucun mouvement chronométré ne part sans que vous le lanciez. Neuf mouvements en tout, environ quatre minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne - un battant ouvert, des plantes sur l'appui, des chats - et gardez le mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de lire quelques distances.\n\nSi quelque chose se passe mal, chaque étape peut être répétée seule, sans refaire celles qui sont déjà faites. Vous pouvez fermer quand vous voulez : rien n'est enregistré jusqu'au dernier écran, et une course déjà lancée va d'elle-même jusqu'à sa fin de course.",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : la calibration est découpée en étapes. À chaque étape, le volet effectue les mouvements que cette étape demande. Là où il y a un bouton à presser, les instructions arrivent d'abord et le mouvement attend que vous le lanciez ; les étapes mesurées au mètre bougent d'elles-mêmes, et un écran prévient avant la première. Huit mouvements en tout, environ quatre minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne - un battant ouvert, des plantes sur l'appui, des chats - et gardez le mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de lire quelques distances.\n\nSi quelque chose se passe mal, chaque étape peut être répétée seule, sans refaire celles qui sont déjà faites. Vous pouvez fermer quand vous voulez : rien n'est enregistré jusqu'au dernier écran, et une course déjà lancée va d'elle-même jusqu'à sa fin de course.",
         "menu_options": {
           "begin": "J'ai compris, commençons",
           "cancel_flow": "Annuler"
@@ -303,15 +303,6 @@
         "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été fermé complètement : ainsi, tout ce qui sera mesuré à partir d'ici part d'un point connu.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement fermé, lames serrées et bord inférieur en appui, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
         "menu_options": {
           "confirm_closed": "Il est complètement fermé",
-          "repeat_step": "Répéter cette étape",
-          "not_right": "Il n'a pas fait ce qu'il devait"
-        }
-      },
-      "home_open_done": {
-        "title": "Le volet est-il complètement ouvert ?",
-        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été ouvert complètement, parce que ce qui suit descend de là et qu'une course partie d'ailleurs ne mesurerait rien.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement ouvert, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
-        "menu_options": {
-          "confirm_open": "Il est complètement ouvert",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "La course du tablier a été notée",
-        "description": "**Volet** : {cover}\n\n**Ce qui a été noté** : {height} cm de la base au bord inférieur, le volet étant complètement ouvert.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Vérifiez la valeur : les lectures au mètre des prochaines étapes sont comparées à cette hauteur.",
+        "description": "**Volet** : {cover}\n\n**Ce qui a été noté** : {height} cm de la base au bord inférieur, le volet étant complètement ouvert.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Vérifiez la valeur : les lectures au mètre des prochaines étapes sont comparées à cette hauteur. Si le volet n'est pas complètement ouvert, et que ce n'est donc pas la course entière, dites-le ci-dessous : il est rouvert et la lecture est reprise.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
-          "repeat_measure": "Répéter la mesure"
+          "repeat_measure": "Répéter la mesure",
+          "not_right": "Il n'a pas fait ce qu'il devait"
+        }
+      },
+      "tape_brief": {
+        "title": "Avant les lectures automatiques",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : à partir d'ici, le volet bouge tout seul. Lectures à faire : {readings}. Chacune commence par amener le volet à la fin de course d'où cette lecture se prend et, là où il y a une course à mesurer, le volet la parcourt et s'y arrête de lui-même. Il n'y a rien à appuyer et rien à saisir au vol : après chaque mouvement, un écran demande la distance en centimètres.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne, gardez le mètre à portée de main et restez à l'écart tant que le volet bouge. Si un mouvement ne fait pas ce qu'il devait, dites-le sur l'écran qui suit la lecture : l'étape est refaite.",
+        "menu_options": {
+          "tape_start": "J'ai compris, lancer les lectures",
+          "cancel_flow": "Annuler"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "La lecture a été notée",
-        "description": "**Volet** : {cover} — lecture à {percent} % de la course\n\n**Ce qui a été noté** : {measured} cm de la base au bord inférieur.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Si vous avez un doute sur le point de départ de votre mesure, répétez-la : le volet retourne à sa fin de course et refait la même course, la lecture peut donc être reprise dans les mêmes conditions.",
+        "description": "**Volet** : {cover} — lecture à {percent} % de la course\n\n**Ce qui a été noté** : {measured} cm de la base au bord inférieur.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Si vous avez un doute sur le point de départ de votre mesure, répétez-la : le volet retourne à sa fin de course et refait la même course, la lecture peut donc être reprise dans les mêmes conditions. Si le volet n'a pas fait ce qu'il devait (il n'a pas bougé, ou il est parti du mauvais côté), dites-le ci-dessous : il est arrêté et les mouvements de cette étape sont refaits.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
-          "repeat_tape": "Répéter la mesure"
+          "repeat_tape": "Répéter la mesure",
+          "tape_not_right": "Il n'a pas fait ce qu'il devait"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} est en cours d'ouverture complète : ainsi, le mouvement suivant part d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
       "starting_open": "{cover} part vers le haut. Regardez-le : dans un instant, l'appui à la base vous sera demandé.",
       "starting_close": "{cover} part vers le bas. Regardez-le : dans un instant, l'appui vous sera demandé.",
-      "running_down": "{cover} est ouvert complètement puis descendu jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
-      "running_up": "{cover} est fermé complètement puis monté jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
+      "running_down": "{cover} est descendu jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
+      "running_up": "{cover} est monté jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
       "stopping_lift": "{cover} est arrêté là où votre appui l'a trouvé. Un instant.",
       "starting_open_full": "{cover} repart vers le haut, cette fois jusqu'en haut. Regardez-le : dans un instant, l'appui en haut vous sera demandé."
     },

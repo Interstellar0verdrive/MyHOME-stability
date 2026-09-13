@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Voordat het rolluik begint te bewegen",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de kalibratie is opgedeeld in stappen. Bij elke stap maakt het rolluik de bewegingen die die stap nodig heeft, en vóór elke beweging komen de uitleg en alle tijd om u klaar te maken: geen enkele gemeten beweging start zonder dat u die start. Negen bewegingen in totaal, ongeveer vier minuten.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat - een openstaand raam, planten op de vensterbank, katten - en houd de rolmaat bij de hand. U wordt gevraagd op een knop te drukken wanneer er iets gebeurt, en een paar afstanden af te lezen.\n\nGaat er iets mis, dan kan elke stap op zichzelf worden herhaald, zonder de al gedane stappen over te doen. U kunt altijd sluiten: er wordt niets opgeslagen tot het laatste scherm, en een rit die al loopt gaat vanzelf door tot de eindstand.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de kalibratie is opgedeeld in stappen. Bij elke stap maakt het rolluik de bewegingen die die stap nodig heeft. Waar een knop moet worden ingedrukt, komt eerst de uitleg en wacht de beweging tot u die start; de stappen die met de rolmaat worden gemeten bewegen vanzelf, en een scherm waarschuwt vóór de eerste daarvan. Acht bewegingen in totaal, ongeveer vier minuten.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat - een openstaand raam, planten op de vensterbank, katten - en houd de rolmaat bij de hand. U wordt gevraagd op een knop te drukken wanneer er iets gebeurt, en een paar afstanden af te lezen.\n\nGaat er iets mis, dan kan elke stap op zichzelf worden herhaald, zonder de al gedane stappen over te doen. U kunt altijd sluiten: er wordt niets opgeslagen tot het laatste scherm, en een rit die al loopt gaat vanzelf door tot de eindstand.",
         "menu_options": {
           "begin": "Begrepen, we beginnen",
           "cancel_flow": "Annuleren"
@@ -303,15 +303,6 @@
         "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is helemaal gesloten: zo vertrekt alles wat hierna gemeten wordt van een bekend punt.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
         "menu_options": {
           "confirm_closed": "Het is helemaal dicht",
-          "repeat_step": "Herhaal deze stap",
-          "not_right": "Het deed niet wat het moest doen"
-        }
-      },
-      "home_open_done": {
-        "title": "Is het rolluik helemaal open?",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is helemaal geopend, want wat hierna komt daalt vandaar en een rit die ergens anders begint meet niets.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal open, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
-        "menu_options": {
-          "confirm_open": "Het is helemaal open",
           "repeat_step": "Herhaal deze stap",
           "not_right": "Het deed niet wat het moest doen"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "De loopafstand van het pantser is genoteerd",
-        "description": "**Rolluik**: {cover}\n\n**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Controleer de waarde: de metingen met de rolmaat in de volgende stappen worden met deze hoogte vergeleken.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Controleer de waarde: de metingen met de rolmaat in de volgende stappen worden met deze hoogte vergeleken. Is het rolluik niet helemaal open, en is dit dus niet de hele loopafstand, zeg dat dan hieronder: het wordt opnieuw geopend en de meting wordt overgedaan.",
         "menu_options": {
           "accept_step": "Dit klopt, verder",
-          "repeat_measure": "Herhaal de meting"
+          "repeat_measure": "Herhaal de meting",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "tape_brief": {
+        "title": "Vóór de automatische metingen",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: vanaf hier beweegt het rolluik vanzelf. Aantal metingen: {readings}. Elke meting begint met het rolluik naar de eindstand te brengen waar die meting vandaan komt, en waar er een rit te meten valt, rijdt het rolluik die en stopt daar vanzelf. Er is niets om op te drukken en niets om op tijd te pakken: na elke beweging vraagt een scherm om de afstand in centimeters.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat, houd de rolmaat bij de hand en blijf uit de buurt zolang het rolluik beweegt. Doet een beweging niet wat ze moest doen, zeg dat dan op het scherm na de meting: de stap wordt opnieuw gedaan.",
+        "menu_options": {
+          "tape_start": "Begrepen, start de metingen",
+          "cancel_flow": "Annuleren"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "De meting is genoteerd",
-        "description": "**Rolluik**: {cover} — afgelezen op {percent}% van de loopafstand\n\n**Wat er genoteerd is**: {measured} cm van de basis tot de onderrand.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Twijfelt u of u vanaf het juiste punt gemeten hebt, herhaal dan de meting: het rolluik gaat terug naar de eindstand en legt dezelfde weg opnieuw af, zodat de meting onder dezelfde omstandigheden kan worden overgedaan.",
+        "description": "**Rolluik**: {cover} — afgelezen op {percent}% van de loopafstand\n\n**Wat er genoteerd is**: {measured} cm van de basis tot de onderrand.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Twijfelt u of u vanaf het juiste punt gemeten hebt, herhaal dan de meting: het rolluik gaat terug naar de eindstand en legt dezelfde weg opnieuw af, zodat de meting onder dezelfde omstandigheden kan worden overgedaan. Deed het rolluik niet wat het moest doen (het bewoog helemaal niet, of de verkeerde kant op), zeg dat dan hieronder: het wordt gestopt en de bewegingen van deze stap worden opnieuw gedaan.",
         "menu_options": {
           "accept_step": "Dit klopt, verder",
-          "repeat_tape": "Herhaal de meting"
+          "repeat_tape": "Herhaal de meting",
+          "tape_not_right": "Het deed niet wat het moest doen"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} wordt helemaal geopend: zo vertrekt de volgende beweging van een bekend punt. Even geduld, en zorg dat er niets in de weg staat.",
       "starting_open": "{cover} vertrekt omhoog. Kijk ernaar: zo meteen wordt de druk bij de basis gevraagd.",
       "starting_close": "{cover} vertrekt omlaag. Kijk ernaar: zo meteen wordt de druk gevraagd.",
-      "running_down": "{cover} wordt helemaal geopend en daarna tot ongeveer {percent}% van zijn loopafstand omlaag gestuurd. Even geduld, en houd de rolmaat klaar.",
-      "running_up": "{cover} wordt helemaal gesloten en daarna tot ongeveer {percent}% van zijn loopafstand omhoog gestuurd. Even geduld, en houd de rolmaat klaar.",
+      "running_down": "{cover} wordt tot ongeveer {percent}% van zijn loopafstand omlaag gestuurd. Even geduld, en houd de rolmaat klaar.",
+      "running_up": "{cover} wordt tot ongeveer {percent}% van zijn loopafstand omhoog gestuurd. Even geduld, en houd de rolmaat klaar.",
       "stopping_lift": "{cover} wordt gestopt precies waar uw druk het aantrof. Een ogenblik.",
       "starting_open_full": "{cover} vertrekt weer omhoog, deze keer helemaal. Kijk ernaar: zo meteen wordt de druk bovenaan gevraagd."
     },

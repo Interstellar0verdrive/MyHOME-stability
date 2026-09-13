@@ -32,7 +32,12 @@ way, and nothing is ever written to `myhome.yaml`.
   direction, which fit a scale factor on the times as well as the rolls — the tape
   corrects the finger — and a fifth at 40 %, a position nothing was fitted to, whose
   gap is what the summary reports as the accuracy. Expect 1–2 cm at the end stops
-  and 2–4 cm at intermediate positions afterwards. Nothing moves before a screen announces it and
+  and 2–4 cm at intermediate positions afterwards. The readings taken with a tape are
+  a phase of their own: one screen warns that the shutter is about to move by itself,
+  and from there the runs chain without a button between them, each naming itself on
+  the progress bar. They are taken in the order that spares a run — the timed descent
+  leaves the shutter at the bottom, so the ascent is read first and the shutter is
+  opened completely once instead of twice. Nothing moves before a screen announces it and
   nothing is written before the last one; every measurement can be repeated on its
   own, and closing the dialog leaves the configuration untouched. The full page is
   [docs/guided-calibration.md](docs/guided-calibration.md).

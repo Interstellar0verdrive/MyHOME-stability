@@ -58,8 +58,10 @@ from custom_components.myhome.calibration_flow import (
     PLAN_TIMES_AND_ROLLS,
     PLAN_VERIFY_B,
     PRESS_TIMEOUT_SEC,
+    TAPE_RUN_FROM,
     VERIFY_RUN,
     VERIFY_RUN_PROFILE,
+    order_the_readings,
     parse_number,
 )
 from custom_components.myhome.calibration_store import loaded_store
@@ -280,6 +282,10 @@ class FakeRunner:
         self.homed: list[str] = []
         self.started: list[str] = []
         self.runs: list[tuple[str, float]] = []
+        # ...and the same calls in the order they arrived, which is what a movement
+        # count has to be read off: a homing that had nothing to run is not a movement,
+        # and only the call before it says whether it had.
+        self.log: list[tuple[str, str]] = []
         self.stops = 0
         self.stopped_at = dt_util.utcnow()
         self.fail: CalibrationError | None = None
@@ -303,15 +309,18 @@ class FakeRunner:
     async def _home(self, direction: str, timeout: float | None = None) -> None:
         self._maybe_fail("home")
         self.homed.append(direction)
+        self.log.append(("home", direction))
 
     async def _start(self, direction: str):
         self._maybe_fail("start")
         self.started.append(direction)
+        self.log.append(("start", direction))
         return dt_util.utcnow()
 
     async def _stop(self):
         self._maybe_fail("stop")
         self.stops += 1
+        self.log.append(("stop", ""))
         # The instant our frame reached the bus, which is not the instant it was asked
         # for: a busy command queue holds it back, and the motor runs for all of it.
         self.stopped_at = dt_util.utcnow() + timedelta(seconds=self.stop_queue)
@@ -324,6 +333,7 @@ class FakeRunner:
     async def _run_fraction(self, direction: str, fraction: float) -> RunReport:
         self._maybe_fail("run")
         self.runs.append((direction, fraction))
+        self.log.append(("run", direction))
         seconds = (
             fraction * CURTAIN_DOWN
             if direction == DIRECTION_CLOSE
@@ -540,9 +550,13 @@ PATH_A_BASIC: tuple[Act, ...] = (
     Act(option="close_start"),
     Act(option="stopped_closed", tick=CLOSING),
     Act(option="accept_step"),
-    Act(payload={"measured_cm": str(descent_cm(0.5))}),
-    Act(option="accept_step"),
+    # The tape phase: one warning, and then the readings chain by themselves. The
+    # shutter is at the bottom after the descent, so the ascent's reading is the one
+    # that needs no homing and is therefore taken first.
+    Act(option="tape_start"),
     Act(payload={"measured_cm": str(ascent_cm(0.5))}),
+    Act(option="accept_step"),
+    Act(payload={"measured_cm": str(descent_cm(0.5))}),
     Act(option="accept_step"),
     Act(payload={CONF_NAME: "tall"}),
     Act(option="save"),
@@ -551,6 +565,8 @@ PATH_A_BASIC: tuple[Act, ...] = (
 PATH_A_PRECISE: tuple[Act, ...] = (
     *PATH_A_BASIC[:-1],
     Act(option="refine"),
+    # The precise level is a tape phase of its own, and opens with the same warning.
+    Act(option="tape_start"),
     Act(payload={"measured_cm": str(descent_cm(0.25))}),
     Act(option="accept_step"),
     Act(payload={"measured_cm": str(descent_cm(0.75))}),
@@ -740,29 +756,36 @@ async def test_path_a_walks_the_screens_in_the_order_the_flow_document_agreed(
         "close_brief",
         "close_bottom",
         "close_result",
-        "measure_descent",
-        "tape_result",
+        "tape_brief",
         "measure_ascent",
+        "tape_result",
+        "measure_descent",
         "tape_result",
         "profile_name",
         "summary_basic",
         "saved",
     ]
     # Closed for the lift-off run, closed again for the full ascent, open for the
-    # descent, and the far end stop before each of the two automatic runs.
+    # height and for the descent, and the far end stop before each of the two automatic
+    # runs. Three of those homings have nothing to run - the shutter is already there -
+    # and the runner answers them with the settle alone; the one that *does* run is the
+    # opening between the two readings, which is the one the order of the tape phase is
+    # there to make the only one (`order_the_readings`).
     assert runner.homed == [
         DIRECTION_CLOSE,  # home_closed
         DIRECTION_CLOSE,  # open_timed brings it back to the bottom
         DIRECTION_CLOSE,  # open_home_again, between the two runs of the ascent
-        DIRECTION_OPEN,  # close_timed takes it to the top
-        DIRECTION_OPEN,  # half_down
-        DIRECTION_CLOSE,  # half_up
+        DIRECTION_OPEN,  # height_read, with the shutter already at the top
+        DIRECTION_OPEN,  # close_timed, likewise
+        DIRECTION_CLOSE,  # half_up, with the shutter already at the bottom
+        DIRECTION_OPEN,  # half_down: the one homing of the tape phase that moves
     ]
     # Three free runs now, not two: the ascent is measured by a short one and a whole
     # one, and only the short one is stopped by us.
     assert runner.started == [DIRECTION_OPEN, DIRECTION_OPEN, DIRECTION_CLOSE]
     assert runner.stops == 1
-    assert runner.runs == [(DIRECTION_CLOSE, 0.5), (DIRECTION_OPEN, 0.5)]
+    # The ascent's reading first, from the end stop the descent left the shutter at.
+    assert runner.runs == [(DIRECTION_OPEN, 0.5), (DIRECTION_CLOSE, 0.5)]
 
 
 async def test_nothing_moves_until_the_user_starts_it(
@@ -814,17 +837,17 @@ async def test_repeating_a_measurement_throws_the_first_one_away(
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        # ... as far as the descent's confirmation screen.
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
+        # ... as far as the ascent's confirmation screen, which is now the first.
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:20])
         assert result["step_id"] == "tape_result"
         runs_before = len(runner.runs)
 
         result = await choose(hass, result, "repeat_tape")
-        assert result["step_id"] == "measure_descent"
+        assert result["step_id"] == "measure_ascent"
         assert len(runner.runs) == runs_before + 1
-        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5))})
-        result = await choose(hass, result, "accept_step")
         result = await submit(hass, result, {"measured_cm": str(ascent_cm(0.5))})
+        result = await choose(hass, result, "accept_step")
+        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5))})
         result = await choose(hass, result, "accept_step")
         result = await submit(hass, result, {CONF_NAME: "tall"})
         assert result["step_id"] == "summary_basic"
@@ -834,6 +857,377 @@ async def test_repeating_a_measurement_throws_the_first_one_away(
         assert the_profile(hass, entry)[CONF_RAW]["descent"] == [
             [pytest.approx(CURTAIN_DOWN / 2), pytest.approx(descent_cm(0.5))]
         ]
+
+
+# --------------------------------------------------------------------------------------
+# The tape phase: one warning, then the readings chain by themselves (0.5.0, 13 Sep)
+# --------------------------------------------------------------------------------------
+# What a movement is, for the count the first screen of path A promises. A homing that
+# had nothing to run is not one: `cover._async_calib_home` answers it with the settle
+# alone, and the user sees a shutter that does not move.
+MOVEMENT_WORDS = {"seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+
+def movements(log: list[tuple[str, str]]) -> int:
+    """How many times the shutter really moved, replayed off the runner's own log."""
+    count = 0
+    at: str | None = None
+    for index, (kind, direction) in enumerate(log):
+        if kind == "stop":
+            continue
+        if kind == "home":
+            if at != direction:
+                count += 1
+            at = direction
+            continue
+        count += 1
+        if kind == "start":
+            # A free run ends at its end stop unless the flow stopped it on a press,
+            # which is the lift-off run and nothing else.
+            stopped = index + 1 < len(log) and log[index + 1][0] == "stop"
+            at = None if stopped else direction
+        else:
+            at = None  # a run to a percentage ends between the two end stops
+    return count
+
+
+@pytest.mark.parametrize(
+    ("at", "stages", "expected"),
+    [
+        # From the bottom, where the measured descent leaves the shutter: the ascent's
+        # reading first, so the only full opening of the phase is the one between them.
+        (DIRECTION_CLOSE, ["half_down", "half_up"], ["half_up", "half_down"]),
+        # From the top, where path B's height leaves it: the descent's reading first.
+        (DIRECTION_OPEN, ["half_down", "half_up"], ["half_down", "half_up"]),
+        # Between the two, which is where every run to a percentage ends: nothing can be
+        # saved, so the plan's own order - each homing the short way round - is kept.
+        (None, ["half_down", "half_up"], ["half_down", "half_up"]),
+        (
+            DIRECTION_CLOSE,
+            ["quarter_down", "three_quarter_down", "quarter_up", "three_quarter_up"],
+            ["quarter_up", "quarter_down", "three_quarter_down", "three_quarter_up"],
+        ),
+        (
+            DIRECTION_OPEN,
+            ["quarter_down", "three_quarter_down", "quarter_up", "three_quarter_up"],
+            ["quarter_down", "three_quarter_down", "quarter_up", "three_quarter_up"],
+        ),
+        # The readings that are not runs stay where the plan puts them, and the movable
+        # ones are dealt round them: the check is asked of a model that is finished.
+        (
+            DIRECTION_CLOSE,
+            ["half_down", "half_up", "verify"],
+            ["half_up", "half_down", "verify"],
+        ),
+        (DIRECTION_OPEN, ["height_read"], ["height_read"]),
+    ],
+)
+def test_the_readings_are_dealt_from_the_end_stop_the_shutter_is_at(
+    at: str | None, stages: list[str], expected: list[str]
+) -> None:
+    """The order of a tape phase is a function of where the shutter stands, not a list.
+
+    Mutation caught: a fixed order (the descent's reading first, as before, which costs
+    a full opening and a full closing where one opening is enough), or reordering the
+    readings that are not runs.
+    """
+    assert order_the_readings(stages, at) == expected
+    # ...and whatever the order, every reading is still taken exactly once.
+    assert sorted(order_the_readings(stages, at)) == sorted(stages)
+
+
+def test_every_reading_that_moves_declares_the_end_stop_it_starts_from() -> None:
+    """`TAPE_RUN_FROM` is what the order is computed from; a stage missing from it
+    would be dealt as if it could start anywhere.
+
+    Mutation caught: adding a fraction stage to a plan and not to the table.
+    """
+    for plan in (PLAN_FULL, PLAN_PRECISE, PLAN_TIMES_AND_ROLLS):
+        for stage in plan:
+            if stage.endswith(("_down", "_up")):
+                assert stage in TAPE_RUN_FROM, stage
+    for stage, end in TAPE_RUN_FROM.items():
+        # A reading taken on the way down starts from the top, and the other way round.
+        assert end == (DIRECTION_OPEN if stage.endswith("_down") else DIRECTION_CLOSE)
+
+
+async def test_the_ascent_is_read_first_and_the_shutter_is_opened_once(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The maintainer's request, end to end: the descent leaves the shutter closed.
+
+    So the reading that starts from the bottom is taken first, and the only homing of
+    the tape phase that has anything to run is the opening between the two readings.
+
+    Mutation caught: the old fixed order, which opened the shutter completely, read the
+    descent, closed it completely and read the ascent - one whole run more.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
+        assert result["step_id"] == "tape_brief"
+        before = list(runner.log)
+
+        result = await drive(hass, freezer, result, PATH_A_BASIC[18:-2])
+        assert result["step_id"] == "profile_name"
+        phase = runner.log[len(before) :]
+        assert phase == [
+            ("home", DIRECTION_CLOSE),  # nothing to run: the descent ended there
+            ("run", DIRECTION_OPEN),
+            ("home", DIRECTION_OPEN),  # the one opening of the phase
+            ("run", DIRECTION_CLOSE),
+        ]
+        # Three movements for two readings, because the first homing has nothing to run.
+        assert movements(runner.log) - movements(before) == 3
+
+
+# How far into the walk of path A, where the shutter is standing once that much of it
+# has been done, and what put it there. The two `None`s are the movements that end
+# between the end stops: the lift-off run, which the flow stops a few centimetres up,
+# and a run to a percentage.
+WHERE_IT_STANDS: tuple[tuple[int, str | None, str], ...] = (
+    (6, DIRECTION_CLOSE, "home_closed"),
+    (8, None, "the lift-off run, stopped on the press"),
+    (10, DIRECTION_CLOSE, "open_home_again, between the two runs of the ascent"),
+    (12, DIRECTION_OPEN, "the full ascent, which ends at the top end stop"),
+    (13, DIRECTION_OPEN, "height_read's homing, which had nothing to run"),
+    (17, DIRECTION_CLOSE, "the measured descent, which ends at the bottom end stop"),
+    (19, None, "half_up's run to 50 % of the travel"),
+)
+
+
+async def test_where_the_shutter_stands_is_remembered_only_while_it_is_true(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`_at` is an end stop the shutter is really standing at, or it is nothing.
+
+    It is the whole input of `order_the_readings`, and it is worth nothing unless it is
+    given up the moment the shutter leaves that end stop. A wrong `_at` cannot skip a
+    homing - the frame is sent for every reading whatever it says - but it deals the
+    readings the long way round, which is the one thing the order is there to avoid.
+
+    Mutation caught: a homing that does not record the end stop it reached, or a
+    movement that leaves behind the end stop the movement before it reached.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await open_dialog(hass, entry)
+        flow = next(iter(hass.config_entries.options._progress.values()))  # noqa: SLF001
+        done = 0
+        for upto, standing_at, why in WHERE_IT_STANDS:
+            result = await drive(hass, freezer, result, PATH_A_BASIC[done:upto])
+            done = upto
+            assert flow._at == standing_at, why  # noqa: SLF001
+
+
+async def test_path_a_makes_the_number_of_movements_it_promises(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The count on the first screen is the count the shutter really makes.
+
+    Mutation caught: changing the order or the stages of a path and leaving the
+    sentence that counts its movements behind - which is what this change did to
+    "nine movements".
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC)
+        promised = re.search(
+            r"(\w+) movements in all", STRINGS["options"]["step"]["path_a"]["description"]
+        )
+        assert promised is not None
+        assert movements(runner.log) == MOVEMENT_WORDS[promised.group(1).lower()]
+
+
+async def test_the_tape_phase_warns_once_and_then_asks_for_nothing_but_readings(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """No "start the cover", no "is it completely open?", between the readings.
+
+    The runs of this phase end by themselves and there is nothing to catch in time, so
+    the conversation asks once - on `tape_brief` - and then the only screens that stop
+    are the reading forms and the confirmation of each reading.
+
+    Mutation caught: putting a confirmation back in front of a homing of the tape phase,
+    or a "Avvia" in front of one of its runs.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
+        assert result["step_id"] == "tape_brief"
+        assert result["menu_options"] == ["tape_start", "cancel_flow"]
+        # Two readings follow, and the screen says so.
+        assert result["description_placeholders"]["readings"] == "2"
+        # Nothing has moved for the phase yet: the warning comes before the first run.
+        moved = len(runner.log)
+
+        seen = []
+        for act in PATH_A_BASIC[18:22]:
+            result = await drive(hass, freezer, result, (act,))
+            seen.append(result["step_id"])
+        assert seen == ["measure_ascent", "tape_result", "measure_descent", "tape_result"]
+        assert len(runner.log) > moved
+
+
+async def test_path_b_is_a_tape_phase_of_one_reading(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The shortest tape phase there is: the travel, and nothing else.
+
+    The screen is the same one path A opens its readings with, so it has to read for
+    one reading as well as for five - which is why it names the count instead of
+    counting into a plural noun.
+
+    Mutation caught: reading the phase off the whole plan rather than off the stages
+    that follow the briefing, which would count `verify_offer` and `summary` in.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:5])
+        assert result["step_id"] == "tape_brief"
+        assert result["description_placeholders"]["readings"] == "1"
+
+
+async def test_the_warning_of_the_tape_phase_can_be_refused(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Annulla" on the warning: nothing else moves, and nothing at all is written.
+
+    Mutation caught: a warning screen with no way out, which would make the readings
+    the one part of the conversation that cannot be left.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
+        moved = len(runner.log)
+        result = await choose(hass, result, "cancel_flow")
+        assert result["step_id"] == "cancelled"
+        assert len(runner.log) == moved
+        assert the_store(hass, entry).raw_profiles == {}
+        assert the_store(hass, entry).raw_covers == {}
+
+
+async def test_a_reading_can_say_the_shutter_did_not_do_what_it_should(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The exit the homings used to carry, now on the screen after the reading.
+
+    Nothing is confirmed before a run of the tape phase any more, so this is where a
+    shutter that never moved, or moved the wrong way, is reported: it is stopped, the
+    stage's movements are made again and the reading taken over the mishap goes with
+    them.
+
+    Mutation caught: keeping the reading (the fit would be given the same fraction
+    twice), or dropping the stop (the step's homing would queue behind whatever is
+    still moving).
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:20])
+        assert result["step_id"] == "tape_result"
+        assert result["menu_options"] == ["accept_step", "repeat_tape", "tape_not_right"]
+        stops, runs = runner.stops, len(runner.runs)
+
+        result = await choose(hass, result, "tape_not_right")
+        assert result["step_id"] == "measure_ascent"
+        assert runner.stops == stops + 1
+        assert len(runner.runs) == runs + 1
+
+        result = await drive(hass, freezer, result, PATH_A_BASIC[19:])
+        assert result["step_id"] == "saved"
+        # One reading per direction: the one taken over the mishap is gone.
+        assert len(the_profile(hass, entry)[CONF_RAW]["ascent"]) == 1
+        assert len(the_profile(hass, entry)[CONF_RAW]["descent"]) == 1
+
+
+async def test_the_travel_can_say_the_shutter_never_reached_the_top(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The height's own way out, for the same reason: its homing is not confirmed.
+
+    A travel read off a shutter that stopped half way is the one reading that puts
+    every other measurement out, because they are all compared against it.
+
+    Mutation caught: leaving the height with "Ripeti la misura" alone, which asks for
+    the number again without opening the shutter again; or keeping the travel that was
+    just disowned, which opens the form again on the very number the user said was
+    wrong and is one Submit away from being believed.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:7])
+        assert result["step_id"] == "height_result"
+        assert result["menu_options"] == ["accept_step", "repeat_measure", "not_right"]
+        homed, stops = len(runner.homed), runner.stops
+
+        result = await choose(hass, result, "not_right")
+        assert result["step_id"] == "height"
+        assert runner.stops == stops + 1
+        assert runner.homed[homed:] == [DIRECTION_OPEN]
+        # The travel read off a shutter that never reached the top is gone with it, and
+        # the field opens on what this window is otherwise said to have - exactly as it
+        # does after "Ripeti la misura".
+        flow = next(iter(hass.config_entries.options._progress.values()))  # noqa: SLF001
+        assert flow._measured.height is None  # noqa: SLF001
+        assert flow._measured.height_measured is False  # noqa: SLF001
+
+
+async def test_the_watchdog_is_put_off_again_by_every_automatic_movement(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A chain of runs nobody presses a button through is not an idle conversation.
+
+    The whole tape phase can outlast the ten minutes a screen that follows a movement
+    is given, so every screen of it - the progress bars included - puts the watchdog
+    off again.
+
+    Mutation caught: arming the watchdog on the menus and the forms alone, which would
+    give the shutter back in the middle of the phase and leave the next reading
+    landing on "the session expired". The second half of the test is what says so: the
+    stretch between "Va bene, avanti" and the next reading's form is two progress bars
+    and nothing else, and two thirds of a whole patience passes in front of each - so
+    the timer the confirmation armed runs out under the second bar unless that bar has
+    put it off.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
+        assert result["step_id"] == "measure_ascent"
+
+        # Long enough in front of the form for the timer the last movement armed to be
+        # the one that matters, and not long enough for it to run out.
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3)
+        )
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3))
+        result = await drive(hass, freezer, result, PATH_A_BASIC[19:20])
+        assert result["step_id"] == "tape_result"
+
+        # From here to the next reading there is no screen a user touches: the homing
+        # and the run to the percentage, one bar each, with nothing between them but
+        # the shutter moving. `drive` would resolve them without letting any time pass,
+        # so they are walked by hand with the clock running.
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "accept_step"}
+        )
+        bars = 0
+        while result["type"] is FlowResultType.SHOW_PROGRESS:
+            bars += 1
+            await hass.async_block_till_done()
+            async_fire_time_changed(
+                hass, dt_util.utcnow() + timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3)
+            )
+            await hass.async_block_till_done()
+            freezer.tick(timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3))
+            result = await hass.config_entries.options.async_configure(result["flow_id"])
+
+        # Two bars, a whole patience and a third of another between them, and the
+        # shutter is still ours.
+        assert bars == 2
+        assert cover.calibrating is True
+        assert result["step_id"] == "measure_descent"
 
 
 # --------------------------------------------------------------------------------------
@@ -1294,7 +1688,6 @@ async def test_path_b_names_the_fraction_its_own_check_ran_to(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
         result = await choose(hass, result, "verify_now")
-        result = await choose(hass, result, "confirm_open")
         assert result["description_placeholders"]["percent"] == str(
             round(VERIFY_RUN_PROFILE * 100)
         )
@@ -1321,13 +1714,18 @@ async def test_the_precise_tape_screens_say_what_is_expected(
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
-        assert result["step_id"] == "measure_descent"
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
+        assert result["step_id"] == "measure_ascent"
         rough = result["description_placeholders"]
         assert rough["tolerance"] == "15"
         assert float(rough["expected"]) > 0
 
-        result = await drive(hass, freezer, result, (*PATH_A_BASIC[18:-1], Act(option="refine")))
+        result = await drive(
+            hass,
+            freezer,
+            result,
+            (*PATH_A_BASIC[19:-1], Act(option="refine"), Act(option="tape_start")),
+        )
         assert result["step_id"] == "measure_descent"
         precise = result["description_placeholders"]
         assert precise["tolerance"] == "3"
@@ -1519,11 +1917,11 @@ async def test_a_tape_reading_above_the_travel_is_sent_back_to_the_form(
     """A bar above the whole travel is a tape read from the floor, not from the rest."""
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
         result = await submit(hass, result, {"measured_cm": str(HEIGHT + 10)})
-        assert result["step_id"] == "measure_descent"
+        assert result["step_id"] == "measure_ascent"
         assert result["errors"] == {"measured_cm": "above_the_travel"}
-        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5))})
+        result = await submit(hass, result, {"measured_cm": str(ascent_cm(0.5))})
         assert result["step_id"] == "tape_result"
 
 
@@ -1692,7 +2090,7 @@ PATH_B: tuple[Act, ...] = (
     Act(payload={"cover": UNIQUE_ID}),
     Act(option="path_b"),
     Act(payload={CONF_PROFILE: "tall"}),
-    Act(option="confirm_open"),
+    Act(option="tape_start"),
     Act(payload={CONF_HEIGHT: str(HEIGHT)}),
     Act(option="accept_step"),
     Act(option="skip_verify"),
@@ -1773,8 +2171,6 @@ async def test_path_b_offers_the_refinement_when_the_check_is_far_out(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
         result = await choose(hass, result, "verify_now")
-        assert result["step_id"] == "home_open_done"
-        result = await choose(hass, result, "confirm_open")
         assert result["step_id"] == "measure_verify"
         result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5) - 8.0)})
         assert result["step_id"] == "verify_result"
@@ -1808,7 +2204,6 @@ async def test_a_check_that_lands_close_enough_just_carries_on(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
         result = await choose(hass, result, "verify_now")
-        result = await choose(hass, result, "confirm_open")
         result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5) - 1.0)})
         assert result["menu_options"] == ["accept_step", "repeat_tape"]
         result = await choose(hass, result, "accept_step")
@@ -1980,18 +2375,28 @@ async def test_a_refinement_of_a_window_nobody_measured_reports_no_travel(
         assert result["description_placeholders"]["height"] == "\u2013"
 
 
-async def test_paths_b_and_c_begin_at_an_end_stop_the_user_has_confirmed(
+async def test_the_paths_with_a_press_begin_at_an_end_stop_the_user_has_confirmed(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
     """The homing's wait is bounded by a model that is, in path C, wrong by hypothesis.
 
-    Mutation caught: dropping the homing stage from either plan, which lets the first
-    measured run start from a shutter that is still travelling.
+    So the homing in front of a *press* is confirmed: somebody has to be watching when
+    that run starts, and a shutter still travelling would take the press with it. The
+    tape phase confirms nothing - there is no press to protect - and opens on its
+    warning screen instead.
+
+    Mutation caught: dropping the homing stage from a plan whose next stage is timed,
+    which lets the first measured run start from a shutter that is still travelling;
+    or putting the confirmation back in front of the readings.
     """
-    assert PLAN_PROFILE[0] == "home_open"
     assert PLAN_TIMES[0] == "home_closed"
     assert PLAN_TIMES_AND_ROLLS[0] == "home_closed"
-    assert PLAN_VERIFY_B == ("home_open", "verify_b")
+    for plan in (PLAN_FULL, PLAN_TIMES, PLAN_TIMES_AND_ROLLS):
+        assert plan[plan.index("home_closed") + 1] == "open_timed"
+    # ...and the two plans that measure nothing timed have no confirmed homing at all.
+    assert PLAN_PROFILE[0] == "tape_brief"
+    assert PLAN_PRECISE[0] == "tape_brief"
+    assert PLAN_VERIFY_B == ("verify_b",)
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:6])
@@ -2867,7 +3272,6 @@ async def test_a_verification_whose_profile_vanished_reports_no_gap(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
         result = await choose(hass, result, "verify_now")
-        result = await choose(hass, result, "confirm_open")
         # The file is re-read on a reload; here the flow's own profile is simply gone.
         from custom_components.myhome.const import CONF_COVER_PROFILES, DOMAIN
 
@@ -2890,7 +3294,6 @@ async def test_the_deviation_shown_is_the_deviation_compared(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
         result = await choose(hass, result, "verify_now")
-        result = await choose(hass, result, "confirm_open")
         result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5) - reading)})
         assert result["description_placeholders"]["deviation"] == ("3.1" if offered else "3.0")
         assert ("path_c" in result["menu_options"]) is offered
@@ -2959,26 +3362,26 @@ async def test_a_tape_reading_that_is_not_a_number_is_refused_on_every_form(
     """The descent, the ascent and the check all read the same field the same way."""
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:18])
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
         result = await submit(hass, result, {"measured_cm": "a bit less than a metre"})
         assert result["errors"] == {"measured_cm": "not_a_number"}
         result = await submit(hass, result, {"measured_cm": "-3"})
         assert result["errors"] == {"measured_cm": "out_of_range"}
-        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5))})
+        result = await submit(hass, result, {"measured_cm": str(ascent_cm(0.5))})
         result = await choose(hass, result, "accept_step")
 
-        assert result["step_id"] == "measure_ascent"
+        assert result["step_id"] == "measure_descent"
         result = await submit(hass, result, {"measured_cm": str(HEIGHT + 5)})
         assert result["errors"] == {"measured_cm": "above_the_travel"}
-        result = await submit(hass, result, {"measured_cm": str(ascent_cm(0.5))})
-        # ...and the ascent's reading can be taken again too.
+        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5))})
+        # ...and the descent's reading can be taken again too.
         result = await choose(hass, result, "repeat_tape")
-        assert result["step_id"] == "measure_ascent"
-        result = await submit(hass, result, {"measured_cm": str(ascent_cm(0.5))})
+        assert result["step_id"] == "measure_descent"
+        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5))})
         result = await choose(hass, result, "accept_step")
         result = await submit(hass, result, {CONF_NAME: "tall"})
         result = await choose(hass, result, "save")
-        assert len(the_profile(hass, entry)[CONF_RAW]["ascent"]) == 1
+        assert len(the_profile(hass, entry)[CONF_RAW]["descent"]) == 1
 
 
 async def test_the_check_of_the_precise_level_refuses_a_bad_reading_too(
@@ -3812,6 +4215,7 @@ async def test_every_screen_of_a_whole_conversation_renders_its_own_text(
         "close_brief",
         "close_bottom",
         "close_result",
+        "tape_brief",
         "measure_descent",
         "measure_ascent",
         "tape_result",

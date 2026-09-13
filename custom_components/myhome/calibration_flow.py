@@ -31,8 +31,13 @@ the code:
   minus the instant the motor really began to turn.
 * **Nothing moves by itself on a screen with a press to make.** The instructions come
   first, then an explicit "1) Avvia la tapparella", and only then the two presses. The
-  automatic runs of the tape steps do start on their own: there is nothing to be ready
-  for while they run.
+  runs of the tape steps do start on their own: there is nothing to be ready for while
+  they run, and the whole phase is announced once, on `tape_brief`, rather than a
+  button at a time.
+* **The tape readings are dealt from where the shutter already is.** Each one runs to
+  its percentage from one end stop or the other, so the one whose end stop the shutter
+  is standing at is taken first and the homing it would have cost never happens
+  (`order_the_readings`).
 * **Every measurement is confirmed.** After the presses, after the tape, after the
   height: a screen showing what was just measured, with "Ripeti la misura" next to
   "Va bene, avanti".
@@ -63,7 +68,7 @@ from __future__ import annotations
 
 import contextlib
 import re
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -253,17 +258,23 @@ PROBLEM_REASONS: tuple[str, ...] = (
 
 # The plans. A stage is the name of an `async_step_` method; the pointer walks the list
 # and "Ripeti questo passo" re-enters the stage it is on.
+#
+# The order of the tape phase is *not* the order written here: `tape_brief` reorders the
+# readings that follow it so that the first one starts from the end stop the shutter is
+# already standing at (`order_the_readings`).
 PLAN_FULL: tuple[str, ...] = (
     "home_closed",
     "open_timed",
-    "height",
+    "height_read",
     "close_timed",
+    "tape_brief",
     "half_down",
     "half_up",
     "profile_name",
     "summary",
 )
 PLAN_PRECISE: tuple[str, ...] = (
+    "tape_brief",
     "quarter_down",
     "three_quarter_down",
     "quarter_up",
@@ -271,28 +282,83 @@ PLAN_PRECISE: tuple[str, ...] = (
     "verify",
     "summary",
 )
-# Path B opens with a homing too: the height is measured from the rest of the bottom
-# edge to where it is *now*, which only means the whole travel when "now" is the top.
-PLAN_PROFILE: tuple[str, ...] = ("home_open", "height", "verify_offer", "summary")
-# Paths B and C open the way path A does: the shutter is brought to an end stop and the
-# user is asked whether it really got there (the question is the homing stage's
-# `done_step`, not a stage of its own). Every homing's wait is bounded by the *modelled*
-# run of a model that is, in path C, wrong by hypothesis - that is why the user is in
-# path C - so without the confirmation the first measured run can start from a shutter
-# that is still travelling.
+# Path B is a tape phase and nothing else: the warning screen, one homing, one reading.
+# The height is measured from the rest of the bottom edge to where it is *now*, which
+# only means the whole travel when "now" is the top, so `height_read` brings the shutter
+# there first (in path A it is already there, and the runner answers a homing that has
+# nothing to run with the settle alone).
+PLAN_PROFILE: tuple[str, ...] = ("tape_brief", "height_read", "verify_offer", "summary")
+# Paths A and C open with a homing the user is asked to confirm, because what follows it
+# is a *timed press*: somebody has to be standing in front of the shutter, watching, when
+# the run starts. Every homing's wait is bounded by the modelled run of a model that is,
+# in path C, wrong by hypothesis - that is why the user is in path C - so without the
+# confirmation the first measured run could start from a shutter still travelling. The
+# tape phase has no such confirmation: nothing there has to be caught by a human eye, so
+# it leans on `async_calib_home` (the full run time plus a margin) and says what it is
+# doing in the progress text instead (maintainer, 13 Sep).
 PLAN_TIMES: tuple[str, ...] = ("home_closed", "open_timed", "close_timed", "summary")
 PLAN_TIMES_AND_ROLLS: tuple[str, ...] = (
     "home_closed",
     "open_timed",
-    "height",
+    "height_read",
     "close_timed",
+    "tape_brief",
     "half_down",
     "half_up",
     "summary",
 )
-# What path B's optional check is preceded by: its run goes *down* from the top, so the
-# end stop it needs confirming is the open one.
-PLAN_VERIFY_B: tuple[str, ...] = ("home_open", "verify_b")
+# Path B's optional check, grafted onto the plan when it is accepted. Its own briefing is
+# `verify_offer`, the screen that offered it, and the run homes itself.
+PLAN_VERIFY_B: tuple[str, ...] = ("verify_b",)
+
+# The readings of the tape phase, and the end stop the run of each one starts from.
+#
+# A stage here is "bring the shutter to an end stop, run to a percentage, read the tape":
+# there is nothing to press and nothing to be quick about, which is what lets them chain
+# without a confirmation between them. It is also what lets them be *reordered*: a
+# reading whose run starts where the shutter already stands costs one movement instead of
+# two, so the plan is walked in the order that homes the shutter least (maintainer,
+# 13 Sep: after the descent the shutter is at the bottom, so the ascent's reading comes
+# first and the full opening happens once, between the two).
+TAPE_RUN_FROM: dict[str, str] = {
+    "half_down": DIRECTION_OPEN,
+    "half_up": DIRECTION_CLOSE,
+    "quarter_down": DIRECTION_OPEN,
+    "three_quarter_down": DIRECTION_OPEN,
+    "quarter_up": DIRECTION_CLOSE,
+    "three_quarter_up": DIRECTION_CLOSE,
+}
+# The readings of the tape phase that stay where the plan puts them: the travel, which is
+# read with the shutter standing still and is what every other reading is scaled by, and
+# the two verifications, which put a question to a model that is only finished once every
+# other reading is in.
+TAPE_FIXED: tuple[str, ...] = ("height_read", "verify", "verify_b")
+TAPE_STAGES: frozenset[str] = frozenset(TAPE_RUN_FROM) | frozenset(TAPE_FIXED)
+
+
+def order_the_readings(stages: Sequence[str], at: str | None) -> list[str]:
+    """The readings of one tape phase, in the order that homes the shutter least.
+
+    `at` is the end stop the shutter is standing at, or `None` when it is somewhere in
+    between. The first reading whose run starts from there needs no homing at all; after
+    any run to a percentage the shutter is between the two end stops again, so every
+    later reading costs a homing whichever one is picked and the plan's own order - which
+    is written so that each homing is the *short* way round - is kept.
+
+    The readings of `TAPE_FIXED` are not moved: they are answered where the plan puts
+    them, and only the movable ones are dealt round them.
+    """
+    movable = [stage for stage in stages if stage in TAPE_RUN_FROM]
+    ordered: list[str] = []
+    here = at
+    while movable:
+        pick = next((stage for stage in movable if TAPE_RUN_FROM[stage] == here), movable[0])
+        movable.remove(pick)
+        ordered.append(pick)
+        here = None
+    dealt = iter(ordered)
+    return [next(dealt) if stage in TAPE_RUN_FROM else stage for stage in stages]
+
 
 # The progress text of an automatic run, by the direction it runs in. A mapping rather
 # than a conditional expression so that every progress action of the flow can be found
@@ -1258,6 +1324,12 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._shown_at: datetime | None = None
         self._report: RunReport | None = None
         self._pending: tuple[str, float] | None = None
+        # The step a run to a percentage hands over to, remembered because the run is a
+        # screen of its own and no longer the stage's.
+        self._after_the_run: str = "measure_descent"
+        # The end stop the shutter is standing at, `None` when it is between the two.
+        # What the order of a tape phase is drawn from (`order_the_readings`).
+        self._at: str | None = None
         self._yaml_key: str = ""
         self._expired: bool = False
         self._claim_refused: str | None = None
@@ -1714,6 +1786,10 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def _async_job(self, job: Callable[[], Awaitable[None]]) -> None:
         """Run one step's movements, turning every failure into a reason to show."""
         self._error = None
+        # Nothing is known about where the shutter is while it is moving, and nothing is
+        # known about where it ended up if the movement failed: what put it at an end
+        # stop says so itself, once it is there.
+        self._at = None
         try:
             if self._stop_first:
                 self._stop_first = False
@@ -1773,15 +1849,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
 
     async def _job_home(self, direction: str) -> None:
         await self._cover_to_drive().async_calib_home(direction)
+        self._at = direction
 
     async def _job_start(self, direction: str) -> None:
         """Let it run free while we watch (it is already at the far end stop)."""
         self._motor_start = await self._cover_to_drive().async_calib_start(direction)
 
     async def _job_fraction(self, direction: str, fraction: float) -> None:
-        cover = self._cover_to_drive()
-        await cover.async_calib_home(_other_end(direction))
-        self._report = await cover.async_calib_run_fraction(direction, fraction)
+        """The run to the percentage alone: the homing is the stage's first movement."""
+        self._report = await self._cover_to_drive().async_calib_run_fraction(direction, fraction)
 
     # ------------------------------------------------------------------ the presses
     def _timed_out(self) -> bool:
@@ -1864,28 +1940,51 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         """It is closed: on to the measured opening."""
         return await self._async_advance()
 
-    # ------------------------------------------------------------------ stage: open
-    async def async_step_home_open(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Send the shutter all the way up: the end a downward check starts from."""
-        return await self._async_movement(
-            step_id="home_open",
-            action=HOMING_ACTION[DIRECTION_OPEN],
-            job=lambda: self._job_home(DIRECTION_OPEN),
-            done_step="home_open_done",
-        )
-
-    async def async_step_home_open_done(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The same question path A asks at the bottom, asked at the top."""
-        self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
+    # ------------------------------------------------------------ the tape phase
+    # Where the shutter stops being something the user has to be ready for. Every reading
+    # from here on is "go to an end stop, run to a percentage, stop by yourself", so the
+    # conversation asks once - on `tape_brief` - and then chains the runs, with the
+    # progress texts saying what is moving and the reading forms as the only stops
+    # (maintainer, 13 Sep). The confirmation the homings used to end on ("is it
+    # completely open?") is gone with them: it protected a *press*, and there is none
+    # here.
+    async def async_step_tape_brief(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The one warning of the tape phase, and the order its readings are taken in."""
+        self._order_the_tape_phase()
         return self.async_show_menu(
-            step_id="home_open_done",
-            menu_options=["confirm_open", "repeat_step", "not_right"],
-            description_placeholders=self._placeholders(),
+            step_id="tape_brief",
+            menu_options=["tape_start", "cancel_flow"],
+            description_placeholders=self._placeholders(readings=len(self._tape_phase())),
         )
 
-    async def async_step_confirm_open(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """It is fully open: the check can start from a place we both agree on."""
+    async def async_step_tape_start(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """"Ho capito, cominciamo": the readings run from here without asking again."""
         return await self._async_advance()
+
+    @callback
+    def _tape_phase(self) -> list[str]:
+        """The readings that follow the briefing: every stage up to the first that is not.
+
+        The phase is read off the plan rather than stored, so a plan that grafts stages
+        onto itself (the precise level, path B's check) needs nothing of its own.
+        """
+        phase: list[str] = []
+        for stage in self._plan[self._index + 1 :]:
+            if stage not in TAPE_STAGES:
+                break
+            phase.append(stage)
+        return phase
+
+    @callback
+    def _order_the_tape_phase(self) -> None:
+        """Deal the readings out again, starting from the end stop the shutter is at."""
+        phase = self._tape_phase()
+        start = self._index + 1
+        self._plan[start : start + len(phase)] = order_the_readings(phase, self._at)
 
     # ------------------------------------------------------------- stage: the ascent
     # One stage, three movements, two presses - and the two presses are on two separate
@@ -2172,6 +2271,8 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         try:
             run = timing_from_presses(self._motor_start, None, dt_util.utcnow())
             self._measured.opening = timing_with_slat(run, self._measured.slat_seconds or 0.0)
+            # The run was free: whatever the press measured, the shutter is at the top.
+            self._at = DIRECTION_OPEN
         except CalibrationError as err:
             LOGGER.warning("Guided calibration of %s: %s", self._cover_label, err)
             return await self.async_step_problem_bad_point()
@@ -2248,6 +2349,9 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             return await self.async_step_problem_timeout()
         try:
             self._measured.closing = timing_from_presses(self._motor_start, None, dt_util.utcnow())
+            # ...and at the bottom, which is what the first reading of the tape phase is
+            # dealt from.
+            self._at = DIRECTION_CLOSE
         except CalibrationError as err:
             LOGGER.warning("Guided calibration of %s: %s", self._cover_label, err)
             return await self.async_step_problem_bad_point()
@@ -2270,6 +2374,37 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         return await self._async_advance()
 
     # ------------------------------------------------------------------ stage: height
+    async def async_step_height_read(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Bring it to the top, then ask for the travel.
+
+        The travel is the distance between the two end stops, so it can only be read off
+        a shutter standing at one of them. In path A the ascent has just left it there
+        and the runner answers a homing with nothing to run with the settle alone
+        (`cover._async_calib_home`); in path B this is the only movement of the path.
+        Homing here rather than in a stage of its own is what makes "Ripeti questo passo"
+        put the shutter back where the reading needs it.
+
+        A travel already written down is thrown away when this stage is re-entered by
+        "Non ha fatto quello che doveva" - which is what `_stop_first` marks, and the
+        only way back in here. The screen that offers it says the shutter never reached
+        the top, so the number read off it is worth no more than the reading
+        `repeat_measure` doubts, and that one is thrown away too; leaving it behind
+        would open the form again on the very number the user has just disowned. A
+        travel carried in from somewhere else - path C keeps the one path B's check
+        measured - is not touched, because this stage is then entered with nothing to
+        stop first.
+        """
+        if self._stop_first:
+            self._forget_the_travel()
+        return await self._async_movement(
+            step_id="height_read",
+            action=HOMING_ACTION[DIRECTION_OPEN],
+            job=lambda: self._job_home(DIRECTION_OPEN),
+            done_step="height",
+        )
+
     async def async_step_height(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The one measurement everything else is scaled by: the curtain travel."""
         errors: dict[str, str] = {}
@@ -2299,10 +2434,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     async def async_step_height_result(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The travel that was just written down, with a way to write it again."""
+        """The travel that was just written down, with a way to write it again.
+
+        "Non ha fatto quello che doveva" is here because the homing that opens this stage
+        no longer ends on a confirmation of its own: this screen is the first thing the
+        user sees after it, and a travel read off a shutter that never reached the top is
+        the one reading that would put every other measurement out.
+        """
+        self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
         return self.async_show_menu(
             step_id="height_result",
-            menu_options=["accept_step", "repeat_measure"],
+            menu_options=["accept_step", "repeat_measure", "not_right"],
             description_placeholders=self._placeholders(
                 height=f"{self._measured.height:.1f}" if self._measured.height else "-"
             ),
@@ -2315,20 +2457,45 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         so there is nothing to re-run; the tape readings have their own step to repeat
         (`repeat_step`), which does re-run the movements.
         """
+        self._forget_the_travel()
+        return await self.async_step_height()
+
+    @callback
+    def _forget_the_travel(self) -> None:
+        """Take back a travel that is not one: the form opens on nothing again."""
         self._measured.height = None
         self._measured.height_measured = False
-        return await self.async_step_height()
 
     # --------------------------------------------------------- stages: the measured runs
     async def _async_fraction_stage(
         self, *, step_id: str, direction: str, fraction: float, done_step: str
     ) -> ConfigFlowResult:
+        """One reading's two movements, each with a progress screen that names it.
+
+        Two screens rather than one because they are two different things to watch: the
+        shutter travelling the whole way to an end stop, and the run to the percentage
+        that is about to be measured. One text covering both said "it is being opened
+        completely and then run down to 50 %" over a bar that was doing the first of
+        those, which is exactly the moment the user is deciding whether to stand clear.
+        """
         self._pending = (direction, fraction)
+        self._after_the_run = done_step
+        start = _other_end(direction)
         return await self._async_movement(
             step_id=step_id,
+            action=HOMING_ACTION[start],
+            job=lambda: self._job_home(start),
+            done_step="tape_run",
+        )
+
+    async def async_step_tape_run(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The run to the percentage, from the end stop the homing has just reached."""
+        direction, fraction = self._pending or (DIRECTION_CLOSE, HALF_RUN)
+        return await self._async_movement(
+            step_id="tape_run",
             action=RUNNING_ACTION[direction],
             job=lambda: self._job_fraction(direction, fraction),
-            done_step=done_step,
+            done_step=self._after_the_run,
             percent=round(fraction * 100),
         )
 
@@ -2469,7 +2636,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
         return self.async_show_menu(
             step_id="tape_result",
-            menu_options=["accept_step", "repeat_tape"],
+            menu_options=["accept_step", "repeat_tape", "tape_not_right"],
             description_placeholders=self._placeholders(
                 percent=round(fraction * 100),
                 measured=f"{points[-1][1]:.1f}" if points else "-",
@@ -2478,6 +2645,25 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
 
     async def async_step_repeat_tape(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Throw the reading away and run the stage's own movements again."""
+        self._forget_the_reading()
+        return await self._async_enter()
+
+    async def async_step_tape_not_right(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """"Non ha fatto quello che doveva", said of the run behind a reading.
+
+        The tape phase asks nothing before its movements, so this is where a shutter that
+        went the wrong way or never moved is reported: it stops whatever is moving and
+        makes the stage's movements again, and the reading that was typed over the top of
+        the mishap goes with them.
+        """
+        self._forget_the_reading()
+        return await self.async_step_not_right()
+
+    @callback
+    def _forget_the_reading(self) -> None:
+        """Take the last reading back off the direction it was appended to."""
         # The verification fits nothing, so it has nothing to take back; the two
         # measuring stages do, and the reading has to go before the run is repeated or
         # the fit would be given the same fraction twice.
@@ -2485,7 +2671,6 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             self._measured.descent.pop()
         elif self._tape_target == "ascent" and self._measured.ascent:
             self._measured.ascent.pop()
-        return await self._async_enter()
 
     # ------------------------------------------------------------------ verification
     async def async_step_verify(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

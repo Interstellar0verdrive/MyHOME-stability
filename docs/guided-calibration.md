@@ -85,7 +85,7 @@ alternatives, not steps.
 
 ### (A) It is the first cover of its kind
 
-The full measurement: nine movements, about four minutes, three button presses and
+The full measurement: eight movements, about four minutes, three button presses and
 three tape readings (four if you take the optional one).
 
 | Step | What it measures |
@@ -96,8 +96,16 @@ three tape readings (four if you take the optional one).
 | Timed ascent, second run | The full upward run. The shutter is closed again, started again and left to run; one press, at the instant the motor stops at the top |
 | Height | The curtain travel, base to bottom edge with the shutter fully open |
 | Timed descent | The full downward run (one press, the motor stopping at the bottom) |
-| Half a descent | The roll coefficient going down |
 | Half an ascent | The roll coefficient going up |
+| Half a descent | The roll coefficient going down |
+
+The last two are the **tape phase**: runs that end by themselves, with a reading to
+take afterwards and nothing to press while they happen. One screen warns before the
+first of them, and from there the shutter moves between the readings on its own. Their
+order is not fixed: each reading runs to its percentage from one end stop, and the one
+that starts where the shutter already stands is taken first. The timed descent leaves
+it at the bottom, so the ascent is read first and the shutter is opened completely once,
+between the two readings, instead of twice.
 
 Before the summary it asks for a **profile name** — letters, digits and
 underscores, no spaces and no accents, because it is also a key of the
@@ -116,9 +124,11 @@ stored one for as long as that one exists.
 
 ### (B) It is similar to a cover already measured
 
-Pick the profile, measure the height, done — two screens and one tape reading. The
+Pick the profile, measure the height, done — three screens and one tape reading. The
 shutter is opened completely first, because the height is the distance the bottom
-edge travels and that only means the whole travel when it is measured from the top.
+edge travels and that only means the whole travel when it is measured from the top;
+that opening is announced by the same warning screen the tape phase of path A opens
+with, and then happens by itself.
 
 It then offers a **check**: the shutter is sent to half its travel and you measure
 where it really stopped. The screen reports the gap between that and where the
@@ -186,7 +196,10 @@ After every measurement — the presses as well as the tape readings — a confi
 screen shows the value that was just taken and offers **"Repeat the measurement"**.
 Repeating a step redoes only that step: the shutter is brought back to the end stop
 that step starts from and the run is made again, and nothing already collected is
-touched.
+touched. The confirmation of a tape reading also carries **"It did not do what it
+should"**, for a shutter that never moved or moved the wrong way: nothing is confirmed
+*before* the runs of the tape phase, so that is where they are reported. It stops
+whatever is moving, throws the reading away and makes the step's movements again.
 
 ## How timing by button press works
 
@@ -222,7 +235,10 @@ The screens are built around that:
 - **The screens shown while it is moving carry one line and a button.** Nobody
   reads three paragraphs while watching a shutter.
 - **The automatic runs of the tape steps do start on their own**: there is nothing
-  to press during them, only something to measure afterwards.
+  to press during them, only something to measure afterwards. They are announced
+  together, once, by a screen that says how many readings follow and asks you to stand
+  clear; after that they chain, each movement naming itself on the progress bar
+  ("is being closed completely", "is being run up to about 50% of its travel").
 - A press that never comes is not believed: after about ninety seconds the step is
   abandoned with an explanation and a way to repeat it.
 
