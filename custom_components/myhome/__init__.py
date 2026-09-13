@@ -524,10 +524,12 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
     A failure here costs the panel and nothing else: the options flow is a complete path
     to everything the panel does, and a gateway that refuses to load because a sidebar
     entry could not be registered would be a poor trade.  Logged, loudly, and continued.
+    The guard is inside the ``try`` for the same reason the registration is: every line
+    that touches the frontend's API is a line that a future Home Assistant can move.
     """
-    if frontend.async_panel_exists(hass, PANEL_URL_PATH):
-        return
     try:
+        if frontend.async_panel_exists(hass, PANEL_URL_PATH):
+            return
         integration = await async_get_integration(hass, DOMAIN)
         version = str(integration.version)
         frontend.async_register_built_in_panel(

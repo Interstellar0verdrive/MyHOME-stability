@@ -1250,6 +1250,34 @@ async def test_the_panel_is_registered_once_per_home_assistant_run(hass: HomeAss
     assert _panel(hass) is not None
 
 
+async def test_the_guard_is_inside_the_net_it_is_guarding(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """`async_panel_exists` is frontend API too, and it was outside the `try`.
+
+    The registration promises that a failure costs the panel and nothing else, but the
+    "is it already there?" question is asked through the same private API as the
+    registration itself - so an exception from *it* used to travel out of `async_setup`
+    and take every gateway in the house with it. The promise has to cover every line
+    that touches the frontend, not only the interesting one.
+
+    Mutation caught: lifting the `async_panel_exists` guard back out of the `try`.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with (
+        mock_gateway(),
+        patch.object(
+            myhome.frontend,
+            "async_panel_exists",
+            side_effect=RuntimeError("no panels here"),
+        ),
+    ):
+        assert await _setup(hass, entry)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert "Could not register the MyHOME panel" in caplog.text
+
+
 async def test_a_panel_that_cannot_be_registered_does_not_stop_a_gateway(
     hass: HomeAssistant, tmp_path, caplog
 ) -> None:
