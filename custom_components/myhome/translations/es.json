@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Perfiles y persianas",
-        "description": "Un **perfil** describe un tipo de persiana: cuánto tarda en completar el recorrido, cuánto tardan en abrirse las lamas y cómo se enrolla el paño en el eje. Cada persiana puede seguir uno, y Home Assistant lo adapta a su propio recorrido del paño.\n\nAhora mismo hay {profiles} perfiles y {covers} persianas sencillas en esta pasarela.",
+        "description": "Un **perfil** describe un tipo de persiana: cuánto tarda en completar el recorrido, cuánto tardan en abrirse las lamas y cómo se enrolla el paño en el eje. Cada persiana puede seguir uno, y Home Assistant lo adapta a su propio recorrido del paño.\n\nPerfiles: {profiles} · Persianas sencillas: {covers}",
         "menu_options": {
           "assign_covers": "Asignar un perfil a cada persiana",
           "pick_profile": "Ver, modificar o eliminar un perfil",
@@ -147,8 +147,8 @@
         "description": "**Lo que va a pasar**: los valores de abajo sustituyen a los medidos, para todas las persianas que siguen este perfil. La persiana no se mueve: solo se modifican los valores.\n\n**Lo que tienes que hacer**: corrige solo los valores para los que tengas datos más fiables que la calibración, como los tiempos indicados por el fabricante. Deja los demás valores sin cambios. Los decimales se escriben con coma o con punto.",
         "data": {
           "reference_height": "Recorrido de referencia (cm)",
-          "opening_time": "Tiempo de apertura (s)",
-          "closing_time": "Tiempo de cierre (s)",
+          "opening_time": "Tiempo de subida (s)",
+          "closing_time": "Tiempo de bajada (s)",
           "slat_time": "Tiempo de apertura de las lamas (s)",
           "opening_roll": "Coeficiente de enrollado al subir",
           "closing_roll": "Coeficiente de enrollado al bajar"
@@ -215,8 +215,8 @@
         "description": "**Lo que va a pasar**: los valores de abajo valen solo para esta persiana y tienen prioridad sobre el perfil y el archivo de configuración. La persiana no se mueve: solo se modifican los valores.\n\n**Lo que tienes que hacer**: introduce solo los valores que quieras establecer para esta persiana. Un campo vacío no equivale a cero: vuelve a utilizarse el valor del perfil o del archivo. Los decimales se escriben con coma o con punto.",
         "data": {
           "height": "Recorrido del paño (cm)",
-          "opening_time": "Tiempo de apertura (s)",
-          "closing_time": "Tiempo de cierre (s)",
+          "opening_time": "Tiempo de subida (s)",
+          "closing_time": "Tiempo de bajada (s)",
           "slat_time": "Tiempo de apertura de las lamas (s)",
           "opening_roll": "Coeficiente de enrollado al subir",
           "closing_roll": "Coeficiente de enrollado al bajar"

@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profile und Rollläden",
-        "description": "Ein **Profil** beschreibt eine Rollladenart: wie lange sie für ihren Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an seinen eigenen Panzerweg an.\n\nZurzeit gibt es {profiles} Profile und {covers} einfache Rollläden an diesem Gateway.",
+        "description": "Ein **Profil** beschreibt eine Rollladenart: wie lange sie für ihren Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an seinen eigenen Panzerweg an.\n\nProfile: {profiles} · Einfache Rollläden: {covers}",
         "menu_options": {
           "assign_covers": "Jedem Rollladen ein Profil zuweisen",
           "pick_profile": "Ein Profil ansehen, ändern oder löschen",
@@ -147,8 +147,8 @@
         "description": "**Was gleich passiert**: die Werte unten ersetzen die gemessenen, für alle Rollläden, die diesem Profil folgen. Der Rollladen bewegt sich nicht: nur die Werte werden geändert.\n\n**Was Sie tun müssen**: ändern Sie nur Werte, für die Sie zuverlässigere Angaben als die Kalibrierung haben, etwa die Laufzeiten des Herstellers. Lassen Sie die übrigen Werte unverändert. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden.",
         "data": {
           "reference_height": "Bezugsweg (cm)",
-          "opening_time": "Öffnungszeit (s)",
-          "closing_time": "Schließzeit (s)",
+          "opening_time": "Auffahrtszeit (s)",
+          "closing_time": "Abfahrtszeit (s)",
           "slat_time": "Öffnungszeit der Lamellen (s)",
           "opening_roll": "Wickelfaktor beim Öffnen",
           "closing_roll": "Wickelfaktor beim Schließen"
@@ -215,8 +215,8 @@
         "description": "**Was gleich passiert**: die Werte unten gelten nur für diesen Rollladen und haben Vorrang vor dem Profil und der Konfigurationsdatei. Der Rollladen bewegt sich nicht: nur die Werte werden geändert.\n\n**Was Sie tun müssen**: tragen Sie nur die Werte ein, die Sie für diesen Rollladen festlegen möchten. Ein leeres Feld bedeutet nicht null: stattdessen wird wieder der Wert aus dem Profil oder der Datei verwendet. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden.",
         "data": {
           "height": "Panzerweg (cm)",
-          "opening_time": "Öffnungszeit (s)",
-          "closing_time": "Schließzeit (s)",
+          "opening_time": "Auffahrtszeit (s)",
+          "closing_time": "Abfahrtszeit (s)",
           "slat_time": "Öffnungszeit der Lamellen (s)",
           "opening_roll": "Wickelfaktor beim Öffnen",
           "closing_roll": "Wickelfaktor beim Schließen"

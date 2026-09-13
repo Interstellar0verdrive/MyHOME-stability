@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Perfis e persianas",
-        "description": "Um **perfil** descreve um tipo de persiana: quanto tempo demora o percurso, quanto tempo as lâminas demoram a abrir e como o pano se enrola no eixo. Cada persiana pode seguir um, e o Home Assistant adapta-o ao seu próprio percurso do pano.\n\nNeste momento há {profiles} perfis e {covers} persianas simples nesta gateway.",
+        "description": "Um **perfil** descreve um tipo de persiana: quanto tempo demora o percurso, quanto tempo as lâminas demoram a abrir e como o pano se enrola no eixo. Cada persiana pode seguir um, e o Home Assistant adapta-o ao seu próprio percurso do pano.\n\nPerfis: {profiles} · Persianas simples: {covers}",
         "menu_options": {
           "assign_covers": "Atribuir um perfil a cada persiana",
           "pick_profile": "Ver, alterar ou eliminar um perfil",
@@ -147,8 +147,8 @@
         "description": "**O que vai acontecer**: os valores abaixo substituem os medidos, para todas as persianas que seguem este perfil. A persiana não se move: apenas os valores são alterados.\n\n**O que tem de fazer**: corrija apenas os valores para os quais dispõe de dados mais fiáveis do que a calibração, por exemplo os tempos indicados pelo fabricante. Deixe os restantes valores inalterados. As casas decimais escrevem-se com vírgula ou com ponto.",
         "data": {
           "reference_height": "Percurso de referência (cm)",
-          "opening_time": "Tempo de abertura (s)",
-          "closing_time": "Tempo de fecho (s)",
+          "opening_time": "Tempo de subida (s)",
+          "closing_time": "Tempo de descida (s)",
           "slat_time": "Tempo de abertura das lâminas (s)",
           "opening_roll": "Coeficiente de enrolamento a subir",
           "closing_roll": "Coeficiente de enrolamento a descer"
@@ -215,8 +215,8 @@
         "description": "**O que vai acontecer**: os valores abaixo valem só para esta persiana e têm precedência sobre o perfil e o ficheiro de configuração. A persiana não se move: apenas os valores são alterados.\n\n**O que tem de fazer**: introduza apenas os valores que pretende definir para esta persiana. Um campo vazio não equivale a zero: volta a ser utilizado o valor do perfil ou do ficheiro. As casas decimais escrevem-se com vírgula ou com ponto.",
         "data": {
           "height": "Percurso do pano (cm)",
-          "opening_time": "Tempo de abertura (s)",
-          "closing_time": "Tempo de fecho (s)",
+          "opening_time": "Tempo de subida (s)",
+          "closing_time": "Tempo de descida (s)",
           "slat_time": "Tempo de abertura das lâminas (s)",
           "opening_roll": "Coeficiente de enrolamento a subir",
           "closing_roll": "Coeficiente de enrolamento a descer"

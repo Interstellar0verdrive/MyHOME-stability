@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profils et volets",
-        "description": "Un **profil** décrit un type de volet : le temps qu'il met à parcourir sa course, le temps d'ouverture des lames et la façon dont le tablier s'enroule sur l'axe. Chaque volet peut en suivre un, et Home Assistant l'adapte à sa propre course du tablier.\n\nIl y a actuellement {profiles} profils et {covers} volets simples sur cette passerelle.",
+        "description": "Un **profil** décrit un type de volet : le temps qu'il met à parcourir sa course, le temps d'ouverture des lames et la façon dont le tablier s'enroule sur l'axe. Chaque volet peut en suivre un, et Home Assistant l'adapte à sa propre course du tablier.\n\nProfils : {profiles} · Volets simples : {covers}",
         "menu_options": {
           "assign_covers": "Attribuer un profil à chaque volet",
           "pick_profile": "Voir, modifier ou supprimer un profil",
@@ -147,8 +147,8 @@
         "description": "**Ce qui va se passer** : les valeurs ci-dessous remplacent celles qui ont été mesurées, pour tous les volets qui suivent ce profil. Le volet ne bouge pas : seules les valeurs sont modifiées.\n\n**Ce que vous devez faire** : ne corrigez que les valeurs pour lesquelles vous disposez de données plus fiables que la calibration, par exemple les temps indiqués par le fabricant. Laissez les autres valeurs inchangées. Les décimales s'écrivent avec une virgule ou avec un point.",
         "data": {
           "reference_height": "Course de référence (cm)",
-          "opening_time": "Temps d'ouverture (s)",
-          "closing_time": "Temps de fermeture (s)",
+          "opening_time": "Temps de montée (s)",
+          "closing_time": "Temps de descente (s)",
           "slat_time": "Temps d'ouverture des lames (s)",
           "opening_roll": "Coefficient d'enroulement à la montée",
           "closing_roll": "Coefficient d'enroulement à la descente"
@@ -215,8 +215,8 @@
         "description": "**Ce qui va se passer** : les valeurs ci-dessous ne valent que pour ce volet et l'emportent à la fois sur le profil et sur le fichier de configuration. Le volet ne bouge pas : seules les valeurs sont modifiées.\n\n**Ce que vous devez faire** : saisissez uniquement les valeurs à définir pour ce volet. Laisser un champ vide ne signifie pas zéro : la valeur du profil ou du fichier est alors utilisée. Les décimales s'écrivent avec une virgule ou avec un point.",
         "data": {
           "height": "Course du tablier (cm)",
-          "opening_time": "Temps d'ouverture (s)",
-          "closing_time": "Temps de fermeture (s)",
+          "opening_time": "Temps de montée (s)",
+          "closing_time": "Temps de descente (s)",
           "slat_time": "Temps d'ouverture des lames (s)",
           "opening_roll": "Coefficient d'enroulement à la montée",
           "closing_roll": "Coefficient d'enroulement à la descente"

@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profili e tapparelle",
-        "description": "Un **profilo** descrive un tipo di tapparella: i tempi di corsa, il tempo di apertura delle lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa del telo.\n\nAl momento ci sono {profiles} profili e {covers} tapparelle semplici su questo gateway.",
+        "description": "Un **profilo** descrive un tipo di tapparella: i tempi di corsa, il tempo di apertura delle lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa del telo.\n\nProfili: {profiles} · Tapparelle semplici: {covers}",
         "menu_options": {
           "assign_covers": "Assegna un profilo a ogni tapparella",
           "pick_profile": "Vedi, modifica o elimina un profilo",
@@ -147,8 +147,8 @@
         "description": "**Cosa sta per succedere**: i valori qui sotto sostituiscono quelli misurati, per tutte le tapparelle che seguono questo profilo. La tapparella non si muove: vengono modificati solo i valori.\n\n**Cosa fare**: correggere solo i valori per cui si dispone di dati più affidabili della calibrazione, per esempio i tempi dichiarati dal costruttore. Lasciare invariati gli altri valori. I decimali si scrivono con la virgola o con il punto.",
         "data": {
           "reference_height": "Corsa di riferimento (cm)",
-          "opening_time": "Tempo di apertura (s)",
-          "closing_time": "Tempo di chiusura (s)",
+          "opening_time": "Tempo di salita (s)",
+          "closing_time": "Tempo di discesa (s)",
           "slat_time": "Tempo di apertura delle lamelle (s)",
           "opening_roll": "Coefficiente di rullo in apertura",
           "closing_roll": "Coefficiente di rullo in chiusura"
@@ -215,8 +215,8 @@
         "description": "**Cosa sta per succedere**: i valori qui sotto valgono solo per questa tapparella e hanno la precedenza sia sul profilo sia sul file di configurazione. La tapparella non si muove: vengono modificati solo i valori.\n\n**Cosa fare**: inserire solo i valori da impostare per questa tapparella. Lasciare un campo vuoto non equivale a inserire zero: significa usare nuovamente il valore del profilo o del file. I decimali si scrivono con la virgola o con il punto.",
         "data": {
           "height": "Corsa del telo (cm)",
-          "opening_time": "Tempo di apertura (s)",
-          "closing_time": "Tempo di chiusura (s)",
+          "opening_time": "Tempo di salita (s)",
+          "closing_time": "Tempo di discesa (s)",
           "slat_time": "Tempo di apertura delle lamelle (s)",
           "opening_roll": "Coefficiente di rullo in apertura",
           "closing_roll": "Coefficiente di rullo in chiusura"
@@ -741,7 +741,7 @@
     },
     "overview": {
       "title": "Profili e tapparelle",
-      "summary": "Su questo gateway ci sono {profiles} profili e {covers} tapparelle semplici.",
+      "summary": "Profili: {profiles} · Tapparelle semplici: {covers}",
       "explanation": "Un profilo descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
       "group": {
         "profile": "Profilo “{profile}”",

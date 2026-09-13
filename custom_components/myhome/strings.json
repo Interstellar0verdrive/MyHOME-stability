@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profiles and covers",
-        "description": "A **profile** describes one kind of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Every cover may follow one, and Home Assistant scales it to that cover's own curtain travel.\n\nThere are {profiles} profiles and {covers} basic covers on this gateway.",
+        "description": "A **profile** describes one kind of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Every cover may follow one, and Home Assistant scales it to that cover's own curtain travel.\n\nProfiles: {profiles} · Basic covers: {covers}",
         "menu_options": {
           "assign_covers": "Give each cover a profile",
           "pick_profile": "View, edit or delete a profile",
@@ -147,8 +147,8 @@
         "description": "**What is about to happen**: the values below replace the measured ones, for every cover that follows this profile. The cover does not move: only the values are changed.\n\n**What you have to do**: change only the values for which you have more reliable information than the calibration, such as the run times in the manufacturer's specifications. Leave the other values unchanged. Decimals may be written with a comma or with a point.",
         "data": {
           "reference_height": "Reference travel (cm)",
-          "opening_time": "Opening time (s)",
-          "closing_time": "Closing time (s)",
+          "opening_time": "Ascent time (s)",
+          "closing_time": "Descent time (s)",
           "slat_time": "Slat opening time (s)",
           "opening_roll": "Roll coefficient when opening",
           "closing_roll": "Roll coefficient when closing"
@@ -215,8 +215,8 @@
         "description": "**What is about to happen**: the values below apply to this cover alone and take precedence over both the profile and the configuration file. The cover does not move: only the values are changed.\n\n**What you have to do**: enter only the values you want to set for this cover. Leaving a field empty does not mean zero: it restores the value from the profile or the file. Decimals may be written with a comma or with a point.",
         "data": {
           "height": "Curtain travel (cm)",
-          "opening_time": "Opening time (s)",
-          "closing_time": "Closing time (s)",
+          "opening_time": "Ascent time (s)",
+          "closing_time": "Descent time (s)",
           "slat_time": "Slat opening time (s)",
           "opening_roll": "Roll coefficient when opening",
           "closing_roll": "Roll coefficient when closing"
@@ -741,7 +741,7 @@
     },
     "overview": {
       "title": "Profiles and covers",
-      "summary": "There are {profiles} profiles and {covers} basic covers on this gateway.",
+      "summary": "Profiles: {profiles} · Basic covers: {covers}",
       "explanation": "A profile describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
       "group": {
         "profile": "Profile “{profile}”",
