@@ -810,6 +810,11 @@ async def test_repeating_a_measurement_throws_the_first_one_away(
 LATE_PRESS_SEC = 0.6
 # ...and how wide that gap is, out of the model the fake shutter is.
 LATE_PRESS_GAP_CM = ascent_cm(LATE_PRESS_SEC / CURTAIN_UP)
+# How long the motor of that shutter goes on turning after our stop frame reaches the
+# bus. The bar rises for all of it too, so the tape reads the distance to the *motor*
+# stop and not to the frame.
+STOP_COAST_SEC = 0.4
+COASTED_GAP_CM = ascent_cm((LATE_PRESS_SEC + STOP_COAST_SEC) / CURTAIN_UP)
 
 # As far as the check screen the lift-off run ends on.
 TO_THE_LIFT_CHECK: tuple[Act, ...] = PATH_A_BASIC[:8]
@@ -1044,6 +1049,36 @@ async def test_without_a_gap_the_late_press_is_stored_as_it_was_made(
         assert the_profile(hass, entry)[CONF_SLAT_TIME] == pytest.approx(
             SLAT + LATE_PRESS_SEC, abs=0.05
         )
+
+
+async def test_the_gap_is_measured_against_the_motor_stop_and_not_the_stop_frame(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The motor turns on past our stop frame, and the bar rises for all of it.
+
+    `async_calib_stop` answers with the instant the frame reached the bus;
+    `async_calib_motor_stop` with the instant the motor really came to rest, which is
+    the actuator's own word where it gives one and `stop_latency` past the frame where
+    it does not. The tape reads the distance to *that* instant, so that is the far end
+    the correction is computed against.
+
+    Mutation caught: measuring the lift-off run to the stop frame, which would put the
+    true lift-off the whole braking time early and take it off every corrected slat
+    phase - the very error the reading exists to remove.
+    """
+    coasting: tuple[Act, ...] = (
+        *PATH_A_BASIC[:7],
+        Act(option="lifted_off", tick=SLAT + LATE_PRESS_SEC),
+        Act(option="lift_gap"),
+        Act(payload={"gap_cm": f"{COASTED_GAP_CM:.1f}"}),
+        *PATH_A_BASIC[9:],
+    )
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        runner.stop_coast = STOP_COAST_SEC
+        result = await drive(hass, freezer, await open_dialog(hass, entry), coasting)
+        assert result["step_id"] == "saved"
+        assert the_profile(hass, entry)[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.15)
 
 
 async def test_repeating_the_ascent_throws_both_of_its_runs_away(
@@ -1743,6 +1778,36 @@ async def test_path_c_times_only_stores_the_two_run_times_as_overrides(
             CONF_CLOSING_TIME: pytest.approx(CLOSING, abs=0.05),
             CONF_SLAT_TIME: pytest.approx(SLAT, abs=0.05),
         }
+
+
+async def test_a_taped_gap_corrects_the_slat_time_a_refinement_stores_too(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path C fits nothing, so the roll the correction needs is the profile's own.
+
+    The refinement always follows a profile - that is what brought the user here - so
+    the one thing the arithmetic is missing is there to be borrowed, scaled to whatever
+    this window's travel is known to be. Nothing else about the refinement moves: the
+    two run times are still exactly what the presses said.
+
+    Mutation caught: correcting the ascent of path A alone, which would leave the one
+    path that always has a roll to hand storing the finger's number.
+    """
+    late_ascent: tuple[Act, ...] = (
+        *PATH_C_TIMES[:8],
+        Act(option="lifted_off", tick=SLAT + LATE_PRESS_SEC),
+        Act(option="lift_gap"),
+        Act(payload={"gap_cm": f"{LATE_PRESS_GAP_CM:.1f}"}),
+        *PATH_C_TIMES[10:],
+    )
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), late_ascent)
+        assert result["step_id"] == "saved_refined"
+        overrides = the_calibration(hass, entry)["overrides"]
+        assert overrides[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.15)
+        assert overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
+        assert overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
 
 
 async def test_path_c_with_the_coefficients_measures_and_overrides_them_too(
