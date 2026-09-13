@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuring this gateway",
-        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: pick one. Nothing changes until something is saved, and no cover moves before a screen says it is about to.",
+        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: choose an option. Nothing changes until something is saved, and no cover moves before a screen says it is about to.",
         "menu_options": {
           "calibrate": "Calibrate a cover",
           "profiles_covers": "Profiles and covers",
@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profiles and covers",
-        "description": "A **profile** describes one kind of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roller. Every cover may follow one, and Home Assistant scales it to that cover's own height.\n\nThere are {profiles} profiles and {covers} basic covers on this gateway.",
+        "description": "A **profile** describes one kind of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Every cover may follow one, and Home Assistant scales it to that cover's own height.\n\nThere are {profiles} profiles and {covers} basic covers on this gateway.",
         "menu_options": {
           "assign_covers": "Give each cover a profile",
           "pick_profile": "View, edit or delete a profile",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Which profile each cover follows",
-        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's height.\n\nYou are saying it here, about this cover, after the configuration file was written, so the profile is used instead of what the file writes for this cover, if you use one. What was measured on this cover itself still counts for more and goes on being used wherever there is any; correcting the profile later reaches every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it belongs to the file, and the file is yours.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
+        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's height.\n\nThe profile is assigned here after the configuration file was written, so it takes precedence over the file's values for this cover, if you use one. Values measured on this cover still take precedence wherever they are available. Later changes to the profile apply to every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it is defined in the file and must be managed there.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
       },
       "assign_heights": {
         "title": "How tall are these covers?",
-        "description": "A profile is the measurement of a cover of a certain height, and it is scaled to the others in proportion. The height of these is not known, so there is nothing to scale it by: {covers}.\n\n**What you have to do**: measure, for each of them, the distance the bottom edge travels from fully closed to fully open, and write it in centimetres. Decimals may be written with a comma or with a point."
+        "description": "A profile contains measurements from a cover of a given height and is scaled to other covers in proportion to their height. The following covers have no known height, so the profile cannot be scaled to them: {covers}.\n\n**What you have to do**: measure, for each of them, the distance the bottom edge travels from fully closed to fully open, and write it in centimetres. Decimals may be written with a comma or with a point."
       },
       "pick_profile": {
         "title": "Which profile?",
@@ -140,16 +140,16 @@
       },
       "profile_view": {
         "title": "Values of profile “{profile}”",
-        "description": "These are the values the profile carries. Home Assistant scales them to every cover that follows it, in proportion to that cover's height.\n\n{values}\nCovers following it: {covers}"
+        "description": "These are the profile values. Home Assistant scales them to every cover that follows it, in proportion to that cover's height.\n\n{values}\nCovers following it: {covers}"
       },
       "profile_edit": {
         "title": "Edit profile “{profile}”",
-        "description": "**What is about to happen**: the values below replace the measured ones, for every cover that follows this profile. Nothing moves: this is writing, not measuring.\n\n**What you have to do**: correct what you know better than the calibration does - the run times from the manufacturer's sheet, for instance - and leave the rest alone. Decimals may be written with a comma or with a point.",
+        "description": "**What is about to happen**: the values below replace the measured ones, for every cover that follows this profile. The cover does not move: only the values are changed.\n\n**What you have to do**: change only the values for which you have more reliable information than the calibration, such as the run times in the manufacturer's specifications. Leave the other values unchanged. Decimals may be written with a comma or with a point.",
         "data": {
           "reference_height": "Reference travel (cm)",
           "opening_time": "Opening time (s)",
           "closing_time": "Closing time (s)",
-          "slat_time": "Slat time (s)",
+          "slat_time": "Slat opening time (s)",
           "opening_roll": "Roll coefficient when opening",
           "closing_roll": "Roll coefficient when closing"
         },
@@ -172,11 +172,11 @@
       },
       "profile_deleted": {
         "title": "Profile “{profile}” deleted",
-        "description": "The profile is gone. Covers that followed it and went back to the file's values or to the defaults: {count} - {covers}\n\nIf that was a mistake, the way to rebuild it is to calibrate a cover of this kind again with the full measurement and give it the same name."
+        "description": "The profile is gone. Covers that followed it and went back to the file's values or to the defaults: {count} - {covers}\n\nIf the profile was deleted by mistake, run the full measurement again on a cover of this kind and give the new profile the same name."
       },
       "calibrations": {
         "title": "Calibrations",
-        "description": "These are the covers the integration keeps something of its own for: {count}. What is kept here beats the configuration file, if you use one.\n\n**What you have to do**: pick the cover whose values you want to see, correct or delete.",
+        "description": "Covers with specific values stored by the integration: {count}. Values stored here take precedence over those in the configuration file, if you use one.\n\n**What you have to do**: pick the cover whose values you want to see, correct or delete.",
         "data": {
           "cover": "Cover"
         }
@@ -208,16 +208,16 @@
       },
       "calibration_view": {
         "title": "Values of {cover}",
-        "description": "This is what the integration keeps for this cover:\n\n{values}\nThe keys listed here beat the ones written in the configuration file, if you use one; the ones that do not appear go on coming from the file, from the profile or from the defaults."
+        "description": "This is what the integration keeps for this cover:\n\n{values}\nThe keys listed here take precedence over those in the configuration file, if you use one; the ones that do not appear go on coming from the file, from the profile or from the defaults."
       },
       "calibration_edit": {
         "title": "Edit the values of {cover}",
-        "description": "**What is about to happen**: the values below apply to this cover alone and beat both the profile and the configuration file. Nothing moves: this is writing, not measuring.\n\n**What you have to do**: write only what you want to impose on this cover. A field left empty is not a zero: it means “I have nothing to say about this”, and the value goes back to coming from the profile or from the file. Decimals may be written with a comma or with a point.",
+        "description": "**What is about to happen**: the values below apply to this cover alone and take precedence over both the profile and the configuration file. The cover does not move: only the values are changed.\n\n**What you have to do**: enter only the values you want to set for this cover. Leaving a field empty does not mean zero: it restores the value from the profile or the file. Decimals may be written with a comma or with a point.",
         "data": {
           "height": "Curtain travel (cm)",
           "opening_time": "Opening time (s)",
           "closing_time": "Closing time (s)",
-          "slat_time": "Slat time (s)",
+          "slat_time": "Slat opening time (s)",
           "opening_roll": "Roll coefficient when opening",
           "closing_roll": "Roll coefficient when closing"
         },
@@ -277,14 +277,14 @@
       },
       "path_b": {
         "title": "What kind of cover is {cover}?",
-        "description": "A profile describes a model of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roller. Home Assistant scales it to this cover as soon as it knows how tall it is.\n\n**What you have to do**: pick the profile measured on a cover similar to this one. On the next screen you will measure the height of this one.",
+        "description": "A profile describes a model of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Home Assistant scales it to this cover as soon as it knows how tall it is.\n\n**What you have to do**: pick the profile measured on a cover similar to this one. On the next screen you will measure the height of this one.",
         "data": {
           "profile": "Profile"
         }
       },
       "path_c": {
         "title": "Refine {cover}",
-        "description": "This cover has been given a profile but does not behave as the profile says: the motor may be slower, the curtain heavier, the roller thicker. What you measure here applies to this cover alone and beats both the profile and the configuration file, if you use one; everything you do not measure goes on coming from the profile.\n\n**What you have to do**: confirm which profile this cover should start from.",
+        "description": "This cover has been given a profile but does not behave as the profile says: the motor may be slower, the curtain heavier, the roller thicker. What you measure here applies to this cover alone and takes precedence over both the profile and the configuration file, if you use one; everything you do not measure goes on coming from the profile.\n\n**What you have to do**: confirm which profile this cover should start from.",
         "data": {
           "profile": "Profile"
         }
@@ -327,7 +327,7 @@
       },
       "open_lift": {
         "title": "The cover is opening",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\nPress at the instant the bottom edge leaves the base.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\nPress as soon as the bottom edge leaves the base.",
         "menu_options": {
           "lifted_off": "1) Press when the bottom edge leaves the base",
           "repeat_step": "Repeat this step",
@@ -356,7 +356,7 @@
       },
       "lift_gap": {
         "title": "Measure the gap - {cover}",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**What you have to do**: measure from the base - the point where the bottom edge rests when the cover is closed - up to the bottom edge where it is now, and write the centimetres below. That distance says exactly when the edge really left the base, so the slat time stops depending on how quick your finger was.\n\nLeaving the field empty goes on without measuring, and the press stands as it was made.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**What you have to do**: measure from the base - the point where the bottom edge rests when the cover is closed - up to the bottom edge where it is now, and write the centimetres below. That distance says exactly when the edge really left the base, so the slat opening time stops depending on how quick your finger was.\n\nLeaving the field empty goes on without measuring, and the press stands as it was made.",
         "data": {
           "gap_cm": "Gap between the bottom edge and the base (cm)"
         },
@@ -366,7 +366,7 @@
       },
       "lift_early": {
         "title": "The press came too early",
-        "description": "**Cover**: {cover}\n\n**What happened**: a gap of less than a centimetre means the cover was still resting on its base when the motor stopped, so the press was made before the bottom edge left it. The slat time it measured is short by an unknown amount, and no reading can put back a distance that was never travelled.\n\n**What you have to do**: make the ascent again. The cover is sent back down and starts up once more; this time wait until the bottom edge has really lifted before pressing.",
+        "description": "**Cover**: {cover}\n\n**What happened**: a gap of less than a centimetre means the cover was still resting on its base when the motor stopped, so the press was made before the bottom edge left it. The slat opening time it measured is short by an unknown amount, and no reading can put back a distance that was never travelled.\n\n**What you have to do**: make the ascent again. The cover is sent back down and starts up once more; this time wait until the bottom edge has really lifted before pressing.",
         "menu_options": {
           "repeat_step": "Measure the ascent again",
           "lift_gap": "Write the gap again",
@@ -402,7 +402,7 @@
       },
       "open_result": {
         "title": "The ascent was measured",
-        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s.\n\n**What you have to do**: if both presses felt right, go on. If either was late or early, repeat the measurement: both runs of the ascent are made again from the base, because a slat time taken on one attempt does not belong with an ascent taken on another. A press half a second out moves the estimate by a few centimetres.",
+        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s.\n\n**What you have to do**: if both presses felt right, go on. If either was late or early, repeat the measurement: both runs of the ascent are made again from the base, because a slat opening time taken on one attempt does not belong with an ascent taken on another. A press half a second out moves the estimate by a few centimetres.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_step": "Repeat the measurement"
@@ -410,7 +410,7 @@
       },
       "open_result_gap": {
         "title": "The ascent was measured",
-        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s, and a gap of {gap} cm above the base.\n\nThe slat time above is the one the press produced. The gap you measured replaces it when the values are computed, so what ends up stored may differ from it by a few tenths of a second - that is the whole point of having measured it.\n\n**What you have to do**: if the press at the top and the reading both felt right, go on. Repeating the measurement makes both runs of the ascent again from the base.",
+        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s, and a gap of {gap} cm above the base.\n\nThe slat opening time above is the one the press produced. The gap you measured replaces it when the values are computed, so what ends up stored may differ from it by a few tenths of a second - that is the whole point of having measured it.\n\n**What you have to do**: if the press at the top and the reading both felt right, go on. Repeating the measurement makes both runs of the ascent again from the base.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_step": "Repeat the measurement"
@@ -482,7 +482,7 @@
       },
       "measure_verify": {
         "title": "Check {cover} - {percent}% of the way down",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was taken to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen says how far the cover is from where Home Assistant believed it to be.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was taken to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen shows the difference between the measured position and the position estimated by Home Assistant.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -508,7 +508,7 @@
       },
       "verify_result": {
         "title": "Where the cover really stopped",
-        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile assigned to it.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If it appears, the refinement measures this cover on its own.",
+        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile assigned to it.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If available, the refinement option measures this cover separately.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_tape": "Repeat the measurement",
@@ -517,14 +517,14 @@
       },
       "profile_name": {
         "title": "Name this kind of cover",
-        "description": "{cover} has been measured, and what was measured describes every cover similar to it. Give that kind a name and the others will be calibrated in two screens instead of ten.\n\n**What you have to do**: write a short name - letters, digits and underscores only, no spaces and no accents, because it is also a key of the configuration file. Something like `tall`, `bedrooms` or `kitchen_door`.\n\nThe name is asked for now because it appears in the summary on the next screen. A name already in use is not refused: the profile of that name is **replaced** by the one just measured, and that is how a cover whose first measurement went badly is measured again. A `cover_profiles:` block of the same name in the configuration file is left untouched and goes on sitting behind the measured one.",
+        "description": "{cover} has been measured, and what was measured describes every cover similar to it. Give that kind a name and the others will be calibrated in two screens instead of ten.\n\n**What you have to do**: write a short name - letters, digits and underscores only, no spaces and no accents, because it is also a key of the configuration file. Something like `tall`, `bedrooms` or `kitchen_door`.\n\nThe name is asked for now because it appears in the summary on the next screen. A name already in use is not refused: the profile of that name is **replaced** by the one just measured, and that is how a cover whose first measurement went badly is measured again. A `cover_profiles:` block of the same name in the configuration file is left untouched and has lower priority than the measured profile.",
         "data": {
           "name": "Profile name"
         }
       },
       "summary_basic": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” measures four more points and shows the gap in centimetres.\n\n**What you have to do**: save, or spend another two minutes and four tape readings.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” measures four more points and shows the gap in centimetres.\n\n**What you have to do**: save, or continue with four more tape readings, taking about two minutes.",
         "menu_options": {
           "save": "Save",
           "refine": "Improve the accuracy (~2 minutes, 4 more readings)",
@@ -565,7 +565,7 @@
       },
       "saved_refined": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved and already in use. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now beats it; everything that was not measured here still comes from the profile. You will find the result among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
+        "description": "Done: the calibration of {cover} is saved and already in use. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. You will find the result among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -581,7 +581,7 @@
       },
       "expired": {
         "title": "The session expired through inactivity",
-        "description": "This calibration stood still for too long, so {cover} was released: it is no longer being calibrated and answers ordinary commands again.\n\n**Nothing was saved**: the measurements taken so far were discarded, and getting them back means starting again from the beginning. If {cover} was still moving, it was asked to stop where it was.\n\nA screen with a progress bar has no Cancel button of its own: the way out of one is to close the dialog, which gives the cover back straight away.",
+        "description": "The calibration session was inactive for too long, so {cover} is no longer being calibrated and responds to normal commands again.\n\n**Nothing was saved**: the measurements taken so far were discarded, and getting them back means starting again from the beginning. If {cover} was still moving, it was asked to stop where it was.\n\nA screen with a progress bar has no Cancel button of its own: the way out of one is to close the dialog, which gives the cover back straight away.",
         "menu_options": {
           "calibrate": "Start again",
           "init": "Close"
@@ -621,7 +621,7 @@
       },
       "problem_not_stopped": {
         "title": "The cover could not be stopped",
-        "description": "**Cover**: {cover}\n\nThe stop command was refused or lost, so the cover carried on to its end stop and the position this step was about does not exist.\n\n**What you have to do**: wait for the cover to be still and repeat the step. This usually happens with a gateway that is busy with a great many commands.",
+        "description": "**Cover**: {cover}\n\nThe stop command was refused or lost, so the cover carried on to its end stop and it did not stop at the position needed for this step.\n\n**What you have to do**: wait for the cover to be still and repeat the step. This usually happens with a gateway that is busy with a great many commands.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -637,7 +637,7 @@
       },
       "problem_bad_point": {
         "title": "Those two presses cannot both be right",
-        "description": "The instants do not hold together: the cover cannot have stopped before it started, nor opened its slats after arriving.\n\n**What you have to do**: repeat the step and press once for each event, at the moment it happens.",
+        "description": "The recorded times are inconsistent: the cover cannot have stopped before it started, nor opened its slats after arriving.\n\n**What you have to do**: repeat the step and press once for each event, at the moment it happens.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -645,7 +645,7 @@
       },
       "problem_timeout": {
         "title": "Nothing was pressed in time",
-        "description": "This screen waits about a minute and a half for the press it is about, far longer than any cover takes to run. Past that limit the press no longer measures anything, so it was discarded rather than believed.\n\n**What you have to do**: repeat the step and this time press as soon as the cover does what the screen describes.",
+        "description": "This screen waits about a minute and a half for the press it is about, far longer than any cover takes to run. Past that limit the press no longer measures anything, so it was rejected as invalid.\n\n**What you have to do**: repeat the step and this time press as soon as the cover does what the screen describes.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -878,7 +878,7 @@
       "fields": {
         "direction": {
           "name": "Direction",
-          "description": "Which run to measure: 'close' starts from fully open and runs half the curtain time, 'open' starts from fully closed and runs the slat time plus half the curtain time."
+          "description": "Which run to measure: 'close' starts from fully open and runs half the curtain time, 'open' starts from fully closed and runs the slat opening time plus half the curtain time."
         }
       }
     },
@@ -899,7 +899,7 @@
           "description": "The same measurement after direction 'open'. Optional: it is what gives the separate opening_roll, and without it only the closing roll is worked out."
         },
         "slat_time": {
-          "name": "Slat time",
+          "name": "Slat opening time",
           "description": "Seconds of slat-only travel. It is an input, never an answer: given here it is used as it stands, otherwise the value configured on the cover is."
         },
         "closed_run_seconds": {

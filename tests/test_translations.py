@@ -706,7 +706,7 @@ TIMED_VOCABULARY: dict[str, tuple[str, str, str]] = {
     "fr": ("moteur", "lames", "base"),
     "nl": ("motor", "lamellen", "basis"),
     "es": ("motor", "lamas", "base"),
-    "de": ("motor", "lamellen", "grundlinie"),
+    "de": ("motor", "lamellen", "auflagefläche"),
     "pt": ("motor", "lâminas", "base"),
 }
 
@@ -743,7 +743,7 @@ CLOSE_WARNING: dict[str, tuple[str, str, str]] = {
     "fr": ("n'appuyez pas", "base", "lames comprises"),
     "nl": ("druk niet", "basis", "lamellen inbegrepen"),
     "es": ("no pulses", "base", "lamas incluidas"),
-    "de": ("drücken sie nicht", "grundlinie", "lamellen eingeschlossen"),
+    "de": ("drücken sie nicht", "auflagefläche", "lamellen eingeschlossen"),
     "pt": ("não carregue", "base", "lâminas incluídas"),
 }
 
