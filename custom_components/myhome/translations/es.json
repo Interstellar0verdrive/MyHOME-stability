@@ -500,7 +500,7 @@
       },
       "saved_refined": {
         "title": "Calibración guardada",
-        "description": "Hecho: la calibración de {cover} está guardada y ya en uso. {cover} sigue siguiendo el perfil «{profile}», y lo que se acaba de medir en esta persiana sola ahora tiene preferencia sobre él; todo lo que aquí no se ha medido sigue viniendo del perfil. El resultado lo encuentras entre los atributos de la entidad, en «Calibration source».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, donde puedes volver a ver los valores, corregirlos a mano o borrarlos. El perfil no se ha tocado: las demás persianas que lo siguen quedan como están.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar.",
+        "description": "Hecho: la calibración de {cover} está guardada y ya en uso. {cover} continúa siguiendo el perfil «{profile}», y lo que se acaba de medir en esta persiana sola ahora tiene preferencia sobre él; todo lo que aquí no se ha medido sigue viniendo del perfil. El resultado lo encuentras entre los atributos de la entidad, en «Calibration source».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, donde puedes volver a ver los valores, corregirlos a mano o borrarlos. El perfil no se ha tocado: las demás persianas que lo siguen quedan como están.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar.",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
