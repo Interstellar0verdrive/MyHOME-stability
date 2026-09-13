@@ -18,6 +18,9 @@ from typing import Any
 import pytest
 
 from custom_components.myhome.calibration_flow import (
+    ERROR_INVALID_NAME,
+    ERROR_NOT_A_NUMBER,
+    ERROR_OUT_OF_RANGE,
     HOMING_ACTION,
     NO_PROFILE,
     PROBLEM_REASONS,
@@ -35,6 +38,7 @@ from custom_components.myhome.const import (
     MAX_COMMAND_WORKERS,
 )
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
+from custom_components.myhome.panel_schemas import WS_ERROR_KEYS
 from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -623,6 +627,251 @@ def test_no_menu_option_draws_an_arrow_of_its_own(path: Path) -> None:
             assert not re.search(r"[\u2190\u2192\u21e6\u21e8]|<-|->", label), (
                 f"{path.name}: {step_id} -> {option}"
             )
+
+
+# ------------------------------------------------------------------- the panel
+# 0.6.0 gives the integration a second client. The panel of "Profili e tapparelle" says
+# the same things the options flow says, in the same words, out of the same eight files -
+# that is the whole point of `myhome/calibration/texts` - and the block it adds is the
+# one place where a sentence exists for the panel and for nothing else.
+#
+# **It is called `config_panel` in the file and `panel` in the payload.** Home Assistant's
+# `hassfest` validates `strings.json` and `translations/en.json` against a closed list of
+# top-level keys (`script/hassfest/translations.py`, `gen_strings_schema`, a schema that
+# prevents extra keys), and that list has `config_panel` on it - an arbitrarily nested
+# tree of slug keys, meant for exactly this - and no `panel`. A top-level `panel` block
+# turns `.github/workflows/hassfest.yml` red. `panel_data.TEXT_BLOCKS` renames it on the
+# way out so the frontend keeps the `panel.<view>.<element>` namespace it is written
+# against; the tests below are written on the file's name.
+PANEL_BLOCK = "config_panel"
+
+# The eleven views, in the order `.audit-2026-09/PANEL-TEXT-KEYS.md` lists them. A twelfth
+# view is a decision, not an accident: it changes what lots 5, 7 and 8 may reach for, so
+# it goes through this list first.
+PANEL_VIEWS: tuple[str, ...] = (
+    "common",
+    "firstrun",
+    "overview",
+    "assign",
+    "review",
+    "dialog",
+    "toast",
+    "detail",
+    "profile",
+    "banner",
+    "error",
+)
+
+# Every `{placeholder}` the panel's own sentences may use, with what the frontend is
+# expected to put in it. A name invented in one language and not in the six others is
+# already caught by the parity test; this one catches a name invented in all eight, which
+# is the way a `{profilo}` gets shipped.
+PANEL_PLACEHOLDERS: dict[str, str] = {
+    "cover": "the name of one shutter",
+    "profile": "the name of one profile",
+    "profiles": "how many profiles this gateway has",
+    "covers": "a list of shutter names, or how many covers this gateway has",
+    "gateway": "the title of the config entry",
+    "count": "a number of things the sentence is about",
+    "travel": "a curtain travel in centimetres",
+    "reference": "the reference travel of a profile, in centimetres",
+    "opening": "the opening time, in seconds",
+    "closing": "the closing time, in seconds",
+    "slat": "the slat opening time, in seconds",
+    "deviation": "how far the check was out, in centimetres",
+    "date": "a date, formatted by the browser",
+    "target": "a phrase naming where an assignment is going",
+    "destination": "a phrase naming what a cover falls back to",
+    "keys": "a list of value names",
+    "value": "one number, already formatted",
+    "from": "where a pending assignment comes from",
+    "to": "where a pending assignment goes",
+    "key": "the name of one value of the travel model",
+    "min": "the lowest number a field accepts",
+    "max": "the highest number a field accepts",
+    "entry_id": "the id of a config entry",
+}
+
+
+def panel_block(path: Path) -> dict[str, Any]:
+    return load(path)[PANEL_BLOCK]
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_panel_has_its_own_block_in_every_file(path: Path) -> None:
+    """Eight files, eleven views, and not a single sentence baked into the bundle.
+
+    The panel resolves every word through `myhome/calibration/texts`; a key it asks for
+    and nobody wrote renders as the dotted key itself, on screen, in production. The key
+    sets are already held equal by `test_each_locale_has_the_same_keys_as_strings_json`;
+    what this adds is that the block is *there* at all, and that its top level is the
+    eleven views and nothing else - a stray `panel.misc` is where a twelfth view starts.
+
+    Mutation caught: translating the block into six languages and forgetting the seventh;
+    adding a view without deciding it belongs.
+    """
+    block = panel_block(path)
+    assert set(block) == set(PANEL_VIEWS), path.name
+    assert all(isinstance(view, dict) and view for view in block.values()), path.name
+
+
+def test_the_panel_never_says_a_word_the_flow_already_says() -> None:
+    """One wording for two clients: the panel reuses, it does not restate.
+
+    The five origin phrases and the six value labels are the vocabulary the entity's
+    `Calibration source` attribute and the dialog's forms are written in. A copy of them
+    under `panel.*` is a second sentence that drifts on the first review that touches only
+    one of the two - which is exactly how "Slat time" and "Slat opening time" both existed
+    for a while. The panel reads `selector.calibration_origin.options.*` and
+    `options.step.calibration_edit.data.*` instead, and lot 5 has no business adding a key
+    that says what one of those already says.
+
+    Mutation caught: pasting an origin phrase or a field label into the panel's block.
+    """
+    strings = load(STRINGS)
+    reserved = set(strings["selector"]["calibration_origin"]["options"].values())
+    reserved |= set(strings["options"]["step"]["calibration_edit"]["data"].values())
+    reserved |= set(strings["options"]["step"]["profile_edit"]["data"].values())
+    offences = [
+        (key, text)
+        for key, text in flatten(panel_block(STRINGS)).items()
+        if text in reserved
+    ]
+    assert not offences, "\n".join(
+        f"{PANEL_BLOCK}.{key}: {text!r} already exists in the flow's own strings"
+        for key, text in offences
+    )
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_panel_substitutes_only_names_that_mean_something(path: Path) -> None:
+    """A placeholder is a promise that the frontend passes that name.
+
+    Home Assistant substitutes nothing here: the panel does it itself, key by key, so a
+    `{profilo}` in the Italian is rendered as five literal characters between braces to
+    the one user who reads that file. The parity test holds the seven languages to the
+    English; this holds the English to a list somebody decided.
+
+    Mutation caught: inventing a placeholder name in the source language, where parity
+    would then propagate it to all eight.
+    """
+    offences = {
+        (key, name)
+        for key, text in flatten(panel_block(path)).items()
+        for name in PLACEHOLDER.findall(text)
+        if name not in PANEL_PLACEHOLDERS
+    }
+    assert not offences, f"{path.name}: {sorted(offences)}"
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_panel_says_none_of_the_words_the_lexicon_struck_out(path: Path) -> None:
+    """The lexicon of 13 September is about the feature, not about one of its clients.
+
+    `test_no_screen_says_a_word_the_lexicon_struck_out` reads the `options` block because
+    that was the only place with screens in it. The panel has screens now, and they are
+    the screens a user reaches first: "livello preciso" on a chip in the panel and
+    "calibrazione approfondita" on the dialog behind it is the same failure the sweep of
+    13 September was about, in a new file.
+
+    Mutation caught: any struck-out term entering the panel's block, in any language.
+    """
+    forbidden = FORBIDDEN_BY_THE_LEXICON[path.stem]
+    offences = [
+        (key, word, instead)
+        for key, text in flatten(panel_block(path)).items()
+        for word, instead in forbidden.items()
+        if word in text.lower()
+    ]
+    assert not offences, "\n".join(
+        f"{path.name}: {key}: {word!r} - say {instead}" for key, word, instead in offences
+    )
+
+
+# ------------------------------------------------------- the refusals of the panel
+# Every `send_error` the panel's WebSocket API sends carries `translation_domain="myhome"`
+# and a `translation_key`, and Home Assistant resolves that pair - both in
+# `homeassistant.helpers.translation.async_get_exception_message`, which builds
+# `component.<domain>.exceptions.<key>.message`, and in the frontend, which does the same
+# for a WebSocket error - against the top-level `exceptions` block. Not `options.error.*`,
+# which is where a *form field's* error lives and which says nothing about which shutter
+# or which value it is about.
+#
+# The keys the read half already has are read off `WS_ERROR_KEYS`; the three the write
+# commands share with the guided dialog are read off `calibration_flow`, which is where
+# they are defined. The seven the write half adds (lot 3) are named below because this
+# branch predates the commit that declares them: the assertion is a superset one, so the
+# moment `WS_ERROR_KEYS` grows to carry them the two agree instead of drifting.
+WRITE_REFUSALS: tuple[str, ...] = (
+    "busy_calibrating",
+    "write_in_progress",
+    "missing_travel",
+    "unknown_profile",
+    "profile_not_editable",
+    "name_in_use",
+    "undo_expired",
+)
+
+
+def refusal_keys() -> set[str]:
+    """Every `translation_key` a refusal of the panel can carry, from the code."""
+    return (
+        set(WS_ERROR_KEYS)
+        | {ERROR_NOT_A_NUMBER, ERROR_OUT_OF_RANGE, ERROR_INVALID_NAME}
+        | set(WRITE_REFUSALS)
+    )
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_every_refusal_the_panel_can_send_has_a_sentence(path: Path) -> None:
+    """A refusal with no sentence is a token on the screen, in seven languages.
+
+    Derived from the constants rather than from a list kept by hand, so a key added to
+    `WS_ERROR_KEYS` with no text behind it fails here rather than reaching a user as
+    `unknown_profile`.
+
+    Mutation caught: adding a refusal to the WebSocket API and translating it nowhere;
+    writing the sentence under `options.error.*`, where nothing resolves it.
+    """
+    written = load(path).get("exceptions", {})
+    missing = sorted(refusal_keys() - set(written))
+    assert not missing, f"{path.name}: no exceptions.<key>.message for {missing}"
+    for key in sorted(refusal_keys()):
+        assert set(written[key]) == {"message"}, f"{path.name}: exceptions.{key}"
+
+
+def test_every_refusal_substitutes_what_the_code_really_passes() -> None:
+    """The braces have to match the dict beside them, refusal by refusal.
+
+    `unknown_entry` is the one that has to stay bare: it is sent twice, once with the
+    entry id the client asked for and once, when no gateway is loaded at all, with
+    nothing - so a sentence naming the id would show braces on the second path. The rest
+    name exactly what their `translation_placeholders` carry.
+
+    Mutation caught: writing a sentence around a placeholder the handler does not pass
+    (braces on screen), or naming one it does pass under a different name.
+    """
+    expected: dict[str, set[str]] = {
+        "unknown_entry": set(),
+        "entry_not_loaded": {"gateway"},
+        "unknown_cover": set(),
+        "advanced_cover": set(),
+        "busy_calibrating": {"cover"},
+        "write_in_progress": set(),
+        "missing_travel": {"covers", "count"},
+        "unknown_profile": {"profile"},
+        "profile_not_editable": {"profile"},
+        "name_in_use": {"profile"},
+        "undo_expired": set(),
+        "not_a_number": {"key"},
+        "out_of_range": {"key", "min", "max"},
+        "invalid_name": {"profile"},
+    }
+    assert set(expected) == refusal_keys()
+    for path in [STRINGS, *TRANSLATIONS]:
+        for key, names in expected.items():
+            message = load(path)["exceptions"][key]["message"]
+            assert set(PLACEHOLDER.findall(message)) == names, f"{path.name}: {key}"
 
 
 # ------------------------------------------------------------------- the drawings
