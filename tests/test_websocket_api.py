@@ -27,9 +27,13 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
+from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er, translation
 
 from custom_components.myhome import panel_write
+from custom_components.myhome.calibration_flow import (
+    ERROR_NOT_A_NUMBER,
+    ERROR_OUT_OF_RANGE,
+)
 from custom_components.myhome.calibration_store import (
     async_forget_store,
     cover_calibration_data,
@@ -61,6 +65,7 @@ from custom_components.myhome.panel_schemas import (
     ERROR_UNDO_EXPIRED,
     ERROR_UNKNOWN_COVER,
     ERROR_UNKNOWN_ENTRY,
+    ERROR_UNKNOWN_PROFILE,
     ERROR_WRITE_IN_PROGRESS,
     MEASURABLE_KEYS,
     OVERVIEW_KEYS,
@@ -968,6 +973,78 @@ async def test_assign_refuses_the_whole_batch_when_a_window_has_no_travel(
         # Nothing was written: the item that would have passed did not either.
         overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
         assert row_of(overview, SECOND)["profile"] == "tall"
+
+
+# The three refusals a batch can raise whose sentence is written around the *item's* own
+# words: a profile name, a field name, a pair of bounds. `_refuse_the_batch` rebuilds one
+# refusal for the whole batch and used to throw those away, so the sentence reached the
+# screen with its braces showing - REVIEW-0.6.0-lot6 §5.1, and `out_of_range` is reachable
+# from the review panel's own "corse mancanti" form, because `height` is `vol.Any(float,
+# int, str)` and everything else about it is decided here.
+BRACED_REFUSALS: tuple[tuple[str, dict[str, Any], str], ...] = (
+    (ERROR_UNKNOWN_PROFILE, {"cover_unique_id": FIRST, "profile": "gone"}, "gone"),
+    (
+        ERROR_NOT_A_NUMBER,
+        {"cover_unique_id": FIRST, "profile": "tall", "height": "abc"},
+        "height",
+    ),
+    (
+        ERROR_OUT_OF_RANGE,
+        {"cover_unique_id": FIRST, "profile": "tall", "height": 5000},
+        "height",
+    ),
+    # The one the batch's own `{covers}`/`{count}` are for: it has to keep working.
+    (ERROR_MISSING_TRAVEL, {"cover_unique_id": THIRD, "profile": "tall"}, THIRD),
+)
+
+
+@pytest.mark.parametrize(
+    ("key", "assignment", "expected"),
+    BRACED_REFUSALS,
+    ids=[key for key, _assignment, _expected in BRACED_REFUSALS],
+)
+async def test_a_refused_batch_carries_the_words_its_own_sentence_asks_for(
+    hass: HomeAssistant,
+    tmp_path,
+    hass_ws_client,
+    key: str,
+    assignment: dict[str, Any],
+    expected: str,
+) -> None:
+    """The refusal is rendered the way Home Assistant renders it, and has no braces left.
+
+    `exceptions.<key>.message` is resolved by
+    `homeassistant.helpers.translation.async_get_exception_message`, which formats the
+    sentence with whatever `translation_placeholders` carried. A batch that reports
+    `unknown_profile` with only `{covers}` and `{count}` in the dict therefore renders
+    "No stored profile is called “{profile}”." verbatim, braces and all.
+
+    Mutation caught: rebuilding the batch's refusal from the keys alone and dropping the
+    offending item's own placeholders (REVIEW-0.6.0-lot6 §5.1).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[assignment],
+        )
+        assert error["translation_key"] == key
+        assert error["translation_domain"] == DOMAIN
+
+        await translation.async_load_integrations(hass, {DOMAIN})
+        rendered = translation.async_get_exception_message(
+            DOMAIN, key, error["translation_placeholders"]
+        )
+        # The key itself comes back when nothing was found, which would make the rest of
+        # this test vacuous.
+        assert rendered != key
+        assert "{" not in rendered, rendered
+        assert expected in rendered
 
 
 async def test_assign_names_every_item_it_refuses(
