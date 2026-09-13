@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantHTTP
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -18,6 +19,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 import custom_components.myhome as myhome
 from custom_components.myhome import (
+    PANEL_BUNDLE,
+    PANEL_ELEMENT,
+    PANEL_SIDEBAR_ICON,
+    PANEL_SIDEBAR_TITLE,
+    PANEL_STATIC_URL,
+    PANEL_URL_PATH,
     STATIC_URL_PATH,
     async_migrate_entry,
     async_remove_config_entry_device,
@@ -1040,13 +1047,23 @@ def test_the_manifest_declares_the_component_it_calls_into() -> None:
     # refuses in exactly the same words ("Using component websocket_api but it's not in
     # 'dependencies'"). `async_setup` registers them, so it has to be up by then.
     assert "websocket_api" in manifest["dependencies"]
+    # The panel registration imports `homeassistant.components.frontend` too, and
+    # hassfest refuses an undeclared import in the same words - but `frontend` is an
+    # *after* dependency and not a hard one, on purpose. The two functions it provides
+    # here (`async_panel_exists`, `async_register_built_in_panel`) are callbacks that
+    # write to `hass.data` and need nothing set up; making it a hard dependency would
+    # instead make every gateway in the house depend on the `home-assistant-frontend`
+    # package being installed, which a headless install - and this test suite - does
+    # not have. `after_dependencies` still orders it first wherever it is present.
+    assert "frontend" in manifest["after_dependencies"]
+    assert "frontend" not in manifest["dependencies"]
     # hassfest also pins the order: `domain`, `name`, then everything else sorted.
     keys = list(manifest)
     assert keys[:2] == ["domain", "name"]
     assert keys[2:] == sorted(keys[2:])
 
 
-async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant, tmp_path) -> None:
+async def test_the_drawings_and_the_bundle_are_served_from_one_call(hass: HomeAssistant, tmp_path) -> None:
     """Seven screens of the guided calibration open with `![](/myhome_static/...)`.
 
     A config-flow description is Markdown, so the drawing costs nothing but the file
@@ -1076,9 +1093,16 @@ async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant,
 
     register.assert_awaited_once()
     (configs,) = register.await_args.args
-    (config,) = configs
-    assert config.url_path == STATIC_URL_PATH
-    assert config.cache_headers is True
+    # Both directories in the one call, under the one flag, with the panel's bundle on
+    # its own URL prefix: a folder under `/myhome_static` would be matched by the
+    # drawings' resource first and looked for at `images/panel/...`.
+    images_config, panel_config = configs
+    assert [config.url_path for config in configs] == [STATIC_URL_PATH, PANEL_STATIC_URL]
+    assert all(config.cache_headers is True for config in configs)
+    bundle = Path(panel_config.path) / PANEL_BUNDLE
+    assert bundle == Path(myhome.__file__).parent / "frontend" / PANEL_BUNDLE
+    assert bundle.is_file()
+    config = images_config
     images = Path(config.path)
     assert images == Path(myhome.__file__).parent / "images"
     assert {path.name for path in images.glob("*.webp")} == {
@@ -1102,11 +1126,11 @@ async def test_a_registration_that_fails_can_be_tried_again(hass: HomeAssistant,
     failing = AsyncMock(side_effect=RuntimeError("no static paths today"))
     hass.http = MagicMock(async_register_static_paths=failing)
     with pytest.raises(RuntimeError):
-        await myhome._async_register_images(hass)
+        await myhome._async_register_static_paths(hass)
 
     register = AsyncMock()
     hass.http = MagicMock(async_register_static_paths=register)
-    await myhome._async_register_images(hass)
+    await myhome._async_register_static_paths(hass)
     register.assert_awaited_once()
 
 
@@ -1124,3 +1148,159 @@ async def test_setup_survives_a_home_assistant_without_http(hass: HomeAssistant,
     with mock_gateway():
         assert await _setup(hass, entry)
     assert entry.state is ConfigEntryState.LOADED
+
+
+# ------------------------------------------------------- "Profili e tapparelle"
+def _panel(hass: HomeAssistant):
+    """The registered panel as the browser receives it, or `None`."""
+    panel = hass.data.get(frontend.DATA_PANELS, {}).get(PANEL_URL_PATH)
+    return None if panel is None else panel.to_response()
+
+
+async def test_the_panel_is_registered_with_the_flags_that_were_decided(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The panel is a custom element, admin-only, and off in the sidebar until asked for.
+
+    Every flag here is a decision the plan records, and every one of them is invisible
+    from the code that sets it: `sidebar_default_visible=False` is the whole reason the
+    registration calls `frontend.async_register_built_in_panel` by hand instead of the
+    documented `panel_custom.async_register_panel`, which cannot express it.
+
+    `config_panel_domain` is asserted *absent*: setting it would move the integration
+    page's "Configura" button from the options flow to this panel, and the options flow
+    still owns the guided calibration and the connection form.
+
+    Mutation caught: dropping any flag, letting the sidebar entry default to visible,
+    naming the wrong element, or reaching for `panel_custom` - whose wrapper would
+    silently register the panel with `sidebar_default_visible` at its default `True`.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+
+    panel = _panel(hass)
+    assert panel is not None
+    assert panel["component_name"] == "custom"
+    assert panel["url_path"] == PANEL_URL_PATH == "myhome-calibration"
+    assert panel["require_admin"] is True
+    assert panel["default_visible"] is False
+    assert panel["show_in_sidebar"] is True
+    assert panel["config_panel_domain"] is None
+    assert panel["title"] == PANEL_SIDEBAR_TITLE
+    assert panel["icon"] == PANEL_SIDEBAR_ICON
+
+    custom = panel["config"]["_panel_custom"]
+    assert custom["name"] == PANEL_ELEMENT == "myhome-calibration-panel"
+    # No iframe: the element lives in the main document and inherits the HA theme.
+    assert custom["embed_iframe"] is False
+    assert custom["trust_external"] is False
+    assert custom["handle_safe_area"] is True
+
+
+async def test_the_bundles_url_carries_the_version_the_manifest_says(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`cache_headers=True` means the URL has to change when the bundle does.
+
+    It changes on the query string, read back out of the integration rather than
+    restated: `release.yml` rewrites and asserts `manifest.json`'s version before it
+    tags, so `?v=` moves on every release and on nothing else. The same version reaches
+    the element through the panel's own `config`, which is why the committed bundle
+    carries no stamp and a release does not have to rebuild it.
+
+    Mutation caught: hard-coding a version, dropping the query string (after which a
+    browser keeps a year-old bundle), or stamping the version into the bundle instead.
+    """
+    version = json.loads(
+        (Path(myhome.__file__).parent / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
+
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+
+    panel = _panel(hass)
+    assert panel["config"]["version"] == version
+    assert panel["config"]["_panel_custom"]["module_url"] == (
+        f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}"
+    )
+
+
+async def test_the_panel_is_registered_once_per_home_assistant_run(hass: HomeAssistant) -> None:
+    """A second gateway must not try to register the same panel again.
+
+    `async_register_built_in_panel` raises `ValueError` on a name it already holds, so
+    without the `async_panel_exists` guard a second attempt would be an exception the
+    registration then has to swallow - and a swallowed exception is how "the panel is
+    gone" becomes a line in a log nobody reads.
+
+    Mutation caught: dropping the guard, or moving the registration into
+    `async_setup_entry` where a second gateway runs it again.
+    """
+    with patch.object(
+        myhome.frontend,
+        "async_register_built_in_panel",
+        wraps=frontend.async_register_built_in_panel,
+    ) as register:
+        await myhome._async_register_panel(hass)
+        await myhome._async_register_panel(hass)
+
+    register.assert_called_once()
+    assert _panel(hass) is not None
+
+
+async def test_the_guard_is_inside_the_net_it_is_guarding(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """`async_panel_exists` is frontend API too, and it was outside the `try`.
+
+    The registration promises that a failure costs the panel and nothing else, but the
+    "is it already there?" question is asked through the same private API as the
+    registration itself - so an exception from *it* used to travel out of `async_setup`
+    and take every gateway in the house with it. The promise has to cover every line
+    that touches the frontend, not only the interesting one.
+
+    Mutation caught: lifting the `async_panel_exists` guard back out of the `try`.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with (
+        mock_gateway(),
+        patch.object(
+            myhome.frontend,
+            "async_panel_exists",
+            side_effect=RuntimeError("no panels here"),
+        ),
+    ):
+        assert await _setup(hass, entry)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert "Could not register the MyHOME panel" in caplog.text
+
+
+async def test_a_panel_that_cannot_be_registered_does_not_stop_a_gateway(
+    hass: HomeAssistant, tmp_path, caplog
+) -> None:
+    """The panel is an addition; the shutters are not.
+
+    Everything the panel does is also reachable from "Configura", so a frontend that
+    refuses the registration costs a sidebar entry - not a house full of covers that
+    will not load. The failure is logged with its traceback and the setup goes on.
+
+    Mutation caught: letting the exception out of `async_setup`, which turns any future
+    change in the frontend's panel API into an integration that does not start.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with (
+        mock_gateway(),
+        patch.object(
+            myhome.frontend,
+            "async_register_built_in_panel",
+            side_effect=ValueError("no panels today"),
+        ),
+    ):
+        assert await _setup(hass, entry)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert _panel(hass) is None
+    assert "Could not register the MyHOME panel" in caplog.text

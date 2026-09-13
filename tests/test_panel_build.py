@@ -1,0 +1,129 @@
+"""The committed bundle: is it there, is it the one the build makes, is it served.
+
+The panel ships as a built file (`custom_components/myhome/frontend/myhome-panel.js`)
+because HACS copies the integration directory as it exists at the tag and `release.yml`
+zips the same directory: there is no build step at the user's end, and a branch install
+with no bundle would show a blank page. The cost of that decision is a generated file in
+the tree, and these tests are half of what pays for it.
+
+The other half is `.github/workflows/panel.yml`, which rebuilds the bundle from
+`panel_src/` and fails on any difference. That job needs node; these tests need nothing,
+and run in the suite everybody already runs.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import custom_components.myhome as myhome
+from custom_components.myhome import PANEL_BUNDLE, PANEL_DIR, PANEL_ELEMENT, PANEL_STATIC_URL
+
+# `build.mjs` writes this as the bundle's first line and nothing else does.
+BANNER = "/* MyHOME calibration panel */"
+
+BUNDLE = Path(PANEL_DIR) / PANEL_BUNDLE
+
+
+def test_the_bundle_ships_with_the_integration() -> None:
+    """It exists, it is not empty, and it is inside the directory HACS copies.
+
+    Mutation caught: building somewhere outside `custom_components/myhome/`, which every
+    developer's own Home Assistant would keep serving out of its cache while every user's
+    installation got a 404.
+    """
+    assert BUNDLE.is_file()
+    assert BUNDLE.stat().st_size > 0
+    assert BUNDLE.parent.parent == Path(myhome.__file__).parent
+
+
+def test_the_bundle_is_the_one_the_build_makes() -> None:
+    """The banner is the build's signature: no banner, no `npm run build`.
+
+    A hand-edited bundle is the failure mode a committed build artefact invites - a
+    one-line fix applied to the generated file, working perfectly, and silently undone by
+    the next real build. The banner catches the version of that mistake that starts with
+    somebody writing the file from scratch; `panel.yml`'s `git diff --exit-code` catches
+    the rest.
+
+    Mutation caught: committing a bundle produced by anything but `panel_src/build.mjs`.
+    """
+    text = BUNDLE.read_text(encoding="utf-8")
+    assert text.startswith(BANNER)
+    # One ES module, minified: the element definition has to be in it.
+    assert PANEL_ELEMENT in text
+    assert "\n" in text  # a banner and a body, not a banner alone
+
+
+def test_the_bundle_does_not_carry_a_version_and_must_not_start_to() -> None:
+    """The version reaches the panel at runtime, never through the file.
+
+    `release.yml` rewrites `manifest.json`'s version and commits it immediately before it
+    tags. A bundle that embedded the version would be stale from that commit on, and
+    `panel.yml` - which rebuilds and diffs - would go red on `main` after every release
+    until somebody rebuilt by hand. So the registration puts the version in the panel's
+    `config` and in the `?v=` of its URL, and the file itself says nothing about it.
+
+    Mutation caught: reintroducing a build-time version stamp (`__MYHOME_PANEL_VERSION__`
+    or the version in the banner), which would make every release a manual rebuild.
+    """
+    version = json.loads(
+        (Path(myhome.__file__).parent / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
+    text = BUNDLE.read_text(encoding="utf-8")
+    assert "__MYHOME_PANEL_VERSION__" not in text
+    assert version not in text.splitlines()[0]
+
+
+def test_the_served_url_resolves_to_the_committed_file() -> None:
+    """`/myhome_panel/myhome-panel.js` and the file on disk are the same thing.
+
+    `_async_register_static_paths` serves `PANEL_DIR` at `PANEL_STATIC_URL`, and the
+    registration builds the module URL out of the same two constants: this asserts that
+    the join of them names a file that is actually there, which is the one mistake the
+    two halves cannot catch on their own.
+
+    Mutation caught: renaming the bundle on one side only.
+    """
+    assert PANEL_STATIC_URL.startswith("/")
+    assert not PANEL_STATIC_URL.endswith("/")
+    served = f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}"
+    assert served == "/myhome_panel/myhome-panel.js"
+    assert (Path(PANEL_DIR) / served.removeprefix(f"{PANEL_STATIC_URL}/")).is_file()
+
+
+def test_the_bundle_carries_lits_copyright_notice() -> None:
+    """Lit is BSD-3-Clause, and the bundle is a binary redistribution of it.
+
+    Clause 2 asks a redistribution in binary form to reproduce the copyright notice, the
+    conditions and the disclaimer "in the documentation and/or other materials provided
+    with the distribution". The bundle is what HACS copies into every installation and
+    what `release.yml` puts in the zip, so the notice has to be in it (esbuild's
+    `legalComments: "eof"`) and the text it refers to has to ship beside it.
+
+    Mutation caught: `legalComments: "none"`, which silently strips every `@license`
+    header out of the file that is actually distributed - the state this started in - or
+    deleting the notices file that the shortened notice points at.
+    """
+    text = BUNDLE.read_text(encoding="utf-8")
+    assert "SPDX-License-Identifier: BSD-3-Clause" in text
+    assert "Google LLC" in text
+
+    notices = BUNDLE.parent / "THIRD_PARTY_NOTICES.md"
+    assert notices.is_file()
+    licence = notices.read_text(encoding="utf-8")
+    assert "BSD 3-Clause License" in licence
+    # The disclaimer is the half of the licence a summary always loses.
+    assert "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS" in licence
+
+
+def test_the_bundle_stays_inside_its_budget() -> None:
+    """150 kB minified is the ceiling the plan sets (risk R5).
+
+    Lit is bundled rather than borrowed from a frontend global, and lots 5 to 8 add the
+    views on top of this skeleton; the number is here so that the day somebody reaches
+    for a Markdown library, an icon font or a date library, the diff says so.
+
+    Mutation caught: a dependency that doubles the download for a convenience.
+    """
+    assert BUNDLE.stat().st_size < 150 * 1024

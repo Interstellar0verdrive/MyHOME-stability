@@ -19,6 +19,7 @@ that will ship as the next release) and `OWNd` 0.7.49.
 - [The dispatcher](#the-dispatcher)
 - [The instant-power throttle](#the-instant-power-throttle)
 - [The calibration store and the options flow](#the-calibration-store-and-the-options-flow)
+- [The panel](#the-panel)
 - [The validator contract](#the-validator-contract)
 - [Test strategy](#test-strategy)
 
@@ -498,6 +499,96 @@ the connection form. The guided-calibration item is not offered when the gateway
 no basic cover. Every screen writes straight through to the store, and the config
 entry is rebuilt **once**, in `async_remove` — however the dialog was left, the
 browser's X included — and only when something was really stored.
+
+## The panel
+
+"Profili e tapparelle" is a Home Assistant **custom panel**, registered at
+`/myhome-calibration`, admin-only, and hidden from the sidebar until somebody turns
+it on in the sidebar editor. It reads and writes the stored calibration data of the
+loaded gateways; it never moves a shutter, and the options flow remains a complete
+path to everything it does.
+
+### Registration
+
+`async_setup` registers it once per Home Assistant run — not once per gateway —
+guarded by `frontend.async_panel_exists`, and never removes it on unload (a second
+gateway may still need it, and a static path cannot be unregistered anyway: aiohttp's
+router is append-only).
+
+It calls `frontend.async_register_built_in_panel` **directly** rather than
+`panel_custom.async_register_panel`, assembling the `_panel_custom` block by hand
+exactly as the wrapper does. The wrapper cannot express `sidebar_default_visible`,
+and "present but off by default" is the decision. The flags:
+
+| Flag | Value | Why |
+|---|---|---|
+| `frontend_url_path` | `myhome-calibration` | |
+| `component_name` | `custom` | |
+| `_panel_custom.name` | `myhome-calibration-panel` | the element the bundle defines |
+| `require_admin` | `True` | a travel model is a setting, not a state |
+| `sidebar_default_visible` | `False` | discoverable in the sidebar editor, invisible otherwise |
+| `show_in_sidebar` | `True` | so it *can* be turned on |
+| `embed_iframe` | `False` | the element inherits the theme's CSS variables |
+| `trust_external` | `False` | the bundle is local |
+| `handle_safe_area` | `True` | the panel draws its own insets |
+| `config_panel_domain` | **not set** | it would move the integration page's *Configure* button away from the options flow, which still owns the guided calibration and the connection form |
+
+A registration that raises is logged and swallowed: the panel is an addition, and a
+gateway that refused to load because a sidebar entry could not be created would be a
+poor trade. `frontend` is an **after** dependency, not a hard one — the two functions
+used are callbacks that write to `hass.data` and need nothing set up, while a hard
+dependency would make every gateway depend on the `home-assistant-frontend` package
+being installed.
+
+### Serving the bundle
+
+`_async_register_static_paths` registers both of the integration's static
+directories in one call, under one flag: the drawings at `/myhome_static` and the
+panel's bundle at `/myhome_panel`. They are **separate URL prefixes on purpose**: two
+aiohttp static resources where one prefix contains the other resolve by registration
+order, so `/myhome_static/panel/...` would be matched by the drawings' resource first
+and looked for inside `images/`.
+
+`cache_headers=True` means the URL has to change when the bundle does, and it does:
+the module URL is `/myhome_panel/myhome-panel.js?v=<the manifest's version>`, read
+back from the integration rather than restated. `release.yml` rewrites and asserts
+that version before it tags, so the URL moves on every release and on nothing else.
+
+The same version is passed to the element in the panel's `config`, which is how the
+panel can name its own version without the bundle carrying a stamp — and therefore
+without a release having to rebuild it.
+
+### The bundle
+
+The panel is Lit 3 + TypeScript, bundled by esbuild into a single ES module:
+
+```
+panel_src/                                                 source, not shipped
+custom_components/myhome/frontend/myhome-panel.js          built, committed, shipped
+custom_components/myhome/frontend/THIRD_PARTY_NOTICES.md   Lit's BSD-3 notice, shipped
+```
+
+Lit is bundled into that file, and BSD-3-Clause asks a binary redistribution to carry
+its copyright notice: esbuild's `legalComments: "eof"` puts the notices at the end of
+the bundle and the full licence text ships beside it.
+
+The built file is committed because HACS copies `custom_components/myhome/` as it is
+at the tag and `release.yml` zips the same directory: there is no build step at a
+user's end. Three things keep it honest — `.github/workflows/panel.yml`
+(`npm ci` → `npm run check` → `npm run build` → `git diff --exit-code`),
+`-diff linguist-generated` in `.gitattributes`, and `tests/test_panel_build.py`,
+which runs in the ordinary suite with no Node.
+
+To rebuild:
+
+```sh
+cd panel_src && npm ci && npm run check && npm run build
+```
+
+`panel_src/README.md` has the rest, including the rules the frontend code follows —
+no sentence compiled into the bundle, no `ha-*` element without a rendered fallback,
+no colour that is not a Home Assistant CSS variable, and nothing re-derived in
+JavaScript that `resolve_cover` already answered on the server.
 
 ## The validator contract
 
