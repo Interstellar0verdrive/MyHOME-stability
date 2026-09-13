@@ -135,6 +135,7 @@ from .const import (
     CONF_COVER_PROFILES,
     CONF_ENTITIES,
     CONF_HEIGHT,
+    CONF_MEASURED_ON,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
@@ -1128,6 +1129,11 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                         opening_roll=values[CONF_OPENING_ROLL],
                         closing_roll=values[CONF_CLOSING_ROLL],
                         reference_cover=stored.get(CONF_REFERENCE_COVER),
+                        # A hand edit re-stamps `measured_at` - it is the date the
+                        # numbers were last stated, and they have just been stated -
+                        # and clears nothing else: the window they were measured on is
+                        # still the window they were measured on.
+                        measured_on=stored.get(CONF_MEASURED_ON),
                         source=stored.get(CONF_SOURCE) or CALIBRATION_SOURCE_MANUAL,
                         raw=stored.get(CONF_RAW),
                     ),
@@ -3495,6 +3501,12 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                     opening_roll=result.profile[CONF_OPENING_ROLL],
                     closing_roll=result.profile[CONF_CLOSING_ROLL],
                     reference_cover=self._cover_label,
+                    # ...and the same window as an id, which survives a rename and is
+                    # what the panel follows back to the cover that is there now. This
+                    # is the only place a profile's provenance is ever written: it is
+                    # a fact about *this* conversation, which has just held a tape
+                    # against that shutter.
+                    measured_on=self._cover_unique_id,
                     raw=self._raw(),
                 ),
             )

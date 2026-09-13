@@ -62,6 +62,7 @@ from .calibration_store import (
 from .const import (
     ATTR_GATEWAY,
     ATTR_MESSAGE,
+    CONF_COVERS_FROM_FILE,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_TYPE,
     CONF_ENTITIES,
@@ -95,6 +96,7 @@ from .const import (
 )
 from .gateway import MyHOMEGatewayHandler
 from .validate import collect_unknown_keys, config_schema, format_mac
+from .websocket_api import async_register as async_register_websocket_api
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -433,6 +435,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration (config entries only; YAML is rejected by CONFIG_SCHEMA)."""
     hass.data.setdefault(DOMAIN, {})
     await _async_register_images(hass)
+    # The panel's read commands, once per Home Assistant run and not once per gateway:
+    # a command name is global, and `websocket_api` is a stage-0 dependency declared in
+    # the manifest, so it is up before this runs. Guarded the same way the drawings are.
+    async_register_websocket_api(hass)
     return True
 
 
@@ -460,6 +466,27 @@ async def _async_register_images(hass: HomeAssistant) -> None:
         [StaticPathConfig(STATIC_URL_PATH, IMAGES_DIR, cache_headers=True)]
     )
     hass.data[_STATIC_PATH_REGISTERED] = True
+
+
+@callback
+def _keep_the_covers_as_the_file_wrote_them(gateway_config: dict[str, Any]) -> None:
+    """Take a copy of the cover block before anything merges a calibration into it.
+
+    ``cover.async_setup_entry`` resolves each cover's travel model and writes the result
+    back into the validated configuration, so that the entity, the diagnostics and
+    whatever comes next all read the numbers the shutter really runs on. That is the
+    right thing for every reader but one.
+
+    The panel has two questions the merged dict cannot answer: what does ``myhome.yaml``
+    itself write for this key, and what would this window fall back to if its own
+    measurement of that key were removed. Both are about the state of things *before*
+    the merge, and once the merge has happened there is nothing left to ask. So the
+    block is copied here, one shallow copy per cover, at the one moment it is still the
+    file's own - before the platforms are forwarded - and the panel resolves against the
+    copy. The entity goes on reading the merged dict, unchanged.
+    """
+    covers = (gateway_config.get(CONF_PLATFORMS) or {}).get(COVER) or {}
+    gateway_config[CONF_COVERS_FROM_FILE] = {key: dict(cfg) for key, cfg in covers.items()}
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -529,6 +556,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway_config = await _async_load_gateway_config(hass, entry, config_file_path, mac)
     # Fresh per-gateway dict: never merge into leftovers of a previous setup.
     hass.data[DOMAIN][mac] = gateway_config
+    _keep_the_covers_as_the_file_wrote_them(gateway_config)
 
     # The handler reads its energy defaults from hass.data[DOMAIN][mac] -> create it after.
     handler = MyHOMEGatewayHandler(hass=hass, config_entry=entry, generate_events=generate_events)

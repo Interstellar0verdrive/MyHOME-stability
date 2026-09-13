@@ -101,6 +101,23 @@ CALIBRATION_ORIGINS: tuple[str, ...] = (
     CALIBRATION_ORIGIN_DEFAULTS,
 )
 # The translation key the five live under, and the one substitution two of them make.
+# ...and, one level down, where each single key of the travel model came from. The five
+# above answer "what is this shutter running on"; these four answer it key by key, which
+# is what the detail screen of the panel prints beside every field and what tells a
+# number the user measured from one the profile is filling in for them. They are the
+# five branches of the one precedence loop (`resolve_cover_keys`) and are never derived
+# a second time anywhere.
+CALIBRATION_KEY_ORIGIN_OWN = "own"
+CALIBRATION_KEY_ORIGIN_PROFILE = "profile"
+CALIBRATION_KEY_ORIGIN_FILE = "file"
+CALIBRATION_KEY_ORIGIN_DEFAULT = "default"
+CALIBRATION_KEY_ORIGINS: tuple[str, ...] = (
+    CALIBRATION_KEY_ORIGIN_OWN,
+    CALIBRATION_KEY_ORIGIN_PROFILE,
+    CALIBRATION_KEY_ORIGIN_FILE,
+    CALIBRATION_KEY_ORIGIN_DEFAULT,
+)
+
 CALIBRATION_ORIGIN_SELECTOR = "calibration_origin"
 CALIBRATION_ORIGIN_PROFILE_SLOT = "{profile}"
 
@@ -111,10 +128,18 @@ CALIBRATION_ORIGIN_PROFILE_SLOT = "{profile}"
 # (`calibration_store.async_import_legacy_subentries`).
 LEGACY_SUBENTRY_COVER_PROFILE = "cover_profile"
 LEGACY_SUBENTRY_COVER_CALIBRATION = "cover_calibration"
-# The two sections of the store, and the profile key that names the window a profile was
-# measured on (shown by "Vedi i valori", never read by the travel model).
+# The three sections of the store, and the profile key that names the window a profile
+# was measured on (shown by "Vedi i valori", never read by the travel model).
 CONF_PROFILES = "profiles"
 CONF_COVERS = "covers"
+# The order the user dragged the shutters into, as one flat list of unique ids at the
+# top level of the file (0.6.0, store minor 2). Flat and not a number inside each
+# cover's record, because a shutter that has only ever been *dragged* has nothing else
+# in its record: `StoredCalibration.says_anything` is False for it and
+# `async_set_assignments` deletes such a record on purpose, so an order kept in there
+# would resurrect empty records and put rows on the "Calibrazioni" screen that say
+# nothing. Groups are derived from the assignment; this list only orders within them.
+CONF_ORDER = "order"
 CONF_REFERENCE_COVER = "reference_cover"
 # Keys of a stored record.
 CONF_COVER_UNIQUE_ID = "cover_unique_id"
@@ -128,10 +153,27 @@ CONF_OVERRIDES = "overrides"
 CONF_PROFILE_WINS = "profile_wins"
 CONF_SOURCE = "source"
 CONF_MEASURED_AT = "measured_at"
+# The window a *profile* was measured on, as its unique id (0.6.0, store minor 2).
+# `reference_cover` beside it is the name that window had on the day, which is what a
+# screen prints; the id is what a screen can follow back to the cover that is there
+# now. Neither is ever guessed: a profile written by hand, imported, or measured before
+# 0.6.0 has no `measured_on` at all, and the panel says so rather than inventing one.
+CONF_MEASURED_ON = "measured_on"
 CONF_RAW = "raw"
 # Where the validator records which travel keys `myhome.yaml` really carries for a
 # cover, so a stored calibration can be given its place in the precedence (0.5.0).
 CONF_KEYS_FROM_FILE = "keys_from_file"
+# ...and, beside the validated platforms, the cover block exactly as the file produced
+# it, before anything merged a stored calibration into it (0.6.0).
+#
+# `cover.async_setup_entry` writes the resolved travel model back into the validated
+# configuration on purpose, so that everything reading a cover's numbers reads the ones
+# the shutter really runs on. That is right for every reader but one: the panel has to
+# be able to say what the *file* writes for a key, and what a window would fall back to
+# if its own measurement of that key were removed - and both questions are unanswerable
+# once the answer has been written over the question. A shallow copy per cover, taken
+# once per setup, is the whole cost.
+CONF_COVERS_FROM_FILE = "covers_from_file"
 # The key a cover is written under in ``myhome.yaml``. The validated device dicts are
 # re-keyed by WHO/WHERE before they reach ``hass.data`` (``validate.device_key``), so
 # this is the one place that remembers what the user called it - and the guided

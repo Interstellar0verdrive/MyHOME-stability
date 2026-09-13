@@ -1,0 +1,123 @@
+{
+  "entries": [
+    {
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "title": "MyHOMEServer1 Gateway",
+      "mac": "00:03:50:aa:bb:cc",
+      "loaded": true
+    }
+  ],
+  "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+  "measuring": null,
+  "profiles": [
+    {
+      "name": "from_the_file",
+      "source": "yaml",
+      "editable": false,
+      "values": {
+        "opening_time": 24.0,
+        "closing_time": 23.0,
+        "slat_time": 5.0,
+        "opening_roll": 1.5,
+        "closing_roll": 1.5
+      },
+      "reference_height": 200.0,
+      "measured_on": null,
+      "measured_on_name": null,
+      "measured_at": null,
+      "followers": [],
+      "followers_from_file": [],
+      "missing": false
+    },
+    {
+      "name": "tall",
+      "source": "store",
+      "editable": true,
+      "values": {
+        "opening_time": 22.3,
+        "closing_time": 21.7,
+        "slat_time": 4.7,
+        "opening_roll": 2.12,
+        "closing_roll": 1.69
+      },
+      "reference_height": 195.0,
+      "measured_on": "00:03:50:aa:bb:cc-2-81",
+      "measured_on_name": "Hallway Shutter",
+      "measured_at": "2026-09-04T18:12:00+00:00",
+      "followers": [
+        "00:03:50:aa:bb:cc-2-82",
+        "00:03:50:aa:bb:cc-2-81"
+      ],
+      "followers_from_file": [],
+      "missing": false
+    }
+  ],
+  "covers": [
+    {
+      "unique_id": "00:03:50:aa:bb:cc-2-82",
+      "entity_id": "cover.landing_shutter",
+      "name": "Landing Shutter",
+      "area_id": null,
+      "area": null,
+      "height": 150.0,
+      "profile": "tall",
+      "profile_from_file": false,
+      "profile_missing": false,
+      "origin": "inherited",
+      "source": "profile tall",
+      "values": {
+        "opening_time": 17.851745131422394,
+        "closing_time": 17.36641465928474,
+        "slat_time": 3.615384615384616,
+        "roll": 1.5581300429582992,
+        "opening_roll": 1.9204166214652487,
+        "closing_roll": 1.5581300429582992,
+        "stop_latency": 0.1,
+        "start_delay": 0.5
+      },
+      "has_own": [],
+      "level": null,
+      "verify_note": null,
+      "measured_at": "2026-09-05T09:02:00+00:00",
+      "calibrating": false,
+      "order_index": 0
+    },
+    {
+      "unique_id": "00:03:50:aa:bb:cc-2-81",
+      "entity_id": "cover.hallway_shutter",
+      "name": "Hallway Shutter",
+      "area_id": "cucina",
+      "area": "Cucina",
+      "height": 195.0,
+      "profile": "tall",
+      "profile_from_file": false,
+      "profile_missing": false,
+      "origin": "adjusted",
+      "source": "profile tall, adjusted",
+      "values": {
+        "opening_time": 25.0,
+        "closing_time": 21.7,
+        "slat_time": 4.0,
+        "roll": 1.69,
+        "opening_roll": 2.12,
+        "closing_roll": 1.69,
+        "stop_latency": 0.1,
+        "start_delay": 0.5
+      },
+      "has_own": [
+        "opening_time",
+        "slat_time"
+      ],
+      "level": "precise",
+      "verify_note": 1.5,
+      "measured_at": "2026-09-05T09:00:00+00:00",
+      "calibrating": false,
+      "order_index": 1
+    }
+  ],
+  "order": [
+    "00:03:50:aa:bb:cc-2-82",
+    "00:03:50:aa:bb:cc-2-81"
+  ],
+  "no_basic_covers": false
+}

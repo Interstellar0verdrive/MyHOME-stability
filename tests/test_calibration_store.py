@@ -18,15 +18,19 @@ from __future__ import annotations
 import inspect
 import logging
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.config_entries import ConfigSubentryData
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
 from custom_components.myhome import calibration_store
 from custom_components.myhome.calibration_store import (
+    STORAGE_MINOR_VERSION,
+    STORAGE_VERSION,
     CalibrationStore,
     StoredCalibration,
     async_get_store,
@@ -35,7 +39,9 @@ from custom_components.myhome.calibration_store import (
     loaded_store,
     merged_profiles,
     profile_as_config,
+    profile_provenance,
     resolve_cover,
+    storage_key,
 )
 from custom_components.myhome.const import (
     ATTR_CALIBRATION_SOURCE,
@@ -45,12 +51,16 @@ from custom_components.myhome.const import (
     CONF_COVERS,
     CONF_HEIGHT,
     CONF_KEYS_FROM_FILE,
+    CONF_MEASURED_AT,
+    CONF_MEASURED_ON,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
+    CONF_ORDER,
     CONF_OVERRIDES,
     CONF_PROFILE,
     CONF_PROFILES,
     CONF_RAW,
+    CONF_REFERENCE_COVER,
     CONF_REFERENCE_HEIGHT,
     CONF_ROLL,
     CONF_SLAT_TIME,
@@ -63,7 +73,21 @@ from custom_components.myhome.const import (
 )
 
 from .helpers_core import MAC
-from .helpers_platforms import device_config, set_connected, setup_myhome
+from .helpers_platforms import device_config, entity_object, set_connected, setup_myhome
+
+# The guided conversation's own harness, so that "the flow writes it" is tested by
+# running the flow and not by reading the call site. `tests/test_calibration_flow.py`
+# is imported rather than extended: it is the acceptance criterion of this branch and
+# stays byte for byte what 0.5.0 shipped.
+from .test_calibration_flow import (
+    PATH_A_BASIC,
+    YAML as GUIDED_YAML,
+    FakeRunner,
+    calibrating,
+    drive,
+    open_dialog,
+    the_profile,
+)
 
 ENTITY = "cover.hallway_shutter"
 DEVICE_KEY = "2-81"
@@ -1158,3 +1182,303 @@ async def test_moving_a_window_to_another_profile_keeps_what_was_measured_on_it(
         assert store.calibration(UNIQUE_ID).follows_a_profile is False
         assert store.calibration(UNIQUE_ID).profile is None
         assert store.calibration(UNIQUE_ID).height == 195.0
+
+
+# --------------------------------------------------------------------------------------
+# Store v2 (0.6.0): the order the user dragged them into, and a profile's provenance
+# --------------------------------------------------------------------------------------
+# Two purely additive keys and a minor version bump, which is the whole of the schema
+# change: `order` at the top level, and `measured_on` / `measured_at` inside a profile.
+# The tests below are about the two things a schema change has to get right - what
+# happens to a file written by the version before it, and what happens to the file
+# after that - and about the one thing this particular pair could have broken, which is
+# the rule that a record saying nothing is deleted rather than kept.
+SECOND_ID = f"{MAC}-2-82"
+THIRD_ID = f"{MAC}-2-83"
+
+# A profile exactly as 0.5.0 wrote one: it says when it was measured and what the window
+# was called, and it has no idea which window that was.
+LEGACY_PROFILE: dict[str, Any] = {
+    CONF_NAME: "tall",
+    CONF_REFERENCE_HEIGHT: 195.0,
+    CONF_OPENING_TIME: 22.3,
+    CONF_CLOSING_TIME: 21.7,
+    CONF_SLAT_TIME: 4.7,
+    CONF_OPENING_ROLL: 2.12,
+    CONF_CLOSING_ROLL: 1.69,
+    CONF_SOURCE: "guided",
+    CONF_MEASURED_AT: "2026-09-04T18:12:00+00:00",
+    CONF_REFERENCE_COVER: "Hallway Shutter",
+}
+
+# ...and one somebody typed into the storage file by hand, which says neither.
+HANDWRITTEN_PROFILE: dict[str, Any] = {
+    CONF_NAME: "short",
+    CONF_REFERENCE_HEIGHT: 150.0,
+    CONF_OPENING_TIME: 15.0,
+}
+
+
+async def test_a_file_written_by_050_is_migrated_to_minor_2_and_told_no_lies(
+    hass: HomeAssistant, tmp_path, hass_storage
+) -> None:
+    """A 0.5.0 store loads, gains one empty key, and keeps everything else it said.
+
+    The whole migration: `order` starts empty. The two provenance keys are *not* filled
+    in, because nothing in 0.5.0 recorded which window a profile was measured on and
+    the only way to produce one here would be to guess from a follower whose numbers
+    happen to match - sometimes right, silently wrong the rest of the time, and
+    indistinguishable from a fact once written (maintainer's decision, 13 Sept). A
+    profile that does not know goes on not knowing.
+
+    Mutation caught: guessing `measured_on`; bumping the *major* version (which would
+    make a rollback to 0.5.0 a data loss rather than a shrug); dropping the profiles.
+    """
+    async with setup_myhome(
+        hass,
+        tmp_path,
+        PLAIN_YAML,
+        calibration=stored(
+            profiles={"tall": dict(LEGACY_PROFILE), "short": dict(HANDWRITTEN_PROFILE)},
+            covers={UNIQUE_ID: calibration_record(profile="tall", height=195.0)},
+        ),
+    ) as (entry, _commands):
+        on_disk = hass_storage[storage_key(entry.entry_id)]
+        # The major stays where it is: 0.5.0 reads this file back unchanged.
+        assert on_disk["version"] == STORAGE_VERSION == 1
+        assert on_disk["minor_version"] == STORAGE_MINOR_VERSION == 2
+        assert on_disk["data"][CONF_ORDER] == []
+
+        store = loaded_store(hass, entry)
+        assert store.raw_order == []
+        assert sorted(store.raw_profiles) == ["short", "tall"]
+        # The one profile that knows when, and neither of them knows on what.
+        assert profile_provenance(store.profile("tall")) == (None, LEGACY_PROFILE[CONF_MEASURED_AT])
+        assert profile_provenance(store.profile("short")) == (None, None)
+        assert CONF_MEASURED_ON not in store.profile("tall")
+        # ...and what the file was really about is untouched.
+        assert store.calibration(UNIQUE_ID).profile == "tall"
+        assert store.calibration(UNIQUE_ID).height == 195.0
+
+
+async def test_a_file_already_at_minor_2_is_not_migrated_again(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The second read of a migrated file reads it, and writes nothing.
+
+    `Store` saves whatever a migration returns, so a migration that ran on every load
+    would rewrite the file on every setup - twelve shutters' worth of disk writes per
+    reload, and a `measured_at` that moved every time if the migration ever grew a
+    default.
+
+    Mutation caught: migrating on a match (a `<=` where the code means `<`).
+    """
+    async with setup_myhome(
+        hass, tmp_path, PLAIN_YAML, calibration=stored(profiles={"tall": dict(LEGACY_PROFILE)})
+    ) as (entry, _commands):
+        assert loaded_store(hass, entry).raw_order == []
+        with patch.object(Store, "async_save", side_effect=AssertionError("written again")):
+            again = CalibrationStore(hass, entry.entry_id)
+            await again.async_load()
+        assert again.raw_order == []
+        assert list(again.raw_profiles) == ["tall"]
+
+
+async def test_the_order_survives_the_file(hass: HomeAssistant, tmp_path) -> None:
+    """What the user dragged is written at the top level and read back as it was.
+
+    Mutation caught: saving only the two old sections (the order would be forgotten on
+    the reload that every write of this store is followed by).
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        assert store.raw_order == []
+        assert await store.async_set_order([SECOND_ID, UNIQUE_ID]) is True
+
+        again = CalibrationStore(hass, entry.entry_id)
+        await again.async_load()
+        assert again.raw_order == [SECOND_ID, UNIQUE_ID]
+
+
+async def test_an_order_is_cleaned_up_before_it_is_stored(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Repeats, blanks and things that are not strings never reach the file.
+
+    The list arrives from a browser through a socket, so none of it is guaranteed; and
+    `known`, which the write path passes and a migration does not, is what stops a tab
+    left open across a reconfiguration writing back a shutter that is gone.
+
+    Mutation caught: reporting a change when the cleaned-up list is the one already
+    stored (every drop would reload the entry).
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        assert await store.async_set_order([UNIQUE_ID, UNIQUE_ID, "", SECOND_ID]) is True
+        assert store.raw_order == [UNIQUE_ID, SECOND_ID]
+        # The same order again is not a change, however untidily it is spelled.
+        assert await store.async_set_order([UNIQUE_ID, SECOND_ID, UNIQUE_ID]) is False
+        # A caller that knows which shutters exist says so, and the rest is dropped.
+        assert await store.async_set_order(
+            [THIRD_ID, UNIQUE_ID, SECOND_ID], known=[UNIQUE_ID, SECOND_ID]
+        ) is False
+        assert await store.async_set_order(
+            [SECOND_ID, THIRD_ID, UNIQUE_ID], known=[UNIQUE_ID, SECOND_ID]
+        ) is True
+        assert store.raw_order == [SECOND_ID, UNIQUE_ID]
+
+
+async def test_shutters_that_come_and_go_keep_their_place(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A cover the list names comes first; one it does not follows, in the file's order.
+
+    Which is what makes the stored list survive an edit of `myhome.yaml` without being
+    rewritten: a new shutter lands at the end rather than somewhere nobody chose, and a
+    shutter commented out for an afternoon leaves no gap and loses no place.
+
+    Mutation caught: dropping unknown ids on load (the place would be lost during the
+    seconds an entry is reloading); returning the ordered ids the caller did not ask
+    about.
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        await store.async_set_order([THIRD_ID, UNIQUE_ID])
+        # THIRD_ID is not among these, and SECOND_ID was never ordered.
+        assert store.ordered([SECOND_ID, UNIQUE_ID]) == [UNIQUE_ID, SECOND_ID]
+        # ...and it is not invented into the answer either.
+        assert store.ordered([UNIQUE_ID]) == [UNIQUE_ID]
+        # It comes back where it was when it comes back.
+        assert store.ordered([SECOND_ID, THIRD_ID, UNIQUE_ID]) == [
+            THIRD_ID,
+            UNIQUE_ID,
+            SECOND_ID,
+        ]
+        # A gateway whose covers are all new keeps the file's order.
+        assert store.ordered([SECOND_ID]) == [SECOND_ID]
+
+
+async def test_a_dragged_shutter_is_not_a_record_and_does_not_become_one(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The order is a flat list at the top level, and that is the whole reason why.
+
+    A cover that has only ever been *dragged* has nothing in its record;
+    `StoredCalibration.says_anything` is False for it and `async_set_assignments`
+    deletes it on purpose, so an order kept inside the record would resurrect empty
+    records and put rows on the "Calibrazioni" screen that say nothing at all.
+
+    Mutation caught: letting the order count as "says something"; deleting the cover's
+    place in the order along with its record.
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        await store.async_set_profile("tall", PROFILE_DATA)
+        await store.async_set_order([SECOND_ID, UNIQUE_ID])
+
+        assert await store.async_set_assignments({SECOND_ID: ("tall", None)}) is True
+        assert SECOND_ID in store.raw_covers
+        # ..."Togli dal profilo", and the record goes: it was the assignment and
+        # nothing else.
+        assert await store.async_set_assignments({SECOND_ID: (None, None)}) is True
+        assert SECOND_ID not in store.raw_covers
+        assert SECOND_ID not in store.calibrations
+        # The place it was dragged to is not a measurement and outlives the record.
+        assert store.raw_order == [SECOND_ID, UNIQUE_ID]
+        assert store.ordered([UNIQUE_ID, SECOND_ID]) == [SECOND_ID, UNIQUE_ID]
+
+
+async def test_a_profile_remembers_the_window_it_was_measured_on(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`measured_on` is written once, by the path that held the tape, and then kept.
+
+    The id and not the name: the name is what a sentence prints, the id is what a
+    screen follows back to the cover that is there now, and it is the one of the two
+    that survives a rename.
+
+    Mutation caught: `async_set_profile` normalising the record and dropping the two
+    keys it does not recognise.
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        await store.async_set_profile(
+            "tall",
+            cover_profile_data(
+                "tall",
+                reference_height=195.0,
+                opening_time=22.3,
+                closing_time=21.7,
+                slat_time=4.7,
+                opening_roll=2.12,
+                closing_roll=1.69,
+                reference_cover="Hallway Shutter",
+                measured_on=UNIQUE_ID,
+                measured_at="2026-09-04T18:12:00+00:00",
+            ),
+        )
+        again = CalibrationStore(hass, entry.entry_id)
+        await again.async_load()
+        assert profile_provenance(again.profile("tall")) == (
+            UNIQUE_ID,
+            "2026-09-04T18:12:00+00:00",
+        )
+
+
+async def test_the_guided_conversation_is_what_writes_where_a_profile_came_from(
+    hass: HomeAssistant, tmp_path, freezer
+) -> None:
+    """Path A, end to end: the profile it stores names the window it was measured on.
+
+    The only path that ever writes `measured_on` is the one that really held a tape
+    against a shutter, so it is the only path this can be tested on. The id and not the
+    name beside it: the name is the one that window had on the day, the id is what a
+    screen follows back to the cover that is there now.
+
+    Mutation caught: dropping `measured_on=self._cover_unique_id` at the save step (the
+    panel would say "provenance not recorded" for a profile measured five minutes ago,
+    which is the one case it is supposed to be able to answer).
+    """
+    async with calibrating(hass, tmp_path, GUIDED_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC)
+        assert result["step_id"] == "saved"
+
+        profile = the_profile(hass, entry)
+        measured_on, measured_at = profile_provenance(profile)
+        assert measured_on == UNIQUE_ID
+        assert measured_at
+        # The name the window had on the day is still beside it, and is not the id.
+        assert profile[CONF_REFERENCE_COVER] == "Hallway Shutter"
+
+
+def test_a_profiles_provenance_never_reaches_the_travel_model() -> None:
+    """`profile_as_config` builds an allow-list, and that is load-bearing here.
+
+    A profile "in the shape `cover_profiles:` produces" must not carry the two new
+    keys: `derive_cover_from_profile` would be handed a mapping with two entries it
+    knows nothing about, and the numbers the shutter runs on would start depending on
+    what a screen wanted to say about where they came from.
+
+    Mutation caught: rewriting `profile_as_config` as a copy-with-additions.
+    """
+    shaped = profile_as_config(
+        "tall",
+        cover_profile_data(
+            "tall",
+            reference_height=195.0,
+            opening_time=22.3,
+            closing_time=21.7,
+            slat_time=4.7,
+            opening_roll=2.12,
+            closing_roll=1.69,
+            measured_on=UNIQUE_ID,
+            measured_at="2026-09-04T18:12:00+00:00",
+        ),
+    )
+    assert CONF_MEASURED_ON not in shaped
+    assert CONF_MEASURED_AT not in shaped
+    assert CONF_REFERENCE_COVER not in shaped
+    # ...and what it is for is all there.
+    assert shaped[CONF_OPENING_TIME] == 22.3
+    assert shaped[CONF_REFERENCE_HEIGHT] == 195.0

@@ -56,7 +56,7 @@ to go stale behind the user's back.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -67,6 +67,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CALIBRATION_KEY_ORIGIN_DEFAULT,
+    CALIBRATION_KEY_ORIGIN_FILE,
+    CALIBRATION_KEY_ORIGIN_OWN,
+    CALIBRATION_KEY_ORIGIN_PROFILE,
     CALIBRATION_ORIGIN_ADJUSTED,
     CALIBRATION_ORIGIN_DEFAULTS,
     CALIBRATION_ORIGIN_FILE,
@@ -83,8 +87,10 @@ from .const import (
     CONF_HEIGHT,
     CONF_KEYS_FROM_FILE,
     CONF_MEASURED_AT,
+    CONF_MEASURED_ON,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
+    CONF_ORDER,
     CONF_OVERRIDES,
     CONF_PROFILE,
     CONF_PROFILE_WINS,
@@ -114,6 +120,16 @@ PROFILE_NAME_PATTERN = r"^[A-Za-z0-9_]+$"
 # One store per config entry, version 1. The entry id is in the key because a house
 # with two gateways has two sets of shutters and one set of files.
 STORAGE_VERSION = 1
+
+# ...and minor 2 from 0.6.0 on: the flat `order` list at the top level and the two
+# provenance keys of a profile (`measured_on`, `measured_at`).
+#
+# The *minor* goes up and the major stays where it is, on purpose. `Store` migrates on
+# a minor mismatch as readily as on a major one, and both additions are purely
+# additive: a user who tries 0.6.0 and rolls back to 0.5.0 hands the file to a store
+# built at minor 1, which reads `profiles` and `covers` exactly as it always did and
+# ignores the third key. A major bump would have made that rollback a data loss.
+STORAGE_MINOR_VERSION = 2
 
 
 def storage_key(entry_id: str) -> str:
@@ -169,6 +185,28 @@ def profile_overrides(profile: Mapping[str, Any], height: float | None) -> dict[
 
 
 @callback
+def keys_written_by_the_file(device: Mapping[str, Any]) -> set[str]:
+    """Which travel keys `myhome.yaml` really states for this cover, fallbacks included.
+
+    The validator records the keys it actually read (`keys_from_file`); this widens that
+    by what one written key says about another, exactly as `_finalize_cover` widens the
+    values themselves - a cover whose file says `roll: 1.5` has stated both directional
+    rolls, and one that says `opening_time:` has stated the downward run too.
+
+    One function because there are two readers and they must not disagree: the
+    precedence below decides that such a key comes from the *file*, and the panel's
+    detail view prints what the file writes for it beside that word. Answering the two
+    questions from two different sets is how a screen ends up calling the user's own
+    `roll: 1.5` the integration's default.
+    """
+    written = set(device.get(CONF_KEYS_FROM_FILE) or ())
+    for key, implied in _IMPLIED_BY_THE_FILE.items():
+        if key in written:
+            written.update(implied)
+    return written
+
+
+@callback
 def reset_name_clash_warnings() -> None:
     """Forget which clashing names have been reported (a reload says it again once)."""
     _CLASH_REPORTED.clear()
@@ -186,6 +224,7 @@ def cover_profile_data(
     opening_roll: float,
     closing_roll: float,
     reference_cover: str | None = None,
+    measured_on: str | None = None,
     source: str = CALIBRATION_SOURCE_GUIDED,
     measured_at: str | None = None,
     raw: Mapping[str, Any] | None = None,
@@ -198,6 +237,14 @@ def cover_profile_data(
     measurements in hand rather than the conclusions alone. `reference_cover` is the
     window it was measured on, which the "Vedi i valori" screen shows and nothing else
     reads.
+
+    `measured_on` is that same window as a **unique id** (0.6.0). The name beside it is
+    the name that window had on the day and is what a sentence prints; the id is what a
+    screen can follow back to the cover that is there now, and what survives a rename.
+    It is written by the one path that really measured a shutter and is never derived
+    from anything: a profile that arrives without it - written by hand, imported, or
+    stored before 0.6.0 - keeps arriving without it, and the screens say "provenance
+    not recorded" rather than guessing which window it might have been.
     """
     data: dict[str, Any] = {
         CONF_NAME: name,
@@ -212,6 +259,8 @@ def cover_profile_data(
     }
     if reference_cover:
         data[CONF_REFERENCE_COVER] = reference_cover
+    if measured_on:
+        data[CONF_MEASURED_ON] = measured_on
     if raw:
         data[CONF_RAW] = dict(raw)
     return data
@@ -369,6 +418,71 @@ def profile_as_config(name: str, data: Mapping[str, Any]) -> dict[str, Any] | No
     }
 
 
+@callback
+def profile_provenance(data: Mapping[str, Any]) -> tuple[str | None, str | None]:
+    """Where a stored profile was measured, as `(cover unique id, ISO date)`.
+
+    `(None, None)` for a profile that never said - which is every profile on every
+    installation upgraded from 0.5.0, and every profile a user wrote into the store by
+    hand. Read in one place so the panel and any screen after it answer the question
+    the same way, and so that "not recorded" is a value and not a missing key somebody
+    has to remember to check for.
+    """
+    measured_on = data.get(CONF_MEASURED_ON)
+    measured_at = data.get(CONF_MEASURED_AT)
+    return (
+        str(measured_on) if measured_on else None,
+        str(measured_at) if measured_at else None,
+    )
+
+
+@callback
+def normalised_order(order: Iterable[Any]) -> list[str]:
+    """A stored order made safe to use: strings, no blanks, no repeats, order kept.
+
+    The list is user data that has been through a browser, a socket and a JSON file,
+    so nothing about it is guaranteed. Ids that name no cover are *not* dropped here -
+    see `CalibrationStore.ordered`: a gateway that is halfway through a reload, or a
+    shutter commented out of `myhome.yaml` for an afternoon, would otherwise have its
+    place in the list thrown away by a read.
+    """
+    seen: set[str] = set()
+    kept: list[str] = []
+    for item in order:
+        if not isinstance(item, str) or not item or item in seen:
+            continue
+        seen.add(item)
+        kept.append(item)
+    return kept
+
+
+class _MyHomeCalibrationStore(Store[dict[str, Any]]):
+    """The `Store` behind `CalibrationStore`, with the one migration it has.
+
+    Minor 1 -> 2 (0.5.0 -> 0.6.0) adds the top-level `order` key and nothing else. The
+    two profile keys `measured_on` and `measured_at` are deliberately *not* filled in
+    here: nothing in 0.5.0 recorded which window a profile was measured on, and the
+    only way to guess it would be to look for a follower whose overrides happen to
+    match the profile's values - a heuristic that is sometimes right, silently wrong
+    the rest of the time, and impossible for the user to tell apart from a fact. A
+    profile that does not know says so (maintainer's decision, 13 Sept).
+    """
+
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Bring a file written by an older MyHOME up to the shape read below."""
+        if old_major_version > STORAGE_VERSION:
+            # A file from a future version: `Store` has already refused anything past
+            # `max_readable_version`, so this is unreachable today and is here so that
+            # a later major does not silently fall through the branch below.
+            raise NotImplementedError
+        data = dict(old_data)
+        if old_minor_version < 2:
+            data.setdefault(CONF_ORDER, [])
+        return data
+
+
 # ---------------------------------------------------------------------------- store
 class CalibrationStore:
     """Every guided calibration of one gateway, and the only thing that writes them.
@@ -385,9 +499,15 @@ class CalibrationStore:
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         """Nothing is read here; `async_load` does that."""
         self._hass = hass
-        self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, storage_key(entry_id))
+        self._store: Store[dict[str, Any]] = _MyHomeCalibrationStore(
+            hass,
+            STORAGE_VERSION,
+            storage_key(entry_id),
+            minor_version=STORAGE_MINOR_VERSION,
+        )
         self._profiles: dict[str, dict[str, Any]] = {}
         self._covers: dict[str, dict[str, Any]] = {}
+        self._order: list[str] = []
 
     # ----------------------------------------------------------------- reading
     async def async_load(self) -> None:
@@ -395,8 +515,12 @@ class CalibrationStore:
         data = await self._store.async_load() or {}
         profiles = data.get(CONF_PROFILES)
         covers = data.get(CONF_COVERS)
+        order = data.get(CONF_ORDER)
         self._profiles = dict(profiles) if isinstance(profiles, dict) else {}
         self._covers = dict(covers) if isinstance(covers, dict) else {}
+        # Forgiven exactly as the two dicts above are: a list that is not a list is no
+        # list at all, and the shutters go back to the file's own order.
+        self._order = normalised_order(order) if isinstance(order, list) else []
 
     @property
     def raw_profiles(self) -> dict[str, dict[str, Any]]:
@@ -407,6 +531,33 @@ class CalibrationStore:
     def raw_covers(self) -> dict[str, dict[str, Any]]:
         """Every stored per-cover record, by the cover's unique id."""
         return dict(self._covers)
+
+    @property
+    def raw_order(self) -> list[str]:
+        """The order the user dragged the shutters into, exactly as it is stored.
+
+        Unique ids, some of which may name nothing any more. `ordered` is what a screen
+        wants; this is what a diagnostic dump and the write path want.
+        """
+        return list(self._order)
+
+    def ordered(self, unique_ids: Iterable[str]) -> list[str]:
+        """Those shutters, in the order the user put them in.
+
+        The rule, and the only one: a cover the list names comes first, in the list's
+        order; a cover it does not name follows, in the order it was handed in - which
+        is the gateway's, which is `myhome.yaml`'s. So a shutter added to the file
+        lands at the end of its group rather than at a place nobody chose for it, a
+        shutter removed from the file takes no gap with it, and neither event needs the
+        stored list rewritten. Covers are grouped by their profile *before* this is
+        called: the list orders within a group and never decides which group anything
+        is in.
+        """
+        known = list(unique_ids)
+        rest = set(known)
+        first = [unique_id for unique_id in self._order if unique_id in rest]
+        placed = set(first)
+        return first + [unique_id for unique_id in known if unique_id not in placed]
 
     @property
     def profiles(self) -> dict[str, dict[str, Any]]:
@@ -452,7 +603,37 @@ class CalibrationStore:
 
     # ----------------------------------------------------------------- writing
     async def _async_save(self) -> None:
-        await self._store.async_save({CONF_PROFILES: self._profiles, CONF_COVERS: self._covers})
+        await self._store.async_save(
+            {
+                CONF_PROFILES: self._profiles,
+                CONF_COVERS: self._covers,
+                CONF_ORDER: self._order,
+            }
+        )
+
+    async def async_set_order(
+        self, order: Sequence[str], *, known: Iterable[str] | None = None
+    ) -> bool:
+        """Replace the whole order with that one; True when the file changed.
+
+        The whole list and not a move, because the panel sends the whole list: the
+        group the user dropped a shutter into is re-stated from top to bottom, which is
+        what makes assignment and position one write and leaves nothing to reconcile.
+
+        `known` is the covers that exist, when the caller knows them - the write path
+        does - and ids outside it are dropped, so a browser tab left open across a
+        reconfiguration cannot write back a shutter that is gone. A caller that does
+        not pass it (the migration path, a test) keeps whatever it sent.
+        """
+        wanted = normalised_order(order)
+        if known is not None:
+            allowed = set(known)
+            wanted = [unique_id for unique_id in wanted if unique_id in allowed]
+        if wanted == self._order:
+            return False
+        self._order = wanted
+        await self._async_save()
+        return True
 
     async def async_set_profile(self, name: str, data: Mapping[str, Any]) -> None:
         """Store (or replace) the profile called `name`.
@@ -462,6 +643,11 @@ class CalibrationStore:
         following it. Nothing else has to happen for that to reach them - a follower's
         record holds the *name*, not a copy of the numbers, and `resolve_cover` scales
         the profile to it on every read (final review, RISK-A).
+
+        Whatever the caller built is written verbatim, `measured_on` and `measured_at`
+        included: this is the one place a profile's provenance is recorded and it is
+        never filled in here, because the only thing that knows which window was under
+        the tape is the conversation that measured it.
         """
         self._profiles[name] = dict(data)
         await self._async_save()
@@ -649,6 +835,56 @@ def merged_profiles(
 
 # ----------------------------------------------------------------------- precedence
 @dataclass(frozen=True, slots=True)
+class ResolvedKey:
+    """One key of the travel model: the number, and which of the four said it."""
+
+    value: Any
+    origin: str
+
+
+@callback
+def resolve_cover_keys(
+    device: Mapping[str, Any],
+    *,
+    overrides: Mapping[str, float],
+    derived: Mapping[str, Any],
+    written: Iterable[str],
+    wins: bool,
+    keys: Iterable[str] = COVER_CALIBRATION_KEYS,
+) -> dict[str, ResolvedKey]:
+    """The precedence of the module docstring, key by key, and the only place it lives.
+
+    `resolve_cover` below is this loop plus the reading of the flags off it; the panel's
+    detail view is this loop run twice, once as things are and once as they would be
+    with this window's own numbers taken away, which is what "eredita N" under an empty
+    field means. Neither has a second copy of the order, because a screen that disagreed
+    with the shutter about where a number came from would make the whole panel
+    untrustworthy and would do it silently.
+
+    `written` is the set of keys `myhome.yaml` really carries for this cover (the
+    validator's `keys_from_file`, widened by what one written key implies about
+    another); `derived` is the profile already scaled to this window; `wins` is the
+    record's "somebody said, on this installation, that this shutter is one of those".
+    """
+    written = set(written)
+    resolved: dict[str, ResolvedKey] = {}
+    for key in keys:
+        if key in overrides:
+            resolved[key] = ResolvedKey(overrides[key], CALIBRATION_KEY_ORIGIN_OWN)
+        elif wins and key in derived:
+            resolved[key] = ResolvedKey(derived[key], CALIBRATION_KEY_ORIGIN_PROFILE)
+        elif key in written:
+            resolved[key] = ResolvedKey(device[key], CALIBRATION_KEY_ORIGIN_FILE)
+        elif key in derived:
+            resolved[key] = ResolvedKey(derived[key], CALIBRATION_KEY_ORIGIN_PROFILE)
+        elif key in device:
+            # Whatever the validator already resolved: the file's own profile chain,
+            # and below that the numbers this integration gives any shutter.
+            resolved[key] = ResolvedKey(device[key], CALIBRATION_KEY_ORIGIN_DEFAULT)
+    return resolved
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedCover:
     """The travel model one cover really runs on, and where it came from.
 
@@ -656,6 +892,11 @@ class ResolvedCover:
     same answer as one of `CALIBRATION_ORIGINS`, for the screens that say it in words.
     Both are decided in one place (`resolve_cover`), so a shutter the attribute calls
     `profile tall, adjusted` cannot be a shutter the dialog calls measured.
+
+    `keys` is the same answer once per key, and `inherited` is what each key would fall
+    back to if this window's own measurements were removed - the placeholder the detail
+    screen prints under an empty field, and the destination "Rimuovi la misura" has to
+    name before it does anything.
     """
 
     values: dict[str, Any]
@@ -663,6 +904,8 @@ class ResolvedCover:
     origin: str = CALIBRATION_ORIGIN_DEFAULTS
     profile: str | None = None
     height: float | None = None
+    keys: Mapping[str, ResolvedKey] = field(default_factory=dict)
+    inherited: Mapping[str, ResolvedKey] = field(default_factory=dict)
 
 
 @callback
@@ -688,10 +931,7 @@ def resolve_cover(
     to the file, because a shutter that stops working because a profile was renamed
     would be worse than one that stops where it used to.
     """
-    written = set(device.get(CONF_KEYS_FROM_FILE) or ())
-    for key, implied in _IMPLIED_BY_THE_FILE.items():
-        if key in written:
-            written.update(implied)
+    written = keys_written_by_the_file(device)
     overrides = calibration.overrides if calibration else {}
     name = (calibration.profile if calibration else None) or device.get(CONF_PROFILE)
     height = (calibration.height if calibration else None) or device.get(CONF_HEIGHT)
@@ -714,7 +954,17 @@ def resolve_cover(
     # the profile stays where spec 1.3 puts it, under the file.
     wins = calibration is not None and calibration.follows_a_profile
 
-    values: dict[str, Any] = {}
+    resolved = resolve_cover_keys(
+        device, overrides=overrides, derived=derived, written=written, wins=wins
+    )
+    # ...and the same loop again with this window's own numbers taken away, which is
+    # what every one of its keys would fall back to. Nothing here reads it; the panel's
+    # detail screen does, and it is computed here so that "eredita N" and the number
+    # the shutter runs on can never come from two different rules.
+    inherited = resolve_cover_keys(
+        device, overrides={}, derived=derived, written=written, wins=wins
+    )
+    values: dict[str, Any] = {key: item.value for key, item in resolved.items()}
     # ...and, per key, which of the two sources the user asks about answered it: the
     # profile, or a tape held against this window. What `Calibration source` says is
     # read off these two below, because "measured" and "inherited" are not the only two
@@ -723,24 +973,19 @@ def resolve_cover(
     # fallback of the two directional ones and is never what the shutter runs on when
     # they are set, so a profile answering for it is not the profile being in use.
     measurable = {key for key, _digits in _DERIVED_OVERRIDE_KEYS}
-    from_the_profile = False
-    of_its_own = False
-    of_the_file = False
-    for key in COVER_CALIBRATION_KEYS:
-        if key in overrides:
-            values[key] = overrides[key]
-            of_its_own = of_its_own or key in measurable
-        elif wins and key in derived:
-            values[key] = derived[key]
-            from_the_profile = from_the_profile or key in measurable
-        elif key in written:
-            values[key] = device[key]
-            of_the_file = of_the_file or key in measurable
-        elif key in derived:
-            values[key] = derived[key]
-            from_the_profile = from_the_profile or key in measurable
-        elif key in device:
-            values[key] = device[key]
+    said = {
+        origin: any(
+            item.origin == origin and key in measurable for key, item in resolved.items()
+        )
+        for origin in (
+            CALIBRATION_KEY_ORIGIN_OWN,
+            CALIBRATION_KEY_ORIGIN_PROFILE,
+            CALIBRATION_KEY_ORIGIN_FILE,
+        )
+    }
+    from_the_profile = said[CALIBRATION_KEY_ORIGIN_PROFILE]
+    of_its_own = said[CALIBRATION_KEY_ORIGIN_OWN]
+    of_the_file = said[CALIBRATION_KEY_ORIGIN_FILE]
     if height is not None:
         values[CONF_HEIGHT] = height
     if name is not None:
@@ -774,7 +1019,13 @@ def resolve_cover(
         CALIBRATION_ORIGIN_INHERITED: f"{CALIBRATION_SOURCE_PROFILE} {name}",
     }.get(origin, CALIBRATION_SOURCE_YAML)
     return ResolvedCover(
-        values=values, source=source, origin=origin, profile=name, height=height
+        values=values,
+        source=source,
+        origin=origin,
+        profile=name,
+        height=height,
+        keys=resolved,
+        inherited=inherited,
     )
 
 
@@ -817,10 +1068,12 @@ def describe_profile(name: str, data: Mapping[str, Any]) -> str:
 
 __all__ = [
     "PROFILE_NAME_PATTERN",
+    "STORAGE_MINOR_VERSION",
     "STORAGE_VERSION",
     "STORE_DATA_KEY",
     "CalibrationStore",
     "ResolvedCover",
+    "ResolvedKey",
     "StoredCalibration",
     "async_forget_store",
     "async_get_store",
@@ -828,13 +1081,17 @@ __all__ = [
     "cover_calibration_data",
     "cover_profile_data",
     "describe_profile",
+    "keys_written_by_the_file",
     "loaded_store",
     "merged_profiles",
+    "normalised_order",
     "profile_as_config",
     "profile_overrides",
+    "profile_provenance",
     "reset_name_clash_warnings",
     "resolve_cover",
     "resolve_cover_config",
+    "resolve_cover_keys",
     "storage_key",
     "stored_calibration",
 ]

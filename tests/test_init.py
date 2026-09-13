@@ -1036,6 +1036,10 @@ def test_the_manifest_declares_the_component_it_calls_into() -> None:
         (Path(myhome.__file__).parent / "manifest.json").read_text(encoding="utf-8")
     )
     assert "http" in manifest["dependencies"]
+    # ...and the panel's three read commands import `websocket_api`, which hassfest
+    # refuses in exactly the same words ("Using component websocket_api but it's not in
+    # 'dependencies'"). `async_setup` registers them, so it has to be up by then.
+    assert "websocket_api" in manifest["dependencies"]
     # hassfest also pins the order: `domain`, `name`, then everything else sorted.
     keys = list(manifest)
     assert keys[:2] == ["domain", "name"]
