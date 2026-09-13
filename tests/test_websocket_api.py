@@ -67,6 +67,12 @@ FIRST_ENTITY = "cover.hallway_shutter"
 
 HEIGHT = 195.0
 
+# The Italian file, read back to check what the texts command really shipped against what
+# is on disk rather than against a copy of it in this module.
+IT_FILE = (
+    Path(__file__).resolve().parents[1] / "custom_components" / "myhome" / "translations" / "it.json"
+)
+
 # Two basic shutters and one advanced one, a profile in the file and a profile in the
 # store: the smallest configuration in which every branch of the payload has something
 # to say. The first cover writes its own run times, which is what makes "the file" and
@@ -607,13 +613,16 @@ async def test_the_panel_is_served_the_nearest_language_there_is(
         assert texts["language"] == served
         assert texts["requested"] == asked
         assert texts["fallback"] is fallback
-        # The two blocks the panel really reads: the flow's own wording, and the five
-        # origin phrases it is forbidden from keeping its own copy of.
+        # The four blocks the panel really reads: the flow's own wording, the five origin
+        # phrases it is forbidden from keeping its own copy of, the sentence behind every
+        # refusal's `translation_key`, and its own screens.
         assert "step" in texts["texts"]["options"]
         assert "calibration_origin" in texts["texts"]["selector"]
+        assert ERROR_UNKNOWN_COVER in texts["texts"]["exceptions"]
+        assert "overview" in texts["texts"]["panel"]
         # Nothing else of the file travels: the panel has no use for the config flow's
         # screens or for the entity names.
-        assert set(texts["texts"]) <= {"options", "selector", "panel"}
+        assert set(texts["texts"]) <= {"options", "selector", "exceptions", "panel"}
 
 
 async def test_the_language_defaults_to_the_one_this_home_assistant_speaks(
@@ -630,6 +639,34 @@ async def test_the_language_defaults_to_the_one_this_home_assistant_speaks(
         texts = await result(client, type=WS_TYPE_TEXTS)
         assert texts["language"] == "fr"
         assert texts["fallback"] is False
+
+
+async def test_the_panels_own_block_arrives_under_the_name_the_frontend_uses(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`config_panel` in the file, `panel` in the payload, and the whole tree in between.
+
+    The rename is not cosmetic and it is not a schema: Home Assistant's `hassfest`
+    validates `strings.json` against a closed list of top-level keys, on which
+    `config_panel` is the entry meant for a panel's own words and `panel` is not there at
+    all - so the file cannot use the name the frontend is written against. This is the
+    one place the two names meet, and a panel that asked for `t("panel.overview.title")`
+    against a payload that said `config_panel` would render dotted identifiers on every
+    screen with nothing failing anywhere else.
+
+    Mutation caught: serving the block under its own name; dropping it from the filter
+    (the whole panel would go wordless); shipping the sentences flattened or half.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (_entry, _commands):
+        client = await hass_ws_client(hass)
+        texts = await result(client, type=WS_TYPE_TEXTS, language="it")
+        panel = texts["texts"]["panel"]
+        assert "config_panel" not in texts["texts"]
+        # The eleven views, verbatim from the file rather than a subset of it.
+        assert set(panel) == set(json.loads(IT_FILE.read_text(encoding="utf-8"))["config_panel"])
+        # ...and nested, not flattened: the frontend walks `panel.common.action.close`.
+        assert panel["common"]["action"]["close"] == "Chiudi"
+        assert panel["overview"]["title"] == "Profili e tapparelle"
 
 
 # ------------------------------------------------------------------- permissions
