@@ -37,6 +37,23 @@ which is how the Python test recognises a file the build actually made.
 changes `src/` and not `custom_components/myhome/frontend/` fails CI, and so does the
 reverse.
 
+## Looking at it without a Home Assistant
+
+`dev/harness.html` loads the committed bundle, hands the element the four properties Home
+Assistant hands it, and answers the two read commands with the real fixture
+(`tests/fixtures/panel_overview_example.json`, which the Python suite regenerates from the
+real server) and the real `strings.json`. Serve the repository root and open it:
+
+```sh
+python3 -m http.server 8765     # from the repository root
+open http://localhost:8765/panel_src/dev/harness.html
+```
+
+The checkboxes across the top switch the states that are otherwise hard to reach: dark
+theme, narrow, a measurement in progress, an installation with no profile yet, a gateway
+whose shutters are all advanced, and an `overview` that refuses. It is not shipped and it is
+not a test - it is somewhere to look.
+
 ## The version
 
 The bundle carries **no version number**, and must not start to. `release.yml` rewrites
@@ -70,14 +87,62 @@ a new entry in that file; `tests/test_panel_build.py` asserts the notice is in t
 ## Layout
 
 ```
-build.mjs             the whole build
-src/main.ts           <myhome-calibration-panel>, the element Home Assistant creates
-src/engine/ha.ts      customElements.get() guards for every ha-* element used
-src/engine/i18n.ts    the texts, read from the backend, never compiled in
-src/engine/theme.ts   Home Assistant's CSS variables, each with a fallback
-src/engine/ws.ts      typed wrappers over the read commands; mirrors panel_schemas.py
-src/types/ha.ts       the four properties Home Assistant sets, and the connection
+build.mjs               the whole build
+dev/harness.html        a page for looking at the panel without a Home Assistant
+src/main.ts             <myhome-calibration-panel>, the element Home Assistant creates
+src/engine/router.ts    location -> view; the panel's own hash, then Home Assistant's route
+src/engine/store.ts     the client state: the server model, and what the user is doing to it
+src/engine/screen.ts    <myhome-screen>: the ScreenModel contract and the responsive law
+src/engine/markdown.ts  the little Markdown the texts contain, without a library
+src/engine/i18n.ts      the texts, read from the backend, with numbers and dates
+src/engine/theme.ts     Home Assistant's CSS variables, each with a fallback
+src/engine/a11y.ts      the live region and focus return
+src/engine/ha.ts        customElements.get() guards for every ha-* element used
+src/engine/ws.ts        typed wrappers over every command; mirrors panel_schemas.py
+src/i18n/keys.ts        every panel.* key the bundle asks for, and its English stand-in
+src/templates/*.ts      the eight wizard step templates
+src/components/*.ts     origin chip, cover row, group card, measuring banner
+src/views/overview.ts   <myhome-overview>, the management screen
+src/types/ha.ts         the four properties Home Assistant sets, and the connection
 ```
+
+## The screen engine
+
+Four pieces, and each is the thing 0.7.0 reuses without changing it.
+
+**The router** (`engine/router.ts`) turns a location into `{view, params}` over four
+patterns: `/`, `/cover/:id`, `/profile/:name` and - reserved, and rendered as "not in this
+version" until 0.7.0 - `/calibrate/:session`. (The plan's fifth, `/gateway/:entry_id`, is
+not routed: the gateway is chosen in the header and the header is lot 8's, and a house with
+one gateway - which is nearly all of them - never sees either.) It reads the panel's **own hash** first (`#/cover/…`, written by the
+panel and moved by `hashchange`, both of them platform behaviour) and falls back to the
+`route.path` property Home Assistant sets, so a deep link of the form
+`/myhome-calibration/cover/<id>` still opens the right screen on the first paint. Links
+*out* of the panel are ordinary `<a href>` and are left to the browser.
+
+**The store** (`engine/store.ts`) holds the server's `overview` in one field and everything
+the user is doing in others. The server model is replaced whole on every read and every
+push; the client model is never merged into it. That separation is what makes a push
+arriving mid-edit harmless, and it is the reason lot 7's pending changes can exist at all.
+
+**`<myhome-screen>`** (`engine/screen.ts`) renders a `ScreenModel` - id, template, title,
+Markdown body, drawing, actions, and the live slots a moving shutter needs - through one of
+the eight templates the wizard prototype names: `lettura`, `scelta`, `pos`, `click`,
+`controllo`, `metro`, `riepilogo`, `esito`. It applies the handoff's responsive law once,
+in CSS: below 900 px one column of at most 480 px with the call to action in a fixed footer
+behind a 36 px gradient and 230 px of bottom margin on the content; at 900 px and above two
+columns (text and drawing beside a 400 px operative column, 44 px apart, 1080 px at most)
+with the right column sticky. A screen never acts: it fires `myhome-screen-action` with the
+token its model gave it.
+
+The templates are functions rather than eight custom elements on purpose. One element means
+one shadow root, so the breakpoint is written once and a FLIP animation in lot 7 can measure
+every row with one query.
+
+**The texts** (`engine/i18n.ts`, `i18n/keys.ts`) come from `myhome/calibration/texts` with
+named placeholders, plus `Intl` for numbers and dates in the user's language. `keys.ts` is
+the list of every `panel.*` key the bundle asks for, with an English stand-in beside each -
+the texts lot's worklist, and the file it deletes.
 
 ## Rules that are not style
 
@@ -86,13 +151,21 @@ src/types/ha.ts       the four properties Home Assistant sets, and the connectio
    on the server, for both the panel and the `Calibration source` attribute — which is
    the only reason the two can be trusted to agree.
 2. **No sentence is compiled into the bundle.** Texts come from
-   `myhome/calibration/texts`, out of the same seven translation files the guided dialog
+   `myhome/calibration/texts`, out of the same eight translation files the guided dialog
    reads. A missing key renders as the key, so that it looks like the bug it is. (The
-   handful of English fallbacks in `main.ts` exist only until the texts lot writes the
-   `panel.*` block; each one is a call that lot deletes.)
+   English stand-ins in `src/i18n/keys.ts` suspend that rule for the `panel.*` block only,
+   and only until the texts lot writes it; the server's answer always wins where it has
+   one.)
 3. **Every `ha-*` element goes through `defined()` with a rendered fallback.** They are
    private API and Home Assistant has renamed them before. A rename must cost chrome,
    never a screen.
 4. **Colours come from Home Assistant's CSS variables, each with a `var()` fallback.**
    Never a literal. The panel is registered with `embed_iframe: false`, so light, dark and
-   user themes work with no code of ours.
+   user themes work with no code of ours. The pastels are
+   `color-mix(in srgb, var(--X) N%, var(--card-background-color))` at the percentages the
+   handoff fixes, and they are backgrounds only.
+5. **No string ever becomes HTML.** `engine/markdown.ts` parses the paragraphs, bold, lists
+   and `/myhome_static/` images the texts contain straight into Lit templates; nothing goes
+   through `unsafeHTML`, and `ha-markdown` is deliberately not used for content. A tag that
+   somehow reached a translation file arrives on the screen as the characters somebody
+   typed.

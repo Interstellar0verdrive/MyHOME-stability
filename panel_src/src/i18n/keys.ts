@@ -15,6 +15,10 @@
 // and `i18n.ts` prefers the server's answer for any key that has one, so a translated key
 // always wins over the word beside it here.
 //
+// The list is **exactly what this bundle asks for today** - no key is written ahead of the
+// code that reads it, which is the decision of 13 September about dead keys applied to this
+// block too. Lots 7, 8 and 9 add their own as they add the screens that need them.
+//
 // Origin words are deliberately **absent**: the panel reads
 // `selector.calibration_origin.options.{measured,inherited,adjusted,from_the_file,defaults}`,
 // which already exist in all eight files and already carry `{profile}`.
@@ -28,12 +32,10 @@ export const FALLBACK_TEXTS: Record<string, string> = {
   "panel.common.travel": "travel {travel} cm",
   "panel.common.travel_unknown": "travel not recorded",
   "panel.common.not_yet": "This screen arrives in a later version. Until then “Configure” does everything it will do.",
-  "panel.common.offline": "Not connected to Home Assistant.",
   "panel.common.polling": "Live updates are not available on this version; the page refreshes by itself every 30 seconds.",
   "panel.common.action.menu": "Open the sidebar",
   "panel.common.action.configure": "Open Configure instead",
   "panel.common.action.back": "Back to the overview",
-  "panel.common.action.close": "Close",
   "panel.common.action.retry": "Try again",
 
   // --- panel.overview: the management screen ------------------------------------------
@@ -104,11 +106,9 @@ export const FALLBACK_TEXTS: Record<string, string> = {
     "This step belongs to the guided calibration, which moves into the panel in a later version.",
   "panel.screen.motor": "Motor",
   "panel.screen.position": "Estimated position",
-  "panel.screen.remaining": "Time remaining ≈ {seconds} s",
   "panel.screen.completed": "Completed",
   "panel.screen.before": "Before",
   "panel.screen.after": "After",
-  "panel.screen.action.exit": "Leave the calibration",
 
   // --- panel.error: one sentence per refusal the backend can send -----------------------
   // The first is the panel's own; the rest are the `translation_key`s of
