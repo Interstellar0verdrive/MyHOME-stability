@@ -747,7 +747,7 @@
         "profile": "Profiel “{profile}”",
         "no_profile": "Zonder profiel",
         "no_profile_note": "Waarden uit het configuratiebestand, of de standaardwaarden. Dat is geen fout: een rolluik met eigen metingen staat hier prima.",
-        "values": "Referentieloopafstand {travel} cm · openen {opening} s · sluiten {closing} s · lamellen {slat} s",
+        "values": "Referentieloopafstand {travel} cm · stijging {opening} s · daling {closing} s · lamellen {slat} s",
         "measured_on": "Gemeten op {cover} · {date}",
         "provenance_missing": "Waar het gemeten is, staat niet vast.",
         "count": "{count} rolluiken",
@@ -829,7 +829,7 @@
       "subtitle": "“{cover}” — de keuze blijft in de wacht tot ze bevestigd wordt.",
       "option": {
         "profile": "Profiel “{profile}”",
-        "profile_meta": "{travel} cm · openen {opening} s · sluiten {closing} s",
+        "profile_meta": "{travel} cm · stijging {opening} s · daling {closing} s",
         "none": "Geen profiel",
         "none_meta": "Waarden uit het configuratiebestand, of de standaardwaarden. De loopafstand en de eigen waarden blijven.",
         "current": "huidig"

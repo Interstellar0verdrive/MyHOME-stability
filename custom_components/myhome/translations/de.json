@@ -747,7 +747,7 @@
         "profile": "Profil „{profile}“",
         "no_profile": "Ohne Profil",
         "no_profile_note": "Werte aus der Konfigurationsdatei oder die Vorgaben. Das ist kein Fehler: ein Rollladen mit eigenen Messungen steht hier bestens.",
-        "values": "Referenzweg {travel} cm · Öffnen {opening} s · Schließen {closing} s · Lamellen {slat} s",
+        "values": "Referenzweg {travel} cm · Auffahrt {opening} s · Abfahrt {closing} s · Lamellen {slat} s",
         "measured_on": "Gemessen an {cover} · {date}",
         "provenance_missing": "Wo es gemessen wurde, ist nicht festgehalten.",
         "count": "{count} Rollläden",
@@ -829,7 +829,7 @@
       "subtitle": "„{cover}“ — die Wahl bleibt ausstehend, bis sie bestätigt wird.",
       "option": {
         "profile": "Profil „{profile}“",
-        "profile_meta": "{travel} cm · Öffnen {opening} s · Schließen {closing} s",
+        "profile_meta": "{travel} cm · Auffahrt {opening} s · Abfahrt {closing} s",
         "none": "Kein Profil",
         "none_meta": "Werte aus der Konfigurationsdatei oder die Vorgaben. Der Weg und die eigenen Werte bleiben.",
         "current": "aktuell"

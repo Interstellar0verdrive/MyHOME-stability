@@ -747,7 +747,7 @@
         "profile": "Perfil «{profile}»",
         "no_profile": "Sem perfil",
         "no_profile_note": "Valores do ficheiro de configuração, ou as predefinições. Não é um erro: uma persiana com medições próprias está muito bem aqui.",
-        "values": "Percurso de referência {travel} cm · abertura {opening} s · fecho {closing} s · lâminas {slat} s",
+        "values": "Percurso de referência {travel} cm · subida {opening} s · descida {closing} s · lâminas {slat} s",
         "measured_on": "Medido em {cover} · {date}",
         "provenance_missing": "Não está registado onde foi medido.",
         "count": "{count} persianas",
@@ -829,7 +829,7 @@
       "subtitle": "«{cover}» — a escolha fica pendente até ser confirmada.",
       "option": {
         "profile": "Perfil «{profile}»",
-        "profile_meta": "{travel} cm · abertura {opening} s · fecho {closing} s",
+        "profile_meta": "{travel} cm · subida {opening} s · descida {closing} s",
         "none": "Nenhum perfil",
         "none_meta": "Valores do ficheiro de configuração, ou as predefinições. Ficam o percurso e os valores próprios.",
         "current": "atual"

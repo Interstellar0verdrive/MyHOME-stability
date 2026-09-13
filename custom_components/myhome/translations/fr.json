@@ -747,7 +747,7 @@
         "profile": "Profil « {profile} »",
         "no_profile": "Sans profil",
         "no_profile_note": "Valeurs du fichier de configuration, ou valeurs par défaut. Ce n'est pas une erreur : un volet qui a ses propres mesures est très bien ici.",
-        "values": "Course de référence {travel} cm · ouverture {opening} s · fermeture {closing} s · lames {slat} s",
+        "values": "Course de référence {travel} cm · montée {opening} s · descente {closing} s · lames {slat} s",
         "measured_on": "Mesuré sur {cover} · {date}",
         "provenance_missing": "L'endroit où il a été mesuré n'est pas enregistré.",
         "count": "{count} volets",
@@ -829,7 +829,7 @@
       "subtitle": "« {cover} » — le choix reste en attente tant qu'il n'est pas confirmé.",
       "option": {
         "profile": "Profil « {profile} »",
-        "profile_meta": "{travel} cm · ouverture {opening} s · fermeture {closing} s",
+        "profile_meta": "{travel} cm · montée {opening} s · descente {closing} s",
         "none": "Aucun profil",
         "none_meta": "Valeurs du fichier de configuration, ou valeurs par défaut. La course et les valeurs propres restent.",
         "current": "actuel"

@@ -747,7 +747,7 @@
         "profile": "Profilo “{profile}”",
         "no_profile": "Senza profilo",
         "no_profile_note": "Valori dal file di configurazione o predefiniti. Non è un errore: anche una tapparella con misure proprie sta benissimo qui.",
-        "values": "Corsa di riferimento {travel} cm · apertura {opening} s · chiusura {closing} s · lamelle {slat} s",
+        "values": "Corsa di riferimento {travel} cm · salita {opening} s · discesa {closing} s · lamelle {slat} s",
         "measured_on": "Misurato su {cover} · {date}",
         "provenance_missing": "Non è registrato dove è stato misurato.",
         "count": "{count} tapparelle",
@@ -829,7 +829,7 @@
       "subtitle": "“{cover}” — la scelta resta in sospeso finché non viene confermata.",
       "option": {
         "profile": "Profilo “{profile}”",
-        "profile_meta": "{travel} cm · apertura {opening} s · chiusura {closing} s",
+        "profile_meta": "{travel} cm · salita {opening} s · discesa {closing} s",
         "none": "Nessun profilo",
         "none_meta": "Valori dal file di configurazione o predefiniti. Restano la corsa e i valori propri.",
         "current": "attuale"

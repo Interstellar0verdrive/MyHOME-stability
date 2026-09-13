@@ -747,7 +747,7 @@
         "profile": "Profile “{profile}”",
         "no_profile": "No profile",
         "no_profile_note": "Values from the configuration file, or the defaults. It is not a fault: a cover with measurements of its own sits perfectly well here.",
-        "values": "Reference travel {travel} cm · opening {opening} s · closing {closing} s · slats {slat} s",
+        "values": "Reference travel {travel} cm · ascent {opening} s · descent {closing} s · slats {slat} s",
         "measured_on": "Measured on {cover} · {date}",
         "provenance_missing": "Where it was measured is not recorded.",
         "count": "{count} covers",
@@ -829,7 +829,7 @@
       "subtitle": "“{cover}” — the choice stays pending until it is confirmed.",
       "option": {
         "profile": "Profile “{profile}”",
-        "profile_meta": "{travel} cm · opening {opening} s · closing {closing} s",
+        "profile_meta": "{travel} cm · ascent {opening} s · descent {closing} s",
         "none": "No profile",
         "none_meta": "Values from the configuration file, or the defaults. The travel and the values of its own stay.",
         "current": "current"
