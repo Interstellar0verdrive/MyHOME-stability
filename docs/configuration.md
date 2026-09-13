@@ -663,8 +663,9 @@ two run times, the slat time, one roll coefficient per direction — and it writ
 profile the other shutters of the same kind inherit by their height alone.
 
 It is the recommended way for a basic cover: three button presses and three tape
-readings, about four minutes, with an optional precise level that adds five
-readings and reports the remaining error in centimetres. See
+readings, about four minutes, with an optional **thorough calibration** that adds
+five readings and reports the remaining error in centimetres — and which a shutter
+already measured can be given on its own, without timing a single run again. See
 [Guided calibration](guided-calibration.md) for the paths, the screens, where the
 values are kept and how to remove them.
 

@@ -879,6 +879,11 @@ DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
         "(A) It is the first cover of its kind",
         "(B) It is similar to a cover already measured",
         "(C) It has a profile but stops in the wrong place",
+        # The third scope of the correction and the button that reaches the same level
+        # from a summary: both are quoted by the page, and both are new enough to be
+        # renamed by the next text review.
+        "Thorough calibration only",
+        "Continue with the thorough calibration",
         "Start the cover",
         "1) Press when the bottom edge leaves the base",
         "2) Press when the motor stops at the top",
