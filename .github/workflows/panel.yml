@@ -1,0 +1,49 @@
+name: Panel
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A branch pushed inside this repository would otherwise run the job twice (once
+# for the push, once for the pull request).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  panel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          # The version the bundle in the tree was built with. esbuild's output is
+          # stable across Node versions, but pinning the major keeps "it rebuilt
+          # differently here" from ever being the explanation for a red diff.
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: panel_src/package-lock.json
+
+      - name: Install
+        working-directory: panel_src
+        # `npm ci`, not `npm install`: it installs exactly what package-lock.json
+        # pins and refuses to run without it, which is what makes the rebuild below
+        # a comparison and not a coincidence.
+        run: npm ci
+
+      - name: Type-check
+        working-directory: panel_src
+        run: npm run check
+
+      - name: Build
+        working-directory: panel_src
+        run: npm run build
+
+      - name: The committed bundle is the one the source builds
+        # The whole point of committing a build artefact. HACS copies
+        # custom_components/myhome/ as it exists at the tag, so the file in the tree
+        # is what users run; this is the only thing standing between that and a
+        # bundle edited by hand, built from an older source, or forgotten entirely.
+        run: git diff --exit-code -- custom_components/myhome/frontend
