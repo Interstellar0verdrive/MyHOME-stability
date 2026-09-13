@@ -33,7 +33,8 @@ from custom_components.myhome.const import (
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
 from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
 
-COMPONENT = Path(__file__).resolve().parents[1] / "custom_components" / "myhome"
+ROOT = Path(__file__).resolve().parents[1]
+COMPONENT = ROOT / "custom_components" / "myhome"
 STRINGS = COMPONENT / "strings.json"
 TRANSLATIONS = sorted((COMPONENT / "translations").glob("*.json"))
 
@@ -781,3 +782,69 @@ def test_the_three_ways_are_lettered_and_not_numbered(path: Path) -> None:
         assert step["menu_options"][option].startswith(f"{letter} "), f"{path.name}: {option}"
         assert letter in step["description"], f"{path.name}: {letter}"
     assert set(step["menu_options"]) == {"path_a", "path_b", "path_c", "cancel_flow"}
+
+
+# --------------------------------------------------------------- the documentation
+# The pages quote the dialog's buttons and headings by name, because a page that
+# paraphrases them leaves the reader hunting for a button that does not read like
+# that. Each label below has to exist *verbatim* in the English strings and to be
+# quoted *verbatim* in that page: a rename that catches only one of the two turns
+# the documentation into a set of directions to a screen nobody can find. The 0.5.0
+# text review renamed "Slat time" to "Slat opening time" and would have left
+# `guided-calibration.md` listing a field by its old name.
+DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
+    "docs/guided-calibration.md": (
+        "Calibrate a cover",
+        "(A) It is the first cover of its kind",
+        "(B) It is similar to a cover already measured",
+        "(C) It has a profile but stops in the wrong place",
+        "Start the cover",
+        "1) Press when the bottom edge leaves the base",
+        "2) Press when the motor stops at the top",
+        "Press when the motor stops at the bottom",
+        "Repeat the measurement",
+        "View the values",
+        "Edit the values by hand",
+        "Measure it again",
+        "Delete the profile",
+        "Delete the calibration",
+        "No profile (the file's values, or the defaults)",
+        "The cover did not answer",
+        "The command never reached the bus",
+        "This cover is already being calibrated",
+    ),
+    "docs/configuration.md": (
+        "Calibrate a cover",
+        "Profiles and covers",
+        "Calibrations",
+        "Gateway and connection",
+        "(B) It is similar to a cover already measured",
+        "(C) It has a profile but stops in the wrong place",
+    ),
+    "docs/recipes.md": (
+        "Calibrate a cover",
+        "Generate events in Home Assistant for each message received",
+    ),
+    "docs/troubleshooting.md": ("Calibrate a cover",),
+    "README.md": ("Calibrate a cover",),
+    "CHANGELOG.md": ("Calibrate a cover", "Gateway and connection"),
+}
+
+
+@pytest.mark.parametrize("page", sorted(DOCUMENTED_LABELS), ids=lambda page: page.replace("/", "-"))
+def test_the_docs_quote_labels_that_exist(page: str) -> None:
+    """Every label a page names is a label the English file really carries.
+
+    Mutation caught: renaming a button or a screen title in `strings.json` and
+    leaving the page that tells the user to click it behind - which no other test
+    sees, because the docs are not loaded by anything the flow tests exercise.
+    """
+    english = set(flatten(load(STRINGS)).values())
+    # A label may be wrapped across two lines of Markdown, so both sides are read
+    # with their whitespace collapsed.
+    text = re.sub(r"\s+", " ", (ROOT / page).read_text(encoding="utf-8"))
+    for label in DOCUMENTED_LABELS[page]:
+        assert any(label == value or value.startswith(f"{label} (") for value in english), (
+            f"{page} quotes {label!r}, which is not a label of strings.json"
+        )
+        assert re.sub(r"\s+", " ", label) in text, f"{page} no longer quotes {label!r}"

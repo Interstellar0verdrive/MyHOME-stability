@@ -30,8 +30,8 @@ way, and nothing is ever written to `myhome.yaml`.
   and the second runs the whole travel for the press at the top. Path A can be followed by a **precise
   level**: four more readings at a quarter and three quarters of the travel in each
   direction, which fit a scale factor on the times as well as the rolls — the tape
-  corrects the finger — and a verification at 40 %, a position nothing was fitted to,
-  reported as "within X cm". Expect 1–2 cm at the end stops and 2–4 cm between
+  corrects the finger — and a fifth at 40 %, a position nothing was fitted to, whose
+  gap the next screen reports. Expect 1–2 cm at the end stops and 2–4 cm at
   intermediate positions afterwards. Nothing moves before a screen announces it and
   nothing is written before the last one; every measurement can be repeated on its
   own, and closing the dialog leaves the configuration untouched. The full page is
@@ -73,8 +73,21 @@ way, and nothing is ever written to `myhome.yaml`.
   out of the same primitives as the guided steps, and two things timing one motor
   would each measure a run the other one stopped. The action already refused to
   start on a cover that was moving.
+- **The wording of the dialog, read through in all seven languages.** An outside
+  review of every string produced 414 proposals; those that still describe the
+  screens are in, in the impersonal Italian the rest of the flow uses, with the
+  glossary each language settled on — *bottom edge*, *curtain*, *slat opening
+  time*, *takes precedence over*, and their equivalents. Buttons keep Home
+  Assistant's own imperative. The counts and the claims were then checked against
+  the code rather than against the review: the refinement asks for three tape
+  readings and not two, the precise level for five and not four, `Calibration
+  source` is named as holding the origin and not the numbers, what is saved is
+  applied when the dialog closes rather than at once, and the accuracy on the
+  precise summary is described as what it is — the worst gap over the readings the
+  model was fitted to, not the verification at 40 %.
 
 ## [0.4.5] - 2026-09-12
+
 ### Fixed
 
 - **A command written into a session the gateway had quietly closed is sent again.** A
