@@ -10,7 +10,7 @@ itself in the registration lot), and because a shutter's travel model is a setti
 than a state - a household member who can open a cover has no business rewriting what
 "open" means.
 
-Three of them read, nine of them write and one subscribes. The handlers are deliberately
+Four of them read, nine of them write and one subscribes. The handlers are deliberately
 thin: a write unwraps its frame, calls one function in `panel_write.py`, and sends back
 what it is given. Everything a write decides - the refusal while a measurement is
 running, the one-at-a-time lock, the undo token, the signal that carries the new numbers
@@ -34,7 +34,13 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import DOMAIN
-from .panel_data import async_cover_detail, async_overview, async_texts, is_advanced_cover
+from .panel_data import (
+    async_cover_detail,
+    async_overview,
+    async_preview,
+    async_texts,
+    is_advanced_cover,
+)
 from .panel_schemas import (
     ASSIGN_SCHEMA,
     COVER_DETAIL_SCHEMA,
@@ -45,6 +51,7 @@ from .panel_schemas import (
     ERROR_UNKNOWN_COVER,
     ERROR_UNKNOWN_ENTRY,
     OVERVIEW_SCHEMA,
+    PREVIEW_SCHEMA,
     PROFILE_DELETE_SCHEMA,
     PROFILE_EDIT_SCHEMA,
     PROFILE_RENAME_SCHEMA,
@@ -91,6 +98,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_overview)
     websocket_api.async_register_command(hass, websocket_cover_detail)
     websocket_api.async_register_command(hass, websocket_texts)
+    websocket_api.async_register_command(hass, websocket_preview)
     websocket_api.async_register_command(hass, websocket_assign)
     websocket_api.async_register_command(hass, websocket_reorder)
     websocket_api.async_register_command(hass, websocket_set_travel)
@@ -225,6 +233,26 @@ async def websocket_texts(
     """
     language = msg.get("language") or hass.config.language
     connection.send_result(msg["id"], await async_texts(hass, language))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(PREVIEW_SCHEMA)
+@websocket_api.async_response
+async def websocket_preview(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """What a batch of assignments would come to, with none of them made.
+
+    The review panel's before/after table. It is a read: no lock, no store write, no
+    signal, and allowed while a measurement is running exactly as every other read is.
+    Each item carries either the answer or the one `translation_key` that stops it, so
+    the whole command never refuses for one row's sake - see `panel_data.async_preview`
+    for why that is the right shape for this one command and the wrong one for `assign`.
+    """
+    entry = _entry(hass, connection, msg)
+    if entry is None:
+        return
+    connection.send_result(msg["id"], async_preview(hass, entry, msg["items"]))
 
 
 # ----------------------------------------------------------------- the write commands

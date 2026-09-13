@@ -6,10 +6,11 @@ the commands, their payloads and the shape of every answer are stated here once,
 file both halves can read, and `.audit-2026-09/CONTRACT-0.6.0-ws.md` says the same thing
 in prose with a worked example beside it. A change to either is a change to both.
 
-**Scope.** The read half is three commands - one overview per gateway, one detail per
-shutter, and the sentences - and is **frozen**: lot 3 adds to this file and changes
-nothing in it. The write half is the nine commands below it plus `subscribe`, and every
-one of them answers with an `overview` of exactly the shape the read half declares.
+**Scope.** The read half is four commands - one overview per gateway, one detail per
+shutter, the sentences, and what an assignment nobody has made yet would come to - and
+its first three are **frozen**: lot 3 added to this file and changed nothing in it. The
+write half is the nine commands below it plus `subscribe`, and every one of them answers
+with an `overview` of exactly the shape the read half declares.
 
 **Two names resolved against the plan.**
 
@@ -46,8 +47,14 @@ from .const import (
 WS_TYPE_OVERVIEW = "myhome/calibration/overview"
 WS_TYPE_COVER_DETAIL = "myhome/calibration/cover_detail"
 WS_TYPE_TEXTS = "myhome/calibration/texts"
+WS_TYPE_PREVIEW = "myhome/calibration/preview"
 
-WS_READ_COMMANDS: tuple[str, ...] = (WS_TYPE_OVERVIEW, WS_TYPE_COVER_DETAIL, WS_TYPE_TEXTS)
+WS_READ_COMMANDS: tuple[str, ...] = (
+    WS_TYPE_OVERVIEW,
+    WS_TYPE_COVER_DETAIL,
+    WS_TYPE_TEXTS,
+    WS_TYPE_PREVIEW,
+)
 
 # `entry_id` is optional on the overview: a house with one gateway - which is nearly
 # every house - should not have to ask which one it has before it can ask anything else.
@@ -70,6 +77,16 @@ TEXTS_SCHEMA: VolDictType = {
     vol.Required("type"): WS_TYPE_TEXTS,
     vol.Optional("language"): str,
 }
+
+# "If these shutters followed these profiles, at these travels, what would they run on?"
+#
+# The items are `ASSIGN_SCHEMA`'s items - the same three keys, read the same way - because
+# the whole point of the command is that its answer is what `assign` would produce. It is
+# declared after the assignment schema itself, below, for that reason.
+#
+# `entry_id` is **required**, like a write's and unlike the other reads': a preview is
+# always about a batch the user is in the middle of composing on one gateway's screen,
+# and there is no "the gateway I have" version of that question.
 
 
 # ------------------------------------------------------------------ write commands
@@ -157,6 +174,16 @@ ASSIGN_SCHEMA: VolDictType = {
     vol.Required("entry_id"): str,
     vol.Required("assignments"): [ASSIGNMENT_SCHEMA],
     vol.Optional("order"): ORDER,
+}
+
+# The read that asks what the write above would come to (CONTRACT §11). One item in, one
+# item out, in the same order, and `ASSIGNMENT_SCHEMA` for both so that the panel sends
+# the batch it is composing rather than a translation of it. No `order`: a position is
+# not a number the shutter runs on and previewing one would answer nothing.
+PREVIEW_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_PREVIEW,
+    vol.Required("entry_id"): str,
+    vol.Required("items"): [ASSIGNMENT_SCHEMA],
 }
 
 # `profile` present (`null` included, which is "Senza profilo") means `order` is that one
@@ -369,6 +396,31 @@ COVER_KEYS: tuple[str, ...] = (
 
 COVER_DETAIL_KEYS: tuple[str, ...] = ("entry_id", "cover", "keys")
 
+PREVIEW_KEYS: tuple[str, ...] = ("entry_id", "items")
+
+PREVIEW_ITEM_KEYS: tuple[str, ...] = (
+    "cover_unique_id",
+    # The profile that was asked about, and the travel the answer was worked out at -
+    # the one in the question when it carried one, and otherwise the one this window was
+    # already known to have.
+    "profile",
+    "height",
+    # `null`, or the one `translation_key` that stops this item: `unknown_cover`,
+    # `advanced_cover`, `unknown_profile`, `missing_travel`, `not_a_number`,
+    # `out_of_range`. The same keys `assign` refuses with, so the panel shows the same
+    # sentence whether the problem was found before the write or by it.
+    "problem",
+    # ...and, when there is no problem, exactly what the overview would say about this
+    # shutter once the batch had been written: same tokens, same numbers, same function.
+    "origin",
+    "source",
+    "values",
+    # One entry per key of `values`: `{key, value, origin}`, the per-key origin being
+    # `own` / `profile` / `file` / `default` as in `cover_detail`.
+    "keys",
+    "has_own",
+)
+
 COVER_DETAIL_KEY_KEYS: tuple[str, ...] = (
     "key",
     # What the shutter runs on today, and which of the four said it.
@@ -482,6 +534,9 @@ __all__ = [
     "ORDER",
     "OVERVIEW_KEYS",
     "OVERVIEW_SCHEMA",
+    "PREVIEW_ITEM_KEYS",
+    "PREVIEW_KEYS",
+    "PREVIEW_SCHEMA",
     "PROFILE_DELETE_KEYS",
     "PROFILE_DELETE_SCHEMA",
     "PROFILE_EDIT_KEYS",
@@ -509,6 +564,7 @@ __all__ = [
     "WS_TYPE_COVER_EDIT",
     "WS_TYPE_COVER_FORGET",
     "WS_TYPE_OVERVIEW",
+    "WS_TYPE_PREVIEW",
     "WS_TYPE_PROFILE_DELETE",
     "WS_TYPE_PROFILE_EDIT",
     "WS_TYPE_PROFILE_RENAME",
