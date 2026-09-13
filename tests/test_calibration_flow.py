@@ -1069,29 +1069,6 @@ async def test_repeating_the_ascent_throws_both_of_its_runs_away(
         assert result["description_placeholders"]["gap"] == "-"
 
 
-async def test_the_precise_level_asks_for_the_gap_instead_of_offering_it(
-    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
-) -> None:
-    """Somebody spending four more tape readings will not begrudge a fifth.
-
-    The level is chosen *after* the measurements today (`summary_basic` -> "Improve the
-    accuracy"), so the flag is set here the way a future release that asks up front
-    would set it. The branch is real either way: it is the one that decides whether the
-    check screen is a menu or the form itself.
-    """
-    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
-        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:6])
-        flow = hass.config_entries.options._progress[result["flow_id"]]  # noqa: SLF001
-        flow._measured.precise = True  # noqa: SLF001
-
-        result = await drive(hass, freezer, result, PATH_A_BASIC[6:8])
-        assert result["step_id"] == "lift_gap"
-        # ...and the empty field is the way back out of it.
-        result = await submit(hass, result, {"gap_cm": ""})
-        assert result["step_id"] == "closed_again"
-
-
 async def test_the_height_can_be_written_again_without_moving_anything(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:

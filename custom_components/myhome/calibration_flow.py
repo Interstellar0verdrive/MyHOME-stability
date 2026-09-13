@@ -1970,14 +1970,14 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         it should". "Ripeti questo passo" is not offered a fourth time: on this screen it
         would be the same button as "it is still touching the base" with a vaguer label.
 
-        At the precise level the gap is not offered, it is asked: somebody who is about
-        to spend two more minutes on four tape readings is not going to begrudge a
-        fourth, and it is the one reading that makes an instant exact rather than a
-        distance. The form itself is the way back - left empty, it accepts the press.
+        The same three whichever level the conversation is heading for. Asking for the
+        gap by default at the precise level was considered and dropped: the level is
+        chosen *after* the measurements (`summary_basic` -> "Migliora la precisione",
+        and `PLAN_PRECISE` does not re-measure the ascent), so a branch on it would
+        never be taken in a real walk. What the text does instead is recommend the
+        reading, in one sentence, as the most precise of the three.
         """
         self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
-        if self._measured.precise:
-            return await self.async_step_lift_gap()
         if self._measured.lift_late:
             return self.async_show_menu(
                 step_id="lift_check_late",
@@ -2021,11 +2021,11 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     ) -> ConfigFlowResult:
         """The tape reading that replaces the press: how far the bar rose after it.
 
-        The field may be left empty, which is the way out of this screen for somebody
-        who arrived on it by default and would rather not measure: the press then
-        stands as it is. A reading under a centimetre is not a small gap, it is a
-        shutter still resting on its base, and it goes to a screen of its own instead
-        of being taken as a very good press.
+        The field may be left empty, which is the way out for somebody who opened the
+        form and then thought better of it: the press stands as it was made. A reading
+        under a centimetre is not a small gap, it is a shutter still resting on its
+        base, and it goes to a screen of its own instead of being taken as a very good
+        press.
         """
         errors: dict[str, str] = {}
         if user_input is not None:
