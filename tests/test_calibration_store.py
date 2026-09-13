@@ -308,6 +308,33 @@ def test_a_calibration_naming_a_profile_that_is_gone_falls_back(caplog) -> None:
             {},
             "guided",
         ),
+        # A profile that answers for the keys this window did not measure: neither
+        # "measured" nor "inherited", and the attribute says which of the two it is
+        # closer to by naming both.
+        (
+            StoredCalibration(
+                UNIQUE_ID, profile="tall", overrides={CONF_OPENING_TIME: 22.3}
+            ),
+            {"tall": PROFILE},
+            "profile tall, adjusted",
+        ),
+        # ...and one whose own overrides answer for every key of the travel model is
+        # measured outright, profile or no profile: nothing of the profile is in use.
+        (
+            StoredCalibration(
+                UNIQUE_ID,
+                profile="tall",
+                overrides={
+                    CONF_OPENING_TIME: 22.3,
+                    CONF_CLOSING_TIME: 21.7,
+                    CONF_SLAT_TIME: 4.7,
+                    CONF_OPENING_ROLL: 2.12,
+                    CONF_CLOSING_ROLL: 1.69,
+                },
+            ),
+            {"tall": PROFILE},
+            "guided",
+        ),
     ],
 )
 def test_the_source_says_where_the_numbers_came_from(
@@ -934,8 +961,9 @@ def test_a_tape_held_against_this_window_still_beats_the_profile_it_follows() ->
     assert resolved.values[CONF_OPENING_TIME] == 27.5
     # ...and everything it did not measure still comes from the profile, above the file.
     assert resolved.values[CONF_CLOSING_TIME] == pytest.approx(21.7)
-    # It was measured here, so the attribute says so rather than naming the profile.
-    assert resolved.source == "guided"
+    # Measured here, and still running on the profile for everything else: the attribute
+    # says both, because neither half of it alone would be true (lexicon of 13 Sep).
+    assert resolved.source == "profile tall, adjusted"
 
 
 def test_a_window_that_was_only_assigned_is_not_called_a_measurement() -> None:
