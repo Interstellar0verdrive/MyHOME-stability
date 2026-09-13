@@ -465,6 +465,12 @@ class _Measured:
     descent: list[tuple[float, float]] = field(default_factory=list)
     ascent: list[tuple[float, float]] = field(default_factory=list)
     deviation: float | None = None
+    # The fraction of the travel the verification really ran to, remembered because the
+    # summary names it in percent and the two verifications do not run to the same
+    # place: `VERIFY_RUN` at the precise level of path A, `VERIFY_RUN_PROFILE` for the
+    # check path B offers. A constant here would put "40 %" under a run that went half
+    # way (0.5.0 v5 review).
+    verify_fraction: float | None = None
     precise: bool = False
 
     @property
@@ -2480,6 +2486,10 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                 "measure_verify", errors={FIELD_MEASURED_CM: error or ERROR_ABOVE_THE_TRAVEL}
             )
         self._measured.deviation = self._deviation(value)
+        # Where that reading was taken, for the summary: the stage set `_pending` when
+        # it started the run, and the two verifications run to different fractions.
+        _direction, fraction = self._pending or (DIRECTION_CLOSE, VERIFY_RUN)
+        self._measured.verify_fraction = fraction
         self._tape_target = None
         return await self.async_step_verify_result()
 
@@ -2750,16 +2760,33 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         return _Result(yaml=overrides_yaml(key, values, None), overrides=values)
 
     def _summary_placeholders(self, result: _Result) -> dict[str, str]:
+        """The numbers the three summaries share, and the one only the precise one shows.
+
+        `{accuracy}` is the verification's own answer whenever there is one: how far the
+        shutter really stopped from where the model said it would, at the one position
+        no reading was fitted to. That is the number `summary_precise` names, and it is
+        the only place the flow says "accuracy" out loud. The worst residual over the
+        fitted readings is the fallback - it is what a summary reached without a
+        verification would have to fall back on, and it is what the basic summary's "-"
+        comes from, because one reading per direction reproduces itself and leaves no
+        residual at all.
+        """
+        measured = self._measured
         # The unit travels with the value, so a path that did not measure something
         # reads "-" rather than "- cm".
-        height = f"{self._measured.height:.0f} cm" if self._measured.height else "\u2013"
-        accuracy = "\u2013" if result.accuracy_cm is None else f"{result.accuracy_cm:.1f} cm"
+        height = f"{measured.height:.0f} cm" if measured.height else "\u2013"
+        if measured.deviation is not None:
+            accuracy = f"{abs(measured.deviation):.1f} cm"
+        elif result.accuracy_cm is not None:
+            accuracy = f"{result.accuracy_cm:.1f} cm"
+        else:
+            accuracy = "\u2013"
         replaced, kept = self._replaced_and_kept(result)
         return self._placeholders(
             yaml=f"```yaml\n{result.yaml}```",
             height=height,
             accuracy=accuracy,
-            percent=round(VERIFY_RUN * 100),
+            percent=round((measured.verify_fraction or VERIFY_RUN) * 100),
             profile=self._measured_name or self._profile or "",
             replacing=", ".join(replaced) or "\u2013",
             keeping=", ".join(kept) or "\u2013",
@@ -2769,9 +2796,10 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         """Two summaries, because the two levels have different things to say.
 
         The basic one has no accuracy to report - one reading per direction reproduces
-        itself - and offers the four extra readings that would give it one. The precise
-        one has a number that was measured at a position nothing was fitted to, and
-        nothing left to offer but Save.
+        itself - and offers the four extra readings and the check that would give it
+        one. The precise one reports that check: how far the shutter stopped from where
+        the model said it would, at a position nothing was fitted to. Nothing left to
+        offer there but Save.
         """
         if self._measured.precise:
             return await self.async_step_summary_precise()
@@ -2803,7 +2831,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     async def async_step_summary_precise(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The same, plus the one number in the whole flow that was verified."""
+        """The same, plus the one number in the whole flow that was verified.
+
+        There is only one text for this screen because there is only one way to reach
+        it: `PLAN_PRECISE` ends `verify` -> `summary`, and `precise` is set nowhere but
+        `async_step_refine`, which installs that plan. So the verification has always
+        happened by the time this is shown, and `{accuracy}` is always its answer - the
+        gap at `{percent}` % of the descent, the one position no reading was fitted to.
+        A second text for a precise summary with no verification behind it would be a
+        screen nobody could open (`test_the_precise_summary_always_has_a_verification`
+        is what says so).
+        """
         result = self._result()
         return self.async_show_menu(
             step_id="summary_precise",

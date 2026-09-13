@@ -173,9 +173,10 @@ reference point shows up while you are still standing there.
 
 It closes with a **verification at 40 % of the descent** — deliberately a position
 no measurement was fitted to, so it is a question put to the model rather than a
-repetition. Its answer is the gap reported by the screen that follows the reading.
-The precise summary carries a different number of its own, the **accuracy**: the
-largest gap between the model and the six readings it was fitted to.
+repetition. Its answer is the gap reported by the screen that follows the reading,
+and it is the **accuracy** the precise summary then names: "within X cm", measured
+at the one position nothing was fitted to rather than over the readings the fit was
+given.
 
 At the basic level the same expected-value line is drawn from the default geometry
 of an ordinary shutter rather than from a model of yours, so it promises much less:

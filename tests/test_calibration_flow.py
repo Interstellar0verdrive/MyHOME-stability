@@ -58,6 +58,8 @@ from custom_components.myhome.calibration_flow import (
     PLAN_TIMES_AND_ROLLS,
     PLAN_VERIFY_B,
     PRESS_TIMEOUT_SEC,
+    VERIFY_RUN,
+    VERIFY_RUN_PROFILE,
     parse_number,
 )
 from custom_components.myhome.calibration_store import loaded_store
@@ -1200,17 +1202,78 @@ async def test_the_precise_summary_reports_an_accuracy_and_offers_only_save(
 ) -> None:
     """Two summaries, because the two levels have different things to say.
 
+    The number is the verification's own answer - the gap at the one position no
+    reading was fitted to - and not the worst residual over the readings the fit was
+    given, which is a measure of how well the model reproduces what it was told and not
+    of how well it predicts. The screen says "at {percent} % of the descent ... within
+    {accuracy}", so both have to be the verification's: the same centimetres
+    `verify_result` has just shown, and the percentage of the run that produced them.
+
     Mutation caught: offering "Migliora la precisione" again on the precise summary,
-    which is a promise of an option that is not there.
+    which is a promise of an option that is not there; and feeding `{accuracy}` the
+    residual of the fit, or `{percent}` a hard-coded 40.
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_PRECISE[:-1])
+        # One act short of the summary: the screen that reports the verification.
+        checked = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_PRECISE[:-2])
+        assert checked["step_id"] == "verify_result"
+        deviation = checked["description_placeholders"]["deviation"]
+
+        result = await drive(hass, freezer, checked, PATH_A_PRECISE[-2:-1])
         assert result["step_id"] == "summary_precise"
         assert result["menu_options"] == ["save", "cancel_flow"]
         accuracy = result["description_placeholders"]["accuracy"]
-        assert accuracy.endswith(" cm") and float(accuracy[:-3]) < 2.0
-        assert result["description_placeholders"]["percent"] == "40"
+        assert accuracy == f"{deviation} cm"
+        assert float(accuracy[:-3]) < 2.0
+        assert result["description_placeholders"]["percent"] == str(round(VERIFY_RUN * 100))
+
+
+def test_the_precise_summary_always_has_a_verification() -> None:
+    """So the screen has one text, and it is the one that names the check.
+
+    `{accuracy}` on `summary_precise` is the verification's answer, which is only true
+    to say if the verification always happened. It does: `precise` is set in exactly one
+    place, `async_step_refine`, and what that installs is `PLAN_PRECISE`, whose last two
+    stages are the check and the summary. There is therefore no precise summary with
+    nothing to report, and no second text for one.
+
+    Mutation caught: grafting the precise level onto a plan that ends without `verify`,
+    or setting `precise` somewhere else - either of which would put the sentence "the
+    cover stopped within X of the estimate" under a screen where nothing was checked.
+    """
+    assert PLAN_PRECISE[-2:] == ("verify", "summary")
+    source = (
+        Path(custom_components.myhome.__file__).parent / "calibration_flow.py"
+    ).read_text(encoding="utf-8")
+    assert source.count("precise = True") == 1
+
+
+async def test_path_b_names_the_fraction_its_own_check_ran_to(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The two verifications do not run to the same place, and `{percent}` follows.
+
+    Path A's check runs to `VERIFY_RUN`, path B's to `VERIFY_RUN_PROFILE`: the screens
+    of the second must not report the first's forty per cent.
+
+    Mutation caught: a constant `{percent}` on the screens a verification feeds.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
+        result = await choose(hass, result, "verify_now")
+        result = await choose(hass, result, "confirm_open")
+        assert result["description_placeholders"]["percent"] == str(
+            round(VERIFY_RUN_PROFILE * 100)
+        )
+        result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5) - 1.0)})
+        assert result["step_id"] == "verify_result"
+        result = await choose(hass, result, "accept_step")
+        assert result["step_id"] == "summary_short"
+        assert result["description_placeholders"]["percent"] == str(
+            round(VERIFY_RUN_PROFILE * 100)
+        )
 
 
 async def test_the_precise_tape_screens_say_what_is_expected(

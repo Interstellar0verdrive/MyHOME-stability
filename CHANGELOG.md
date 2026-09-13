@@ -31,8 +31,8 @@ way, and nothing is ever written to `myhome.yaml`.
   level**: four more readings at a quarter and three quarters of the travel in each
   direction, which fit a scale factor on the times as well as the rolls — the tape
   corrects the finger — and a fifth at 40 %, a position nothing was fitted to, whose
-  gap the next screen reports. Expect 1–2 cm at the end stops and 2–4 cm at
-  intermediate positions afterwards. Nothing moves before a screen announces it and
+  gap is what the summary reports as the accuracy. Expect 1–2 cm at the end stops
+  and 2–4 cm at intermediate positions afterwards. Nothing moves before a screen announces it and
   nothing is written before the last one; every measurement can be repeated on its
   own, and closing the dialog leaves the configuration untouched. The full page is
   [docs/guided-calibration.md](docs/guided-calibration.md).
@@ -83,8 +83,9 @@ way, and nothing is ever written to `myhome.yaml`.
   readings and not two, the precise level for five and not four, `Calibration
   source` is named as holding the origin and not the numbers, what is saved is
   applied when the dialog closes rather than at once, and the accuracy on the
-  precise summary is described as what it is — the worst gap over the readings the
-  model was fitted to, not the verification at 40 %.
+  precise summary is the verification's own answer — the gap at the one position
+  nothing was fitted to — with the percentage the screen quotes taken from the run
+  that produced it instead of a constant.
 
 ## [0.4.5] - 2026-09-12
 
