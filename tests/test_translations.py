@@ -263,13 +263,22 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "summary_short": {
         "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
     },
+    # Path C's own summary: the short one's list of what a save replaces, and the basic
+    # one's offer of the thorough calibration.
+    "summary_correction": {
+        "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
+    },
     "summary_precise": {
         "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
     },
     # One `saved` screen per path: what was written is a different sentence on each.
-    "saved": {"cover", "profile"},
-    "saved_profile": {"cover", "profile"},
-    "saved_refined": {"cover", "profile"},
+    # `source` is what `Calibration source` now says about this cover, read off the
+    # record that was just written: a correction leaves `guided` or
+    # `profile <name>, adjusted` depending on whether the profile still answers for
+    # anything, and the screen that sends the user to look at the attribute quotes it.
+    "saved": {"cover", "profile", "source"},
+    "saved_profile": {"cover", "profile", "source"},
+    "saved_refined": {"cover", "profile", "source"},
     # Every way out of the conversation is given `_placeholders()`, so every one of
     # them may name the shutter it is about.
     "cancelled": {"cover"},
@@ -532,16 +541,23 @@ def test_only_the_summary_that_offers_the_refinement_describes_it(path: Path) ->
     which have no such button - the one thing the live feedback asked for by name
     (0.5.0 v2 review, BUG-5).
 
-    Mutation caught: describing the refinement on the short summary, or offering it
-    there.
+    Since the third scope of the correction there are two summaries that do offer it -
+    path A's and path C's - and two that cannot: path B's, whose numbers are the
+    profile's by intent, and the thorough one, which is what the button leads to.
+
+    Mutation caught: describing the thorough calibration on a summary that does not
+    offer it, or offering it on path B's.
     """
     steps = options_block(path)["step"]
     assert set(steps["summary_basic"]["menu_options"]) == {"save", "refine", "cancel_flow"}
+    assert set(steps["summary_correction"]["menu_options"]) == {"save", "refine", "cancel_flow"}
     assert set(steps["summary_short"]["menu_options"]) == {"save", "cancel_flow"}
     assert set(steps["summary_precise"]["menu_options"]) == {"save", "cancel_flow"}
-    # The name of the button, as it appears in the text of the screen that has it.
+    # The name of the button, as it appears in the text of the screens that have it.
     refine = steps["summary_basic"]["menu_options"]["refine"].split("(")[0].strip()
+    assert refine == steps["summary_correction"]["menu_options"]["refine"].split("(")[0].strip()
     assert refine in steps["summary_basic"]["description"], path.name
+    assert refine in steps["summary_correction"]["description"], path.name
     assert refine not in steps["summary_short"]["description"], path.name
     assert refine not in steps["summary_precise"]["description"], path.name
 
@@ -690,6 +706,39 @@ def test_every_language_promises_the_same_number_of_movements(path: Path) -> Non
     description = options_block(path)["step"]["path_a"]["description"]
     assert says in description, f"{path.name}: path_a no longer says {says!r}"
     assert stale not in description, f"{path.name}: path_a still says {stale!r}"
+
+
+# The word each language counts movements in, for the three entries of `refine_scope`.
+# Every entry names what it costs, because the three are chosen against each other and
+# "how long will this take" is the whole of the question being asked. The numbers are
+# replayed against the shutter in `test_calibration_flow`
+# (`test_the_thorough_scope_makes_the_movements_its_entry_promises` and the walks of the
+# other two scopes); what is checked here is that the eight files agree about them.
+SCOPE_MOVEMENTS: dict[str, str] = {
+    "strings": "movements",
+    "en": "movements",
+    "it": "movimenti",
+    "fr": "mouvements",
+    "nl": "bewegingen",
+    "es": "movimientos",
+    "de": "Bewegungen",
+    "pt": "movimentos",
+}
+SCOPE_COSTS: tuple[tuple[str, int], ...] = (
+    ("times_only", 5),
+    ("times_and_rolls", 8),
+    ("points_only", 10),
+)
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_every_language_promises_the_same_counts_for_the_three_scopes(path: Path) -> None:
+    """Mutation caught: correcting a count in one file, or adding a scope to one file."""
+    options = options_block(path)["step"]["refine_scope"]["menu_options"]
+    assert list(options) == [option for option, _cost in SCOPE_COSTS] + ["cancel_flow"]
+    word = SCOPE_MOVEMENTS[path.stem]
+    for option, cost in SCOPE_COSTS:
+        assert f"{cost} {word}" in options[option], f"{path.name}: {option} no longer says {cost}"
 
 
 # The screens a shutter is moving through while they are on the screen. "Nobody reads

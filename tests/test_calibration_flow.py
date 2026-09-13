@@ -53,6 +53,7 @@ from custom_components.myhome.calibration_flow import (
     NO_PROFILE,
     PLAN_FULL,
     PLAN_PRECISE,
+    PLAN_PRECISE_TRAVEL,
     PLAN_PROFILE,
     PLAN_TIMES,
     PLAN_TIMES_AND_ROLLS,
@@ -79,6 +80,7 @@ from custom_components.myhome.const import (
     CONF_RAW,
     CONF_REFERENCE_HEIGHT,
     CONF_SLAT_TIME,
+    CONF_STOP_LATENCY,
     DIRECTION_CLOSE,
     DIRECTION_OPEN,
 )
@@ -204,6 +206,28 @@ PROFILE_YAML = (
 # The same, with no `height:` for the cover: nothing anywhere knows this window's own
 # travel, which is the one case a summary may report "-" for it.
 NO_HEIGHT_PROFILE_YAML = PROFILE_YAML.replace(f"      height: {HEIGHT}\n", "")
+
+# A cover the file says nothing about but its travel and which profile it follows, which
+# is how a window looks once path B has been through it: every key of the travel model
+# is the profile's, so a correction that measures two of them leaves the other three
+# still coming from there - the one case `Calibration source` has to call `adjusted`.
+FOLLOWER_ONLY_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    hallway_shutter:
+      where: '81'
+      name: {COVER_NAME}
+      height: {HEIGHT}
+      profile: tall
+  cover_profiles:
+    tall:
+      reference_height: {HEIGHT}
+      opening_time: {OPENING}
+      closing_time: {CLOSING}
+      slat_time: {SLAT}
+      roll: {ROLL_DOWN}
+"""
 
 # Two basic covers, so the assignment form has more than one row and the second one has
 # no height anywhere.
@@ -2256,9 +2280,11 @@ async def test_path_c_times_only_stores_the_two_run_times_as_overrides(
     here, one window of it was).
     """
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
-        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
         assert result["step_id"] == "saved_refined"
+        # ...in the five movements the menu entry of this scope promises.
+        assert movements(runner.log) == 5
         assert the_store(hass, entry).raw_profiles == {}
         calibration = the_calibration(hass, entry)
         assert calibration[CONF_PROFILE] == "tall"
@@ -2310,9 +2336,11 @@ async def test_path_c_with_the_coefficients_measures_and_overrides_them_too(
         Act(option="save"),
     )
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
-        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), acts)
         assert result["step_id"] == "saved_refined"
+        # ...in the eight movements the menu entry of this scope promises.
+        assert movements(runner.log) == 8
         overrides = the_calibration(hass, entry)["overrides"]
         assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
         assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
@@ -2326,7 +2354,7 @@ async def test_the_refinement_summary_shows_the_cover_s_own_yaml(
     async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
-        assert result["step_id"] == "summary_short"
+        assert result["step_id"] == "summary_correction"
         snippet = result["description_placeholders"]["yaml"]
         assert "cover_profiles:" not in snippet
         assert f"  {YAML_KEY}:" in snippet
@@ -2402,6 +2430,327 @@ async def test_the_paths_with_a_press_begin_at_an_end_stop_the_user_has_confirme
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:6])
         assert result["step_id"] == "home_closed_done"
         assert runner.homed == [DIRECTION_CLOSE]
+
+
+# --------------------------------------------------------------------------------------
+# Path C, third scope - the thorough calibration with nothing timed
+# --------------------------------------------------------------------------------------
+# The five readings of the thorough calibration, in the order `order_the_readings` deals
+# them when nothing is known about where the shutter stands - which is every entry into
+# this scope, because it is chosen before anything has moved.
+THOROUGH_READINGS: tuple[Act, ...] = (
+    Act(option="tape_start"),
+    Act(payload={"measured_cm": str(descent_cm(0.25))}),
+    Act(option="accept_step"),
+    Act(payload={"measured_cm": str(descent_cm(0.75))}),
+    Act(option="accept_step"),
+    Act(payload={"measured_cm": str(ascent_cm(0.25))}),
+    Act(option="accept_step"),
+    Act(payload={"measured_cm": str(ascent_cm(0.75))}),
+    Act(option="accept_step"),
+    Act(payload={"measured_cm": str(descent_cm(0.40))}),
+    Act(option="accept_step"),
+)
+
+PATH_C_POINTS: tuple[Act, ...] = (
+    *ENTER,
+    Act(payload={"cover": UNIQUE_ID}),
+    Act(option="path_c"),
+    Act(payload={CONF_PROFILE: "tall"}),
+    Act(option="points_only"),
+    *THOROUGH_READINGS,
+    Act(option="save"),
+)
+
+
+async def test_the_thorough_scope_reads_the_tape_and_times_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The gap the live installation found: the readings without the runs.
+
+    A cover that has already been measured had no way at all to the four extra points -
+    the thorough calibration hung off the summary of path A and nowhere else - so the
+    only way to them was to time the three runs again, on a cover whose times were
+    already right.
+
+    Mutation caught: a scope that starts a timed run all the same (the runner records
+    every press it is asked for, and there is none), or one that fits the rolls off
+    something other than the readings.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS)
+        assert result["step_id"] == "saved_refined"
+        # Not one run was started by hand and not one stop was sent: every movement of
+        # the scope is a homing or a run to a percentage, which end by themselves.
+        assert runner.started == []
+        assert runner.stops == 0
+        overrides = the_calibration(hass, entry)["overrides"]
+        assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
+        assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
+        # ...and the run times, which the four readings scale rather than re-time.
+        assert overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
+        assert overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
+        assert overrides[CONF_SLAT_TIME] == pytest.approx(SLAT, abs=0.05)
+        # The measurements kept beside the conclusions say the times were not pressed
+        # for, so that a reader six months later does not take them for a measurement.
+        assert the_calibration(hass, entry)[CONF_RAW]["times_measured"] is False
+
+
+async def test_the_thorough_scope_makes_the_movements_its_entry_promises(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Ten: five readings, each a homing and a run, and no homing that has nothing to do.
+
+    The number is on the menu entry itself, in all eight files
+    (`test_translations.test_every_language_promises_the_same_counts`), and this is what
+    it is checked against - replayed off the runner's own log, so a homing the shutter
+    was already at does not count.
+
+    Mutation caught: a scope that opens with a movement of its own, or an order that
+    homes the shutter twice for one reading.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS[:-1])
+        assert movements(runner.log) == 10
+        label = STRINGS["options"]["step"]["refine_scope"]["menu_options"]["points_only"]
+        assert "10 movements" in label
+
+
+async def test_the_thorough_scope_asks_for_a_travel_nobody_knows_and_not_for_one_that_is_known(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The one tape reading that does not change is not asked for twice.
+
+    Every reading of the phase is centimetres out of the curtain travel, so the scope
+    cannot run without one; but a travel already stored for this cover, or written in
+    the configuration file, is what the user measured the last time they stood here.
+    Asking again would be asking them to check a number nothing has moved.
+
+    Mutation caught: grafting the travel onto the plan unconditionally, or leaving a
+    cover nobody has measured one for with no way to give it.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS[:6])
+        # The file writes a `height:` for this cover, so the first screen is the warning
+        # of the tape phase and the readings that follow it are the four and the check.
+        assert result["step_id"] == "tape_brief"
+        assert result["description_placeholders"]["readings"] == "5"
+
+
+async def test_the_thorough_scope_asks_for_a_travel_nobody_knows(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """...and a cover nobody has measured one for is asked, before anything else.
+
+    Mutation caught: leaving the travel out of the plan, which would fit every reading
+    against a curtain travel of nothing.
+    """
+    async with calibrating(hass, tmp_path, NO_HEIGHT_PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS[:6])
+        assert result["step_id"] == "tape_brief"
+        assert result["description_placeholders"]["readings"] == "6"
+        result = await drive(hass, freezer, result, (Act(option="tape_start"),))
+        assert result["step_id"] == "height"
+        result = await drive(
+            hass,
+            freezer,
+            result,
+            (
+                Act(payload={CONF_HEIGHT: str(HEIGHT)}),
+                Act(option="accept_step"),
+                *THOROUGH_READINGS[1:],
+                Act(option="save"),
+            ),
+        )
+        assert result["step_id"] == "saved_refined"
+        # The travel costs no movement of its own: it is read with the cover at the top,
+        # which is where the first of the four readings has to start from anyway.
+        assert movements(runner.log) == 10
+        assert the_calibration(hass, entry)["overrides"][CONF_CLOSING_ROLL] == pytest.approx(
+            ROLL_DOWN, abs=0.01
+        )
+
+
+def test_the_thorough_plan_is_the_tape_phase_and_nothing_else() -> None:
+    """No timed stage in it, and the travel is the only thing that may come first.
+
+    Mutation caught: putting `home_closed` or a measured run back into either plan,
+    which would make the scope that promises no timed run ask for a press.
+    """
+    timed = {"home_closed", "open_timed", "close_timed"}
+    for plan in (PLAN_PRECISE, PLAN_PRECISE_TRAVEL):
+        assert plan[0] == "tape_brief"
+        assert plan[-1] == "summary"
+        assert not timed & set(plan)
+    assert ("tape_brief", "height_read", *PLAN_PRECISE[1:]) == PLAN_PRECISE_TRAVEL
+
+
+async def test_the_thorough_scope_starts_from_the_times_the_cover_moves_on_today(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """What is not timed has to come from somewhere, and it is the model in use.
+
+    The file here writes 30 / 29 / 6 s for this cover and the profile it was *told* to
+    follow carries the shutter's real times; the profile wins, so those are what the
+    readings correct. Taking the file's instead would put every fraction out by a third
+    and the fit would come back on the bounds of its scale.
+
+    Mutation caught: adopting the file's numbers, or the profile's without scaling them
+    to this window.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await the_store(hass, entry).async_set_calibration(
+            UNIQUE_ID,
+            calibration_store.cover_calibration_data(
+                UNIQUE_ID, profile="tall", profile_wins=True, height=HEIGHT
+            ),
+        )
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS)
+        assert result["step_id"] == "saved_refined"
+        overrides = the_calibration(hass, entry)["overrides"]
+        assert overrides[CONF_OPENING_TIME] == pytest.approx(OPENING, abs=0.05)
+        assert overrides[CONF_CLOSING_TIME] == pytest.approx(CLOSING, abs=0.05)
+        assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
+        assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
+
+
+async def test_the_thorough_scope_writes_over_the_record_and_keeps_the_rest(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Save merges, exactly as the two scopes that time their runs do.
+
+    Mutation caught: a scope that writes its record whole and throws away a travel
+    nobody re-measured (final review, BUG-A) or a key it never touched.
+    """
+    async with calibrating(hass, tmp_path, NO_HEIGHT_PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        await the_store(hass, entry).async_set_calibration(
+            UNIQUE_ID,
+            calibration_store.cover_calibration_data(
+                UNIQUE_ID,
+                profile="tall",
+                height=HEIGHT,
+                overrides={
+                    CONF_OPENING_TIME: OPENING,
+                    CONF_CLOSING_TIME: CLOSING,
+                    CONF_SLAT_TIME: SLAT,
+                    CONF_STOP_LATENCY: 0.7,
+                },
+            ),
+        )
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS[:-1])
+        assert result["step_id"] == "summary_precise"
+        # The travel was not re-measured here, so it is the one already stored...
+        assert result["description_placeholders"]["height"] == f"{HEIGHT:.0f} cm"
+        assert CONF_HEIGHT in result["description_placeholders"]["keeping"]
+        # ...and the one key of the record this conversation has no opinion about is
+        # named as kept rather than quietly rewritten.
+        assert CONF_STOP_LATENCY in result["description_placeholders"]["keeping"]
+        result = await choose(hass, result, "save")
+        assert result["step_id"] == "saved_refined"
+        record = the_store(hass, entry).calibration(UNIQUE_ID)
+        assert record.height == HEIGHT
+        assert record.overrides[CONF_STOP_LATENCY] == 0.7
+        assert record.overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
+
+
+async def test_the_correction_offers_the_thorough_calibration_after_its_own_scopes(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Continua con la calibrazione approfondita", on the summary of a correction too.
+
+    It used to hang off the summary of path A alone, so a user who had just measured
+    this cover's own times and coefficients was one screen away from the four extra
+    points and had no way to them.
+
+    Mutation caught: leaving the correction's summary with Save alone, or sending the
+    button into a plan that times the runs again.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
+        assert result["step_id"] == "summary_correction"
+        assert result["menu_options"] == ["save", "refine", "cancel_flow"]
+        presses = len(runner.started)
+        # The shutter is at the bottom after the measured descent, so the phase is dealt
+        # from there: the ascent's quarter first, and the only full opening is the one
+        # the descent's readings need.
+        result = await drive(
+            hass,
+            freezer,
+            result,
+            (
+                Act(option="refine"),
+                Act(option="tape_start"),
+                Act(payload={"measured_cm": str(ascent_cm(0.25))}),
+                Act(option="accept_step"),
+                Act(payload={"measured_cm": str(descent_cm(0.25))}),
+                Act(option="accept_step"),
+                Act(payload={"measured_cm": str(descent_cm(0.75))}),
+                Act(option="accept_step"),
+                Act(payload={"measured_cm": str(ascent_cm(0.75))}),
+                Act(option="accept_step"),
+                Act(payload={"measured_cm": str(descent_cm(0.40))}),
+                Act(option="accept_step"),
+            ),
+        )
+        assert result["step_id"] == "summary_precise"
+        # Nothing was timed a second time: the four readings correct the presses.
+        assert len(runner.started) == presses
+        result = await choose(hass, result, "save")
+        assert result["step_id"] == "saved_refined"
+        overrides = the_calibration(hass, entry)["overrides"]
+        assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
+        assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
+
+
+async def test_a_cover_corrected_in_part_says_its_values_are_adjusted(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Three origins, not two: measured, inherited, and the mixture of the two.
+
+    "Solo i tempi" measures two of the five keys of the travel model and leaves the
+    other three coming from the profile. `Calibration source` said `guided` for that -
+    the same word as a cover every one of whose numbers was measured on it - and the
+    screen that sends the user to look at the attribute quoted the same wrong word.
+
+    Mutation caught: naming the origin off the path rather than off the record, which
+    would say "adjusted" for a thorough scope that overrides every key.
+    """
+    async with calibrating(hass, tmp_path, FOLLOWER_ONLY_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
+        assert result["step_id"] == "saved_refined"
+        assert result["description_placeholders"]["source"] == "profile tall, adjusted"
+        result = await choose(hass, result, "init")
+        result = await choose(hass, result, "finish")
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        await hass.async_block_till_done()
+        await set_connected(hass, True)
+        assert hass.states.get(ENTITY).attributes[ATTR_CALIBRATION_SOURCE] == (
+            "profile tall, adjusted"
+        )
+
+
+async def test_a_cover_corrected_throughout_is_measured_and_not_adjusted(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The scope that measures every key of the model leaves nothing of the profile in use.
+
+    The same cover as the test above, and the same profile: what decides the word is
+    what the cover is running on afterwards, not which path was walked.
+
+    Mutation caught: saying "adjusted" for every record that names a profile.
+    """
+    async with calibrating(hass, tmp_path, FOLLOWER_ONLY_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_POINTS)
+        assert result["description_placeholders"]["source"] == "guided"
 
 
 # --------------------------------------------------------------------------------------
@@ -2486,7 +2835,7 @@ async def test_the_short_summary_says_what_it_replaces_and_what_it_leaves_alone(
             ),
         )
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES[:-1])
-        assert result["step_id"] == "summary_short"
+        assert result["step_id"] == "summary_correction"
         placeholders = result["description_placeholders"]
         replacing = placeholders["replacing"].split(", ")
         keeping = placeholders["keeping"].split(", ")
@@ -2519,7 +2868,7 @@ async def test_measuring_a_window_again_starts_from_the_travel_it_is_known_to_ha
         assert result["step_id"] == "path"
 
         result = await drive(hass, freezer, result, PATH_C_TIMES[3:-1])
-        assert result["step_id"] == "summary_short"
+        assert result["step_id"] == "summary_correction"
         # The screen before Save says what it is scaling by and what it will keep...
         assert result["description_placeholders"]["height"] == f"{HEIGHT:.0f} cm"
         assert CONF_HEIGHT in result["description_placeholders"]["keeping"]
