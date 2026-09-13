@@ -563,9 +563,14 @@ without a release having to rebuild it.
 The panel is Lit 3 + TypeScript, bundled by esbuild into a single ES module:
 
 ```
-panel_src/                                          source, not shipped
-custom_components/myhome/frontend/myhome-panel.js   built, committed, shipped
+panel_src/                                                 source, not shipped
+custom_components/myhome/frontend/myhome-panel.js          built, committed, shipped
+custom_components/myhome/frontend/THIRD_PARTY_NOTICES.md   Lit's BSD-3 notice, shipped
 ```
+
+Lit is bundled into that file, and BSD-3-Clause asks a binary redistribution to carry
+its copyright notice: esbuild's `legalComments: "eof"` puts the notices at the end of
+the bundle and the full licence text ships beside it.
 
 The built file is committed because HACS copies `custom_components/myhome/` as it is
 at the tag and `release.yml` zips the same directory: there is no build step at a

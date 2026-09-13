@@ -59,6 +59,14 @@ Markdown library, no icon font, no date library — `Intl` and the frontend's ow
 
 Lit is bundled rather than borrowed from a frontend global: a global is not a contract.
 
+Lit is BSD-3-Clause, and clause 2 asks a binary redistribution to reproduce its copyright
+notice — which the shipped bundle is, since HACS copies it to every installation. So
+`build.mjs` sets `legalComments: "eof"`: esbuild collects the `@license` headers it would
+otherwise drop and prints them once at the end of the file (half a kilobyte), and the full
+text of the conditions and the disclaimer ships beside the bundle in
+`custom_components/myhome/frontend/THIRD_PARTY_NOTICES.md`. A new runtime dependency means
+a new entry in that file; `tests/test_panel_build.py` asserts the notice is in the bundle.
+
 ## Layout
 
 ```

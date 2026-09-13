@@ -4,7 +4,7 @@ The panel ships as a built file (`custom_components/myhome/frontend/myhome-panel
 because HACS copies the integration directory as it exists at the tag and `release.yml`
 zips the same directory: there is no build step at the user's end, and a branch install
 with no bundle would show a blank page. The cost of that decision is a generated file in
-the tree, and these four tests are half of what pays for it.
+the tree, and these tests are half of what pays for it.
 
 The other half is `.github/workflows/panel.yml`, which rebuilds the bundle from
 `panel_src/` and fails on any difference. That job needs node; these tests need nothing,
@@ -90,6 +90,31 @@ def test_the_served_url_resolves_to_the_committed_file() -> None:
     served = f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}"
     assert served == "/myhome_panel/myhome-panel.js"
     assert (Path(PANEL_DIR) / served.removeprefix(f"{PANEL_STATIC_URL}/")).is_file()
+
+
+def test_the_bundle_carries_lits_copyright_notice() -> None:
+    """Lit is BSD-3-Clause, and the bundle is a binary redistribution of it.
+
+    Clause 2 asks a redistribution in binary form to reproduce the copyright notice, the
+    conditions and the disclaimer "in the documentation and/or other materials provided
+    with the distribution". The bundle is what HACS copies into every installation and
+    what `release.yml` puts in the zip, so the notice has to be in it (esbuild's
+    `legalComments: "eof"`) and the text it refers to has to ship beside it.
+
+    Mutation caught: `legalComments: "none"`, which silently strips every `@license`
+    header out of the file that is actually distributed - the state this started in - or
+    deleting the notices file that the shortened notice points at.
+    """
+    text = BUNDLE.read_text(encoding="utf-8")
+    assert "SPDX-License-Identifier: BSD-3-Clause" in text
+    assert "Google LLC" in text
+
+    notices = BUNDLE.parent / "THIRD_PARTY_NOTICES.md"
+    assert notices.is_file()
+    licence = notices.read_text(encoding="utf-8")
+    assert "BSD 3-Clause License" in licence
+    # The disclaimer is the half of the licence a summary always loses.
+    assert "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS" in licence
 
 
 def test_the_bundle_stays_inside_its_budget() -> None:

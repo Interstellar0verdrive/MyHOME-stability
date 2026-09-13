@@ -38,7 +38,13 @@ await build({
   // Off: a source map would double what HACS ships, and the bundle is read by nobody -
   // the source next to it is the thing to read.
   sourcemap: false,
-  legalComments: "none",
+  // Lit is BSD-3-Clause, and clause 2 asks a *binary* redistribution to reproduce the
+  // copyright notice. The bundle is exactly that: HACS copies it to every installation
+  // and `release.yml` puts it in the zip. `"eof"` collects the `@license` headers esbuild
+  // would otherwise drop and prints them once at the end of the file, which costs half a
+  // kilobyte and is the only attribution that travels with the thing being distributed.
+  // The full licence text is beside the bundle in THIRD_PARTY_NOTICES.md.
+  legalComments: "eof",
   banner: { js: BANNER },
   charset: "utf8",
   logLevel: "info",
