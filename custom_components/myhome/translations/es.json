@@ -766,14 +766,14 @@
       "no_basic_covers": "Todas las persianas de esta pasarela informan de su propia posición: no hay ningún modelo de recorrido que calibrar ni nada que hacer aquí."
     },
     "assign": {
-      "handle": "Mueve {cover} a otro grupo o cambia el orden",
-      "handle_hint": "Arrastra para asignar o reordenar, Intro para elegir de una lista",
+      "handle": "Mover {cover} a otro grupo o cambiar el orden",
+      "handle_hint": "Arrastrar para asignar o reordenar, Intro para elegir de una lista",
       "drop_zone": "Quitar del perfil — soltar aquí",
-      "armed": "Toca el grupo de destino para «{cover}»",
+      "armed": "Tocar el grupo de destino para «{cover}»",
       "target_profile": "el perfil «{profile}»",
       "target_none": "«Sin perfil»",
       "announce": {
-        "armed": "Toca el grupo de destino.",
+        "armed": "Tocar el grupo de destino.",
         "pending": "«{cover}» queda pendiente, hacia {target}. Todavía no se ha escrito nada.",
         "withdrawn": "«{cover}» vuelve donde estaba: cambio retirado.",
         "reordered": "Orden actualizado: se recordará.",

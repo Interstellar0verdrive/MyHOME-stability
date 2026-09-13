@@ -769,11 +769,11 @@
       "handle": "Déplacer {cover} vers un autre groupe, ou le réordonner",
       "handle_hint": "Glisser pour attribuer ou réordonner, Entrée pour choisir dans une liste",
       "drop_zone": "Retirer du profil — déposer ici",
-      "armed": "Touchez le groupe de destination pour « {cover} »",
+      "armed": "Toucher le groupe de destination pour « {cover} »",
       "target_profile": "le profil « {profile} »",
       "target_none": "« Sans profil »",
       "announce": {
-        "armed": "Touchez le groupe de destination.",
+        "armed": "Toucher le groupe de destination.",
         "pending": "« {cover} » est en attente, vers {target}. Rien n'est encore écrit.",
         "withdrawn": "« {cover} » revient là où il était : modification retirée.",
         "reordered": "Ordre mis à jour : il sera retenu.",
@@ -896,7 +896,7 @@
       },
       "remove": {
         "title": "Retirer la mesure ?",
-        "body": "Les mesures faites sur « {cover} » seront retirées et ne se récupèrent pas. Le volet reviendra à {destination}.",
+        "body": "Les mesures faites sur « {cover} » seront retirées et ne se récupèrent pas. Le volet se remettra à utiliser {destination}.",
         "travel_stays": "La course du tablier reste : quelqu'un l'a mesurée au mètre.",
         "action": "Retirer la mesure"
       },

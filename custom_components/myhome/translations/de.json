@@ -747,7 +747,7 @@
         "profile": "Profil „{profile}“",
         "no_profile": "Ohne Profil",
         "no_profile_note": "Werte aus der Konfigurationsdatei oder die Vorgaben. Das ist kein Fehler: ein Rollladen mit eigenen Messungen steht hier bestens.",
-        "values": "Referenzweg {travel} cm · Auffahrt {opening} s · Abfahrt {closing} s · Lamellen {slat} s",
+        "values": "Bezugsweg {travel} cm · Auffahrt {opening} s · Abfahrt {closing} s · Lamellen {slat} s",
         "measured_on": "Gemessen an {cover} · {date}",
         "provenance_missing": "Wo es gemessen wurde, ist nicht festgehalten.",
         "count": "{count} Rollläden",
@@ -774,7 +774,7 @@
       "target_none": "„Ohne Profil“",
       "announce": {
         "armed": "Auf die Zielgruppe tippen.",
-        "pending": "„{cover}“ steht aus, in Richtung {target}. Noch ist nichts geschrieben.",
+        "pending": "„{cover}“ steht aus, Ziel: {target}. Noch ist nichts geschrieben.",
         "withdrawn": "„{cover}“ geht dorthin zurück, wo er war: Änderung zurückgenommen.",
         "reordered": "Reihenfolge aktualisiert: sie wird gemerkt.",
         "drag_cancelled": "Ziehen abgebrochen.",
@@ -802,8 +802,8 @@
       "travel": {
         "title": "Wie weit läuft der Panzer dieser Rollläden?",
         "hint": "Ein Profil ist die Messung eines Rollladens mit einem bestimmten Weg und wird auf die anderen anteilig umgerechnet. Bei diesen ist der Weg nicht bekannt: den Abstand messen, den die Unterkante von ganz geschlossen bis ganz offen zurücklegt, und ihn in Zentimetern eintragen (Dezimalstellen mit Komma oder mit Punkt).",
-        "label": "Weg des Panzers",
-        "aria": "Weg des Panzers in Zentimetern",
+        "label": "Panzerweg",
+        "aria": "Panzerweg in Zentimetern",
         "placeholder": "z. B. 145",
         "required": "Der Weg wird gebraucht, in Zentimetern."
       },
@@ -897,7 +897,7 @@
       "remove": {
         "title": "Die Messung entfernen?",
         "body": "Die an „{cover}“ vorgenommenen Messungen werden entfernt und lassen sich nicht zurückholen. Der Rollladen verwendet dann wieder {destination}.",
-        "travel_stays": "Der Weg des Panzers bleibt: jemand hat ihn mit dem Maßband gemessen.",
+        "travel_stays": "Der Panzerweg bleibt: jemand hat ihn mit dem Maßband gemessen.",
         "action": "Die Messung entfernen"
       },
       "destination": {
@@ -911,7 +911,7 @@
       "name": "Profil „{profile}“",
       "stored": "Gespeichertes Profil",
       "from_file": "Profil aus der Konfigurationsdatei: hier nur lesbar.",
-      "reference_travel": "Referenzweg",
+      "reference_travel": "Bezugsweg",
       "provenance": "Gemessen an {cover} · {date}",
       "provenance_missing": "Wo es gemessen wurde, ist nicht festgehalten.",
       "provenance_now_profile": "folgt jetzt „{profile}“",
@@ -1140,7 +1140,7 @@
       "message": "Es ist zu viel Zeit vergangen: diese Änderung lässt sich nicht mehr rückgängig machen."
     },
     "missing_travel": {
-      "message": "Bei {count} Rollläden ist der Weg des Panzers unbekannt: {covers}. Ein Profil lässt sich nur auf einen Rollladen übertragen, dessen Weg bekannt ist."
+      "message": "Bei {count} Rollläden ist der Panzerweg unbekannt: {covers}. Ein Profil lässt sich nur auf einen Rollladen übertragen, dessen Weg bekannt ist."
     },
     "invalid_name": {
       "message": "„{profile}“ ist kein brauchbarer Profilname: nur Buchstaben, Ziffern und Unterstriche, keine Leerzeichen und keine Akzente."

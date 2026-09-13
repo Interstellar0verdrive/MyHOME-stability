@@ -769,11 +769,11 @@
       "handle": "Mover {cover} para outro grupo ou reordenar",
       "handle_hint": "Arrastar para atribuir ou reordenar, Enter para escolher de uma lista",
       "drop_zone": "Retirar do perfil — largar aqui",
-      "armed": "Toque no grupo de destino para «{cover}»",
+      "armed": "Tocar no grupo de destino para «{cover}»",
       "target_profile": "o perfil «{profile}»",
       "target_none": "«Sem perfil»",
       "announce": {
-        "armed": "Toque no grupo de destino.",
+        "armed": "Tocar no grupo de destino.",
         "pending": "«{cover}» fica pendente, para {target}. Ainda não foi escrito nada.",
         "withdrawn": "«{cover}» volta ao sítio onde estava: alteração retirada.",
         "reordered": "Ordem atualizada: fica memorizada.",

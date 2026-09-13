@@ -767,13 +767,13 @@
     },
     "assign": {
       "handle": "Sposta {cover} in un altro gruppo o riordina",
-      "handle_hint": "Trascina per assegnare o riordinare, Invio per scegliere da un elenco",
+      "handle_hint": "Trascinare per assegnare o riordinare, Invio per scegliere da un elenco",
       "drop_zone": "Togli dal profilo — rilascia qui",
-      "armed": "Tocca il gruppo di destinazione per “{cover}”",
+      "armed": "Toccare il gruppo di destinazione per “{cover}”",
       "target_profile": "il profilo “{profile}”",
       "target_none": "“Senza profilo”",
       "announce": {
-        "armed": "Tocca il gruppo di destinazione.",
+        "armed": "Toccare il gruppo di destinazione.",
         "pending": "“{cover}” in sospeso verso {target}. Niente è ancora scritto.",
         "withdrawn": "“{cover}” torna dov'era: modifica ritirata.",
         "reordered": "Ordine aggiornato: verrà ricordato.",
@@ -957,7 +957,7 @@
       },
       "delete": {
         "title": "Eliminare il profilo “{profile}”?",
-        "affects": "Tocca queste tapparelle:",
+        "affects": "Riguarda queste tapparelle:",
         "body": "Torneranno ai valori del file di configurazione, dove esistono, o ai predefiniti. Restano le loro corse e i loro valori propri. Le misure del profilo non si recuperano.",
         "action": "Elimina il profilo"
       }
