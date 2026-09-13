@@ -426,14 +426,17 @@ re-read, while a dialog is open.
 never reported that it had started, so there is no instant to measure against and
 the step was abandoned. The motor has most likely started all the same: a stop was
 sent right after the error, but check the shutter is not still running before
-repeating the step. Check too that nothing else is holding it — a wall pushbutton,
-an automation. If it happens every time, that actuator does not report its own
-status and the guided calibration cannot measure it; the
+repeating the step. Why the actuator stayed silent is not something the dialog can
+tell — a shutter that something else was already driving is caught before the step
+starts, and says **"The cover is already moving"** instead. If it happens every
+time, that actuator does not report its own status and the guided calibration
+cannot measure it; the
 [action-based recipe](recipes.md#calibrating-a-shutter-in-centimetres) still can.
 
-**"The command never reached the bus."** The gateway neither wrote the frame nor
-said it had given up on it. Check the connection on the integration page and repeat
-the step.
+**"The command never reached the bus."** The gateway would not take the frame,
+dropped it, or never said what became of it — which of the three is not something
+the dialog can tell — so the shutter was never asked to move and nothing was
+measured. Check the connection on the integration page and repeat the step.
 
 **The press went in late, or was missed.** Repeat the step rather than accepting
 the number: that is what the confirmation screen after every measurement is for.

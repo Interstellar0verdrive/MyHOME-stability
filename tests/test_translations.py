@@ -815,6 +815,7 @@ DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
         "No profile (the file's values, or the defaults)",
         "The cover did not answer",
         "The command never reached the bus",
+        "The cover is already moving",
         "This cover is already being calibrated",
     ),
     "docs/configuration.md": (
