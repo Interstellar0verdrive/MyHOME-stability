@@ -1091,7 +1091,9 @@ async def test_the_travel_can_say_the_shutter_never_reached_the_top(
     every other measurement out, because they are all compared against it.
 
     Mutation caught: leaving the height with "Ripeti la misura" alone, which asks for
-    the number again without opening the shutter again.
+    the number again without opening the shutter again; or keeping the travel that was
+    just disowned, which opens the form again on the very number the user said was
+    wrong and is one Submit away from being believed.
     """
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
@@ -1104,6 +1106,12 @@ async def test_the_travel_can_say_the_shutter_never_reached_the_top(
         assert result["step_id"] == "height"
         assert runner.stops == stops + 1
         assert runner.homed[homed:] == [DIRECTION_OPEN]
+        # The travel read off a shutter that never reached the top is gone with it, and
+        # the field opens on what this window is otherwise said to have - exactly as it
+        # does after "Ripeti la misura".
+        flow = next(iter(hass.config_entries.options._progress.values()))  # noqa: SLF001
+        assert flow._measured.height is None  # noqa: SLF001
+        assert flow._measured.height_measured is False  # noqa: SLF001
 
 
 async def test_the_watchdog_is_put_off_again_by_every_automatic_movement(

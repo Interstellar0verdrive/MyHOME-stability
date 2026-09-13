@@ -2385,7 +2385,19 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         (`cover._async_calib_home`); in path B this is the only movement of the path.
         Homing here rather than in a stage of its own is what makes "Ripeti questo passo"
         put the shutter back where the reading needs it.
+
+        A travel already written down is thrown away when this stage is re-entered by
+        "Non ha fatto quello che doveva" - which is what `_stop_first` marks, and the
+        only way back in here. The screen that offers it says the shutter never reached
+        the top, so the number read off it is worth no more than the reading
+        `repeat_measure` doubts, and that one is thrown away too; leaving it behind
+        would open the form again on the very number the user has just disowned. A
+        travel carried in from somewhere else - path C keeps the one path B's check
+        measured - is not touched, because this stage is then entered with nothing to
+        stop first.
         """
+        if self._stop_first:
+            self._forget_the_travel()
         return await self._async_movement(
             step_id="height_read",
             action=HOMING_ACTION[DIRECTION_OPEN],
@@ -2445,9 +2457,14 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         so there is nothing to re-run; the tape readings have their own step to repeat
         (`repeat_step`), which does re-run the movements.
         """
+        self._forget_the_travel()
+        return await self.async_step_height()
+
+    @callback
+    def _forget_the_travel(self) -> None:
+        """Take back a travel that is not one: the form opens on nothing again."""
         self._measured.height = None
         self._measured.height_measured = False
-        return await self.async_step_height()
 
     # --------------------------------------------------------- stages: the measured runs
     async def _async_fraction_stage(
