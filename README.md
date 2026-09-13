@@ -13,7 +13,7 @@ Assistant releases** — sessions that detect a dead connection and reconnect on
 their own, commands that are never silently dropped, strict configuration
 validation, and closed deprecations.
 
-- Current release: **0.4.0** (7 September 2026) — see [CHANGELOG.md](CHANGELOG.md)
+- Current release: **0.5.0** (13 September 2026) — see [CHANGELOG.md](CHANGELOG.md)
 - Requires **Home Assistant 2026.8.0 or newer**
 - Devices are declared in a YAML file (`myhome.yaml`); the gateway is added from the UI
 
@@ -186,7 +186,27 @@ copy-paste automations.
 
 ## What's new / Upgrading
 
-**0.4.0** (7 September 2026) is the current release. It brings three additions, all
+**0.5.0** (13 September 2026) is the current release. Its one theme is that a basic
+roller shutter can be **calibrated without a stopwatch**: **Settings → Devices &
+services → MyHOME → Configure → "Calibrate a cover"** drives the shutter, times its
+runs from the actuator's own status frames, asks for a few tape readings and stores
+the result inside Home Assistant, where the cover reads it. A basic calibration takes
+about four minutes and lands within a couple of centimetres of the end stops; a
+thorough one adds four readings and a check. **Profiles** let every similar shutter
+inherit a measured one, rescaled to its own curtain travel, and a **correction** path
+refines a cover that stops in the wrong place. Nothing is written to `myhome.yaml`,
+covers that are not calibrated this way behave exactly as before, and the `Calibration
+source` attribute always says where a cover's values come from. See
+[Guided calibration](docs/guided-calibration.md).
+
+The 0.4.x series prepared the ground: a **roll model** for basic covers (the curtain
+speeds up as the roll grows, so 50 % of the time is not 50 % of the travel), a
+calibration in centimetres through two actions, and a run clock that starts from the
+gateway's own answer rather than from the moment the command was queued, which is
+what keeps a dozen shutters commanded together from all stopping short. Details for
+each step are in [CHANGELOG.md](CHANGELOG.md).
+
+**0.4.0** (7 September 2026) brought three additions, all
 opt-in or additive, with no renamed entity and no configuration change required:
 
 **A two-phase travel model for basic covers.** On most roller shutters the first
