@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profielen en rolluiken",
-        "description": "Een **profiel** beschrijft één soort rolluik: hoe lang het erover doet, hoe lang het openen van de lamellen duurt en hoe het pantser op de as wordt gewikkeld. Elk rolluik kan er een volgen, en Home Assistant past het aan de loopafstand van het pantser van dat rolluik aan.\n\nEr zijn nu {profiles} profielen en {covers} eenvoudige rolluiken op deze gateway.",
+        "description": "Een **profiel** beschrijft één soort rolluik: hoe lang het erover doet, hoe lang het openen van de lamellen duurt en hoe het pantser op de as wordt gewikkeld. Elk rolluik kan er een volgen, en Home Assistant past het aan de loopafstand van het pantser van dat rolluik aan.\n\nProfielen: {profiles} · Eenvoudige rolluiken: {covers}",
         "menu_options": {
           "assign_covers": "Geef elk rolluik een profiel",
           "pick_profile": "Een profiel bekijken, wijzigen of verwijderen",
@@ -147,8 +147,8 @@
         "description": "**Wat er gaat gebeuren**: de waarden hieronder vervangen de gemeten waarden, voor alle rolluiken die dit profiel volgen. Het rolluik beweegt niet: alleen de waarden worden gewijzigd.\n\n**Wat u moet doen**: wijzig alleen waarden waarvoor u betrouwbaardere gegevens hebt dan de kalibratie, bijvoorbeeld de looptijden van de fabrikant. Laat de overige waarden ongewijzigd. Decimalen mogen met een komma of met een punt.",
         "data": {
           "reference_height": "Referentieloopafstand (cm)",
-          "opening_time": "Openingstijd (s)",
-          "closing_time": "Sluitingstijd (s)",
+          "opening_time": "Stijgtijd (s)",
+          "closing_time": "Daaltijd (s)",
           "slat_time": "Openingstijd van de lamellen (s)",
           "opening_roll": "Wikkelfactor bij het openen",
           "closing_roll": "Wikkelfactor bij het sluiten"
@@ -215,8 +215,8 @@
         "description": "**Wat er gaat gebeuren**: de waarden hieronder gelden alleen voor dit rolluik en gaan voor op zowel het profiel als het configuratiebestand. Het rolluik beweegt niet: alleen de waarden worden gewijzigd.\n\n**Wat u moet doen**: voer alleen de waarden in die u voor dit rolluik wilt instellen. Een leeg veld betekent niet nul: de waarde uit het profiel of het bestand wordt dan weer gebruikt. Decimalen mogen met een komma of met een punt.",
         "data": {
           "height": "Loopafstand van het pantser (cm)",
-          "opening_time": "Openingstijd (s)",
-          "closing_time": "Sluitingstijd (s)",
+          "opening_time": "Stijgtijd (s)",
+          "closing_time": "Daaltijd (s)",
           "slat_time": "Openingstijd van de lamellen (s)",
           "opening_roll": "Wikkelfactor bij het openen",
           "closing_roll": "Wikkelfactor bij het sluiten"

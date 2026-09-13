@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profili e tapparelle",
-        "description": "Un **profilo** descrive un tipo di tapparella: i tempi di corsa, il tempo di apertura delle lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa del telo.\n\nAl momento ci sono {profiles} profili e {covers} tapparelle semplici su questo gateway.",
+        "description": "Un **profilo** descrive un tipo di tapparella: i tempi di corsa, il tempo di apertura delle lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa del telo.\n\nProfili: {profiles} · Tapparelle semplici: {covers}",
         "menu_options": {
           "assign_covers": "Assegna un profilo a ogni tapparella",
           "pick_profile": "Vedi, modifica o elimina un profilo",
@@ -147,8 +147,8 @@
         "description": "**Cosa sta per succedere**: i valori qui sotto sostituiscono quelli misurati, per tutte le tapparelle che seguono questo profilo. La tapparella non si muove: vengono modificati solo i valori.\n\n**Cosa fare**: correggere solo i valori per cui si dispone di dati più affidabili della calibrazione, per esempio i tempi dichiarati dal costruttore. Lasciare invariati gli altri valori. I decimali si scrivono con la virgola o con il punto.",
         "data": {
           "reference_height": "Corsa di riferimento (cm)",
-          "opening_time": "Tempo di apertura (s)",
-          "closing_time": "Tempo di chiusura (s)",
+          "opening_time": "Tempo di salita (s)",
+          "closing_time": "Tempo di discesa (s)",
           "slat_time": "Tempo di apertura delle lamelle (s)",
           "opening_roll": "Coefficiente di rullo in apertura",
           "closing_roll": "Coefficiente di rullo in chiusura"
@@ -215,8 +215,8 @@
         "description": "**Cosa sta per succedere**: i valori qui sotto valgono solo per questa tapparella e hanno la precedenza sia sul profilo sia sul file di configurazione. La tapparella non si muove: vengono modificati solo i valori.\n\n**Cosa fare**: inserire solo i valori da impostare per questa tapparella. Lasciare un campo vuoto non equivale a inserire zero: significa usare nuovamente il valore del profilo o del file. I decimali si scrivono con la virgola o con il punto.",
         "data": {
           "height": "Corsa del telo (cm)",
-          "opening_time": "Tempo di apertura (s)",
-          "closing_time": "Tempo di chiusura (s)",
+          "opening_time": "Tempo di salita (s)",
+          "closing_time": "Tempo di discesa (s)",
           "slat_time": "Tempo di apertura delle lamelle (s)",
           "opening_roll": "Coefficiente di rullo in apertura",
           "closing_roll": "Coefficiente di rullo in chiusura"
@@ -715,12 +715,15 @@
       "all_rooms": "Tutte le stanze",
       "opens_configure": "Si apre il dialogo Configura. Alla chiusura il pannello si aggiorna da solo.",
       "not_loaded": "Questo gateway non è caricato: per ora non c'è niente da leggere.",
+      "not_yet": "Questa schermata arriva in una versione successiva. Fino ad allora “Configura” fa tutto quello che farà.",
+      "polling": "Gli aggiornamenti in tempo reale non sono disponibili su questa versione: la pagina si aggiorna da sola ogni 30 secondi.",
       "action": {
         "menu": "Apri il menu di Home Assistant",
         "configure": "Apri Configura",
         "close": "Chiudi",
         "cancel": "Annulla",
         "back": "Indietro",
+        "retry": "Riprova",
         "save": "Salva",
         "show_all": "Mostra tutti i valori, compresi i coefficienti di rullo",
         "hide_all": "Nascondi i coefficienti di rullo"
@@ -741,14 +744,18 @@
     },
     "overview": {
       "title": "Profili e tapparelle",
-      "summary": "Su questo gateway ci sono {profiles} profili e {covers} tapparelle semplici.",
+      "summary": "Profili: {profiles} · Tapparelle semplici: {covers}",
       "explanation": "Un profilo descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
       "group": {
         "profile": "Profilo “{profile}”",
+        "missing": "Questo profilo non è più definito: le tapparelle qui sotto sono tornate in silenzio alla propria configurazione.",
+        "from_file": "Definito nel file di configurazione, e di sola lettura da qui.",
         "no_profile": "Senza profilo",
         "no_profile_note": "Valori dal file di configurazione o predefiniti. Non è un errore: anche una tapparella con misure proprie sta benissimo qui.",
         "values": "Corsa di riferimento {travel} cm · salita {opening} s · discesa {closing} s · lamelle {slat} s",
+        "values_unknown": "Nessuno definisce questo profilo, quindi non ha valori.",
         "measured_on": "Misurato su {cover} · {date}",
+        "measured_on_gone": "Misurato su una tapparella che questo gateway non ha più · {date}",
         "provenance_missing": "Non è registrato dove è stato misurato.",
         "count": "{count} tapparelle",
         "count_one": "1 tapparella",
@@ -761,13 +768,20 @@
         "travel_needed": "corsa da inserire",
         "follows": "segue “{profile}”",
         "profile_missing": "Il profilo “{profile}” non è più definito: questa tapparella sta usando la propria configurazione.",
-        "from_file": "Questo profilo lo assegna il file di configurazione: si cambia lì, non qui."
+        "from_file": "Questo profilo lo assegna il file di configurazione: si cambia lì, non qui.",
+        "origin_inherited": "Ereditata",
+        "origin_adjusted": "Adattata"
       },
-      "no_basic_covers": "Tutte le tapparelle di questo gateway riportano da sole la posizione: non c'è nessun modello di corsa da calibrare e niente da fare da qui."
+      "no_basic_covers": "Tutte le tapparelle di questo gateway riportano da sole la posizione: non c'è nessun modello di corsa da calibrare e niente da fare da qui.",
+      "no_results": "Nessuna tapparella corrisponde a questa ricerca.",
+      "action": {
+        "clear_filters": "Azzera la ricerca e il filtro"
+      }
     },
     "assign": {
       "handle": "Sposta {cover} in un altro gruppo o riordina",
       "handle_hint": "Trascinare per assegnare o riordinare, Invio per scegliere da un elenco",
+      "handle_inert": "L'assegnazione e il riordino arrivano in una versione successiva",
       "drop_zone": "Togli dal profilo — rilascia qui",
       "armed": "Toccare il gruppo di destinazione per “{cover}”",
       "target_profile": "il profilo “{profile}”",
@@ -852,6 +866,8 @@
     },
     "detail": {
       "title": "Dettaglio della tapparella",
+      "named": "Tapparella «{cover}»",
+      "unknown": "Questo gateway non ha nessuna tapparella con quell'identificatore.",
       "measured_at": "Misurata il {date}",
       "level_basic": "calibrazione base",
       "level_thorough": "calibrazione approfondita",
@@ -912,6 +928,7 @@
       "name": "Profilo “{profile}”",
       "stored": "Profilo dell'archivio",
       "from_file": "Profilo del file di configurazione: qui è di sola lettura.",
+      "unknown": "Nessun profilo con quel nome è definito o seguito qui.",
       "reference_travel": "Corsa di riferimento",
       "provenance": "Misurato su {cover} · {date}",
       "provenance_missing": "Non è registrato dove è stato misurato.",
@@ -976,6 +993,14 @@
         "title": "Le modifiche vengono applicate…",
         "body": "Le tapparelle non sono disponibili per qualche secondo"
       }
+    },
+    "screen": {
+      "phase": "{phase} · {index} di {count}",
+      "new_text": "testo nuovo — non ancora tradotto",
+      "not_in_this_version": "Questo passaggio appartiene alla calibrazione guidata, che si sposta nel pannello in una versione successiva.",
+      "motor": "Motore",
+      "position": "Posizione stimata",
+      "completed": "Completato"
     },
     "error": {
       "not_found": "Il pannello non è riuscito a leggere questo gateway.",

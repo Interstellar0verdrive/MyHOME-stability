@@ -27,9 +27,13 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
+from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er, translation
 
-from custom_components.myhome import panel_write
+from custom_components.myhome import panel_data, panel_write
+from custom_components.myhome.calibration_flow import (
+    ERROR_NOT_A_NUMBER,
+    ERROR_OUT_OF_RANGE,
+)
 from custom_components.myhome.calibration_store import (
     async_forget_store,
     cover_calibration_data,
@@ -61,6 +65,7 @@ from custom_components.myhome.panel_schemas import (
     ERROR_UNDO_EXPIRED,
     ERROR_UNKNOWN_COVER,
     ERROR_UNKNOWN_ENTRY,
+    ERROR_UNKNOWN_PROFILE,
     ERROR_WRITE_IN_PROGRESS,
     MEASURABLE_KEYS,
     OVERVIEW_KEYS,
@@ -684,6 +689,72 @@ async def test_the_language_defaults_to_the_one_this_home_assistant_speaks(
         assert texts["fallback"] is False
 
 
+def leaves(tree: Any, prefix: str = "") -> set[str]:
+    """Every dotted path of a served block that ends on a string."""
+    if not isinstance(tree, dict):
+        return {prefix}
+    return {key for name, value in tree.items() for key in leaves(value, f"{prefix}.{name}")}
+
+
+async def test_a_language_still_being_written_is_served_over_english(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A key a language has not reached yet arrives in English, not as a dotted key.
+
+    The decision of 14 September: `config_panel` is written in English and Italian while
+    the screens that read it are built, and the other five catch up in one translation
+    lot before the release. Whole-file selection would put a French user in front of an
+    English panel the moment one key was added - or, with no fallback at all, in front of
+    a screen of identifiers. `async_texts` lays the language over English key by key
+    instead.
+
+    Mutation caught: returning the requested language's file as it stands; merging only
+    the top level (a `panel` block would replace English's whole tree); mutating the
+    cached English tree while merging, which would serve French words to an English user.
+    """
+    english = {
+        "config_panel": {"overview": {"title": "Profiles and covers", "summary": "Profiles: 2"}},
+        "options": {"step": {"init": {"title": "Menu"}}},
+    }
+    french = {
+        "config_panel": {"overview": {"title": "Profils et volets"}},
+        "options": {"step": {"init": {"title": "Menu"}}},
+    }
+    files = {"en": english, "fr": french}
+    with patch.object(panel_data, "_read_language", side_effect=files.get):
+        answer = await panel_data.async_texts(hass, "fr")
+        assert answer["language"] == "fr"
+        assert answer["fallback"] is False
+        panel = answer["texts"]["panel"]
+        assert panel["overview"]["title"] == "Profils et volets"
+        assert panel["overview"]["summary"] == "Profiles: 2"
+
+        # ...and English is still English: the merge copies, it does not write back.
+        served = await panel_data.async_texts(hass, "en")
+        assert served["texts"]["panel"]["overview"]["title"] == "Profiles and covers"
+
+
+@pytest.mark.parametrize("language", ["it", "fr", "nl", "es", "de", "pt"])
+async def test_every_sentence_english_has_reaches_every_language(
+    hass: HomeAssistant, tmp_path, language: str
+) -> None:
+    """The invariant the two-language rule rests on, over the real files.
+
+    `tests/test_translations.py` lets the five lagging files carry a subset of
+    `config_panel`; this is the other half of that permission - whatever they are missing,
+    the panel is still served a complete book, because English is underneath. It holds
+    just as well on the day the translation lot fills them.
+
+    Mutation caught: dropping the merge, which would make a missing key a dotted
+    identifier on a French screen with nothing failing anywhere.
+    """
+    english = await panel_data.async_texts(hass, "en")
+    served = await panel_data.async_texts(hass, language)
+    assert served["language"] == language
+    for block in english["texts"]:
+        assert leaves(served["texts"][block]) == leaves(english["texts"][block]), block
+
+
 async def test_the_panels_own_block_arrives_under_the_name_the_frontend_uses(
     hass: HomeAssistant, tmp_path, hass_ws_client
 ) -> None:
@@ -968,6 +1039,78 @@ async def test_assign_refuses_the_whole_batch_when_a_window_has_no_travel(
         # Nothing was written: the item that would have passed did not either.
         overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
         assert row_of(overview, SECOND)["profile"] == "tall"
+
+
+# The three refusals a batch can raise whose sentence is written around the *item's* own
+# words: a profile name, a field name, a pair of bounds. `_refuse_the_batch` rebuilds one
+# refusal for the whole batch and used to throw those away, so the sentence reached the
+# screen with its braces showing - REVIEW-0.6.0-lot6 §5.1, and `out_of_range` is reachable
+# from the review panel's own "corse mancanti" form, because `height` is `vol.Any(float,
+# int, str)` and everything else about it is decided here.
+BRACED_REFUSALS: tuple[tuple[str, dict[str, Any], str], ...] = (
+    (ERROR_UNKNOWN_PROFILE, {"cover_unique_id": FIRST, "profile": "gone"}, "gone"),
+    (
+        ERROR_NOT_A_NUMBER,
+        {"cover_unique_id": FIRST, "profile": "tall", "height": "abc"},
+        "height",
+    ),
+    (
+        ERROR_OUT_OF_RANGE,
+        {"cover_unique_id": FIRST, "profile": "tall", "height": 5000},
+        "height",
+    ),
+    # The one the batch's own `{covers}`/`{count}` are for: it has to keep working.
+    (ERROR_MISSING_TRAVEL, {"cover_unique_id": THIRD, "profile": "tall"}, THIRD),
+)
+
+
+@pytest.mark.parametrize(
+    ("key", "assignment", "expected"),
+    BRACED_REFUSALS,
+    ids=[key for key, _assignment, _expected in BRACED_REFUSALS],
+)
+async def test_a_refused_batch_carries_the_words_its_own_sentence_asks_for(
+    hass: HomeAssistant,
+    tmp_path,
+    hass_ws_client,
+    key: str,
+    assignment: dict[str, Any],
+    expected: str,
+) -> None:
+    """The refusal is rendered the way Home Assistant renders it, and has no braces left.
+
+    `exceptions.<key>.message` is resolved by
+    `homeassistant.helpers.translation.async_get_exception_message`, which formats the
+    sentence with whatever `translation_placeholders` carried. A batch that reports
+    `unknown_profile` with only `{covers}` and `{count}` in the dict therefore renders
+    "No stored profile is called “{profile}”." verbatim, braces and all.
+
+    Mutation caught: rebuilding the batch's refusal from the keys alone and dropping the
+    offending item's own placeholders (REVIEW-0.6.0-lot6 §5.1).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[assignment],
+        )
+        assert error["translation_key"] == key
+        assert error["translation_domain"] == DOMAIN
+
+        await translation.async_load_integrations(hass, {DOMAIN})
+        rendered = translation.async_get_exception_message(
+            DOMAIN, key, error["translation_placeholders"]
+        )
+        # The key itself comes back when nothing was found, which would make the rest of
+        # this test vacuous.
+        assert rendered != key
+        assert "{" not in rendered, rendered
+        assert expected in rendered
 
 
 async def test_assign_names_every_item_it_refuses(

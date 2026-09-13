@@ -4,6 +4,7 @@
     "lib": ["es2022", "dom", "dom.iterable"],
     "module": "es2022",
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -17,5 +18,5 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.json"]
 }

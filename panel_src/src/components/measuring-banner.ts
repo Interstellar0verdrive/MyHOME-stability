@@ -55,10 +55,10 @@ export const measuringBannerStyles = css`
 
 export const measuringBanner = (i18n: I18n, coverName: string, flowUrl: string): TemplateResult =>
   html`<div class="measuring" role="status" aria-live="polite">
-    <strong>${i18n.t("panel.banner.measuring_title")}</strong>
-    <span class="body">${i18n.t("panel.banner.measuring_body", { cover: coverName })}</span>
+    <strong>${i18n.t("panel.banner.measuring.title")}</strong>
+    <span class="body">${i18n.t("panel.banner.measuring.body", { cover: coverName })}</span>
     <span class="links">
-      <a href=${flowUrl}>${i18n.t("panel.banner.action.resume")}</a>
-      <a href=${flowUrl}>${i18n.t("panel.banner.action.terminate")}</a>
+      <a href=${flowUrl}>${i18n.t("panel.banner.measuring.action.resume")}</a>
+      <a href=${flowUrl}>${i18n.t("panel.banner.measuring.action.stop")}</a>
     </span>
   </div>`;

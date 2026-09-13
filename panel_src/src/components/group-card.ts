@@ -142,8 +142,8 @@ export const groupCard = (group: PanelGroup, context: GroupContext): TemplateRes
   const { i18n } = context;
   const count =
     group.covers.length === 1
-      ? i18n.t("panel.overview.count_one")
-      : i18n.t("panel.overview.count_other", { count: group.covers.length });
+      ? i18n.t("panel.overview.group.count_one")
+      : i18n.t("panel.overview.group.count", { count: group.covers.length });
   return html`<section class="group" data-group=${group.key ?? "none"} aria-labelledby=${group.id}>
     <div class="group-head">
       <div class="line">
@@ -152,7 +152,7 @@ export const groupCard = (group: PanelGroup, context: GroupContext): TemplateRes
             ? group.title
             : html`<button
                 type="button"
-                title=${i18n.t("panel.overview.action.open_profile")}
+                title=${i18n.t("panel.overview.group.open")}
                 @click=${() => context.onOpenProfile(group.key as string)}
               >
                 ${group.title}
@@ -177,7 +177,7 @@ export const groupCard = (group: PanelGroup, context: GroupContext): TemplateRes
         }),
       )}
       ${group.covers.length === 0
-        ? html`<p class="empty">${i18n.t("panel.overview.group_empty")}</p>`
+        ? html`<p class="empty">${i18n.t("panel.overview.group.empty")}</p>`
         : nothing}
     </div>
   </section>`;

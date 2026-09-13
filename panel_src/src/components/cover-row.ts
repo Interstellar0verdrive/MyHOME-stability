@@ -132,8 +132,8 @@ export interface CoverRowContext {
 const subtitle = (i18n: I18n, cover: CoverRow): string => {
   const travel =
     cover.height === null
-      ? i18n.t("panel.common.travel_unknown")
-      : i18n.t("panel.common.travel", { travel: i18n.number(cover.height, 0) });
+      ? i18n.t("panel.overview.cover.travel_unknown")
+      : i18n.t("panel.overview.cover.travel", { travel: i18n.number(cover.height, 0) });
   return cover.area ? `${cover.area} · ${travel}` : travel;
 };
 
@@ -145,8 +145,8 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
       class="handle"
       type="button"
       disabled
-      aria-label=${i18n.t("panel.overview.handle_label", { cover: cover.name })}
-      title=${i18n.t("panel.overview.handle_inert")}
+      aria-label=${i18n.t("panel.assign.handle", { cover: cover.name })}
+      title=${i18n.t("panel.assign.handle_inert")}
     >
       ⠿
     </button>
@@ -163,11 +163,11 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
       </span>
       ${cover.profile_missing
         ? html`<span class="warn"
-            >${i18n.t("panel.overview.row_profile_missing", { profile: cover.profile ?? "" })}</span
+            >${i18n.t("panel.overview.cover.profile_missing", { profile: cover.profile ?? "" })}</span
           >`
         : nothing}
       ${cover.profile_from_file && !cover.profile_missing
-        ? html`<span class="sub">${i18n.t("panel.overview.row_from_file")}</span>`
+        ? html`<span class="sub">${i18n.t("panel.overview.cover.from_file")}</span>`
         : nothing}
     </button>
   </div>`;

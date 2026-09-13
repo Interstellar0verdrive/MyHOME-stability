@@ -558,6 +558,23 @@ The same version is passed to the element in the panel's `config`, which is how 
 panel can name its own version without the bundle carrying a stamp — and therefore
 without a release having to rebuild it.
 
+### The panel's words, and the two languages they are written in
+
+Every sentence the panel shows comes from the same eight translation files the guided
+calibration shows, served by `myhome/calibration/texts` as four blocks — `options`,
+`selector`, `exceptions` and the panel's own, which is **`config_panel` in the file and
+`panel` in the payload** (hassfest validates `strings.json` against a closed list of
+top-level keys, and `config_panel` is the entry on it meant for a panel's own words).
+That block is developed in **English and Italian only** (decision of 14 September 2026):
+`tests/test_translations.py` holds `strings.json`, `en.json` and `it.json` key-for-key
+over it, while `fr`, `nl`, `es`, `de` and `pt` may carry a subset whose placeholders must
+still match, and one translation lot before the 0.6.0 release fills them. Every other
+block, 0.5.0's included, keeps the full eight-file parity, because those sentences are
+shipped and a user reading them in French is not a developer waiting for a lot. What
+makes the permission safe is that `panel_data.async_texts` lays the requested language
+**over English, key by key**: a key a language has not reached yet arrives as the English
+sentence, never as the dotted identifier a missing key otherwise renders as.
+
 ### The bundle
 
 The panel is Lit 3 + TypeScript, bundled by esbuild into a single ES module:
@@ -665,7 +682,7 @@ sets `asyncio_mode = auto`, which the Home Assistant test plugin requires).
 | `test_device_trigger.py` | What the automation editor is offered per protocol, an attached trigger firing on a real bus frame, and the shipped blueprints against Home Assistant's blueprint schema. |
 | `test_discovery.py` | The discovery service: message classification (zone vs probe vs central unit, dimmer vs on/off, auxiliary, alarm), the start/stop service lifecycle, the 60 s timeout, the `myhome_device_discovered` / `myhome_discovery_completed` payloads and worker cancellation on unload. |
 | `test_config_flow_discovery.py` | The YAML suggestion writer: what each device type becomes, de-duplication against `myhome.yaml`, the atomic merge into `myhome_discovered.yaml`, and a round-trip of every suggestion through the real `validate.config_schema`. |
-| `test_translations.py` | That `strings.json` and the four locales carry the same keys and the same `{placeholders}`, that every options tunable has a `data_description` naming its real range, and that the device-automation strings cover every trigger. |
+| `test_translations.py` | That `strings.json` and the seven locales carry the same keys and the same `{placeholders}` — `config_panel` excepted in the five languages the panel is not yet written in — that the bundle's offline stand-ins are the English sentences and ask for no key the files lack, that every options tunable has a `data_description` naming its real range, and that the device-automation strings cover every trigger. |
 | `test_release_notes.py`, `test_release_workflow.py` | `scripts/release_notes.py` (section extraction, unwrapping, link absolutization) and the order of the steps in `.github/workflows/release.yml` — the manifest bump has to be committed before the tag is created. |
 
 ### The fake OpenWebNet server

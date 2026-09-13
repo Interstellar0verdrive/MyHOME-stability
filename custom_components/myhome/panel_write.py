@@ -502,29 +502,29 @@ async def async_assign(
     covers = basic_covers(hass, entry)
     profiles = merged_profiles(yaml_profiles(hass, entry), store.profiles)
     wanted: dict[str, tuple[str | None, float | None]] = {}
-    problems: list[tuple[str, str]] = []
+    problems: list[_Problem] = []
 
     for item in assignments:
         unique_id = str(item["cover_unique_id"])
         try:
             cfg = _cover_config(hass, entry, unique_id)
         except PanelError as err:
-            problems.append((unique_id, err.translation_key))
+            problems.append(_Problem(unique_id, err.translation_key, err.placeholders))
             continue
         name = item.get(CONF_PROFILE)
         profile = None if name is None else str(name)
         if profile is not None and profile not in profiles:
-            problems.append((unique_id, ERROR_UNKNOWN_PROFILE))
+            problems.append(_Problem(unique_id, ERROR_UNKNOWN_PROFILE, {"profile": profile}))
             continue
         height: float | None = None
         if item.get(CONF_HEIGHT) is not None:
             try:
                 height = _height(item[CONF_HEIGHT])
             except PanelError as err:
-                problems.append((unique_id, err.translation_key))
+                problems.append(_Problem(unique_id, err.translation_key, err.placeholders))
                 continue
         if profile is not None and height is None and _known_travel(store, cfg, unique_id) is None:
-            problems.append((unique_id, ERROR_MISSING_TRAVEL))
+            problems.append(_Problem(unique_id, ERROR_MISSING_TRAVEL, {}))
             continue
         wanted[unique_id] = (profile, height)
 
@@ -571,8 +571,25 @@ def _known_travel(
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class _Problem:
+    """One item of a batch that cannot be written, with the words its refusal needs.
+
+    The placeholders are the item's own - `{profile}` for a profile nobody defines,
+    `{key}`/`{min}`/`{max}` for a number outside its range - and they are carried here
+    rather than thrown away, because the sentence the user reads is the sentence written
+    for that `translation_key` and it asks for them by name. Dropping them is how
+    "Weg nimmt eine Zahl zwischen {min} und {max} an." reached a screen (REVIEW lot 6
+    §5.1).
+    """
+
+    unique_id: str
+    key: str
+    placeholders: Mapping[str, Any]
+
+
 @callback
-def _refuse_the_batch(problems: Sequence[tuple[str, str]]) -> None:
+def _refuse_the_batch(problems: Sequence[_Problem]) -> None:
     """One refusal for the batch, saying which item failed and why.
 
     A WebSocket error carries one key and a sentence, so the key is the first kind of
@@ -580,15 +597,24 @@ def _refuse_the_batch(problems: Sequence[tuple[str, str]]) -> None:
     the panel shows the sentence and marks the rows. A travel nobody has measured is
     reported first when it is there at all: it is the one problem with a form behind it,
     and the screen that collects the missing numbers is the answer to it.
+
+    **Both vocabularies travel.** `{covers}` and `{count}` are the batch's own, and
+    `exceptions.missing_travel.message` is written around them; the first offending
+    item's placeholders are what every other sentence here is written around, and a
+    placeholder a sentence does not use costs nothing while one it does use and does not
+    get is a pair of braces on the screen.
     """
-    kinds = [key for _unique_id, key in problems]
+    kinds = [problem.key for problem in problems]
     first = ERROR_MISSING_TRAVEL if ERROR_MISSING_TRAVEL in kinds else kinds[0]
-    missing = [unique_id for unique_id, key in problems if key == first]
+    offending = [problem for problem in problems if problem.key == first]
+    placeholders: dict[str, Any] = dict(offending[0].placeholders)
+    placeholders["covers"] = ", ".join(problem.unique_id for problem in offending)
+    placeholders["count"] = str(len(offending))
     raise PanelError(
         ERR_SERVICE_VALIDATION_ERROR,
         first,
-        "; ".join(f"{unique_id}: {key}" for unique_id, key in problems),
-        {"covers": ", ".join(missing), "count": str(len(missing))},
+        "; ".join(f"{problem.unique_id}: {problem.key}" for problem in problems),
+        placeholders,
     )
 
 
