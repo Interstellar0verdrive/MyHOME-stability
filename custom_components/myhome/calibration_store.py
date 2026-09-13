@@ -67,6 +67,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CALIBRATION_KEY_ORIGIN_DEFAULT,
+    CALIBRATION_KEY_ORIGIN_FILE,
+    CALIBRATION_KEY_ORIGIN_OWN,
+    CALIBRATION_KEY_ORIGIN_PROFILE,
     CALIBRATION_ORIGIN_ADJUSTED,
     CALIBRATION_ORIGIN_DEFAULTS,
     CALIBRATION_ORIGIN_FILE,
@@ -809,6 +813,56 @@ def merged_profiles(
 
 # ----------------------------------------------------------------------- precedence
 @dataclass(frozen=True, slots=True)
+class ResolvedKey:
+    """One key of the travel model: the number, and which of the four said it."""
+
+    value: Any
+    origin: str
+
+
+@callback
+def resolve_cover_keys(
+    device: Mapping[str, Any],
+    *,
+    overrides: Mapping[str, float],
+    derived: Mapping[str, Any],
+    written: Iterable[str],
+    wins: bool,
+    keys: Iterable[str] = COVER_CALIBRATION_KEYS,
+) -> dict[str, ResolvedKey]:
+    """The precedence of the module docstring, key by key, and the only place it lives.
+
+    `resolve_cover` below is this loop plus the reading of the flags off it; the panel's
+    detail view is this loop run twice, once as things are and once as they would be
+    with this window's own numbers taken away, which is what "eredita N" under an empty
+    field means. Neither has a second copy of the order, because a screen that disagreed
+    with the shutter about where a number came from would make the whole panel
+    untrustworthy and would do it silently.
+
+    `written` is the set of keys `myhome.yaml` really carries for this cover (the
+    validator's `keys_from_file`, widened by what one written key implies about
+    another); `derived` is the profile already scaled to this window; `wins` is the
+    record's "somebody said, on this installation, that this shutter is one of those".
+    """
+    written = set(written)
+    resolved: dict[str, ResolvedKey] = {}
+    for key in keys:
+        if key in overrides:
+            resolved[key] = ResolvedKey(overrides[key], CALIBRATION_KEY_ORIGIN_OWN)
+        elif wins and key in derived:
+            resolved[key] = ResolvedKey(derived[key], CALIBRATION_KEY_ORIGIN_PROFILE)
+        elif key in written:
+            resolved[key] = ResolvedKey(device[key], CALIBRATION_KEY_ORIGIN_FILE)
+        elif key in derived:
+            resolved[key] = ResolvedKey(derived[key], CALIBRATION_KEY_ORIGIN_PROFILE)
+        elif key in device:
+            # Whatever the validator already resolved: the file's own profile chain,
+            # and below that the numbers this integration gives any shutter.
+            resolved[key] = ResolvedKey(device[key], CALIBRATION_KEY_ORIGIN_DEFAULT)
+    return resolved
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedCover:
     """The travel model one cover really runs on, and where it came from.
 
@@ -816,6 +870,11 @@ class ResolvedCover:
     same answer as one of `CALIBRATION_ORIGINS`, for the screens that say it in words.
     Both are decided in one place (`resolve_cover`), so a shutter the attribute calls
     `profile tall, adjusted` cannot be a shutter the dialog calls measured.
+
+    `keys` is the same answer once per key, and `inherited` is what each key would fall
+    back to if this window's own measurements were removed - the placeholder the detail
+    screen prints under an empty field, and the destination "Rimuovi la misura" has to
+    name before it does anything.
     """
 
     values: dict[str, Any]
@@ -823,6 +882,8 @@ class ResolvedCover:
     origin: str = CALIBRATION_ORIGIN_DEFAULTS
     profile: str | None = None
     height: float | None = None
+    keys: Mapping[str, ResolvedKey] = field(default_factory=dict)
+    inherited: Mapping[str, ResolvedKey] = field(default_factory=dict)
 
 
 @callback
@@ -874,7 +935,17 @@ def resolve_cover(
     # the profile stays where spec 1.3 puts it, under the file.
     wins = calibration is not None and calibration.follows_a_profile
 
-    values: dict[str, Any] = {}
+    resolved = resolve_cover_keys(
+        device, overrides=overrides, derived=derived, written=written, wins=wins
+    )
+    # ...and the same loop again with this window's own numbers taken away, which is
+    # what every one of its keys would fall back to. Nothing here reads it; the panel's
+    # detail screen does, and it is computed here so that "eredita N" and the number
+    # the shutter runs on can never come from two different rules.
+    inherited = resolve_cover_keys(
+        device, overrides={}, derived=derived, written=written, wins=wins
+    )
+    values: dict[str, Any] = {key: item.value for key, item in resolved.items()}
     # ...and, per key, which of the two sources the user asks about answered it: the
     # profile, or a tape held against this window. What `Calibration source` says is
     # read off these two below, because "measured" and "inherited" are not the only two
@@ -883,24 +954,19 @@ def resolve_cover(
     # fallback of the two directional ones and is never what the shutter runs on when
     # they are set, so a profile answering for it is not the profile being in use.
     measurable = {key for key, _digits in _DERIVED_OVERRIDE_KEYS}
-    from_the_profile = False
-    of_its_own = False
-    of_the_file = False
-    for key in COVER_CALIBRATION_KEYS:
-        if key in overrides:
-            values[key] = overrides[key]
-            of_its_own = of_its_own or key in measurable
-        elif wins and key in derived:
-            values[key] = derived[key]
-            from_the_profile = from_the_profile or key in measurable
-        elif key in written:
-            values[key] = device[key]
-            of_the_file = of_the_file or key in measurable
-        elif key in derived:
-            values[key] = derived[key]
-            from_the_profile = from_the_profile or key in measurable
-        elif key in device:
-            values[key] = device[key]
+    said = {
+        origin: any(
+            item.origin == origin and key in measurable for key, item in resolved.items()
+        )
+        for origin in (
+            CALIBRATION_KEY_ORIGIN_OWN,
+            CALIBRATION_KEY_ORIGIN_PROFILE,
+            CALIBRATION_KEY_ORIGIN_FILE,
+        )
+    }
+    from_the_profile = said[CALIBRATION_KEY_ORIGIN_PROFILE]
+    of_its_own = said[CALIBRATION_KEY_ORIGIN_OWN]
+    of_the_file = said[CALIBRATION_KEY_ORIGIN_FILE]
     if height is not None:
         values[CONF_HEIGHT] = height
     if name is not None:
@@ -934,7 +1000,13 @@ def resolve_cover(
         CALIBRATION_ORIGIN_INHERITED: f"{CALIBRATION_SOURCE_PROFILE} {name}",
     }.get(origin, CALIBRATION_SOURCE_YAML)
     return ResolvedCover(
-        values=values, source=source, origin=origin, profile=name, height=height
+        values=values,
+        source=source,
+        origin=origin,
+        profile=name,
+        height=height,
+        keys=resolved,
+        inherited=inherited,
     )
 
 
@@ -982,6 +1054,7 @@ __all__ = [
     "STORE_DATA_KEY",
     "CalibrationStore",
     "ResolvedCover",
+    "ResolvedKey",
     "StoredCalibration",
     "async_forget_store",
     "async_get_store",
@@ -998,6 +1071,7 @@ __all__ = [
     "reset_name_clash_warnings",
     "resolve_cover",
     "resolve_cover_config",
+    "resolve_cover_keys",
     "storage_key",
     "stored_calibration",
 ]

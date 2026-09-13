@@ -101,6 +101,23 @@ CALIBRATION_ORIGINS: tuple[str, ...] = (
     CALIBRATION_ORIGIN_DEFAULTS,
 )
 # The translation key the five live under, and the one substitution two of them make.
+# ...and, one level down, where each single key of the travel model came from. The five
+# above answer "what is this shutter running on"; these four answer it key by key, which
+# is what the detail screen of the panel prints beside every field and what tells a
+# number the user measured from one the profile is filling in for them. They are the
+# five branches of the one precedence loop (`resolve_cover_keys`) and are never derived
+# a second time anywhere.
+CALIBRATION_KEY_ORIGIN_OWN = "own"
+CALIBRATION_KEY_ORIGIN_PROFILE = "profile"
+CALIBRATION_KEY_ORIGIN_FILE = "file"
+CALIBRATION_KEY_ORIGIN_DEFAULT = "default"
+CALIBRATION_KEY_ORIGINS: tuple[str, ...] = (
+    CALIBRATION_KEY_ORIGIN_OWN,
+    CALIBRATION_KEY_ORIGIN_PROFILE,
+    CALIBRATION_KEY_ORIGIN_FILE,
+    CALIBRATION_KEY_ORIGIN_DEFAULT,
+)
+
 CALIBRATION_ORIGIN_SELECTOR = "calibration_origin"
 CALIBRATION_ORIGIN_PROFILE_SLOT = "{profile}"
 
@@ -146,6 +163,17 @@ CONF_RAW = "raw"
 # Where the validator records which travel keys `myhome.yaml` really carries for a
 # cover, so a stored calibration can be given its place in the precedence (0.5.0).
 CONF_KEYS_FROM_FILE = "keys_from_file"
+# ...and, beside the validated platforms, the cover block exactly as the file produced
+# it, before anything merged a stored calibration into it (0.6.0).
+#
+# `cover.async_setup_entry` writes the resolved travel model back into the validated
+# configuration on purpose, so that everything reading a cover's numbers reads the ones
+# the shutter really runs on. That is right for every reader but one: the panel has to
+# be able to say what the *file* writes for a key, and what a window would fall back to
+# if its own measurement of that key were removed - and both questions are unanswerable
+# once the answer has been written over the question. A shallow copy per cover, taken
+# once per setup, is the whole cost.
+CONF_COVERS_FROM_FILE = "covers_from_file"
 # The key a cover is written under in ``myhome.yaml``. The validated device dicts are
 # re-keyed by WHO/WHERE before they reach ``hass.data`` (``validate.device_key``), so
 # this is the one place that remembers what the user called it - and the guided
