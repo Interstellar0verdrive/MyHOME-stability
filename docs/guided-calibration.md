@@ -85,13 +85,15 @@ alternatives, not steps.
 
 ### (A) It is the first cover of its kind
 
-The full measurement: seven movements, about three minutes, three button presses
-and three tape readings.
+The full measurement: nine movements, about four minutes, three button presses and
+three tape readings (four if you take the optional one).
 
 | Step | What it measures |
 |---|---|
 | Close completely | Nothing — it gives every later measurement a known starting point |
-| Timed ascent | The slat time (first press, the bottom edge leaving the base) and the full upward run (second press, the motor stopping at the top) |
+| Timed ascent, first run | The slat time. One press, at the instant the bottom edge leaves the base; the dialog stops the shutter on that press, a few centimetres up |
+| The lift-off check | Nothing by itself: it asks where the bottom edge ended up, and offers an optional tape reading of the gap that makes the lift-off instant exact |
+| Timed ascent, second run | The full upward run. The shutter is closed again, started again and left to run; one press, at the instant the motor stops at the top |
 | Height | The curtain travel, base to bottom edge with the shutter fully open |
 | Timed descent | The full downward run (one press, the motor stopping at the bottom) |
 | Half a descent | The roll coefficient going down |
@@ -139,9 +141,9 @@ own height; nothing of the profile was ever copied into it.
 For a shutter that was given a profile and does not behave like it: a slower motor,
 a heavier curtain, a fatter tube. It asks how far to go:
 
-- **its own run times** — two presses, about a minute. Enough for a shutter whose
-  motor is simply slower or faster than the one the profile was measured on;
-- **its run times and its own roll coefficients** — the same two presses plus two
+- **its own run times** — three presses, about two minutes. Enough for a shutter
+  whose motor is simply slower or faster than the one the profile was measured on;
+- **its run times and its own roll coefficients** — the same three presses plus two
   tape readings. What a shutter needs when it misses *at mid-travel*, which is not
   the motor running differently but the curtain winding differently.
 
@@ -155,7 +157,7 @@ goes on coming from the profile.
 Path A ends on a summary and an offer.
 
 **Basic** — what the path A table above measures: three button presses and three
-tape readings. One reading per direction fixes that direction's roll exactly, so
+tape readings (the lift-off gap is a fourth, and optional). One reading per direction fixes that direction's roll exactly, so
 there is nothing left over to be an error: the summary has no accuracy line, and
 says so rather than showing a dash.
 
@@ -198,11 +200,21 @@ The screens are built around that:
 - **Nothing moves by itself on a step with a press.** The instructions arrive
   first, in full — including that you will have to be quick — and the shutter
   starts when you press **"Start the cover"**.
-- **The ascent asks for two presses and the descent for one.** The ascent's
-  buttons are numbered — **"1) Press when the bottom edge leaves the base"** and
-  **"2) Press when the motor stops at the top"** — because they come one after the
-  other on the same run; the descent's single
+- **The ascent asks for two presses, one on each of its two runs, and the descent
+  for one.** The ascent's buttons are numbered — **"1) Press when the bottom edge
+  leaves the base"** and **"2) Press when the motor stops at the top"** — because
+  they are the first and second measurement of the same thing; the descent's single
   **"Press when the motor stops at the bottom"** carries no number.
+- **The first ascent press is checked, and can be corrected.** Pressing it sends a
+  stop at once, so the shutter comes to rest a little above the base and the next
+  screen asks what you see. Still touching the base means the press went in before
+  the edge moved: that one cannot be repaired, and the run is made again. A few
+  centimetres up is a press that went well. A hand's breadth or more is a late
+  press, and measuring the gap with the tape puts the instant back where it
+  belongs — the curtain moved that distance between the real lift-off and the
+  motor stopping, which is arithmetic rather than guesswork. If the gateway held
+  the stop back — a busy command queue — the screen says so, because the gap is
+  then not yours.
 - **The screens shown while it is moving carry one line and a button.** Nobody
   reads three paragraphs while watching a shutter.
 - **The automatic runs of the tape steps do start on their own**: there is nothing
@@ -217,10 +229,11 @@ because the noise stops. And a press that went half a second astray moves the
 estimate by a few centimetres, so repeating the measurement is always better than
 guessing.
 
-The ascent briefing opens with one drawing showing both of its presses, and each of
-the two press screens repeats its own; the height form and the three tape-reading
-forms show where to hold the tape. The descent asks for the same gesture as the
-second ascent press and carries no drawing of its own.
+The ascent's first briefing opens with one drawing showing both of its presses; the
+press screen of each run, the briefing of the second run, and the lift-off check and
+its gap form all repeat the one that belongs to them. The height form and the three
+tape-reading forms show where to hold the tape. The descent asks for the same gesture
+as the second ascent press and carries no drawing of its own.
 
 ## The management screens
 
@@ -420,7 +433,7 @@ the number: that is what the confirmation screen after every measurement is for.
 Half a second of reaction is a few centimetres of shutter. Going on to the precise
 level also helps — the scale factor it fits absorbs a systematic reaction delay.
 
-**The two presses are refused as impossible.** The instants do not hold together: a
+**A press is refused as impossible.** The instants do not hold together: a
 shutter cannot stop before it starts, or open its slats after arriving. One press
 per event, at the moment it happens.
 
