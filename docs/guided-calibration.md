@@ -156,25 +156,39 @@ a heavier curtain, a fatter tube. It asks how far to go:
 - **its run times and its own roll coefficients** — the same three presses plus
   three tape readings: the curtain travel, and one at half the travel in each
   direction. What a shutter needs when it misses *at mid-travel*, which is not
-  the motor running differently but the curtain winding differently.
+  the motor running differently but the curtain winding differently. Eight
+  movements;
+- **Thorough calibration only** — no timed run at all: four tape readings, at a
+  quarter and at three quarters of the travel in each direction, and the check that
+  closes them. Ten movements. For a shutter that has already been measured and whose
+  times are right: it keeps every time that shutter runs on today — its own stored
+  values, or the profile it follows scaled to its travel — and the readings refit
+  both roll coefficients **and** a scale on those times. A curtain travel already
+  known is not asked for again; one nobody has ever measured is asked for first, and
+  costs no movement of its own, because the shutter has to be taken to the top for it
+  in any case.
 
 Only the keys it actually measured are stored, and only for this shutter — merged
 into whatever was already stored for it, so the height and any other override this
 run did not re-measure stay exactly as they were. Everything still not covered
 goes on coming from the profile.
 
+The first two scopes end on a summary that offers **"Continue with the thorough
+calibration"**, which is the third scope run there and then, on the times just
+measured.
+
 ## The two levels
 
-Path A ends on a summary and an offer.
+Path A ends on a summary and an offer, and so does a correction.
 
-**Basic** — what the path A table above measures: three button presses and three
+**Basic calibration** — what the path A table above measures: three button presses and three
 tape readings (the lift-off gap is a fourth, and optional). One reading per direction fixes that direction's roll exactly, so
 there is nothing left over to be an error: the summary has no accuracy line, and
 says so rather than showing a dash.
 
-**Precise** — about two more minutes and five more tape readings: four at a quarter
+**Thorough** — about two more minutes and five more tape readings: four at a quarter
 and three quarters of the travel in each direction, and one more for the check that
-closes the level. With three points per direction the
+closes it. With three points per direction the
 fit solves the roll **and** a scale factor on the run times at the same time, which
 is what absorbs the reaction time of the button presses: the tape corrects the
 finger. Under each field the form prints the value the model expects
@@ -184,11 +198,11 @@ reference point shows up while you are still standing there.
 It closes with a **verification at 40 % of the descent** — deliberately a position
 no measurement was fitted to, so it is a question put to the model rather than a
 repetition. Its answer is the gap reported by the screen that follows the reading,
-and it is the **accuracy** the precise summary then names: "within X cm", measured
+and it is the **accuracy** the thorough summary then names: "within X cm", measured
 at the one position nothing was fitted to rather than over the readings the fit was
 given.
 
-At the basic level the same expected-value line is drawn from the default geometry
+At the basic calibration the same expected-value line is drawn from the default geometry
 of an ordinary shutter rather than from a model of yours, so it promises much less:
 anything within 15 cm is normal there.
 
@@ -368,9 +382,14 @@ running on:
 
 | Value | Meaning |
 |---|---|
-| `guided` | This shutter was measured (path A or C) — including one that was assigned a profile and then refined, since the refinement is the measurement — or its stored values were edited by hand |
-| `profile <name>` | It follows that profile — assigned from the assignment form or by path B — and was not measured itself |
+| `guided` | **Measured**: every key of the travel model comes from this shutter's own stored values — path A, a correction that covered them all — or from values edited by hand. Nothing of a profile is in use |
+| `profile <name>` | **Inherited**: it follows that profile — assigned from the assignment form or by path B — and was not measured itself |
+| `profile <name>, adjusted` | **Adjusted**: both at once. Some keys were measured on this shutter and the rest still come from the profile, which is what a correction of the run times alone leaves behind |
 | `yaml` | Nothing is stored for it: the configuration file, the file's profile chain, or the defaults |
+
+Only the five keys a guided calibration can measure decide which of the three it is:
+`roll:` is the fallback of the two directional coefficients and is never what a
+shutter that has both of them runs on.
 
 A calibration naming a profile that no longer exists logs a warning and falls back
 to the file: a shutter does not stop working because a name changed.
@@ -456,8 +475,10 @@ measured. Check the connection on the integration page and repeat the step.
 
 **The press went in late, or was missed.** Repeat the step rather than accepting
 the number: that is what the confirmation screen after every measurement is for.
-Half a second of reaction is a few centimetres of shutter. Going on to the precise
-level also helps — the scale factor it fits absorbs a systematic reaction delay.
+Half a second of reaction is a few centimetres of shutter. Going on to the thorough
+calibration also helps — the scale factor it fits absorbs a systematic reaction delay
+— and on a shutter that has already been measured it can be run on its own, from
+**(C) It has a profile but stops in the wrong place**, without timing anything again.
 
 **A press is refused as impossible.** The instants do not hold together: a
 shutter cannot stop before it starts, or open its slats after arriving. One press
@@ -471,7 +492,8 @@ not behave like the profile it was given; measure it on its own with path C, whi
 the verification screen offers directly. On a shutter measured with path A it means
 one of the readings was taken from a different reference point — measure every
 centimetre from where the bottom edge rests when the shutter is closed, not from
-the floor or a sill when those differ — or that the shutter needs the precise level.
+the floor or a sill when those differ — or that the shutter needs the thorough
+calibration.
 
 **A constant offset at every position and in both directions** is a reference
 mismatch, not a bad model. An error that grows with the length of the run is the

@@ -259,11 +259,11 @@
       },
       "path": {
         "title": "How do you want to measure this cover?",
-        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be refined.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
+        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be corrected.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
         "menu_options": {
           "path_a": "(A) It is the first cover of its kind (full measurement, ~4 minutes)",
           "path_b": "(B) It is similar to a cover already measured (height only)",
-          "path_c": "(C) It has a profile but stops in the wrong place (refine the calibration)",
+          "path_c": "(C) It has a profile but stops in the wrong place (correction)",
           "cancel_flow": "Cancel"
         }
       },
@@ -283,18 +283,19 @@
         }
       },
       "path_c": {
-        "title": "Refine {cover}",
+        "title": "Correct {cover}",
         "description": "This cover has been given a profile but does not behave as the profile says: the motor may be slower, the curtain heavier, the roller thicker. What you measure here applies to this cover alone and takes precedence over both the profile and the configuration file, if you use one; everything you do not measure goes on coming from the profile.\n\n**What you have to do**: confirm which profile this cover should start from.",
         "data": {
           "profile": "Profile"
         }
       },
       "refine_scope": {
-        "title": "How far do you want to refine the calibration?",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: either three measured runs (two up and one down), or those plus three tape readings: the curtain travel, and one at half the travel in each direction.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
+        "title": "How far do you want to correct the calibration?",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: one of three things. Three timed runs (two up and one down); those plus three tape readings - the curtain travel, and one at half the travel in each direction; or no timed run at all, four tape readings at a quarter and at three quarters of the travel in each direction and then a check. Each option below says how many movements it costs.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\nThe last one is the thorough calibration on its own, for a cover that has been measured already: it keeps every time this cover runs on today and reads nothing but the tape. If its curtain travel has never been measured, that reading comes first and costs no movement of its own: the cover has to be taken to the top for it in any case.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
         "menu_options": {
-          "times_only": "Its own run times only (3 presses, ~2 minutes)",
-          "times_and_rolls": "Its own times and its own coefficients (3 presses and 3 readings)",
+          "times_only": "Its own run times only (3 presses, 5 movements)",
+          "times_and_rolls": "Its own times and its own coefficients (3 presses, 3 readings, 8 movements)",
+          "points_only": "Thorough calibration only (no timed run: 4 readings and a check, 10 movements)",
           "cancel_flow": "Cancel"
         }
       },
@@ -509,11 +510,11 @@
       },
       "verify_result": {
         "title": "Where the cover really stopped",
-        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile assigned to it.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If available, the refinement option measures this cover separately.",
+        "description": "**Cover**: {cover} - **gap**: {deviation} cm\n\nThat is the distance between where the cover really stopped and where Home Assistant believed it would. One or two centimetres are normal and already a very good approximation; three or more mean that this cover does not behave like the profile assigned to it.\n\n**What you have to do**: go on, or repeat the measurement if you think the reading was wrong. If available, the correction measures this cover separately.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_tape": "Repeat the measurement",
-          "path_c": "Refine this cover with its own measurements"
+          "path_c": "Correct this cover with its own measurements"
         }
       },
       "profile_name": {
@@ -525,10 +526,10 @@
       },
       "summary_basic": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Continue with the thorough calibration” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
         "menu_options": {
           "save": "Save",
-          "refine": "Improve the accuracy (~2 minutes, 5 more readings)",
+          "refine": "Continue with the thorough calibration (~2 minutes, 5 more readings)",
           "cancel_flow": "Cancel without saving anything"
         }
       },
@@ -540,9 +541,18 @@
           "cancel_flow": "Cancel without saving anything"
         }
       },
+      "summary_correction": {
+        "title": "What was measured",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\nThe accuracy has not been checked yet. “Continue with the thorough calibration” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
+        "menu_options": {
+          "save": "Save",
+          "refine": "Continue with the thorough calibration (~2 minutes, 5 more readings)",
+          "cancel_flow": "Cancel without saving anything"
+        }
+      },
       "summary_precise": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}\n\nThat is the check the level closes with: at {percent}% of the descent - a position nothing was fitted to - the cover stopped within {accuracy} of where the model said it would. It is a question put to the model, not a repetition of a reading it was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}\n\nThat is the check the thorough calibration closes with: at {percent}% of the descent - a position nothing was fitted to - the cover stopped within {accuracy} of where the model said it would. It is a question put to the model, not a repetition of a reading it was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"
@@ -566,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved, and it is applied when this dialog is closed. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. The entity's attributes then say `guided` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
+        "description": "Done: the calibration of {cover} is saved, and it is applied when this dialog is closed. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. The entity's attributes then say `{source}` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"

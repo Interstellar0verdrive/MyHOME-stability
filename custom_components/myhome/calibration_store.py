@@ -67,6 +67,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CALIBRATION_SOURCE_ADJUSTED,
     CALIBRATION_SOURCE_GUIDED,
     CALIBRATION_SOURCE_PROFILE,
     CALIBRATION_SOURCE_YAML,
@@ -702,15 +703,28 @@ def resolve_cover(
     wins = calibration is not None and calibration.follows_a_profile
 
     values: dict[str, Any] = {}
+    # ...and, per key, which of the two sources the user asks about answered it: the
+    # profile, or a tape held against this window. What `Calibration source` says is
+    # read off these two below, because "measured" and "inherited" are not the only two
+    # answers - a correction of the run times alone leaves a shutter running on both.
+    # Only the five keys a guided calibration ever measures are counted: `roll` is the
+    # fallback of the two directional ones and is never what the shutter runs on when
+    # they are set, so a profile answering for it is not the profile being in use.
+    measurable = {key for key, _digits in _DERIVED_OVERRIDE_KEYS}
+    from_the_profile = False
+    of_its_own = False
     for key in COVER_CALIBRATION_KEYS:
         if key in overrides:
             values[key] = overrides[key]
+            of_its_own = of_its_own or key in measurable
         elif wins and key in derived:
             values[key] = derived[key]
+            from_the_profile = from_the_profile or key in measurable
         elif key in written:
             values[key] = device[key]
         elif key in derived:
             values[key] = derived[key]
+            from_the_profile = from_the_profile or key in measurable
         elif key in device:
             values[key] = device[key]
     if height is not None:
@@ -718,9 +732,16 @@ def resolve_cover(
     if name is not None:
         values[CONF_PROFILE] = name
 
+    named = name is not None and name in profiles
     if calibration is not None and calibration.is_a_measurement:
-        source = CALIBRATION_SOURCE_GUIDED
-    elif name is not None and name in profiles:
+        # Measured, and then: adjusted when the profile is still answering for some of
+        # the keys this window did not measure, plain `guided` when it is not.
+        source = (
+            f"{CALIBRATION_SOURCE_PROFILE} {name}, {CALIBRATION_SOURCE_ADJUSTED}"
+            if named and from_the_profile and of_its_own
+            else CALIBRATION_SOURCE_GUIDED
+        )
+    elif named:
         source = f"{CALIBRATION_SOURCE_PROFILE} {name}"
     else:
         source = CALIBRATION_SOURCE_YAML

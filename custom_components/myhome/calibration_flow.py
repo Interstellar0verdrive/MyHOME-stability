@@ -69,7 +69,7 @@ from __future__ import annotations
 import contextlib
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -110,6 +110,7 @@ from .calibration import (
 from .calibration_store import (
     PROFILE_NAME_PATTERN,
     CalibrationStore,
+    StoredCalibration,
     async_get_store,
     cover_calibration_data,
     cover_profile_data,
@@ -117,6 +118,7 @@ from .calibration_store import (
     loaded_store,
     merged_profiles,
     profile_overrides,
+    resolve_cover,
     stored_calibration,
 )
 from .const import (
@@ -273,6 +275,13 @@ PLAN_FULL: tuple[str, ...] = (
     "profile_name",
     "summary",
 )
+# The thorough calibration (lexicon of 13 Sep: "calibrazione approfondita", which the
+# texts used to call "the precise level"). Four readings that fit the two roll
+# coefficients *and* a scale on the run times, and then the check. It is reached three
+# ways and is the same plan every time: from the summary of path A, from the summary of
+# a correction, and chosen up front as the third scope of a correction - which is the
+# one way in that has timed nothing of its own, and takes the times the cover already
+# moves on as the model the readings correct (`_adopt_the_model_in_use`).
 PLAN_PRECISE: tuple[str, ...] = (
     "tape_brief",
     "quarter_down",
@@ -282,6 +291,13 @@ PLAN_PRECISE: tuple[str, ...] = (
     "verify",
     "summary",
 )
+# ...and the same with the curtain travel in front of it, for a cover nobody has ever
+# measured one for. Every reading of the phase is a number of centimetres out of that
+# travel, so a thorough calibration cannot start without it; a travel already known -
+# stored for this cover, or written in the configuration file - is *not* asked for
+# again, because the user is standing in front of the shutter to read a tape and this
+# is the one reading that does not change.
+PLAN_PRECISE_TRAVEL: tuple[str, ...] = ("tape_brief", "height_read", *PLAN_PRECISE[1:])
 # Path B is a tape phase and nothing else: the warning screen, one homing, one reading.
 # The height is measured from the rest of the bottom edge to where it is *now*, which
 # only means the whole travel when "now" is the top, so `height_read` brings the shutter
@@ -538,6 +554,12 @@ class _Measured:
     # way (0.5.0 v5 review).
     verify_fraction: float | None = None
     precise: bool = False
+    # True when `opening` and `closing` above were not timed in this conversation but
+    # taken off the model the cover already moves on ("solo la calibrazione
+    # approfondita"). The fit still corrects them - that is what the time scale of
+    # `fit_direction` is - but the record's `raw` says they were not pressed for, so
+    # that a reader six months later does not take them for a measurement.
+    times_adopted: bool = False
 
     @property
     def slat_time(self) -> float:
@@ -1696,10 +1718,18 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_refine_scope(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """How far to go: its own times, or its own roll coefficients as well."""
+        """How far to go: its own times, its own roll coefficients, or the readings alone.
+
+        The third scope is the one the live installation asked for. A cover that has
+        already been corrected - its own times and its own coefficients stored - had no
+        way at all to the thorough calibration: that level hung off the summary of path
+        A and nowhere else, so the only way to the four extra readings was to time the
+        three runs again. `points_only` keeps every time the cover already moves on and
+        runs the tape phase over them.
+        """
         return self.async_show_menu(
             step_id="refine_scope",
-            menu_options=["times_only", "times_and_rolls", "cancel_flow"],
+            menu_options=["times_only", "times_and_rolls", "points_only", "cancel_flow"],
             description_placeholders=self._placeholders(),
         )
 
@@ -1714,6 +1744,95 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     ) -> ConfigFlowResult:
         """Two presses and two tape readings: this curtain winds differently too."""
         return await self._async_start_plan(PLAN_TIMES_AND_ROLLS)
+
+    async def async_step_points_only(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The thorough calibration alone: no timed run, four readings and the check.
+
+        Nothing is pressed for here, so there is nothing for the conversation to time:
+        the run times and the slat phase it starts from are the ones the cover moves on
+        today, and the four readings refit the two roll coefficients and the scale of
+        those times over them. The one way the model cannot be put together is a cover
+        that is not in this gateway's configuration any more - the entry was reloaded
+        off an edited `myhome.yaml` while the dialog stood open - and that is the screen
+        the conversation already has for it.
+        """
+        if not self._adopt_the_model_in_use():
+            return await self._async_claim_refused(REASON_UNKNOWN_COVER)
+        return await self._async_start_thorough(from_here=False)
+
+    @callback
+    def _values_in_use(self) -> dict[str, float] | None:
+        """The travel model this cover really moves on, as the readings start from it.
+
+        Read through `resolve_cover`, which is the precedence the cover platform itself
+        applies - this cover's stored overrides, the profile it was *told* to follow,
+        the keys the configuration file writes for it, the profile the file names, the
+        defaults - rather than a second copy of that order written here. The profile is
+        the one chosen on `path_c`, which the user may have just changed, and the travel
+        is whatever this conversation knows of it.
+        """
+        unique_id = self._cover_unique_id or ""
+        device = self._cover_config(unique_id)
+        if not device:
+            return None
+        record = self._store.calibration(unique_id)
+        chosen = self._profile or (record.profile if record is not None else None)
+        height = self._measured.height or (record.height if record is not None else None)
+        if record is not None:
+            record = replace(record, profile=chosen, height=height)
+        elif chosen is not None:
+            record = StoredCalibration(cover_unique_id=unique_id, profile=chosen, height=height)
+        values = resolve_cover(device, profiles=self._all_profiles(), calibration=record).values
+        wanted = (
+            CONF_OPENING_TIME,
+            CONF_CLOSING_TIME,
+            CONF_SLAT_TIME,
+            CONF_OPENING_ROLL,
+            CONF_CLOSING_ROLL,
+        )
+        if any(values.get(key) is None for key in wanted):
+            return None
+        return {key: float(values[key]) for key in wanted}
+
+    @callback
+    def _adopt_the_model_in_use(self) -> bool:
+        """Take the times the cover moves on today as the ones the readings correct.
+
+        `PressTiming` is what the fit is fed, and it is built here out of numbers
+        nobody pressed for - which is the whole point of the scope: three timed runs
+        are three chances to be half a second late, and a cover that has already been
+        timed has no reason to spend them again.
+        """
+        values = self._values_in_use()
+        if values is None:
+            return False
+        slat = values[CONF_SLAT_TIME]
+        self._measured.opening = PressTiming(slat, values[CONF_OPENING_TIME])
+        self._measured.closing = PressTiming(None, values[CONF_CLOSING_TIME])
+        self._measured.times_adopted = True
+        return True
+
+    @callback
+    def _thorough_plan(self) -> tuple[str, ...]:
+        """The thorough calibration, with the curtain travel first when nobody knows it."""
+        return PLAN_PRECISE if self._measured.height else PLAN_PRECISE_TRAVEL
+
+    async def _async_start_thorough(self, *, from_here: bool) -> ConfigFlowResult:
+        """Install the thorough plan, either after what has been walked or instead of it.
+
+        `from_here` is what tells the two ways in apart: pressed on a summary, the plan
+        replaces the tail of the one that got there (the pointer is on `summary`, and
+        everything before it has already happened); chosen on `refine_scope`, it is the
+        whole plan and the conversation starts on its first stage.
+        """
+        self._measured.precise = True
+        plan = list(self._thorough_plan())
+        if from_here:
+            self._plan = self._plan[: self._index] + plan
+            return await self._async_enter()
+        return await self._async_start_plan(tuple(plan))
 
     # ------------------------------------------------------------------ the plan
     async def _async_start_plan(self, plan: tuple[str, ...]) -> ConfigFlowResult:
@@ -3031,6 +3150,8 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             return await self.async_step_summary_precise()
         if self._path == PATH_FIRST:
             return await self.async_step_summary_basic()
+        if self._path == PATH_REFINE:
+            return await self.async_step_summary_correction()
         return await self.async_step_summary_short()
 
     async def async_step_summary_basic(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -3049,10 +3170,36 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     async def async_step_summary_short(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The same summary for paths B and C, with nothing left to offer but Save."""
+        """Path B's summary, with nothing left to offer but Save.
+
+        Path B measures no time of its own: its numbers are the profile's, scaled to a
+        travel read with a tape, and that is the whole of what it claims. The thorough
+        calibration is not offered here because fitting four readings would give this
+        cover roll coefficients of its own and make it something other than "one of
+        those" - which is the statement path B exists to make. The screen that doubts
+        the profile is `verify_result`, and what it offers is the correction.
+        """
         return self.async_show_menu(
             step_id="summary_short",
             menu_options=["save", "cancel_flow"],
+            description_placeholders=self._summary_placeholders(self._result()),
+        )
+
+    async def async_step_summary_correction(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Path C's summary: what was corrected, and the offer to go on to the readings.
+
+        The same offer as `summary_basic`, and for the same reason: the accuracy of
+        what has just been measured has not been checked, and four more readings plus
+        the check are what would check it. It is a screen of its own rather than a
+        second text for `summary_short` because path B reaches that one and has no such
+        button - a summary that describes a button the user cannot see is the one thing
+        the live walk-through asked for by name (0.5.0 v2 review, BUG-5).
+        """
+        return self.async_show_menu(
+            step_id="summary_correction",
+            menu_options=["save", "refine", "cancel_flow"],
             description_placeholders=self._summary_placeholders(self._result()),
         )
 
@@ -3076,15 +3223,16 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     async def async_step_refine(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """"Migliora la precisione": four more tape readings, and then a check.
+        """"Continua con la calibrazione approfondita": four readings, and then a check.
 
         The presses are not repeated. With three points per direction the fit solves
         the roll *and* a scale factor on the run time, which is the reaction time of
         those presses being measured on the shutter instead of guessed at.
+
+        Offered by two summaries - path A's and a correction's - and the same plan for
+        both: whatever the conversation has timed so far is what the readings correct.
         """
-        self._measured.precise = True
-        self._plan = self._plan[: self._index] + list(PLAN_PRECISE)
-        return await self._async_enter()
+        return await self._async_start_thorough(from_here=True)
 
     # ------------------------------------------------------------------ saving
     @callback
@@ -3098,6 +3246,9 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             "opening_run": measured.opening.run_time if measured.opening else None,
             "closing_run": measured.closing.run_time if measured.closing else None,
             "slat": measured.slat_time,
+            # False for the one scope that times nothing: the two run times above were
+            # the ones the cover already moved on, not a pair of presses.
+            "times_measured": not measured.times_adopted,
             "descent": [list(point) for point in measured.descent],
             "ascent": [list(point) for point in measured.ascent],
             "deviation_cm": measured.deviation,
@@ -3201,6 +3352,11 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._saved_cover = self._cover_label
         self._saved_profile = self._measured_name or self._profile or ""
         self._saved_path = self._path
+        # Read off the record that was just written rather than guessed at from the
+        # path: a correction leaves `guided` or `profile <name>, adjusted` depending on
+        # whether the profile still answers for anything, and the screen quotes the
+        # attribute the user is about to go and look at.
+        self._saved_source = self._source_now()
         self._disarm()
         self._release()
         # ...and the conversation is over: without this, rendering the `saved` screen
@@ -3210,9 +3366,26 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._cover = None
         return await self.async_step_saved()
 
+    @callback
+    def _source_now(self) -> str:
+        """What `Calibration source` says about this cover with the record as it stands."""
+        unique_id = self._cover_unique_id or ""
+        device = self._cover_config(unique_id)
+        if not device:  # pragma: no cover - the cover went away between Save and here
+            return CALIBRATION_SOURCE_GUIDED
+        return resolve_cover(
+            device,
+            profiles=self._all_profiles(),
+            calibration=self._store.calibration(unique_id),
+        ).source
+
     def _saved_placeholders(self) -> dict[str, str]:
-        """The shutter and the profile, read off what Save actually wrote."""
-        return {"cover": self._saved_cover, "profile": self._saved_profile}
+        """The shutter, the profile and the origin, read off what Save actually wrote."""
+        return {
+            "cover": self._saved_cover,
+            "profile": self._saved_profile,
+            "source": self._saved_source,
+        }
 
     async def async_step_saved(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """What was saved, where it lives, and how to undo it - path A's version.

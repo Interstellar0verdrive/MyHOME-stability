@@ -56,11 +56,21 @@ CALIBRATION_DIRECTIONS: tuple[str, ...] = (DIRECTION_CLOSE, DIRECTION_OPEN)
 # is), the other where the numbers of the travel model came from.
 ATTR_CALIBRATING = "Calibrating"
 ATTR_CALIBRATION_SOURCE = "Calibration source"
-# The three things `Calibration source` can say: the guided flow measured this shutter,
-# a profile (named) supplies its numbers, or they come from `myhome.yaml` as written.
+# The four things `Calibration source` can say: the guided calibration measured this
+# shutter and nothing of a profile is left in use (`guided`), a profile (named) supplies
+# every one of its numbers (`profile <name>`), a profile supplies some of them and this
+# shutter's own measurements the rest (`profile <name>, adjusted`), or they come from
+# `myhome.yaml` as written (`yaml`). The third is what a correction leaves behind: "solo
+# i tempi" measures two of the five keys and the other three go on coming from the
+# profile, which is a different thing from either of its neighbours and used to be
+# reported as `guided` (lexicon of 13 Sep, "Origin of the values in use").
 CALIBRATION_SOURCE_GUIDED = "guided"
 CALIBRATION_SOURCE_YAML = "yaml"
 CALIBRATION_SOURCE_PROFILE = "profile"
+# The suffix the third of those carries, kept apart from the name so that a reader of
+# the attribute (and a test) can tell "the profile, adjusted" from a profile really
+# called "tall, adjusted", which the name pattern forbids.
+CALIBRATION_SOURCE_ADJUSTED = "adjusted"
 # ...and what a record says about itself when the numbers in it were typed rather than
 # measured ("Modifica i valori a mano"). The entity still reports `guided`: what the
 # attribute answers is "do these numbers come from the file or from the integration",

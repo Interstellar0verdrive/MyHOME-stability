@@ -259,11 +259,11 @@
       },
       "path": {
         "title": "Comment voulez-vous mesurer ce volet ?",
-        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ quatre minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être affinée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
+        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ quatre minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être corrigée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
         "menu_options": {
           "path_a": "(A) C'est le premier volet de ce type (mesure complète, ~4 minutes)",
           "path_b": "(B) Il est semblable à un volet déjà mesuré (la hauteur seulement)",
-          "path_c": "(C) Il a un profil mais s'arrête au mauvais endroit (affiner la calibration)",
+          "path_c": "(C) Il a un profil mais s'arrête au mauvais endroit (correction)",
           "cancel_flow": "Annuler"
         }
       },
@@ -283,18 +283,19 @@
         }
       },
       "path_c": {
-        "title": "Affiner {cover}",
+        "title": "Corriger {cover}",
         "description": "Un profil a été attribué à ce volet, mais il ne se comporte pas comme le profil le prévoit : le moteur peut être plus lent, le tablier plus lourd, l'axe plus gros. Ce que vous mesurez ici ne vaut que pour ce volet et l'emporte à la fois sur le profil et sur le fichier de configuration, si vous en utilisez un ; tout ce que vous ne mesurez pas continue de venir du profil.\n\n**Ce que vous devez faire** : confirmez de quel profil ce volet doit partir.",
         "data": {
           "profile": "Profil"
         }
       },
       "refine_scope": {
-        "title": "Jusqu'où voulez-vous affiner la calibration ?",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : soit trois courses mesurées (deux à la montée et une à la descente), soit celles-ci plus trois lectures au mètre : la course du tablier, et une à mi-course dans chaque sens.\n\nLes seuls temps suffisent pour un volet dont le moteur est simplement plus lent ou plus rapide que celui sur lequel le profil a été mesuré. Ajoutez les coefficients quand il se trompe aussi *à mi-course* : là, ce n'est pas le moteur qui tourne autrement, c'est le tablier qui s'enroule autrement.\n\n**Ce que vous devez faire** : choisissez jusqu'où aller. Vous pouvez toujours revenir faire le reste.",
+        "title": "Jusqu'où voulez-vous corriger la calibration ?",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : l'une de trois choses. Trois courses chronométrées (deux à la montée et une à la descente) ; celles-ci plus trois lectures au mètre — la course du tablier, et une à mi-course dans chaque sens ; ou aucune course chronométrée, quatre lectures au mètre au quart et aux trois quarts de la course dans chaque sens, puis une vérification. Chaque entrée ci-dessous dit combien de mouvements elle coûte.\n\nLes seuls temps suffisent pour un volet dont le moteur est simplement plus lent ou plus rapide que celui sur lequel le profil a été mesuré. Ajoutez les coefficients quand il se trompe aussi *à mi-course* : là, ce n'est pas le moteur qui tourne autrement, c'est le tablier qui s'enroule autrement.\n\nLa dernière est le calibrage approfondi seul, pour un volet déjà mesuré : il garde tous les temps avec lesquels ce volet fonctionne aujourd'hui et ne lit que le mètre. Si sa course du tablier n'a jamais été mesurée, cette lecture vient d'abord et ne coûte aucun mouvement supplémentaire : le volet doit de toute façon être amené en haut pour elle.\n\n**Ce que vous devez faire** : choisissez jusqu'où aller. Vous pouvez toujours revenir faire le reste.",
         "menu_options": {
-          "times_only": "Ses seuls temps de course (3 appuis, ~2 minutes)",
-          "times_and_rolls": "Ses temps et ses coefficients (3 appuis et 3 lectures)",
+          "times_only": "Ses seuls temps de course (3 appuis, 5 mouvements)",
+          "times_and_rolls": "Ses temps et ses coefficients (3 appuis, 3 lectures, 8 mouvements)",
+          "points_only": "Le calibrage approfondi seul (aucune course chronométrée : 4 lectures et une vérification, 10 mouvements)",
           "cancel_flow": "Annuler"
         }
       },
@@ -509,11 +510,11 @@
       },
       "verify_result": {
         "title": "Où le volet s'est réellement arrêté",
-        "description": "**Volet** : {cover} — **écart** : {deviation} cm\n\nC'est la distance entre l'endroit où le volet s'est réellement arrêté et celui où Home Assistant croyait qu'il s'arrêterait. Un ou deux centimètres sont normaux et déjà une très bonne approximation ; trois ou plus veulent dire que ce volet ne se comporte pas comme le profil attribué.\n\n**Ce que vous devez faire** : continuez, ou répétez la mesure si vous pensez que la lecture était fausse. Si elle est disponible, l'option d'affinage permet de mesurer ce volet séparément.",
+        "description": "**Volet** : {cover} — **écart** : {deviation} cm\n\nC'est la distance entre l'endroit où le volet s'est réellement arrêté et celui où Home Assistant croyait qu'il s'arrêterait. Un ou deux centimètres sont normaux et déjà une très bonne approximation ; trois ou plus veulent dire que ce volet ne se comporte pas comme le profil attribué.\n\n**Ce que vous devez faire** : continuez, ou répétez la mesure si vous pensez que la lecture était fausse. Si elle est disponible, l'option de correction permet de mesurer ce volet séparément.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
           "repeat_tape": "Répéter la mesure",
-          "path_c": "Affiner ce volet avec ses propres mesures"
+          "path_c": "Corriger ce volet avec ses propres mesures"
         }
       },
       "profile_name": {
@@ -525,10 +526,10 @@
       },
       "summary_basic": {
         "title": "Ce qui a été mesuré",
-        "description": "**Volet** : {cover}\n\n**Course du tablier** : {height}\n\n**Où vont ces valeurs** : si vous enregistrez, elles restent dans Home Assistant, ici sous Configurer → Calibrations. Elles sont écrites dès l'enregistrement et le volet commence à les utiliser à la fermeture de cette boîte de dialogue, à la place de celles du fichier de configuration, si vous en utilisez un. Depuis ce même écran, vous pouvez les revoir, les corriger à la main ou les supprimer à tout moment.\n\nSi vous préférez les écrire vous-même dans le fichier, l'extrait équivalent est ci-dessous : copiez-le avant de fermer, car sans enregistrer rien n'est conservé.\n\n{yaml}\nLa précision n'a pas encore été vérifiée. « Améliorer la précision » ajuste quatre points de plus, au quart et aux trois quarts de la course dans chaque sens, puis met le modèle à l'épreuve d'une cinquième lecture prise là où rien n'a été ajusté.\n\n**Ce que vous devez faire** : enregistrez, ou poursuivez avec cinq lectures supplémentaires au mètre, pour environ deux minutes.",
+        "description": "**Volet** : {cover}\n\n**Course du tablier** : {height}\n\n**Où vont ces valeurs** : si vous enregistrez, elles restent dans Home Assistant, ici sous Configurer → Calibrations. Elles sont écrites dès l'enregistrement et le volet commence à les utiliser à la fermeture de cette boîte de dialogue, à la place de celles du fichier de configuration, si vous en utilisez un. Depuis ce même écran, vous pouvez les revoir, les corriger à la main ou les supprimer à tout moment.\n\nSi vous préférez les écrire vous-même dans le fichier, l'extrait équivalent est ci-dessous : copiez-le avant de fermer, car sans enregistrer rien n'est conservé.\n\n{yaml}\nLa précision n'a pas encore été vérifiée. « Poursuivre avec le calibrage approfondi » ajuste quatre points de plus, au quart et aux trois quarts de la course dans chaque sens, puis met le modèle à l'épreuve d'une cinquième lecture prise là où rien n'a été ajusté.\n\n**Ce que vous devez faire** : enregistrez, ou poursuivez avec cinq lectures supplémentaires au mètre, pour environ deux minutes.",
         "menu_options": {
           "save": "Enregistrer",
-          "refine": "Améliorer la précision (~2 minutes, 5 lectures de plus)",
+          "refine": "Poursuivre avec le calibrage approfondi (~2 minutes, 5 lectures de plus)",
           "cancel_flow": "Annuler sans rien enregistrer"
         }
       },
@@ -540,9 +541,18 @@
           "cancel_flow": "Annuler sans rien enregistrer"
         }
       },
+      "summary_correction": {
+        "title": "Ce qui a été mesuré",
+        "description": "**Volet** : {cover}\n\n**Course du tablier** : {height}\n\n**Où vont ces valeurs** : si vous enregistrez, elles restent dans Home Assistant, ici sous Configurer → Calibrations. Elles sont écrites dès l'enregistrement et le volet commence à les utiliser à la fermeture de cette boîte de dialogue, à la place de celles du fichier de configuration, si vous en utilisez un. Depuis ce même écran, vous pouvez les revoir, les corriger à la main ou les supprimer à tout moment.\n\nSi vous préférez les écrire vous-même dans le fichier, l'extrait équivalent est ci-dessous : copiez-le avant de fermer, car sans enregistrer rien n'est conservé.\n\n{yaml}\n**Ce qui est remplacé et ce qui reste** : enregistrer écrit {replacing} et laisse tout le reste de ce qui est déjà enregistré pour ce volet exactement tel quel : {keeping}.\n\nLa précision n'a pas encore été vérifiée. « Poursuivre avec le calibrage approfondi » ajuste quatre points de plus, au quart et aux trois quarts de la course dans chaque sens, puis met le modèle à l'épreuve d'une cinquième lecture prise là où rien n'a été ajusté.\n\n**Ce que vous devez faire** : enregistrez, ou poursuivez avec cinq lectures supplémentaires au mètre, pour environ deux minutes.",
+        "menu_options": {
+          "save": "Enregistrer",
+          "refine": "Poursuivre avec le calibrage approfondi (~2 minutes, 5 lectures de plus)",
+          "cancel_flow": "Annuler sans rien enregistrer"
+        }
+      },
       "summary_precise": {
         "title": "Ce qui a été mesuré",
-        "description": "**Volet** : {cover}\n\n**Course du tablier** : {height}\n**Précision** : à {accuracy} près\n\nC'est la vérification qui clôt le niveau : à {percent} % de la descente — une position sur laquelle rien n'a été ajusté — le volet s'est arrêté à {accuracy} près de là où le modèle l'annonçait. C'est une question posée au modèle, et non la répétition d'une lecture qui a servi à l'ajuster.\n\n**Où vont ces valeurs** : si vous enregistrez, elles restent dans Home Assistant, ici sous Configurer → Calibrations. Elles sont écrites dès l'enregistrement et le volet commence à les utiliser à la fermeture de cette boîte de dialogue, à la place de celles du fichier de configuration, si vous en utilisez un. Depuis ce même écran, vous pouvez les revoir, les corriger à la main ou les supprimer à tout moment.\n\nSi vous préférez les écrire vous-même dans le fichier, l'extrait équivalent est ci-dessous : copiez-le avant de fermer, car sans enregistrer rien n'est conservé.\n\n{yaml}\n**Ce que vous devez faire** : enregistrez.",
+        "description": "**Volet** : {cover}\n\n**Course du tablier** : {height}\n**Précision** : à {accuracy} près\n\nC'est la vérification qui clôt le calibrage approfondi : à {percent} % de la descente — une position sur laquelle rien n'a été ajusté — le volet s'est arrêté à {accuracy} près de là où le modèle l'annonçait. C'est une question posée au modèle, et non la répétition d'une lecture qui a servi à l'ajuster.\n\n**Où vont ces valeurs** : si vous enregistrez, elles restent dans Home Assistant, ici sous Configurer → Calibrations. Elles sont écrites dès l'enregistrement et le volet commence à les utiliser à la fermeture de cette boîte de dialogue, à la place de celles du fichier de configuration, si vous en utilisez un. Depuis ce même écran, vous pouvez les revoir, les corriger à la main ou les supprimer à tout moment.\n\nSi vous préférez les écrire vous-même dans le fichier, l'extrait équivalent est ci-dessous : copiez-le avant de fermer, car sans enregistrer rien n'est conservé.\n\n{yaml}\n**Ce qui est remplacé et ce qui reste** : enregistrer écrit {replacing} et laisse tout le reste de ce qui est déjà enregistré pour ce volet exactement tel quel : {keeping}.\n\n**Ce que vous devez faire** : enregistrez.",
         "menu_options": {
           "save": "Enregistrer",
           "cancel_flow": "Annuler sans rien enregistrer"
@@ -566,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibration enregistrée",
-        "description": "C'est fait : la calibration de {cover} est enregistrée et s'applique à la fermeture de cette boîte de dialogue. {cover} continue de suivre le profil « {profile} », et ce qui vient d'être mesuré sur ce volet seul l'emporte désormais sur lui ; tout ce qui n'a pas été mesuré ici continue de venir du profil. Les attributs de l'entité indiquent alors `guided` sous « Calibration source », et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, où vous pouvez revoir les valeurs, les corriger à la main ou les supprimer. Le profil lui-même n'a pas été touché : les autres volets qui le suivent ne changent pas.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer.",
+        "description": "C'est fait : la calibration de {cover} est enregistrée et s'applique à la fermeture de cette boîte de dialogue. {cover} continue de suivre le profil « {profile} », et ce qui vient d'être mesuré sur ce volet seul l'emporte désormais sur lui ; tout ce qui n'a pas été mesuré ici continue de venir du profil. Les attributs de l'entité indiquent alors `{source}` sous « Calibration source », et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, où vous pouvez revoir les valeurs, les corriger à la main ou les supprimer. Le profil lui-même n'a pas été touché : les autres volets qui le suivent ne changent pas.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer.",
         "menu_options": {
           "calibrate": "Calibrer un autre volet",
           "init": "Retour au menu"

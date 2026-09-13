@@ -20,15 +20,18 @@ way, and nothing is ever written to `myhome.yaml`.
   **profile** every similar shutter can inherit; **(B)** a shutter similar to one
   already measured — pick the profile, measure the height, with an optional check at
   half the travel; **(C)** a shutter that has a profile and stops in the wrong place
-  — its own run times, and its own roll coefficients if it needs them. There is no
+  — its own run times, its own roll coefficients if it needs them, or the **thorough
+  calibration on its own**: no timed run at all, four tape readings and a check, on
+  the times the shutter already moves on. There is no
   stopwatch anywhere: the integration knows when the motor started (the actuator
   says so itself), so a press marks only the end of a run, which halves the human
   error and leaves the tape as the only tool. The ascent is measured by **two runs
   of one press each**: the first ends on the press that marks the bottom edge
   leaving its base — the dialog stops the shutter there, so the press can be
   checked by looking at it and, where it went in late, corrected with the tape —
-  and the second runs the whole travel for the press at the top. Path A can be followed by a **precise
-  level**: four more readings at a quarter and three quarters of the travel in each
+  and the second runs the whole travel for the press at the top. Path A and a correction
+  can both be followed by the **thorough calibration**: four more readings at a
+  quarter and three quarters of the travel in each
   direction, which fit a scale factor on the times as well as the rolls — the tape
   corrects the finger — and a fifth at 40 %, a position nothing was fitted to, whose
   gap is what the summary reports as the accuracy. Expect 1–2 cm at the end stops
@@ -65,9 +68,12 @@ way, and nothing is ever written to `myhome.yaml`.
   session tunables. The other items are the calibration and what it stored. Saving
   that form still reloads the integration; the calibration screens rebuild the entry
   once, when the dialog is closed, and only if something was really stored.
-- **`Calibration source` tells a measurement from an inheritance.** It says `guided`
-  for a shutter the dialog measured (or whose stored values were edited by hand),
-  `profile <name>` for one that follows a profile, and `yaml` when nothing is
+- **`Calibration source` tells a measurement from an inheritance, and both from the
+  mixture of the two.** It says `guided` for a shutter running on nothing but its own
+  measured (or hand-edited) values, `profile <name>` for one that follows a profile
+  and was never measured itself, `profile <name>, adjusted` when some keys were
+  measured on it and the profile still answers for the rest — which is what a
+  correction of the run times alone leaves behind — and `yaml` when nothing is
   stored for it and the numbers come from the configuration file or the defaults.
   The distinction matters because a profile assigned from the dialog ranks above
   the keys the cover's own configuration-file entry writes — it is a statement
@@ -85,7 +91,7 @@ way, and nothing is ever written to `myhome.yaml`.
   time*, *takes precedence over*, and their equivalents. Buttons keep Home
   Assistant's own imperative. The counts and the claims were then checked against
   the code rather than against the review: the refinement asks for three tape
-  readings and not two, the precise level for five and not four, `Calibration
+  readings and not two, the thorough calibration for five and not four, `Calibration
   source` is named as holding the origin and not the numbers, what is saved is
   applied when the dialog closes rather than at once, and the accuracy on the
   precise summary is the verification's own answer — the gap at the one position
