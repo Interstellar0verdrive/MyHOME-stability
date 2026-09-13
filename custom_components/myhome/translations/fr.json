@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profils et volets",
-        "description": "Un **profil** décrit un type de volet : le temps qu'il met à parcourir sa course, le temps d'ouverture des lames et la façon dont le tablier s'enroule sur l'axe. Chaque volet peut en suivre un, et Home Assistant l'adapte à sa propre hauteur.\n\nIl y a actuellement {profiles} profils et {covers} volets simples sur cette passerelle.",
+        "description": "Un **profil** décrit un type de volet : le temps qu'il met à parcourir sa course, le temps d'ouverture des lames et la façon dont le tablier s'enroule sur l'axe. Chaque volet peut en suivre un, et Home Assistant l'adapte à sa propre course du tablier.\n\nIl y a actuellement {profiles} profils et {covers} volets simples sur cette passerelle.",
         "menu_options": {
           "assign_covers": "Attribuer un profil à chaque volet",
           "pick_profile": "Voir, modifier ou supprimer un profil",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Quel profil suit chaque volet",
-        "description": "**Ce qui va se passer** : rien ne bouge. Attribuer un profil, c'est dire à Home Assistant « ce volet est fait comme ceux-là » : à partir de là, le volet suit ce profil, temps de course comprises, adaptées à sa hauteur.\n\nLe profil est attribué ici après la rédaction du fichier de configuration. Il est donc prioritaire sur les valeurs du fichier pour ce volet, si vous en utilisez un. Les valeurs mesurées sur ce volet restent prioritaires lorsqu'elles sont disponibles. Toute modification ultérieure du profil s'applique à tous les volets qui le suivent.\n\nUn `profile:` écrit dans le fichier de configuration pour un volet apparaît ici comme sa valeur actuelle et ne peut pas être retiré depuis cet écran : il est défini dans le fichier et doit y être géré.\n\n**Ce que vous devez faire** : choisissez un profil pour chaque volet, ou « Aucun profil » pour le laisser aux valeurs du fichier ou aux valeurs par défaut."
+        "description": "**Ce qui va se passer** : rien ne bouge. Attribuer un profil, c'est dire à Home Assistant « ce volet est fait comme ceux-là » : à partir de là, le volet suit ce profil, temps de course comprises, adaptées à sa course du tablier.\n\nLe profil est attribué ici après la rédaction du fichier de configuration. Il est donc prioritaire sur les valeurs du fichier pour ce volet, si vous en utilisez un. Les valeurs mesurées sur ce volet restent prioritaires lorsqu'elles sont disponibles. Toute modification ultérieure du profil s'applique à tous les volets qui le suivent.\n\nUn `profile:` écrit dans le fichier de configuration pour un volet apparaît ici comme sa valeur actuelle et ne peut pas être retiré depuis cet écran : il est défini dans le fichier et doit y être géré.\n\n**Ce que vous devez faire** : choisissez un profil pour chaque volet, ou « Aucun profil » pour le laisser aux valeurs du fichier ou aux valeurs par défaut."
       },
       "assign_heights": {
-        "title": "Quelle est la hauteur de ces volets ?",
-        "description": "Un profil contient les mesures d'un volet de référence et s'adapte aux autres proportionnellement à leur hauteur. La hauteur des volets suivants est inconnue, ce qui empêche d'y adapter le profil : {covers}.\n\n**Ce que vous devez faire** : mesurez, pour chacun, la distance que parcourt le bord inférieur de la fermeture complète à l'ouverture complète, et écrivez-la en centimètres. Les décimales s'écrivent avec une virgule ou avec un point."
+        "title": "Quelle est la course du tablier de ces volets ?",
+        "description": "Un profil contient les mesures d'un volet de référence et s'adapte aux autres proportionnellement à leur course du tablier. La course du tablier des volets suivants est inconnue, ce qui empêche d'y adapter le profil : {covers}.\n\n**Ce que vous devez faire** : mesurez, pour chacun, la distance que parcourt le bord inférieur de la fermeture complète à l'ouverture complète, et écrivez-la en centimètres. Les décimales s'écrivent avec une virgule ou avec un point."
       },
       "pick_profile": {
         "title": "Quel profil ?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Valeurs du profil « {profile} »",
-        "description": "Voici les valeurs du profil. Home Assistant les adapte à chaque volet qui le suit, proportionnellement à la hauteur de ce volet.\n\n{values}\nVolets qui le suivent : {covers}"
+        "description": "Voici les valeurs du profil. Home Assistant les adapte à chaque volet qui le suit, proportionnellement à la course du tablier de ce volet.\n\n{values}\nVolets qui le suivent : {covers}"
       },
       "profile_edit": {
         "title": "Modifier le profil « {profile} »",
@@ -259,10 +259,10 @@
       },
       "path": {
         "title": "Comment voulez-vous mesurer ce volet ?",
-        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ quatre minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être corrigée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
+        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ quatre minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la course du tablier, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être corrigée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
         "menu_options": {
           "path_a": "(A) C'est le premier volet de ce type (mesure complète, ~4 minutes)",
-          "path_b": "(B) Il est semblable à un volet déjà mesuré (la hauteur seulement)",
+          "path_b": "(B) Il est semblable à un volet déjà mesuré (la course du tablier seulement)",
           "path_c": "(C) Il a un profil mais s'arrête au mauvais endroit (correction)",
           "cancel_flow": "Annuler"
         }
@@ -277,7 +277,7 @@
       },
       "path_b": {
         "title": "De quel type est {cover} ?",
-        "description": "Un profil décrit un modèle de volet : le temps qu'il met à parcourir sa course, le temps d'ouverture des lames et la façon dont le tablier s'enroule sur l'axe. Home Assistant l'adapte à ce volet dès qu'il sait quelle est sa hauteur.\n\n**Ce que vous devez faire** : choisissez le profil mesuré sur un volet semblable à celui-ci. À l'écran suivant, vous mesurerez la hauteur de celui-ci.",
+        "description": "Un profil décrit un modèle de volet : le temps qu'il met à parcourir sa course, le temps d'ouverture des lames et la façon dont le tablier s'enroule sur l'axe. Home Assistant l'adapte à ce volet dès qu'il sait quelle est sa course du tablier.\n\n**Ce que vous devez faire** : choisissez le profil mesuré sur un volet semblable à celui-ci. À l'écran suivant, vous mesurerez la course du tablier de celui-ci.",
         "data": {
           "profile": "Profil"
         }
@@ -435,7 +435,7 @@
         }
       },
       "height": {
-        "title": "Quelle est la hauteur de {cover} ?",
+        "title": "Quelle est la course du tablier de {cover} ?",
         "description": "![](/myhome_static/height.webp)\n\n**Ce que vous devez faire** : le volet étant complètement ouvert, mesurez depuis le point où le bord inférieur du volet repose quand il est fermé (la base) jusqu'au bord inférieur du volet dans sa position actuelle (complètement ouvert). Autrement dit, mesurez la distance que parcourt le volet de complètement ouvert à complètement fermé (ou l'inverse), et écrivez les centimètres ci-dessous.\n\nCette distance est la course du tablier, et c'est la référence à laquelle toute autre mesure est comparée. Mesurez le tablier, pas la baie : si le bord inférieur repose sur un appui et non sur le sol, mesurez depuis l'appui.",
         "data": {
           "height": "Course du tablier (cm)"
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "La course du tablier a été notée",
-        "description": "**Volet** : {cover}\n\n**Ce qui a été noté** : {height} cm de la base au bord inférieur, le volet étant complètement ouvert.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Vérifiez la valeur : les lectures au mètre des prochaines étapes sont comparées à cette hauteur. Si le volet n'est pas complètement ouvert, et que ce n'est donc pas la course entière, dites-le ci-dessous : il est rouvert et la lecture est reprise.",
+        "description": "**Volet** : {cover}\n\n**Ce qui a été noté** : {height} cm de la base au bord inférieur, le volet étant complètement ouvert.\n\n**Ce que vous devez faire** : si c'est le nombre que vous avez lu sur le mètre, continuez. Vérifiez la valeur : les lectures au mètre des prochaines étapes sont comparées à cette course du tablier. Si le volet n'est pas complètement ouvert, et que ce n'est donc pas la course entière, dites-le ci-dessous : il est rouvert et la lecture est reprise.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
           "repeat_measure": "Répéter la mesure",
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Mesurez {cover} - à {percent} % de la descente",
-        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été ouvert complètement puis descendu d'environ {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. La même référence que la hauteur, pour que les deux mesures puissent être comparées.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Ce qui s'est passé** : le volet a été ouvert complètement puis descendu d'environ {percent} % de sa course.\n\n**Ce que vous devez faire** : mesurez depuis la base jusqu'au bord inférieur dans sa position actuelle, et écrivez les centimètres ci-dessous. La même référence que la course du tablier, pour que les deux mesures puissent être comparées.",
         "data": {
           "measured_cm": "Hauteur du bord inférieur (cm)"
         },
@@ -502,7 +502,7 @@
       },
       "verify_offer": {
         "title": "Voulez-vous vérifier le volet ?",
-        "description": "**Volet** : {cover}\n\nLa hauteur était tout ce qu'il fallait : la calibration peut déjà être enregistrée telle quelle.\n\n**Ce qu'est la vérification** : le volet est envoyé à mi-course et vous mesurez où il s'est réellement arrêté, ce qui dit si ce volet se comporte vraiment comme le profil. Cela prend environ une minute et une lecture au mètre.",
+        "description": "**Volet** : {cover}\n\nLa course du tablier était tout ce qu'il fallait : la calibration peut déjà être enregistrée telle quelle.\n\n**Ce qu'est la vérification** : le volet est envoyé à mi-course et vous mesurez où il s'est réellement arrêté, ce qui dit si ce volet se comporte vraiment comme le profil. Cela prend environ une minute et une lecture au mètre.",
         "menu_options": {
           "verify_now": "Vérifier maintenant (~1 minute)",
           "skip_verify": "Non, aller au récapitulatif"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibration enregistrée",
-        "description": "C'est fait : {cover} suit désormais le profil « {profile} », et ce dès la fermeture de cette boîte de dialogue. Aucun temps de course propre à ce volet n'a été mesuré ici : la seule chose mesurée sur ce volet est sa hauteur, et les temps du profil y sont ramenés. Les attributs de l'entité indiquent alors `profile {profile}` sous « Calibration source », et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} » sous Configurer → Profils et volets, où il est partagé par tous les volets qui le suivent. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : donner le même profil à un autre volet, ou fermer. Si {cover} s'arrête au mauvais endroit, « (C) Il a un profil mais s'arrête au mauvais endroit » mesure ses propres temps de course.",
+        "description": "C'est fait : {cover} suit désormais le profil « {profile} », et ce dès la fermeture de cette boîte de dialogue. Aucun temps de course propre à ce volet n'a été mesuré ici : la seule chose mesurée sur ce volet est sa course du tablier, et les temps du profil y sont ramenés. Les attributs de l'entité indiquent alors `profile {profile}` sous « Calibration source », et les valeurs elles-mêmes sont sous « Opening time », « Closing time », « Slat time », les coefficients d'axe et « Height ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} » sous Configurer → Profils et volets, où il est partagé par tous les volets qui le suivent. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : donner le même profil à un autre volet, ou fermer. Si {cover} s'arrête au mauvais endroit, « (C) Il a un profil mais s'arrête au mauvais endroit » mesure ses propres temps de course.",
         "menu_options": {
           "calibrate": "Calibrer un autre volet",
           "init": "Retour au menu"

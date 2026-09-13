@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profielen en rolluiken",
-        "description": "Een **profiel** beschrijft één soort rolluik: hoe lang het erover doet, hoe lang het openen van de lamellen duurt en hoe het pantser op de as wordt gewikkeld. Elk rolluik kan er een volgen, en Home Assistant past het aan de eigen hoogte van dat rolluik aan.\n\nEr zijn nu {profiles} profielen en {covers} eenvoudige rolluiken op deze gateway.",
+        "description": "Een **profiel** beschrijft één soort rolluik: hoe lang het erover doet, hoe lang het openen van de lamellen duurt en hoe het pantser op de as wordt gewikkeld. Elk rolluik kan er een volgen, en Home Assistant past het aan de loopafstand van het pantser van dat rolluik aan.\n\nEr zijn nu {profiles} profielen en {covers} eenvoudige rolluiken op deze gateway.",
         "menu_options": {
           "assign_covers": "Geef elk rolluik een profiel",
           "pick_profile": "Een profiel bekijken, wijzigen of verwijderen",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Welk profiel elk rolluik volgt",
-        "description": "**Wat er gaat gebeuren**: er beweegt niets. Een profiel toewijzen betekent Home Assistant vertellen “dit rolluik is gemaakt zoals die daar”: vanaf dat moment volgt het rolluik dat profiel, looptijden inbegrepen, aangepast aan de hoogte van dit rolluik.\n\nU wijst het profiel hier toe nadat het configuratiebestand is geschreven. Het profiel krijgt daarom voorrang op de waarden voor dit rolluik in dat bestand, als u dat gebruikt. Waarden die op dit rolluik zijn gemeten, blijven voorrang houden waar ze beschikbaar zijn. Latere wijzigingen aan het profiel gelden voor alle rolluiken die het volgen.\n\nEen `profile:` dat in het configuratiebestand voor een rolluik staat, verschijnt hier als de huidige waarde en kan vanaf dit scherm niet worden weggehaald: het staat in het bestand en moet daar worden beheerd.\n\n**Wat u moet doen**: kies voor elk rolluik een profiel, of “Geen profiel” om het op de waarden van het bestand of op de standaardwaarden te laten."
+        "description": "**Wat er gaat gebeuren**: er beweegt niets. Een profiel toewijzen betekent Home Assistant vertellen “dit rolluik is gemaakt zoals die daar”: vanaf dat moment volgt het rolluik dat profiel, looptijden inbegrepen, aangepast aan de loopafstand van het pantser van dit rolluik.\n\nU wijst het profiel hier toe nadat het configuratiebestand is geschreven. Het profiel krijgt daarom voorrang op de waarden voor dit rolluik in dat bestand, als u dat gebruikt. Waarden die op dit rolluik zijn gemeten, blijven voorrang houden waar ze beschikbaar zijn. Latere wijzigingen aan het profiel gelden voor alle rolluiken die het volgen.\n\nEen `profile:` dat in het configuratiebestand voor een rolluik staat, verschijnt hier als de huidige waarde en kan vanaf dit scherm niet worden weggehaald: het staat in het bestand en moet daar worden beheerd.\n\n**Wat u moet doen**: kies voor elk rolluik een profiel, of “Geen profiel” om het op de waarden van het bestand of op de standaardwaarden te laten."
       },
       "assign_heights": {
-        "title": "Hoe hoog zijn deze rolluiken?",
-        "description": "Een profiel bevat metingen van een rolluik met een bepaalde hoogte en wordt naar verhouding aangepast aan andere rolluiken. Van de volgende rolluiken is de hoogte onbekend, waardoor het profiel niet kan worden aangepast: {covers}.\n\n**Wat u moet doen**: meet voor elk van hen de afstand die de onderrand aflegt van helemaal dicht naar helemaal open, en schrijf die in centimeters. Decimalen mogen met een komma of met een punt."
+        "title": "Wat is de loopafstand van het pantser van deze rolluiken?",
+        "description": "Een profiel bevat metingen van een rolluik met een bepaalde loopafstand en wordt naar verhouding aangepast aan andere rolluiken. Van de volgende rolluiken is de loopafstand van het pantser onbekend, waardoor het profiel niet kan worden aangepast: {covers}.\n\n**Wat u moet doen**: meet voor elk van hen de afstand die de onderrand aflegt van helemaal dicht naar helemaal open, en schrijf die in centimeters. Decimalen mogen met een komma of met een punt."
       },
       "pick_profile": {
         "title": "Welk profiel?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Waarden van profiel “{profile}”",
-        "description": "Dit zijn de waarden van het profiel. Home Assistant past ze toe op elk rolluik dat het volgt, naar verhouding van de hoogte van dat rolluik.\n\n{values}\nRolluiken die het volgen: {covers}"
+        "description": "Dit zijn de waarden van het profiel. Home Assistant past ze toe op elk rolluik dat het volgt, naar verhouding van de loopafstand van het pantser van dat rolluik.\n\n{values}\nRolluiken die het volgen: {covers}"
       },
       "profile_edit": {
         "title": "Profiel “{profile}” wijzigen",
@@ -259,10 +259,10 @@
       },
       "path": {
         "title": "Hoe wilt u dit rolluik meten?",
-        "description": "**Rolluik**: {cover}\n\nEr zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is de lange, ongeveer vier minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is juist bedoeld voor rolluiken die lijken op een al gekalibreerd rolluik: u kiest het profiel, meet de hoogte, klaar.\n\nDe derde (C) is voor een rolluik waaraan een profiel is toegewezen maar dat op de verkeerde plek stopt: in dat geval moet de kalibratie van dit rolluik worden gecorrigeerd.\n\n**Wat u moet doen**: kies een van de manieren hieronder. Tot het volgende scherm beweegt er niets.",
+        "description": "**Rolluik**: {cover}\n\nEr zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is de lange, ongeveer vier minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is juist bedoeld voor rolluiken die lijken op een al gekalibreerd rolluik: u kiest het profiel, meet de loopafstand van het pantser, klaar.\n\nDe derde (C) is voor een rolluik waaraan een profiel is toegewezen maar dat op de verkeerde plek stopt: in dat geval moet de kalibratie van dit rolluik worden gecorrigeerd.\n\n**Wat u moet doen**: kies een van de manieren hieronder. Tot het volgende scherm beweegt er niets.",
         "menu_options": {
           "path_a": "(A) Het is het eerste rolluik van deze soort (volledige meting, ~4 minuten)",
-          "path_b": "(B) Het lijkt op een al gemeten rolluik (alleen de hoogte)",
+          "path_b": "(B) Het lijkt op een al gemeten rolluik (alleen de loopafstand van het pantser)",
           "path_c": "(C) Het heeft een profiel maar stopt op de verkeerde plek (correctie)",
           "cancel_flow": "Annuleren"
         }
@@ -277,7 +277,7 @@
       },
       "path_b": {
         "title": "Van welke soort is {cover}?",
-        "description": "Een profiel beschrijft een model rolluik: hoe lang het erover doet, hoe lang het openen van de lamellen duurt en hoe het pantser op de as wordt gewikkeld. Home Assistant past het op dit rolluik toe zodra het weet hoe hoog het is.\n\n**Wat u moet doen**: kies het profiel dat op een vergelijkbaar rolluik is gemeten. Op het volgende scherm meet u de hoogte van dit rolluik.",
+        "description": "Een profiel beschrijft een model rolluik: hoe lang het erover doet, hoe lang het openen van de lamellen duurt en hoe het pantser op de as wordt gewikkeld. Home Assistant past het op dit rolluik toe zodra het de loopafstand van het pantser kent.\n\n**Wat u moet doen**: kies het profiel dat op een vergelijkbaar rolluik is gemeten. Op het volgende scherm meet u de loopafstand van het pantser van dit rolluik.",
         "data": {
           "profile": "Profiel"
         }
@@ -435,7 +435,7 @@
         }
       },
       "height": {
-        "title": "Hoe hoog is {cover}?",
+        "title": "Wat is de loopafstand van het pantser van {cover}?",
         "description": "![](/myhome_static/height.webp)\n\n**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand van het rolluik rust als het dicht is (de basis) tot de onderrand van het rolluik in de huidige stand (helemaal open). Met andere woorden: meet de afstand die het rolluik aflegt van helemaal open naar helemaal dicht (of omgekeerd), en schrijf de centimeters hieronder.\n\nDie afstand is de loopafstand van het pantser, en dat is de maat waarmee elke andere meting wordt vergeleken. Meet het pantser, niet de dagopening: rust de onderrand op een vensterbank en niet op de vloer, meet dan vanaf de vensterbank.",
         "data": {
           "height": "Loopafstand van het pantser (cm)"
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "De loopafstand van het pantser is genoteerd",
-        "description": "**Rolluik**: {cover}\n\n**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Controleer de waarde: de metingen met de rolmaat in de volgende stappen worden met deze hoogte vergeleken. Is het rolluik niet helemaal open, en is dit dus niet de hele loopafstand, zeg dat dan hieronder: het wordt opnieuw geopend en de meting wordt overgedaan.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Controleer de waarde: de metingen met de rolmaat in de volgende stappen worden met deze loopafstand vergeleken. Is het rolluik niet helemaal open, en is dit dus niet de hele loopafstand, zeg dat dan hieronder: het wordt opnieuw geopend en de meting wordt overgedaan.",
         "menu_options": {
           "accept_step": "Dit klopt, verder",
           "repeat_measure": "Herhaal de meting",
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Meet {cover} - op {percent}% van de daling",
-        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna ongeveer {percent}% van zijn loopafstand omlaag gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Gebruik hetzelfde referentiepunt als bij de hoogtemeting, zodat de twee metingen vergelijkbaar zijn.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna ongeveer {percent}% van zijn loopafstand omlaag gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Gebruik hetzelfde referentiepunt als bij de loopafstand van het pantser, zodat de twee metingen vergelijkbaar zijn.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },
@@ -502,7 +502,7 @@
       },
       "verify_offer": {
         "title": "Wilt u het rolluik controleren?",
-        "description": "**Rolluik**: {cover}\n\nDe hoogte was alles wat nodig was: de kalibratie kan zo al worden opgeslagen.\n\n**Wat de controle is**: het rolluik wordt naar halverwege gestuurd en u meet waar het werkelijk gestopt is, wat zegt of dit rolluik zich echt als het profiel gedraagt. Het kost ongeveer een minuut en één meting met de rolmaat.",
+        "description": "**Rolluik**: {cover}\n\nDe loopafstand van het pantser was alles wat nodig was: de kalibratie kan zo al worden opgeslagen.\n\n**Wat de controle is**: het rolluik wordt naar halverwege gestuurd en u meet waar het werkelijk gestopt is, wat zegt of dit rolluik zich echt als het profiel gedraagt. Het kost ongeveer een minuut en één meting met de rolmaat.",
         "menu_options": {
           "verify_now": "Nu controleren (~1 minuut)",
           "skip_verify": "Nee, naar de samenvatting"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Kalibratie opgeslagen",
-        "description": "Klaar: {cover} volgt nu het profiel “{profile}”, en doet dat zodra dit dialoogvenster gesloten wordt. Er is hier geen eigen beweging geklokt: het enige wat op dit rolluik gemeten is, is de hoogte, en de tijden van het profiel worden daarop geschaald. De attributen van de entiteit zeggen dan `profile {profile}` onder “Calibration source”, en de getallen zelf staan onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken, waar het gedeeld wordt met elk rolluik dat het volgt. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: hetzelfde profiel aan een ander rolluik geven, of sluiten. Blijkt {cover} op de verkeerde plek te stoppen, dan meet “(C) Het heeft een profiel maar stopt op de verkeerde plek” zijn eigen looptijden.",
+        "description": "Klaar: {cover} volgt nu het profiel “{profile}”, en doet dat zodra dit dialoogvenster gesloten wordt. Er is hier geen eigen beweging geklokt: het enige wat op dit rolluik gemeten is, is de loopafstand van het pantser, en de tijden van het profiel worden daarop geschaald. De attributen van de entiteit zeggen dan `profile {profile}` onder “Calibration source”, en de getallen zelf staan onder “Opening time”, “Closing time”, “Slat time”, de rolfactoren en “Height”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken, waar het gedeeld wordt met elk rolluik dat het volgt. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: hetzelfde profiel aan een ander rolluik geven, of sluiten. Blijkt {cover} op de verkeerde plek te stoppen, dan meet “(C) Het heeft een profiel maar stopt op de verkeerde plek” zijn eigen looptijden.",
         "menu_options": {
           "calibrate": "Kalibreer nog een rolluik",
           "init": "Terug naar het menu"

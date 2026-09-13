@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profiles and covers",
-        "description": "A **profile** describes one kind of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Every cover may follow one, and Home Assistant scales it to that cover's own height.\n\nThere are {profiles} profiles and {covers} basic covers on this gateway.",
+        "description": "A **profile** describes one kind of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Every cover may follow one, and Home Assistant scales it to that cover's own curtain travel.\n\nThere are {profiles} profiles and {covers} basic covers on this gateway.",
         "menu_options": {
           "assign_covers": "Give each cover a profile",
           "pick_profile": "View, edit or delete a profile",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Which profile each cover follows",
-        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's height.\n\nThe profile is assigned here after the configuration file was written, so it takes precedence over the file's values for this cover, if you use one. Values measured on this cover still take precedence wherever they are available. Later changes to the profile apply to every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it is defined in the file and must be managed there.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
+        "description": "**What is about to happen**: nothing moves. Assigning a profile means telling Home Assistant “this cover is built like those ones”: from then on the cover follows that profile, including its run times, scaled to this cover's curtain travel.\n\nThe profile is assigned here after the configuration file was written, so it takes precedence over the file's values for this cover, if you use one. Values measured on this cover still take precedence wherever they are available. Later changes to the profile apply to every cover that follows it.\n\nA `profile:` written in the configuration file for a cover is shown here as its current value and cannot be taken away from this screen: it is defined in the file and must be managed there.\n\n**What you have to do**: pick a profile for each cover, or “No profile” to leave it on the file's values or the defaults."
       },
       "assign_heights": {
-        "title": "How tall are these covers?",
-        "description": "A profile contains measurements from a cover of a given height and is scaled to other covers in proportion to their height. The following covers have no known height, so the profile cannot be scaled to them: {covers}.\n\n**What you have to do**: measure, for each of them, the distance the bottom edge travels from fully closed to fully open, and write it in centimetres. Decimals may be written with a comma or with a point."
+        "title": "What is the curtain travel of these covers?",
+        "description": "A profile contains measurements from a cover of a given curtain travel and is scaled to other covers in proportion to their own. The following covers have no known curtain travel, so the profile cannot be scaled to them: {covers}.\n\n**What you have to do**: measure, for each of them, the distance the bottom edge travels from fully closed to fully open, and write it in centimetres. Decimals may be written with a comma or with a point."
       },
       "pick_profile": {
         "title": "Which profile?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Values of profile “{profile}”",
-        "description": "These are the profile values. Home Assistant scales them to every cover that follows it, in proportion to that cover's height.\n\n{values}\nCovers following it: {covers}"
+        "description": "These are the profile values. Home Assistant scales them to every cover that follows it, in proportion to that cover's curtain travel.\n\n{values}\nCovers following it: {covers}"
       },
       "profile_edit": {
         "title": "Edit profile “{profile}”",
@@ -259,10 +259,10 @@
       },
       "path": {
         "title": "How do you want to measure this cover?",
-        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be corrected.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
+        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the curtain travel, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be corrected.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
         "menu_options": {
           "path_a": "(A) It is the first cover of its kind (full measurement, ~4 minutes)",
-          "path_b": "(B) It is similar to a cover already measured (height only)",
+          "path_b": "(B) It is similar to a cover already measured (curtain travel only)",
           "path_c": "(C) It has a profile but stops in the wrong place (correction)",
           "cancel_flow": "Cancel"
         }
@@ -277,7 +277,7 @@
       },
       "path_b": {
         "title": "What kind of cover is {cover}?",
-        "description": "A profile describes a model of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Home Assistant scales it to this cover as soon as it knows how tall it is.\n\n**What you have to do**: pick the profile measured on a cover similar to this one. On the next screen you will measure the height of this one.",
+        "description": "A profile describes a model of cover: how long it takes to run, how long the slats take to open and how the curtain winds onto the roller. Home Assistant scales it to this cover as soon as it knows what its curtain travel is.\n\n**What you have to do**: pick the profile measured on a cover similar to this one. On the next screen you will measure the curtain travel of this one.",
         "data": {
           "profile": "Profile"
         }
@@ -435,7 +435,7 @@
         }
       },
       "height": {
-        "title": "How tall is {cover}?",
+        "title": "What is the curtain travel of {cover}?",
         "description": "![](/myhome_static/height.webp)\n\n**What you have to do**: with the cover completely open, measure from the point where the bottom edge of the cover rests when it is closed (the base) up to the bottom edge of the cover in its present position (completely open). In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres below.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the opening: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
         "data": {
           "height": "Curtain travel (cm)"
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "The curtain travel was written down",
-        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this height. If the cover is not completely open, so that this is not the whole travel, say so below: it is opened again and the reading is taken again.",
+        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this curtain travel. If the cover is not completely open, so that this is not the whole travel, say so below: it is opened again and the reading is taken again.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_measure": "Repeat the measurement",
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Measure {cover} - {percent}% of the way down",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the height, so that the two measurements can be compared.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the curtain travel, so that the two measurements can be compared.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -502,7 +502,7 @@
       },
       "verify_offer": {
         "title": "Do you want to check the cover?",
-        "description": "**Cover**: {cover}\n\nThe height was all that was needed: the calibration can be saved as it is.\n\n**What the check is**: the cover is sent half way and you measure where it really stopped, which says whether this cover really behaves like the profile. It takes about a minute and one tape reading.",
+        "description": "**Cover**: {cover}\n\nThe curtain travel was all that was needed: the calibration can be saved as it is.\n\n**What the check is**: the cover is sent half way and you measure where it really stopped, which says whether this cover really behaves like the profile. It takes about a minute and one tape reading.",
         "menu_options": {
           "verify_now": "Check it now (~1 minute)",
           "skip_verify": "No, go to the summary"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibration saved",
-        "description": "Done: {cover} now follows the profile “{profile}”, and does so from the moment this dialog is closed. No run of its own was timed here: the only thing measured on this cover is its height, and the profile's times are scaled to it. The entity's attributes then say `profile {profile}` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
+        "description": "Done: {cover} now follows the profile “{profile}”, and does so from the moment this dialog is closed. No run of its own was timed here: the only thing measured on this cover is its curtain travel, and the profile's times are scaled to it. The entity's attributes then say `profile {profile}` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"

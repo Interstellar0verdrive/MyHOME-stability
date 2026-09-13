@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profile und Rollläden",
-        "description": "Ein **Profil** beschreibt eine Rollladenart: wie lange sie für ihren Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an seine eigene Höhe an.\n\nZurzeit gibt es {profiles} Profile und {covers} einfache Rollläden an diesem Gateway.",
+        "description": "Ein **Profil** beschreibt eine Rollladenart: wie lange sie für ihren Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an seinen eigenen Panzerweg an.\n\nZurzeit gibt es {profiles} Profile und {covers} einfache Rollläden an diesem Gateway.",
         "menu_options": {
           "assign_covers": "Jedem Rollladen ein Profil zuweisen",
           "pick_profile": "Ein Profil ansehen, ändern oder löschen",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Welchem Profil jeder Rollladen folgt",
-        "description": "**Was gleich passiert**: nichts bewegt sich. Ein Profil zuzuweisen heißt, Home Assistant zu sagen „dieser Rollladen ist gebaut wie jene dort“: von da an folgt der Rollladen diesem Profil, Laufzeiten eingeschlossen, auf seine Höhe umgerechnet.\n\nSie weisen das Profil hier zu, nachdem die Konfigurationsdatei erstellt wurde. Es hat daher Vorrang vor den Werten für diesen Rollladen in der Datei, falls Sie eine verwenden. An diesem Rollladen gemessene Werte behalten ihren Vorrang, soweit sie vorhanden sind. Spätere Änderungen am Profil gelten für alle Rollläden, die ihm folgen.\n\nEin `profile:`, das in der Konfigurationsdatei für einen Rollladen steht, erscheint hier als aktueller Wert und kann von diesem Bildschirm aus nicht entfernt werden: es ist in der Datei definiert und muss dort verwaltet werden.\n\n**Was Sie tun müssen**: wählen Sie für jeden Rollladen ein Profil oder „Kein Profil“, um ihn bei den Werten der Datei oder bei den Vorgaben zu belassen."
+        "description": "**Was gleich passiert**: nichts bewegt sich. Ein Profil zuzuweisen heißt, Home Assistant zu sagen „dieser Rollladen ist gebaut wie jene dort“: von da an folgt der Rollladen diesem Profil, Laufzeiten eingeschlossen, auf seinen Panzerweg umgerechnet.\n\nSie weisen das Profil hier zu, nachdem die Konfigurationsdatei erstellt wurde. Es hat daher Vorrang vor den Werten für diesen Rollladen in der Datei, falls Sie eine verwenden. An diesem Rollladen gemessene Werte behalten ihren Vorrang, soweit sie vorhanden sind. Spätere Änderungen am Profil gelten für alle Rollläden, die ihm folgen.\n\nEin `profile:`, das in der Konfigurationsdatei für einen Rollladen steht, erscheint hier als aktueller Wert und kann von diesem Bildschirm aus nicht entfernt werden: es ist in der Datei definiert und muss dort verwaltet werden.\n\n**Was Sie tun müssen**: wählen Sie für jeden Rollladen ein Profil oder „Kein Profil“, um ihn bei den Werten der Datei oder bei den Vorgaben zu belassen."
       },
       "assign_heights": {
-        "title": "Wie hoch sind diese Rollläden?",
-        "description": "Ein Profil enthält Messwerte eines Rollladens mit einer bestimmten Höhe und wird proportional auf andere Rollläden umgerechnet. Bei folgenden Rollläden ist die Höhe unbekannt, daher lässt sich das Profil nicht umrechnen: {covers}.\n\n**Was Sie tun müssen**: messen Sie für jeden den Weg, den die Unterkante von ganz geschlossen bis ganz geöffnet zurücklegt, und tragen Sie ihn in Zentimetern ein. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
+        "title": "Wie groß ist der Panzerweg dieser Rollläden?",
+        "description": "Ein Profil enthält Messwerte eines Rollladens mit einem bestimmten Panzerweg und wird proportional auf andere Rollläden umgerechnet. Bei folgenden Rollläden ist der Panzerweg unbekannt, daher lässt sich das Profil nicht umrechnen: {covers}.\n\n**Was Sie tun müssen**: messen Sie für jeden den Weg, den die Unterkante von ganz geschlossen bis ganz geöffnet zurücklegt, und tragen Sie ihn in Zentimetern ein. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
       },
       "pick_profile": {
         "title": "Welches Profil?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Werte des Profils „{profile}“",
-        "description": "Dies sind die Werte des Profils. Home Assistant rechnet sie auf jeden Rollladen um, der ihm folgt, im Verhältnis zur Höhe jenes Rollladens.\n\n{values}\nRollläden, die ihm folgen: {covers}"
+        "description": "Dies sind die Werte des Profils. Home Assistant rechnet sie auf jeden Rollladen um, der ihm folgt, im Verhältnis zum Panzerweg jenes Rollladens.\n\n{values}\nRollläden, die ihm folgen: {covers}"
       },
       "profile_edit": {
         "title": "Profil „{profile}“ ändern",
@@ -259,10 +259,10 @@
       },
       "path": {
         "title": "Wie wollen Sie diesen Rollladen messen?",
-        "description": "**Rollladen**: {cover}\n\nEs gibt drei Wege, und der richtige hängt davon ab, was Sie schon gemessen haben. Es sind keine aufeinanderfolgenden Schritte: Sie wählen einen.\n\nDer erste (A) ist der lange, etwa vier Minuten: dreimal einen Knopf drücken und dreimal mit dem Maßband messen. Am Ende entsteht ein **Profil**, also die Beschreibung dieser Rollladenart, die alle ähnlichen Rollläden (gleiches Modell, gleiche Größe, ...) wiederverwenden können.\n\nDer zweite (B) ist gerade für Rollläden gedacht, die einem bereits kalibrierten ähneln: Sie wählen das Profil, messen die Höhe, fertig.\n\nDer dritte (C) ist für einen Rollladen, dem ein Profil zugewiesen wurde, der aber an der falschen Stelle stehen bleibt: in diesem Fall muss die Kalibrierung dieses Rollladens korrigiert werden.\n\n**Was Sie tun müssen**: wählen Sie einen der Wege unten. Bis zum nächsten Bildschirm bewegt sich nichts.",
+        "description": "**Rollladen**: {cover}\n\nEs gibt drei Wege, und der richtige hängt davon ab, was Sie schon gemessen haben. Es sind keine aufeinanderfolgenden Schritte: Sie wählen einen.\n\nDer erste (A) ist der lange, etwa vier Minuten: dreimal einen Knopf drücken und dreimal mit dem Maßband messen. Am Ende entsteht ein **Profil**, also die Beschreibung dieser Rollladenart, die alle ähnlichen Rollläden (gleiches Modell, gleiche Größe, ...) wiederverwenden können.\n\nDer zweite (B) ist gerade für Rollläden gedacht, die einem bereits kalibrierten ähneln: Sie wählen das Profil, messen den Panzerweg, fertig.\n\nDer dritte (C) ist für einen Rollladen, dem ein Profil zugewiesen wurde, der aber an der falschen Stelle stehen bleibt: in diesem Fall muss die Kalibrierung dieses Rollladens korrigiert werden.\n\n**Was Sie tun müssen**: wählen Sie einen der Wege unten. Bis zum nächsten Bildschirm bewegt sich nichts.",
         "menu_options": {
           "path_a": "(A) Es ist der erste Rollladen dieser Art (vollständige Messung, ~4 Minuten)",
-          "path_b": "(B) Er ähnelt einem bereits gemessenen Rollladen (nur die Höhe)",
+          "path_b": "(B) Er ähnelt einem bereits gemessenen Rollladen (nur der Panzerweg)",
           "path_c": "(C) Er hat ein Profil, hält aber an der falschen Stelle (Korrektur)",
           "cancel_flow": "Abbrechen"
         }
@@ -277,7 +277,7 @@
       },
       "path_b": {
         "title": "Von welcher Art ist {cover}?",
-        "description": "Ein Profil beschreibt ein Rollladenmodell: wie lange es für seinen Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Home Assistant rechnet es auf diesen Rollladen um, sobald es weiß, wie hoch er ist.\n\n**Was Sie tun müssen**: wählen Sie das Profil, das an einem ähnlichen Rollladen gemessen wurde. Auf dem nächsten Bildschirm messen Sie die Höhe dieses Rollladens.",
+        "description": "Ein Profil beschreibt ein Rollladenmodell: wie lange es für seinen Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Home Assistant rechnet es auf diesen Rollladen um, sobald es seinen Panzerweg kennt.\n\n**Was Sie tun müssen**: wählen Sie das Profil, das an einem ähnlichen Rollladen gemessen wurde. Auf dem nächsten Bildschirm messen Sie den Panzerweg dieses Rollladens.",
         "data": {
           "profile": "Profil"
         }
@@ -435,7 +435,7 @@
         }
       },
       "height": {
-        "title": "Wie hoch ist {cover}?",
+        "title": "Wie groß ist der Panzerweg von {cover}?",
         "description": "![](/myhome_static/height.webp)\n\n**Was Sie tun müssen**: messen Sie bei vollständig geöffnetem Rollladen von der Stelle, an der die Unterkante des Rollladens im geschlossenen Zustand aufliegt (der Auflagefläche), bis zur Unterkante des Rollladens in ihrer jetzigen Stellung (vollständig geöffnet). Mit anderen Worten: messen Sie den Weg, den der Rollladen von ganz geöffnet bis ganz geschlossen zurücklegt (oder umgekehrt), und tragen Sie die Zentimeter unten ein.\n\nDieser Weg ist der Panzerweg, und er ist der Bezug, mit dem jede andere Messung verglichen wird. Messen Sie den Panzer, nicht die Öffnung: liegt die Unterkante auf einer Fensterbank und nicht auf dem Boden auf, messen Sie ab der Fensterbank.",
         "data": {
           "height": "Panzerweg (cm)"
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "Der Panzerweg wurde notiert",
-        "description": "**Rollladen**: {cover}\n\n**Was notiert wurde**: {height} cm von der Auflagefläche bis zur Unterkante bei vollständig geöffnetem Rollladen.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Prüfen Sie den Wert: die Maßbandablesungen der nächsten Schritte werden mit dieser Höhe verglichen. Ist der Rollladen nicht vollständig geöffnet, und ist das also nicht der ganze Weg, sagen Sie es unten: er wird erneut geöffnet und die Ablesung wiederholt.",
+        "description": "**Rollladen**: {cover}\n\n**Was notiert wurde**: {height} cm von der Auflagefläche bis zur Unterkante bei vollständig geöffnetem Rollladen.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Prüfen Sie den Wert: die Maßbandablesungen der nächsten Schritte werden mit diesem Panzerweg verglichen. Ist der Rollladen nicht vollständig geöffnet, und ist das also nicht der ganze Weg, sagen Sie es unten: er wird erneut geöffnet und die Ablesung wiederholt.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_measure": "Die Messung wiederholen",
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Messen Sie {cover} – bei {percent}% der Abfahrt",
-        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geöffnet und dann um etwa {percent}% seines Weges heruntergefahren.\n\n**Was Sie tun müssen**: messen Sie von der Auflagefläche bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Derselbe Bezug wie bei der Höhe, damit sich die beiden Messungen vergleichen lassen.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geöffnet und dann um etwa {percent}% seines Weges heruntergefahren.\n\n**Was Sie tun müssen**: messen Sie von der Auflagefläche bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Derselbe Bezug wie beim Panzerweg, damit sich die beiden Messungen vergleichen lassen.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },
@@ -502,7 +502,7 @@
       },
       "verify_offer": {
         "title": "Wollen Sie den Rollladen prüfen?",
-        "description": "**Rollladen**: {cover}\n\nDie Höhe war alles, was gebraucht wurde: die Kalibrierung lässt sich schon so speichern.\n\n**Was die Prüfung ist**: der Rollladen wird auf halben Weg gefahren, und Sie messen, wo er wirklich stehen geblieben ist – das sagt, ob sich dieser Rollladen tatsächlich wie das Profil verhält. Es dauert etwa eine Minute und eine Messung mit dem Maßband.",
+        "description": "**Rollladen**: {cover}\n\nDer Panzerweg war alles, was gebraucht wurde: die Kalibrierung lässt sich schon so speichern.\n\n**Was die Prüfung ist**: der Rollladen wird auf halben Weg gefahren, und Sie messen, wo er wirklich stehen geblieben ist – das sagt, ob sich dieser Rollladen tatsächlich wie das Profil verhält. Es dauert etwa eine Minute und eine Messung mit dem Maßband.",
         "menu_options": {
           "verify_now": "Jetzt prüfen (~1 Minute)",
           "skip_verify": "Nein, zur Zusammenfassung"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“, und zwar ab dem Augenblick, in dem dieser Dialog geschlossen wird. Hier wurde keine eigene Laufzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist seine Höhe, und die Zeiten des Profils werden darauf umgerechnet. Die Attribute der Entität sagen dann `profile {profile}` unter „Calibration source“, und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Laufzeiten.",
+        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“, und zwar ab dem Augenblick, in dem dieser Dialog geschlossen wird. Hier wurde keine eigene Laufzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist sein Panzerweg, und die Zeiten des Profils werden darauf umgerechnet. Die Attribute der Entität sagen dann `profile {profile}` unter „Calibration source“, und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Laufzeiten.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
