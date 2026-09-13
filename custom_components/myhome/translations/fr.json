@@ -402,7 +402,7 @@
       },
       "open_result": {
         "title": "La montée a été mesurée",
-        "description": "**Volet** : {cover}\n\n**Ce qui a été mesuré** : lames {slat} s, montée complète {run} s.\n\n**Ce que vous devez faire** : si les deux appuis vous semblent bons, continuez. Si l'un des deux est parti en retard ou en avance, répétez la mesure : les deux courses de la montée sont refaites depuis la base, car un temps de lames pris à un essai ne va pas avec une montée prise à un autre. Un appui décalé d'une demi-seconde déplace l'estimation de quelques centimètres.",
+        "description": "**Volet** : {cover}\n\n**Ce qui a été mesuré** : lames {slat} s, montée complète {run} s.\n\n**Ce que vous devez faire** : si les deux appuis vous semblent bons, continuez. Si l'un des deux est parti en retard ou en avance, répétez la mesure : les deux courses de la montée sont refaites depuis la base, car un temps d'ouverture des lames pris à un essai ne va pas avec une montée prise à un autre. Un appui décalé d'une demi-seconde déplace l'estimation de quelques centimètres.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
           "repeat_step": "Répéter la mesure"

@@ -366,7 +366,7 @@
       },
       "lift_early": {
         "title": "La pulsación llegó demasiado pronto",
-        "description": "**Persiana**: {cover}\n\n**Lo que ha pasado**: una separación de menos de un centímetro quiere decir que la persiana seguía apoyada en su base cuando el motor se paró, así que la pulsación se hizo antes de que el borde inferior se despegara. El tiempo de lamas que ha salido es demasiado corto en una cantidad desconocida, y ninguna lectura puede devolver una distancia que nunca se recorrió.\n\n**Lo que tienes que hacer**: repetir la subida. La persiana vuelve abajo y arranca otra vez; esta vez espera a que el borde inferior se haya despegado de verdad antes de pulsar.",
+        "description": "**Persiana**: {cover}\n\n**Lo que ha pasado**: una separación de menos de un centímetro quiere decir que la persiana seguía apoyada en su base cuando el motor se paró, así que la pulsación se hizo antes de que el borde inferior se despegara. El tiempo de apertura de las lamas que ha salido es demasiado corto en una cantidad desconocida, y ninguna lectura puede devolver una distancia que nunca se recorrió.\n\n**Lo que tienes que hacer**: repetir la subida. La persiana vuelve abajo y arranca otra vez; esta vez espera a que el borde inferior se haya despegado de verdad antes de pulsar.",
         "menu_options": {
           "repeat_step": "Medir la subida otra vez",
           "lift_gap": "Escribir la separación otra vez",
@@ -402,7 +402,7 @@
       },
       "open_result": {
         "title": "La subida se ha medido",
-        "description": "**Persiana**: {cover}\n\n**Lo que se ha medido**: lamas {slat} s, subida completa {run} s.\n\n**Lo que tienes que hacer**: si las dos pulsaciones te han parecido correctas, continúa. Si alguna ha salido tarde o pronto, repite la medida: los dos recorridos de la subida se rehacen desde la base, porque un tiempo de lamas tomado en un intento no va con una subida tomada en otro. Una pulsación medio segundo desviada mueve la estimación unos centímetros.",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha medido**: lamas {slat} s, subida completa {run} s.\n\n**Lo que tienes que hacer**: si las dos pulsaciones te han parecido correctas, continúa. Si alguna ha salido tarde o pronto, repite la medida: los dos recorridos de la subida se rehacen desde la base, porque un tiempo de apertura de las lamas tomado en un intento no va con una subida tomada en otro. Una pulsación medio segundo desviada mueve la estimación unos centímetros.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_step": "Repetir la medida"
@@ -410,7 +410,7 @@
       },
       "open_result_gap": {
         "title": "La subida se ha medido",
-        "description": "**Persiana**: {cover}\n\n**Lo que se ha medido**: lamas {slat} s, subida completa {run} s, y una separación de {gap} cm por encima de la base.\n\nEl tiempo de lamas de arriba es el que ha producido la pulsación. La separación que has medido lo sustituye cuando se calculan los valores, así que lo que acabe guardado puede diferir de él en unas décimas de segundo: justo para eso se ha medido.\n\n**Lo que tienes que hacer**: si la pulsación de arriba y la lectura te han parecido correctas, continúa. Repetir la medida rehace los dos recorridos de la subida desde la base.",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha medido**: lamas {slat} s, subida completa {run} s, y una separación de {gap} cm por encima de la base.\n\nEl tiempo de apertura de las lamas de arriba es el que ha producido la pulsación. La separación que has medido lo sustituye cuando se calculan los valores, así que lo que acabe guardado puede diferir de él en unas décimas de segundo: justo para eso se ha medido.\n\n**Lo que tienes que hacer**: si la pulsación de arriba y la lectura te han parecido correctas, continúa. Repetir la medida rehace los dos recorridos de la subida desde la base.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_step": "Repetir la medida"
