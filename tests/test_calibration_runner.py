@@ -430,6 +430,65 @@ async def test_stop_says_so_when_the_command_path_would_not_take_it(
         assert "never stopped" in str(err.value)
 
 
+async def test_the_motor_stop_is_the_actuator_s_own_word_when_it_gives_one(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The far end of the distance the lift-off check has the user measure.
+
+    `async_calib_stop` answers with the instant our frame reached the bus; the motor
+    turns for a moment longer, and the curtain rises for all of it. The actuator says
+    when it really stopped, on the monitor session, and that is what comes back.
+
+    Mutation caught: answering with the frame's own instant, which would put the true
+    lift-off `stop_latency` too early on every taped gap.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        with _patched(path)[0], _patched(path)[1]:
+            await cover.async_calib_start(DIRECTION_OPEN)
+            written = await cover.async_calib_stop()
+            stopped = await cover.async_calib_motor_stop()
+        assert stopped == path.answered[STOPPED]
+        assert (stopped - written).total_seconds() == pytest.approx(STOP_ECHO_SEC, abs=0.001)
+
+
+async def test_the_motor_stop_falls_back_to_the_model_when_the_actuator_says_nothing(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """An actuator that answers the direction and not the stop is still measured.
+
+    The model's own `stop_latency` past the frame, which is the number the user can
+    tune - and the same answer `_async_calibration_motor_seconds` settles for.
+    """
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        with _patched(path)[0], _patched(path)[1]:
+            await cover.async_calib_start(DIRECTION_OPEN)
+            path.answer = False
+            written = await cover.async_calib_stop()
+            stopped = await cover.async_calib_motor_stop()
+        assert (stopped - written).total_seconds() == pytest.approx(STOP_LATENCY_SEC, abs=0.001)
+
+
+async def test_there_is_no_motor_stop_when_the_stop_was_never_written(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """No stop, no instant: the same failure, and the same screen, as the stop itself."""
+    async with setup_myhome(hass, tmp_path, RUNNER_YAML):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        path = GuidedPath(hass, freezer, cover)
+        with _patched(path)[0], _patched(path)[1]:
+            await cover.async_calib_start(DIRECTION_OPEN)
+            path.refuse_prefix = "*2*0*"
+            with contextlib.suppress(CalibrationError):
+                await cover.async_calib_stop()
+            with pytest.raises(CalibrationError) as err:
+                await cover.async_calib_motor_stop()
+        assert err.value.reason == REASON_NOT_STOPPED
+
+
 # --------------------------------------------------------------------------------------
 # A measured run
 # --------------------------------------------------------------------------------------

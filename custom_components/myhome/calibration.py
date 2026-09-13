@@ -271,6 +271,120 @@ def timing_from_presses(
     return PressTiming(slat_time, run_time)
 
 
+def slat_time_from_press(
+    motor_start: datetime | float, pressed: datetime | float
+) -> float:
+    """The slat phase alone, from a run that measures nothing else.
+
+    Since 0.5.0 the ascent is measured by two runs of one press each, and this is the
+    first of them: the shutter starts from the closed end stop, the user presses at the
+    instant the bottom edge leaves its rest, and the flow stops the shutter there. The
+    press is the whole measurement, exactly as it was when the same instant was the
+    first of two presses on one long run - `PRESS_REACTION_SEC` is taken off it and is
+    zero, because the reaction time is solved for on the shutter (`fit_direction`).
+
+    Raises `CalibrationError` when the press came before the motor did, which is a
+    clock, not a shutter.
+    """
+    slat = _instant(pressed) - PRESS_REACTION_SEC - _instant(motor_start)
+    if slat < 0:
+        raise CalibrationError(
+            REASON_BAD_POINT,
+            f"the slat press arrived {-slat:.1f} s before the motor started",
+        )
+    return slat
+
+
+def timing_with_slat(run: PressTiming, slat_time: float) -> PressTiming:
+    """Put the slat phase measured by one run onto the full ascent measured by another.
+
+    The two runs of the ascent produce one number each - the slat phase and the whole
+    upward run - and the model wants them as one `PressTiming`. The check is the one
+    `timing_from_presses` makes when both presses are on the same run: a slat phase
+    longer than the run it is meant to be the first seconds of is two measurements that
+    cannot both be of this shutter.
+    """
+    if slat_time < 0 or slat_time > run.run_time:
+        raise CalibrationError(
+            REASON_BAD_POINT,
+            f"a slat phase of {slat_time:.1f} s is outside the ascent it belongs to "
+            f"(0 - {run.run_time:.1f} s)",
+        )
+    return PressTiming(slat_time, run.run_time)
+
+
+def curtain_speed_at_the_closed_end(roll: float, height: float, curtain_time: float) -> float:
+    """How fast the bottom edge rises the instant it leaves its rest, in cm per second.
+
+    The slowest the curtain ever moves: at the closed end the whole curtain is hanging
+    and the tube is bare, so one turn of the motor lifts the least bar it ever will.
+
+    Read off the roll model itself (`roll_x`, which is `x` after `tau` of the curtain
+    time of a descent from the top):
+
+        x(tau)  = (k**2 - (k - tau * (k - 1))**2) / (k**2 - 1)
+        dx/dtau = 2 * (k - tau * (k - 1)) / (k + 1)
+
+    and the closed end is `tau = 1`, where that comes to `2 / (k + 1)` - which is 1 for
+    a `k` of 1, the linear shutter, as it must be. `x` is a fraction of the travel and
+    `tau` a fraction of the curtain time, so the speed in centimetres of bar per second
+    of motor is that slope times `height / curtain_time`.
+
+    Raises `CalibrationError` on a window with no travel or no curtain time, which is
+    not a window this can be asked about.
+    """
+    if height <= 0 or curtain_time <= 0:
+        raise CalibrationError(
+            REASON_BAD_POINT,
+            f"a window {height} cm tall whose curtain takes {curtain_time} s has no speed",
+        )
+    k = max(MIN_ROLL, roll)
+    return 2.0 * height / ((k + 1.0) * curtain_time)
+
+
+def slat_time_from_gap(
+    *,
+    stop_seconds: float,
+    gap_cm: float,
+    roll: float,
+    height: float,
+    curtain_time: float,
+) -> float:
+    """The slat phase a measured gap implies, rather than the one a finger produced.
+
+    The lift-off run ends with a stop *we* send, the instant the user presses, so where
+    the bottom edge comes to rest says exactly how late the press was. If the bar is
+    `gap_cm` above its rest when the motor stops, the curtain moved for `gap_cm / v0`
+    seconds after the true lift-off, and the true lift-off is that much before the
+    motor stop:
+
+        lift_off = motor_stop - gap_cm / v0
+        slat     = lift_off - motor_start = stop_seconds - gap_cm / v0
+
+    with `stop_seconds` the motor seconds from the start of the run to the motor coming
+    to rest and `v0` the curtain speed at the closed end
+    (`curtain_speed_at_the_closed_end`), which is where all of this happens - the gap is
+    a few centimetres out of two metres.
+
+    The press does not appear in the formula at all: a tape reading replaces it. What is
+    still the press's is `stop_seconds` at its far end, and that is the bus's own
+    measurement of when the motor stopped, not a human's.
+
+    `roll` and `curtain_time` are the ascent's own, which the flow only knows once it
+    has fitted the ascent - and the fit is given the slat phase this function returns.
+    The flow breaks the circle by fitting once with the press-based slat phase, using
+    that fit here, and fitting again (`CalibrationFlow._fits`): the correction is a
+    fraction of a second on a run of twenty, so the second fit does not move the roll
+    enough to be worth a third.
+
+    A gap of zero returns `stop_seconds` unchanged - the curtain moved no distance after
+    the true lift-off, so the true lift-off *is* the motor stop - and a gap larger than
+    the whole slat phase is clamped to zero rather than made negative.
+    """
+    speed = curtain_speed_at_the_closed_end(roll, height, curtain_time)
+    return min(stop_seconds, max(0.0, stop_seconds - max(0.0, gap_cm) / speed))
+
+
 def corrected_curtain_time(configured_curtain: float, time_scale: float) -> float:
     """The true curtain time behind a configured one: `Tc_true = Tc_configured / s`."""
     if time_scale <= 0:  # pragma: no cover - the fit never leaves the scale bounds
@@ -533,11 +647,15 @@ __all__ = [
     "clamped_roll",
     "corrected_curtain_time",
     "corrected_run_time",
+    "curtain_speed_at_the_closed_end",
     "deviation_cm",
     "fit_direction",
     "fit_from_run",
     "predict_cm",
     "roll_tau",
     "roll_x",
+    "slat_time_from_gap",
+    "slat_time_from_press",
     "timing_from_presses",
+    "timing_with_slat",
 ]
