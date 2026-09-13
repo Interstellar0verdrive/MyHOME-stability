@@ -111,10 +111,18 @@ CALIBRATION_ORIGIN_PROFILE_SLOT = "{profile}"
 # (`calibration_store.async_import_legacy_subentries`).
 LEGACY_SUBENTRY_COVER_PROFILE = "cover_profile"
 LEGACY_SUBENTRY_COVER_CALIBRATION = "cover_calibration"
-# The two sections of the store, and the profile key that names the window a profile was
-# measured on (shown by "Vedi i valori", never read by the travel model).
+# The three sections of the store, and the profile key that names the window a profile
+# was measured on (shown by "Vedi i valori", never read by the travel model).
 CONF_PROFILES = "profiles"
 CONF_COVERS = "covers"
+# The order the user dragged the shutters into, as one flat list of unique ids at the
+# top level of the file (0.6.0, store minor 2). Flat and not a number inside each
+# cover's record, because a shutter that has only ever been *dragged* has nothing else
+# in its record: `StoredCalibration.says_anything` is False for it and
+# `async_set_assignments` deletes such a record on purpose, so an order kept in there
+# would resurrect empty records and put rows on the "Calibrazioni" screen that say
+# nothing. Groups are derived from the assignment; this list only orders within them.
+CONF_ORDER = "order"
 CONF_REFERENCE_COVER = "reference_cover"
 # Keys of a stored record.
 CONF_COVER_UNIQUE_ID = "cover_unique_id"
@@ -128,6 +136,12 @@ CONF_OVERRIDES = "overrides"
 CONF_PROFILE_WINS = "profile_wins"
 CONF_SOURCE = "source"
 CONF_MEASURED_AT = "measured_at"
+# The window a *profile* was measured on, as its unique id (0.6.0, store minor 2).
+# `reference_cover` beside it is the name that window had on the day, which is what a
+# screen prints; the id is what a screen can follow back to the cover that is there
+# now. Neither is ever guessed: a profile written by hand, imported, or measured before
+# 0.6.0 has no `measured_on` at all, and the panel says so rather than inventing one.
+CONF_MEASURED_ON = "measured_on"
 CONF_RAW = "raw"
 # Where the validator records which travel keys `myhome.yaml` really carries for a
 # cover, so a stored calibration can be given its place in the precedence (0.5.0).
