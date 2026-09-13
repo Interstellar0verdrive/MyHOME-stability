@@ -26,6 +26,7 @@ from unittest.mock import patch
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
+    ATTR_CURRENT_TILT_POSITION,
     ATTR_POSITION,
     DOMAIN as COVER,
     CoverEntityFeature,
@@ -37,6 +38,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache
 
 from custom_components.myhome.calibration_store import (
+    cover_calibration_data,
     cover_profile_data,
     loaded_store,
 )
@@ -63,6 +65,26 @@ FIRST_ENTITY = "cover.hallway_shutter"
 SECOND_ENTITY = "cover.landing_shutter"
 
 HEIGHT = 195.0
+
+# A third gateway configuration, for the two tests about a slat phase that is taken
+# away while the motor is turning the slats: the file has to state one for there to be
+# one to take away.
+SLAT = "2-85"
+SLAT_ID = f"{MAC}-{SLAT}"
+SLAT_ENTITY = "cover.blind"
+SLAT_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    blind:
+      where: '85'
+      name: Blind
+      opening_time: 30
+      closing_time: 29
+      slat_time: 6
+      tilt: true
+      height: {HEIGHT}
+"""
 
 # The first shutter writes its own run times and its own travel, which is what makes
 # "what the file says" and "what the profile says" two different answers for it - and
@@ -409,3 +431,92 @@ async def test_a_height_measured_on_one_window_rescales_only_that_window(
         assert second.attributes["Opening time"] < first.attributes["Opening time"]
         assert second.attributes["Height"] == HEIGHT / 2
         assert device_config(hass, COVER, SECOND)[CONF_HEIGHT] == HEIGHT / 2
+
+
+async def test_a_slat_phase_taken_away_leaves_the_run_in_flight_its_slat_leg(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The last line of both travel functions is part of the frozen model too.
+
+    `_normalise` decides whether a shutter resting on the floor still has slats to
+    account for, and it is what `_travel` and `_travel_time` both end on. Reading the
+    live flag there while the seconds stay frozen is the worst of both: a calibration
+    that takes the slat phase away mid-run erases the whole slat leg of a run that is
+    still turning the slats, so the shutter reads "slats closed" while the motor has
+    three seconds of them left and the next command pays for them again.
+
+    Mutation caught: `_normalise` reading `self._two_phase` instead of
+    `self._run.two_phase`.
+    """
+    mock_restore_cache(
+        hass,
+        (
+            State(
+                SLAT_ENTITY,
+                CoverState.OPEN,
+                {ATTR_CURRENT_POSITION: 0, ATTR_CURRENT_TILT_POSITION: 100},
+            ),
+        ),
+    )
+    async with setup_myhome(hass, tmp_path, SLAT_YAML) as (entry, _commands):
+        entity = entity_object(hass, COVER, SLAT)
+        assert entity._run.two_phase is True  # noqa: SLF001
+        # Closing from the floor with the slats open: the whole run is the slat leg.
+        await hass.services.async_call(
+            COVER, "close_cover", {ATTR_ENTITY_ID: SLAT_ENTITY}, blocking=True
+        )
+        freezer.tick(timedelta(seconds=3))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+        half_way = hass.states.get(SLAT_ENTITY).attributes[ATTR_CURRENT_TILT_POSITION]
+        assert 0 < half_way < 100
+
+        store = loaded_store(hass, entry)
+        await store.async_set_calibration(
+            SLAT_ID, cover_calibration_data(SLAT_ID, overrides={CONF_SLAT_TIME: 0.0})
+        )
+        await refresh(hass, entry)
+
+        # The model says the shutter has no slat phase any more...
+        assert entity._slat_time == 0.0  # noqa: SLF001
+        assert entity._two_phase is False  # noqa: SLF001
+        assert "Slat time" not in hass.states.get(SLAT_ENTITY).attributes
+        # ...and the run in flight is still half way through the one it started with.
+        assert entity._run.slat_time == 6.0  # noqa: SLF001
+        assert entity._estimate() == (0, half_way)  # noqa: SLF001
+
+
+async def test_a_reversal_after_a_refresh_is_planned_with_the_new_model(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A run that ends by being reversed, not by being stopped, still ends the deferral.
+
+    `_finish_movement` puts the snapshot back, and every movement that follows a
+    completed one therefore has the current model. A movement that follows a movement
+    does not go through it: the direction is turned round under the motor and
+    `_start_movement` is the only place that could take the fresh snapshot.
+
+    Mutation caught: dropping `self._run = self._current_movement_model()` from
+    `_start_movement`, after which a shutter reversed while a calibration was landing
+    goes on being timed by the model it stopped having.
+    """
+    mock_restore_cache(hass, (State(FIRST_ENTITY, CoverState.OPEN, {ATTR_CURRENT_POSITION: 100}),))
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        entity = entity_object(hass, COVER, FIRST)
+        await hass.services.async_call(
+            COVER, "close_cover", {ATTR_ENTITY_ID: FIRST_ENTITY}, blocking=True
+        )
+        await assign(hass, entry, FIRST_ID, "tall")
+        assert entity._moving is not None  # noqa: SLF001
+        assert entity._run.slat_time == 0.0  # noqa: SLF001
+
+        freezer.tick(timedelta(seconds=2))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+        # Turned round under the motor: no stop, no `_finish_movement`.
+        await hass.services.async_call(
+            COVER, "open_cover", {ATTR_ENTITY_ID: FIRST_ENTITY}, blocking=True
+        )
+        assert entity._run.slat_time == 4.0  # noqa: SLF001
+        assert entity._run.opening_roll == 2.0  # noqa: SLF001
+        assert entity._run.two_phase is True  # noqa: SLF001

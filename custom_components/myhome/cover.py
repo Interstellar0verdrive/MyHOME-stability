@@ -332,7 +332,7 @@ TRAVEL_ATTRIBUTES: tuple[str, ...] = (
 
 @dataclass(frozen=True, slots=True)
 class _MovementModel:
-    """The seven numbers one movement is timed by, frozen for the length of that run.
+    """The numbers one movement is timed by, frozen for the length of that run.
 
     Up to 0.6.0 there was nothing to freeze: a cover's travel model only ever changed
     when the config entry was reloaded, which destroyed the entity and every movement
@@ -354,6 +354,12 @@ class _MovementModel:
     curtain_down: float
     stop_latency: float
     start_delay: float
+    # Derived from `slat_time`, and frozen with it: `_normalise` is the last line of
+    # both travel functions and decides whether a shutter on the floor still has slats
+    # to account for. Left reading the live flag, a calibration that takes the slat
+    # phase away mid-run makes the estimate drop the whole slat leg of a run that is
+    # still turning the slats - the one thing the snapshot exists to prevent.
+    two_phase: bool
 
 
 # ------------------------------------------------------- when the frame really left
@@ -1174,7 +1180,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
     @callback
     def _current_movement_model(self) -> _MovementModel:
-        """The seven numbers a run started now would be timed by."""
+        """The numbers a run started now would be timed by."""
         return _MovementModel(
             slat_time=self._slat_time,
             opening_roll=self._opening_roll,
@@ -1183,6 +1189,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             curtain_down=self._curtain_down,
             stop_latency=self._stop_latency,
             start_delay=self._start_delay,
+            two_phase=self._two_phase,
         )
 
     @callback
@@ -1356,12 +1363,17 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         clamped = int(max(0, min(100, round(position))))
         if clamped > 0:
             return clamped, 100
-        if not self._two_phase:
+        if not self._run.two_phase:
             return 0, 0
-        # `_two_phase`, not `_has_tilt`: a cover with `tilt: false` still tracks where
+        # `two_phase`, not `_has_tilt`: a cover with `tilt: false` still tracks where
         # the slats are, it just never publishes it.  Forgetting it here would make
         # every stop inside the slat phase cost a full `slat_time` again on the next
         # command.
+        #
+        # Read off the run's own snapshot and not off the live flag, because this is
+        # the last line of `_travel` and `_travel_time`: a slat phase taken away by a
+        # calibration written mid-run would otherwise erase the slat leg of a run that
+        # is still turning the slats, while the seconds it is timed by stay frozen.
         return 0, int(max(0, min(100, round(tilt))))
 
     def _curtain_tau(self, position: float, roll: float) -> float:

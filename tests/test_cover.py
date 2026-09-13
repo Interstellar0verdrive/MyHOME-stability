@@ -765,6 +765,7 @@ class _Model:
             curtain_down=self._curtain_down,
             stop_latency=0.0,
             start_delay=0.0,
+            two_phase=slat > 0,
         )
 
     _normalise = cover_module.MyHOMECover._normalise
