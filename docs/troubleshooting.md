@@ -125,7 +125,7 @@ way down and too high on the way up. See
    linear estimate.
 2. Measure the real values once with the
    [guided calibration](guided-calibration.md) — *Configure → "Calibrate a
-   shutter"*, which measures and stores them for you — or by hand with
+   cover"*, which measures and stores them for you — or by hand with
    [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres),
    and apply them on that cover or as a profile shared by every shutter of the same
    kind.
