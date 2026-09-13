@@ -706,6 +706,282 @@
       }
     }
   },
+  "config_panel": {
+    "common": {
+      "loading": "Cargando…",
+      "gateway": "Pasarela {gateway}",
+      "search": "Buscar una persiana",
+      "room_filter": "Filtrar por estancia",
+      "all_rooms": "Todas las estancias",
+      "opens_configure": "Se abre el diálogo Configurar. Al cerrarlo, el panel se actualiza solo.",
+      "not_loaded": "Esta pasarela no está cargada, así que aquí todavía no hay nada que leer.",
+      "action": {
+        "menu": "Abrir el menú de Home Assistant",
+        "configure": "Abrir Configurar",
+        "close": "Cerrar",
+        "cancel": "Cancelar",
+        "back": "Atrás",
+        "save": "Guardar",
+        "show_all": "Mostrar todos los valores, incluidos los coeficientes de rodillo",
+        "hide_all": "Ocultar los coeficientes de rodillo"
+      },
+      "unit": {
+        "seconds": "s",
+        "centimetres": "cm"
+      }
+    },
+    "firstrun": {
+      "title": "Todavía ningún perfil",
+      "body": "Un perfil describe un tipo de persiana: cuánto tarda en recorrer, cuánto duran las lamas y cómo se enrolla el paño en el rodillo. Cada persiana puede seguir uno, y Home Assistant lo adapta a su propio recorrido.",
+      "how": "Un perfil no se escribe: se mide. Se elige una persiana representativa y se mide una sola vez, con la calibración guiada: unos tres minutos. Las persianas parecidas podrán seguirla después.",
+      "action": {
+        "measure": "Medir una persiana"
+      },
+      "note": "Se abre el diálogo Configurar: ahí es donde se mide. Al terminar, el perfil aparece aquí."
+    },
+    "overview": {
+      "title": "Perfiles y persianas",
+      "summary": "En esta pasarela hay {profiles} perfiles y {covers} persianas sencillas.",
+      "explanation": "Un perfil describe un tipo de persiana: cuánto tarda en recorrer, cuánto duran las lamas y cómo se enrolla el paño en el rodillo. Cada persiana puede seguir uno, y Home Assistant lo adapta a su propio recorrido.",
+      "group": {
+        "profile": "Perfil «{profile}»",
+        "no_profile": "Sin perfil",
+        "no_profile_note": "Valores del archivo de configuración, o los predeterminados. No es un error: una persiana con medidas propias está muy bien aquí.",
+        "values": "Recorrido de referencia {travel} cm · apertura {opening} s · cierre {closing} s · lamas {slat} s",
+        "measured_on": "Medido en {cover} · {date}",
+        "provenance_missing": "No está registrado dónde se midió.",
+        "count": "{count} persianas",
+        "count_one": "1 persiana",
+        "empty": "Ninguna persiana en este grupo.",
+        "open": "Abrir la ficha del perfil"
+      },
+      "cover": {
+        "travel": "recorrido {travel} cm",
+        "travel_unknown": "recorrido no indicado",
+        "travel_needed": "recorrido por introducir",
+        "follows": "sigue «{profile}»",
+        "profile_missing": "El perfil «{profile}» ya no está definido: esta persiana usa su propia configuración.",
+        "from_file": "Este perfil lo asigna el archivo de configuración: se cambia allí, no aquí."
+      },
+      "no_basic_covers": "Todas las persianas de esta pasarela informan de su propia posición: no hay ningún modelo de recorrido que calibrar ni nada que hacer aquí."
+    },
+    "assign": {
+      "handle": "Mueve {cover} a otro grupo o cambia el orden",
+      "handle_hint": "Arrastra para asignar o reordenar, Intro para elegir de una lista",
+      "drop_zone": "Quitar del perfil — soltar aquí",
+      "armed": "Toca el grupo de destino para «{cover}»",
+      "target_profile": "el perfil «{profile}»",
+      "target_none": "«Sin perfil»",
+      "announce": {
+        "armed": "Toca el grupo de destino.",
+        "pending": "«{cover}» queda pendiente, hacia {target}. Todavía no se ha escrito nada.",
+        "withdrawn": "«{cover}» vuelve donde estaba: cambio retirado.",
+        "reordered": "Orden actualizado: se recordará.",
+        "drag_cancelled": "Arrastre cancelado.",
+        "discarded": "Se han descartado todos los cambios pendientes.",
+        "applying": "Se están aplicando los cambios.",
+        "missing_travel": "Falta el recorrido de algunas persianas."
+      },
+      "action": {
+        "withdraw": "Retirar este cambio",
+        "discard_all": "Descartar todo",
+        "review": "Revisar y confirmar",
+        "review_hint": "Revisar y confirmar las asignaciones"
+      },
+      "pending": {
+        "count": "{count} cambios pendientes — todavía no se ha escrito nada",
+        "count_one": "1 cambio pendiente — todavía no se ha escrito nada",
+        "route": "{from} → {to}",
+        "all_own": "Todos los valores son propios: no cambia nada",
+        "some_own": "Valores propios: esos se quedan"
+      }
+    },
+    "review": {
+      "title": "Revisar y confirmar",
+      "intro": "Los cambios se escriben todos juntos. Para cada persiana, esto es lo que usará de verdad: los valores del perfil llevados a su propio recorrido.",
+      "travel": {
+        "title": "¿Cuánto recorre el paño de estas persianas?",
+        "hint": "Un perfil es la medida de una persiana con un recorrido determinado, y se lleva a las demás en proporción. De estas no se conoce el recorrido: medir la distancia que recorre el borde inferior desde el cierre completo hasta la apertura completa, y escribirla en centímetros (decimales con coma o con punto).",
+        "label": "Recorrido del paño",
+        "aria": "Recorrido del paño en centímetros",
+        "placeholder": "p. ej. 145",
+        "required": "Hace falta el recorrido, en centímetros."
+      },
+      "before": "Antes",
+      "after": "Después",
+      "note": {
+        "all_own": "Tiene valores propios para todo: no cambia nada. El perfil solo valdría para los valores que se quiten más adelante.",
+        "some_own": "Tiene algunos valores propios: esos se quedan. Solo cambian los valores heredados.",
+        "scaled": "Valores del perfil «{profile}» (medido sobre {reference} cm) llevados a un recorrido de {travel} cm.",
+        "back_to_file": "Vuelven los valores del archivo de configuración. Se quedan el recorrido y cualquier valor propio.",
+        "back_to_defaults": "Vuelven los valores predeterminados: la posición en por ciento será una estimación burda. Se quedan el recorrido y cualquier valor propio."
+      },
+      "action": {
+        "back": "Volver al resumen",
+        "confirm": "Confirmar {count} asignaciones",
+        "confirm_one": "Confirmar 1 asignación",
+        "missing_travel": "Faltan {count} recorridos",
+        "missing_travel_one": "Falta 1 recorrido"
+      }
+    },
+    "dialog": {
+      "title": "¿Qué perfil?",
+      "subtitle": "«{cover}» — la elección queda pendiente hasta que se confirme.",
+      "option": {
+        "profile": "Perfil «{profile}»",
+        "profile_meta": "{travel} cm · apertura {opening} s · cierre {closing} s",
+        "none": "Ningún perfil",
+        "none_meta": "Valores del archivo de configuración, o los predeterminados. Se quedan el recorrido y los valores propios.",
+        "current": "actual"
+      }
+    },
+    "toast": {
+      "assigned": "{count} asignaciones aplicadas",
+      "assigned_one": "1 asignación aplicada",
+      "order_saved": "El nuevo orden se recordará.",
+      "values_saved": "Los valores de «{cover}» están guardados: ganan al perfil y al archivo.",
+      "measure_removed": "Medida eliminada: «{cover}» ahora usa {destination}.",
+      "profile_saved": "Perfil «{profile}» actualizado: {count} persianas alcanzadas.",
+      "profile_renamed": "Renombrado a «{profile}»: el cambio de nombre sigue a todas las persianas que lo usan.",
+      "profile_deleted": "Perfil «{profile}» eliminado: las persianas vuelven al archivo o a los valores predeterminados.",
+      "action": {
+        "undo": "Deshacer"
+      },
+      "undone": "Cambios deshechos: todo como estaba."
+    },
+    "detail": {
+      "title": "Detalle de la persiana",
+      "measured_at": "Medida el {date}",
+      "level_basic": "calibración básica",
+      "level_thorough": "calibración detallada",
+      "verify_note": "desvío de {deviation} cm en la comprobación",
+      "values": {
+        "title": "Valores efectivos",
+        "intro": "Lo que la persiana está usando ahora, valor por valor, con su origen: un valor propio gana siempre; luego el perfil asignado, luego el archivo, luego los valores predeterminados."
+      },
+      "source": {
+        "own": "valor propio, medido en esta persiana",
+        "profile": "heredado del perfil «{profile}»",
+        "file": "del archivo de configuración",
+        "default": "valor predeterminado"
+      },
+      "action": {
+        "edit": "Modificar los valores a mano",
+        "assign": "Asignar a un perfil…",
+        "measure_again": "Medir de nuevo",
+        "measure_again_note": "Calibración básica completa, en el diálogo",
+        "correct": "Corregir…",
+        "correct_note": "Si se para en el sitio equivocado: solo los tiempos, tiempos y rodillos, o solo la calibración detallada",
+        "thorough": "Calibración detallada",
+        "thorough_note": "Además: lecturas al 25 y al 75 % por dirección, y una comprobación",
+        "remove": "Eliminar la medida…"
+      },
+      "correct": {
+        "intro": "La corrección abre el diálogo Configurar en la vía elegida. Al volver, el panel se actualiza solo.",
+        "times": "Solo los tiempos",
+        "times_note": "Un recorrido por dirección, los rodillos se quedan",
+        "times_rolls": "Tiempos y rodillos",
+        "times_rolls_note": "Calibración básica completa",
+        "thorough": "Solo la calibración detallada",
+        "thorough_note": "Lecturas al 25 y al 75 % por dirección, y una comprobación"
+      },
+      "edit": {
+        "title": "Modificar los valores a mano",
+        "intro": "Estos valores valen solo para esta persiana y ganan tanto al perfil como al archivo. Un campo dejado vacío no es un cero: significa «sobre esto no hay nada que decir», y el valor vuelve a venir del perfil o del archivo. Vaciar todos los campos equivale a eliminar la medida.",
+        "inherits": "hereda {value}",
+        "empty": "vacío = nada que decir",
+        "action": {
+          "save": "Guardar los valores"
+        }
+      },
+      "remove": {
+        "title": "¿Eliminar la medida?",
+        "body": "Las medidas hechas en «{cover}» se eliminarán y no se recuperan. La persiana volverá a usar {destination}.",
+        "travel_stays": "El recorrido del paño se queda: alguien lo midió con el metro.",
+        "action": "Eliminar la medida"
+      },
+      "destination": {
+        "profile": "los valores heredados del perfil «{profile}»",
+        "file": "los valores del archivo de configuración",
+        "defaults": "los valores predeterminados"
+      }
+    },
+    "profile": {
+      "title": "Ficha del perfil",
+      "name": "Perfil «{profile}»",
+      "stored": "Perfil del archivo interno",
+      "from_file": "Perfil del archivo de configuración: aquí es de solo lectura.",
+      "reference_travel": "Recorrido de referencia",
+      "provenance": "Medido en {cover} · {date}",
+      "provenance_missing": "No está registrado dónde se midió.",
+      "provenance_now_profile": "ahora sigue «{profile}»",
+      "provenance_now_none": "ahora no sigue ningún perfil",
+      "followers": {
+        "count": "{count} persianas lo siguen",
+        "count_one": "1 persiana lo sigue",
+        "none": "Ninguna persiana lo sigue.",
+        "measured": "medida: ningún valor heredado",
+        "adjusted": "ajustada: valores propios para {keys}",
+        "inherited": "heredada"
+      },
+      "edit": {
+        "intro": "Un cambio en el perfil lo cambia todo en las persianas que heredan sus valores, y solo los valores heredados en las ajustadas: sus valores propios se quedan, clave por clave.",
+        "reach": "El cambio alcanza {target}",
+        "reach_all": "todas las {count} persianas que siguen el perfil",
+        "reach_one": "1 persiana",
+        "action": {
+          "save": "Aplicar a {count} persianas",
+          "save_one": "Aplicar a 1 persiana"
+        }
+      },
+      "impact": {
+        "title": "Vista previa del impacto",
+        "no_change": "ningún cambio: todos los valores son propios",
+        "no_travel": "recorrido no indicado: usará los valores del perfil tal cual",
+        "invalid": "corregir los campos para ver la vista previa",
+        "state_measured": "medida",
+        "state_adjusted": "ajustada: solo cambian los valores heredados",
+        "state_inherited": "heredada: cambia todo",
+        "kept": "siguen siendo propios: {keys}"
+      },
+      "action": {
+        "edit": "Modificar los valores…",
+        "rename": "Renombrar…",
+        "delete": "Eliminar el perfil…"
+      },
+      "rename": {
+        "title": "Renombrar el perfil",
+        "field": "Nuevo nombre del perfil",
+        "rule": "Solo letras, cifras y guiones bajos: sin espacios, sin acentos — el nombre es también una clave del archivo de configuración. El cambio de nombre sigue a todas las persianas que usan el perfil.",
+        "action": "Renombrar"
+      },
+      "delete": {
+        "title": "¿Eliminar el perfil «{profile}»?",
+        "affects": "Afecta a estas persianas:",
+        "body": "Volverán a los valores del archivo de configuración, donde existan, o a los predeterminados. Se quedan sus recorridos y sus valores propios. Las medidas del perfil no se recuperan.",
+        "action": "Eliminar el perfil"
+      }
+    },
+    "banner": {
+      "measuring": {
+        "title": "Medición en curso",
+        "body": "Una calibración guiada está usando «{cover}». Hasta que la sesión termine, este panel solo lee: no se escribe nada.",
+        "action": {
+          "resume": "Retomar la sesión",
+          "stop": "Terminar"
+        }
+      },
+      "applying": {
+        "title": "Se están aplicando los cambios…",
+        "body": "Las persianas no están disponibles durante unos segundos"
+      }
+    },
+    "error": {
+      "not_found": "El panel no ha podido leer esta pasarela.",
+      "write_failed": "El cambio no se ha escrito. No se ha guardado nada.",
+      "no_connection": "Home Assistant no responde. El panel volverá a intentarlo."
+    }
+  },
   "issues": {
     "yaml_invalid": {
       "title": "El archivo de configuración de MyHOME no es válido",
@@ -835,6 +1111,48 @@
     },
     "climate_unsupported_hvac_mode": {
       "message": "El modo HVAC {hvac_mode} no está admitido por {entity_id}."
+    },
+    "unknown_entry": {
+      "message": "No hay ninguna pasarela MyHome configurada con ese identificador."
+    },
+    "entry_not_loaded": {
+      "message": "La pasarela {gateway} está configurada pero no cargada, así que sus persianas todavía no se pueden leer."
+    },
+    "unknown_cover": {
+      "message": "Esta pasarela no tiene esa persiana."
+    },
+    "advanced_cover": {
+      "message": "Esta persiana informa de su propia posición: no tiene ningún modelo de recorrido que calibrar."
+    },
+    "busy_calibrating": {
+      "message": "Hay una calibración guiada en curso en {cover}. Hasta que termine no se escribe nada."
+    },
+    "write_in_progress": {
+      "message": "Todavía se está aplicando otro cambio en esta pasarela. Volver a intentarlo dentro de un momento."
+    },
+    "profile_not_editable": {
+      "message": "El perfil «{profile}» está escrito en el archivo de configuración: se cambia allí, no desde el panel."
+    },
+    "unknown_profile": {
+      "message": "Ningún perfil guardado se llama «{profile}»."
+    },
+    "undo_expired": {
+      "message": "Ha pasado demasiado tiempo: este cambio ya no se puede deshacer."
+    },
+    "missing_travel": {
+      "message": "De {count} persianas no se conoce el recorrido del paño: {covers}. Un perfil solo se puede llevar a una persiana cuyo recorrido se conoce."
+    },
+    "invalid_name": {
+      "message": "«{profile}» no es un nombre de perfil utilizable: solo letras, cifras y guiones bajos, sin espacios y sin acentos."
+    },
+    "name_in_use": {
+      "message": "Ya existe un perfil llamado «{profile}»."
+    },
+    "out_of_range": {
+      "message": "{key} acepta un número entre {min} y {max}."
+    },
+    "not_a_number": {
+      "message": "{key} necesita un número. Los decimales se escriben con coma o con punto."
     }
   },
   "services": {

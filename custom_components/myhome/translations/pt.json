@@ -706,6 +706,282 @@
       }
     }
   },
+  "config_panel": {
+    "common": {
+      "loading": "A carregar…",
+      "gateway": "Gateway {gateway}",
+      "search": "Procurar uma persiana",
+      "room_filter": "Filtrar por divisão",
+      "all_rooms": "Todas as divisões",
+      "opens_configure": "Abre-se o diálogo Configurar. Ao fechar, o painel atualiza-se sozinho.",
+      "not_loaded": "Esta gateway não está carregada, por isso ainda não há nada para ler aqui.",
+      "action": {
+        "menu": "Abrir o menu do Home Assistant",
+        "configure": "Abrir Configurar",
+        "close": "Fechar",
+        "cancel": "Cancelar",
+        "back": "Voltar",
+        "save": "Guardar",
+        "show_all": "Mostrar todos os valores, incluindo os coeficientes de rolo",
+        "hide_all": "Ocultar os coeficientes de rolo"
+      },
+      "unit": {
+        "seconds": "s",
+        "centimetres": "cm"
+      }
+    },
+    "firstrun": {
+      "title": "Ainda nenhum perfil",
+      "body": "Um perfil descreve um tipo de persiana: quanto tempo demora a percorrer, quanto duram as lâminas e como o pano se enrola no rolo. Cada persiana pode seguir um, e o Home Assistant adapta-o ao percurso dela.",
+      "how": "Um perfil não se escreve: mede-se. Escolhe-se uma persiana representativa e mede-se uma única vez, com a calibração guiada: cerca de três minutos. As persianas parecidas poderão segui-la depois.",
+      "action": {
+        "measure": "Medir uma persiana"
+      },
+      "note": "Abre-se o diálogo Configurar: é aí que se mede. No fim, o perfil aparece aqui."
+    },
+    "overview": {
+      "title": "Perfis e persianas",
+      "summary": "Nesta gateway há {profiles} perfis e {covers} persianas simples.",
+      "explanation": "Um perfil descreve um tipo de persiana: quanto tempo demora a percorrer, quanto duram as lâminas e como o pano se enrola no rolo. Cada persiana pode seguir um, e o Home Assistant adapta-o ao percurso dela.",
+      "group": {
+        "profile": "Perfil «{profile}»",
+        "no_profile": "Sem perfil",
+        "no_profile_note": "Valores do ficheiro de configuração, ou as predefinições. Não é um erro: uma persiana com medições próprias está muito bem aqui.",
+        "values": "Percurso de referência {travel} cm · abertura {opening} s · fecho {closing} s · lâminas {slat} s",
+        "measured_on": "Medido em {cover} · {date}",
+        "provenance_missing": "Não está registado onde foi medido.",
+        "count": "{count} persianas",
+        "count_one": "1 persiana",
+        "empty": "Nenhuma persiana neste grupo.",
+        "open": "Abrir a ficha do perfil"
+      },
+      "cover": {
+        "travel": "percurso {travel} cm",
+        "travel_unknown": "percurso não indicado",
+        "travel_needed": "percurso por introduzir",
+        "follows": "segue «{profile}»",
+        "profile_missing": "O perfil «{profile}» já não está definido: esta persiana está a usar a sua própria configuração.",
+        "from_file": "Este perfil é atribuído pelo ficheiro de configuração: altera-se lá, não aqui."
+      },
+      "no_basic_covers": "Todas as persianas desta gateway comunicam a sua própria posição: não há nenhum modelo de percurso para calibrar nem nada a fazer aqui."
+    },
+    "assign": {
+      "handle": "Mover {cover} para outro grupo ou reordenar",
+      "handle_hint": "Arrastar para atribuir ou reordenar, Enter para escolher de uma lista",
+      "drop_zone": "Retirar do perfil — largar aqui",
+      "armed": "Toque no grupo de destino para «{cover}»",
+      "target_profile": "o perfil «{profile}»",
+      "target_none": "«Sem perfil»",
+      "announce": {
+        "armed": "Toque no grupo de destino.",
+        "pending": "«{cover}» fica pendente, para {target}. Ainda não foi escrito nada.",
+        "withdrawn": "«{cover}» volta ao sítio onde estava: alteração retirada.",
+        "reordered": "Ordem atualizada: fica memorizada.",
+        "drag_cancelled": "Arrasto cancelado.",
+        "discarded": "Foram descartadas todas as alterações pendentes.",
+        "applying": "As alterações estão a ser aplicadas.",
+        "missing_travel": "Falta o percurso de algumas persianas."
+      },
+      "action": {
+        "withdraw": "Retirar esta alteração",
+        "discard_all": "Descartar tudo",
+        "review": "Rever e confirmar",
+        "review_hint": "Rever e confirmar as atribuições"
+      },
+      "pending": {
+        "count": "{count} alterações pendentes — ainda não foi escrito nada",
+        "count_one": "1 alteração pendente — ainda não foi escrito nada",
+        "route": "{from} → {to}",
+        "all_own": "Todos os valores são próprios: não muda nada",
+        "some_own": "Valores próprios: esses ficam"
+      }
+    },
+    "review": {
+      "title": "Rever e confirmar",
+      "intro": "As alterações são escritas todas juntas. Para cada persiana, isto é o que ela vai mesmo usar: os valores do perfil trazidos para o percurso dela.",
+      "travel": {
+        "title": "Quanto percorre o pano destas persianas?",
+        "hint": "Um perfil é a medição de uma persiana com um certo percurso, e é trazido para as outras em proporção. Destas não se conhece o percurso: medir a distância que a borda inferior faz de totalmente fechada a totalmente aberta, e escrevê-la em centímetros (casas decimais com vírgula ou com ponto).",
+        "label": "Percurso do pano",
+        "aria": "Percurso do pano em centímetros",
+        "placeholder": "p. ex. 145",
+        "required": "É preciso o percurso, em centímetros."
+      },
+      "before": "Antes",
+      "after": "Depois",
+      "note": {
+        "all_own": "Tem valores próprios para tudo: não muda nada. O perfil só valeria para os valores removidos mais tarde.",
+        "some_own": "Tem alguns valores próprios: esses ficam. Mudam só os valores herdados.",
+        "scaled": "Valores do perfil «{profile}» (medido em {reference} cm) trazidos para um percurso de {travel} cm.",
+        "back_to_file": "Voltam os valores do ficheiro de configuração. Ficam o percurso e qualquer valor próprio.",
+        "back_to_defaults": "Voltam os valores predefinidos: a posição em por cento será uma estimativa grosseira. Ficam o percurso e qualquer valor próprio."
+      },
+      "action": {
+        "back": "Voltar à vista geral",
+        "confirm": "Confirmar {count} atribuições",
+        "confirm_one": "Confirmar 1 atribuição",
+        "missing_travel": "Faltam {count} percursos",
+        "missing_travel_one": "Falta 1 percurso"
+      }
+    },
+    "dialog": {
+      "title": "Que perfil?",
+      "subtitle": "«{cover}» — a escolha fica pendente até ser confirmada.",
+      "option": {
+        "profile": "Perfil «{profile}»",
+        "profile_meta": "{travel} cm · abertura {opening} s · fecho {closing} s",
+        "none": "Nenhum perfil",
+        "none_meta": "Valores do ficheiro de configuração, ou as predefinições. Ficam o percurso e os valores próprios.",
+        "current": "atual"
+      }
+    },
+    "toast": {
+      "assigned": "{count} atribuições aplicadas",
+      "assigned_one": "1 atribuição aplicada",
+      "order_saved": "A nova ordem fica memorizada.",
+      "values_saved": "Os valores de «{cover}» estão guardados: ganham ao perfil e ao ficheiro.",
+      "measure_removed": "Medição removida: «{cover}» usa agora {destination}.",
+      "profile_saved": "Perfil «{profile}» atualizado: {count} persianas alcançadas.",
+      "profile_renamed": "Renomeado para «{profile}»: a mudança de nome segue todas as persianas que o usam.",
+      "profile_deleted": "Perfil «{profile}» eliminado: as persianas voltam ao ficheiro ou às predefinições.",
+      "action": {
+        "undo": "Anular"
+      },
+      "undone": "Alterações anuladas: tudo como estava."
+    },
+    "detail": {
+      "title": "Detalhe da persiana",
+      "measured_at": "Medida a {date}",
+      "level_basic": "calibração básica",
+      "level_thorough": "calibração aprofundada",
+      "verify_note": "desvio de {deviation} cm na verificação",
+      "values": {
+        "title": "Valores efetivos",
+        "intro": "O que a persiana está a usar agora, valor a valor, com a sua origem: um valor próprio ganha sempre; depois o perfil atribuído, depois o ficheiro, depois as predefinições."
+      },
+      "source": {
+        "own": "valor próprio, medido nesta persiana",
+        "profile": "herdado do perfil «{profile}»",
+        "file": "do ficheiro de configuração",
+        "default": "valor predefinido"
+      },
+      "action": {
+        "edit": "Alterar os valores à mão",
+        "assign": "Atribuir a um perfil…",
+        "measure_again": "Medir de novo",
+        "measure_again_note": "Calibração básica completa, no diálogo",
+        "correct": "Corrigir…",
+        "correct_note": "Se para no sítio errado: só os tempos, tempos e rolos, ou só a calibração aprofundada",
+        "thorough": "Calibração aprofundada",
+        "thorough_note": "Além disso: leituras a 25 e a 75 % por direção e uma verificação",
+        "remove": "Remover a medição…"
+      },
+      "correct": {
+        "intro": "A correção abre o diálogo Configurar no caminho escolhido. Ao regressar, o painel atualiza-se sozinho.",
+        "times": "Só os tempos",
+        "times_note": "Um percurso por direção, os rolos ficam",
+        "times_rolls": "Tempos e rolos",
+        "times_rolls_note": "Calibração básica completa",
+        "thorough": "Só a calibração aprofundada",
+        "thorough_note": "Leituras a 25 e a 75 % por direção e uma verificação"
+      },
+      "edit": {
+        "title": "Alterar os valores à mão",
+        "intro": "Estes valores valem só para esta persiana e ganham tanto ao perfil como ao ficheiro. Um campo deixado vazio não é um zero: significa «sobre isto não há nada a dizer», e o valor volta a vir do perfil ou do ficheiro. Esvaziar todos os campos equivale a remover a medição.",
+        "inherits": "herda {value}",
+        "empty": "vazio = nada a dizer",
+        "action": {
+          "save": "Guardar os valores"
+        }
+      },
+      "remove": {
+        "title": "Remover a medição?",
+        "body": "As medições feitas em «{cover}» vão ser removidas e não se recuperam. A persiana volta a usar {destination}.",
+        "travel_stays": "O percurso do pano fica: alguém o mediu com a fita métrica.",
+        "action": "Remover a medição"
+      },
+      "destination": {
+        "profile": "os valores herdados do perfil «{profile}»",
+        "file": "os valores do ficheiro de configuração",
+        "defaults": "os valores predefinidos"
+      }
+    },
+    "profile": {
+      "title": "Ficha do perfil",
+      "name": "Perfil «{profile}»",
+      "stored": "Perfil do arquivo interno",
+      "from_file": "Perfil do ficheiro de configuração: aqui é só de leitura.",
+      "reference_travel": "Percurso de referência",
+      "provenance": "Medido em {cover} · {date}",
+      "provenance_missing": "Não está registado onde foi medido.",
+      "provenance_now_profile": "agora segue «{profile}»",
+      "provenance_now_none": "agora não segue nenhum perfil",
+      "followers": {
+        "count": "{count} persianas seguem-no",
+        "count_one": "1 persiana segue-o",
+        "none": "Nenhuma persiana o segue.",
+        "measured": "medida: nenhum valor herdado",
+        "adjusted": "ajustada: valores próprios para {keys}",
+        "inherited": "herdada"
+      },
+      "edit": {
+        "intro": "Uma alteração ao perfil muda tudo nas persianas que herdam os seus valores, e só os valores herdados nas ajustadas: os valores próprios ficam, chave a chave.",
+        "reach": "A alteração alcança {target}",
+        "reach_all": "todas as {count} persianas que seguem o perfil",
+        "reach_one": "1 persiana",
+        "action": {
+          "save": "Aplicar a {count} persianas",
+          "save_one": "Aplicar a 1 persiana"
+        }
+      },
+      "impact": {
+        "title": "Pré-visualização do impacto",
+        "no_change": "nenhuma mudança: os valores são todos próprios",
+        "no_travel": "percurso não indicado: vai usar os valores do perfil tal como estão",
+        "invalid": "corrigir os campos para ver a pré-visualização",
+        "state_measured": "medida",
+        "state_adjusted": "ajustada: mudam só os valores herdados",
+        "state_inherited": "herdada: muda tudo",
+        "kept": "ficam próprios: {keys}"
+      },
+      "action": {
+        "edit": "Alterar os valores…",
+        "rename": "Mudar o nome…",
+        "delete": "Eliminar o perfil…"
+      },
+      "rename": {
+        "title": "Mudar o nome do perfil",
+        "field": "Novo nome do perfil",
+        "rule": "Só letras, algarismos e sublinhados: sem espaços, sem acentos — o nome é também uma chave do ficheiro de configuração. A mudança de nome segue todas as persianas que usam o perfil.",
+        "action": "Mudar o nome"
+      },
+      "delete": {
+        "title": "Eliminar o perfil «{profile}»?",
+        "affects": "Isto afeta estas persianas:",
+        "body": "Voltam aos valores do ficheiro de configuração, onde existam, ou às predefinições. Ficam os seus percursos e os seus valores próprios. As medições do perfil não se recuperam.",
+        "action": "Eliminar o perfil"
+      }
+    },
+    "banner": {
+      "measuring": {
+        "title": "Medição em curso",
+        "body": "Uma calibração guiada está a usar «{cover}». Enquanto a sessão não terminar, este painel só lê: não é escrito nada.",
+        "action": {
+          "resume": "Retomar a sessão",
+          "stop": "Terminar"
+        }
+      },
+      "applying": {
+        "title": "As alterações estão a ser aplicadas…",
+        "body": "As persianas ficam indisponíveis durante alguns segundos"
+      }
+    },
+    "error": {
+      "not_found": "O painel não conseguiu ler esta gateway.",
+      "write_failed": "A alteração não foi escrita. Não foi guardado nada.",
+      "no_connection": "O Home Assistant não responde. O painel vai tentar de novo."
+    }
+  },
   "issues": {
     "yaml_invalid": {
       "title": "O ficheiro de configuração do MyHOME é inválido",
@@ -835,6 +1111,48 @@
     },
     "climate_unsupported_hvac_mode": {
       "message": "O modo HVAC {hvac_mode} não é suportado por {entity_id}."
+    },
+    "unknown_entry": {
+      "message": "Não há nenhuma gateway MyHome configurada com esse identificador."
+    },
+    "entry_not_loaded": {
+      "message": "A gateway {gateway} está configurada mas não carregada, por isso as suas persianas ainda não podem ser lidas."
+    },
+    "unknown_cover": {
+      "message": "Esta gateway não tem essa persiana."
+    },
+    "advanced_cover": {
+      "message": "Esta persiana comunica a sua própria posição: não tem nenhum modelo de percurso para calibrar."
+    },
+    "busy_calibrating": {
+      "message": "Está a decorrer uma calibração guiada em {cover}. Até terminar não é escrito nada."
+    },
+    "write_in_progress": {
+      "message": "Ainda está a ser aplicada outra alteração a esta gateway. Tentar de novo daqui a um momento."
+    },
+    "profile_not_editable": {
+      "message": "O perfil «{profile}» está escrito no ficheiro de configuração: altera-se lá, não a partir do painel."
+    },
+    "unknown_profile": {
+      "message": "Nenhum perfil guardado se chama «{profile}»."
+    },
+    "undo_expired": {
+      "message": "Passou demasiado tempo: esta alteração já não pode ser anulada."
+    },
+    "missing_travel": {
+      "message": "De {count} persianas não se conhece o percurso do pano: {covers}. Um perfil só pode ser trazido para uma persiana cujo percurso seja conhecido."
+    },
+    "invalid_name": {
+      "message": "«{profile}» não é um nome de perfil utilizável: só letras, algarismos e sublinhados, sem espaços e sem acentos."
+    },
+    "name_in_use": {
+      "message": "Já existe um perfil chamado «{profile}»."
+    },
+    "out_of_range": {
+      "message": "{key} aceita um número entre {min} e {max}."
+    },
+    "not_a_number": {
+      "message": "{key} precisa de um número. As casas decimais escrevem-se com vírgula ou com ponto."
     }
   },
   "services": {

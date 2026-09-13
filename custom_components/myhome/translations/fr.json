@@ -706,6 +706,282 @@
       }
     }
   },
+  "config_panel": {
+    "common": {
+      "loading": "Chargement…",
+      "gateway": "Passerelle {gateway}",
+      "search": "Rechercher un volet",
+      "room_filter": "Filtrer par pièce",
+      "all_rooms": "Toutes les pièces",
+      "opens_configure": "Cela ouvre le dialogue Configurer. À sa fermeture, le panneau se met à jour tout seul.",
+      "not_loaded": "Cette passerelle n'est pas chargée : il n'y a encore rien à lire ici.",
+      "action": {
+        "menu": "Ouvrir le menu de Home Assistant",
+        "configure": "Ouvrir Configurer",
+        "close": "Fermer",
+        "cancel": "Annuler",
+        "back": "Retour",
+        "save": "Enregistrer",
+        "show_all": "Afficher toutes les valeurs, coefficients de rouleau compris",
+        "hide_all": "Masquer les coefficients de rouleau"
+      },
+      "unit": {
+        "seconds": "s",
+        "centimetres": "cm"
+      }
+    },
+    "firstrun": {
+      "title": "Aucun profil pour l'instant",
+      "body": "Un profil décrit un type de volet : le temps qu'il met à courir, la durée des lames et la façon dont le tablier s'enroule sur le rouleau. Chaque volet peut en suivre un, et Home Assistant l'adapte à sa propre course.",
+      "how": "Un profil ne s'écrit pas : il se mesure. On choisit un volet représentatif et on le mesure une seule fois, avec la calibration guidée : environ trois minutes. Les volets semblables pourront ensuite le suivre.",
+      "action": {
+        "measure": "Mesurer un volet"
+      },
+      "note": "Cela ouvre le dialogue Configurer : c'est là que la mesure se fait. À la fin, le profil apparaît ici."
+    },
+    "overview": {
+      "title": "Profils et volets",
+      "summary": "Cette passerelle compte {profiles} profils et {covers} volets simples.",
+      "explanation": "Un profil décrit un type de volet : le temps qu'il met à courir, la durée des lames et la façon dont le tablier s'enroule sur le rouleau. Chaque volet peut en suivre un, et Home Assistant l'adapte à sa propre course.",
+      "group": {
+        "profile": "Profil « {profile} »",
+        "no_profile": "Sans profil",
+        "no_profile_note": "Valeurs du fichier de configuration, ou valeurs par défaut. Ce n'est pas une erreur : un volet qui a ses propres mesures est très bien ici.",
+        "values": "Course de référence {travel} cm · ouverture {opening} s · fermeture {closing} s · lames {slat} s",
+        "measured_on": "Mesuré sur {cover} · {date}",
+        "provenance_missing": "L'endroit où il a été mesuré n'est pas enregistré.",
+        "count": "{count} volets",
+        "count_one": "1 volet",
+        "empty": "Aucun volet dans ce groupe.",
+        "open": "Ouvrir la fiche du profil"
+      },
+      "cover": {
+        "travel": "course {travel} cm",
+        "travel_unknown": "course non indiquée",
+        "travel_needed": "course à saisir",
+        "follows": "suit « {profile} »",
+        "profile_missing": "Le profil « {profile} » n'est plus défini : ce volet fonctionne avec sa propre configuration.",
+        "from_file": "C'est le fichier de configuration qui attribue ce profil : il se change là-bas, pas ici."
+      },
+      "no_basic_covers": "Tous les volets de cette passerelle rapportent eux-mêmes leur position : il n'y a aucun modèle de course à calibrer et rien à faire ici."
+    },
+    "assign": {
+      "handle": "Déplacer {cover} vers un autre groupe, ou le réordonner",
+      "handle_hint": "Glisser pour attribuer ou réordonner, Entrée pour choisir dans une liste",
+      "drop_zone": "Retirer du profil — déposer ici",
+      "armed": "Touchez le groupe de destination pour « {cover} »",
+      "target_profile": "le profil « {profile} »",
+      "target_none": "« Sans profil »",
+      "announce": {
+        "armed": "Touchez le groupe de destination.",
+        "pending": "« {cover} » est en attente, vers {target}. Rien n'est encore écrit.",
+        "withdrawn": "« {cover} » revient là où il était : modification retirée.",
+        "reordered": "Ordre mis à jour : il sera retenu.",
+        "drag_cancelled": "Glissement annulé.",
+        "discarded": "Toutes les modifications en attente ont été abandonnées.",
+        "applying": "Les modifications sont en cours d'application.",
+        "missing_travel": "La course de certains volets manque."
+      },
+      "action": {
+        "withdraw": "Retirer cette modification",
+        "discard_all": "Tout abandonner",
+        "review": "Revoir et confirmer",
+        "review_hint": "Revoir et confirmer les attributions"
+      },
+      "pending": {
+        "count": "{count} modifications en attente — rien n'est encore écrit",
+        "count_one": "1 modification en attente — rien n'est encore écrit",
+        "route": "{from} → {to}",
+        "all_own": "Toutes les valeurs lui sont propres : rien ne change",
+        "some_own": "Valeurs propres : celles-là restent"
+      }
+    },
+    "review": {
+      "title": "Revoir et confirmer",
+      "intro": "Les modifications sont écrites toutes ensemble. Pour chaque volet, voici ce qu'il utilisera vraiment : les valeurs du profil ramenées à sa propre course.",
+      "travel": {
+        "title": "Quelle course fait le tablier de ces volets ?",
+        "hint": "Un profil est la mesure d'un volet ayant une certaine course, et il est ramené aux autres en proportion. La course de ceux-ci n'est pas connue : mesurer la distance que le bord inférieur parcourt de la fermeture complète à l'ouverture complète, et l'écrire en centimètres (décimales avec une virgule ou un point).",
+        "label": "Course du tablier",
+        "aria": "Course du tablier en centimètres",
+        "placeholder": "ex. 145",
+        "required": "La course est nécessaire, en centimètres."
+      },
+      "before": "Avant",
+      "after": "Après",
+      "note": {
+        "all_own": "Il a ses propres valeurs pour tout : rien ne change. Le profil ne vaudrait que pour les valeurs retirées plus tard.",
+        "some_own": "Il a quelques valeurs propres : celles-là restent. Seules les valeurs héritées changent.",
+        "scaled": "Valeurs du profil « {profile} » (mesuré sur {reference} cm) ramenées à une course de {travel} cm.",
+        "back_to_file": "Les valeurs du fichier de configuration reviennent. La course et toute valeur propre restent.",
+        "back_to_defaults": "Les valeurs par défaut reviennent : la position en pour cent ne sera qu'une estimation grossière. La course et toute valeur propre restent."
+      },
+      "action": {
+        "back": "Retour à la vue d'ensemble",
+        "confirm": "Confirmer {count} attributions",
+        "confirm_one": "Confirmer 1 attribution",
+        "missing_travel": "{count} courses manquantes",
+        "missing_travel_one": "1 course manquante"
+      }
+    },
+    "dialog": {
+      "title": "Quel profil ?",
+      "subtitle": "« {cover} » — le choix reste en attente tant qu'il n'est pas confirmé.",
+      "option": {
+        "profile": "Profil « {profile} »",
+        "profile_meta": "{travel} cm · ouverture {opening} s · fermeture {closing} s",
+        "none": "Aucun profil",
+        "none_meta": "Valeurs du fichier de configuration, ou valeurs par défaut. La course et les valeurs propres restent.",
+        "current": "actuel"
+      }
+    },
+    "toast": {
+      "assigned": "{count} attributions appliquées",
+      "assigned_one": "1 attribution appliquée",
+      "order_saved": "Le nouvel ordre sera retenu.",
+      "values_saved": "Les valeurs de « {cover} » sont enregistrées : elles l'emportent sur le profil et sur le fichier.",
+      "measure_removed": "Mesure retirée : « {cover} » utilise maintenant {destination}.",
+      "profile_saved": "Profil « {profile} » mis à jour : {count} volets touchés.",
+      "profile_renamed": "Renommé en « {profile} » : le renommage suit tous les volets qui l'utilisent.",
+      "profile_deleted": "Profil « {profile} » supprimé : les volets reviennent au fichier ou aux valeurs par défaut.",
+      "action": {
+        "undo": "Annuler"
+      },
+      "undone": "Modifications annulées : tout comme avant."
+    },
+    "detail": {
+      "title": "Détail du volet",
+      "measured_at": "Mesurée le {date}",
+      "level_basic": "calibration de base",
+      "level_thorough": "calibration approfondie",
+      "verify_note": "écart de {deviation} cm à la vérification",
+      "values": {
+        "title": "Valeurs effectives",
+        "intro": "Ce que le volet utilise en ce moment, valeur par valeur, avec son origine : une valeur propre l'emporte toujours ; puis le profil attribué, puis le fichier, puis les valeurs par défaut."
+      },
+      "source": {
+        "own": "valeur propre, mesurée sur ce volet",
+        "profile": "hérité du profil « {profile} »",
+        "file": "du fichier de configuration",
+        "default": "valeur par défaut"
+      },
+      "action": {
+        "edit": "Modifier les valeurs à la main",
+        "assign": "Attribuer à un profil…",
+        "measure_again": "Mesurer à nouveau",
+        "measure_again_note": "Calibration de base complète, dans le dialogue",
+        "correct": "Corriger…",
+        "correct_note": "S'il s'arrête au mauvais endroit : seulement les temps, temps et rouleaux, ou seulement la calibration approfondie",
+        "thorough": "Calibration approfondie",
+        "thorough_note": "En plus : relevés à 25 et 75 % par direction, et une vérification",
+        "remove": "Retirer la mesure…"
+      },
+      "correct": {
+        "intro": "La correction ouvre le dialogue Configurer sur le chemin choisi. Au retour, le panneau se met à jour tout seul.",
+        "times": "Seulement les temps",
+        "times_note": "Une course par direction, les rouleaux restent",
+        "times_rolls": "Temps et rouleaux",
+        "times_rolls_note": "Calibration de base complète",
+        "thorough": "Seulement la calibration approfondie",
+        "thorough_note": "Relevés à 25 et 75 % par direction, et une vérification"
+      },
+      "edit": {
+        "title": "Modifier les valeurs à la main",
+        "intro": "Ces valeurs ne valent que pour ce volet et l'emportent sur le profil comme sur le fichier. Un champ laissé vide n'est pas un zéro : il signifie « rien à dire là-dessus », et la valeur revient du profil ou du fichier. Vider tous les champs revient à retirer la mesure.",
+        "inherits": "hérite de {value}",
+        "empty": "vide = rien à dire",
+        "action": {
+          "save": "Enregistrer les valeurs"
+        }
+      },
+      "remove": {
+        "title": "Retirer la mesure ?",
+        "body": "Les mesures faites sur « {cover} » seront retirées et ne se récupèrent pas. Le volet reviendra à {destination}.",
+        "travel_stays": "La course du tablier reste : quelqu'un l'a mesurée au mètre.",
+        "action": "Retirer la mesure"
+      },
+      "destination": {
+        "profile": "les valeurs héritées du profil « {profile} »",
+        "file": "les valeurs du fichier de configuration",
+        "defaults": "les valeurs par défaut"
+      }
+    },
+    "profile": {
+      "title": "Fiche du profil",
+      "name": "Profil « {profile} »",
+      "stored": "Profil de l'archive",
+      "from_file": "Profil du fichier de configuration : en lecture seule ici.",
+      "reference_travel": "Course de référence",
+      "provenance": "Mesuré sur {cover} · {date}",
+      "provenance_missing": "L'endroit où il a été mesuré n'est pas enregistré.",
+      "provenance_now_profile": "suit maintenant « {profile} »",
+      "provenance_now_none": "ne suit plus aucun profil",
+      "followers": {
+        "count": "{count} volets le suivent",
+        "count_one": "1 volet le suit",
+        "none": "Aucun volet ne le suit.",
+        "measured": "mesurée : aucune valeur héritée",
+        "adjusted": "ajustée : valeurs propres pour {keys}",
+        "inherited": "héritée"
+      },
+      "edit": {
+        "intro": "Une modification du profil change tout pour les volets qui héritent de ses valeurs, et seulement les valeurs héritées pour les volets ajustés : leurs valeurs propres restent, clé par clé.",
+        "reach": "La modification touche {target}",
+        "reach_all": "chacun des {count} volets qui suivent le profil",
+        "reach_one": "1 volet",
+        "action": {
+          "save": "Appliquer à {count} volets",
+          "save_one": "Appliquer à 1 volet"
+        }
+      },
+      "impact": {
+        "title": "Aperçu de l'impact",
+        "no_change": "aucun changement : toutes les valeurs lui sont propres",
+        "no_travel": "course non indiquée : il utilisera les valeurs du profil telles quelles",
+        "invalid": "corriger les champs pour voir l'aperçu",
+        "state_measured": "mesurée",
+        "state_adjusted": "ajustée : seules les valeurs héritées changent",
+        "state_inherited": "héritée : tout change",
+        "kept": "restent propres : {keys}"
+      },
+      "action": {
+        "edit": "Modifier les valeurs…",
+        "rename": "Renommer…",
+        "delete": "Supprimer le profil…"
+      },
+      "rename": {
+        "title": "Renommer le profil",
+        "field": "Nouveau nom du profil",
+        "rule": "Uniquement des lettres, des chiffres et des tirets bas : pas d'espaces, pas d'accents — le nom est aussi une clé du fichier de configuration. Le renommage suit tous les volets qui utilisent le profil.",
+        "action": "Renommer"
+      },
+      "delete": {
+        "title": "Supprimer le profil « {profile} » ?",
+        "affects": "Cela concerne ces volets :",
+        "body": "Ils reviendront aux valeurs du fichier de configuration, là où elles existent, ou aux valeurs par défaut. Leurs courses et leurs valeurs propres restent. Les mesures du profil ne se récupèrent pas.",
+        "action": "Supprimer le profil"
+      }
+    },
+    "banner": {
+      "measuring": {
+        "title": "Mesure en cours",
+        "body": "Une calibration guidée utilise « {cover} ». Tant que la session n'est pas terminée, ce panneau ne fait que lire : rien n'est écrit.",
+        "action": {
+          "resume": "Reprendre la session",
+          "stop": "Terminer"
+        }
+      },
+      "applying": {
+        "title": "Les modifications sont appliquées…",
+        "body": "Les volets sont indisponibles pendant quelques secondes"
+      }
+    },
+    "error": {
+      "not_found": "Le panneau n'a pas pu lire cette passerelle.",
+      "write_failed": "La modification n'a pas été écrite. Rien n'a été enregistré.",
+      "no_connection": "Home Assistant ne répond pas. Le panneau réessaiera."
+    }
+  },
   "issues": {
     "yaml_invalid": {
       "title": "Le fichier de configuration MyHOME est invalide",
@@ -835,6 +1111,48 @@
     },
     "climate_unsupported_hvac_mode": {
       "message": "Le mode {hvac_mode} n'est pas pris en charge par {entity_id}."
+    },
+    "unknown_entry": {
+      "message": "Aucune passerelle MyHome n'est configurée avec cet identifiant."
+    },
+    "entry_not_loaded": {
+      "message": "La passerelle {gateway} est configurée mais pas chargée : ses volets ne peuvent pas encore être lus."
+    },
+    "unknown_cover": {
+      "message": "Cette passerelle n'a pas ce volet."
+    },
+    "advanced_cover": {
+      "message": "Ce volet rapporte lui-même sa position : il n'a aucun modèle de course à calibrer."
+    },
+    "busy_calibrating": {
+      "message": "Une calibration guidée est en cours sur {cover}. Rien n'est écrit avant qu'elle ne se termine."
+    },
+    "write_in_progress": {
+      "message": "Une autre modification de cette passerelle est encore en cours d'application. Réessayer dans un instant."
+    },
+    "profile_not_editable": {
+      "message": "Le profil « {profile} » est écrit dans le fichier de configuration : il se change là-bas, pas depuis le panneau."
+    },
+    "unknown_profile": {
+      "message": "Aucun profil de l'archive ne s'appelle « {profile} »."
+    },
+    "undo_expired": {
+      "message": "Trop de temps a passé : cette modification ne peut plus être annulée."
+    },
+    "missing_travel": {
+      "message": "La course du tablier de {count} volets est inconnue : {covers}. Un profil ne peut être ramené qu'à un volet dont la course est connue."
+    },
+    "invalid_name": {
+      "message": "« {profile} » n'est pas un nom de profil utilisable : uniquement des lettres, des chiffres et des tirets bas, pas d'espaces ni d'accents."
+    },
+    "name_in_use": {
+      "message": "Un profil appelé « {profile} » existe déjà."
+    },
+    "out_of_range": {
+      "message": "{key} accepte un nombre entre {min} et {max}."
+    },
+    "not_a_number": {
+      "message": "{key} demande un nombre. Les décimales s'écrivent avec une virgule ou avec un point."
     }
   },
   "services": {

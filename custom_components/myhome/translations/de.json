@@ -706,6 +706,282 @@
       }
     }
   },
+  "config_panel": {
+    "common": {
+      "loading": "Wird geladen…",
+      "gateway": "Gateway {gateway}",
+      "search": "Einen Rollladen suchen",
+      "room_filter": "Nach Raum filtern",
+      "all_rooms": "Alle Räume",
+      "opens_configure": "Damit öffnet sich der Dialog Konfigurieren. Beim Schließen aktualisiert sich das Panel von selbst.",
+      "not_loaded": "Dieses Gateway ist nicht geladen, hier gibt es also noch nichts zu lesen.",
+      "action": {
+        "menu": "Das Menü von Home Assistant öffnen",
+        "configure": "Konfigurieren öffnen",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "back": "Zurück",
+        "save": "Speichern",
+        "show_all": "Alle Werte anzeigen, einschließlich der Wickelkoeffizienten",
+        "hide_all": "Die Wickelkoeffizienten ausblenden"
+      },
+      "unit": {
+        "seconds": "s",
+        "centimetres": "cm"
+      }
+    },
+    "firstrun": {
+      "title": "Noch kein Profil",
+      "body": "Ein Profil beschreibt einen Rollladentyp: wie lange er läuft, wie lange die Lamellen brauchen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an dessen eigenen Weg an.",
+      "how": "Ein Profil wird nicht geschrieben, sondern gemessen. Man wählt einen repräsentativen Rollladen und misst ihn ein einziges Mal, mit der geführten Kalibrierung: etwa drei Minuten. Ähnliche Rollläden können ihm danach folgen.",
+      "action": {
+        "measure": "Einen Rollladen messen"
+      },
+      "note": "Damit öffnet sich der Dialog Konfigurieren: dort wird gemessen. Danach erscheint das Profil hier."
+    },
+    "overview": {
+      "title": "Profile und Rollläden",
+      "summary": "Auf diesem Gateway gibt es {profiles} Profile und {covers} einfache Rollläden.",
+      "explanation": "Ein Profil beschreibt einen Rollladentyp: wie lange er läuft, wie lange die Lamellen brauchen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an dessen eigenen Weg an.",
+      "group": {
+        "profile": "Profil „{profile}“",
+        "no_profile": "Ohne Profil",
+        "no_profile_note": "Werte aus der Konfigurationsdatei oder die Vorgaben. Das ist kein Fehler: ein Rollladen mit eigenen Messungen steht hier bestens.",
+        "values": "Referenzweg {travel} cm · Öffnen {opening} s · Schließen {closing} s · Lamellen {slat} s",
+        "measured_on": "Gemessen an {cover} · {date}",
+        "provenance_missing": "Wo es gemessen wurde, ist nicht festgehalten.",
+        "count": "{count} Rollläden",
+        "count_one": "1 Rollladen",
+        "empty": "Kein Rollladen in dieser Gruppe.",
+        "open": "Die Profilkarte öffnen"
+      },
+      "cover": {
+        "travel": "Weg {travel} cm",
+        "travel_unknown": "Weg nicht angegeben",
+        "travel_needed": "Weg noch einzutragen",
+        "follows": "folgt „{profile}“",
+        "profile_missing": "Das Profil „{profile}“ ist nicht mehr definiert: dieser Rollladen läuft mit seiner eigenen Konfiguration.",
+        "from_file": "Dieses Profil weist die Konfigurationsdatei zu: geändert wird es dort, nicht hier."
+      },
+      "no_basic_covers": "Alle Rollläden dieses Gateways melden ihre Position selbst: es gibt kein Wegmodell zu kalibrieren und hier nichts zu tun."
+    },
+    "assign": {
+      "handle": "{cover} in eine andere Gruppe verschieben oder neu anordnen",
+      "handle_hint": "Ziehen zum Zuweisen oder Umsortieren, Eingabetaste zum Auswählen aus einer Liste",
+      "drop_zone": "Aus dem Profil nehmen — hier ablegen",
+      "armed": "Auf die Zielgruppe für „{cover}“ tippen",
+      "target_profile": "das Profil „{profile}“",
+      "target_none": "„Ohne Profil“",
+      "announce": {
+        "armed": "Auf die Zielgruppe tippen.",
+        "pending": "„{cover}“ steht aus, in Richtung {target}. Noch ist nichts geschrieben.",
+        "withdrawn": "„{cover}“ geht dorthin zurück, wo er war: Änderung zurückgenommen.",
+        "reordered": "Reihenfolge aktualisiert: sie wird gemerkt.",
+        "drag_cancelled": "Ziehen abgebrochen.",
+        "discarded": "Alle ausstehenden Änderungen wurden verworfen.",
+        "applying": "Die Änderungen werden angewendet.",
+        "missing_travel": "Bei einigen Rollläden fehlt der Weg."
+      },
+      "action": {
+        "withdraw": "Diese Änderung zurücknehmen",
+        "discard_all": "Alles verwerfen",
+        "review": "Prüfen und bestätigen",
+        "review_hint": "Die Zuweisungen prüfen und bestätigen"
+      },
+      "pending": {
+        "count": "{count} ausstehende Änderungen — noch ist nichts geschrieben",
+        "count_one": "1 ausstehende Änderung — noch ist nichts geschrieben",
+        "route": "{from} → {to}",
+        "all_own": "Alle Werte sind eigene: es ändert sich nichts",
+        "some_own": "Eigene Werte: die bleiben"
+      }
+    },
+    "review": {
+      "title": "Prüfen und bestätigen",
+      "intro": "Die Änderungen werden alle zusammen geschrieben. Für jeden Rollladen steht hier, was er wirklich verwenden wird: die Werte des Profils, auf seinen eigenen Weg umgerechnet.",
+      "travel": {
+        "title": "Wie weit läuft der Panzer dieser Rollläden?",
+        "hint": "Ein Profil ist die Messung eines Rollladens mit einem bestimmten Weg und wird auf die anderen anteilig umgerechnet. Bei diesen ist der Weg nicht bekannt: den Abstand messen, den die Unterkante von ganz geschlossen bis ganz offen zurücklegt, und ihn in Zentimetern eintragen (Dezimalstellen mit Komma oder mit Punkt).",
+        "label": "Weg des Panzers",
+        "aria": "Weg des Panzers in Zentimetern",
+        "placeholder": "z. B. 145",
+        "required": "Der Weg wird gebraucht, in Zentimetern."
+      },
+      "before": "Vorher",
+      "after": "Nachher",
+      "note": {
+        "all_own": "Er hat für alles eigene Werte: es ändert sich nichts. Das Profil würde nur für später entfernte Werte gelten.",
+        "some_own": "Er hat einige eigene Werte: die bleiben. Nur die übernommenen Werte ändern sich.",
+        "scaled": "Werte des Profils „{profile}“ (gemessen an {reference} cm), umgerechnet auf einen Weg von {travel} cm.",
+        "back_to_file": "Die Werte der Konfigurationsdatei kommen zurück. Der Weg und jeder eigene Wert bleiben.",
+        "back_to_defaults": "Die Vorgabewerte kommen zurück: die Position in Prozent wird eine grobe Schätzung. Der Weg und jeder eigene Wert bleiben."
+      },
+      "action": {
+        "back": "Zurück zur Übersicht",
+        "confirm": "{count} Zuweisungen bestätigen",
+        "confirm_one": "1 Zuweisung bestätigen",
+        "missing_travel": "{count} Wege fehlen",
+        "missing_travel_one": "1 Weg fehlt"
+      }
+    },
+    "dialog": {
+      "title": "Welches Profil?",
+      "subtitle": "„{cover}“ — die Wahl bleibt ausstehend, bis sie bestätigt wird.",
+      "option": {
+        "profile": "Profil „{profile}“",
+        "profile_meta": "{travel} cm · Öffnen {opening} s · Schließen {closing} s",
+        "none": "Kein Profil",
+        "none_meta": "Werte aus der Konfigurationsdatei oder die Vorgaben. Der Weg und die eigenen Werte bleiben.",
+        "current": "aktuell"
+      }
+    },
+    "toast": {
+      "assigned": "{count} Zuweisungen angewendet",
+      "assigned_one": "1 Zuweisung angewendet",
+      "order_saved": "Die neue Reihenfolge wird gemerkt.",
+      "values_saved": "Die Werte von „{cover}“ sind gespeichert: sie schlagen das Profil und die Datei.",
+      "measure_removed": "Messung entfernt: „{cover}“ verwendet jetzt {destination}.",
+      "profile_saved": "Profil „{profile}“ aktualisiert: {count} Rollläden erreicht.",
+      "profile_renamed": "Umbenannt in „{profile}“: die Umbenennung folgt jedem Rollladen, der es verwendet.",
+      "profile_deleted": "Profil „{profile}“ gelöscht: die Rollläden kehren zur Datei oder zu den Vorgaben zurück.",
+      "action": {
+        "undo": "Rückgängig"
+      },
+      "undone": "Änderungen rückgängig gemacht: alles wie zuvor."
+    },
+    "detail": {
+      "title": "Rollladen im Detail",
+      "measured_at": "Gemessen am {date}",
+      "level_basic": "Basis-Kalibrierung",
+      "level_thorough": "erweiterte Kalibrierung",
+      "verify_note": "Abweichung von {deviation} cm bei der Prüfung",
+      "values": {
+        "title": "Tatsächliche Werte",
+        "intro": "Was der Rollladen gerade verwendet, Wert für Wert, mit seiner Herkunft: ein eigener Wert gewinnt immer; dann das zugewiesene Profil, dann die Datei, dann die Vorgaben."
+      },
+      "source": {
+        "own": "eigener Wert, an diesem Rollladen gemessen",
+        "profile": "vom Profil „{profile}“ übernommen",
+        "file": "aus der Konfigurationsdatei",
+        "default": "Vorgabewert"
+      },
+      "action": {
+        "edit": "Die Werte von Hand ändern",
+        "assign": "Einem Profil zuweisen…",
+        "measure_again": "Erneut messen",
+        "measure_again_note": "Vollständige Basis-Kalibrierung, im Dialog",
+        "correct": "Korrigieren…",
+        "correct_note": "Wenn er an der falschen Stelle hält: nur die Zeiten, Zeiten und Wickel, oder nur die erweiterte Kalibrierung",
+        "thorough": "Erweiterte Kalibrierung",
+        "thorough_note": "Zusätzlich: Ablesungen bei 25 und 75 % je Richtung und eine Prüfung",
+        "remove": "Die Messung entfernen…"
+      },
+      "correct": {
+        "intro": "Die Korrektur öffnet den Dialog Konfigurieren auf dem gewählten Weg. Bei der Rückkehr aktualisiert sich das Panel von selbst.",
+        "times": "Nur die Zeiten",
+        "times_note": "Ein Lauf je Richtung, die Wickel bleiben",
+        "times_rolls": "Zeiten und Wickel",
+        "times_rolls_note": "Vollständige Basis-Kalibrierung",
+        "thorough": "Nur die erweiterte Kalibrierung",
+        "thorough_note": "Ablesungen bei 25 und 75 % je Richtung und eine Prüfung"
+      },
+      "edit": {
+        "title": "Die Werte von Hand ändern",
+        "intro": "Diese Werte gelten nur für diesen Rollladen und schlagen sowohl das Profil als auch die Datei. Ein leer gelassenes Feld ist keine Null: es heißt „dazu gibt es nichts zu sagen“, und der Wert kommt wieder vom Profil oder aus der Datei. Alle Felder zu leeren kommt dem Entfernen der Messung gleich.",
+        "inherits": "übernimmt {value}",
+        "empty": "leer = nichts zu sagen",
+        "action": {
+          "save": "Die Werte speichern"
+        }
+      },
+      "remove": {
+        "title": "Die Messung entfernen?",
+        "body": "Die an „{cover}“ vorgenommenen Messungen werden entfernt und lassen sich nicht zurückholen. Der Rollladen verwendet dann wieder {destination}.",
+        "travel_stays": "Der Weg des Panzers bleibt: jemand hat ihn mit dem Maßband gemessen.",
+        "action": "Die Messung entfernen"
+      },
+      "destination": {
+        "profile": "die vom Profil „{profile}“ übernommenen Werte",
+        "file": "die Werte der Konfigurationsdatei",
+        "defaults": "die Vorgabewerte"
+      }
+    },
+    "profile": {
+      "title": "Profilkarte",
+      "name": "Profil „{profile}“",
+      "stored": "Gespeichertes Profil",
+      "from_file": "Profil aus der Konfigurationsdatei: hier nur lesbar.",
+      "reference_travel": "Referenzweg",
+      "provenance": "Gemessen an {cover} · {date}",
+      "provenance_missing": "Wo es gemessen wurde, ist nicht festgehalten.",
+      "provenance_now_profile": "folgt jetzt „{profile}“",
+      "provenance_now_none": "folgt jetzt keinem Profil",
+      "followers": {
+        "count": "{count} Rollläden folgen ihm",
+        "count_one": "1 Rollladen folgt ihm",
+        "none": "Kein Rollladen folgt ihm.",
+        "measured": "gemessen: kein übernommener Wert",
+        "adjusted": "angepasst: eigene Werte für {keys}",
+        "inherited": "übernommen"
+      },
+      "edit": {
+        "intro": "Eine Änderung am Profil ändert alles bei den Rollläden, die seine Werte übernehmen, und bei den angepassten nur die übernommenen Werte: ihre eigenen Werte bleiben, Schlüssel für Schlüssel.",
+        "reach": "Die Änderung erreicht {target}",
+        "reach_all": "alle {count} Rollläden, die dem Profil folgen",
+        "reach_one": "1 Rollladen",
+        "action": {
+          "save": "Auf {count} Rollläden anwenden",
+          "save_one": "Auf 1 Rollladen anwenden"
+        }
+      },
+      "impact": {
+        "title": "Auswirkungsvorschau",
+        "no_change": "keine Änderung: alle Werte sind eigene",
+        "no_travel": "Weg nicht angegeben: er verwendet die Werte des Profils unverändert",
+        "invalid": "die Felder korrigieren, um die Vorschau zu sehen",
+        "state_measured": "gemessen",
+        "state_adjusted": "angepasst: nur die übernommenen Werte ändern sich",
+        "state_inherited": "übernommen: alles ändert sich",
+        "kept": "eigen bleiben: {keys}"
+      },
+      "action": {
+        "edit": "Die Werte ändern…",
+        "rename": "Umbenennen…",
+        "delete": "Das Profil löschen…"
+      },
+      "rename": {
+        "title": "Das Profil umbenennen",
+        "field": "Neuer Name des Profils",
+        "rule": "Nur Buchstaben, Ziffern und Unterstriche: keine Leerzeichen, keine Akzente — der Name ist zugleich ein Schlüssel der Konfigurationsdatei. Die Umbenennung folgt jedem Rollladen, der das Profil verwendet.",
+        "action": "Umbenennen"
+      },
+      "delete": {
+        "title": "Das Profil „{profile}“ löschen?",
+        "affects": "Das betrifft diese Rollläden:",
+        "body": "Sie kehren zu den Werten der Konfigurationsdatei zurück, wo es sie gibt, sonst zu den Vorgaben. Ihre Wege und ihre eigenen Werte bleiben. Die Messungen des Profils lassen sich nicht zurückholen.",
+        "action": "Das Profil löschen"
+      }
+    },
+    "banner": {
+      "measuring": {
+        "title": "Messung läuft",
+        "body": "Eine geführte Kalibrierung verwendet „{cover}“. Solange die Sitzung läuft, liest dieses Panel nur: es wird nichts geschrieben.",
+        "action": {
+          "resume": "Die Sitzung fortsetzen",
+          "stop": "Beenden"
+        }
+      },
+      "applying": {
+        "title": "Die Änderungen werden angewendet…",
+        "body": "Die Rollläden sind für einige Sekunden nicht verfügbar"
+      }
+    },
+    "error": {
+      "not_found": "Das Panel konnte dieses Gateway nicht lesen.",
+      "write_failed": "Die Änderung wurde nicht geschrieben. Es wurde nichts gespeichert.",
+      "no_connection": "Home Assistant antwortet nicht. Das Panel versucht es erneut."
+    }
+  },
   "issues": {
     "yaml_invalid": {
       "title": "Die MyHOME-Konfigurationsdatei ist ungültig",
@@ -835,6 +1111,48 @@
     },
     "climate_unsupported_hvac_mode": {
       "message": "Der HVAC-Modus {hvac_mode} wird von {entity_id} nicht unterstützt."
+    },
+    "unknown_entry": {
+      "message": "Es ist kein MyHome-Gateway mit dieser Kennung eingerichtet."
+    },
+    "entry_not_loaded": {
+      "message": "Das Gateway {gateway} ist eingerichtet, aber nicht geladen, seine Rollläden lassen sich daher noch nicht lesen."
+    },
+    "unknown_cover": {
+      "message": "Dieses Gateway hat diesen Rollladen nicht."
+    },
+    "advanced_cover": {
+      "message": "Dieser Rollladen meldet seine Position selbst: es gibt kein Wegmodell zu kalibrieren."
+    },
+    "busy_calibrating": {
+      "message": "Auf {cover} läuft eine geführte Kalibrierung. Bis sie endet, wird nichts geschrieben."
+    },
+    "write_in_progress": {
+      "message": "Eine andere Änderung an diesem Gateway wird noch angewendet. Gleich erneut versuchen."
+    },
+    "profile_not_editable": {
+      "message": "Das Profil „{profile}“ steht in der Konfigurationsdatei: geändert wird es dort, nicht im Panel."
+    },
+    "unknown_profile": {
+      "message": "Kein gespeichertes Profil heißt „{profile}“."
+    },
+    "undo_expired": {
+      "message": "Es ist zu viel Zeit vergangen: diese Änderung lässt sich nicht mehr rückgängig machen."
+    },
+    "missing_travel": {
+      "message": "Bei {count} Rollläden ist der Weg des Panzers unbekannt: {covers}. Ein Profil lässt sich nur auf einen Rollladen übertragen, dessen Weg bekannt ist."
+    },
+    "invalid_name": {
+      "message": "„{profile}“ ist kein brauchbarer Profilname: nur Buchstaben, Ziffern und Unterstriche, keine Leerzeichen und keine Akzente."
+    },
+    "name_in_use": {
+      "message": "Ein Profil namens „{profile}“ gibt es bereits."
+    },
+    "out_of_range": {
+      "message": "{key} nimmt eine Zahl zwischen {min} und {max} an."
+    },
+    "not_a_number": {
+      "message": "{key} braucht eine Zahl. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
     }
   },
   "services": {
