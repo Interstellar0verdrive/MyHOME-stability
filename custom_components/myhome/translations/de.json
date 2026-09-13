@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Bevor der Rollladen zu fahren beginnt",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: die Kalibrierung ist in Schritte geteilt. In jedem Schritt macht der Rollladen die Bewegungen, die dieser Schritt braucht, und vor jeder kommen die Anweisungen und alle Zeit, sich vorzubereiten: keine gemessene Bewegung startet, ohne dass Sie sie starten. Neun Bewegungen insgesamt, etwa vier Minuten.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht – ein offener Fensterflügel, Pflanzen auf der Fensterbank, Katzen – und halten Sie das Maßband bereit. Sie werden gebeten, einen Knopf zu drücken, wenn etwas geschieht, und einige Abstände abzulesen.\n\nGeht etwas schief, lässt sich jeder Schritt für sich wiederholen, ohne die bereits erledigten noch einmal zu machen. Sie können jederzeit schließen: bis zum letzten Bildschirm wird nichts gespeichert, und eine bereits laufende Fahrt geht von selbst bis in die Endlage.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: die Kalibrierung ist in Schritte geteilt. In jedem Schritt macht der Rollladen die Bewegungen, die dieser Schritt braucht. Wo ein Knopf zu drücken ist, kommen zuerst die Anweisungen und die Bewegung wartet darauf, dass Sie sie starten; die mit dem Maßband gemessenen Schritte fahren von selbst, und ein Bildschirm warnt vor dem ersten davon. Acht Bewegungen insgesamt, etwa vier Minuten.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht – ein offener Fensterflügel, Pflanzen auf der Fensterbank, Katzen – und halten Sie das Maßband bereit. Sie werden gebeten, einen Knopf zu drücken, wenn etwas geschieht, und einige Abstände abzulesen.\n\nGeht etwas schief, lässt sich jeder Schritt für sich wiederholen, ohne die bereits erledigten noch einmal zu machen. Sie können jederzeit schließen: bis zum letzten Bildschirm wird nichts gespeichert, und eine bereits laufende Fahrt geht von selbst bis in die Endlage.",
         "menu_options": {
           "begin": "Verstanden, fangen wir an",
           "cancel_flow": "Abbrechen"
@@ -303,15 +303,6 @@
         "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde vollständig geschlossen: so geht alles, was von hier an gemessen wird, von einem bekannten Punkt aus.\n\n**Was Sie tun müssen**: sehen Sie ihn an. Ist er vollständig geschlossen, mit geschlossenen Lamellen und aufliegender Unterkante, fahren Sie fort. Bewegt er sich noch, warten Sie und fahren dann fort. Hat er sich gar nicht bewegt oder in die falsche Richtung, sagen Sie es unten.",
         "menu_options": {
           "confirm_closed": "Er ist vollständig geschlossen",
-          "repeat_step": "Diesen Schritt wiederholen",
-          "not_right": "Er hat nicht getan, was er sollte"
-        }
-      },
-      "home_open_done": {
-        "title": "Ist der Rollladen vollständig geöffnet?",
-        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde vollständig geöffnet, denn was folgt, fährt von dort herunter, und eine Fahrt, die anderswo begänne, würde nichts messen.\n\n**Was Sie tun müssen**: sehen Sie ihn an. Ist er vollständig geöffnet, fahren Sie fort. Bewegt er sich noch, warten Sie und fahren dann fort. Hat er sich gar nicht bewegt oder in die falsche Richtung, sagen Sie es unten.",
-        "menu_options": {
-          "confirm_open": "Er ist vollständig geöffnet",
           "repeat_step": "Diesen Schritt wiederholen",
           "not_right": "Er hat nicht getan, was er sollte"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "Der Panzerweg wurde notiert",
-        "description": "**Rollladen**: {cover}\n\n**Was notiert wurde**: {height} cm von der Auflagefläche bis zur Unterkante bei vollständig geöffnetem Rollladen.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Prüfen Sie den Wert: die Maßbandablesungen der nächsten Schritte werden mit dieser Höhe verglichen.",
+        "description": "**Rollladen**: {cover}\n\n**Was notiert wurde**: {height} cm von der Auflagefläche bis zur Unterkante bei vollständig geöffnetem Rollladen.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Prüfen Sie den Wert: die Maßbandablesungen der nächsten Schritte werden mit dieser Höhe verglichen. Ist der Rollladen nicht vollständig geöffnet, und ist das also nicht der ganze Weg, sagen Sie es unten: er wird erneut geöffnet und die Ablesung wiederholt.",
         "menu_options": {
           "accept_step": "Passt, weiter",
-          "repeat_measure": "Die Messung wiederholen"
+          "repeat_measure": "Die Messung wiederholen",
+          "not_right": "Er hat nicht getan, was er sollte"
+        }
+      },
+      "tape_brief": {
+        "title": "Vor den automatischen Ablesungen",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: von hier an fährt der Rollladen von selbst. Es folgen {readings} Ablesungen: für jede fährt der Rollladen zuerst in die Endlage, aus der diese Ablesung startet, dann bis zu der zu messenden Position, wo er von selbst hält. Es gibt nichts zu drücken und nichts im richtigen Augenblick zu treffen: nach jeder Bewegung fragt ein Bildschirm nach dem Abstand in Zentimetern.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht, halten Sie das Maßband bereit und bleiben Sie dem Rollladen fern, solange er fährt. Tut eine Bewegung nicht, was sie soll, sagen Sie es auf dem Bildschirm nach der Ablesung: der Schritt wird dann wiederholt.",
+        "menu_options": {
+          "tape_start": "Verstanden, Ablesungen starten",
+          "cancel_flow": "Abbrechen"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "Die Ablesung wurde notiert",
-        "description": "**Rollladen**: {cover} – abgelesen bei {percent}% des Wegs\n\n**Was notiert wurde**: {measured} cm von der Auflagefläche bis zur Unterkante.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Zweifeln Sie, ob Sie vom richtigen Punkt aus gemessen haben, wiederholen Sie die Messung: der Rollladen fährt zurück in seine Endlage und legt denselben Weg erneut zurück, sodass sich unter denselben Bedingungen noch einmal ablesen lässt.",
+        "description": "**Rollladen**: {cover} – abgelesen bei {percent}% des Wegs\n\n**Was notiert wurde**: {measured} cm von der Auflagefläche bis zur Unterkante.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Zweifeln Sie, ob Sie vom richtigen Punkt aus gemessen haben, wiederholen Sie die Messung: der Rollladen fährt zurück in seine Endlage und legt denselben Weg erneut zurück, sodass sich unter denselben Bedingungen noch einmal ablesen lässt. Hat der Rollladen nicht getan, was er sollte (er hat sich gar nicht bewegt oder in die falsche Richtung), sagen Sie es unten: er wird angehalten und die Bewegungen dieses Schritts werden wiederholt.",
         "menu_options": {
           "accept_step": "Passt, weiter",
-          "repeat_tape": "Die Messung wiederholen"
+          "repeat_tape": "Die Messung wiederholen",
+          "tape_not_right": "Er hat nicht getan, was er sollte"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} wird vollständig geöffnet: so geht die nächste Bewegung von einem bekannten Punkt aus. Bitte warten, und sorgen Sie dafür, dass nichts im Weg steht.",
       "starting_open": "{cover} fährt nach oben los. Sehen Sie hin: gleich werden Sie um den Tastendruck an der Auflagefläche gebeten.",
       "starting_close": "{cover} fährt nach unten los. Sehen Sie hin: gleich werden Sie um den Tastendruck gebeten.",
-      "running_down": "{cover} wird vollständig geöffnet und dann bis auf etwa {percent}% seines Weges heruntergefahren. Bitte warten, und halten Sie das Maßband bereit.",
-      "running_up": "{cover} wird vollständig geschlossen und dann bis auf etwa {percent}% seines Weges hinaufgefahren. Bitte warten, und halten Sie das Maßband bereit.",
+      "running_down": "{cover} wird bis auf etwa {percent}% seines Weges heruntergefahren. Bitte warten, und halten Sie das Maßband bereit.",
+      "running_up": "{cover} wird bis auf etwa {percent}% seines Weges hinaufgefahren. Bitte warten, und halten Sie das Maßband bereit.",
       "stopping_lift": "{cover} wird genau dort angehalten, wo Ihr Tastendruck ihn angetroffen hat. Einen Augenblick.",
       "starting_open_full": "{cover} fährt wieder nach oben los, diesmal ganz hinauf. Sehen Sie hin: gleich werden Sie um den Tastendruck oben gebeten."
     },

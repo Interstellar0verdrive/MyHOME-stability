@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Prima che la tapparella cominci a muoversi",
-        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: la calibrazione è divisa in passi. A ogni passo la tapparella fa i movimenti che quel passo richiede, e prima di ciascuno arrivano le istruzioni e tutto il tempo per prepararsi: nessun movimento a tempo parte senza essere avviato a mano. In tutto sono nove movimenti, circa quattro minuti.\n\n**Cosa fare**: assicurarsi che non ci sia niente d'intralcio — un'anta aperta, piante sul davanzale, gatti — e tenere il metro a portata di mano. Sarà richiesto di premere un pulsante quando succede qualcosa e di leggere qualche distanza.\n\nSe qualcosa va storto, ogni passo si può ripetere da solo, senza rifare quelli già fatti. Si può chiudere quando si vuole: non viene salvato niente fino all'ultima schermata, e una corsa in atto finisce da sola al finecorsa.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: la calibrazione è divisa in passi. A ogni passo la tapparella fa i movimenti che quel passo richiede. Dove c'è un pulsante da premere arrivano prima le istruzioni e il movimento aspetta di essere avviato a mano; i passi che si misurano col metro si muovono da soli, e una schermata avvisa prima del primo. In tutto sono otto movimenti, circa quattro minuti.\n\n**Cosa fare**: assicurarsi che non ci sia niente d'intralcio — un'anta aperta, piante sul davanzale, gatti — e tenere il metro a portata di mano. Sarà richiesto di premere un pulsante quando succede qualcosa e di leggere qualche distanza.\n\nSe qualcosa va storto, ogni passo si può ripetere da solo, senza rifare quelli già fatti. Si può chiudere quando si vuole: non viene salvato niente fino all'ultima schermata, e una corsa in atto finisce da sola al finecorsa.",
         "menu_options": {
           "begin": "Ho capito, cominciamo",
           "cancel_flow": "Annulla"
@@ -303,15 +303,6 @@
         "description": "**Tapparella**: {cover}\n\n**Cosa è successo**: la tapparella è stata chiusa completamente: in questo modo tutto quello che si misura da qui in poi parte da un punto noto.\n\n**Cosa fare**: osservare la tapparella. Se è chiusa completamente, con le lamelle serrate e il bordo inferiore in appoggio, proseguire. Se è ancora in movimento, attendere che si fermi prima di proseguire. Se non si è mossa o si è mossa nella direzione sbagliata, segnalarlo qui sotto.",
         "menu_options": {
           "confirm_closed": "È chiusa completamente",
-          "repeat_step": "Ripeti questo passo",
-          "not_right": "Non ha fatto quello che doveva"
-        }
-      },
-      "home_open_done": {
-        "title": "La tapparella è aperta completamente?",
-        "description": "**Tapparella**: {cover}\n\n**Cosa è successo**: la tapparella è stata aperta completamente, perché quello che segue scende da lì e una corsa partita da un altro punto non misurerebbe niente.\n\n**Cosa fare**: osservare la tapparella. Se è aperta completamente, proseguire. Se è ancora in movimento, attendere che si fermi prima di proseguire. Se non si è mossa o si è mossa nella direzione sbagliata, segnalarlo qui sotto.",
-        "menu_options": {
-          "confirm_open": "È aperta completamente",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "Corsa del telo inserita",
-        "description": "**Tapparella**: {cover}\n\n**Valore inserito**: {height} cm dalla base al bordo inferiore con la tapparella completamente aperta.\n\n**Cosa fare**: verificare che il valore corrisponda alla lettura del metro, poi proseguire: le letture col metro dei prossimi passi vengono confrontate con questa altezza.",
+        "description": "**Tapparella**: {cover}\n\n**Valore inserito**: {height} cm dalla base al bordo inferiore con la tapparella completamente aperta.\n\n**Cosa fare**: verificare che il valore corrisponda alla lettura del metro, poi proseguire: le letture col metro dei prossimi passi vengono confrontate con questa altezza. Se la tapparella non è aperta completamente, e quindi questa non è la corsa intera, segnalarlo qui sotto: viene aperta di nuovo e la lettura si rifà.",
         "menu_options": {
           "accept_step": "Va bene, avanti",
-          "repeat_measure": "Ripeti la misura"
+          "repeat_measure": "Ripeti la misura",
+          "not_right": "Non ha fatto quello che doveva"
+        }
+      },
+      "tape_brief": {
+        "title": "Prima delle letture automatiche",
+        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: da qui in avanti la tapparella si muove da sola. Seguono {readings} letture: per ciascuna la tapparella va prima al finecorsa da cui parte quella lettura, poi corre fino alla posizione da misurare e lì si ferma da sola. Non c'è niente da premere e niente da prendere al volo: dopo ogni movimento una schermata chiede la distanza in centimetri.\n\n**Cosa fare**: assicurarsi che non ci sia niente d'intralcio, tenere il metro a portata di mano e stare lontani dalla tapparella finché è in movimento. Se un movimento non fa quello che deve, si può segnalarlo nella schermata che segue la lettura: il passo viene rifatto.",
+        "menu_options": {
+          "tape_start": "Ho capito, avvia le letture",
+          "cancel_flow": "Annulla"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "Lettura inserita",
-        "description": "**Tapparella**: {cover} — lettura al {percent}% della corsa\n\n**Valore inserito**: {measured} cm dalla base al bordo inferiore.\n\n**Cosa fare**: se il valore corrisponde alla lettura del metro, proseguire. In caso di dubbi sul punto da cui è stata presa la misura, ripetere la misura: la tapparella torna al finecorsa e rifà la stessa corsa, così la lettura si può rifare nelle stesse condizioni.",
+        "description": "**Tapparella**: {cover} — lettura al {percent}% della corsa\n\n**Valore inserito**: {measured} cm dalla base al bordo inferiore.\n\n**Cosa fare**: se il valore corrisponde alla lettura del metro, proseguire. In caso di dubbi sul punto da cui è stata presa la misura, ripetere la misura: la tapparella torna al finecorsa e rifà la stessa corsa, così la lettura si può rifare nelle stesse condizioni. Se la tapparella non ha fatto quello che doveva (non si è mossa, oppure si è mossa nella direzione sbagliata), segnalarlo qui sotto: viene fermata e i movimenti di questo passo vengono rifatti.",
         "menu_options": {
           "accept_step": "Va bene, avanti",
-          "repeat_tape": "Ripeti la misura"
+          "repeat_tape": "Ripeti la misura",
+          "tape_not_right": "Non ha fatto quello che doveva"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} viene aperta completamente: in questo modo il movimento successivo parte da un punto noto. Attendere e assicurarsi che non ci siano ostacoli.",
       "starting_open": "{cover} sta partendo in salita. Va guardata: fra un istante verrà chiesta la pressione sulla base.",
       "starting_close": "{cover} sta partendo in discesa. Osservarla: tra poco sarà richiesto di premere il pulsante.",
-      "running_down": "{cover} viene aperta completamente e poi fatta scendere fino a circa il {percent}% della corsa. Attendere e tenere pronto il metro.",
-      "running_up": "{cover} viene chiusa completamente e poi fatta salire fino a circa il {percent}% della corsa. Attendere e tenere pronto il metro.",
+      "running_down": "{cover} viene fatta scendere fino a circa il {percent}% della corsa. Attendere e tenere pronto il metro.",
+      "running_up": "{cover} viene fatta salire fino a circa il {percent}% della corsa. Attendere e tenere pronto il metro.",
       "stopping_lift": "{cover} viene fermata esattamente dove l'ha trovata la pressione. Un istante.",
       "starting_open_full": "{cover} riparte in salita, questa volta fino in cima. Va guardata: fra un istante verrà chiesta la pressione in alto."
     },

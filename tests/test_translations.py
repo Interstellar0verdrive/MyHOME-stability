@@ -224,7 +224,6 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "path_c": {"cover"},
     "refine_scope": {"cover"},
     "home_closed_done": {"cover"},
-    "home_open_done": {"cover"},
     "open_brief": {"cover"},
     "open_lift": {"cover"},
     # The lift-off run's own screens: the check, the tape reading that can replace the
@@ -249,6 +248,8 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "measure_ascent": {"cover", "percent", "direction", "expected", "tolerance"},
     "measure_verify": {"cover", "percent", "direction", "expected", "tolerance"},
     "tape_result": {"cover", "percent", "measured"},
+    # The one warning of the tape phase, which counts the readings it is about.
+    "tape_brief": {"cover", "readings"},
     "verify_offer": {"cover"},
     "verify_result": {"cover", "deviation"},
     "profile_name": {"cover", "replaced"},
@@ -341,7 +342,6 @@ def test_every_screen_the_flow_can_show_is_written_down() -> None:
     # A progress screen has a `progress` text and no step text.
     shown -= set(PROGRESS_PLACEHOLDERS) | {
         "home_closed",
-        "home_open",
         "open_timed",
         "open_start",
         "lift_stop",
@@ -355,6 +355,8 @@ def test_every_screen_the_flow_can_show_is_written_down() -> None:
         "quarter_up",
         "three_quarter_down",
         "three_quarter_up",
+        "tape_run",
+        "height_read",
         "verify",
         "verify_b",
     }
@@ -662,6 +664,32 @@ def test_the_italian_says_none_of_the_words_the_live_test_struck_out() -> None:
     assert not offences, "\n".join(
         f"{key}: {word!r} - {FORBIDDEN_ITALIAN[word]}" for key, word in offences
     )
+
+
+# How many movements path A promises, in the word each language writes it with. The
+# number itself is checked against the shutter in
+# `test_calibration_flow.test_path_a_makes_the_number_of_movements_it_promises`; what is
+# checked here is that the eight files agree about it, which is what went wrong when the
+# ascent became two runs and again when the readings were reordered.
+MOVEMENTS_PROMISED: dict[str, tuple[str, str]] = {
+    "strings": ("Eight movements in all", "Nine movements"),
+    "en": ("Eight movements in all", "Nine movements"),
+    "it": ("otto movimenti", "nove movimenti"),
+    "fr": ("Huit mouvements", "Neuf mouvements"),
+    "nl": ("Acht bewegingen", "Negen bewegingen"),
+    "es": ("Ocho movimientos", "Nueve movimientos"),
+    "de": ("Acht Bewegungen", "Neun Bewegungen"),
+    "pt": ("Oito movimentos", "Nove movimentos"),
+}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_every_language_promises_the_same_number_of_movements(path: Path) -> None:
+    """Mutation caught: correcting the count in the Italian and nowhere else."""
+    says, stale = MOVEMENTS_PROMISED[path.stem]
+    description = options_block(path)["step"]["path_a"]["description"]
+    assert says in description, f"{path.name}: path_a no longer says {says!r}"
+    assert stale not in description, f"{path.name}: path_a still says {stale!r}"
 
 
 # The screens a shutter is moving through while they are on the screen. "Nobody reads

@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Antes de que la persiana empiece a moverse",
-        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: la calibración está dividida en pasos. En cada paso la persiana hace los movimientos que ese paso necesita, y antes de cada uno llegan las instrucciones y todo el tiempo para prepararse: ningún movimiento medido arranca sin que lo lances tú. Nueve movimientos en total, unos cuatro minutos.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando — una hoja abierta, plantas en el alféizar, gatos — y ten la cinta métrica a mano. Se te pedirá que pulses un botón cuando ocurra algo y que leas unas cuantas distancias.\n\nSi algo sale mal, cada paso se puede repetir por separado, sin rehacer los ya hechos. Puedes cerrar cuando quieras: no se guarda nada hasta la última pantalla, y un recorrido ya lanzado llega solo hasta el final de carrera.",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: la calibración está dividida en pasos. En cada paso la persiana hace los movimientos que ese paso necesita. Donde hay un botón que pulsar, primero llegan las instrucciones y el movimiento espera a que lo lances tú; los pasos que se miden con la cinta se mueven solos, y una pantalla avisa antes del primero. Ocho movimientos en total, unos cuatro minutos.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando — una hoja abierta, plantas en el alféizar, gatos — y ten la cinta métrica a mano. Se te pedirá que pulses un botón cuando ocurra algo y que leas unas cuantas distancias.\n\nSi algo sale mal, cada paso se puede repetir por separado, sin rehacer los ya hechos. Puedes cerrar cuando quieras: no se guarda nada hasta la última pantalla, y un recorrido ya lanzado llega solo hasta el final de carrera.",
         "menu_options": {
           "begin": "Entendido, empecemos",
           "cancel_flow": "Cancelar"
@@ -303,15 +303,6 @@
         "description": "**Persiana**: {cover}\n\n**Lo que ha pasado**: la persiana se ha cerrado completamente: de este modo, todo lo que se mida a partir de aquí parte de un punto conocido.\n\n**Lo que tienes que hacer**: mírala. Si está completamente cerrada, con las lamas apretadas y el borde inferior apoyado, continúa. Si todavía se está moviendo, espera y luego continúa. Si no se ha movido nada, o se ha movido hacia el lado equivocado, dilo aquí abajo.",
         "menu_options": {
           "confirm_closed": "Está completamente cerrada",
-          "repeat_step": "Repetir este paso",
-          "not_right": "No ha hecho lo que debía"
-        }
-      },
-      "home_open_done": {
-        "title": "¿La persiana está completamente abierta?",
-        "description": "**Persiana**: {cover}\n\n**Lo que ha pasado**: la persiana se ha abierto completamente, porque lo que sigue baja desde ahí y un recorrido que empezara en otro punto no mediría nada.\n\n**Lo que tienes que hacer**: mírala. Si está completamente abierta, continúa. Si todavía se está moviendo, espera y luego continúa. Si no se ha movido nada, o se ha movido hacia el lado equivocado, dilo aquí abajo.",
-        "menu_options": {
-          "confirm_open": "Está completamente abierta",
           "repeat_step": "Repetir este paso",
           "not_right": "No ha hecho lo que debía"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "El recorrido del paño se ha anotado",
-        "description": "**Persiana**: {cover}\n\n**Lo que se ha anotado**: {height} cm desde la base hasta el borde inferior con la persiana completamente abierta.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Comprueba el valor: las lecturas con la cinta de los próximos pasos se comparan con esta altura.",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha anotado**: {height} cm desde la base hasta el borde inferior con la persiana completamente abierta.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Comprueba el valor: las lecturas con la cinta de los próximos pasos se comparan con esta altura. Si la persiana no está completamente abierta, y por tanto este no es el recorrido entero, dilo aquí abajo: se abre de nuevo y la lectura se repite.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
-          "repeat_measure": "Repetir la medida"
+          "repeat_measure": "Repetir la medida",
+          "not_right": "No ha hecho lo que debía"
+        }
+      },
+      "tape_brief": {
+        "title": "Antes de las lecturas automáticas",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: a partir de aquí la persiana se mueve sola. Siguen {readings} lecturas: en cada una la persiana va primero al final de carrera del que parte esa lectura, luego recorre hasta la posición que hay que medir y ahí se detiene sola. No hay nada que pulsar ni nada que coger al vuelo: después de cada movimiento una pantalla pide la distancia en centímetros.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando, ten la cinta métrica a mano y mantente apartado mientras la persiana se mueve. Si un movimiento no hace lo que debía, dilo en la pantalla que sigue a la lectura: el paso se rehace.",
+        "menu_options": {
+          "tape_start": "Entendido, empezar las lecturas",
+          "cancel_flow": "Cancelar"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "La lectura se ha anotado",
-        "description": "**Persiana**: {cover} — lectura al {percent}% del recorrido\n\n**Lo que se ha anotado**: {measured} cm desde la base hasta el borde inferior.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Si dudas de haber medido desde el punto correcto, repite la medida: la persiana vuelve al final de carrera y rehace el mismo recorrido, así la lectura se puede repetir en las mismas condiciones.",
+        "description": "**Persiana**: {cover} — lectura al {percent}% del recorrido\n\n**Lo que se ha anotado**: {measured} cm desde la base hasta el borde inferior.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Si dudas de haber medido desde el punto correcto, repite la medida: la persiana vuelve al final de carrera y rehace el mismo recorrido, así la lectura se puede repetir en las mismas condiciones. Si la persiana no ha hecho lo que debía (no se ha movido, o se ha movido hacia el lado equivocado), dilo aquí abajo: se detiene y los movimientos de este paso se rehacen.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
-          "repeat_tape": "Repetir la medida"
+          "repeat_tape": "Repetir la medida",
+          "tape_not_right": "No ha hecho lo que debía"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} se está abriendo completamente: de este modo el movimiento siguiente parte de un punto conocido. Espera, y asegúrate de que no haya nada estorbando.",
       "starting_open": "{cover} está arrancando hacia arriba. Mírala: dentro de un instante se te pedirá la pulsación en la base.",
       "starting_close": "{cover} está arrancando hacia abajo. Mírala: dentro de un instante se te pedirá la pulsación.",
-      "running_down": "{cover} se abre completamente y luego baja hasta alrededor del {percent}% de su recorrido. Espera, y ten lista la cinta métrica.",
-      "running_up": "{cover} se cierra completamente y luego sube hasta alrededor del {percent}% de su recorrido. Espera, y ten lista la cinta métrica.",
+      "running_down": "{cover} baja hasta alrededor del {percent}% de su recorrido. Espera, y ten lista la cinta métrica.",
+      "running_up": "{cover} sube hasta alrededor del {percent}% de su recorrido. Espera, y ten lista la cinta métrica.",
       "stopping_lift": "{cover} se está parando justo donde la ha encontrado tu pulsación. Un instante.",
       "starting_open_full": "{cover} arranca otra vez hacia arriba, esta vez hasta el final. Mírala: dentro de un instante se te pedirá la pulsación de arriba."
     },

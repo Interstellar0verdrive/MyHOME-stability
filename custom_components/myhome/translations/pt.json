@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Antes de a persiana começar a mover-se",
-        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a calibração está dividida em passos. Em cada passo a persiana faz os movimentos de que esse passo precisa, e antes de cada um chegam as instruções e todo o tempo para se preparar: nenhum movimento cronometrado arranca sem que seja você a iniciá-lo. Nove movimentos ao todo, cerca de quatro minutos.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar — uma folha de janela aberta, plantas no peitoril, gatos — e tenha a fita métrica à mão. Ser-lhe-á pedido que carregue num botão quando algo acontecer e que leia algumas distâncias.\n\nSe algo correr mal, cada passo pode ser repetido sozinho, sem refazer os já feitos. Pode fechar quando quiser: nada é guardado até ao último ecrã, e um percurso já iniciado vai sozinho até ao fim de curso.",
+        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a calibração está dividida em passos. Em cada passo a persiana faz os movimentos de que esse passo precisa. Onde há um botão para carregar, as instruções chegam primeiro e o movimento espera que seja você a iniciá-lo; os passos medidos com a fita movem-se sozinhos, e um ecrã avisa antes do primeiro deles. Oito movimentos ao todo, cerca de quatro minutos.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar — uma folha de janela aberta, plantas no peitoril, gatos — e tenha a fita métrica à mão. Ser-lhe-á pedido que carregue num botão quando algo acontecer e que leia algumas distâncias.\n\nSe algo correr mal, cada passo pode ser repetido sozinho, sem refazer os já feitos. Pode fechar quando quiser: nada é guardado até ao último ecrã, e um percurso já iniciado vai sozinho até ao fim de curso.",
         "menu_options": {
           "begin": "Percebi, vamos começar",
           "cancel_flow": "Cancelar"
@@ -303,15 +303,6 @@
         "description": "**Persiana**: {cover}\n\n**O que aconteceu**: a persiana foi fechada completamente: deste modo, tudo o que se medir a partir daqui parte de um ponto conhecido.\n\n**O que tem de fazer**: olhe para ela. Se está completamente fechada, com as lâminas cerradas e a borda inferior apoiada, continue. Se ainda se está a mover, espere e depois continue. Se não se moveu de todo, ou se moveu para o lado errado, diga-o aqui abaixo.",
         "menu_options": {
           "confirm_closed": "Está completamente fechada",
-          "repeat_step": "Repetir este passo",
-          "not_right": "Não fez o que devia"
-        }
-      },
-      "home_open_done": {
-        "title": "A persiana está completamente aberta?",
-        "description": "**Persiana**: {cover}\n\n**O que aconteceu**: a persiana foi aberta completamente, porque o que se segue desce dali e um percurso que começasse noutro ponto não mediria nada.\n\n**O que tem de fazer**: olhe para ela. Se está completamente aberta, continue. Se ainda se está a mover, espere e depois continue. Se não se moveu de todo, ou se moveu para o lado errado, diga-o aqui abaixo.",
-        "menu_options": {
-          "confirm_open": "Está completamente aberta",
           "repeat_step": "Repetir este passo",
           "not_right": "Não fez o que devia"
         }
@@ -454,10 +445,19 @@
       },
       "height_result": {
         "title": "O percurso do pano foi registado",
-        "description": "**Persiana**: {cover}\n\n**O que ficou registado**: {height} cm da base até à borda inferior com a persiana completamente aberta.\n\n**O que tem de fazer**: se é o número que leu na fita, continue. Confirme o valor: as leituras com a fita dos próximos passos são comparadas com esta altura.",
+        "description": "**Persiana**: {cover}\n\n**O que ficou registado**: {height} cm da base até à borda inferior com a persiana completamente aberta.\n\n**O que tem de fazer**: se é o número que leu na fita, continue. Confirme o valor: as leituras com a fita dos próximos passos são comparadas com esta altura. Se a persiana não está completamente aberta, e este não é portanto o percurso inteiro, diga-o aqui abaixo: é aberta de novo e a leitura é repetida.",
         "menu_options": {
           "accept_step": "Está bem, continuar",
-          "repeat_measure": "Repetir a medição"
+          "repeat_measure": "Repetir a medição",
+          "not_right": "Não fez o que devia"
+        }
+      },
+      "tape_brief": {
+        "title": "Antes das leituras automáticas",
+        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a partir daqui a persiana move-se sozinha. Seguem-se {readings} leituras: em cada uma a persiana vai primeiro ao fim de curso de onde essa leitura parte, depois percorre até à posição a medir e aí para sozinha. Não há nada para carregar nem nada para apanhar a tempo: depois de cada movimento um ecrã pede a distância em centímetros.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar, tenha a fita métrica à mão e mantenha-se afastado enquanto a persiana se move. Se um movimento não fizer o que devia, diga-o no ecrã que se segue à leitura: o passo é refeito.",
+        "menu_options": {
+          "tape_start": "Percebi, iniciar as leituras",
+          "cancel_flow": "Cancelar"
         }
       },
       "measure_descent": {
@@ -492,10 +492,11 @@
       },
       "tape_result": {
         "title": "A leitura foi registada",
-        "description": "**Persiana**: {cover} — leitura a {percent}% do percurso\n\n**O que ficou registado**: {measured} cm da base até à borda inferior.\n\n**O que tem de fazer**: se é o número que leu na fita, continue. Se tem dúvidas de ter medido a partir do ponto certo, repita a medição: a persiana volta ao fim de curso e refaz o mesmo percurso, para que a leitura possa ser repetida nas mesmas condições.",
+        "description": "**Persiana**: {cover} — leitura a {percent}% do percurso\n\n**O que ficou registado**: {measured} cm da base até à borda inferior.\n\n**O que tem de fazer**: se é o número que leu na fita, continue. Se tem dúvidas de ter medido a partir do ponto certo, repita a medição: a persiana volta ao fim de curso e refaz o mesmo percurso, para que a leitura possa ser repetida nas mesmas condições. Se a persiana não fez o que devia (não se moveu, ou moveu-se para o lado errado), diga-o aqui abaixo: é parada e os movimentos deste passo são refeitos.",
         "menu_options": {
           "accept_step": "Está bem, continuar",
-          "repeat_tape": "Repetir a medição"
+          "repeat_tape": "Repetir a medição",
+          "tape_not_right": "Não fez o que devia"
         }
       },
       "verify_offer": {
@@ -665,8 +666,8 @@
       "homing_open": "{cover} está a ser aberta completamente: deste modo o movimento seguinte parte de um ponto conhecido. Aguarde, e certifique-se de que nada está a estorvar.",
       "starting_open": "{cover} está a arrancar a subir. Olhe para ela: daqui a um instante ser-lhe-á pedida a pressão na base.",
       "starting_close": "{cover} está a arrancar a descer. Olhe para ela: daqui a um instante ser-lhe-á pedida a pressão.",
-      "running_down": "{cover} é aberta completamente e depois descida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta.",
-      "running_up": "{cover} é fechada completamente e depois subida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta.",
+      "running_down": "{cover} é descida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta.",
+      "running_up": "{cover} é subida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta.",
       "stopping_lift": "{cover} está a ser parada exatamente onde a pressão a encontrou. Um instante.",
       "starting_open_full": "{cover} arranca outra vez a subir, desta vez até ao topo. Olhe para ela: daqui a um instante ser-lhe-á pedida a pressão em cima."
     },
