@@ -164,7 +164,7 @@
       },
       "profile_delete": {
         "title": "Dieses Profil löschen?",
-        "description": "**Profil**: „{profile}“\n\n**Was gleich passiert**: das Profil wird gelöscht und diese {count} Rollläden fallen auf die Werte der Konfigurationsdatei zurück, falls Sie eine verwenden, oder auf die Vorgaben: {covers}\n\nWas an jedem einzelnen Rollladen gemessen wurde, bleibt bestehen: es verschwindet nur die Beschreibung der Art. Gibt es in `cover_profiles:` ein Profil gleichen Namens, wird es nicht länger verdeckt: die Rollläden, deren Konfigurationsdatei es nennt, folgen ihm wieder, während die Rollläden, die das Profil nur von hier bekommen hatten, gar keinem mehr folgen.",
+        "description": "**Profil**: „{profile}“\n\n**Was gleich passiert**: das Profil wird gelöscht und diese {count} Rollläden fallen auf die Werte der Konfigurationsdatei zurück, falls Sie eine verwenden, oder auf die Vorgaben: {covers}\n\nDavon haben {assigned} das Profil hier bekommen, und {from_file} folgen ihm über den Schlüssel `profile:` der Konfigurationsdatei, den dieses Löschen nicht anrührt.\n\nWas an jedem einzelnen Rollladen gemessen wurde, bleibt bestehen: es verschwindet nur die Beschreibung der Art. Gibt es in `cover_profiles:` ein Profil gleichen Namens, wird es nicht länger verdeckt: die Rollläden, deren Konfigurationsdatei es nennt, folgen ihm wieder, während die Rollläden, die das Profil nur von hier bekommen hatten, gar keinem mehr folgen.",
         "menu_options": {
           "profile_delete_confirm": "Ja, das Profil löschen",
           "profile_actions": "Nein, zurück"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profil „{profile}“ gelöscht",
-        "description": "Das Profil ist fort. Rollläden, die ihm folgten und auf die Werte der Datei oder auf die Vorgaben zurückgefallen sind: {count} – {covers}\n\nEin Profil gleichen Namens in `cover_profiles:` wird nicht länger verdeckt und gilt wieder für die Rollläden, deren Konfigurationsdatei es nennt.\n\nWurde das Profil versehentlich gelöscht, führen Sie die vollständige Messung an einem Rollladen dieser Art erneut durch und geben Sie dem neuen Profil denselben Namen."
+        "description": "Das Profil ist fort. Rollläden, die ihm folgten und auf die Werte der Datei oder auf die Vorgaben zurückgefallen sind: {count} – {covers}\n\nDavon hatten {assigned} das Profil hier bekommen; {from_file} folgen ihm über den Schlüssel `profile:` der Konfigurationsdatei, die unverändert bleibt.\n\nEin Profil gleichen Namens in `cover_profiles:` wird nicht länger verdeckt und gilt wieder für die Rollläden, deren Konfigurationsdatei es nennt.\n\nWurde das Profil versehentlich gelöscht, führen Sie die vollständige Messung an einem Rollladen dieser Art erneut durch und geben Sie dem neuen Profil denselben Namen."
       },
       "calibrations": {
         "title": "Kalibrierungen",

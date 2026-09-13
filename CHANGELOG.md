@@ -86,6 +86,14 @@ way, and nothing is ever written to `myhome.yaml`.
   precise summary is the verification's own answer — the gap at the one position
   nothing was fitted to — with the percentage the screen quotes taken from the run
   that produced it instead of a constant.
+- **The deletion of a profile counts every shutter that follows it.** The count and
+  the list on "Eliminare questo profilo?" came from the assignments this dialog
+  makes, so a profile several shutters follow through the `profile:` key of
+  `myhome.yaml` announced "0 covers" on the very screen that was about to remove
+  it. Both sources are counted now, and named apart, because the deletion reaches
+  them differently: the assignment is stripped from the stored record, while the
+  `profile:` line stays in the file and goes back to naming the `cover_profiles:`
+  entry it had been shadowing.
 
 ## [0.4.5] - 2026-09-12
 

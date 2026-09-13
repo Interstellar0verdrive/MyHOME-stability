@@ -198,11 +198,15 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "assign_covers": {"covers"},
     "assign_heights": {"covers"},
     "pick_profile": set(),
-    "profile_actions": {"profile", "covers", "values", "count"},
-    "profile_view": {"profile", "covers", "values", "count"},
-    "profile_edit": {"profile", "covers", "values", "count"},
-    "profile_delete": {"profile", "covers", "values", "count"},
-    "profile_deleted": {"profile", "covers", "count"},
+    # `assigned` / `from_file` split `count`: the shutters told to follow the profile
+    # from this dialog, and the ones whose own `profile:` key in the configuration file
+    # names it. The deletion reaches the two differently, so the two screens that are
+    # about it say both numbers.
+    "profile_actions": {"profile", "covers", "values", "count", "assigned", "from_file"},
+    "profile_view": {"profile", "covers", "values", "count", "assigned", "from_file"},
+    "profile_edit": {"profile", "covers", "values", "count", "assigned", "from_file"},
+    "profile_delete": {"profile", "covers", "values", "count", "assigned", "from_file"},
+    "profile_deleted": {"profile", "covers", "count", "assigned", "from_file"},
     "calibrations": {"count"},
     "no_calibrations": set(),
     "no_basic_covers": set(),

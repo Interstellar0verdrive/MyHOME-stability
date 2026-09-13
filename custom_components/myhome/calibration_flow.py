@@ -595,6 +595,34 @@ class CalibrationContextMixin:
         name = self._cover_config(unique_id).get(CONF_PROFILE)
         return str(name) if name else None
 
+    def _covers_following(self, name: str) -> tuple[list[str], list[str]]:
+        """The shutters that follow a profile, split by where they were told to.
+
+        Two sources, and the dialog used to count only the first: the assignment stored
+        here (`calibration_store.covers_following`), and the `profile:` key written
+        against the cover in the configuration file, which `validate.py` accepts and
+        `cover.py` reads on every load. A profile three shutters follow through
+        `myhome.yaml` and nobody assigned from this dialog read "0 covers" on the very
+        screen that was about to delete it.
+
+        A stored assignment outranks the file's key (`resolve_cover`), so a cover that
+        has both is counted once, on the side that really decides. The two lists are
+        kept apart because deleting the profile does different things to them: the
+        assignment is stripped from the record, while the `profile:` line stays in the
+        file and starts naming nothing - or names a `cover_profiles:` entry that was
+        shadowed until now.
+        """
+        assigned = [self._cover_name(unique_id) for unique_id in self._store.covers_following(name)]
+        from_file: list[str] = []
+        for key, cfg in self._covers().items():
+            if cfg.get(CONF_PROFILE) != name:
+                continue
+            stored = self._store.calibration(f"{self._mac}-{key}")
+            if stored is not None and stored.profile:
+                continue
+            from_file.append(str(cfg.get(CONF_NAME) or key))
+        return assigned, sorted(from_file)
+
     def _own_height(self, unique_id: str) -> float | None:
         """The travel *this* window is known to have: its record's, else the file's.
 
@@ -832,13 +860,16 @@ class CalibrationManagementMixin(CalibrationContextMixin):
 
     def _profile_placeholders(self) -> dict[str, str]:
         name = self._profile_name or ""
-        followers = [self._cover_name(unique_id) for unique_id in self._store.covers_following(name)]
+        assigned, from_file = self._covers_following(name)
+        followers = assigned + from_file
         stored = self._store.profile(name)
         return {
             "profile": name,
             "covers": ", ".join(followers) if followers else "",
             "values": describe_profile(name, stored or dict(self._all_profiles().get(name) or {})),
             "count": str(len(followers)),
+            "assigned": str(len(assigned)),
+            "from_file": str(len(from_file)),
         }
 
     async def async_step_profile_actions(
@@ -942,16 +973,24 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         name = self._profile_name or ""
         store = await self._async_store()
         had_it = store.profile(name) is not None
+        # Read before the deletion: `async_remove_profile` strips the assignment, so
+        # afterwards there is nothing left to count on that side, and the shutters that
+        # follow through the file's own `profile:` key are never in `orphans` at all.
+        _assigned, from_file = self._covers_following(name)
         orphans = await store.async_remove_profile(name)
         if orphans or had_it:
             self._mark_changed()
         LOGGER.info(
-            "Cover profile '%s' deleted; %s shutter(s) went back to the configuration file",
+            "Cover profile '%s' deleted; %s shutter(s) lost the assignment and %s "
+            "follow(ed) it through the configuration file",
             name,
             len(orphans),
+            len(from_file),
         )
         self._deleted = name
-        self._deleted_covers = [self._cover_name(unique_id) for unique_id in orphans]
+        self._deleted_assigned = [self._cover_name(unique_id) for unique_id in orphans]
+        self._deleted_from_file = from_file
+        self._deleted_covers = self._deleted_assigned + from_file
         return await self.async_step_profile_deleted()
 
     async def async_step_profile_deleted(
@@ -968,6 +1007,8 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                 "profile": self._deleted,
                 "covers": ", ".join(self._deleted_covers) if self._deleted_covers else "",
                 "count": str(len(self._deleted_covers)),
+                "assigned": str(len(self._deleted_assigned)),
+                "from_file": str(len(self._deleted_from_file)),
             },
         )
 

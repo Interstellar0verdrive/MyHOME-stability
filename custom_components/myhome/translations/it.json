@@ -164,7 +164,7 @@
       },
       "profile_delete": {
         "title": "Eliminare questo profilo?",
-        "description": "**Profilo**: “{profile}”\n\n**Cosa sta per succedere**: il profilo viene eliminato e queste {count} tapparelle tornano ai valori del file di configurazione, se presente, o a quelli predefiniti: {covers}\n\nLe misure di ciascuna tapparella restano memorizzate: viene eliminata solo la descrizione del tipo. Se in `cover_profiles:` esiste un profilo con lo stesso nome, smette di essere nascosto: torna a valere per le tapparelle che lo nominano nel file di configurazione, mentre le tapparelle a cui il profilo era stato assegnato solo da qui non ne seguono più nessuno.",
+        "description": "**Profilo**: “{profile}”\n\n**Cosa sta per succedere**: il profilo viene eliminato e queste {count} tapparelle tornano ai valori del file di configurazione, se presente, o a quelli predefiniti: {covers}\n\nDi queste, {assigned} hanno ricevuto il profilo da qui e {from_file} lo seguono tramite la chiave `profile:` del file di configurazione, che questa eliminazione non tocca.\n\nLe misure di ciascuna tapparella restano memorizzate: viene eliminata solo la descrizione del tipo. Se in `cover_profiles:` esiste un profilo con lo stesso nome, smette di essere nascosto: torna a valere per le tapparelle che lo nominano nel file di configurazione, mentre le tapparelle a cui il profilo era stato assegnato solo da qui non ne seguono più nessuno.",
         "menu_options": {
           "profile_delete_confirm": "Sì, elimina il profilo",
           "profile_actions": "No, torna indietro"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profilo “{profile}” eliminato",
-        "description": "Il profilo non c'è più. Tapparelle che lo seguivano e sono tornate ai valori del file o a quelli predefiniti: {count} — {covers}\n\nUn profilo con lo stesso nome in `cover_profiles:` non è più nascosto e torna a valere per le tapparelle che lo nominano nel file di configurazione.\n\nPer ricreare un profilo eliminato per errore, eseguire nuovamente la misura completa su una tapparella dello stesso tipo e assegnare al profilo lo stesso nome."
+        "description": "Il profilo non c'è più. Tapparelle che lo seguivano e sono tornate ai valori del file o a quelli predefiniti: {count} — {covers}\n\nDi queste, {assigned} avevano ricevuto il profilo da qui; {from_file} lo seguono tramite la chiave `profile:` del file di configurazione, che resta invariato.\n\nUn profilo con lo stesso nome in `cover_profiles:` non è più nascosto e torna a valere per le tapparelle che lo nominano nel file di configurazione.\n\nPer ricreare un profilo eliminato per errore, eseguire nuovamente la misura completa su una tapparella dello stesso tipo e assegnare al profilo lo stesso nome."
       },
       "calibrations": {
         "title": "Calibrazioni",

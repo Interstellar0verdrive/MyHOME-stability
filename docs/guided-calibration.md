@@ -272,11 +272,12 @@ that follow it and offers:
   scaled to each one's own height, and never touches an override paths A or C
   measured;
 - **Delete the profile** — a confirmation screen that names the shutters that use
-  it. They go back to the configuration file, if you use one, or to the defaults;
-  their own measurements stay. A `cover_profiles:` entry of the same name in the
-  file, until then shadowed, applies again from that moment — to the shutters
-  whose own entry in the file names it. A shutter that was given the profile from
-  this dialog alone is left following none;
+  it, counting the ones it was assigned to here and the ones whose own `profile:`
+  key in the file names it separately. They go back to the configuration file, if
+  you use one, or to the defaults; their own measurements stay. A `cover_profiles:`
+  entry of the same name in the file, until then shadowed, applies again from that
+  moment — to the shutters whose own entry in the file names it. A shutter that was
+  given the profile from this dialog alone is left following none.
 
 A profile that lives in the configuration file is shown here and left alone: its
 menu offers "View the values" and nothing else. The file is yours, and an edit that

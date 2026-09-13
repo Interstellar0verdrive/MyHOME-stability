@@ -225,6 +225,37 @@ gateway:
 
 SECOND_UNIQUE_ID = f"{MAC}-2-82"
 
+# Two covers and a `cover_profiles:` block the second one names with its own `profile:`
+# key. Walking path A over the first stores a profile of the same name, which shadows
+# the file's - so "tall" is followed from two different places at once, which is the
+# case the deletion screens have to count and the one `covers_following` alone cannot
+# see (0.5.0 v5 review).
+FILE_FOLLOWER_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    hallway_shutter:
+      where: '81'
+      name: {COVER_NAME}
+      opening_time: {OPENING}
+      closing_time: {CLOSING}
+      slat_time: {SLAT}
+      roll: {ROLL_DOWN}
+      height: {HEIGHT}
+    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+      profile: tall
+      height: 150
+  cover_profiles:
+    tall:
+      reference_height: {HEIGHT}
+      opening_time: {OPENING}
+      closing_time: {CLOSING}
+      slat_time: {SLAT}
+      roll: {ROLL_DOWN}
+"""
+
 
 def descent_cm(fraction: float) -> float:
     """Where the bottom edge of the real window is after `fraction` of a descent."""
@@ -2589,6 +2620,75 @@ async def test_deleting_a_profile_names_the_shutters_it_will_affect(
         assert the_store(hass, entry).raw_profiles == {}
         assert the_store(hass, entry).calibration(UNIQUE_ID).profile is None
         assert (await submit(hass, result))["step_id"] == "profiles_covers"
+
+
+async def test_the_deletion_counts_the_shutters_the_file_sends_to_the_profile(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A shutter follows a profile from two places, and only one of them was counted.
+
+    `calibration_store.covers_following` knows about the assignment this dialog makes
+    and nothing else, so a profile three shutters follow through the `profile:` key of
+    `myhome.yaml` read "these 0 covers" on the screen that was about to delete it -
+    the worst possible place for an undercount.
+
+    The two sources are counted separately because the deletion reaches them
+    differently: the assignment is stripped from the record, while the `profile:` line
+    stays in the file and goes back to naming the `cover_profiles:` entry it had been
+    shadowing.
+
+    Mutation caught: counting the assignments alone, or counting a cover twice when it
+    has both.
+    """
+    async with calibrating(hass, tmp_path, FILE_FOLLOWER_YAML) as (entry, _commands):
+        await measured_profile(hass, entry, freezer)
+        result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+        result = await choose(hass, result, "pick_profile")
+        result = await submit(hass, result, {CONF_PROFILE: "tall"})
+        # The profile's own screen counts both as well.
+        assert result["step_id"] == "profile_actions"
+        assert result["description_placeholders"]["count"] == "2"
+
+        result = await choose(hass, result, "profile_delete")
+        assert result["step_id"] == "profile_delete"
+        placeholders = result["description_placeholders"]
+        assert placeholders["count"] == "2"
+        assert placeholders["assigned"] == "1"
+        assert placeholders["from_file"] == "1"
+        assert placeholders["covers"] == f"{COVER_NAME}, Landing Shutter"
+
+        result = await choose(hass, result, "profile_delete_confirm")
+        assert result["step_id"] == "profile_deleted"
+        placeholders = result["description_placeholders"]
+        assert placeholders["count"] == "2"
+        assert placeholders["assigned"] == "1"
+        assert placeholders["from_file"] == "1"
+        assert placeholders["covers"] == f"{COVER_NAME}, Landing Shutter"
+
+
+async def test_a_cover_with_both_an_assignment_and_a_file_key_is_counted_once(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The assignment outranks the file's key, so the cover belongs to that side alone.
+
+    Mutation caught: adding the two lists together without looking, which would name
+    the same shutter twice and promise two shutters where there is one.
+    """
+    async with calibrating(hass, tmp_path, FILE_FOLLOWER_YAML) as (entry, _commands):
+        await measured_profile(hass, entry, freezer)
+        store = the_store(hass, entry)
+        await store.async_set_calibration(
+            SECOND_UNIQUE_ID, {CONF_PROFILE: "tall", CONF_PROFILE_WINS: True, CONF_HEIGHT: 150.0}
+        )
+        result = await choose(hass, await open_dialog(hass, entry), "profiles_covers")
+        result = await choose(hass, result, "pick_profile")
+        result = await submit(hass, result, {CONF_PROFILE: "tall"})
+        result = await choose(hass, result, "profile_delete")
+        placeholders = result["description_placeholders"]
+        assert placeholders["count"] == "2"
+        assert placeholders["assigned"] == "2"
+        assert placeholders["from_file"] == "0"
+        assert placeholders["covers"] == f"{COVER_NAME}, Landing Shutter"
 
 
 async def test_a_profile_written_in_the_file_is_shown_and_left_alone(

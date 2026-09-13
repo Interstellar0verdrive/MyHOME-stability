@@ -164,7 +164,7 @@
       },
       "profile_delete": {
         "title": "Dit profiel verwijderen?",
-        "description": "**Profiel**: “{profile}”\n\n**Wat er gaat gebeuren**: het profiel wordt verwijderd en deze {count} rolluiken vallen terug op de waarden van het configuratiebestand, als u dat gebruikt, of op de standaardwaarden: {covers}\n\nWat op elk rolluik zelf is gemeten blijft staan: alleen de beschrijving van de soort verdwijnt. Bestaat er in `cover_profiles:` een profiel met dezelfde naam, dan wordt dat niet langer overschaduwd: de rolluiken waarvan het configuratiebestand het noemt volgen het weer, terwijl de rolluiken die het profiel alleen hier kregen, er geen meer volgen.",
+        "description": "**Profiel**: “{profile}”\n\n**Wat er gaat gebeuren**: het profiel wordt verwijderd en deze {count} rolluiken vallen terug op de waarden van het configuratiebestand, als u dat gebruikt, of op de standaardwaarden: {covers}\n\nDaarvan hebben er {assigned} het profiel hier gekregen en volgen er {from_file} het via de sleutel `profile:` in het configuratiebestand, waar deze verwijdering niets aan verandert.\n\nWat op elk rolluik zelf is gemeten blijft staan: alleen de beschrijving van de soort verdwijnt. Bestaat er in `cover_profiles:` een profiel met dezelfde naam, dan wordt dat niet langer overschaduwd: de rolluiken waarvan het configuratiebestand het noemt volgen het weer, terwijl de rolluiken die het profiel alleen hier kregen, er geen meer volgen.",
         "menu_options": {
           "profile_delete_confirm": "Ja, verwijder het profiel",
           "profile_actions": "Nee, terug"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profiel “{profile}” verwijderd",
-        "description": "Het profiel is weg. Rolluiken die het volgden en zijn teruggevallen op de waarden van het bestand of op de standaardwaarden: {count} - {covers}\n\nEen profiel met dezelfde naam in `cover_profiles:` wordt niet langer overschaduwd en geldt weer voor de rolluiken waarvan het configuratiebestand het noemt.\n\nIs het profiel per ongeluk verwijderd, voer dan opnieuw de volledige meting uit op een rolluik van dit type en geef het nieuwe profiel dezelfde naam."
+        "description": "Het profiel is weg. Rolluiken die het volgden en zijn teruggevallen op de waarden van het bestand of op de standaardwaarden: {count} - {covers}\n\nDaarvan hadden er {assigned} het profiel hier gekregen; {from_file} volgen het via de sleutel `profile:` in het configuratiebestand, dat ongewijzigd blijft.\n\nEen profiel met dezelfde naam in `cover_profiles:` wordt niet langer overschaduwd en geldt weer voor de rolluiken waarvan het configuratiebestand het noemt.\n\nIs het profiel per ongeluk verwijderd, voer dan opnieuw de volledige meting uit op een rolluik van dit type en geef het nieuwe profiel dezelfde naam."
       },
       "calibrations": {
         "title": "Kalibraties",

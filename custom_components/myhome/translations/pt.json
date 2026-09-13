@@ -164,7 +164,7 @@
       },
       "profile_delete": {
         "title": "Eliminar este perfil?",
-        "description": "**Perfil**: «{profile}»\n\n**O que vai acontecer**: o perfil é eliminado e estas {count} persianas voltam aos valores do ficheiro de configuração, se o usar, ou aos predefinidos: {covers}\n\nO que foi medido em cada persiana fica onde está: só desaparece a descrição do tipo. Se em `cover_profiles:` existir um perfil com o mesmo nome, deixa de estar tapado: as persianas cujo ficheiro de configuração o nomeia voltam a segui-lo, enquanto as persianas a que o perfil foi atribuído só a partir daqui deixam de seguir qualquer um.",
+        "description": "**Perfil**: «{profile}»\n\n**O que vai acontecer**: o perfil é eliminado e estas {count} persianas voltam aos valores do ficheiro de configuração, se o usar, ou aos predefinidos: {covers}\n\nDestas, {assigned} receberam o perfil aqui e {from_file} seguem-no pela chave `profile:` do ficheiro de configuração, que esta eliminação não toca.\n\nO que foi medido em cada persiana fica onde está: só desaparece a descrição do tipo. Se em `cover_profiles:` existir um perfil com o mesmo nome, deixa de estar tapado: as persianas cujo ficheiro de configuração o nomeia voltam a segui-lo, enquanto as persianas a que o perfil foi atribuído só a partir daqui deixam de seguir qualquer um.",
         "menu_options": {
           "profile_delete_confirm": "Sim, eliminar o perfil",
           "profile_actions": "Não, voltar atrás"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Perfil «{profile}» eliminado",
-        "description": "O perfil já não existe. Persianas que o seguiam e voltaram aos valores do ficheiro ou aos predefinidos: {count} — {covers}\n\nUm perfil com o mesmo nome em `cover_profiles:` deixa de estar tapado e volta a valer para as persianas cujo ficheiro de configuração o nomeia.\n\nSe o perfil foi eliminado por engano, repita a medição completa numa persiana deste tipo e dê o mesmo nome ao novo perfil."
+        "description": "O perfil já não existe. Persianas que o seguiam e voltaram aos valores do ficheiro ou aos predefinidos: {count} — {covers}\n\nDestas, {assigned} tinham recebido o perfil aqui; {from_file} seguem-no pela chave `profile:` do ficheiro de configuração, que fica intacto.\n\nUm perfil com o mesmo nome em `cover_profiles:` deixa de estar tapado e volta a valer para as persianas cujo ficheiro de configuração o nomeia.\n\nSe o perfil foi eliminado por engano, repita a medição completa numa persiana deste tipo e dê o mesmo nome ao novo perfil."
       },
       "calibrations": {
         "title": "Calibrações",

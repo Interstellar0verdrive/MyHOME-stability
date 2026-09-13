@@ -164,7 +164,7 @@
       },
       "profile_delete": {
         "title": "Supprimer ce profil ?",
-        "description": "**Profil** : « {profile} »\n\n**Ce qui va se passer** : le profil est supprimé et ces {count} volets reviennent aux valeurs du fichier de configuration, si vous en utilisez un, ou aux valeurs par défaut : {covers}\n\nCe qui a été mesuré sur chaque volet reste en place : seule la description du type disparaît. S'il existe un profil du même nom dans `cover_profiles:`, il cesse d'être masqué : les volets dont le fichier de configuration le nomme le suivent de nouveau, tandis que les volets à qui le profil n'avait été donné qu'ici ne suivent plus rien.",
+        "description": "**Profil** : « {profile} »\n\n**Ce qui va se passer** : le profil est supprimé et ces {count} volets reviennent aux valeurs du fichier de configuration, si vous en utilisez un, ou aux valeurs par défaut : {covers}\n\nParmi eux, {assigned} ont reçu le profil ici et {from_file} le suivent par la clé `profile:` du fichier de configuration, que cette suppression ne touche pas.\n\nCe qui a été mesuré sur chaque volet reste en place : seule la description du type disparaît. S'il existe un profil du même nom dans `cover_profiles:`, il cesse d'être masqué : les volets dont le fichier de configuration le nomme le suivent de nouveau, tandis que les volets à qui le profil n'avait été donné qu'ici ne suivent plus rien.",
         "menu_options": {
           "profile_delete_confirm": "Oui, supprimer le profil",
           "profile_actions": "Non, retour"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profil « {profile} » supprimé",
-        "description": "Le profil n'existe plus. Volets qui le suivaient et sont revenus aux valeurs du fichier ou aux valeurs par défaut : {count} - {covers}\n\nUn profil du même nom dans `cover_profiles:` n'est plus masqué et s'applique de nouveau aux volets dont le fichier de configuration le nomme.\n\nSi le profil a été supprimé par erreur, effectuez de nouveau la mesure complète sur un volet de ce type et donnez le même nom au nouveau profil."
+        "description": "Le profil n'existe plus. Volets qui le suivaient et sont revenus aux valeurs du fichier ou aux valeurs par défaut : {count} - {covers}\n\nParmi eux, {assigned} avaient reçu le profil ici ; {from_file} le suivent par la clé `profile:` du fichier de configuration, qui reste inchangé.\n\nUn profil du même nom dans `cover_profiles:` n'est plus masqué et s'applique de nouveau aux volets dont le fichier de configuration le nomme.\n\nSi le profil a été supprimé par erreur, effectuez de nouveau la mesure complète sur un volet de ce type et donnez le même nom au nouveau profil."
       },
       "calibrations": {
         "title": "Calibrations",

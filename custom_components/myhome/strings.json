@@ -164,7 +164,7 @@
       },
       "profile_delete": {
         "title": "Delete this profile?",
-        "description": "**Profile**: “{profile}”\n\n**What is about to happen**: the profile is deleted and these {count} covers go back to the values of the configuration file, if you use one, or to the defaults: {covers}\n\nWhat was measured on each cover stays where it is: only the description of the kind is removed. If a profile of the same name exists in `cover_profiles:`, it stops being shadowed: the covers whose configuration file names it follow that one again, while the covers that were given the profile here alone are left following none.",
+        "description": "**Profile**: “{profile}”\n\n**What is about to happen**: the profile is deleted and these {count} covers go back to the values of the configuration file, if you use one, or to the defaults: {covers}\n\n{assigned} of them were given the profile here, and {from_file} follow it through the `profile:` key of the configuration file, which this deletion does not touch.\n\nWhat was measured on each cover stays where it is: only the description of the kind is removed. If a profile of the same name exists in `cover_profiles:`, it stops being shadowed: the covers whose configuration file names it follow that one again, while the covers that were given the profile here alone are left following none.",
         "menu_options": {
           "profile_delete_confirm": "Yes, delete the profile",
           "profile_actions": "No, go back"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profile “{profile}” deleted",
-        "description": "The profile is gone. Covers that followed it and went back to the file's values or to the defaults: {count} - {covers}\n\nA profile of the same name in `cover_profiles:` is no longer shadowed and applies again to the covers whose configuration file names it.\n\nIf the profile was deleted by mistake, run the full measurement again on a cover of this kind and give the new profile the same name."
+        "description": "The profile is gone. Covers that followed it and went back to the file's values or to the defaults: {count} - {covers}\n\n{assigned} of them had been given the profile here; {from_file} follow it through the `profile:` key of the configuration file, which is untouched.\n\nA profile of the same name in `cover_profiles:` is no longer shadowed and applies again to the covers whose configuration file names it.\n\nIf the profile was deleted by mistake, run the full measurement again on a cover of this kind and give the new profile the same name."
       },
       "calibrations": {
         "title": "Calibrations",
