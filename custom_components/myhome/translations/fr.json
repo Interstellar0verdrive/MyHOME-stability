@@ -842,6 +842,7 @@
       "values_saved": "Les valeurs de « {cover} » sont enregistrées : elles l'emportent sur le profil et sur le fichier.",
       "measure_removed": "Mesure retirée : « {cover} » utilise maintenant {destination}.",
       "profile_saved": "Profil « {profile} » mis à jour : {count} volets touchés.",
+      "profile_saved_one": "Profil « {profile} » mis à jour : 1 volet touché.",
       "profile_renamed": "Renommé en « {profile} » : le renommage suit tous les volets qui l'utilisent.",
       "profile_deleted": "Profil « {profile} » supprimé : les volets reviennent au fichier ou aux valeurs par défaut.",
       "action": {
@@ -1140,7 +1141,7 @@
       "message": "Trop de temps a passé : cette modification ne peut plus être annulée."
     },
     "missing_travel": {
-      "message": "La course du tablier de {count} volets est inconnue : {covers}. Un profil ne peut être ramené qu'à un volet dont la course est connue."
+      "message": "Volets dont la course du tablier est inconnue ({count}) : {covers}. Un profil ne peut être ramené qu'à un volet dont la course est connue."
     },
     "invalid_name": {
       "message": "« {profile} » n'est pas un nom de profil utilisable : uniquement des lettres, des chiffres et des tirets bas, pas d'espaces ni d'accents."

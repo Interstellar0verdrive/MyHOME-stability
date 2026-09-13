@@ -842,6 +842,7 @@
       "values_saved": "Die Werte von „{cover}“ sind gespeichert: sie schlagen das Profil und die Datei.",
       "measure_removed": "Messung entfernt: „{cover}“ verwendet jetzt {destination}.",
       "profile_saved": "Profil „{profile}“ aktualisiert: {count} Rollläden erreicht.",
+      "profile_saved_one": "Profil „{profile}“ aktualisiert: 1 Rollladen erreicht.",
       "profile_renamed": "Umbenannt in „{profile}“: die Umbenennung folgt jedem Rollladen, der es verwendet.",
       "profile_deleted": "Profil „{profile}“ gelöscht: die Rollläden kehren zur Datei oder zu den Vorgaben zurück.",
       "action": {
@@ -1140,7 +1141,7 @@
       "message": "Es ist zu viel Zeit vergangen: diese Änderung lässt sich nicht mehr rückgängig machen."
     },
     "missing_travel": {
-      "message": "Bei {count} Rollläden ist der Panzerweg unbekannt: {covers}. Ein Profil lässt sich nur auf einen Rollladen übertragen, dessen Weg bekannt ist."
+      "message": "Rollläden mit unbekanntem Panzerweg ({count}): {covers}. Ein Profil lässt sich nur auf einen Rollladen übertragen, dessen Weg bekannt ist."
     },
     "invalid_name": {
       "message": "„{profile}“ ist kein brauchbarer Profilname: nur Buchstaben, Ziffern und Unterstriche, keine Leerzeichen und keine Akzente."

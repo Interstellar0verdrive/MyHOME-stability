@@ -842,6 +842,7 @@
       "values_saved": "The values of “{cover}” are saved: they beat the profile and the file.",
       "measure_removed": "Measurement removed: “{cover}” now uses {destination}.",
       "profile_saved": "Profile “{profile}” updated: {count} covers reached.",
+      "profile_saved_one": "Profile “{profile}” updated: 1 cover reached.",
       "profile_renamed": "Renamed to “{profile}”: the rename follows every cover that uses it.",
       "profile_deleted": "Profile “{profile}” deleted: the covers go back to the file or to the defaults.",
       "action": {
@@ -1140,7 +1141,7 @@
       "message": "Too much time has passed: this change can no longer be undone."
     },
     "missing_travel": {
-      "message": "{count} covers have no curtain travel: {covers}. A profile can only be brought to a cover whose travel is known."
+      "message": "Covers with no curtain travel ({count}): {covers}. A profile can only be brought to a cover whose travel is known."
     },
     "invalid_name": {
       "message": "“{profile}” is not a usable profile name: only letters, digits and underscores, no spaces and no accents."

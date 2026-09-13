@@ -842,6 +842,7 @@
       "values_saved": "I valori di “{cover}” sono salvati: battono il profilo e il file.",
       "measure_removed": "Misura rimossa: “{cover}” ora usa {destination}.",
       "profile_saved": "Profilo “{profile}” aggiornato: {count} tapparelle raggiunte.",
+      "profile_saved_one": "Profilo “{profile}” aggiornato: 1 tapparella raggiunta.",
       "profile_renamed": "Rinominato in “{profile}”: la rinomina segue tutte le tapparelle che lo usano.",
       "profile_deleted": "Profilo “{profile}” eliminato: le tapparelle tornano al file o ai predefiniti.",
       "action": {
@@ -1140,7 +1141,7 @@
       "message": "È passato troppo tempo: questa modifica non si può più annullare."
     },
     "missing_travel": {
-      "message": "Di {count} tapparelle non si conosce la corsa del telo: {covers}. Un profilo si può riportare solo a una tapparella di cui si conosce la corsa."
+      "message": "Tapparelle di cui non si conosce la corsa del telo ({count}): {covers}. Un profilo si può riportare solo a una tapparella di cui si conosce la corsa."
     },
     "invalid_name": {
       "message": "“{profile}” non è un nome di profilo utilizzabile: solo lettere, cifre e trattini bassi, niente spazi e niente accenti."

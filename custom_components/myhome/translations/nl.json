@@ -842,6 +842,7 @@
       "values_saved": "De waarden van “{cover}” zijn opgeslagen: ze gaan boven het profiel en het bestand.",
       "measure_removed": "Meting verwijderd: “{cover}” gebruikt nu {destination}.",
       "profile_saved": "Profiel “{profile}” bijgewerkt: {count} rolluiken bereikt.",
+      "profile_saved_one": "Profiel “{profile}” bijgewerkt: 1 rolluik bereikt.",
       "profile_renamed": "Hernoemd naar “{profile}”: de naamswijziging volgt elk rolluik dat het gebruikt.",
       "profile_deleted": "Profiel “{profile}” verwijderd: de rolluiken gaan terug naar het bestand of de standaardwaarden.",
       "action": {
@@ -1140,7 +1141,7 @@
       "message": "Er is te veel tijd verstreken: deze wijziging is niet meer ongedaan te maken."
     },
     "missing_travel": {
-      "message": "Van {count} rolluiken is de loopafstand van het pantser onbekend: {covers}. Een profiel kan alleen worden omgerekend naar een rolluik waarvan de loopafstand bekend is."
+      "message": "Rolluiken waarvan de loopafstand van het pantser onbekend is ({count}): {covers}. Een profiel kan alleen worden omgerekend naar een rolluik waarvan de loopafstand bekend is."
     },
     "invalid_name": {
       "message": "“{profile}” is geen bruikbare profielnaam: alleen letters, cijfers en lage streepjes, geen spaties en geen accenten."

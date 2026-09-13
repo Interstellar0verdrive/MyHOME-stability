@@ -842,6 +842,7 @@
       "values_saved": "Os valores de «{cover}» estão guardados: ganham ao perfil e ao ficheiro.",
       "measure_removed": "Medição removida: «{cover}» usa agora {destination}.",
       "profile_saved": "Perfil «{profile}» atualizado: {count} persianas alcançadas.",
+      "profile_saved_one": "Perfil «{profile}» atualizado: 1 persiana alcançada.",
       "profile_renamed": "Renomeado para «{profile}»: a mudança de nome segue todas as persianas que o usam.",
       "profile_deleted": "Perfil «{profile}» eliminado: as persianas voltam ao ficheiro ou às predefinições.",
       "action": {
@@ -1140,7 +1141,7 @@
       "message": "Passou demasiado tempo: esta alteração já não pode ser anulada."
     },
     "missing_travel": {
-      "message": "De {count} persianas não se conhece o percurso do pano: {covers}. Um perfil só pode ser trazido para uma persiana cujo percurso seja conhecido."
+      "message": "Persianas cujo percurso do pano se desconhece ({count}): {covers}. Um perfil só pode ser trazido para uma persiana cujo percurso seja conhecido."
     },
     "invalid_name": {
       "message": "«{profile}» não é um nome de perfil utilizável: só letras, algarismos e sublinhados, sem espaços e sem acentos."
