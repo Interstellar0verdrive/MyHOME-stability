@@ -484,7 +484,23 @@
       },
       "saved": {
         "title": "Calibrazione salvata",
-        "description": "Fatto: la calibrazione di {cover} è salvata e già in uso. Da adesso {cover} si muove con i valori appena misurati; li trovi tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove la ritrovi**: qui in Configura → Calibrazioni, e il profilo “{profile}” in Configura → Profili e tapparelle. Se un giorno vuoi tornare ai valori scritti nel file di configurazione, ti basta eliminare la calibrazione da quella schermata.\n\n**Cosa puoi fare adesso**: calibrare un'altra tapparella, oppure chiudere. Le altre tapparelle simili a questa si fanno in due schermate scegliendo “(B) È simile a una tapparella già misurata”.",
+        "description": "Fatto: la calibrazione di {cover} è salvata e già in uso. Da adesso {cover} si muove con i valori appena misurati su questa tapparella; li trovi tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove la ritrovi**: qui in Configura → Calibrazioni, e il profilo “{profile}”, misurato su questa tapparella, in Configura → Profili e tapparelle. Se un giorno vuoi tornare ai valori scritti nel file di configurazione, ti basta eliminare la calibrazione da quella schermata.\n\n**Cosa puoi fare adesso**: calibrare un'altra tapparella, oppure chiudere. Le altre tapparelle simili a questa si fanno in due schermate scegliendo “(B) È simile a una tapparella già misurata”.",
+        "menu_options": {
+          "calibrate": "Calibra un'altra tapparella",
+          "init": "Torna al menu"
+        }
+      },
+      "saved_profile": {
+        "title": "Calibrazione salvata",
+        "description": "Fatto: {cover} adesso segue il profilo “{profile}” e lo sta già usando. Qui non è stata cronometrata nessuna corsa sua: l'unica cosa misurata su questa tapparella è la sua altezza, e i tempi del profilo vengono adattati a quella. Il risultato lo trovi tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove la ritrovi**: qui in Configura → Calibrazioni, e il profilo “{profile}” in Configura → Profili e tapparelle, dove è condiviso con tutte le tapparelle che lo seguono. Se un giorno vuoi tornare ai valori scritti nel file di configurazione, ti basta eliminare la calibrazione da quella schermata.\n\n**Cosa puoi fare adesso**: dare lo stesso profilo a un'altra tapparella, oppure chiudere. Se {cover} dovesse fermarsi nel posto sbagliato, “(C) Ha un profilo ma si ferma nel posto sbagliato” misura i tempi di corsa di questa tapparella.",
+        "menu_options": {
+          "calibrate": "Calibra un'altra tapparella",
+          "init": "Torna al menu"
+        }
+      },
+      "saved_refined": {
+        "title": "Calibrazione salvata",
+        "description": "Fatto: la calibrazione di {cover} è salvata e già in uso. {cover} continua a seguire il profilo “{profile}”, e quello che è appena stato misurato su questa sola tapparella adesso ha la precedenza sul profilo; tutto quello che qui non è stato misurato continua a venire dal profilo. Il risultato lo trovi tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove la ritrovi**: qui in Configura → Calibrazioni, dove puoi rivedere i valori, correggerli a mano o cancellarli. Il profilo non è stato toccato: le altre tapparelle che lo seguono restano come sono.\n\n**Cosa puoi fare adesso**: calibrare un'altra tapparella, oppure chiudere.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -492,7 +508,7 @@
       },
       "cancelled": {
         "title": "Calibrazione annullata",
-        "description": "Non è stato salvato niente. La tapparella è dove l'ha lasciata l'ultimo movimento e continua a muoversi come prima.",
+        "description": "Non è stato salvato niente: {cover} non è più in calibrazione e torna a rispondere ai comandi normali, esattamente come prima.\n\n**Se si stava ancora muovendo**, non viene fermata: una corsa avviata dalla calibrazione non ha una fine propria e prosegue fino al finecorsa verso cui era diretta.",
         "menu_options": {
           "calibrate": "Ricomincia",
           "init": "Torna al menu"
@@ -500,7 +516,7 @@
       },
       "expired": {
         "title": "Sessione scaduta per inattività",
-        "description": "Questa calibrazione è rimasta ferma troppo a lungo, quindi {cover} è stata liberata: non è più in calibrazione e torna a rispondere ai comandi normali.\n\n**Non è stato salvato niente**, e la tapparella è dove l'ha lasciata l'ultimo movimento. Le misure fatte finora sono state scartate: per riaverle bisogna ricominciare dall'inizio.",
+        "description": "Questa calibrazione è rimasta ferma troppo a lungo, quindi {cover} è stata liberata: non è più in calibrazione e torna a rispondere ai comandi normali.\n\n**Non è stato salvato niente**: le misure fatte finora sono state scartate e per riaverle bisogna ricominciare dall'inizio. Se {cover} si stava ancora muovendo, le è stato chiesto di fermarsi dov'era.\n\nUna schermata con la barra di avanzamento non ha un pulsante Annulla: per uscirne si chiude il dialogo, e la tapparella viene liberata subito.",
         "menu_options": {
           "calibrate": "Ricomincia",
           "init": "Chiudi"

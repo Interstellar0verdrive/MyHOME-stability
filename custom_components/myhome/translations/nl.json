@@ -484,7 +484,23 @@
       },
       "saved": {
         "title": "Kalibratie opgeslagen",
-        "description": "Klaar: de kalibratie van {cover} is opgeslagen en al in gebruik. Vanaf nu beweegt {cover} met de zojuist gemeten waarden; u vindt ze bij de attributen van de entiteit, onder “Calibration source”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten. De andere rolluiken die op dit lijken kosten twee schermen, met de keuze “(B) Het lijkt op een al gemeten rolluik”.",
+        "description": "Klaar: de kalibratie van {cover} is opgeslagen en al in gebruik. Vanaf nu beweegt {cover} met de waarden die er zojuist op gemeten zijn; u vindt ze bij de attributen van de entiteit, onder “Calibration source”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}”, op dit rolluik gemeten, onder Configureren → Profielen en rolluiken. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten. De andere rolluiken die op dit lijken kosten twee schermen, met de keuze “(B) Het lijkt op een al gemeten rolluik”.",
+        "menu_options": {
+          "calibrate": "Kalibreer nog een rolluik",
+          "init": "Terug naar het menu"
+        }
+      },
+      "saved_profile": {
+        "title": "Kalibratie opgeslagen",
+        "description": "Klaar: {cover} volgt nu het profiel “{profile}” en gebruikt het al. Er is hier geen eigen beweging geklokt: het enige wat op dit rolluik gemeten is, is de hoogte, en de tijden van het profiel worden daarop geschaald. Het resultaat vindt u bij de attributen van de entiteit, onder “Calibration source”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, en het profiel “{profile}” onder Configureren → Profielen en rolluiken, waar het gedeeld wordt met elk rolluik dat het volgt. Wilt u ooit terug naar de waarden in het configuratiebestand, dan hoeft u de kalibratie alleen vanaf dat scherm te verwijderen.\n\n**Wat u nu kunt doen**: hetzelfde profiel aan een ander rolluik geven, of sluiten. Blijkt {cover} op de verkeerde plek te stoppen, dan meet “(C) Het heeft een profiel maar stopt op de verkeerde plek” zijn eigen looptijden.",
+        "menu_options": {
+          "calibrate": "Kalibreer nog een rolluik",
+          "init": "Terug naar het menu"
+        }
+      },
+      "saved_refined": {
+        "title": "Kalibratie opgeslagen",
+        "description": "Klaar: de kalibratie van {cover} is opgeslagen en al in gebruik. {cover} blijft het profiel “{profile}” volgen, en wat zojuist op dit ene rolluik gemeten is, gaat er nu boven; alles wat hier niet gemeten is, komt nog steeds van het profiel. Het resultaat vindt u bij de attributen van de entiteit, onder “Calibration source”.\n\n**Waar u het terugvindt**: hier onder Configureren → Kalibraties, waar u de waarden kunt nakijken, met de hand corrigeren of verwijderen. Het profiel zelf is niet aangeraakt: de andere rolluiken die het volgen blijven zoals ze zijn.\n\n**Wat u nu kunt doen**: nog een rolluik kalibreren, of sluiten.",
         "menu_options": {
           "calibrate": "Kalibreer nog een rolluik",
           "init": "Terug naar het menu"
@@ -492,7 +508,7 @@
       },
       "cancelled": {
         "title": "Kalibratie geannuleerd",
-        "description": "Er is niets opgeslagen. Het rolluik staat waar de laatste beweging het achterliet en beweegt verder zoals voorheen.",
+        "description": "Er is niets opgeslagen: {cover} wordt niet meer gekalibreerd en reageert weer op gewone commando's, precies zoals voorheen.\n\n**Als het nog bewoog**, wordt het niet gestopt: een beweging die de kalibratie gestart heeft, heeft geen eigen einde en loopt door tot de eindaanslag waar hij naartoe ging.",
         "menu_options": {
           "calibrate": "Opnieuw beginnen",
           "init": "Terug naar het menu"
@@ -500,7 +516,7 @@
       },
       "expired": {
         "title": "Sessie verlopen door inactiviteit",
-        "description": "Deze kalibratie heeft te lang stilgestaan, dus is {cover} vrijgegeven: het wordt niet meer gekalibreerd en reageert weer op gewone commando's.\n\n**Er is niets opgeslagen**, en het rolluik staat waar de laatste beweging het achterliet. De tot nu toe gedane metingen zijn weggegooid: om ze terug te krijgen moet u opnieuw bij het begin beginnen.",
+        "description": "Deze kalibratie heeft te lang stilgestaan, dus is {cover} vrijgegeven: het wordt niet meer gekalibreerd en reageert weer op gewone commando's.\n\n**Er is niets opgeslagen**: de tot nu toe gedane metingen zijn weggegooid en om ze terug te krijgen moet u opnieuw bij het begin beginnen. Als {cover} nog bewoog, is gevraagd het te stoppen waar het was.\n\nEen scherm met een voortgangsbalk heeft geen eigen knop Annuleren: de uitweg is het dialoogvenster te sluiten, waarmee het rolluik meteen wordt vrijgegeven.",
         "menu_options": {
           "calibrate": "Opnieuw beginnen",
           "init": "Sluiten"

@@ -964,6 +964,42 @@ async def test_cancelling_from_the_summary_saves_nothing_and_says_so(
         assert result["menu_options"] == ["calibrate", "init"]
 
 
+async def test_cancelling_does_not_stop_a_shutter_that_is_still_running(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The `cancelled` screen says the run is not interrupted, and it is not.
+
+    A run of the calibration is free: nothing ends it but an end stop or a stop of ours.
+    By the time "Annulla" can be pressed the conversation has already given up on
+    measuring that run, and cutting it short would leave the curtain at an arbitrary
+    point instead of at a known one. The watchdog is deliberately the other way round
+    (`test_the_watchdog_stops_a_shutter_it_finds_still_running`), because by then nobody
+    is standing in front of the shutter any more.
+
+    Mutation caught: stopping the shutter in `async_step_cancel_flow`, which would make
+    the second paragraph of that screen a lie in seven languages.
+    """
+    async with calibrating(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        runner = FakeRunner(cover)
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:7])
+        assert result["step_id"] == "open_lift"
+        cover._moving = "opening"  # noqa: SLF001 - the shutter is still travelling
+        stops = runner.stops
+
+        freezer.tick(timedelta(seconds=PRESS_TIMEOUT_SEC + 1))
+        result = await choose(hass, result, "lifted_off")
+        assert result["step_id"] == "problem_timeout"
+        result = await choose(hass, result, "cancel_flow")
+
+        assert result["step_id"] == "cancelled"
+        # The screen names the shutter, which it can only do because the label is read
+        # before `_reset_calibration` throws the conversation away.
+        assert result["description_placeholders"]["cover"] == COVER_NAME
+        assert runner.stops == stops
+        assert cover.is_opening is True
+
+
 async def test_a_second_walk_under_the_same_name_replaces_the_profile(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -1247,7 +1283,7 @@ async def test_path_b_reaches_a_shutter_whose_file_carries_its_own_run_times(
     async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_profile"
         calibration = the_calibration(hass, entry)
         assert calibration[CONF_PROFILE] == "tall"
         assert calibration[CONF_PROFILE_WINS] is True
@@ -1386,7 +1422,7 @@ async def test_path_c_times_only_stores_the_two_run_times_as_overrides(
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_refined"
         assert the_store(hass, entry).raw_profiles == {}
         calibration = the_calibration(hass, entry)
         assert calibration[CONF_PROFILE] == "tall"
@@ -1410,7 +1446,7 @@ async def test_path_c_with_the_coefficients_measures_and_overrides_them_too(
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), acts)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_refined"
         overrides = the_calibration(hass, entry)["overrides"]
         assert overrides[CONF_CLOSING_ROLL] == pytest.approx(ROLL_DOWN, abs=0.01)
         assert overrides[CONF_OPENING_ROLL] == pytest.approx(ROLL_UP, abs=0.01)
@@ -1529,7 +1565,7 @@ async def test_refining_a_window_keeps_the_height_and_the_rolls_it_did_not_measu
         )
 
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_refined"
 
         record = the_store(hass, entry).calibration(UNIQUE_ID)
         # The two run times and the slat phase are this conversation's...
@@ -1612,7 +1648,7 @@ async def test_measuring_a_window_again_starts_from_the_travel_it_is_known_to_ha
         assert result["description_placeholders"]["height"] == f"{HEIGHT:.0f} cm"
         assert CONF_HEIGHT in result["description_placeholders"]["keeping"]
         result = await choose(hass, result, "save")
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_refined"
         # ...and the record still has it.
         assert the_store(hass, entry).calibration(UNIQUE_ID).height == HEIGHT
 
@@ -1632,7 +1668,7 @@ async def test_a_refinement_never_copies_the_file_s_height_into_the_record(
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_C_TIMES)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_refined"
         record = the_store(hass, entry).calibration(UNIQUE_ID)
         assert record.height is None
         # ...and the cover still has one, because the file says so.
@@ -2971,7 +3007,7 @@ async def test_editing_a_profile_reaches_the_windows_that_follow_it(
         )
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_profile"
         result = await choose(hass, result, "init")
         await choose(hass, result, "finish")
         await hass.async_block_till_done()
@@ -3032,7 +3068,7 @@ async def test_a_profile_corrected_in_the_file_reaches_the_windows_that_follow_i
     async with calibrating(hass, tmp_path, PROFILE_AND_OWN_NUMBERS_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B)
-        assert result["step_id"] == "saved"
+        assert result["step_id"] == "saved_profile"
         result = await choose(hass, result, "init")
         await choose(hass, result, "finish")
         await hass.async_block_till_done()

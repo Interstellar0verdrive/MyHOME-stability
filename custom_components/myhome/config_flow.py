@@ -534,6 +534,10 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         self._deleted_covers: list[str] = []
         self._saved_cover: str = ""
         self._saved_profile: str = ""
+        self._saved_path: str = ""
+        # The `cancelled` screen names the shutter, and `async_step_cancel_flow` has
+        # thrown the conversation away by the time that screen is shown.
+        self._cancelled_cover: str = ""
         # ...and the guided conversation's.
         self._session: Any = None
         self._watchdog: Any = None

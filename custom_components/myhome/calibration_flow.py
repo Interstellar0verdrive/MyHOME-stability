@@ -1375,10 +1375,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_claim_refused(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """One screen for both reasons: the shutter is not ours to move right now."""
+        """One screen for both reasons: the shutter is not ours to move right now.
+
+        Given `_placeholders()` like every other screen of the conversation. Neither
+        text names the shutter today, but a translation that did would be rendered by
+        formatjs as "[formatjs Error: MISSING_VALUE]" instead - a whole screen lost to
+        one brace (final review).
+        """
         return self.async_show_menu(
             step_id=f"refused_{self._claim_refused}",
             menu_options=["calibrate", "init"],
+            description_placeholders=self._placeholders(),
         )
 
     async def async_step_refused_unknown_cover(
@@ -1570,7 +1577,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_cancel_flow(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Leave the conversation, having written nothing (true at every screen)."""
+        """Leave the conversation, having written nothing (true at every screen).
+
+        The shutter is *not* stopped. A run of the calibration is free - only an end
+        stop or a stop of ours ends it - and by the time this screen can be reached the
+        conversation has already given up on measuring that run; interrupting it would
+        leave the curtain at an arbitrary point instead of a known one. The screen says
+        as much, which is why it is given the shutter's name.
+        """
+        self._cancelled_cover = self._cover_label
         self._disarm()
         self._release()
         self._reset_calibration()
@@ -1579,8 +1594,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_cancelled(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Say so, and offer the menu rather than closing the dialog."""
-        return self.async_show_menu(step_id="cancelled", menu_options=["calibrate", "init"])
+        """Say so, and offer the menu rather than closing the dialog.
+
+        The shutter's name is carried on `_cancelled_cover` rather than read off
+        `_cover_label`: `async_step_cancel_flow` throws the conversation away before
+        showing this screen, and `_reset_calibration` empties the label with it.
+        """
+        return self.async_show_menu(
+            step_id="cancelled",
+            menu_options=["calibrate", "init"],
+            description_placeholders={"cover": self._cancelled_cover},
+        )
 
     # ------------------------------------------------------------------ movements
     async def _async_job(self, job: Callable[[], Awaitable[None]]) -> None:
@@ -2548,6 +2572,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
         self._saved_cover = self._cover_label
         self._saved_profile = self._measured_name or self._profile or ""
+        self._saved_path = self._path
         self._disarm()
         self._release()
         # ...and the conversation is over: without this, rendering the `saved` screen
@@ -2557,15 +2582,49 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._cover = None
         return await self.async_step_saved()
 
+    def _saved_placeholders(self) -> dict[str, str]:
+        """The shutter and the profile, read off what Save actually wrote."""
+        return {"cover": self._saved_cover, "profile": self._saved_profile}
+
     async def async_step_saved(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """What was saved, where it lives, and how to undo it."""
+        """What was saved, where it lives, and how to undo it - path A's version.
+
+        Also the router, because what Save really wrote is a different sentence on each
+        path: path A measured this shutter and named a profile after it, path B measured
+        nothing but its height and gave it somebody else's profile, path C measured a
+        few of its numbers over a profile it goes on following. One screen for all three
+        told two of them that the shutter "moves on the values just measured", which is
+        a sentence the user cannot check against the attributes (final review). Three
+        step ids, as the three summaries already are.
+        """
+        if self._saved_path == PATH_PROFILE:
+            return await self.async_step_saved_profile()
+        if self._saved_path == PATH_REFINE:
+            return await self.async_step_saved_refined()
         return self.async_show_menu(
             step_id="saved",
             menu_options=["calibrate", "init"],
-            description_placeholders={
-                "cover": self._saved_cover,
-                "profile": self._saved_profile,
-            },
+            description_placeholders=self._saved_placeholders(),
+        )
+
+    async def async_step_saved_profile(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Path B: the shutter follows a profile, and only its height was measured."""
+        return self.async_show_menu(
+            step_id="saved_profile",
+            menu_options=["calibrate", "init"],
+            description_placeholders=self._saved_placeholders(),
+        )
+
+    async def async_step_saved_refined(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Path C: its own numbers over a profile it goes on following."""
+        return self.async_show_menu(
+            step_id="saved_refined",
+            menu_options=["calibrate", "init"],
+            description_placeholders=self._saved_placeholders(),
         )
 
 

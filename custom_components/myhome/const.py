@@ -189,12 +189,6 @@ CONF_PROFILE = "profile"
 # that only lives inside it.
 CONF_COVER_PROFILES = "cover_profiles"
 CONF_REFERENCE_HEIGHT = "reference_height"
-# The slat phase of a *descent* (0.5.0). The model has one slat time, used for both
-# directions, and the precise level of the guided flow can measure the downward one
-# separately (the optional "it touched the floor" press); it is stored so the
-# measurement is not lost, and the day the travel model grows an asymmetric slat
-# phase it is already there. Nothing reads it yet - see the phase 1 handoff.
-CONF_CLOSING_SLAT_TIME = "closing_slat_time"
 # Every key of the travel model a stored calibration may carry, in the order a profile
 # is read in. `roll` is included for completeness: a guided calibration writes the two
 # directional ones, and `roll` is only their fallback.
@@ -202,7 +196,6 @@ COVER_CALIBRATION_KEYS: tuple[str, ...] = (
     CONF_OPENING_TIME,
     CONF_CLOSING_TIME,
     CONF_SLAT_TIME,
-    CONF_CLOSING_SLAT_TIME,
     CONF_ROLL,
     CONF_OPENING_ROLL,
     CONF_CLOSING_ROLL,
