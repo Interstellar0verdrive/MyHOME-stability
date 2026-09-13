@@ -40,9 +40,11 @@ reverse.
 ## Looking at it without a Home Assistant
 
 `dev/harness.html` loads the committed bundle, hands the element the four properties Home
-Assistant hands it, and answers the two read commands with the real fixture
+Assistant hands it, and stands in for the backend: the reads answer the real fixture
 (`tests/fixtures/panel_overview_example.json`, which the Python suite regenerates from the
-real server) and the real `strings.json`. Serve the repository root and open it:
+real server) and the real `strings.json`, and the writes — `preview`, `assign`, `reorder`,
+`undo` and the subscription — work against a mutable copy of it with one undo slot, so the
+whole assignment loop can be walked offline. Serve the repository root and open it:
 
 ```sh
 python3 -m http.server 8765     # from the repository root
@@ -51,8 +53,14 @@ open http://localhost:8765/panel_src/dev/harness.html
 
 The checkboxes across the top switch the states that are otherwise hard to reach: dark
 theme, narrow, a measurement in progress, an installation with no profile yet, a gateway
-whose shutters are all advanced, and an `overview` that refuses. It is not shipped and it is
-not a test - it is somewhere to look.
+whose shutters are all advanced, an `overview` that refuses and a write that does. The
+measuring and live-updates ones are **pushed down the subscription** rather than rebuilding
+the element, because a measurement that starts while changes are already pending is a state
+with a sentence of its own.
+
+The scaling the stubbed `preview` does is the stub's own and is deliberately approximate.
+It stands in for the server, which is the only thing allowed to do it: see the last rule
+under *Dependencies*. It is not shipped and it is not a test — it is somewhere to look.
 
 ## The version
 
@@ -96,16 +104,39 @@ src/engine/screen.ts    <myhome-screen>: the ScreenModel contract and the respon
 src/engine/markdown.ts  the little Markdown the texts contain, without a library
 src/engine/i18n.ts      the texts, read from the backend, with numbers and dates
 src/engine/theme.ts     Home Assistant's CSS variables, each with a fallback
-src/engine/a11y.ts      the live region and focus return
+src/engine/a11y.ts      the live region, focus return and the focus trap
 src/engine/ha.ts        customElements.get() guards for every ha-* element used
 src/engine/ws.ts        typed wrappers over every command; mirrors panel_schemas.py
+src/engine/assign.ts    the pending-change model: pure functions, and no arithmetic
+src/engine/dnd.ts       FLIP, the pointer drag and the long press
 src/i18n/keys.ts        every panel.* key the bundle asks for, and its English stand-in
 src/i18n/fallback.json  the stand-ins themselves, held equal to en.json by the suite
 src/templates/*.ts      the eight wizard step templates
-src/components/*.ts     origin chip, cover row, group card, measuring banner
+src/components/*.ts     origin chip, cover row, group card, measuring banner,
+                        the five bottom strips, "Quale profilo?", the review panel
 src/views/overview.ts   <myhome-overview>, the management screen
 src/types/ha.ts         the four properties Home Assistant sets, and the connection
 ```
+
+## Assignment: three gestures, one pending state
+
+A pointer drag from a row's handle (600 px and up), a long press and a tap on a collapsed
+group title (below it), and Enter or Space on the handle at any width all produce the same
+`PendingChange` in the store, drawn on the same row and confirmed in the same panel.
+**Nothing is written until the confirm**: one `assign` carries every change, the positions
+they imply and the travels the review panel collected, because a write reaches every cover
+of the gateway at once.
+
+Three rules the code follows and a reviewer should hold it to:
+
+* **Pointer events, never HTML5 drag and drop.** `dragstart` is not fired by touch on iOS
+  Safari, and its drag image cannot be styled. The handle carries `touch-action: none` and
+  `pointerdown` is `preventDefault`ed; the drop target is found by hit-testing the shadow
+  root, which is why every group and every row lives in one.
+* **The pending changes live beside the server's model, never inside it.** A push replaces
+  `overview` whole and the changes survive it, which is the contract's own rule.
+* **The before/after numbers come from `myhome/calibration/preview`.** The panel never
+  scales a profile.
 
 ## The screen engine
 

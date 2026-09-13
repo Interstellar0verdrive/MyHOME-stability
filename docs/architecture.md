@@ -607,6 +607,15 @@ no sentence compiled into the bundle, no `ha-*` element without a rendered fallb
 no colour that is not a Home Assistant CSS variable, and nothing re-derived in
 JavaScript that `resolve_cover` already answered on the server.
 
+That last rule is why the API has a fourth read. The panel's assignment screen shows,
+before anything is written, what each shutter would run on afterwards; working that out
+in the browser would mean a second copy of `derive_cover_from_profile` beside the one the
+shutter uses. `myhome/calibration/preview` answers it instead — the record rewritten
+exactly as `async_set_assignments` would rewrite it, handed to `resolve_cover`, with
+nothing stored and no lock taken. It is the only command that refuses per item rather than
+per batch: a preview writes nothing, so a row that still needs its travel is a form to
+fill in and not a reason to blank the other eleven answers.
+
 ## The validator contract
 
 `config_schema(yaml_dict)` returns `{mac: {"platforms": {...}, ...}}` and
