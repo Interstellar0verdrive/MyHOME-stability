@@ -632,6 +632,18 @@ async def async_reorder(
             f"{', '.join(unknown)} does not follow {group or 'no profile'}",
             {"covers": ", ".join(unknown), "profile": group or ""},
         )
+    # The list is the group's *full* order, and a client that sends a short one (or the
+    # same id twice, which the schema refuses but an internal caller could still send)
+    # must not cost a member its place: the seats below are the group's, one per member,
+    # and a member left out of `wanted` would leave a seat empty and fall out of the
+    # stored order altogether - which reads on the screen as a shutter that jumped to
+    # the end of its group for no reason anybody can see.
+    wanted = list(dict.fromkeys(wanted))
+    wanted += [
+        unique_id
+        for unique_id in store.ordered(list(covers))
+        if unique_id in members and unique_id not in wanted
+    ]
     rest = [unique_id for unique_id in store.ordered(list(covers)) if unique_id not in members]
     # The places that group holds in the whole order, filled again in the order asked
     # for. Everything else keeps its own place, which is what makes one group's drag one

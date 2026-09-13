@@ -125,6 +125,14 @@ MEASURABLE_KEYS: tuple[str, ...] = (
     CONF_CLOSING_ROLL,
 )
 
+# An order is a *full* list of unique ids and each shutter sits in exactly one place in
+# it, so a repeated id is a client that has lost track of its own model. Refused at the
+# schema (`invalid_format`) rather than quietly deduplicated: the stored order would then
+# be a different order from the one on the screen, and nothing would have said so. Ids
+# naming no cover of this gateway are still dropped rather than refused (CONTRACT §9.2) -
+# a browser tab left open across a reconfiguration is not a client bug.
+ORDER = vol.All([str], vol.Unique())
+
 # One batch: which shutters follow which profile, and the order they end up in.
 #
 # Assignment and position are **one write**, because on the screen they are one gesture -
@@ -148,7 +156,7 @@ ASSIGN_SCHEMA: VolDictType = {
     vol.Required("type"): WS_TYPE_ASSIGN,
     vol.Required("entry_id"): str,
     vol.Required("assignments"): [ASSIGNMENT_SCHEMA],
-    vol.Optional("order"): [str],
+    vol.Optional("order"): ORDER,
 }
 
 # `profile` present (`null` included, which is "Senza profilo") means `order` is that one
@@ -158,7 +166,7 @@ ASSIGN_SCHEMA: VolDictType = {
 REORDER_SCHEMA: VolDictType = {
     vol.Required("type"): WS_TYPE_REORDER,
     vol.Required("entry_id"): str,
-    vol.Required("order"): [str],
+    vol.Required("order"): ORDER,
     vol.Optional("profile"): vol.Any(str, None),
 }
 
@@ -471,6 +479,7 @@ __all__ = [
     "ERROR_WRITE_IN_PROGRESS",
     "MEASURABLE_KEYS",
     "NUMBER",
+    "ORDER",
     "OVERVIEW_KEYS",
     "OVERVIEW_SCHEMA",
     "PROFILE_DELETE_KEYS",

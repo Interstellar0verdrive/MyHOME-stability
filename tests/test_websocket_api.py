@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import ExitStack
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,9 @@ from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
+from custom_components.myhome import panel_write
 from custom_components.myhome.calibration_store import (
+    async_forget_store,
     cover_calibration_data,
     cover_profile_data,
     loaded_store,
@@ -90,13 +93,14 @@ from custom_components.myhome.panel_schemas import (
 from custom_components.myhome.panel_write import (
     UNDO_TTL,
     PanelError,
+    async_set_travel,
     async_subscribers,
     async_write,
 )
 from custom_components.myhome.websocket_api import WS_REGISTERED
 
-from .helpers_core import MAC
-from .helpers_platforms import entity_object, setup_myhome
+from .helpers_core import MAC, MAC2, make_entry, mock_gateway, write_yaml
+from .helpers_platforms import entity_object, mock_commands, setup_myhome
 from .test_panel_parity import assert_they_agree
 
 FIRST = f"{MAC}-2-81"
@@ -762,6 +766,19 @@ THIRD_ENTITY = "cover.attic_shutter"
 # The reading fixture plus one shutter nobody has ever measured or given a travel to:
 # the window a profile cannot be scaled onto, which is what the "corse mancanti" form
 # exists for. Kept apart from `YAML` so the frozen example stays the payload it is.
+# A second gateway, for the one test that needs two of them: the smallest thing that
+# can be set up beside the first, because what it is for is the keying of the
+# subscriber list and the undo slot and not anything it says about shutters.
+SECOND_GATEWAY_YAML = f"""
+gateway:
+  mac: {MAC2}
+  cover:
+    garage_shutter:
+      where: '81'
+      name: Garage Shutter
+      height: 200
+"""
+
 WRITE_YAML = YAML.replace(
     """    skylight:""",
     """    attic_shutter:
@@ -1080,6 +1097,64 @@ async def test_reorder_of_one_group_leaves_the_other_groups_where_they_are(
             order=[FIRST, SECOND],
         )
         assert answer["overview"]["order"] == [FIRST, SECOND, THIRD]
+
+
+async def test_reorder_of_one_group_keeps_every_member_of_it(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A group's list is that group's *full* order, and a short one costs nobody a place.
+
+    The group's members are put back into the seats that group holds in the one flat
+    order - one seat per member - so a list naming fewer than all of them would leave a
+    seat empty and drop a shutter out of the stored order altogether. On the screen that
+    is a window jumping to the end of its group for no reason anybody can see.
+
+    Mutation caught: `zip(seats, wanted, strict=False)` without the tail that puts the
+    members the list left out back at the end of the group.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            profile="tall",
+            order=[FIRST],
+        )
+        assert set(answer["overview"]["order"]) == {FIRST, SECOND, THIRD}
+
+
+async def test_reorder_refuses_an_order_that_names_a_shutter_twice(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Each shutter sits in exactly one place, so a repeated id is a broken client.
+
+    Refused at the schema rather than quietly deduplicated: a deduplicated list is a
+    stored order different from the one on the screen, with nothing saying so.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            order=[FIRST, SECOND, FIRST],
+        )
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
+        error = await refused(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+            order=[FIRST, FIRST],
+        )
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
 
 
 async def test_reorder_refuses_a_shutter_that_does_not_follow_that_profile(
@@ -1805,3 +1880,155 @@ async def test_a_second_write_is_refused_while_the_first_is_being_applied(
 
 async def _nothing() -> dict[str, Any]:
     return {}
+
+
+async def test_two_frames_in_one_tick_cannot_both_find_the_gateway_free(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The claim is taken with no `await` between it and the refusal that guards it.
+
+    The socket delivers two frames in the same tick whenever the user double-taps, and
+    the first thing a write does after the check is read the store - which really goes
+    to the disk, and really suspends, the first time a gateway is written to after a
+    restart. The suspension is the whole point, so it is arranged here rather than
+    hoped for: a claim taken on the far side of it is a claim both writes get, and two
+    writes each decide against a store the other is about to replace.
+
+    Mutation caught: moving `writing.add(entry.entry_id)` below
+    `await async_get_store(...)`.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        real = panel_write.async_get_store
+
+        async def slow_store(hass_, entry_):
+            # What the first write of a Home Assistant run really does here.
+            await asyncio.sleep(0)
+            return await real(hass_, entry_)
+
+        outcomes: list[Any] = []
+
+        async def write() -> None:
+            try:
+                outcomes.append(
+                    await async_write(
+                        hass,
+                        entry,
+                        "set_travel",
+                        lambda entry_, store: async_set_travel(
+                            hass, entry_, store, cover_unique_id=SECOND, height=165
+                        ),
+                    )
+                )
+            except PanelError as err:
+                outcomes.append(err)
+
+        with patch.object(panel_write, "async_get_store", slow_store):
+            async_forget_store(hass, entry)
+            # Created in the same tick, as two frames off one socket are.
+            await asyncio.gather(
+                hass.async_create_task(write()), hass.async_create_task(write())
+            )
+        refusals = [item for item in outcomes if isinstance(item, PanelError)]
+        assert len(refusals) == 1, outcomes
+        assert refusals[0].translation_key == ERROR_WRITE_IN_PROGRESS
+
+
+async def test_a_measurement_that_opens_while_a_write_is_being_applied(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The one order the lock cannot rule out, and what it comes to.
+
+    `_refuse_if_busy` runs before the write and the guided conversation is many screens
+    long, so the only way round it is a session that opens inside the awaited store
+    write itself. Defined outcome: the write finishes - its records are already on the
+    way to the disk and abandoning half of it would be worse than either - and the
+    signal it ends with reaches a cover that is now measuring, which the cover survives:
+    the swap defers to the end of the run it is in (`_MovementModel`), and `Calibrating`
+    is not one of the attributes a swap rewrites. The *next* write is refused as every
+    write is, which is the state the panel is shown.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        cover = entity_object(hass, "cover", "2-81")
+        with ExitStack() as sessions:
+
+            async def work(entry_, store) -> dict[str, Any]:
+                # The guided conversation takes the shutter exactly here, between the
+                # refusal that guards this write and the signal that ends it.
+                sessions.enter_context(cover.calibration_session())
+                return await async_set_travel(
+                    hass, entry_, store, cover_unique_id=SECOND, height=165
+                )
+
+            answer = await async_write(hass, entry, "set_travel", work)
+            assert answer["undo_token"] is not None
+            assert row_of(answer["overview"], SECOND)["height"] == 165.0
+            # The session the swap landed in is untouched, and says so.
+            assert cover.calibrating is True
+            assert hass.states.get(FIRST_ENTITY).attributes["Calibrating"] is True
+            assert row_of(answer["overview"], FIRST)["calibrating"] is True
+            # ...and the next write is refused, which is what the panel is told.
+            with pytest.raises(PanelError) as refusal:
+                await async_write(hass, entry, "set_travel", lambda *_: _nothing())
+            assert refusal.value.translation_key == ERROR_BUSY_CALIBRATING
+        assert cover.calibrating is False
+
+
+async def test_two_gateways_are_two_subscriptions(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A panel watching one gateway is not woken by a write to the other.
+
+    The subscriber list is keyed by `entry_id` and so is the undo slot; this is the one
+    test in the suite that sets two gateways up, which is what open point 7 of the lot's
+    handoff asked for.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        second = make_entry(write_yaml(tmp_path, SECOND_GATEWAY_YAML, name="second.yaml"), mac=MAC2)
+        with mock_gateway(), mock_commands():
+            second.add_to_hass(hass)
+            assert await hass.config_entries.async_setup(second.entry_id)
+            await hass.async_block_till_done()
+
+            client = await hass_ws_client(hass)
+            await client.send_json_auto_id(
+                {"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id}
+            )
+            assert (await client.receive_json())["success"] is True
+            assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+            assert len(async_subscribers(hass, entry.entry_id)) == 1
+            assert async_subscribers(hass, second.entry_id) == []
+
+            # A write to the other gateway answers, and pushes nothing here.
+            answer = await result(
+                client,
+                type=WS_TYPE_SET_TRAVEL,
+                entry_id=second.entry_id,
+                cover_unique_id=f"{MAC2}-2-81",
+                height=180,
+            )
+            assert answer["undo_token"] is not None
+            # The next frame down the socket is the push from a write to *this* one.
+            await client.send_json_auto_id(
+                {
+                    "type": WS_TYPE_SET_TRAVEL,
+                    "entry_id": entry.entry_id,
+                    "cover_unique_id": SECOND,
+                    "height": 170,
+                }
+            )
+            pushed = await client.receive_json()
+            assert pushed["event"]["type"] == WS_EVENT_OVERVIEW
+            assert row_of(pushed["event"]["overview"], SECOND)["height"] == 170.0
+            assert (await client.receive_json())["success"] is True
+
+        await hass.config_entries.async_unload(second.entry_id)
+        await hass.async_block_till_done()
