@@ -100,13 +100,35 @@ export class MyHomeOverview extends LitElement {
       /*
        * The select draws its own arrow: only with appearance stripped does it take the
        * theme's own background and text colours, and the native arrow goes with it.
+       *
+       * The prototype drew the replacement as an SVG data URI with a fixed grey painted
+       * into it. A data URI cannot read a CSS variable, so that grey would be the one
+       * literal colour in the panel and the same grey in both themes - which is the thing
+       * the handoff's first rule forbids. The chevron here is two borders on a wrapper's
+       * pseudo-element instead, in the theme's own secondary text colour.
        */
+      .select-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .select-wrap::after {
+        content: "";
+        position: absolute;
+        right: 13px;
+        top: 50%;
+        width: 7px;
+        height: 7px;
+        border-right: 1.6px solid var(--myhome-text-soft);
+        border-bottom: 1.6px solid var(--myhome-text-soft);
+        border-radius: 1px;
+        transform: translateY(-70%) rotate(45deg);
+        pointer-events: none;
+      }
+
       select.field {
         appearance: none;
         padding-right: 36px;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888888' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 12px center;
       }
 
       a.cta {
@@ -267,16 +289,18 @@ export class MyHomeOverview extends LitElement {
         @input=${(event: Event) =>
           this._fire("myhome-search", (event.target as HTMLInputElement).value)}
       />
-      <select
-        class="field"
-        aria-label=${this.i18n.t("panel.common.room_filter")}
-        .value=${this.room}
-        @change=${(event: Event) =>
-          this._fire("myhome-room", (event.target as HTMLSelectElement).value)}
-      >
-        <option value="">${this.i18n.t("panel.common.all_rooms")}</option>
-        ${this._rooms.map((room) => html`<option value=${room}>${room}</option>`)}
-      </select>
+      <span class="select-wrap">
+        <select
+          class="field"
+          aria-label=${this.i18n.t("panel.common.room_filter")}
+          .value=${this.room}
+          @change=${(event: Event) =>
+            this._fire("myhome-room", (event.target as HTMLSelectElement).value)}
+        >
+          <option value="">${this.i18n.t("panel.common.all_rooms")}</option>
+          ${this._rooms.map((room) => html`<option value=${room}>${room}</option>`)}
+        </select>
+      </span>
       <span class="spacer"></span>
       <a class="cta secondary compact" href=${FLOW_URL} title=${this.i18n.t("panel.overview.measure_hint")}
         >${this.i18n.t("panel.overview.action.measure")}</a

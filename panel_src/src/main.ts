@@ -146,6 +146,12 @@ export class MyHomeCalibrationPanel extends LitElement {
         padding: 16px;
       }
 
+      /* Waiting is not a refusal, and must not borrow the error colour to say so. */
+      .card.waiting {
+        color: var(--myhome-text-soft);
+        padding: 16px;
+      }
+
       .soft {
         color: var(--myhome-text-soft);
         font-size: 13px;
@@ -417,7 +423,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _renderView(): TemplateResult {
     const state = this._store.state;
     if (state.status === "loading") {
-      return html`<div class="card problem" role="status">
+      return html`<div class="card waiting" role="status">
         ${this._i18n.t("panel.common.loading")}
       </div>`;
     }
