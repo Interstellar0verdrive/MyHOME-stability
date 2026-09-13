@@ -71,7 +71,6 @@ from .const import (
     CALIBRATION_SOURCE_PROFILE,
     CALIBRATION_SOURCE_YAML,
     CONF_CLOSING_ROLL,
-    CONF_CLOSING_SLAT_TIME,
     CONF_CLOSING_TIME,
     CONF_COVER_UNIQUE_ID,
     CONF_COVERS,
@@ -180,7 +179,6 @@ def cover_profile_data(
     slat_time: float,
     opening_roll: float,
     closing_roll: float,
-    closing_slat_time: float | None = None,
     reference_cover: str | None = None,
     source: str = CALIBRATION_SOURCE_GUIDED,
     measured_at: str | None = None,
@@ -206,8 +204,6 @@ def cover_profile_data(
         CONF_SOURCE: source,
         CONF_MEASURED_AT: measured_at or dt_util.utcnow().isoformat(),
     }
-    if closing_slat_time is not None:
-        data[CONF_CLOSING_SLAT_TIME] = float(closing_slat_time)
     if reference_cover:
         data[CONF_REFERENCE_COVER] = reference_cover
     if raw:

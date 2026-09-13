@@ -290,8 +290,10 @@ FIELD_COVER = "cover"
 FIELD_MEASURED_CM = "measured_cm"
 FIELD_PROFILE = "profile"
 # "Nessun profilo" in the assignment form. Not the empty string: a select whose option
-# is "" renders as a blank line the user cannot tell from an unset field.
-NO_PROFILE = "__none__"
+# is "" renders as a blank line the user cannot tell from an unset field. It is also a
+# translation key under `selector.profile_choice.options`, so it has to be a slug
+# (`[a-z0-9-_]+`, no leading or trailing separator) or hassfest refuses `strings.json`.
+NO_PROFILE = "no_profile"
 
 _NAME_RE = re.compile(PROFILE_NAME_PATTERN)
 _NOT_A_NAME = re.compile(r"[^A-Za-z0-9_]+")
@@ -625,13 +627,23 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         fields = self._cover_fields()
         if not fields:
             return await self.async_step_no_basic_covers()
-        names = sorted(self._all_profiles())
+        # A profile the *file* calls `no_profile` would otherwise put the sentinel in
+        # the list twice; `async_step_profile_name` refuses the name, so the file is the
+        # only door it can come through.
+        names = sorted(name for name in self._all_profiles() if name != NO_PROFILE)
         if user_input is not None:
             assignments: dict[str, tuple[str | None, float | None]] = {}
             for label, unique_id in fields.items():
                 chosen = user_input.get(label, NO_PROFILE)
                 profile = None if chosen == NO_PROFILE else str(chosen)
-                if profile == self._assigned_profile(unique_id):
+                current = self._assigned_profile(unique_id)
+                # The second half is the window that follows a profile the select
+                # cannot offer, because the *file* called that profile like the
+                # sentinel: the row opens on "Nessun profilo" for want of anything else
+                # to show, so submitting the form untouched must not be read as an
+                # instruction to take the assignment away. Such a profile can only be
+                # given from path B, and only ever taken back from "Calibrazioni".
+                if profile == current or (profile is None and current == NO_PROFILE):
                     # This row was left as it was. Collecting it anyway wrote a record
                     # for every shutter the form had ever shown - stamped `guided`,
                     # listed under "Calibrazioni" as something measured, and (with a
@@ -664,7 +676,7 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                     options=[NO_PROFILE, *names],
                     mode=SelectSelectorMode.DROPDOWN,
                     custom_value=False,
-                    # Only `__none__` is translated; a profile name has no text of its
+                    # Only `no_profile` is translated; a profile name has no text of its
                     # own and Home Assistant falls back to showing the value itself,
                     # which is the name the user gave it.
                     translation_key="profile_choice",
@@ -1370,10 +1382,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_claim_refused(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """One screen for both reasons: the shutter is not ours to move right now."""
+        """One screen for both reasons: the shutter is not ours to move right now.
+
+        Given `_placeholders()` like every other screen of the conversation. Neither
+        text names the shutter today, but a translation that did would be rendered by
+        formatjs as "[formatjs Error: MISSING_VALUE]" instead - a whole screen lost to
+        one brace (final review).
+        """
         return self.async_show_menu(
             step_id=f"refused_{self._claim_refused}",
             menu_options=["calibrate", "init"],
+            description_placeholders=self._placeholders(),
         )
 
     async def async_step_refused_unknown_cover(
@@ -1565,7 +1584,15 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_cancel_flow(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Leave the conversation, having written nothing (true at every screen)."""
+        """Leave the conversation, having written nothing (true at every screen).
+
+        The shutter is *not* stopped. A run of the calibration is free - only an end
+        stop or a stop of ours ends it - and by the time this screen can be reached the
+        conversation has already given up on measuring that run; interrupting it would
+        leave the curtain at an arbitrary point instead of a known one. The screen says
+        as much, which is why it is given the shutter's name.
+        """
+        self._cancelled_cover = self._cover_label
         self._disarm()
         self._release()
         self._reset_calibration()
@@ -1574,8 +1601,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
     async def async_step_cancelled(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Say so, and offer the menu rather than closing the dialog."""
-        return self.async_show_menu(step_id="cancelled", menu_options=["calibrate", "init"])
+        """Say so, and offer the menu rather than closing the dialog.
+
+        The shutter's name is carried on `_cancelled_cover` rather than read off
+        `_cover_label`: `async_step_cancel_flow` throws the conversation away before
+        showing this screen, and `_reset_calibration` empties the label with it.
+        """
+        return self.async_show_menu(
+            step_id="cancelled",
+            menu_options=["calibrate", "init"],
+            description_placeholders={"cover": self._cancelled_cover},
+        )
 
     # ------------------------------------------------------------------ movements
     async def _async_job(self, job: Callable[[], Awaitable[None]]) -> None:
@@ -2543,6 +2579,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
         self._saved_cover = self._cover_label
         self._saved_profile = self._measured_name or self._profile or ""
+        self._saved_path = self._path
         self._disarm()
         self._release()
         # ...and the conversation is over: without this, rendering the `saved` screen
@@ -2552,15 +2589,49 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._cover = None
         return await self.async_step_saved()
 
+    def _saved_placeholders(self) -> dict[str, str]:
+        """The shutter and the profile, read off what Save actually wrote."""
+        return {"cover": self._saved_cover, "profile": self._saved_profile}
+
     async def async_step_saved(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """What was saved, where it lives, and how to undo it."""
+        """What was saved, where it lives, and how to undo it - path A's version.
+
+        Also the router, because what Save really wrote is a different sentence on each
+        path: path A measured this shutter and named a profile after it, path B measured
+        nothing but its height and gave it somebody else's profile, path C measured a
+        few of its numbers over a profile it goes on following. One screen for all three
+        told two of them that the shutter "moves on the values just measured", which is
+        a sentence the user cannot check against the attributes (final review). Three
+        step ids, as the three summaries already are.
+        """
+        if self._saved_path == PATH_PROFILE:
+            return await self.async_step_saved_profile()
+        if self._saved_path == PATH_REFINE:
+            return await self.async_step_saved_refined()
         return self.async_show_menu(
             step_id="saved",
             menu_options=["calibrate", "init"],
-            description_placeholders={
-                "cover": self._saved_cover,
-                "profile": self._saved_profile,
-            },
+            description_placeholders=self._saved_placeholders(),
+        )
+
+    async def async_step_saved_profile(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Path B: the shutter follows a profile, and only its height was measured."""
+        return self.async_show_menu(
+            step_id="saved_profile",
+            menu_options=["calibrate", "init"],
+            description_placeholders=self._saved_placeholders(),
+        )
+
+    async def async_step_saved_refined(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Path C: its own numbers over a profile it goes on following."""
+        return self.async_show_menu(
+            step_id="saved_refined",
+            menu_options=["calibrate", "init"],
+            description_placeholders=self._saved_placeholders(),
         )
 
 

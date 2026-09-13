@@ -45,14 +45,14 @@ accumulating one.
 ## Where to find it
 
 **Settings → Devices & services → MyHOME → Configure**, then **"Calibrate a
-shutter"**. There is nothing to add on the integration page and nothing to install:
+cover"**. There is nothing to add on the integration page and nothing to install:
 the whole thing — the guided measurement, what it stored, and the connection
 options that used to be the only content of that button — is behind **Configure**.
 
 ```
 Configure
-├── Calibrate a shutter        (only when the gateway has a basic cover)
-├── Profiles and shutters
+├── Calibrate a cover          (only when the gateway has a basic cover)
+├── Profiles and covers
 ├── Calibrations
 ├── Gateway and connection
 └── Close
@@ -60,8 +60,14 @@ Configure
 
 Nothing moves until a screen announces it, nothing is written until the last
 screen, and closing the dialog at any point — including with the X — leaves the
-configuration exactly as it was. The movements the dialog makes are ordinary
-commands; a shutter it has already moved stays where it is.
+configuration exactly as it was. That is also the way out of a screen showing a
+progress bar, which by design carries no Cancel button of its own: Home Assistant
+draws none on a progress step, and a movement already under way is heading for an
+end stop anyway. The movements the dialog makes are ordinary commands; a shutter it
+has already moved stays where it is. A run still under way when you cancel or close
+is not cut short — it ends at the end stop it was heading for — while a session that
+expires through inactivity does send a stop (see
+[Idle timers and expired sessions](#idle-timers-and-expired-sessions)).
 
 While a guided step owns a shutter the entity publishes `Calibrating: true` and
 refuses `cover.set_cover_position`: two things timing the same motor would each
@@ -77,7 +83,7 @@ shutter and press a button at a precise instant.
 The second screen asks which shutter, the third how to measure it. The three are
 alternatives, not steps.
 
-### (A) The first shutter of this kind
+### (A) It is the first cover of its kind
 
 The full measurement: seven movements, about three minutes, three button presses
 and three tape readings.
@@ -106,7 +112,7 @@ measurement that went badly is corrected. A `cover_profiles:` block of the same
 name in the configuration file is not touched; it goes on being shadowed by the
 stored one for as long as that one exists.
 
-### (B) Similar to a shutter already measured
+### (B) It is similar to a cover already measured
 
 Pick the profile, measure the height, done — two screens and one tape reading. The
 shutter is opened completely first, because the height is the distance the bottom
@@ -124,8 +130,8 @@ height, and the profile's values are used **instead of** the ones the configurat
 file writes for that cover, if you use one: this is a statement about the shutter
 made after the file was written, which a `profile:` named in the file is not.
 `Calibration source` therefore says `profile <name>` for such a shutter. Correcting
-the profile afterwards — in `cover_profiles:` or from **Profili e tapparelle →
-Modifica i valori** — reaches this shutter too, at the next reload, scaled to its
+the profile afterwards — in `cover_profiles:` or from **Profiles and covers → Edit
+the values by hand** — reaches this shutter too, at the next reload, scaled to its
 own height; nothing of the profile was ever copied into it.
 
 ### (C) It has a profile but stops in the wrong place
@@ -191,7 +197,12 @@ The screens are built around that:
 
 - **Nothing moves by itself on a step with a press.** The instructions arrive
   first, in full — including that you will have to be quick — and the shutter
-  starts when you press **"Start the shutter"**.
+  starts when you press **"Start the cover"**.
+- **The ascent asks for two presses and the descent for one.** The ascent's
+  buttons are numbered — **"1) Press when the bottom edge leaves the base"** and
+  **"2) Press when the motor stops at the top"** — because they come one after the
+  other on the same run; the descent's single
+  **"Press when the motor stops at the bottom"** carries no number.
 - **The screens shown while it is moving carry one line and a button.** Nobody
   reads three paragraphs while watching a shutter.
 - **The automatic runs of the tape steps do start on their own**: there is nothing
@@ -206,14 +217,16 @@ because the noise stops. And a press that went half a second astray moves the
 estimate by a few centimetres, so repeating the measurement is always better than
 guessing.
 
-The screens that ask for a press, and the ones that ask for a tape reading, carry a
-small diagram of what to look at.
+The ascent briefing opens with one drawing showing both of its presses, and each of
+the two press screens repeats its own; the height form and the three tape-reading
+forms show where to hold the tape. The descent asks for the same gesture as the
+second ascent press and carries no drawing of its own.
 
 ## The management screens
 
-### Profiles and shutters
+### Profiles and covers
 
-**Assign a profile to each shutter** — one selector per basic cover, with
+**Give each cover a profile** — one selector per basic cover, with
 "No profile (the file's values, or the defaults)" at the top. Only rows that really
 changed are written; submitting the form with nothing changed writes nothing at
 all, on any row. A shutter newly assigned to a profile whose height nobody knows is
@@ -261,11 +274,12 @@ One entry per shutter the integration is keeping something for:
 - **Edit the values by hand** — a prefilled form, per shutter. A field left empty
   is not a zero: it means "nothing to say about this one", and the value goes back
   to coming from the profile or the file. Emptying the form deletes the record;
-- **Measure again** — the guided calibration on that shutter. Path A or C merges
+- **Measure it again** — the guided calibration on that shutter. Path A or C merges
   into what is already stored, keeping the height and any override this run did
   not re-measure; picking a profile (path B) replaces the shutter's own measured
   overrides with the profile assignment instead;
-- **Delete** — a confirmation, then back to the file or the profile. The
+- **Delete the calibration** — a confirmation, then back to the file or the
+  profile. The
   measurements cannot be recovered: getting them back means measuring again.
 
 ### Gateway and connection
@@ -286,8 +300,8 @@ configuration file. It holds two things — the **profiles** and, per shutter, i
 Per key, highest first:
 
 1. the values the guided calibration stored **for that shutter** — path A, or
-   **(C) Affina la calibrazione** measured on it directly;
-2. a profile **assigned** to the shutter — from **Profili e tapparelle**, or chosen
+   **(C) It has a profile but stops in the wrong place** measured on it directly;
+2. a profile **assigned** to the shutter — from **Profiles and covers**, or chosen
    with path B — scaled to the shutter's height. This is a statement about that
    shutter made after the configuration file was written, so it is used **instead
    of** the keys the file writes for that cover;
@@ -308,10 +322,10 @@ profile of the same name wins — the log says so once per name.
 
 Nothing of an assigned profile is copied into the shutter's stored calibration:
 only the name, the flag and the height are. Correcting the profile — in
-`cover_profiles:` or from **Profili e tapparelle → Modifica i valori** — reaches
-every shutter that follows it at the next reload, scaled to each one's own height.
-Deleting it takes the assignment away and leaves the height and any measurement
-alone; the shutter goes back to what the file says.
+`cover_profiles:` or from **Profiles and covers → Edit the values by hand** —
+reaches every shutter that follows it at the next reload, scaled to each one's own
+height. Deleting it takes the assignment away and leaves the height and any
+measurement alone; the shutter goes back to what the file says.
 
 The `Calibration source` attribute of every basic cover says which of these it is
 running on:
@@ -388,7 +402,7 @@ re-read, while a dialog is open.
 
 ## Troubleshooting
 
-**"The shutter did not answer."** The command reached the bus but the actuator
+**"The cover did not answer."** The command reached the bus but the actuator
 never reported that it had started, so there is no instant to measure against and
 the step was abandoned. The motor has most likely started all the same: a stop was
 sent right after the error, but check the shutter is not still running before
@@ -410,7 +424,7 @@ level also helps — the scale factor it fits absorbs a systematic reaction dela
 shutter cannot stop before it starts, or open its slats after arriving. One press
 per event, at the moment it happens.
 
-**"This shutter is already being calibrated."** Another dialog is open on it, or
+**"This cover is already being calibrated."** Another dialog is open on it, or
 `myhome.cover_calibration_run` is driving it. Finish or close that one first.
 
 **The verification is more than 3 cm out.** On path B that means this shutter does
@@ -424,7 +438,7 @@ the floor or a sill when those differ — or that the shutter needs the precise 
 mismatch, not a bad model. An error that grows with the length of the run is the
 times or the roll.
 
-**Nothing appears under "Calibrate a shutter".** Every cover of that gateway is
+**Nothing appears under "Calibrate a cover".** Every cover of that gateway is
 declared `advanced: true`, or none is declared at all. Advanced actuators report
 their own position and have nothing to calibrate.
 

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.components.http import HomeAssistantHTTP
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -1019,6 +1021,27 @@ async def test_a_service_call_the_queue_refuses_is_reported_to_the_caller(
 
 
 # --------------------------------------------------------------- the drawings' URL
+def test_the_manifest_declares_the_component_it_calls_into() -> None:
+    """`async_setup` serves the drawings through `hass.http`, so `http` is a dependency.
+
+    Home Assistant sets a declared dependency up before the entry, which is what makes
+    `hass.http` safe to reach for; hassfest refuses the integration without the
+    declaration ("Using component http but it's not in 'dependencies' or
+    'after_dependencies'") and "Validate with hassfest" fails on every push.
+
+    Mutation caught: dropping the key, or listing `http` under `after_dependencies`,
+    which does not guarantee the order.
+    """
+    manifest = json.loads(
+        (Path(myhome.__file__).parent / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert "http" in manifest["dependencies"]
+    # hassfest also pins the order: `domain`, `name`, then everything else sorted.
+    keys = list(manifest)
+    assert keys[:2] == ["domain", "name"]
+    assert keys[2:] == sorted(keys[2:])
+
+
 async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant, tmp_path) -> None:
     """Seven screens of the guided calibration open with `![](/myhome_static/...)`.
 
@@ -1030,14 +1053,20 @@ async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant,
     Mutation caught: registering the path under another URL (or another directory),
     dropping `cache_headers`, or moving the call somewhere a second gateway would run
     it again, which Home Assistant refuses with "Static path already registered".
+
+    `http` is a declared dependency of the manifest, so setting the entry up sets `http`
+    up first and `hass.http` becomes the real server: the registration has to be
+    intercepted on the class, not on an object assigned to `hass.http` beforehand.
     """
     register = AsyncMock()
-    hass.http = MagicMock(async_register_static_paths=register)
 
     path = write_yaml(tmp_path)
     entry = make_entry(path)
     entry2 = make_entry(path, mac=MAC2)
-    with mock_gateway():
+    with (
+        mock_gateway(),
+        patch.object(HomeAssistantHTTP, "async_register_static_paths", register),
+    ):
         assert await _setup(hass, entry)
         assert await _setup(hass, entry2)
 

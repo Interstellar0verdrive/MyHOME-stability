@@ -15,6 +15,7 @@ there is one), and last what the validator already resolved.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -56,6 +57,7 @@ from custom_components.myhome.const import (
     CONF_SOURCE,
     CONF_START_DELAY,
     CONF_STOP_LATENCY,
+    COVER_CALIBRATION_KEYS,
     LEGACY_SUBENTRY_COVER_CALIBRATION,
     LEGACY_SUBENTRY_COVER_PROFILE,
 )
@@ -471,24 +473,30 @@ def test_the_builders_keep_only_what_the_travel_model_knows(caplog) -> None:
     assert kept_raw[CONF_RAW] == {"half_down_cm": 85, "half_up_cm": 80}
 
 
-def test_the_closing_slat_press_is_stored_even_though_nothing_reads_it_yet() -> None:
-    """The precise level can measure it; the travel model still has one slat time.
+def test_a_profile_carries_one_slat_time_and_no_second_one() -> None:
+    """The travel model has a single slat time, used in both directions.
 
-    Storing it costs nothing and keeps a measurement that was actually made, so the
-    release that gives the model an asymmetric slat phase has the data waiting for it.
-    See the phase 1 handoff - this is a deliberate gap, not an oversight.
+    `closing_slat_time` was reserved for an asymmetric slat phase that no release ever
+    grew: nothing wrote it, nothing read it, the YAML schema refused it and no page
+    documented it, so it was a key that could only ever be typed by mistake. Should the
+    model ever learn the distinction, the key comes back with the code that uses it.
+
+    Mutation caught: reintroducing a second slat time in the stored schema without a
+    reader for it - as a key of the built profile, or as a parameter of the builder,
+    which is where it came back from the last time.
     """
+    assert "closing_slat_time" not in inspect.signature(cover_profile_data).parameters
     data = cover_profile_data(
         "tall",
         reference_height=195.0,
         opening_time=22.3,
         closing_time=21.7,
         slat_time=4.7,
-        closing_slat_time=5.4,
         opening_roll=2.1,
         closing_roll=1.7,
     )
-    assert data["closing_slat_time"] == 5.4
+    assert "closing_slat_time" not in data
+    assert "closing_slat_time" not in COVER_CALIBRATION_KEYS
 
 
 # --------------------------------------------------------------------------------------

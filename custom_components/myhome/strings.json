@@ -484,7 +484,23 @@
       },
       "saved": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved and already in use. From now on {cover} moves on the values just measured; you will find them among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
+        "description": "Done: the calibration of {cover} is saved and already in use. From now on {cover} moves on the values measured on it just now; you will find them among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}”, measured on this cover, under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
+        "menu_options": {
+          "calibrate": "Calibrate another cover",
+          "init": "Back to the menu"
+        }
+      },
+      "saved_profile": {
+        "title": "Calibration saved",
+        "description": "Done: {cover} now follows the profile “{profile}” and is already using it. No run of its own was timed here: the only thing measured on this cover is its height, and the profile's times are scaled to it. You will find the result among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
+        "menu_options": {
+          "calibrate": "Calibrate another cover",
+          "init": "Back to the menu"
+        }
+      },
+      "saved_refined": {
+        "title": "Calibration saved",
+        "description": "Done: the calibration of {cover} is saved and already in use. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now beats it; everything that was not measured here still comes from the profile. You will find the result among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -492,7 +508,7 @@
       },
       "cancelled": {
         "title": "Calibration cancelled",
-        "description": "Nothing was saved. The cover is where the last movement left it and goes on moving as it did before.",
+        "description": "Nothing was saved: {cover} is no longer being calibrated and answers ordinary commands again, exactly as before.\n\n**If it was still moving**, it is not stopped: a run started by the calibration has no end of its own and carries on to the end stop it was heading for.",
         "menu_options": {
           "calibrate": "Start again",
           "init": "Back to the menu"
@@ -500,7 +516,7 @@
       },
       "expired": {
         "title": "The session expired through inactivity",
-        "description": "This calibration stood still for too long, so {cover} was released: it is no longer being calibrated and answers ordinary commands again.\n\n**Nothing was saved**, and the cover is where the last movement left it. The measurements taken so far were discarded: getting them back means starting again from the beginning.",
+        "description": "This calibration stood still for too long, so {cover} was released: it is no longer being calibrated and answers ordinary commands again.\n\n**Nothing was saved**: the measurements taken so far were discarded, and getting them back means starting again from the beginning. If {cover} was still moving, it was asked to stop where it was.\n\nA screen with a progress bar has no Cancel button of its own: the way out of one is to close the dialog, which gives the cover back straight away.",
         "menu_options": {
           "calibrate": "Start again",
           "init": "Close"
@@ -599,7 +615,7 @@
   "selector": {
     "profile_choice": {
       "options": {
-        "__none__": "No profile (the file's values, or the defaults)"
+        "no_profile": "No profile (the file's values, or the defaults)"
       }
     }
   },

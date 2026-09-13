@@ -484,7 +484,23 @@
       },
       "saved": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und bereits in Gebrauch. Von jetzt an fährt {cover} mit den eben gemessenen Werten; Sie finden sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen. Die übrigen Rollläden, die diesem ähneln, sind in zwei Bildschirmen erledigt, mit der Wahl „(B) Er ähnelt einem bereits gemessenen Rollladen“.",
+        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und bereits in Gebrauch. Von jetzt an fährt {cover} mit den eben an ihm gemessenen Werten; Sie finden sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“, an diesem Rollladen gemessen, unter Konfigurieren → Profile und Rollläden. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen. Die übrigen Rollläden, die diesem ähneln, sind in zwei Bildschirmen erledigt, mit der Wahl „(B) Er ähnelt einem bereits gemessenen Rollladen“.",
+        "menu_options": {
+          "calibrate": "Einen weiteren Rollladen kalibrieren",
+          "init": "Zurück zum Menü"
+        }
+      },
+      "saved_profile": {
+        "title": "Kalibrierung gespeichert",
+        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“ und benutzt es bereits. Hier wurde keine eigene Fahrzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist seine Höhe, und die Zeiten des Profils werden darauf umgerechnet. Das Ergebnis finden Sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Fahrzeiten.",
+        "menu_options": {
+          "calibrate": "Einen weiteren Rollladen kalibrieren",
+          "init": "Zurück zum Menü"
+        }
+      },
+      "saved_refined": {
+        "title": "Kalibrierung gespeichert",
+        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und bereits in Gebrauch. {cover} folgt weiterhin dem Profil „{profile}“, und was eben an diesem einen Rollladen gemessen wurde, geht jetzt vor; alles, was hier nicht gemessen wurde, kommt weiterhin aus dem Profil. Das Ergebnis finden Sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, wo Sie die Werte wieder ansehen, von Hand korrigieren oder löschen können. Das Profil selbst wurde nicht angerührt: die anderen Rollläden, die ihm folgen, bleiben, wie sie sind.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -492,7 +508,7 @@
       },
       "cancelled": {
         "title": "Kalibrierung abgebrochen",
-        "description": "Es wurde nichts gespeichert. Der Rollladen steht dort, wo ihn die letzte Bewegung gelassen hat, und fährt weiter wie zuvor.",
+        "description": "Es wurde nichts gespeichert: {cover} wird nicht mehr kalibriert und nimmt wieder gewöhnliche Befehle an, genau wie zuvor.\n\n**Falls er noch fuhr**, wird er nicht angehalten: eine von der Kalibrierung gestartete Fahrt hat kein eigenes Ende und läuft bis zu dem Endanschlag weiter, auf den sie zulief.",
         "menu_options": {
           "calibrate": "Von vorn beginnen",
           "init": "Zurück zum Menü"
@@ -500,7 +516,7 @@
       },
       "expired": {
         "title": "Sitzung wegen Untätigkeit abgelaufen",
-        "description": "Diese Kalibrierung stand zu lange still, deshalb wurde {cover} freigegeben: er wird nicht mehr kalibriert und nimmt wieder gewöhnliche Befehle an.\n\n**Es wurde nichts gespeichert**, und der Rollladen steht dort, wo ihn die letzte Bewegung gelassen hat. Die bisher gemachten Messungen wurden verworfen: um sie wiederzubekommen, muss von vorn begonnen werden.",
+        "description": "Diese Kalibrierung stand zu lange still, deshalb wurde {cover} freigegeben: er wird nicht mehr kalibriert und nimmt wieder gewöhnliche Befehle an.\n\n**Es wurde nichts gespeichert**: die bisher gemachten Messungen wurden verworfen, und um sie wiederzubekommen, muss von vorn begonnen werden. Falls {cover} noch fuhr, wurde er aufgefordert, dort anzuhalten, wo er war.\n\nEin Bildschirm mit Fortschrittsbalken hat keine eigene Schaltfläche Abbrechen: der Weg hinaus ist, den Dialog zu schließen, womit der Rollladen sofort freigegeben wird.",
         "menu_options": {
           "calibrate": "Von vorn beginnen",
           "init": "Schließen"
@@ -599,7 +615,7 @@
   "selector": {
     "profile_choice": {
       "options": {
-        "__none__": "Kein Profil (die Werte der Datei oder die Vorgaben)"
+        "no_profile": "Kein Profil (die Werte der Datei oder die Vorgaben)"
       }
     }
   },

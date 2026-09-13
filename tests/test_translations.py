@@ -249,14 +249,21 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "summary_precise": {
         "cover", "yaml", "height", "accuracy", "percent", "profile", "replacing", "keeping",
     },
+    # One `saved` screen per path: what was written is a different sentence on each.
     "saved": {"cover", "profile"},
-    "cancelled": set(),
+    "saved_profile": {"cover", "profile"},
+    "saved_refined": {"cover", "profile"},
+    # Every way out of the conversation is given `_placeholders()`, so every one of
+    # them may name the shutter it is about.
+    "cancelled": {"cover"},
     "expired": {"cover"},
-    "refused_unknown_cover": set(),
-    "refused_already_calibrating": set(),
+    "refused_unknown_cover": {"cover"},
+    "refused_already_calibrating": {"cover"},
     # Every `problem_*` screen, which are generated from `PROBLEM_REASONS`.
     **{f"problem_{reason}": {"cover"} for reason in PROBLEM_REASONS},
 }
+# One `saved` screen per path of the guided flow (`GuidedCalibrationMixin`).
+SAVED_SCREENS = ("saved", "saved_profile", "saved_refined")
 PROGRESS_PLACEHOLDERS: dict[str, set[str]] = {
     "homing_closed": {"cover"},
     "homing_open": {"cover"},
@@ -390,12 +397,51 @@ def test_the_no_profile_option_of_the_assignment_form_is_translated() -> None:
 
     Its value is `NO_PROFILE`, and Home Assistant looks its label up under
     ``selector.profile_choice.options``. Without the text the user is offered a
-    dropdown whose first entry reads ``__none__``.
+    dropdown whose first entry reads ``no_profile``.
     """
     for path in [STRINGS, *TRANSLATIONS]:
         options = load(path)["selector"]["profile_choice"]["options"]
         assert set(options) == {NO_PROFILE}, path.name
         assert options[NO_PROFILE], path.name
+
+
+# hassfest's rule for a translation key: lowercase letters, digits, hyphen and
+# underscore, and neither a hyphen nor an underscore at either end.
+TRANSLATION_KEY_RE = re.compile(r"^(?![-_])(?!.*[-_]$)[a-z0-9_-]+$")
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_every_selector_option_key_is_a_valid_translation_key(path: Path) -> None:
+    """hassfest refuses the whole file over one option key that is not a slug.
+
+    The assignment select's "no profile" sentinel used to be spelled `__none__`, which
+    reads as "not a name anybody would give a profile" and is exactly what hassfest
+    rejects - it failed "Validate with hassfest" on every push until it was renamed.
+
+    Mutation caught: spelling any sentinel with a leading or trailing underscore again.
+    """
+    for key, selector in load(path)["selector"].items():
+        assert TRANSLATION_KEY_RE.match(key), f"{path.name}: selector.{key}"
+        for option in selector.get("options", {}):
+            assert TRANSLATION_KEY_RE.match(option), f"{path.name}: selector.{key}.{option}"
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_the_three_paths_end_on_three_different_saved_screens(path: Path) -> None:
+    """Save writes something different on each path, and each has to say which.
+
+    Path A measured this shutter and named a profile after it; path B measured nothing
+    but its height and gave it a profile measured on another window; path C measured a
+    few of its numbers over a profile it goes on following. One text for all three told
+    two of them that the shutter "moves on the values just measured", which is a
+    sentence the user cannot check against the attributes (final review).
+
+    Mutation caught: copying one of the three descriptions over another, in any of the
+    eight files.
+    """
+    step = options_block(path)["step"]
+    descriptions = [step[name]["description"] for name in SAVED_SCREENS]
+    assert len(set(descriptions)) == len(SAVED_SCREENS), path.name
 
 
 @pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)

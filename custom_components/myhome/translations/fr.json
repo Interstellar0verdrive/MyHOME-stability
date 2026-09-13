@@ -484,7 +484,23 @@
       },
       "saved": {
         "title": "Calibration enregistrée",
-        "description": "C'est fait : la calibration de {cover} est enregistrée et déjà utilisée. À partir de maintenant, {cover} fonctionne avec les valeurs qui viennent d'être mesurées ; vous les trouverez parmi les attributs de l'entité, sous « Calibration source ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} » sous Configurer → Profils et volets. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer. Les autres volets semblables à celui-ci se font en deux écrans en choisissant « (B) Il est semblable à un volet déjà mesuré ».",
+        "description": "C'est fait : la calibration de {cover} est enregistrée et déjà utilisée. À partir de maintenant, {cover} fonctionne avec les valeurs qui viennent d'être mesurées sur lui ; vous les trouverez parmi les attributs de l'entité, sous « Calibration source ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} », mesuré sur ce volet, sous Configurer → Profils et volets. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer. Les autres volets semblables à celui-ci se font en deux écrans en choisissant « (B) Il est semblable à un volet déjà mesuré ».",
+        "menu_options": {
+          "calibrate": "Calibrer un autre volet",
+          "init": "Retour au menu"
+        }
+      },
+      "saved_profile": {
+        "title": "Calibration enregistrée",
+        "description": "C'est fait : {cover} suit désormais le profil « {profile} » et l'utilise déjà. Aucune course à lui n'a été chronométrée ici : la seule chose mesurée sur ce volet est sa hauteur, et les temps du profil y sont ramenés. Vous trouverez le résultat parmi les attributs de l'entité, sous « Calibration source ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, et le profil « {profile} » sous Configurer → Profils et volets, où il est partagé par tous les volets qui le suivent. Si un jour vous voulez revenir aux valeurs écrites dans le fichier de configuration, il vous suffit de supprimer la calibration depuis cet écran.\n\n**Ce que vous pouvez faire maintenant** : donner le même profil à un autre volet, ou fermer. Si {cover} s'arrête au mauvais endroit, « (C) Il a un profil mais s'arrête au mauvais endroit » mesure ses propres temps de course.",
+        "menu_options": {
+          "calibrate": "Calibrer un autre volet",
+          "init": "Retour au menu"
+        }
+      },
+      "saved_refined": {
+        "title": "Calibration enregistrée",
+        "description": "C'est fait : la calibration de {cover} est enregistrée et déjà utilisée. {cover} continue de suivre le profil « {profile} », et ce qui vient d'être mesuré sur ce volet seul l'emporte désormais sur lui ; tout ce qui n'a pas été mesuré ici continue de venir du profil. Vous trouverez le résultat parmi les attributs de l'entité, sous « Calibration source ».\n\n**Où la retrouver** : ici sous Configurer → Calibrations, où vous pouvez revoir les valeurs, les corriger à la main ou les supprimer. Le profil lui-même n'a pas été touché : les autres volets qui le suivent ne changent pas.\n\n**Ce que vous pouvez faire maintenant** : calibrer un autre volet, ou fermer.",
         "menu_options": {
           "calibrate": "Calibrer un autre volet",
           "init": "Retour au menu"
@@ -492,7 +508,7 @@
       },
       "cancelled": {
         "title": "Calibration annulée",
-        "description": "Rien n'a été enregistré. Le volet est là où le dernier mouvement l'a laissé et continue de fonctionner comme avant.",
+        "description": "Rien n'a été enregistré : {cover} n'est plus en calibration et répond de nouveau aux commandes ordinaires, exactement comme avant.\n\n**S'il était encore en mouvement**, il n'est pas arrêté : une course lancée par la calibration n'a pas de fin propre et se poursuit jusqu'à la butée vers laquelle elle allait.",
         "menu_options": {
           "calibrate": "Recommencer",
           "init": "Retour au menu"
@@ -500,7 +516,7 @@
       },
       "expired": {
         "title": "Session expirée pour inactivité",
-        "description": "Cette calibration est restée immobile trop longtemps, {cover} a donc été libéré : il n'est plus en calibration et répond de nouveau aux commandes ordinaires.\n\n**Rien n'a été enregistré**, et le volet est là où le dernier mouvement l'a laissé. Les mesures faites jusqu'ici ont été abandonnées : pour les retrouver, il faut recommencer depuis le début.",
+        "description": "Cette calibration est restée immobile trop longtemps, {cover} a donc été libéré : il n'est plus en calibration et répond de nouveau aux commandes ordinaires.\n\n**Rien n'a été enregistré** : les mesures faites jusqu'ici ont été abandonnées et, pour les retrouver, il faut recommencer depuis le début. Si {cover} était encore en mouvement, un arrêt lui a été demandé là où il se trouvait.\n\nUn écran avec une barre de progression n'a pas de bouton Annuler : pour en sortir, il faut fermer la boîte de dialogue, ce qui libère le volet aussitôt.",
         "menu_options": {
           "calibrate": "Recommencer",
           "init": "Fermer"
@@ -599,7 +615,7 @@
   "selector": {
     "profile_choice": {
       "options": {
-        "__none__": "Aucun profil (les valeurs du fichier, ou celles par défaut)"
+        "no_profile": "Aucun profil (les valeurs du fichier, ou celles par défaut)"
       }
     }
   },

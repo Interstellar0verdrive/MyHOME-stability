@@ -484,7 +484,23 @@
       },
       "saved": {
         "title": "Calibração guardada",
-        "description": "Feito: a calibração de {cover} está guardada e já em uso. A partir de agora {cover} move-se com os valores acabados de medir; encontra-os entre os atributos da entidade, em «Calibration source».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}» em Configurar → Perfis e persianas. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar. As outras persianas semelhantes a esta fazem-se em dois ecrãs escolhendo «(B) É semelhante a uma persiana já medida».",
+        "description": "Feito: a calibração de {cover} está guardada e já em uso. A partir de agora {cover} move-se com os valores acabados de medir nela; encontra-os entre os atributos da entidade, em «Calibration source».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}», medido nesta persiana, em Configurar → Perfis e persianas. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar. As outras persianas semelhantes a esta fazem-se em dois ecrãs escolhendo «(B) É semelhante a uma persiana já medida».",
+        "menu_options": {
+          "calibrate": "Calibrar outra persiana",
+          "init": "Voltar ao menu"
+        }
+      },
+      "saved_profile": {
+        "title": "Calibração guardada",
+        "description": "Feito: {cover} segue agora o perfil «{profile}» e já o está a usar. Aqui não foi cronometrado nenhum percurso seu: a única coisa medida nesta persiana é a sua altura, e os tempos do perfil são ajustados a ela. O resultado encontra-o entre os atributos da entidade, em «Calibration source».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, e o perfil «{profile}» em Configurar → Perfis e persianas, onde é partilhado por todas as persianas que o seguem. Se um dia quiser voltar aos valores escritos no ficheiro de configuração, basta eliminar a calibração a partir desse ecrã.\n\n**O que pode fazer agora**: dar o mesmo perfil a outra persiana, ou fechar. Se {cover} vier a parar no sítio errado, «(C) Tem um perfil mas para no sítio errado» mede os tempos de percurso dela própria.",
+        "menu_options": {
+          "calibrate": "Calibrar outra persiana",
+          "init": "Voltar ao menu"
+        }
+      },
+      "saved_refined": {
+        "title": "Calibração guardada",
+        "description": "Feito: a calibração de {cover} está guardada e já em uso. {cover} continua a seguir o perfil «{profile}», e o que acabou de ser medido nesta persiana em particular passa agora à frente dele; tudo o que aqui não foi medido continua a vir do perfil. O resultado encontra-o entre os atributos da entidade, em «Calibration source».\n\n**Onde a volta a encontrar**: aqui em Configurar → Calibrações, onde pode rever os valores, corrigi-los à mão ou eliminá-los. O perfil não foi tocado: as outras persianas que o seguem ficam como estão.\n\n**O que pode fazer agora**: calibrar outra persiana, ou fechar.",
         "menu_options": {
           "calibrate": "Calibrar outra persiana",
           "init": "Voltar ao menu"
@@ -492,7 +508,7 @@
       },
       "cancelled": {
         "title": "Calibração cancelada",
-        "description": "Não foi guardado nada. A persiana está onde o último movimento a deixou e continua a mover-se como antes.",
+        "description": "Não foi guardado nada: {cover} já não está em calibração e volta a responder aos comandos normais, exatamente como antes.\n\n**Se ainda se estava a mover**, não é parada: um percurso iniciado pela calibração não tem um fim próprio e continua até ao fim de curso para onde ia.",
         "menu_options": {
           "calibrate": "Recomeçar",
           "init": "Voltar ao menu"
@@ -500,7 +516,7 @@
       },
       "expired": {
         "title": "Sessão expirada por inatividade",
-        "description": "Esta calibração esteve parada demasiado tempo, por isso {cover} foi libertada: já não está em calibração e volta a responder aos comandos normais.\n\n**Não foi guardado nada**, e a persiana está onde o último movimento a deixou. As medições feitas até agora foram descartadas: para as ter de volta é preciso recomeçar do princípio.",
+        "description": "Esta calibração esteve parada demasiado tempo, por isso {cover} foi libertada: já não está em calibração e volta a responder aos comandos normais.\n\n**Não foi guardado nada**: as medições feitas até agora foram descartadas e para as ter de volta é preciso recomeçar do princípio. Se {cover} ainda se estava a mover, foi-lhe pedido que parasse onde estava.\n\nUm ecrã com barra de progresso não tem um botão Cancelar próprio: a saída é fechar a caixa de diálogo, o que liberta a persiana de imediato.",
         "menu_options": {
           "calibrate": "Recomeçar",
           "init": "Fechar"
@@ -599,7 +615,7 @@
   "selector": {
     "profile_choice": {
       "options": {
-        "__none__": "Sem perfil (os valores do ficheiro, ou os predefinidos)"
+        "no_profile": "Sem perfil (os valores do ficheiro, ou os predefinidos)"
       }
     }
   },

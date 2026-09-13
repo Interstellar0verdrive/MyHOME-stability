@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 A basic shutter can now be calibrated from a dialog instead of from a stopwatch, a
 tape measure and two action calls. **Settings → Devices & services → MyHOME →
-Configure → "Calibrate a shutter"** drives the shutter, times its runs from the
+Configure → "Calibrate a cover"** drives the shutter, times its runs from the
 actuator's own status frames, asks for three tape readings and stores the result
 where the shutter reads it. Nothing changes for a cover that is not calibrated this
 way, and nothing is ever written to `myhome.yaml`.
@@ -15,7 +15,7 @@ way, and nothing is ever written to `myhome.yaml`.
 ### Added
 
 - **Guided calibration of a basic cover**, under *Configure → "Calibrate a
-  shutter"*. Three ways in: **(A)** the first shutter of a kind — three button
+  cover"*. Three ways in: **(A)** the first shutter of a kind — three button
   presses and three tape readings, about three minutes, ending on a named
   **profile** every similar shutter can inherit; **(B)** a shutter similar to one
   already measured — pick the profile, measure the height, with an optional check at
@@ -33,7 +33,7 @@ way, and nothing is ever written to `myhome.yaml`.
   own, and closing the dialog leaves the configuration untouched. The full page is
   [docs/guided-calibration.md](docs/guided-calibration.md).
 - **Screens that manage what was measured**, in the same dialog. *Profiles and
-  shutters*: one selector per basic cover to assign a profile (and a follow-up form
+  covers*: one selector per basic cover to assign a profile (and a follow-up form
   for the heights nobody knows yet), plus view, hand-edit and delete for each
   profile — the delete names the shutters that lose it. *Calibrations*: per shutter,
   view the stored values, correct them by hand, measure again, or delete them and go

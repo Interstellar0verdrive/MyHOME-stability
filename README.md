@@ -74,7 +74,7 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   that model on your own shutter in centimetres and scale it to every other shutter
   of the same kind by its height (`cover_profiles:`) — see
   [Calibrating a shutter in centimetres](docs/recipes.md#calibrating-a-shutter-in-centimetres)
-- **Guided calibration**: *Configure → "Calibrate a shutter"* drives the shutter,
+- **Guided calibration**: *Configure → "Calibrate a cover"* drives the shutter,
   times its runs from the actuator's own status frames and asks for three tape
   readings; it stores the model where it beats `myhome.yaml`, and writes a profile
   every similar shutter inherits by its height — see
@@ -265,7 +265,7 @@ The [`docs/`](docs/README.md) folder goes deeper than this README:
 - [Services and events](docs/services-and-events.md) — every service's fields
   and every event's data contract
 - [Guided calibration](docs/guided-calibration.md) — the *Configure → "Calibrate a
-  shutter"* dialog: the three paths, the two levels, the management screens and
+  cover"* dialog: the three paths, the two levels, the management screens and
   where the values are kept
 - [Energy monitoring](docs/energy.md) — the instant-power keep-alive, the push
   filter, daily/monthly/total energy, and deriving kWh without gateway totals

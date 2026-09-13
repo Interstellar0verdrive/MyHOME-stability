@@ -12,7 +12,7 @@ minimal configuration example; the pages here go deeper.
   their fields, the two cover calibration actions and their response data, and the
   event contracts (CEN/CEN+, general/area/group, discovery, raw bus traffic).
 - **[Guided calibration](guided-calibration.md)** — the *Configure → "Calibrate a
-  shutter"* dialog: what it measures on a basic cover, the three paths and the two
+  cover"* dialog: what it measures on a basic cover, the three paths and the two
   levels of precision, the screens that manage profiles and stored calibrations,
   where the values are kept and what beats what.
 - **[Energy monitoring](energy.md)** — the instant-power keep-alive, the push
