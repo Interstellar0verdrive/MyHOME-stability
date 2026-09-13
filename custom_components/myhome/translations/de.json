@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Konfiguration dieses Gateways",
-        "description": "**Gateway**: {gateway}\n\nHier wird das Gateway eingerichtet und werden „einfache“ Rollläden kalibriert – jene, deren Position Home Assistant aus den Laufzeiten schätzen muss.\n\n**Was Sie tun müssen**: wählen Sie einen Eintrag. Solange nichts gespeichert wird, ändert sich nichts, und kein Rollladen bewegt sich, bevor ein Bildschirm es ankündigt.",
+        "description": "**Gateway**: {gateway}\n\nHier können Sie das Gateway einrichten und „einfache“ Rollläden kalibrieren – jene, deren Position Home Assistant aus den Laufzeiten schätzen muss.\n\n**Was Sie tun müssen**: wählen Sie einen Eintrag. Solange nichts gespeichert wird, wird nichts geschrieben; was gespeichert wurde, wird wirksam, sobald dieser Dialog geschlossen wird, und kein Rollladen bewegt sich, bevor ein Bildschirm es ankündigt.",
         "menu_options": {
           "calibrate": "Einen Rollladen kalibrieren",
           "profiles_covers": "Profile und Rollläden",
@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Profile und Rollläden",
-        "description": "Ein **Profil** beschreibt eine Rollladenart: wie lange sie für ihren Weg braucht, wie lange die Lamellen dauern und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an seine eigene Höhe an.\n\nZurzeit gibt es {profiles} Profile und {covers} einfache Rollläden an diesem Gateway.",
+        "description": "Ein **Profil** beschreibt eine Rollladenart: wie lange sie für ihren Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Jeder Rollladen kann einem folgen, und Home Assistant passt es an seine eigene Höhe an.\n\nZurzeit gibt es {profiles} Profile und {covers} einfache Rollläden an diesem Gateway.",
         "menu_options": {
           "assign_covers": "Jedem Rollladen ein Profil zuweisen",
           "pick_profile": "Ein Profil ansehen, ändern oder löschen",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Welchem Profil jeder Rollladen folgt",
-        "description": "**Was gleich passiert**: nichts bewegt sich. Ein Profil zuzuweisen heißt, Home Assistant zu sagen „dieser Rollladen ist gebaut wie jene dort“: von da an folgt der Rollladen diesem Profil, Laufzeiten eingeschlossen, auf seine Höhe umgerechnet.\n\nSie sagen es hier, über diesen Rollladen, nachdem die Konfigurationsdatei geschrieben wurde: deshalb wird das Profil anstelle dessen verwendet, was die Datei für diesen Rollladen schreibt, falls Sie eine verwenden. Was an diesem Rollladen gemessen wurde, wiegt noch schwerer und wird weiter verwendet, wo es vorhanden ist; das Profil später zu berichtigen erreicht jeden Rollladen, der ihm folgt.\n\nEin `profile:`, das in der Konfigurationsdatei für einen Rollladen steht, erscheint hier als aktueller Wert und kann von diesem Bildschirm aus nicht entfernt werden: es gehört der Datei, und die Datei gehört Ihnen.\n\n**Was Sie tun müssen**: wählen Sie für jeden Rollladen ein Profil oder „Kein Profil“, um ihn bei den Werten der Datei oder bei den Vorgaben zu belassen."
+        "description": "**Was gleich passiert**: nichts bewegt sich. Ein Profil zuzuweisen heißt, Home Assistant zu sagen „dieser Rollladen ist gebaut wie jene dort“: von da an folgt der Rollladen diesem Profil, Laufzeiten eingeschlossen, auf seine Höhe umgerechnet.\n\nSie weisen das Profil hier zu, nachdem die Konfigurationsdatei erstellt wurde. Es hat daher Vorrang vor den Werten für diesen Rollladen in der Datei, falls Sie eine verwenden. An diesem Rollladen gemessene Werte behalten ihren Vorrang, soweit sie vorhanden sind. Spätere Änderungen am Profil gelten für alle Rollläden, die ihm folgen.\n\nEin `profile:`, das in der Konfigurationsdatei für einen Rollladen steht, erscheint hier als aktueller Wert und kann von diesem Bildschirm aus nicht entfernt werden: es ist in der Datei definiert und muss dort verwaltet werden.\n\n**Was Sie tun müssen**: wählen Sie für jeden Rollladen ein Profil oder „Kein Profil“, um ihn bei den Werten der Datei oder bei den Vorgaben zu belassen."
       },
       "assign_heights": {
         "title": "Wie hoch sind diese Rollläden?",
-        "description": "Ein Profil ist die Messung eines Rollladens einer bestimmten Höhe und wird auf die übrigen im Verhältnis umgerechnet. Von diesen ist die Höhe nicht bekannt, es gibt also nichts, worauf umgerechnet werden könnte: {covers}.\n\n**Was Sie tun müssen**: messen Sie für jeden den Weg, den die Unterkante von ganz geschlossen bis ganz geöffnet zurücklegt, und tragen Sie ihn in Zentimetern ein. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
+        "description": "Ein Profil enthält Messwerte eines Rollladens mit einer bestimmten Höhe und wird proportional auf andere Rollläden umgerechnet. Bei folgenden Rollläden ist die Höhe unbekannt, daher lässt sich das Profil nicht umrechnen: {covers}.\n\n**Was Sie tun müssen**: messen Sie für jeden den Weg, den die Unterkante von ganz geschlossen bis ganz geöffnet zurücklegt, und tragen Sie ihn in Zentimetern ein. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
       },
       "pick_profile": {
         "title": "Welches Profil?",
@@ -130,7 +130,7 @@
       },
       "profile_actions": {
         "title": "Rollladenprofil",
-        "description": "**Profil**: „{profile}“\n\nRollläden, die ihm folgen: {count}.\n\n**Was Sie tun müssen**: wählen Sie, was damit geschehen soll. Die Werte anzusehen ändert nichts; sie zu ändern oder das Profil zu löschen wirkt, sobald Sie diesen Dialog schließen.",
+        "description": "**Profil**: „{profile}“\n\nRollläden, die ihm folgen: {count}.\n\n**Was Sie tun müssen**: wählen Sie, was damit geschehen soll. Die Werte anzusehen ändert nichts; sie zu ändern oder das Profil zu löschen wird sofort geschrieben und wirksam, sobald dieser Dialog geschlossen wird.",
         "menu_options": {
           "profile_view": "Die Werte ansehen",
           "profile_edit": "Die Werte von Hand ändern",
@@ -140,16 +140,16 @@
       },
       "profile_view": {
         "title": "Werte des Profils „{profile}“",
-        "description": "Das sind die Werte, die dieses Profil mit sich trägt. Home Assistant rechnet sie auf jeden Rollladen um, der ihm folgt, im Verhältnis zur Höhe jenes Rollladens.\n\n{values}\nRollläden, die ihm folgen: {covers}"
+        "description": "Dies sind die Werte des Profils. Home Assistant rechnet sie auf jeden Rollladen um, der ihm folgt, im Verhältnis zur Höhe jenes Rollladens.\n\n{values}\nRollläden, die ihm folgen: {covers}"
       },
       "profile_edit": {
         "title": "Profil „{profile}“ ändern",
-        "description": "**Was gleich passiert**: die Werte unten ersetzen die gemessenen, für alle Rollläden, die diesem Profil folgen. Nichts bewegt sich: das ist Schreiben, kein Messen.\n\n**Was Sie tun müssen**: berichtigen Sie das, was Sie besser wissen als die Kalibrierung – etwa die Laufzeiten des Herstellers – und lassen Sie den Rest stehen. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden.",
+        "description": "**Was gleich passiert**: die Werte unten ersetzen die gemessenen, für alle Rollläden, die diesem Profil folgen. Der Rollladen bewegt sich nicht: nur die Werte werden geändert.\n\n**Was Sie tun müssen**: ändern Sie nur Werte, für die Sie zuverlässigere Angaben als die Kalibrierung haben, etwa die Laufzeiten des Herstellers. Lassen Sie die übrigen Werte unverändert. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden.",
         "data": {
-          "reference_height": "Bezugshöhe (cm)",
+          "reference_height": "Bezugsweg (cm)",
           "opening_time": "Öffnungszeit (s)",
           "closing_time": "Schließzeit (s)",
-          "slat_time": "Lamellenzeit (s)",
+          "slat_time": "Öffnungszeit der Lamellen (s)",
           "opening_roll": "Wickelfaktor beim Öffnen",
           "closing_roll": "Wickelfaktor beim Schließen"
         },
@@ -158,13 +158,13 @@
           "opening_time": "Sekunden von ganz geschlossen bis ganz geöffnet, Lamellen eingerechnet (1-600).",
           "closing_time": "Sekunden von ganz geöffnet bis ganz geschlossen (1-600).",
           "slat_time": "Sekunden, in denen sich die Lamellen öffnen, bevor der Panzer zu steigen beginnt (0-60).",
-          "opening_roll": "Wie sehr der aufgewickelte Panzer das Steigen beschleunigt: 1 ist eine nackte Welle, 2 eine gut gefüllte (1-5).",
-          "closing_roll": "Dasselbe beim Sinken (1-5)."
+          "opening_roll": "Das Verhältnis zwischen dem Durchmesser der Welle bei vollständig geöffnetem Rollladen (volle Welle) und bei vollständig geschlossenem Rollladen (leere Welle): 1,5 bis 2,5 bei den meisten Rollläden, 1 bei einer Welle, deren Durchmesser sich nicht ändert (1-5).",
+          "closing_roll": "Dasselbe Verhältnis beim Herunterfahren (1-5)."
         }
       },
       "profile_delete": {
         "title": "Dieses Profil löschen?",
-        "description": "**Profil**: „{profile}“\n\n**Was gleich passiert**: das Profil wird gelöscht und diese {count} Rollläden fallen auf die Werte der Konfigurationsdatei zurück, falls Sie eine verwenden, oder auf die Vorgaben: {covers}\n\nWas an jedem einzelnen Rollladen gemessen wurde, bleibt bestehen: es verschwindet nur die Beschreibung der Art. Gibt es in `cover_profiles:` ein Profil gleichen Namens, gilt von nun an wieder jenes.",
+        "description": "**Profil**: „{profile}“\n\n**Was gleich passiert**: das Profil wird gelöscht und diese {count} Rollläden fallen auf die Werte der Konfigurationsdatei zurück, falls Sie eine verwenden, oder auf die Vorgaben: {covers}\n\nDavon haben {assigned} das Profil hier bekommen, und {from_file} folgen ihm über den Schlüssel `profile:` der Konfigurationsdatei, den dieses Löschen nicht anrührt.\n\nWas an jedem einzelnen Rollladen gemessen wurde, bleibt bestehen: es verschwindet nur die Beschreibung der Art. Gibt es in `cover_profiles:` ein Profil gleichen Namens, wird es nicht länger verdeckt: die Rollläden, deren Konfigurationsdatei es nennt, folgen ihm wieder, während die Rollläden, die das Profil nur von hier bekommen hatten, gar keinem mehr folgen.",
         "menu_options": {
           "profile_delete_confirm": "Ja, das Profil löschen",
           "profile_actions": "Nein, zurück"
@@ -172,11 +172,11 @@
       },
       "profile_deleted": {
         "title": "Profil „{profile}“ gelöscht",
-        "description": "Das Profil ist fort. Rollläden, die ihm folgten und auf die Werte der Datei oder auf die Vorgaben zurückgefallen sind: {count} – {covers}\n\nWar das ein Versehen, führt der Weg zurück über eine erneute Kalibrierung eines Rollladens dieser Art mit der vollständigen Messung und denselben Namen."
+        "description": "Das Profil ist fort. Rollläden, die ihm folgten und auf die Werte der Datei oder auf die Vorgaben zurückgefallen sind: {count} – {covers}\n\nDavon hatten {assigned} das Profil hier bekommen; {from_file} folgen ihm über den Schlüssel `profile:` der Konfigurationsdatei, die unverändert bleibt.\n\nEin Profil gleichen Namens in `cover_profiles:` wird nicht länger verdeckt und gilt wieder für die Rollläden, deren Konfigurationsdatei es nennt.\n\nWurde das Profil versehentlich gelöscht, führen Sie die vollständige Messung an einem Rollladen dieser Art erneut durch und geben Sie dem neuen Profil denselben Namen."
       },
       "calibrations": {
         "title": "Kalibrierungen",
-        "description": "Das sind die Rollläden, für die die Integration etwas Eigenes aufbewahrt: {count}. Was hier aufbewahrt wird, hat Vorrang vor der Konfigurationsdatei, falls Sie eine verwenden.\n\n**Was Sie tun müssen**: wählen Sie den Rollladen, dessen Werte Sie ansehen, berichtigen oder löschen wollen.",
+        "description": "Rollläden, für die die Integration spezifische Werte gespeichert hat: {count}. Was hier aufbewahrt wird, hat Vorrang vor der Konfigurationsdatei, falls Sie eine verwenden.\n\n**Was Sie tun müssen**: wählen Sie den Rollladen, dessen Werte Sie ansehen, berichtigen oder löschen wollen.",
         "data": {
           "cover": "Rollladen"
         }
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Kalibrierung dieses Rollladens",
-        "description": "**Rollladen**: {cover}\n\nFür diesen Rollladen aufbewahrte Werte:\n\n{values}\n**Was Sie tun müssen**: wählen Sie, was damit geschehen soll. „Neu messen“ führt die geführte Kalibrierung an diesem Rollladen erneut aus und ersetzt, was da ist; „Löschen“ gibt ihn an die Konfigurationsdatei zurück, falls Sie eine verwenden.",
+        "description": "**Rollladen**: {cover}\n\nFür diesen Rollladen aufbewahrte Werte:\n\n{values}\n**Was Sie tun müssen**: wählen Sie, was damit geschehen soll. „Neu messen“ führt die geführte Kalibrierung an diesem Rollladen erneut aus und ersetzt, was da ist; „Die Kalibrierung löschen“ gibt diesen Rollladen an die Konfigurationsdatei zurück, falls Sie eine verwenden, an das Profil, dem er folgt, oder an die Vorgaben.",
         "menu_options": {
           "calibration_view": "Die Werte ansehen",
           "calibration_edit": "Die Werte von Hand ändern",
@@ -212,12 +212,12 @@
       },
       "calibration_edit": {
         "title": "Die Werte von {cover} ändern",
-        "description": "**Was gleich passiert**: die Werte unten gelten nur für diesen Rollladen und schlagen sowohl das Profil als auch die Konfigurationsdatei. Nichts bewegt sich: das ist Schreiben, kein Messen.\n\n**Was Sie tun müssen**: schreiben Sie nur das auf, was Sie diesem Rollladen vorgeben wollen. Ein leeres Feld ist keine Null: es heißt „dazu habe ich nichts zu sagen“, und der Wert kommt wieder aus dem Profil oder aus der Datei. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden.",
+        "description": "**Was gleich passiert**: die Werte unten gelten nur für diesen Rollladen und haben Vorrang vor dem Profil und der Konfigurationsdatei. Der Rollladen bewegt sich nicht: nur die Werte werden geändert.\n\n**Was Sie tun müssen**: tragen Sie nur die Werte ein, die Sie für diesen Rollladen festlegen möchten. Ein leeres Feld bedeutet nicht null: stattdessen wird wieder der Wert aus dem Profil oder der Datei verwendet. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden.",
         "data": {
           "height": "Panzerweg (cm)",
           "opening_time": "Öffnungszeit (s)",
           "closing_time": "Schließzeit (s)",
-          "slat_time": "Lamellenzeit (s)",
+          "slat_time": "Öffnungszeit der Lamellen (s)",
           "opening_roll": "Wickelfaktor beim Öffnen",
           "closing_roll": "Wickelfaktor beim Schließen"
         },
@@ -226,8 +226,8 @@
           "opening_time": "Sekunden von ganz geschlossen bis ganz geöffnet, Lamellen eingerechnet (1-600).",
           "closing_time": "Sekunden von ganz geöffnet bis ganz geschlossen (1-600).",
           "slat_time": "Sekunden, in denen sich die Lamellen öffnen, bevor der Panzer zu steigen beginnt (0-60).",
-          "opening_roll": "Wie sehr der aufgewickelte Panzer das Steigen beschleunigt: 1 ist eine nackte Welle, 2 eine gut gefüllte (1-5).",
-          "closing_roll": "Dasselbe beim Sinken (1-5)."
+          "opening_roll": "Das Verhältnis zwischen dem Durchmesser der Welle bei vollständig geöffnetem Rollladen (volle Welle) und bei vollständig geschlossenem Rollladen (leere Welle): 1,5 bis 2,5 bei den meisten Rollläden, 1 bei einer Welle, deren Durchmesser sich nicht ändert (1-5).",
+          "closing_roll": "Dasselbe Verhältnis beim Herunterfahren (1-5)."
         }
       },
       "calibration_delete": {
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Geführte Rollladenkalibrierung",
-        "description": "Dieses Werkzeug kalibriert „einfache“ Rollläden: jene, deren Antrieb seine Position nicht meldet. Für die ist der Prozentwert, den Sie in Home Assistant sehen, eine aus den Laufzeiten berechnete Schätzung; die Kalibrierung misst diese Zeiten und die Geometrie der Welle, um eine genauere Schätzung zu erhalten.\n\nVollkommen wird sie nicht. Rechnen Sie mit einigen Zentimetern Abweichung: 1–2 cm nahe den Endlagen, 2–4 cm zwischen den Zwischenstellungen. Jedes vollständige Öffnen oder Schließen richtet die Schätzung wieder aus, der Fehler häuft sich also nicht an.\n\n„Erweiterte“ Rollläden melden ihre Position selbst und brauchen all das nicht: deshalb stehen sie in den nächsten Schritten nicht in der Liste.\n\n**Was gleich passiert**: Sie wählen einen Rollladen und eine der drei Arten, ihn zu messen. Der Rollladen wird mehrmals bis in seine Endlagen fahren.\n\n**Was Sie tun müssen**: halten Sie ein Maßband bereit, sorgen Sie dafür, dass dem Rollladen nichts im Weg steht, und bleiben Sie dort, wo Sie ihn sehen können. Bis zum letzten Bildschirm wird nichts gespeichert: Sie können diesen Dialog jederzeit schließen, und es wird sich nichts geändert haben.",
+        "description": "Dieses Werkzeug kalibriert „einfache“ Rollläden: jene, deren Antrieb seine Position nicht meldet. Für die ist der Prozentwert, den Sie in Home Assistant sehen, eine aus den Laufzeiten berechnete Schätzung; die Kalibrierung misst diese Zeiten und die Geometrie der Welle, um eine genauere Schätzung zu erhalten.\n\nVollkommen wird sie nicht. Rechnen Sie mit einigen Zentimetern Abweichung: 1–2 cm nahe den Endlagen, 2–4 cm in den Zwischenstellungen. Jedes vollständige Öffnen oder Schließen richtet die Schätzung wieder aus, der Fehler häuft sich also nicht an.\n\n„Erweiterte“ Rollläden melden ihre Position selbst und brauchen all das nicht: deshalb stehen sie in den nächsten Schritten nicht in der Liste.\n\n**Was gleich passiert**: Sie wählen einen Rollladen und eine der drei Arten, ihn zu messen. Der Rollladen wird mehrmals bis in seine Endlagen fahren.\n\n**Was Sie tun müssen**: halten Sie ein Maßband bereit, sorgen Sie dafür, dass dem Rollladen nichts im Weg steht, und bleiben Sie dort, wo Sie ihn sehen können. Bis zum letzten Bildschirm wird nichts gespeichert: Sie können diesen Dialog jederzeit schließen, und es wird sich nichts geändert haben; eine bereits laufende Fahrt geht von selbst bis in die Endlage.",
         "menu_options": {
           "cover": "Beginnen",
           "init": "Zurück zum Menü"
@@ -252,7 +252,7 @@
       },
       "cover": {
         "title": "Welchen Rollladen messen wir?",
-        "description": "Aufgeführt sind nur die „einfachen“ Rollläden dieses Gateways: jene, die ihre eigene Position nicht melden und daher die einzigen sind, die mit diesem Werkzeug zu kalibrieren sinnvoll ist.\n\n**Welchen wählen**: ist es das erste Mal, wählen Sie einen Rollladen, der für seine Art steht und bequem zu messen ist – einen, vor dem Sie stehen können, ohne Möbel zu rücken, und dessen Unterkante das Maßband erreicht. Was Sie an diesem messen, gilt für alle ähnlichen Rollläden.\n\n**Was Sie tun müssen**: stellen Sie sich vor den gewählten Rollladen, mit diesem Werkzeug griffbereit (Ihr Telefon oder Ihr Laptop), und bestätigen Sie ihn dann unten. Sie werden gebeten, ihn beim Fahren zu beobachten und ihn mit dem Maßband zu messen, Sie müssen also körperlich beim gewählten Rollladen sein.",
+        "description": "Aufgeführt sind nur die „einfachen“ Rollläden dieses Gateways: also diejenigen, die ihre Position nicht selbst melden und für die eine Kalibrierung mit diesem Werkzeug sinnvoll ist.\n\n**Welchen wählen**: ist es das erste Mal, wählen Sie einen Rollladen, der für seine Art steht und bequem zu messen ist – einen, vor dem Sie stehen können, ohne Möbel zu rücken, und dessen Unterkante das Maßband erreicht. Was Sie an diesem messen, gilt für alle ähnlichen Rollläden.\n\n**Was Sie tun müssen**: stellen Sie sich vor den gewählten Rollladen, mit diesem Werkzeug griffbereit (Ihr Telefon oder Ihr Laptop), und bestätigen Sie ihn dann unten. Sie werden gebeten, ihn beim Fahren zu beobachten und ihn mit dem Maßband zu messen, Sie müssen also körperlich beim gewählten Rollladen sein.",
         "data": {
           "cover": "Rollladen"
         }
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Bevor der Rollladen zu fahren beginnt",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: die Kalibrierung ist in Schritte geteilt. In jedem Schritt macht der Rollladen die Bewegungen, die dieser Schritt braucht, und vor jeder kommen die Anweisungen und alle Zeit, sich vorzubereiten: keine gemessene Bewegung startet, ohne dass Sie sie starten. Neun Bewegungen insgesamt, etwa vier Minuten.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht – ein offener Fensterflügel, Pflanzen auf der Fensterbank, Katzen – und halten Sie das Maßband bereit. Sie werden gebeten, einen Knopf zu drücken, wenn etwas geschieht, und einige Abstände abzulesen.\n\nGeht etwas schief, lässt sich jeder Schritt für sich wiederholen, ohne die bereits erledigten noch einmal zu machen. Sie können jederzeit abbrechen: bis zum letzten Bildschirm wird nichts gespeichert, und die Bewegungen sind gewöhnliche Befehle.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: die Kalibrierung ist in Schritte geteilt. In jedem Schritt macht der Rollladen die Bewegungen, die dieser Schritt braucht, und vor jeder kommen die Anweisungen und alle Zeit, sich vorzubereiten: keine gemessene Bewegung startet, ohne dass Sie sie starten. Neun Bewegungen insgesamt, etwa vier Minuten.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht – ein offener Fensterflügel, Pflanzen auf der Fensterbank, Katzen – und halten Sie das Maßband bereit. Sie werden gebeten, einen Knopf zu drücken, wenn etwas geschieht, und einige Abstände abzulesen.\n\nGeht etwas schief, lässt sich jeder Schritt für sich wiederholen, ohne die bereits erledigten noch einmal zu machen. Sie können jederzeit schließen: bis zum letzten Bildschirm wird nichts gespeichert, und eine bereits laufende Fahrt geht von selbst bis in die Endlage.",
         "menu_options": {
           "begin": "Verstanden, fangen wir an",
           "cancel_flow": "Abbrechen"
@@ -277,24 +277,24 @@
       },
       "path_b": {
         "title": "Von welcher Art ist {cover}?",
-        "description": "Ein Profil beschreibt ein Rollladenmodell: wie lange es für seinen Weg braucht, wie lange die Lamellen dauern und wie sich der Panzer auf die Welle wickelt. Home Assistant rechnet es auf diesen Rollladen um, sobald es weiß, wie hoch er ist.\n\n**Was Sie tun müssen**: wählen Sie das Profil, das an einem ähnlichen Rollladen gemessen wurde. Auf dem nächsten Bildschirm messen Sie die Höhe dieses Rollladens.",
+        "description": "Ein Profil beschreibt ein Rollladenmodell: wie lange es für seinen Weg braucht, wie lange sich die Lamellen öffnen und wie sich der Panzer auf die Welle wickelt. Home Assistant rechnet es auf diesen Rollladen um, sobald es weiß, wie hoch er ist.\n\n**Was Sie tun müssen**: wählen Sie das Profil, das an einem ähnlichen Rollladen gemessen wurde. Auf dem nächsten Bildschirm messen Sie die Höhe dieses Rollladens.",
         "data": {
           "profile": "Profil"
         }
       },
       "path_c": {
         "title": "{cover} verfeinern",
-        "description": "Diesem Rollladen wurde ein Profil zugewiesen, er verhält sich aber nicht so, wie das Profil es vorsieht: der Motor kann langsamer sein, der Panzer schwerer, die Welle dicker. Was Sie hier messen, gilt nur für diesen Rollladen und schlägt sowohl das Profil als auch die Konfigurationsdatei, falls Sie eine verwenden; alles, was Sie nicht messen, kommt weiterhin aus dem Profil.\n\n**Was Sie tun müssen**: bestätigen Sie, von welchem Profil dieser Rollladen ausgehen soll.",
+        "description": "Diesem Rollladen wurde ein Profil zugewiesen, er verhält sich aber nicht so, wie das Profil es vorsieht: der Motor kann langsamer sein, der Panzer schwerer, die Welle dicker. Was Sie hier messen, gilt nur für diesen Rollladen und hat Vorrang vor dem Profil und der Konfigurationsdatei, falls Sie eine verwenden; alles, was Sie nicht messen, kommt weiterhin aus dem Profil.\n\n**Was Sie tun müssen**: bestätigen Sie, von welchem Profil dieser Rollladen ausgehen soll.",
         "data": {
           "profile": "Profil"
         }
       },
       "refine_scope": {
         "title": "Wie weit wollen Sie die Kalibrierung verfeinern?",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: entweder drei gemessene Fahrten (zwei hinauf und eine herunter) oder diese plus zwei Messungen mit dem Maßband.\n\nDie Zeiten allein genügen für einen Rollladen, dessen Motor schlicht langsamer oder schneller ist als jener, an dem das Profil gemessen wurde. Nehmen Sie die Faktoren dazu, wenn er auch *auf halbem Weg* danebenliegt: dort dreht sich nicht der Motor anders, dort wickelt sich der Panzer anders.\n\n**Was Sie tun müssen**: wählen Sie, wie weit Sie gehen wollen. Sie können immer zurückkommen und den Rest tun.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: entweder drei gemessene Fahrten (zwei hinauf und eine herunter) oder diese plus drei Messungen mit dem Maßband: der Panzerweg und je eine auf halbem Weg in jeder Richtung.\n\nDie Zeiten allein genügen für einen Rollladen, dessen Motor schlicht langsamer oder schneller ist als jener, an dem das Profil gemessen wurde. Nehmen Sie die Faktoren dazu, wenn er auch *auf halbem Weg* danebenliegt: dort dreht sich nicht der Motor anders, dort wickelt sich der Panzer anders.\n\n**Was Sie tun müssen**: wählen Sie, wie weit Sie gehen wollen. Sie können immer zurückkommen und den Rest tun.",
         "menu_options": {
           "times_only": "Nur seine eigenen Laufzeiten (3 Tastendrücke, ~2 Minuten)",
-          "times_and_rolls": "Seine Zeiten und seine Faktoren (3 Tastendrücke und 2 Messungen)",
+          "times_and_rolls": "Seine Zeiten und seine Faktoren (3 Tastendrücke und 3 Messungen)",
           "cancel_flow": "Abbrechen"
         }
       },
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Wir messen gleich die Auffahrt",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: die Auffahrt wird mit zwei Fahrten gemessen, je einem Tastendruck, und dies ist die erste. Wenn Sie den Knopf unten drücken, fährt der Rollladen von der Grundlinie nach oben los: in der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt, und dann beginnt der ganze Panzer zu steigen. Der Rollladen wird in dem Augenblick angehalten, in dem Sie drücken, einige Zentimeter höher, und der nächste Bildschirm bittet Sie nachzusehen, wo er stehen geblieben ist.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Ein einziger Tastendruck, in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst. Sie stoppen nichts: der Augenblick des Drückens ist die Messung.\n\nDie zweite Fahrt folgt danach, wieder von der Grundlinie aus, und verlangt den anderen Tastendruck: den Augenblick, in dem der Rollladen oben die Endlage erreicht und der Motor anhält, woran man es am aufhörenden Geräusch erkennt. Die Zeichnung zeigt beide.\n\nDie folgenden Bildschirme tragen nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: die Auffahrt wird mit zwei Fahrten gemessen, je einem Tastendruck, und dies ist die erste. Wenn Sie den Knopf unten drücken, fährt der Rollladen von der Auflagefläche nach oben los: in der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt, und dann beginnt der ganze Panzer zu steigen. Der Rollladen wird in dem Augenblick angehalten, in dem Sie drücken, einige Zentimeter höher, und der nächste Bildschirm bittet Sie nachzusehen, wo er stehen geblieben ist.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Ein einziger Tastendruck, in dem Augenblick, in dem sich die Unterkante von der Auflagefläche löst. Sie stoppen nichts: der Augenblick des Drückens ist die Messung.\n\nDie zweite Fahrt folgt danach, wieder von der Auflagefläche aus, und verlangt den anderen Tastendruck: den Augenblick, in dem der Rollladen oben die Endlage erreicht und der Motor anhält, woran man es am aufhörenden Geräusch erkennt. Die Zeichnung zeigt beide.\n\nDie folgenden Bildschirme tragen nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
           "open_start": "Den Rollladen starten",
           "repeat_step": "Ihn erst wieder herunterfahren",
@@ -327,18 +327,18 @@
       },
       "open_lift": {
         "title": "Der Rollladen öffnet sich",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\nDrücken, sobald die Unterkante von der Auflagefläche abhebt.",
         "menu_options": {
-          "lifted_off": "1) Drücken, wenn sich die Unterkante von der Grundlinie löst",
+          "lifted_off": "1) Drücken, sobald die Unterkante von der Auflagefläche abhebt",
           "repeat_step": "Diesen Schritt wiederholen",
           "not_right": "Er hat nicht getan, was er sollte"
         }
       },
       "lift_check": {
         "title": "Wo steht die Unterkante jetzt?",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde in dem Augenblick angehalten, in dem Sie gedrückt haben. Zwischen einem Tastendruck und dem Stillstand des Motors vergeht immer ein Moment — Ihre eigene Reaktion, der Befehl bis zum Gateway, der bremsende Motor — und die ganze Zeit über steigt der Panzer weiter.\n\n**Was Sie tun müssen**: sehen Sie die Unterkante an und sagen Sie, welcher der drei Fälle es ist. Einige Zentimeter über der Grundlinie, so sieht ein gelungener Tastendruck aus. Liegt sie noch auf der Grundlinie auf, kam der Tastendruck, bevor sich die Kante gelöst hat: diese Messung lässt sich nicht ausbessern, nur wiederholen. Eine Handbreit oder mehr heißt, der Tastendruck kam zu spät, und der zu späte Tastendruck ist der einzige Fall, den ein Maßband geradebiegen kann.\n\nIm Zweifel messen: die Ablesung ist die genaueste der drei Antworten, denn sie setzt den Augenblick, in dem sich die Kante von der Grundlinie gelöst hat, an seine Stelle zurück, statt sich auf den Tastendruck zu verlassen.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde in dem Augenblick angehalten, in dem Sie gedrückt haben. Zwischen einem Tastendruck und dem Stillstand des Motors vergeht immer ein Moment — Ihre eigene Reaktion, der Befehl bis zum Gateway, der bremsende Motor — und die ganze Zeit über steigt der Panzer weiter.\n\n**Was Sie tun müssen**: sehen Sie die Unterkante an und sagen Sie, welcher der drei Fälle es ist. Einige Zentimeter über der Auflagefläche, so sieht ein gelungener Tastendruck aus. Liegt sie noch auf der Auflagefläche auf, kam der Tastendruck, bevor sich die Kante gelöst hat: diese Messung lässt sich nicht ausbessern, nur wiederholen. Eine Handbreit oder mehr heißt, der Tastendruck kam zu spät, und der zu späte Tastendruck ist der einzige Fall, den ein Maßband geradebiegen kann.\n\nIm Zweifel messen: die Ablesung ist die genaueste der drei Antworten, denn sie setzt den Augenblick, in dem sich die Kante von der Auflagefläche gelöst hat, an seine Stelle zurück, statt sich auf den Tastendruck zu verlassen.",
         "menu_options": {
-          "lift_too_early": "Sie liegt noch auf der Grundlinie auf",
+          "lift_too_early": "Sie liegt noch auf der Auflagefläche auf",
           "lift_accept": "Sie steht einige Zentimeter höher, weiter",
           "lift_gap": "Ich möchte den Abstand messen, für mehr Genauigkeit",
           "not_right": "Er hat nicht getan, was er sollte"
@@ -346,9 +346,9 @@
       },
       "lift_check_late": {
         "title": "Wo steht die Unterkante jetzt?",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde in dem Augenblick angehalten, in dem Sie gedrückt haben — aber das Gateway hatte noch andere Befehle in der Warteschlange und brauchte über eine Sekunde, um unseren auf den Bus zu schreiben. Die ganze Zeit über ist der Panzer weiter gestiegen: der Abstand, den Sie gleich sehen, ist also größer als üblich, und er liegt nicht an Ihnen.\n\n**Was Sie tun müssen**: sehen Sie die Unterkante an und sagen Sie, welcher der drei Fälle es ist. Liegt sie noch auf der Grundlinie auf, kam der Tastendruck, bevor sich die Kante gelöst hat: diese Messung lässt sich nicht ausbessern, nur wiederholen. In allen anderen Fällen lohnt das Messen hier, denn bei dieser Fahrt kann nur das Maßband sagen, wann sich die Kante wirklich gelöst hat.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde in dem Augenblick angehalten, in dem Sie gedrückt haben — aber das Gateway hatte noch andere Befehle in der Warteschlange und brauchte über eine Sekunde, um unseren auf den Bus zu schreiben. Die ganze Zeit über ist der Panzer weiter gestiegen: der Abstand, den Sie gleich sehen, ist also größer als üblich, und er liegt nicht an Ihnen.\n\n**Was Sie tun müssen**: sehen Sie die Unterkante an und sagen Sie, welcher der drei Fälle es ist. Liegt sie noch auf der Auflagefläche auf, kam der Tastendruck, bevor sich die Kante gelöst hat: diese Messung lässt sich nicht ausbessern, nur wiederholen. In allen anderen Fällen lohnt das Messen hier, denn bei dieser Fahrt kann nur das Maßband sagen, wann sich die Kante wirklich gelöst hat.",
         "menu_options": {
-          "lift_too_early": "Sie liegt noch auf der Grundlinie auf",
+          "lift_too_early": "Sie liegt noch auf der Auflagefläche auf",
           "lift_accept": "Sie steht einige Zentimeter höher, weiter",
           "lift_gap": "Ich möchte den Abstand messen, für mehr Genauigkeit",
           "not_right": "Er hat nicht getan, was er sollte"
@@ -356,9 +356,9 @@
       },
       "lift_gap": {
         "title": "Den Abstand messen — {cover}",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Was Sie tun müssen**: messen Sie von der Grundlinie — dem Punkt, auf dem die Unterkante aufliegt, wenn der Rollladen geschlossen ist — bis zur Unterkante dort, wo sie jetzt steht, und schreiben Sie die Zentimeter unten hin. Dieser Abstand sagt genau, wann sich die Kante wirklich von der Grundlinie gelöst hat, sodass die Lamellenzeit nicht mehr davon abhängt, wie schnell Ihr Finger war.\n\nLassen Sie das Feld leer, geht es ohne Messung weiter, und der Tastendruck bleibt, wie er gemacht wurde.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Was Sie tun müssen**: messen Sie von der Auflagefläche — dem Punkt, auf dem die Unterkante aufliegt, wenn der Rollladen geschlossen ist — bis zur Unterkante dort, wo sie jetzt steht, und schreiben Sie die Zentimeter unten hin. Dieser Abstand sagt genau, wann sich die Kante wirklich von der Auflagefläche gelöst hat, sodass die Öffnungszeit der Lamellen nicht mehr davon abhängt, wie schnell Ihr Finger war.\n\nLassen Sie das Feld leer, geht es ohne Messung weiter, und der Tastendruck bleibt, wie er gemacht wurde.",
         "data": {
-          "gap_cm": "Abstand zwischen Unterkante und Grundlinie (cm)"
+          "gap_cm": "Abstand zwischen Unterkante und Auflagefläche (cm)"
         },
         "data_description": {
           "gap_cm": "In Zentimetern, meist zwischen 2 und 5. Dezimalstellen dürfen mit Komma oder Punkt geschrieben werden: 3,5 oder 3.5. Leer lassen, um ohne Messung weiterzugehen."
@@ -366,7 +366,7 @@
       },
       "lift_early": {
         "title": "Der Tastendruck kam zu früh",
-        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: ein Abstand von weniger als einem Zentimeter heißt, dass der Rollladen noch auf seiner Grundlinie auflag, als der Motor anhielt — der Tastendruck kam also, bevor sich die Unterkante gelöst hatte. Die Lamellenzeit, die dabei herauskommt, ist um einen unbekannten Betrag zu kurz, und keine Messung kann eine Strecke zurückgeben, die nie zurückgelegt wurde.\n\n**Was Sie tun müssen**: die Auffahrt noch einmal messen. Der Rollladen wird wieder heruntergefahren und startet erneut; warten Sie diesmal, bis sich die Unterkante wirklich gelöst hat, bevor Sie drücken.",
+        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: ein Abstand von weniger als einem Zentimeter heißt, dass der Rollladen noch auf seiner Auflagefläche auflag, als der Motor anhielt — der Tastendruck kam also, bevor sich die Unterkante gelöst hatte. Die Öffnungszeit der Lamellen, die dabei herauskommt, ist um einen unbekannten Betrag zu kurz, und keine Messung kann eine Strecke zurückgeben, die nie zurückgelegt wurde.\n\n**Was Sie tun müssen**: die Auffahrt noch einmal messen. Der Rollladen wird wieder heruntergefahren und startet erneut; warten Sie diesmal, bis sich die Unterkante wirklich gelöst hat, bevor Sie drücken.",
         "menu_options": {
           "repeat_step": "Die Auffahrt noch einmal messen",
           "lift_gap": "Den Abstand noch einmal eintragen",
@@ -375,7 +375,7 @@
       },
       "closed_again": {
         "title": "Ist der Rollladen wieder vollständig geschlossen?",
-        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde wieder bis zur Grundlinie heruntergefahren, denn die vollständige Auffahrt muss genau wie die erste Fahrt von dort ausgehen.\n\n**Was Sie tun müssen**: sehen Sie ihn an. Ist er vollständig geschlossen, mit geschlossenen Lamellen und aufliegender Unterkante, fahren Sie fort. Bewegt er sich noch, warten Sie und fahren dann fort. Hat er sich gar nicht bewegt oder in die falsche Richtung, sagen Sie es unten.",
+        "description": "**Rollladen**: {cover}\n\n**Was geschehen ist**: der Rollladen wurde wieder bis zur Auflagefläche heruntergefahren, denn die vollständige Auffahrt muss genau wie die erste Fahrt von dort ausgehen.\n\n**Was Sie tun müssen**: sehen Sie ihn an. Ist er vollständig geschlossen, mit geschlossenen Lamellen und aufliegender Unterkante, fahren Sie fort. Bewegt er sich noch, warten Sie und fahren dann fort. Hat er sich gar nicht bewegt oder in die falsche Richtung, sagen Sie es unten.",
         "menu_options": {
           "confirm_closed_again": "Er ist vollständig geschlossen",
           "repeat_step": "Diesen Schritt wiederholen",
@@ -384,7 +384,7 @@
       },
       "open_full_brief": {
         "title": "Jetzt die vollständige Auffahrt",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen wieder von der Grundlinie nach oben los, und diesmal lässt man ihn laufen — die Lamellen öffnen sich, der ganze Panzer steigt, und oben hält der Rollladen von selbst in seiner Endlage an.\n\n**Was Sie tun müssen**: nur ein Tastendruck, in dem Augenblick, in dem der Motor oben anhält. Man erkennt es am aufhörenden Geräusch. An der Grundlinie wird Ihnen diesmal nichts abverlangt: diese Messung ist bereits gemacht.\n\nDer Bildschirm während der Bewegung trägt nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen wieder von der Auflagefläche nach oben los, und diesmal lässt man ihn laufen — die Lamellen öffnen sich, der ganze Panzer steigt, und oben hält der Rollladen von selbst in seiner Endlage an.\n\n**Was Sie tun müssen**: nur ein Tastendruck, in dem Augenblick, in dem der Motor oben anhält. Man erkennt es am aufhörenden Geräusch. An der Auflagefläche wird Ihnen diesmal nichts abverlangt: diese Messung ist bereits gemacht.\n\nDer Bildschirm während der Bewegung trägt nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
           "open_full_start": "Den Rollladen starten",
           "repeat_step": "Die Auffahrt von vorn messen",
@@ -393,7 +393,7 @@
       },
       "open_top": {
         "title": "Der Rollladen steigt noch",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem der Motor oben anhält.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\nDrücken, sobald der Motor oben anhält.",
         "menu_options": {
           "stopped_open": "2) Drücken, wenn der Motor oben anhält",
           "repeat_step": "Diesen Schritt wiederholen",
@@ -402,7 +402,7 @@
       },
       "open_result": {
         "title": "Die Auffahrt wurde gemessen",
-        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s.\n\n**Was Sie tun müssen**: kamen Ihnen beide Tastendrücke richtig vor, fahren Sie fort. Kam einer zu spät oder zu früh, wiederholen Sie die Messung: beide Fahrten der Auffahrt werden von der Grundlinie aus neu gemacht, denn eine Lamellenzeit aus dem einen Versuch gehört nicht zu einer Auffahrt aus dem anderen. Ein Tastendruck, der eine halbe Sekunde danebenliegt, verschiebt die Schätzung um einige Zentimeter.",
+        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s.\n\n**Was Sie tun müssen**: kamen Ihnen beide Tastendrücke richtig vor, fahren Sie fort. Kam einer zu spät oder zu früh, wiederholen Sie die Messung: beide Fahrten der Auffahrt werden von der Auflagefläche aus neu gemacht, denn eine Öffnungszeit der Lamellen aus dem einen Versuch gehört nicht zu einer Auffahrt aus dem anderen. Ein Tastendruck, der eine halbe Sekunde danebenliegt, verschiebt die Schätzung um einige Zentimeter.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_step": "Die Messung wiederholen"
@@ -410,7 +410,7 @@
       },
       "open_result_gap": {
         "title": "Die Auffahrt wurde gemessen",
-        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s, und ein Abstand von {gap} cm über der Grundlinie.\n\nDie Lamellenzeit oben ist die des Tastendrucks. Der gemessene Abstand ersetzt sie, sobald die Werte berechnet werden: was am Ende gespeichert wird, kann also um einige Zehntelsekunden davon abweichen — genau dafür wurde er gemessen.\n\n**Was Sie tun müssen**: kamen Ihnen der Tastendruck oben und die Ablesung richtig vor, fahren Sie fort. Die Messung zu wiederholen macht beide Fahrten der Auffahrt von der Grundlinie aus neu.",
+        "description": "**Rollladen**: {cover}\n\n**Was gemessen wurde**: Lamellen {slat} s, vollständige Auffahrt {run} s, und ein Abstand von {gap} cm über der Auflagefläche.\n\nDie Öffnungszeit der Lamellen oben ist die des Tastendrucks. Der gemessene Abstand ersetzt sie, sobald die Werte berechnet werden: was am Ende gespeichert wird, kann also um einige Zehntelsekunden davon abweichen — genau dafür wurde er gemessen.\n\n**Was Sie tun müssen**: kamen Ihnen der Tastendruck oben und die Ablesung richtig vor, fahren Sie fort. Die Messung zu wiederholen macht beide Fahrten der Auffahrt von der Auflagefläche aus neu.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_step": "Die Messung wiederholen"
@@ -418,7 +418,7 @@
       },
       "close_brief": {
         "title": "Wir messen gleich die Abfahrt",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von oben nach unten los und hält von selbst an, sobald der Panzer unten ist und sich die Lamellen geschlossen haben.\n\n**Was Sie tun müssen**: auch hier müssen Sie schnell und genau sein, aber diesmal gibt es nur einen Tastendruck, in dem Augenblick, in dem der Motor unten anhält.\n\n**Achtung**: drücken Sie nicht, wenn die Unterkante die Grundlinie berührt. Von da an bewegt sich der Rollladen noch einen Moment weiter, um die Lamellen zu schließen. Drücken Sie erst, wenn er sich überhaupt nicht mehr bewegt, Lamellen eingeschlossen, also wenn der Motor anhält: zu erkennen am aufhörenden Geräusch.\n\nEin Rollladen fährt etwas schneller herunter, als er hinauffährt, und deshalb wird das gesondert gemessen. Der Bildschirm während der Bewegung trägt nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von oben nach unten los und hält von selbst an, sobald der Panzer unten ist und sich die Lamellen geschlossen haben.\n\n**Was Sie tun müssen**: auch hier müssen Sie schnell und genau sein, aber diesmal gibt es nur einen Tastendruck, in dem Augenblick, in dem der Motor unten anhält.\n\n**Achtung**: drücken Sie nicht, wenn die Unterkante die Auflagefläche berührt. Von da an bewegt sich der Rollladen noch einen Moment weiter, um die Lamellen zu schließen. Drücken Sie erst, wenn er sich überhaupt nicht mehr bewegt, Lamellen eingeschlossen, also wenn der Motor anhält: zu erkennen am aufhörenden Geräusch.\n\nEin Rollladen fährt etwas schneller herunter, als er hinauffährt, und deshalb wird das gesondert gemessen. Der Bildschirm während der Bewegung zeigt nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
           "close_start": "Den Rollladen starten",
           "repeat_step": "Ihn erst wieder hinauffahren",
@@ -427,7 +427,7 @@
       },
       "close_bottom": {
         "title": "Der Rollladen schließt sich",
-        "description": "**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem der Motor unten anhält.",
+        "description": "**Rollladen**: {cover}\n\nDrücken, sobald der Motor unten anhält.",
         "menu_options": {
           "stopped_closed": "Drücken, wenn der Motor unten anhält",
           "repeat_step": "Diesen Schritt wiederholen",
@@ -444,7 +444,7 @@
       },
       "height": {
         "title": "Wie hoch ist {cover}?",
-        "description": "![](/myhome_static/height.webp)\n\n**Was Sie tun müssen**: messen Sie bei vollständig geöffnetem Rollladen von der Stelle, an der die Unterkante des Rollladens im geschlossenen Zustand aufliegt (der Grundlinie), bis zur Unterkante des Rollladens in ihrer jetzigen Stellung (vollständig geöffnet). Mit anderen Worten: messen Sie den Weg, den der Rollladen von ganz geöffnet bis ganz geschlossen zurücklegt (oder umgekehrt), und tragen Sie die Zentimeter unten ein.\n\nDieser Weg ist der Panzerweg, und er ist der Bezug, mit dem jede andere Messung verglichen wird. Messen Sie den Panzer, nicht die Öffnung: liegt die Unterkante auf einer Fensterbank und nicht auf dem Boden auf, messen Sie ab der Fensterbank.",
+        "description": "![](/myhome_static/height.webp)\n\n**Was Sie tun müssen**: messen Sie bei vollständig geöffnetem Rollladen von der Stelle, an der die Unterkante des Rollladens im geschlossenen Zustand aufliegt (der Auflagefläche), bis zur Unterkante des Rollladens in ihrer jetzigen Stellung (vollständig geöffnet). Mit anderen Worten: messen Sie den Weg, den der Rollladen von ganz geöffnet bis ganz geschlossen zurücklegt (oder umgekehrt), und tragen Sie die Zentimeter unten ein.\n\nDieser Weg ist der Panzerweg, und er ist der Bezug, mit dem jede andere Messung verglichen wird. Messen Sie den Panzer, nicht die Öffnung: liegt die Unterkante auf einer Fensterbank und nicht auf dem Boden auf, messen Sie ab der Fensterbank.",
         "data": {
           "height": "Panzerweg (cm)"
         },
@@ -454,7 +454,7 @@
       },
       "height_result": {
         "title": "Der Panzerweg wurde notiert",
-        "description": "**Rollladen**: {cover}\n\n**Was notiert wurde**: {height} cm von der Grundlinie bis zur Unterkante bei vollständig geöffnetem Rollladen.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Prüfen Sie den Wert: die Maßbandablesungen der nächsten Schritte werden mit dieser Höhe verglichen.",
+        "description": "**Rollladen**: {cover}\n\n**Was notiert wurde**: {height} cm von der Auflagefläche bis zur Unterkante bei vollständig geöffnetem Rollladen.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Prüfen Sie den Wert: die Maßbandablesungen der nächsten Schritte werden mit dieser Höhe verglichen.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_measure": "Die Messung wiederholen"
@@ -462,37 +462,37 @@
       },
       "measure_descent": {
         "title": "Messen Sie {cover} – bei {percent}% der Abfahrt",
-        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geöffnet und dann um etwa {percent}% seines Weges heruntergefahren.\n\n**Was Sie tun müssen**: messen Sie von der Grundlinie bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Derselbe Bezug wie bei der Höhe, damit sich die beiden Messungen vergleichen lassen.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geöffnet und dann um etwa {percent}% seines Weges heruntergefahren.\n\n**Was Sie tun müssen**: messen Sie von der Auflagefläche bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Derselbe Bezug wie bei der Höhe, damit sich die beiden Messungen vergleichen lassen.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },
         "data_description": {
-          "measured_cm": "Erwartet werden etwa {expected} cm; innerhalb von {tolerance} cm ist alles normal. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
+          "measured_cm": "Erwartet werden etwa {expected} cm; jeder Wert innerhalb von {tolerance} cm um {expected} ist völlig normal. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
         }
       },
       "measure_ascent": {
         "title": "Messen Sie {cover} – bei {percent}% der Auffahrt",
-        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geschlossen und dann um die Lamellen plus etwa {percent}% seines Weges hinaufgefahren.\n\n**Was Sie tun müssen**: messen Sie von der Grundlinie bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Ein Rollladen ist beim Steigen und beim Sinken nicht gleich belastet: deshalb wird derselbe Bruchteil zweimal gemessen.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde vollständig geschlossen und dann hinaufgefahren: zuerst öffneten sich die Lamellen, dann legte der Panzer etwa {percent}% seines Weges zurück.\n\n**Was Sie tun müssen**: messen Sie von der Auflagefläche bis zur Unterkante in ihrer jetzigen Stellung und tragen Sie die Zentimeter unten ein. Ein Rollladen ist beim Steigen und beim Sinken nicht gleich belastet: deshalb wird derselbe Bruchteil zweimal gemessen.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },
         "data_description": {
-          "measured_cm": "Erwartet werden etwa {expected} cm; innerhalb von {tolerance} cm ist alles normal. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
+          "measured_cm": "Erwartet werden etwa {expected} cm; jeder Wert innerhalb von {tolerance} cm um {expected} ist völlig normal. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
         }
       },
       "measure_verify": {
         "title": "Prüfen Sie {cover} – bei {percent}% der Abfahrt",
-        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde in eine Stellung gefahren, in der nichts gemessen wurde, das hier ist also eine echte Prüfung und keine Wiederholung.\n\n**Was Sie tun müssen**: messen Sie ein letztes Mal die Höhe der Unterkante, vom selben Bezug wie zuvor, und tragen Sie die Zentimeter unten ein. Der nächste Bildschirm sagt, wie weit der Rollladen von dort abweicht, wo Home Assistant ihn vermutet hat.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Was geschehen ist**: der Rollladen wurde in eine Stellung gefahren, in der nichts gemessen wurde, das hier ist also eine echte Prüfung und keine Wiederholung.\n\n**Was Sie tun müssen**: messen Sie ein letztes Mal die Höhe der Unterkante, vom selben Bezug wie zuvor, und tragen Sie die Zentimeter unten ein. Der nächste Bildschirm zeigt die Abweichung zwischen der gemessenen und der von Home Assistant geschätzten Position.",
         "data": {
           "measured_cm": "Höhe der Unterkante (cm)"
         },
         "data_description": {
-          "measured_cm": "Erwartet werden etwa {expected} cm; innerhalb von {tolerance} cm ist alles normal. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
+          "measured_cm": "Erwartet werden etwa {expected} cm; jeder Wert innerhalb von {tolerance} cm um {expected} ist völlig normal. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden."
         }
       },
       "tape_result": {
         "title": "Die Ablesung wurde notiert",
-        "description": "**Rollladen**: {cover} – abgelesen bei {percent}% des Wegs\n\n**Was notiert wurde**: {measured} cm von der Grundlinie bis zur Unterkante.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Zweifeln Sie, ob Sie vom richtigen Punkt aus gemessen haben, wiederholen Sie die Messung: der Rollladen fährt zurück in seine Endlage und legt denselben Weg erneut zurück, sodass sich unter denselben Bedingungen noch einmal ablesen lässt.",
+        "description": "**Rollladen**: {cover} – abgelesen bei {percent}% des Wegs\n\n**Was notiert wurde**: {measured} cm von der Auflagefläche bis zur Unterkante.\n\n**Was Sie tun müssen**: ist das die Zahl, die Sie am Maßband abgelesen haben, fahren Sie fort. Zweifeln Sie, ob Sie vom richtigen Punkt aus gemessen haben, wiederholen Sie die Messung: der Rollladen fährt zurück in seine Endlage und legt denselben Weg erneut zurück, sodass sich unter denselben Bedingungen noch einmal ablesen lässt.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_tape": "Die Messung wiederholen"
@@ -508,7 +508,7 @@
       },
       "verify_result": {
         "title": "Wo der Rollladen wirklich stehen geblieben ist",
-        "description": "**Rollladen**: {cover} – **Abweichung**: {deviation} cm\n\nDas ist der Abstand zwischen der Stelle, an der der Rollladen wirklich stehen geblieben ist, und der, an der Home Assistant ihn erwartet hat. Ein oder zwei Zentimeter sind normal und bereits eine sehr gute Näherung; drei oder mehr heißen, dass sich dieser Rollladen nicht wie das zugewiesene Profil verhält.\n\n**Was Sie tun müssen**: fahren Sie fort, oder wiederholen Sie die Messung, wenn Sie glauben, dass die Ablesung falsch war. Erscheint sie, misst die Verfeinerung diesen Rollladen für sich.",
+        "description": "**Rollladen**: {cover} – **Abweichung**: {deviation} cm\n\nDas ist der Abstand zwischen der Stelle, an der der Rollladen wirklich stehen geblieben ist, und der, an der Home Assistant ihn erwartet hat. Ein oder zwei Zentimeter sind normal und bereits eine sehr gute Näherung; drei oder mehr heißen, dass sich dieser Rollladen nicht wie das zugewiesene Profil verhält.\n\n**Was Sie tun müssen**: fahren Sie fort, oder wiederholen Sie die Messung, wenn Sie glauben, dass die Ablesung falsch war. Wenn die Option zur Verfeinerung verfügbar ist, lässt sich damit dieser Rollladen separat messen.",
         "menu_options": {
           "accept_step": "Passt, weiter",
           "repeat_tape": "Die Messung wiederholen",
@@ -517,23 +517,23 @@
       },
       "profile_name": {
         "title": "Geben Sie dieser Rollladenart einen Namen",
-        "description": "{cover} wurde gemessen, und was gemessen wurde, beschreibt jeden Rollladen, der diesem ähnelt. Geben Sie dieser Art einen Namen, und die übrigen werden in zwei Bildschirmen statt in zehn kalibriert.\n\n**Was Sie tun müssen**: schreiben Sie einen kurzen Namen – nur Buchstaben, Ziffern und Unterstriche, keine Leerzeichen und keine Umlaute, denn er ist auch ein Schlüssel der Konfigurationsdatei. Etwa `hoch`, `schlafzimmer` oder `kuechentuer`.\n\nDer Name wird jetzt erfragt, weil er in der Zusammenfassung auf dem nächsten Bildschirm erscheint. Ein bereits vergebener Name wird nicht abgelehnt: das Profil dieses Namens wird durch das eben gemessene **ersetzt**, und so misst man einen Rollladen neu, dessen erste Messung schlecht ausfiel. Ein `cover_profiles:`-Block gleichen Namens in der Konfigurationsdatei bleibt unberührt und steht weiterhin hinter dem gemessenen Profil.",
+        "description": "{cover} wurde gemessen, und was gemessen wurde, beschreibt jeden Rollladen, der diesem ähnelt. Geben Sie dieser Art einen Namen, und die übrigen werden in zwei Bildschirmen statt in zehn kalibriert.\n\n**Was Sie tun müssen**: schreiben Sie einen kurzen Namen – nur Buchstaben, Ziffern und Unterstriche, keine Leerzeichen und keine Akzente oder Umlaute, denn er ist auch ein Schlüssel der Konfigurationsdatei. Etwa `hoch`, `schlafzimmer` oder `kuechentuer`.\n\nDer Name wird jetzt erfragt, weil er in der Zusammenfassung auf dem nächsten Bildschirm erscheint. Ein bereits vergebener Name wird nicht abgelehnt: das Profil dieses Namens wird durch das eben gemessene **ersetzt**, und so misst man einen Rollladen neu, dessen erste Messung schlecht ausfiel. Ein `cover_profiles:`-Block gleichen Namens in der Konfigurationsdatei bleibt unberührt und hat weiterhin eine niedrigere Priorität als das gemessene Profil.",
         "data": {
           "name": "Name des Profils"
         }
       },
       "summary_basic": {
         "title": "Was gemessen wurde",
-        "description": "**Rollladen**: {cover}\n\n**Panzerweg**: {height}\n\n**Wohin diese Werte gehen**: wenn Sie speichern, bleiben sie in Home Assistant, hier unter Konfigurieren → Kalibrierungen, und der Rollladen verwendet sie sofort statt derer aus der Konfigurationsdatei, falls Sie eine verwenden. Von demselben Bildschirm aus können Sie sie jederzeit wieder ansehen, von Hand berichtigen oder löschen.\n\nSchreiben Sie sie lieber selbst in die Datei, steht der entsprechende Ausschnitt unten: kopieren Sie ihn, bevor Sie schließen, denn ohne Speichern wird nichts aufbewahrt.\n\n{yaml}\nDie Genauigkeit wurde noch nicht geprüft. Mit „Die Genauigkeit verbessern“ werden vier weitere Punkte gemessen und die Abweichung in Zentimetern angezeigt.\n\n**Was Sie tun müssen**: speichern, oder weitere zwei Minuten und vier Messungen mit dem Maßband aufwenden.",
+        "description": "**Rollladen**: {cover}\n\n**Panzerweg**: {height}\n\n**Wohin diese Werte gehen**: wenn Sie speichern, bleiben sie in Home Assistant, hier unter Konfigurieren → Kalibrierungen. Sie werden beim Speichern geschrieben, und der Rollladen beginnt sie zu verwenden, sobald dieser Dialog geschlossen wird, statt derer aus der Konfigurationsdatei, falls Sie eine verwenden. Von demselben Bildschirm aus können Sie sie jederzeit wieder ansehen, von Hand berichtigen oder löschen.\n\nSchreiben Sie sie lieber selbst in die Datei, steht der entsprechende Ausschnitt unten: kopieren Sie ihn, bevor Sie schließen, denn ohne Speichern wird nichts aufbewahrt.\n\n{yaml}\nDie Genauigkeit wurde noch nicht geprüft. Mit „Die Genauigkeit verbessern“ werden vier weitere Punkte gemessen, bei einem Viertel und bei drei Vierteln des Weges in jeder Richtung, und das Modell wird danach an einer fünften Ablesung geprüft, die dort genommen wird, wo nichts gerechnet wurde.\n\n**Was Sie tun müssen**: speichern Sie, oder fahren Sie mit fünf weiteren Messungen mit dem Maßband fort. Das dauert etwa zwei Minuten.",
         "menu_options": {
           "save": "Speichern",
-          "refine": "Die Genauigkeit verbessern (~2 Minuten, 4 weitere Messungen)",
+          "refine": "Die Genauigkeit verbessern (~2 Minuten, 5 weitere Messungen)",
           "cancel_flow": "Abbrechen, ohne etwas zu speichern"
         }
       },
       "summary_short": {
         "title": "Was gemessen wurde",
-        "description": "**Rollladen**: {cover}\n\n**Panzerweg**: {height}\n\n**Wohin diese Werte gehen**: wenn Sie speichern, bleiben sie in Home Assistant, hier unter Konfigurieren → Kalibrierungen, und der Rollladen verwendet sie sofort statt derer aus der Konfigurationsdatei, falls Sie eine verwenden. Von demselben Bildschirm aus können Sie sie jederzeit wieder ansehen, von Hand berichtigen oder löschen.\n\nSchreiben Sie sie lieber selbst in die Datei, steht der entsprechende Ausschnitt unten: kopieren Sie ihn, bevor Sie schließen, denn ohne Speichern wird nichts aufbewahrt.\n\n{yaml}\n**Was ersetzt wird und was bleibt**: beim Speichern werden {replacing} geschrieben, und alles andere, was für diesen Rollladen bereits gespeichert ist, bleibt genau so, wie es ist: {keeping}.\n\n**Was Sie tun müssen**: speichern, oder ohne zu speichern verlassen.",
+        "description": "**Rollladen**: {cover}\n\n**Panzerweg**: {height}\n\n**Wohin diese Werte gehen**: wenn Sie speichern, bleiben sie in Home Assistant, hier unter Konfigurieren → Kalibrierungen. Sie werden beim Speichern geschrieben, und der Rollladen beginnt sie zu verwenden, sobald dieser Dialog geschlossen wird, statt derer aus der Konfigurationsdatei, falls Sie eine verwenden. Von demselben Bildschirm aus können Sie sie jederzeit wieder ansehen, von Hand berichtigen oder löschen.\n\nSchreiben Sie sie lieber selbst in die Datei, steht der entsprechende Ausschnitt unten: kopieren Sie ihn, bevor Sie schließen, denn ohne Speichern wird nichts aufbewahrt.\n\n{yaml}\n**Was ersetzt wird und was bleibt**: beim Speichern werden {replacing} geschrieben, und alles andere, was für diesen Rollladen bereits gespeichert ist, bleibt genau so, wie es ist: {keeping}.\n\n**Was Sie tun müssen**: speichern Sie, oder schließen Sie den Dialog ohne zu speichern.",
         "menu_options": {
           "save": "Speichern",
           "cancel_flow": "Abbrechen, ohne etwas zu speichern"
@@ -541,7 +541,7 @@
       },
       "summary_precise": {
         "title": "Was gemessen wurde",
-        "description": "**Rollladen**: {cover}\n\n**Panzerweg**: {height}\n**Genauigkeit**: innerhalb von {accuracy}, geprüft bei {percent}%\n\nDie Genauigkeit ist der Abstand zwischen der Stelle, an die das Modell die Unterkante setzt, und der, an der das Maßband sie wirklich gefunden hat, gemessen in einer Stellung, auf die nichts gerechnet wurde.\n\n**Wohin diese Werte gehen**: wenn Sie speichern, bleiben sie in Home Assistant, hier unter Konfigurieren → Kalibrierungen, und der Rollladen verwendet sie sofort statt derer aus der Konfigurationsdatei, falls Sie eine verwenden. Von demselben Bildschirm aus können Sie sie jederzeit wieder ansehen, von Hand berichtigen oder löschen.\n\nSchreiben Sie sie lieber selbst in die Datei, steht der entsprechende Ausschnitt unten: kopieren Sie ihn, bevor Sie schließen, denn ohne Speichern wird nichts aufbewahrt.\n\n{yaml}\n**Was Sie tun müssen**: speichern.",
+        "description": "**Rollladen**: {cover}\n\n**Panzerweg**: {height}\n**Genauigkeit**: innerhalb von {accuracy}\n\nDas ist die Prüfung, mit der die Stufe schließt: bei {percent}% der Abfahrt — eine Stellung, auf die nichts gerechnet wurde — hielt der Rollladen innerhalb von {accuracy} von dort an, wo das Modell ihn erwartete. Das ist eine Frage an das Modell und nicht die Wiederholung einer Ablesung, auf die es gerechnet wurde.\n\n**Wohin diese Werte gehen**: wenn Sie speichern, bleiben sie in Home Assistant, hier unter Konfigurieren → Kalibrierungen. Sie werden beim Speichern geschrieben, und der Rollladen beginnt sie zu verwenden, sobald dieser Dialog geschlossen wird, statt derer aus der Konfigurationsdatei, falls Sie eine verwenden. Von demselben Bildschirm aus können Sie sie jederzeit wieder ansehen, von Hand berichtigen oder löschen.\n\nSchreiben Sie sie lieber selbst in die Datei, steht der entsprechende Ausschnitt unten: kopieren Sie ihn, bevor Sie schließen, denn ohne Speichern wird nichts aufbewahrt.\n\n{yaml}\n**Was Sie tun müssen**: speichern.",
         "menu_options": {
           "save": "Speichern",
           "cancel_flow": "Abbrechen, ohne etwas zu speichern"
@@ -549,7 +549,7 @@
       },
       "saved": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und bereits in Gebrauch. Von jetzt an fährt {cover} mit den eben an ihm gemessenen Werten; Sie finden sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“, an diesem Rollladen gemessen, unter Konfigurieren → Profile und Rollläden. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen. Die übrigen Rollläden, die diesem ähneln, sind in zwei Bildschirmen erledigt, mit der Wahl „(B) Er ähnelt einem bereits gemessenen Rollladen“.",
+        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und wird wirksam, sobald dieser Dialog geschlossen wird; von da an fährt {cover} mit den eben an ihm gemessenen Werten. Die Attribute der Entität sagen dann `guided` unter „Calibration source“ und tragen die Zahlen selbst unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“, an diesem Rollladen gemessen, unter Konfigurieren → Profile und Rollläden. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen. Die übrigen Rollläden, die diesem ähneln, sind in zwei Bildschirmen erledigt, mit der Wahl „(B) Er ähnelt einem bereits gemessenen Rollladen“.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -557,7 +557,7 @@
       },
       "saved_profile": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“ und benutzt es bereits. Hier wurde keine eigene Fahrzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist seine Höhe, und die Zeiten des Profils werden darauf umgerechnet. Das Ergebnis finden Sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Fahrzeiten.",
+        "description": "Fertig: {cover} folgt jetzt dem Profil „{profile}“, und zwar ab dem Augenblick, in dem dieser Dialog geschlossen wird. Hier wurde keine eigene Laufzeit ermittelt: das Einzige, was an diesem Rollladen gemessen wurde, ist seine Höhe, und die Zeiten des Profils werden darauf umgerechnet. Die Attribute der Entität sagen dann `profile {profile}` unter „Calibration source“, und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, und das Profil „{profile}“ unter Konfigurieren → Profile und Rollläden, wo es alle Rollläden teilen, die ihm folgen. Wollen Sie eines Tages zu den in der Konfigurationsdatei geschriebenen Werten zurück, genügt es, die Kalibrierung von jenem Bildschirm aus zu löschen.\n\n**Was Sie jetzt tun können**: dasselbe Profil einem weiteren Rollladen geben oder schließen. Hält {cover} doch an der falschen Stelle, misst „(C) Er hat ein Profil, hält aber an der falschen Stelle“ seine eigenen Laufzeiten.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -565,7 +565,7 @@
       },
       "saved_refined": {
         "title": "Kalibrierung gespeichert",
-        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und bereits in Gebrauch. {cover} folgt weiterhin dem Profil „{profile}“, und was eben an diesem einen Rollladen gemessen wurde, geht jetzt vor; alles, was hier nicht gemessen wurde, kommt weiterhin aus dem Profil. Das Ergebnis finden Sie unter den Attributen der Entität, unter „Calibration source“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, wo Sie die Werte wieder ansehen, von Hand korrigieren oder löschen können. Das Profil selbst wurde nicht angerührt: die anderen Rollläden, die ihm folgen, bleiben, wie sie sind.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen.",
+        "description": "Fertig: die Kalibrierung von {cover} ist gespeichert und wird wirksam, sobald dieser Dialog geschlossen wird. {cover} folgt weiterhin dem Profil „{profile}“, und was eben an diesem einen Rollladen gemessen wurde, geht jetzt vor; alles, was hier nicht gemessen wurde, kommt weiterhin aus dem Profil. Die Attribute der Entität sagen dann `guided` unter „Calibration source“, und die Zahlen selbst stehen unter „Opening time“, „Closing time“, „Slat time“, den Rollfaktoren und „Height“.\n\n**Wo Sie sie wiederfinden**: hier unter Konfigurieren → Kalibrierungen, wo Sie die Werte wieder ansehen, von Hand korrigieren oder löschen können. Das Profil selbst wurde nicht angerührt: die anderen Rollläden, die ihm folgen, bleiben, wie sie sind.\n\n**Was Sie jetzt tun können**: einen weiteren Rollladen kalibrieren oder schließen.",
         "menu_options": {
           "calibrate": "Einen weiteren Rollladen kalibrieren",
           "init": "Zurück zum Menü"
@@ -573,7 +573,7 @@
       },
       "cancelled": {
         "title": "Kalibrierung abgebrochen",
-        "description": "Es wurde nichts gespeichert: {cover} wird nicht mehr kalibriert und nimmt wieder gewöhnliche Befehle an, genau wie zuvor.\n\n**Falls er noch fuhr**, wird er nicht angehalten: eine von der Kalibrierung gestartete Fahrt hat kein eigenes Ende und läuft bis zu dem Endanschlag weiter, auf den sie zulief.",
+        "description": "Es wurde nichts gespeichert: {cover} wird nicht mehr kalibriert und nimmt wieder gewöhnliche Befehle an, genau wie zuvor.\n\n**Falls er noch fuhr**, wird er nicht angehalten: eine von der Kalibrierung gestartete Fahrt hat kein eigenes Ende und läuft bis zu der Endlage weiter, auf den sie zulief.",
         "menu_options": {
           "calibrate": "Von vorn beginnen",
           "init": "Zurück zum Menü"
@@ -581,7 +581,7 @@
       },
       "expired": {
         "title": "Sitzung wegen Untätigkeit abgelaufen",
-        "description": "Diese Kalibrierung stand zu lange still, deshalb wurde {cover} freigegeben: er wird nicht mehr kalibriert und nimmt wieder gewöhnliche Befehle an.\n\n**Es wurde nichts gespeichert**: die bisher gemachten Messungen wurden verworfen, und um sie wiederzubekommen, muss von vorn begonnen werden. Falls {cover} noch fuhr, wurde er aufgefordert, dort anzuhalten, wo er war.\n\nEin Bildschirm mit Fortschrittsbalken hat keine eigene Schaltfläche Abbrechen: der Weg hinaus ist, den Dialog zu schließen, womit der Rollladen sofort freigegeben wird.",
+        "description": "Die Sitzung war zu lange inaktiv, daher wird {cover} nicht mehr kalibriert und reagiert wieder auf normale Befehle.\n\n**Es wurde nichts gespeichert**: die bisher gemachten Messungen wurden verworfen, und um sie wiederzubekommen, muss von vorn begonnen werden. Falls {cover} noch fuhr, wurde er aufgefordert, dort anzuhalten, wo er war.\n\nEin Bildschirm mit Fortschrittsbalken hat keine eigene Schaltfläche Abbrechen: der Weg hinaus ist, den Dialog zu schließen, womit der Rollladen sofort freigegeben wird.",
         "menu_options": {
           "calibrate": "Von vorn beginnen",
           "init": "Schließen"
@@ -605,7 +605,7 @@
       },
       "problem_no_echo": {
         "title": "Der Rollladen hat nicht geantwortet",
-        "description": "**Rollladen**: {cover}\n\nDer Befehl ist auf dem Bus angekommen, aber der Antrieb hat nie gemeldet, dass er angelaufen ist, es gibt also keinen Augenblick, gegen den gemessen werden könnte, und der Schritt wurde abgebrochen.\n\n**Der Rollladen könnte noch fahren**: der Befehl ist wirklich hinausgegangen, der Motor ist also höchstwahrscheinlich angelaufen. Gleich nach dem Fehler wurde ein Stopp geschickt, aber wenn der Rollladen noch läuft, halten Sie ihn selbst an, bevor Sie den Schritt wiederholen.\n\n**Was Sie tun müssen**: prüfen Sie, ob der Rollladen nicht klemmt und ob ihn niemand sonst (ein Wandtaster, eine Automatisierung) festhält, und wiederholen Sie den Schritt. Geschieht das jedes Mal, meldet dieser Antrieb seinen eigenen Zustand nicht, und die geführte Kalibrierung kann ihn nicht messen.",
+        "description": "**Rollladen**: {cover}\n\nDer Befehl ist auf dem Bus angekommen, aber der Antrieb hat nie gemeldet, dass er angelaufen ist, es gibt also keinen Augenblick, gegen den gemessen werden könnte, und der Schritt wurde abgebrochen.\n\n**Der Rollladen könnte noch fahren**: der Befehl ist wirklich hinausgegangen, der Motor ist also höchstwahrscheinlich angelaufen. Gleich nach dem Fehler wurde ein Stopp geschickt, aber wenn der Rollladen noch läuft, halten Sie ihn selbst an, bevor Sie den Schritt wiederholen.\n\n**Was Sie tun müssen**: prüfen Sie, ob der Rollladen nicht klemmt, und wiederholen Sie den Schritt. Geschieht das jedes Mal, meldet dieser Antrieb seinen eigenen Zustand nicht, und die geführte Kalibrierung kann ihn nicht messen.",
         "menu_options": {
           "repeat_step": "Diesen Schritt wiederholen",
           "cancel_flow": "Abbrechen"
@@ -613,7 +613,7 @@
       },
       "problem_not_delivered": {
         "title": "Der Befehl ist nie auf dem Bus angekommen",
-        "description": "Das Gateway hat unseren Befehl weder geschrieben noch gesagt, dass es ihn aufgegeben hat, {cover} wurde also nie gebeten zu fahren, und es wurde nichts gemessen.\n\n**Was Sie tun müssen**: prüfen Sie, ob das Gateway verbunden ist – die Integrationsseite sagt es – und wiederholen Sie den Schritt.",
+        "description": "Das Gateway hat unseren Befehl nie auf den Bus geschrieben — es hat ihn nicht angenommen, es hat ihn verworfen, oder es hat nie gesagt, was aus ihm geworden ist — {cover} wurde also nie gebeten zu fahren, und es wurde nichts gemessen.\n\n**Was Sie tun müssen**: prüfen Sie, ob das Gateway verbunden ist – die Integrationsseite sagt es – und wiederholen Sie den Schritt.",
         "menu_options": {
           "repeat_step": "Diesen Schritt wiederholen",
           "cancel_flow": "Abbrechen"
@@ -621,7 +621,7 @@
       },
       "problem_not_stopped": {
         "title": "Der Rollladen konnte nicht angehalten werden",
-        "description": "**Rollladen**: {cover}\n\nDer Stoppbefehl wurde abgewiesen oder ging verloren, der Rollladen ist also bis in seine Endlage weitergefahren, und die Stellung, um die es in diesem Schritt ging, gibt es nicht.\n\n**Was Sie tun müssen**: warten Sie, bis der Rollladen steht, und wiederholen Sie den Schritt. Das geschieht meist bei einem Gateway, das mit sehr vielen Befehlen beschäftigt ist.",
+        "description": "**Rollladen**: {cover}\n\nDer Stoppbefehl wurde abgewiesen oder ging verloren, der Rollladen ist also bis in seine Endlage weitergefahren, und er hat nicht an der für diesen Schritt benötigten Position angehalten.\n\n**Was Sie tun müssen**: warten Sie, bis der Rollladen steht, und wiederholen Sie den Schritt. Das geschieht meist bei einem Gateway, das mit sehr vielen Befehlen beschäftigt ist.",
         "menu_options": {
           "repeat_step": "Diesen Schritt wiederholen",
           "cancel_flow": "Abbrechen"
@@ -645,7 +645,7 @@
       },
       "problem_timeout": {
         "title": "Es wurde nicht rechtzeitig gedrückt",
-        "description": "Dieser Bildschirm wartet etwa anderthalb Minuten auf den Tastendruck, um den es geht – weit länger, als irgendein Rollladen für seine Fahrt braucht. Jenseits dieser Grenze misst der Tastendruck nichts mehr, er wurde also verworfen statt geglaubt.\n\n**Was Sie tun müssen**: wiederholen Sie den Schritt und drücken Sie diesmal, sobald der Rollladen tut, was der Bildschirm beschreibt.",
+        "description": "Dieser Bildschirm wartet etwa anderthalb Minuten auf den Tastendruck, um den es geht, und in dieser Zeit wurde nicht gedrückt. Es bleibt kein Augenblick, von dem aus gemessen werden könnte, der Schritt wurde daher abgebrochen, statt auf einen später eingegangenen Tastendruck gerechnet zu werden.\n\n**Was Sie tun müssen**: wiederholen Sie den Schritt und drücken Sie diesmal, sobald der Rollladen tut, was der Bildschirm beschreibt.",
         "menu_options": {
           "repeat_step": "Diesen Schritt wiederholen",
           "cancel_flow": "Abbrechen"
@@ -663,7 +663,7 @@
     "progress": {
       "homing_closed": "{cover} wird vollständig geschlossen: so gehen die Messungen von einem bekannten Punkt aus. Bitte warten, und sorgen Sie dafür, dass nichts im Weg steht.",
       "homing_open": "{cover} wird vollständig geöffnet: so geht die nächste Bewegung von einem bekannten Punkt aus. Bitte warten, und sorgen Sie dafür, dass nichts im Weg steht.",
-      "starting_open": "{cover} fährt nach oben los. Sehen Sie hin: gleich werden Sie um den Tastendruck an der Grundlinie gebeten.",
+      "starting_open": "{cover} fährt nach oben los. Sehen Sie hin: gleich werden Sie um den Tastendruck an der Auflagefläche gebeten.",
       "starting_close": "{cover} fährt nach unten los. Sehen Sie hin: gleich werden Sie um den Tastendruck gebeten.",
       "running_down": "{cover} wird vollständig geöffnet und dann bis auf etwa {percent}% seines Weges heruntergefahren. Bitte warten, und halten Sie das Maßband bereit.",
       "running_up": "{cover} wird vollständig geschlossen und dann bis auf etwa {percent}% seines Weges hinaufgefahren. Bitte warten, und halten Sie das Maßband bereit.",
@@ -676,7 +676,7 @@
       "not_a_number": "Schreiben Sie eine Zahl. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden: 198,5 oder 198.5.",
       "out_of_range": "Die Zahl liegt außerhalb des Bereichs, den dieses Feld annimmt.",
       "above_the_travel": "Das ist mehr als der ganze Weg dieses Panzers. Messen Sie ab der Stelle, an der die Unterkante aufliegt, wenn der Rollladen geschlossen ist, nicht ab dem Boden.",
-      "invalid_name": "Ein Profilname darf nur Buchstaben, Ziffern und Unterstriche enthalten: keine Leerzeichen, keine Umlaute, keine Bindestriche."
+      "invalid_name": "Ein Profilname darf nur Buchstaben, Ziffern und Unterstriche enthalten: keine Leerzeichen, keine Akzente oder Umlaute, keine Bindestriche."
     }
   },
   "selector": {
@@ -878,7 +878,7 @@
       "fields": {
         "direction": {
           "name": "Richtung",
-          "description": "Welche Fahrt gemessen wird: „close“ beginnt ganz geöffnet und läuft die halbe Panzerzeit, „open“ beginnt ganz geschlossen und läuft die Lamellenzeit plus die halbe Panzerzeit."
+          "description": "Welche Fahrt gemessen wird: „close“ beginnt ganz geöffnet und läuft die halbe Panzerzeit, „open“ beginnt ganz geschlossen und läuft die Öffnungszeit der Lamellen plus die halbe Panzerzeit."
         }
       }
     },
@@ -899,7 +899,7 @@
           "description": "Dieselbe Messung nach der Richtung „open“. Wahlfrei: sie ergibt den eigenen opening_roll, und ohne sie wird nur der Wickelfaktor beim Schließen bestimmt."
         },
         "slat_time": {
-          "name": "Lamellenzeit",
+          "name": "Öffnungszeit der Lamellen",
           "description": "Sekunden reiner Lamellenbewegung. Sie ist eine Eingabe, nie ein Ergebnis: hier angegeben wird sie so verwendet, sonst der am Rollladen eingestellte Wert."
         },
         "closed_run_seconds": {

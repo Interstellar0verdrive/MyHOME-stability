@@ -465,6 +465,12 @@ class _Measured:
     descent: list[tuple[float, float]] = field(default_factory=list)
     ascent: list[tuple[float, float]] = field(default_factory=list)
     deviation: float | None = None
+    # The fraction of the travel the verification really ran to, remembered because the
+    # summary names it in percent and the two verifications do not run to the same
+    # place: `VERIFY_RUN` at the precise level of path A, `VERIFY_RUN_PROFILE` for the
+    # check path B offers. A constant here would put "40 %" under a run that went half
+    # way (0.5.0 v5 review).
+    verify_fraction: float | None = None
     precise: bool = False
 
     @property
@@ -588,6 +594,34 @@ class CalibrationContextMixin:
             return str(stored.profile)
         name = self._cover_config(unique_id).get(CONF_PROFILE)
         return str(name) if name else None
+
+    def _covers_following(self, name: str) -> tuple[list[str], list[str]]:
+        """The shutters that follow a profile, split by where they were told to.
+
+        Two sources, and the dialog used to count only the first: the assignment stored
+        here (`calibration_store.covers_following`), and the `profile:` key written
+        against the cover in the configuration file, which `validate.py` accepts and
+        `cover.py` reads on every load. A profile three shutters follow through
+        `myhome.yaml` and nobody assigned from this dialog read "0 covers" on the very
+        screen that was about to delete it.
+
+        A stored assignment outranks the file's key (`resolve_cover`), so a cover that
+        has both is counted once, on the side that really decides. The two lists are
+        kept apart because deleting the profile does different things to them: the
+        assignment is stripped from the record, while the `profile:` line stays in the
+        file and starts naming nothing - or names a `cover_profiles:` entry that was
+        shadowed until now.
+        """
+        assigned = [self._cover_name(unique_id) for unique_id in self._store.covers_following(name)]
+        from_file: list[str] = []
+        for key, cfg in self._covers().items():
+            if cfg.get(CONF_PROFILE) != name:
+                continue
+            stored = self._store.calibration(f"{self._mac}-{key}")
+            if stored is not None and stored.profile:
+                continue
+            from_file.append(str(cfg.get(CONF_NAME) or key))
+        return assigned, sorted(from_file)
 
     def _own_height(self, unique_id: str) -> float | None:
         """The travel *this* window is known to have: its record's, else the file's.
@@ -826,13 +860,16 @@ class CalibrationManagementMixin(CalibrationContextMixin):
 
     def _profile_placeholders(self) -> dict[str, str]:
         name = self._profile_name or ""
-        followers = [self._cover_name(unique_id) for unique_id in self._store.covers_following(name)]
+        assigned, from_file = self._covers_following(name)
+        followers = assigned + from_file
         stored = self._store.profile(name)
         return {
             "profile": name,
             "covers": ", ".join(followers) if followers else "",
             "values": describe_profile(name, stored or dict(self._all_profiles().get(name) or {})),
             "count": str(len(followers)),
+            "assigned": str(len(assigned)),
+            "from_file": str(len(from_file)),
         }
 
     async def async_step_profile_actions(
@@ -936,16 +973,24 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         name = self._profile_name or ""
         store = await self._async_store()
         had_it = store.profile(name) is not None
+        # Read before the deletion: `async_remove_profile` strips the assignment, so
+        # afterwards there is nothing left to count on that side, and the shutters that
+        # follow through the file's own `profile:` key are never in `orphans` at all.
+        _assigned, from_file = self._covers_following(name)
         orphans = await store.async_remove_profile(name)
         if orphans or had_it:
             self._mark_changed()
         LOGGER.info(
-            "Cover profile '%s' deleted; %s shutter(s) went back to the configuration file",
+            "Cover profile '%s' deleted; %s shutter(s) lost the assignment and %s "
+            "follow(ed) it through the configuration file",
             name,
             len(orphans),
+            len(from_file),
         )
         self._deleted = name
-        self._deleted_covers = [self._cover_name(unique_id) for unique_id in orphans]
+        self._deleted_assigned = [self._cover_name(unique_id) for unique_id in orphans]
+        self._deleted_from_file = from_file
+        self._deleted_covers = self._deleted_assigned + from_file
         return await self.async_step_profile_deleted()
 
     async def async_step_profile_deleted(
@@ -962,6 +1007,8 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                 "profile": self._deleted,
                 "covers": ", ".join(self._deleted_covers) if self._deleted_covers else "",
                 "count": str(len(self._deleted_covers)),
+                "assigned": str(len(self._deleted_assigned)),
+                "from_file": str(len(self._deleted_from_file)),
             },
         )
 
@@ -2480,6 +2527,10 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                 "measure_verify", errors={FIELD_MEASURED_CM: error or ERROR_ABOVE_THE_TRAVEL}
             )
         self._measured.deviation = self._deviation(value)
+        # Where that reading was taken, for the summary: the stage set `_pending` when
+        # it started the run, and the two verifications run to different fractions.
+        _direction, fraction = self._pending or (DIRECTION_CLOSE, VERIFY_RUN)
+        self._measured.verify_fraction = fraction
         self._tape_target = None
         return await self.async_step_verify_result()
 
@@ -2750,16 +2801,33 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         return _Result(yaml=overrides_yaml(key, values, None), overrides=values)
 
     def _summary_placeholders(self, result: _Result) -> dict[str, str]:
+        """The numbers the three summaries share, and the one only the precise one shows.
+
+        `{accuracy}` is the verification's own answer whenever there is one: how far the
+        shutter really stopped from where the model said it would, at the one position
+        no reading was fitted to. That is the number `summary_precise` names, and it is
+        the only place the flow says "accuracy" out loud. The worst residual over the
+        fitted readings is the fallback - it is what a summary reached without a
+        verification would have to fall back on, and it is what the basic summary's "-"
+        comes from, because one reading per direction reproduces itself and leaves no
+        residual at all.
+        """
+        measured = self._measured
         # The unit travels with the value, so a path that did not measure something
         # reads "-" rather than "- cm".
-        height = f"{self._measured.height:.0f} cm" if self._measured.height else "\u2013"
-        accuracy = "\u2013" if result.accuracy_cm is None else f"{result.accuracy_cm:.1f} cm"
+        height = f"{measured.height:.0f} cm" if measured.height else "\u2013"
+        if measured.deviation is not None:
+            accuracy = f"{abs(measured.deviation):.1f} cm"
+        elif result.accuracy_cm is not None:
+            accuracy = f"{result.accuracy_cm:.1f} cm"
+        else:
+            accuracy = "\u2013"
         replaced, kept = self._replaced_and_kept(result)
         return self._placeholders(
             yaml=f"```yaml\n{result.yaml}```",
             height=height,
             accuracy=accuracy,
-            percent=round(VERIFY_RUN * 100),
+            percent=round((measured.verify_fraction or VERIFY_RUN) * 100),
             profile=self._measured_name or self._profile or "",
             replacing=", ".join(replaced) or "\u2013",
             keeping=", ".join(kept) or "\u2013",
@@ -2769,9 +2837,10 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         """Two summaries, because the two levels have different things to say.
 
         The basic one has no accuracy to report - one reading per direction reproduces
-        itself - and offers the four extra readings that would give it one. The precise
-        one has a number that was measured at a position nothing was fitted to, and
-        nothing left to offer but Save.
+        itself - and offers the four extra readings and the check that would give it
+        one. The precise one reports that check: how far the shutter stopped from where
+        the model said it would, at a position nothing was fitted to. Nothing left to
+        offer there but Save.
         """
         if self._measured.precise:
             return await self.async_step_summary_precise()
@@ -2803,7 +2872,17 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     async def async_step_summary_precise(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The same, plus the one number in the whole flow that was verified."""
+        """The same, plus the one number in the whole flow that was verified.
+
+        There is only one text for this screen because there is only one way to reach
+        it: `PLAN_PRECISE` ends `verify` -> `summary`, and `precise` is set nowhere but
+        `async_step_refine`, which installs that plan. So the verification has always
+        happened by the time this is shown, and `{accuracy}` is always its answer - the
+        gap at `{percent}` % of the descent, the one position no reading was fitted to.
+        A second text for a precise summary with no verification behind it would be a
+        screen nobody could open (`test_the_precise_summary_always_has_a_verification`
+        is what says so).
+        """
         result = self._result()
         return self.async_show_menu(
             step_id="summary_precise",

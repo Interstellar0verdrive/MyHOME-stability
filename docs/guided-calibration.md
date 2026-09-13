@@ -143,8 +143,9 @@ a heavier curtain, a fatter tube. It asks how far to go:
 
 - **its own run times** — three presses, about two minutes. Enough for a shutter
   whose motor is simply slower or faster than the one the profile was measured on;
-- **its run times and its own roll coefficients** — the same three presses plus two
-  tape readings. What a shutter needs when it misses *at mid-travel*, which is not
+- **its run times and its own roll coefficients** — the same three presses plus
+  three tape readings: the curtain travel, and one at half the travel in each
+  direction. What a shutter needs when it misses *at mid-travel*, which is not
   the motor running differently but the curtain winding differently.
 
 Only the keys it actually measured are stored, and only for this shutter — merged
@@ -161,8 +162,9 @@ tape readings (the lift-off gap is a fourth, and optional). One reading per dire
 there is nothing left over to be an error: the summary has no accuracy line, and
 says so rather than showing a dash.
 
-**Precise** — about two more minutes and four more tape readings, at a quarter and
-three quarters of the travel in each direction. With three points per direction the
+**Precise** — about two more minutes and five more tape readings: four at a quarter
+and three quarters of the travel in each direction, and one more for the check that
+closes the level. With three points per direction the
 fit solves the roll **and** a scale factor on the run times at the same time, which
 is what absorbs the reaction time of the button presses: the tape corrects the
 finger. Under each field the form prints the value the model expects
@@ -171,8 +173,10 @@ reference point shows up while you are still standing there.
 
 It closes with a **verification at 40 % of the descent** — deliberately a position
 no measurement was fitted to, so it is a question put to the model rather than a
-repetition. The precise summary reports the answer as "within X cm, verified at
-40 %".
+repetition. Its answer is the gap reported by the screen that follows the reading,
+and it is the **accuracy** the precise summary then names: "within X cm", measured
+at the one position nothing was fitted to rather than over the readings the fit was
+given.
 
 At the basic level the same expected-value line is drawn from the default geometry
 of an ordinary shutter rather than from a model of yours, so it promises much less:
@@ -260,17 +264,20 @@ came with the profile. The height stays — somebody held a tape against that sh
 **View, edit or delete a profile** — the profile's own screen lists the shutters
 that follow it and offers:
 
-- **View the values** — reference height, run times, slat time, both rolls, and
-  which shutters follow it. Changes nothing;
+- **View the values** — reference travel, run times, slat opening time, both rolls,
+  and which shutters follow it. Changes nothing;
 - **Edit the values by hand** — a prefilled form. For the numbers you know better
   than the measurement did, the manufacturer's declared times for instance.
   Correcting a profile reaches every shutter that follows it at the next reload,
   scaled to each one's own height, and never touches an override paths A or C
   measured;
 - **Delete the profile** — a confirmation screen that names the shutters that use
-  it. They go back to the configuration file, if you use one, or to the defaults;
-  their own measurements stay. A `cover_profiles:` entry of the same name in the
-  file, until then shadowed, applies again from that moment.
+  it, counting the ones it was assigned to here and the ones whose own `profile:`
+  key in the file names it separately. They go back to the configuration file, if
+  you use one, or to the defaults; their own measurements stay. A `cover_profiles:`
+  entry of the same name in the file, until then shadowed, applies again from that
+  moment — to the shutters whose own entry in the file names it. A shutter that was
+  given the profile from this dialog alone is left following none.
 
 A profile that lives in the configuration file is shown here and left alone: its
 menu offers "View the values" and nothing else. The file is yours, and an edit that
@@ -419,14 +426,17 @@ re-read, while a dialog is open.
 never reported that it had started, so there is no instant to measure against and
 the step was abandoned. The motor has most likely started all the same: a stop was
 sent right after the error, but check the shutter is not still running before
-repeating the step. Check too that nothing else is holding it — a wall pushbutton,
-an automation. If it happens every time, that actuator does not report its own
-status and the guided calibration cannot measure it; the
+repeating the step. Why the actuator stayed silent is not something the dialog can
+tell — a shutter that something else was already driving is caught before the step
+starts, and says **"The cover is already moving"** instead. If it happens every
+time, that actuator does not report its own status and the guided calibration
+cannot measure it; the
 [action-based recipe](recipes.md#calibrating-a-shutter-in-centimetres) still can.
 
-**"The command never reached the bus."** The gateway neither wrote the frame nor
-said it had given up on it. Check the connection on the integration page and repeat
-the step.
+**"The command never reached the bus."** The gateway would not take the frame,
+dropped it, or never said what became of it — which of the three is not something
+the dialog can tell — so the shutter was never asked to move and nothing was
+measured. Check the connection on the integration page and repeat the step.
 
 **The press went in late, or was missed.** Repeat the step rather than accepting
 the number: that is what the confirmation screen after every measurement is for.

@@ -532,6 +532,12 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         self._missing_heights: list[str] = []
         self._deleted: str = ""
         self._deleted_covers: list[str] = []
+        # The same list, split by where the shutter was told to follow the profile: an
+        # assignment made in this dialog, or the `profile:` key of the configuration
+        # file. "Profilo eliminato" says both numbers, because the deletion reaches them
+        # differently (`CalibrationContextMixin._covers_following`).
+        self._deleted_assigned: list[str] = []
+        self._deleted_from_file: list[str] = []
         self._saved_cover: str = ""
         self._saved_profile: str = ""
         self._saved_path: str = ""
