@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "Stiamo per misurare la salita",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in salita dal basso. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo, e in cima la tapparella si ferma da sola.\n\n**Cosa devi fare tu**: qui dovrai essere veloce e preciso. Ti verranno chieste due pressioni, una dopo l'altra:\n\n1. la prima nell'istante in cui il bordo inferiore si stacca dalla base;\n2. la seconda nell'istante in cui la tapparella arriva a fine corsa e il motore si ferma, che si riconosce dal rumore che cessa.\n\nNon devi cronometrare niente: l'istante della pressione è la misura. Le schermate che seguono hanno una riga sola, perché non c'è tempo per leggere mentre guardi la tapparella.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in salita dal basso. Per il primo secondo o due si aprono solo le lamelle, mentre il bordo inferiore resta in appoggio; poi comincia a salire tutto il telo, e in cima la tapparella si ferma da sola.\n\n**Cosa devi fare tu**: qui dovrai essere veloce e preciso. Ti verranno chieste due pressioni, una dopo l'altra:\n\n1. la prima nell'istante in cui il bordo inferiore si stacca dalla base;\n2. la seconda nell'istante in cui la tapparella arriva a fine corsa e il motore si ferma, che si riconosce dal rumore che cessa.\n\nNon devi cronometrare niente: l'istante della pressione è la misura. Le schermate che seguono hanno una riga sola, perché non c'è tempo per leggere mentre guardi la tapparella.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
         "menu_options": {
-          "open_start": "1) Avvia la tapparella",
+          "open_start": "Avvia la tapparella",
           "repeat_step": "Riportala prima in basso",
           "cancel_flow": "Annulla"
         }
@@ -329,7 +329,7 @@
         "title": "La tapparella si sta aprendo",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Tapparella**: {cover}\n\nPremi nell'istante in cui il bordo inferiore si stacca dalla base.",
         "menu_options": {
-          "lifted_off": "2) Premi quando il bordo si stacca dalla base",
+          "lifted_off": "1) Premi quando il bordo si stacca dalla base",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }
@@ -338,7 +338,7 @@
         "title": "La tapparella sta ancora salendo",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Tapparella**: {cover}\n\nPremi nell'istante in cui il motore si ferma in alto.",
         "menu_options": {
-          "stopped_open": "3) Premi quando il motore si ferma in alto",
+          "stopped_open": "2) Premi quando il motore si ferma in alto",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }
@@ -355,7 +355,7 @@
         "title": "Stiamo per misurare la discesa",
         "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: quando premi il pulsante qui sotto, la tapparella parte in discesa dall'alto e si ferma da sola quando il telo è giù e le lamelle si sono chiuse.\n\n**Cosa devi fare tu**: anche qui dovrai essere veloce e preciso, ma questa volta la pressione è una sola, nell'istante in cui il motore si ferma in basso.\n\n**Attenzione**: non premere quando il bordo inferiore tocca la base. Da lì la tapparella continua a muoversi ancora per un momento, per chiudere le lamelle. Premi solo quando smette del tutto di muoversi, lamelle comprese, cioè quando il motore si ferma: si riconosce dal rumore che cessa.\n\nUna tapparella scende un po' più in fretta di quanto salga, ed è per questo che si misura a parte. La schermata durante il movimento ha una riga sola, perché non c'è tempo per leggere mentre guardi la tapparella.\n\nLeggi con calma, mettiti in posizione, e avvia tu il movimento quando sei pronto.",
         "menu_options": {
-          "close_start": "1) Avvia la tapparella",
+          "close_start": "Avvia la tapparella",
           "repeat_step": "Riportala prima in alto",
           "cancel_flow": "Annulla"
         }
@@ -364,7 +364,7 @@
         "title": "La tapparella si sta chiudendo",
         "description": "**Tapparella**: {cover}\n\nPremi nell'istante in cui il motore si ferma in basso.",
         "menu_options": {
-          "stopped_closed": "2) Premi quando il motore si ferma in basso",
+          "stopped_closed": "Premi quando il motore si ferma in basso",
           "repeat_step": "Ripeti questo passo",
           "not_right": "Non ha fatto quello che doveva"
         }

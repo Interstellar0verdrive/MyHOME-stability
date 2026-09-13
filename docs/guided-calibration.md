@@ -191,7 +191,7 @@ The screens are built around that:
 
 - **Nothing moves by itself on a step with a press.** The instructions arrive
   first, in full — including that you will have to be quick — and the shutter
-  starts when you press **"1) Start the shutter"**.
+  starts when you press **"Start the shutter"**.
 - **The screens shown while it is moving carry one line and a button.** Nobody
   reads three paragraphs while watching a shutter.
 - **The automatic runs of the tape steps do start on their own**: there is nothing

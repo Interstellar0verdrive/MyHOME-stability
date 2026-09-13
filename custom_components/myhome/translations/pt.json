@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "Vamos medir a subida",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\n**O que vai acontecer**: quando carregar no botão abaixo, a persiana arranca de baixo para cima. Durante o primeiro segundo ou dois só se abrem as lâminas, enquanto a borda inferior continua apoiada; depois começa a subir toda a tela, e em cima a persiana para sozinha.\n\n**O que tem de fazer**: aqui terá de ser rápido e preciso. Ser-lhe-ão pedidas duas pressões, uma a seguir à outra:\n\n1. a primeira no instante em que a borda inferior se descola da base;\n2. a segunda no instante em que a persiana chega ao fim de curso e o motor para, o que se reconhece pelo ruído que cessa.\n\nNão está a cronometrar nada: o instante da pressão é a medida. Os ecrãs que se seguem têm uma só linha, porque não há tempo para ler enquanto olha para a persiana.\n\nLeia com calma, ponha-se em posição, e inicie o movimento quando estiver pronto.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Persiana**: {cover}\n\n**O que vai acontecer**: quando carregar no botão abaixo, a persiana arranca de baixo para cima. Durante o primeiro segundo ou dois só se abrem as lâminas, enquanto a borda inferior continua apoiada; depois começa a subir toda a tela, e em cima a persiana para sozinha.\n\n**O que tem de fazer**: aqui terá de ser rápido e preciso. Ser-lhe-ão pedidas duas pressões, uma a seguir à outra:\n\n1. a primeira no instante em que a borda inferior se descola da base;\n2. a segunda no instante em que a persiana chega ao fim de curso e o motor para, o que se reconhece pelo ruído que cessa.\n\nNão está a cronometrar nada: o instante da pressão é a medida. Os ecrãs que se seguem têm uma só linha, porque não há tempo para ler enquanto olha para a persiana.\n\nLeia com calma, ponha-se em posição, e inicie o movimento quando estiver pronto.",
         "menu_options": {
-          "open_start": "1) Iniciar a persiana",
+          "open_start": "Iniciar a persiana",
           "repeat_step": "Descê-la primeiro",
           "cancel_flow": "Cancelar"
         }
@@ -329,7 +329,7 @@
         "title": "A persiana está a abrir",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\nCarregue no instante em que a borda inferior se descola da base.",
         "menu_options": {
-          "lifted_off": "2) Carregue quando a borda inferior se descola da base",
+          "lifted_off": "1) Carregue quando a borda inferior se descola da base",
           "repeat_step": "Repetir este passo",
           "not_right": "Não fez o que devia"
         }
@@ -338,7 +338,7 @@
         "title": "A persiana ainda está a subir",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Persiana**: {cover}\n\nCarregue no instante em que o motor para em cima.",
         "menu_options": {
-          "stopped_open": "3) Carregue quando o motor para em cima",
+          "stopped_open": "2) Carregue quando o motor para em cima",
           "repeat_step": "Repetir este passo",
           "not_right": "Não fez o que devia"
         }
@@ -355,7 +355,7 @@
         "title": "Vamos medir a descida",
         "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: quando carregar no botão abaixo, a persiana arranca de cima para baixo e para sozinha quando a tela estiver em baixo e as lâminas se tiverem fechado.\n\n**O que tem de fazer**: também aqui terá de ser rápido e preciso, mas desta vez a pressão é só uma, no instante em que o motor para em baixo.\n\n**Atenção**: não carregue quando a borda inferior toca a base. A partir daí a persiana continua a mover-se mais um momento, para fechar as lâminas. Carregue só quando deixar de se mover por completo, lâminas incluídas, ou seja quando o motor para: reconhece-se pelo ruído que cessa.\n\nUma persiana desce um pouco mais depressa do que sobe, e é por isso que se mede à parte. O ecrã durante o movimento tem uma só linha, porque não há tempo para ler enquanto olha para a persiana.\n\nLeia com calma, ponha-se em posição, e inicie o movimento quando estiver pronto.",
         "menu_options": {
-          "close_start": "1) Iniciar a persiana",
+          "close_start": "Iniciar a persiana",
           "repeat_step": "Subi-la primeiro",
           "cancel_flow": "Cancelar"
         }
@@ -364,7 +364,7 @@
         "title": "A persiana está a fechar",
         "description": "**Persiana**: {cover}\n\nCarregue no instante em que o motor para em baixo.",
         "menu_options": {
-          "stopped_closed": "2) Carregue quando o motor para em baixo",
+          "stopped_closed": "Carregue quando o motor para em baixo",
           "repeat_step": "Repetir este passo",
           "not_right": "Não fez o que devia"
         }

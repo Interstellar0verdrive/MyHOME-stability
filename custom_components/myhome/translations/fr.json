@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "Nous allons mesurer la montée",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre :\n\n1. le premier à l'instant où le bord inférieur se décolle de la base ;\n2. le second à l'instant où le volet arrive en fin de course et où le moteur s'arrête, ce qui se reconnaît au bruit qui cesse.\n\nVous ne chronométrez rien : l'instant de l'appui est la mesure. Les écrans qui suivent ne comportent qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre :\n\n1. le premier à l'instant où le bord inférieur se décolle de la base ;\n2. le second à l'instant où le volet arrive en fin de course et où le moteur s'arrête, ce qui se reconnaît au bruit qui cesse.\n\nVous ne chronométrez rien : l'instant de l'appui est la mesure. Les écrans qui suivent ne comportent qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
         "menu_options": {
-          "open_start": "1) Lancer le volet",
+          "open_start": "Lancer le volet",
           "repeat_step": "Le redescendre d'abord",
           "cancel_flow": "Annuler"
         }
@@ -329,7 +329,7 @@
         "title": "Le volet est en train de s'ouvrir",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\nAppuyez à l'instant où le bord inférieur se décolle de la base.",
         "menu_options": {
-          "lifted_off": "2) Appuyez quand le bord inférieur se décolle de la base",
+          "lifted_off": "1) Appuyez quand le bord inférieur se décolle de la base",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
@@ -338,7 +338,7 @@
         "title": "Le volet monte encore",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Volet** : {cover}\n\nAppuyez à l'instant où le moteur s'arrête en haut.",
         "menu_options": {
-          "stopped_open": "3) Appuyez quand le moteur s'arrête en haut",
+          "stopped_open": "2) Appuyez quand le moteur s'arrête en haut",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
@@ -355,7 +355,7 @@
         "title": "Nous allons mesurer la descente",
         "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le bas depuis le haut et s'arrêtera tout seul quand le tablier sera en bas et que les lames se seront refermées.\n\n**Ce que vous devez faire** : ici aussi il faudra être rapide et précis, mais cette fois il n'y a qu'un seul appui, à l'instant où le moteur s'arrête en bas.\n\n**Attention** : n'appuyez pas quand le bord inférieur touche la base. À partir de là, le volet continue de bouger encore un moment, pour refermer les lames. N'appuyez que lorsqu'il cesse complètement de bouger, lames comprises, c'est-à-dire quand le moteur s'arrête : cela se reconnaît au bruit qui cesse.\n\nUn volet descend un peu plus vite qu'il ne monte, c'est pourquoi cela se mesure à part. L'écran pendant le mouvement ne comporte qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
         "menu_options": {
-          "close_start": "1) Lancer le volet",
+          "close_start": "Lancer le volet",
           "repeat_step": "Le remonter d'abord",
           "cancel_flow": "Annuler"
         }
@@ -364,7 +364,7 @@
         "title": "Le volet est en train de se fermer",
         "description": "**Volet** : {cover}\n\nAppuyez à l'instant où le moteur s'arrête en bas.",
         "menu_options": {
-          "stopped_closed": "2) Appuyez quand le moteur s'arrête en bas",
+          "stopped_closed": "Appuyez quand le moteur s'arrête en bas",
           "repeat_step": "Répéter cette étape",
           "not_right": "Il n'a pas fait ce qu'il devait"
         }

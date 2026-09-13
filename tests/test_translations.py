@@ -501,7 +501,7 @@ def test_no_menu_option_draws_an_arrow_of_its_own(path: Path) -> None:
 # `__init__.async_setup`, out of `custom_components/myhome/images`).
 STEP_IMAGES: dict[str, str] = {
     "height": "height.webp",
-    "open_brief": "lift_off.webp",
+    "open_brief": "ascent_presses.webp",
     "open_lift": "lift_off.webp",
     "open_top": "top_stop.webp",
     "measure_descent": "reading.webp",

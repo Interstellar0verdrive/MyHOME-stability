@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "We are about to measure the ascent",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other:\n\n1. the first at the instant the bottom edge leaves the base;\n2. the second at the instant the cover reaches the end stop and the motor stops, which you recognise by the noise ceasing.\n\nYou are not timing anything: the instant of the press is the measurement. The screens that follow carry a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other:\n\n1. the first at the instant the bottom edge leaves the base;\n2. the second at the instant the cover reaches the end stop and the motor stops, which you recognise by the noise ceasing.\n\nYou are not timing anything: the instant of the press is the measurement. The screens that follow carry a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
-          "open_start": "1) Start the cover",
+          "open_start": "Start the cover",
           "repeat_step": "Send it back down first",
           "cancel_flow": "Cancel"
         }
@@ -329,7 +329,7 @@
         "title": "The cover is opening",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\nPress at the instant the bottom edge leaves the base.",
         "menu_options": {
-          "lifted_off": "2) Press when the bottom edge leaves the base",
+          "lifted_off": "1) Press when the bottom edge leaves the base",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }
@@ -338,7 +338,7 @@
         "title": "The cover is still rising",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\nPress at the instant the motor stops at the top.",
         "menu_options": {
-          "stopped_open": "3) Press when the motor stops at the top",
+          "stopped_open": "2) Press when the motor stops at the top",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }
@@ -355,7 +355,7 @@
         "title": "We are about to measure the descent",
         "description": "**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time there is only one press, at the instant the motor stops at the bottom.\n\n**Careful**: do not press when the bottom edge touches the base. From there the cover goes on moving for a moment longer, to close the slats. Press only when it stops moving altogether, slats included, that is when the motor stops: you recognise it by the noise ceasing.\n\nA cover comes down a little faster than it goes up, which is why this is measured separately. The screen during the movement carries a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
-          "close_start": "1) Start the cover",
+          "close_start": "Start the cover",
           "repeat_step": "Send it back up first",
           "cancel_flow": "Cancel"
         }
@@ -364,7 +364,7 @@
         "title": "The cover is closing",
         "description": "**Cover**: {cover}\n\nPress at the instant the motor stops at the bottom.",
         "menu_options": {
-          "stopped_closed": "2) Press when the motor stops at the bottom",
+          "stopped_closed": "Press when the motor stops at the bottom",
           "repeat_step": "Repeat this step",
           "not_right": "It did not do what it should"
         }

@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "Vamos a medir la subida",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia arriba desde abajo. Durante el primer segundo o dos solo se abren las lamas, mientras el borde inferior sigue apoyado; después empieza a subir toda la tela, y arriba la persiana se para sola.\n\n**Lo que tienes que hacer**: aquí tendrás que ser rápido y preciso. Se te pedirán dos pulsaciones, una tras otra:\n\n1. la primera en el instante en que el borde inferior se despega de la base;\n2. la segunda en el instante en que la persiana llega al final de carrera y el motor se para, algo que se reconoce porque cesa el ruido.\n\nNo estás cronometrando nada: el instante de la pulsación es la medida. Las pantallas que siguen tienen una sola línea, porque no hay tiempo de leer mientras miras la persiana.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Persiana**: {cover}\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia arriba desde abajo. Durante el primer segundo o dos solo se abren las lamas, mientras el borde inferior sigue apoyado; después empieza a subir toda la tela, y arriba la persiana se para sola.\n\n**Lo que tienes que hacer**: aquí tendrás que ser rápido y preciso. Se te pedirán dos pulsaciones, una tras otra:\n\n1. la primera en el instante en que el borde inferior se despega de la base;\n2. la segunda en el instante en que la persiana llega al final de carrera y el motor se para, algo que se reconoce porque cesa el ruido.\n\nNo estás cronometrando nada: el instante de la pulsación es la medida. Las pantallas que siguen tienen una sola línea, porque no hay tiempo de leer mientras miras la persiana.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
         "menu_options": {
-          "open_start": "1) Arrancar la persiana",
+          "open_start": "Arrancar la persiana",
           "repeat_step": "Bajarla del todo primero",
           "cancel_flow": "Cancelar"
         }
@@ -329,7 +329,7 @@
         "title": "La persiana se está abriendo",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\nPulsa en el instante en que el borde inferior se despega de la base.",
         "menu_options": {
-          "lifted_off": "2) Pulsa cuando el borde inferior se despega de la base",
+          "lifted_off": "1) Pulsa cuando el borde inferior se despega de la base",
           "repeat_step": "Repetir este paso",
           "not_right": "No ha hecho lo que debía"
         }
@@ -338,7 +338,7 @@
         "title": "La persiana sigue subiendo",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Persiana**: {cover}\n\nPulsa en el instante en que el motor se para arriba.",
         "menu_options": {
-          "stopped_open": "3) Pulsa cuando el motor se para arriba",
+          "stopped_open": "2) Pulsa cuando el motor se para arriba",
           "repeat_step": "Repetir este paso",
           "not_right": "No ha hecho lo que debía"
         }
@@ -355,7 +355,7 @@
         "title": "Vamos a medir la bajada",
         "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: cuando pulses el botón de abajo, la persiana arrancará hacia abajo desde arriba y se parará sola cuando la tela esté abajo y las lamas se hayan cerrado.\n\n**Lo que tienes que hacer**: aquí también tendrás que ser rápido y preciso, pero esta vez la pulsación es una sola, en el instante en que el motor se para abajo.\n\n**Atención**: no pulses cuando el borde inferior toque la base. A partir de ahí la persiana sigue moviéndose un momento más, para cerrar las lamas. Pulsa solo cuando deje de moverse del todo, lamas incluidas, es decir cuando el motor se para: se reconoce porque cesa el ruido.\n\nUna persiana baja un poco más deprisa de lo que sube, y por eso se mide aparte. La pantalla durante el movimiento tiene una sola línea, porque no hay tiempo de leer mientras miras la persiana.\n\nLee con calma, ponte en posición, y lanza tú el movimiento cuando estés listo.",
         "menu_options": {
-          "close_start": "1) Arrancar la persiana",
+          "close_start": "Arrancar la persiana",
           "repeat_step": "Subirla del todo primero",
           "cancel_flow": "Cancelar"
         }
@@ -364,7 +364,7 @@
         "title": "La persiana se está cerrando",
         "description": "**Persiana**: {cover}\n\nPulsa en el instante en que el motor se para abajo.",
         "menu_options": {
-          "stopped_closed": "2) Pulsa cuando el motor se para abajo",
+          "stopped_closed": "Pulsa cuando el motor se para abajo",
           "repeat_step": "Repetir este paso",
           "not_right": "No ha hecho lo que debía"
         }

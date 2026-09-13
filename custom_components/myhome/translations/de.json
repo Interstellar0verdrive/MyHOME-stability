@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "Wir messen gleich die Auffahrt",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von unten nach oben los. In der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt; dann beginnt der ganze Panzer zu steigen, und oben hält der Rollladen von selbst an.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Sie werden um zwei Tastendrücke gebeten, einen nach dem anderen:\n\n1. den ersten in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst;\n2. den zweiten in dem Augenblick, in dem der Rollladen die Endlage erreicht und der Motor anhält, woran man es am aufhörenden Geräusch erkennt.\n\nSie stoppen nichts: der Augenblick des Drückens ist die Messung. Die folgenden Bildschirme tragen nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von unten nach oben los. In der ersten Sekunde oder zwei öffnen sich nur die Lamellen, während die Unterkante noch aufliegt; dann beginnt der ganze Panzer zu steigen, und oben hält der Rollladen von selbst an.\n\n**Was Sie tun müssen**: hier müssen Sie schnell und genau sein. Sie werden um zwei Tastendrücke gebeten, einen nach dem anderen:\n\n1. den ersten in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst;\n2. den zweiten in dem Augenblick, in dem der Rollladen die Endlage erreicht und der Motor anhält, woran man es am aufhörenden Geräusch erkennt.\n\nSie stoppen nichts: der Augenblick des Drückens ist die Messung. Die folgenden Bildschirme tragen nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
-          "open_start": "1) Den Rollladen starten",
+          "open_start": "Den Rollladen starten",
           "repeat_step": "Ihn erst wieder herunterfahren",
           "cancel_flow": "Abbrechen"
         }
@@ -329,7 +329,7 @@
         "title": "Der Rollladen öffnet sich",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem sich die Unterkante von der Grundlinie löst.",
         "menu_options": {
-          "lifted_off": "2) Drücken, wenn sich die Unterkante von der Grundlinie löst",
+          "lifted_off": "1) Drücken, wenn sich die Unterkante von der Grundlinie löst",
           "repeat_step": "Diesen Schritt wiederholen",
           "not_right": "Er hat nicht getan, was er sollte"
         }
@@ -338,7 +338,7 @@
         "title": "Der Rollladen steigt noch",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem der Motor oben anhält.",
         "menu_options": {
-          "stopped_open": "3) Drücken, wenn der Motor oben anhält",
+          "stopped_open": "2) Drücken, wenn der Motor oben anhält",
           "repeat_step": "Diesen Schritt wiederholen",
           "not_right": "Er hat nicht getan, was er sollte"
         }
@@ -355,7 +355,7 @@
         "title": "Wir messen gleich die Abfahrt",
         "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: wenn Sie den Knopf unten drücken, fährt der Rollladen von oben nach unten los und hält von selbst an, sobald der Panzer unten ist und sich die Lamellen geschlossen haben.\n\n**Was Sie tun müssen**: auch hier müssen Sie schnell und genau sein, aber diesmal gibt es nur einen Tastendruck, in dem Augenblick, in dem der Motor unten anhält.\n\n**Achtung**: drücken Sie nicht, wenn die Unterkante die Grundlinie berührt. Von da an bewegt sich der Rollladen noch einen Moment weiter, um die Lamellen zu schließen. Drücken Sie erst, wenn er sich überhaupt nicht mehr bewegt, Lamellen eingeschlossen, also wenn der Motor anhält: zu erkennen am aufhörenden Geräusch.\n\nEin Rollladen fährt etwas schneller herunter, als er hinauffährt, und deshalb wird das gesondert gemessen. Der Bildschirm während der Bewegung trägt nur eine Zeile, denn zum Lesen bleibt keine Zeit, während Sie den Rollladen beobachten.\n\nLesen Sie in Ruhe, stellen Sie sich hin, und starten Sie die Bewegung selbst, wenn Sie bereit sind.",
         "menu_options": {
-          "close_start": "1) Den Rollladen starten",
+          "close_start": "Den Rollladen starten",
           "repeat_step": "Ihn erst wieder hinauffahren",
           "cancel_flow": "Abbrechen"
         }
@@ -364,7 +364,7 @@
         "title": "Der Rollladen schließt sich",
         "description": "**Rollladen**: {cover}\n\nDrücken Sie in dem Augenblick, in dem der Motor unten anhält.",
         "menu_options": {
-          "stopped_closed": "2) Drücken, wenn der Motor unten anhält",
+          "stopped_closed": "Drücken, wenn der Motor unten anhält",
           "repeat_step": "Diesen Schritt wiederholen",
           "not_right": "Er hat nicht getan, was er sollte"
         }

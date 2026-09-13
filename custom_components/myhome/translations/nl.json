@@ -318,9 +318,9 @@
       },
       "open_brief": {
         "title": "We gaan het rolluik omhoog meten",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van onderen omhoog. De eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten; daarna begint het hele doek te stijgen, en bovenaan stopt het rolluik vanzelf.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Er worden twee drukken gevraagd, de een na de ander:\n\n1. de eerste op het moment dat de onderrand van de basis loskomt;\n2. de tweede op het moment dat het rolluik de eindstand bereikt en de motor stopt, wat u herkent doordat het geluid ophoudt.\n\nU klokt niets: het moment van drukken ís de meting. De schermen die volgen hebben maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van onderen omhoog. De eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten; daarna begint het hele doek te stijgen, en bovenaan stopt het rolluik vanzelf.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Er worden twee drukken gevraagd, de een na de ander:\n\n1. de eerste op het moment dat de onderrand van de basis loskomt;\n2. de tweede op het moment dat het rolluik de eindstand bereikt en de motor stopt, wat u herkent doordat het geluid ophoudt.\n\nU klokt niets: het moment van drukken ís de meting. De schermen die volgen hebben maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
         "menu_options": {
-          "open_start": "1) Start het rolluik",
+          "open_start": "Start het rolluik",
           "repeat_step": "Stuur het eerst weer omlaag",
           "cancel_flow": "Annuleren"
         }
@@ -329,7 +329,7 @@
         "title": "Het rolluik gaat open",
         "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\nDruk op het moment dat de onderrand van de basis loskomt.",
         "menu_options": {
-          "lifted_off": "2) Druk wanneer de onderrand van de basis loskomt",
+          "lifted_off": "1) Druk wanneer de onderrand van de basis loskomt",
           "repeat_step": "Herhaal deze stap",
           "not_right": "Het deed niet wat het moest doen"
         }
@@ -338,7 +338,7 @@
         "title": "Het rolluik stijgt nog",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Rolluik**: {cover}\n\nDruk op het moment dat de motor bovenaan stopt.",
         "menu_options": {
-          "stopped_open": "3) Druk wanneer de motor bovenaan stopt",
+          "stopped_open": "2) Druk wanneer de motor bovenaan stopt",
           "repeat_step": "Herhaal deze stap",
           "not_right": "Het deed niet wat het moest doen"
         }
@@ -355,7 +355,7 @@
         "title": "We gaan het rolluik omlaag meten",
         "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van boven omlaag en stopt vanzelf zodra het doek beneden is en de lamellen gesloten zijn.\n\n**Wat u moet doen**: ook hier moet u snel en nauwkeurig zijn, maar dit keer is er maar één druk, op het moment dat de motor beneden stopt.\n\n**Let op**: druk niet wanneer de onderrand de basis raakt. Vanaf dat punt beweegt het rolluik nog even door, om de lamellen te sluiten. Druk pas wanneer het helemaal ophoudt met bewegen, lamellen inbegrepen, dus wanneer de motor stopt: dat herkent u doordat het geluid ophoudt.\n\nEen rolluik daalt iets sneller dan het stijgt, en daarom wordt dit apart gemeten. Het scherm tijdens de beweging heeft maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
         "menu_options": {
-          "close_start": "1) Start het rolluik",
+          "close_start": "Start het rolluik",
           "repeat_step": "Stuur het eerst weer omhoog",
           "cancel_flow": "Annuleren"
         }
@@ -364,7 +364,7 @@
         "title": "Het rolluik gaat dicht",
         "description": "**Rolluik**: {cover}\n\nDruk op het moment dat de motor beneden stopt.",
         "menu_options": {
-          "stopped_closed": "2) Druk wanneer de motor beneden stopt",
+          "stopped_closed": "Druk wanneer de motor beneden stopt",
           "repeat_step": "Herhaal deze stap",
           "not_right": "Het deed niet wat het moest doen"
         }

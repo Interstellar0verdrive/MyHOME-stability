@@ -1049,6 +1049,7 @@ async def test_the_drawings_are_served_from_one_static_path(hass: HomeAssistant,
     images = Path(config.path)
     assert images == Path(myhome.__file__).parent / "images"
     assert {path.name for path in images.glob("*.webp")} == {
+        "ascent_presses.webp",
         "height.webp",
         "lift_off.webp",
         "reading.webp",
