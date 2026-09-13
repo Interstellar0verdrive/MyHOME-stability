@@ -454,7 +454,7 @@
       },
       "tape_brief": {
         "title": "Before the automatic readings",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: from here on the cover moves by itself. {readings} readings follow: for each one the cover first goes to the end stop that reading starts from, then runs to the position to be measured and stops there on its own. There is nothing to press and nothing to catch in time: after each movement a screen asks for the distance in centimetres.\n\n**What you have to do**: make sure nothing is in the way, keep the tape measure to hand and stand clear while the cover is moving. If a movement does not do what it should, say so on the screen that follows the reading: the step is made again.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: from here on the cover moves by itself. Readings to take: {readings}. Each one begins by taking the cover to the end stop that reading is taken from, and where there is a run to measure the cover makes it and stops there on its own. There is nothing to press and nothing to catch in time: after each movement a screen asks for the distance in centimetres.\n\n**What you have to do**: make sure nothing is in the way, keep the tape measure to hand and stand clear while the cover is moving. If a movement does not do what it should, say so on the screen that follows the reading: the step is made again.",
         "menu_options": {
           "tape_start": "Understood, start the readings",
           "cancel_flow": "Cancel"

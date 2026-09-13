@@ -454,7 +454,7 @@
       },
       "tape_brief": {
         "title": "Avant les lectures automatiques",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : à partir d'ici, le volet bouge tout seul. {readings} lectures suivent : pour chacune, le volet rejoint d'abord la fin de course d'où part cette lecture, puis court jusqu'à la position à mesurer et s'y arrête de lui-même. Il n'y a rien à appuyer et rien à saisir au vol : après chaque mouvement, un écran demande la distance en centimètres.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne, gardez le mètre à portée de main et restez à l'écart tant que le volet bouge. Si un mouvement ne fait pas ce qu'il devait, dites-le sur l'écran qui suit la lecture : l'étape est refaite.",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : à partir d'ici, le volet bouge tout seul. Lectures à faire : {readings}. Chacune commence par amener le volet à la fin de course d'où cette lecture se prend et, là où il y a une course à mesurer, le volet la parcourt et s'y arrête de lui-même. Il n'y a rien à appuyer et rien à saisir au vol : après chaque mouvement, un écran demande la distance en centimètres.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne, gardez le mètre à portée de main et restez à l'écart tant que le volet bouge. Si un mouvement ne fait pas ce qu'il devait, dites-le sur l'écran qui suit la lecture : l'étape est refaite.",
         "menu_options": {
           "tape_start": "J'ai compris, lancer les lectures",
           "cancel_flow": "Annuler"

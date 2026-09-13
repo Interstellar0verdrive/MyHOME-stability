@@ -454,7 +454,7 @@
       },
       "tape_brief": {
         "title": "Vóór de automatische metingen",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: vanaf hier beweegt het rolluik vanzelf. Er volgen {readings} metingen: voor elke meting gaat het rolluik eerst naar de eindstand waar die meting vandaan vertrekt, daarna rijdt het naar de te meten stand en stopt daar vanzelf. Er is niets om op te drukken en niets om op tijd te pakken: na elke beweging vraagt een scherm om de afstand in centimeters.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat, houd de rolmaat bij de hand en blijf uit de buurt zolang het rolluik beweegt. Doet een beweging niet wat ze moest doen, zeg dat dan op het scherm na de meting: de stap wordt opnieuw gedaan.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: vanaf hier beweegt het rolluik vanzelf. Aantal metingen: {readings}. Elke meting begint met het rolluik naar de eindstand te brengen waar die meting vandaan komt, en waar er een rit te meten valt, rijdt het rolluik die en stopt daar vanzelf. Er is niets om op te drukken en niets om op tijd te pakken: na elke beweging vraagt een scherm om de afstand in centimeters.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat, houd de rolmaat bij de hand en blijf uit de buurt zolang het rolluik beweegt. Doet een beweging niet wat ze moest doen, zeg dat dan op het scherm na de meting: de stap wordt opnieuw gedaan.",
         "menu_options": {
           "tape_start": "Begrepen, start de metingen",
           "cancel_flow": "Annuleren"

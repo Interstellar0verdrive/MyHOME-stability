@@ -454,7 +454,7 @@
       },
       "tape_brief": {
         "title": "Vor den automatischen Ablesungen",
-        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: von hier an fährt der Rollladen von selbst. Es folgen {readings} Ablesungen: für jede fährt der Rollladen zuerst in die Endlage, aus der diese Ablesung startet, dann bis zu der zu messenden Position, wo er von selbst hält. Es gibt nichts zu drücken und nichts im richtigen Augenblick zu treffen: nach jeder Bewegung fragt ein Bildschirm nach dem Abstand in Zentimetern.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht, halten Sie das Maßband bereit und bleiben Sie dem Rollladen fern, solange er fährt. Tut eine Bewegung nicht, was sie soll, sagen Sie es auf dem Bildschirm nach der Ablesung: der Schritt wird dann wiederholt.",
+        "description": "**Rollladen**: {cover}\n\n**Was gleich passiert**: von hier an fährt der Rollladen von selbst. Zahl der Ablesungen: {readings}. Jede beginnt damit, den Rollladen in die Endlage zu fahren, aus der diese Ablesung genommen wird; wo eine Fahrt zu messen ist, fährt der Rollladen sie und hält dort von selbst. Es gibt nichts zu drücken und nichts im richtigen Augenblick zu treffen: nach jeder Bewegung fragt ein Bildschirm nach dem Abstand in Zentimetern.\n\n**Was Sie tun müssen**: sorgen Sie dafür, dass nichts im Weg steht, halten Sie das Maßband bereit und bleiben Sie dem Rollladen fern, solange er fährt. Tut eine Bewegung nicht, was sie soll, sagen Sie es auf dem Bildschirm nach der Ablesung: der Schritt wird dann wiederholt.",
         "menu_options": {
           "tape_start": "Verstanden, Ablesungen starten",
           "cancel_flow": "Abbrechen"

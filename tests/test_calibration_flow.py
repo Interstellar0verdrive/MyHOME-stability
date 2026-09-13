@@ -1030,6 +1030,25 @@ async def test_the_tape_phase_warns_once_and_then_asks_for_nothing_but_readings(
         assert len(runner.log) > moved
 
 
+async def test_path_b_is_a_tape_phase_of_one_reading(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The shortest tape phase there is: the travel, and nothing else.
+
+    The screen is the same one path A opens its readings with, so it has to read for
+    one reading as well as for five - which is why it names the count instead of
+    counting into a plural noun.
+
+    Mutation caught: reading the phase off the whole plan rather than off the stages
+    that follow the briefing, which would count `verify_offer` and `summary` in.
+    """
+    async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:5])
+        assert result["step_id"] == "tape_brief"
+        assert result["description_placeholders"]["readings"] == "1"
+
+
 async def test_the_warning_of_the_tape_phase_can_be_refused(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:

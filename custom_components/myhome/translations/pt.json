@@ -454,7 +454,7 @@
       },
       "tape_brief": {
         "title": "Antes das leituras automáticas",
-        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a partir daqui a persiana move-se sozinha. Seguem-se {readings} leituras: em cada uma a persiana vai primeiro ao fim de curso de onde essa leitura parte, depois percorre até à posição a medir e aí para sozinha. Não há nada para carregar nem nada para apanhar a tempo: depois de cada movimento um ecrã pede a distância em centímetros.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar, tenha a fita métrica à mão e mantenha-se afastado enquanto a persiana se move. Se um movimento não fizer o que devia, diga-o no ecrã que se segue à leitura: o passo é refeito.",
+        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a partir daqui a persiana move-se sozinha. Leituras a fazer: {readings}. Cada uma começa por levar a persiana ao fim de curso de onde essa leitura é tirada e, onde há um percurso a medir, a persiana percorre-o e aí para sozinha. Não há nada para carregar nem nada para apanhar a tempo: depois de cada movimento um ecrã pede a distância em centímetros.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar, tenha a fita métrica à mão e mantenha-se afastado enquanto a persiana se move. Se um movimento não fizer o que devia, diga-o no ecrã que se segue à leitura: o passo é refeito.",
         "menu_options": {
           "tape_start": "Percebi, iniciar as leituras",
           "cancel_flow": "Cancelar"
