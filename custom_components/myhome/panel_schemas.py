@@ -6,12 +6,10 @@ the commands, their payloads and the shape of every answer are stated here once,
 file both halves can read, and `.audit-2026-09/CONTRACT-0.6.0-ws.md` says the same thing
 in prose with a worked example beside it. A change to either is a change to both.
 
-**Scope.** 0.6.0 lot 2 is the *read* half. The three commands below are all there is:
-one overview per gateway, one detail per shutter, and the sentences. The writes
-(`assign`, `reorder`, `set_travel`, `cover_edit`, `cover_forget`, `profile_edit`,
-`profile_rename`, `profile_delete`, `undo`) and the `subscribe` stream belong to lot 3
-and are not declared here even as placeholders: a schema for a command that does not
-exist is a promise nobody checked.
+**Scope.** The read half is three commands - one overview per gateway, one detail per
+shutter, and the sentences - and is **frozen**: lot 3 adds to this file and changes
+nothing in it. The write half is the nine commands below it plus `subscribe`, and every
+one of them answers with an `overview` of exactly the shape the read half declares.
 
 **Two names resolved against the plan.**
 
@@ -35,6 +33,14 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.helpers.typing import VolDictType
+
+from .const import (
+    CONF_CLOSING_ROLL,
+    CONF_CLOSING_TIME,
+    CONF_OPENING_ROLL,
+    CONF_OPENING_TIME,
+    CONF_SLAT_TIME,
+)
 
 # --------------------------------------------------------------------- commands
 WS_TYPE_OVERVIEW = "myhome/calibration/overview"
@@ -66,6 +72,167 @@ TEXTS_SCHEMA: VolDictType = {
 }
 
 
+# ------------------------------------------------------------------ write commands
+# Nine commands and one subscription, added by lot 3. Every one of them is admin-only
+# like the reads, every one is refused while a guided calibration is running on any
+# shutter of the gateway, and every one answers with a fresh `overview` plus the token
+# that takes it back.
+#
+# `entry_id` is **required** here and optional on the reads, which is not an
+# inconsistency: a read with no gateway named is a panel opening for the first time and
+# asking what there is, while a write with none would be a change applied to whichever
+# gateway happened to be first in the list.
+WS_TYPE_ASSIGN = "myhome/calibration/assign"
+WS_TYPE_REORDER = "myhome/calibration/reorder"
+WS_TYPE_SET_TRAVEL = "myhome/calibration/set_travel"
+WS_TYPE_COVER_EDIT = "myhome/calibration/cover_edit"
+WS_TYPE_COVER_FORGET = "myhome/calibration/cover_forget"
+WS_TYPE_PROFILE_EDIT = "myhome/calibration/profile_edit"
+WS_TYPE_PROFILE_RENAME = "myhome/calibration/profile_rename"
+WS_TYPE_PROFILE_DELETE = "myhome/calibration/profile_delete"
+WS_TYPE_UNDO = "myhome/calibration/undo"
+WS_TYPE_SUBSCRIBE = "myhome/calibration/subscribe"
+
+WS_WRITE_COMMANDS: tuple[str, ...] = (
+    WS_TYPE_ASSIGN,
+    WS_TYPE_REORDER,
+    WS_TYPE_SET_TRAVEL,
+    WS_TYPE_COVER_EDIT,
+    WS_TYPE_COVER_FORGET,
+    WS_TYPE_PROFILE_EDIT,
+    WS_TYPE_PROFILE_RENAME,
+    WS_TYPE_PROFILE_DELETE,
+    WS_TYPE_UNDO,
+)
+
+# A number as a person may have written it. Not `vol.Coerce(float)`: the guided dialog
+# accepts a comma for a decimal point, because a shutter measured as `85,5` in Italian is
+# a shutter, and `calibration_flow.parse_number` is the one thing that reads either. The
+# range is checked there too, against the dialog's own bounds - here would be a second
+# copy of numbers that already exist.
+NUMBER = vol.Any(float, int, str)
+
+# The five numbers a window can have measured on it, which is what a hand edit may set
+# or clear - and, because a profile *is* a window that was measured, the same five a
+# profile states. Restricted at the schema, so a key the travel model does not know is
+# `invalid_format` naming the key rather than a value quietly stored and never read.
+# They are `panel_data.PROFILE_VALUE_KEYS` on the read side, pinned equal by a test.
+MEASURABLE_KEYS: tuple[str, ...] = (
+    CONF_OPENING_TIME,
+    CONF_CLOSING_TIME,
+    CONF_SLAT_TIME,
+    CONF_OPENING_ROLL,
+    CONF_CLOSING_ROLL,
+)
+
+# An order is a *full* list of unique ids and each shutter sits in exactly one place in
+# it, so a repeated id is a client that has lost track of its own model. Refused at the
+# schema (`invalid_format`) rather than quietly deduplicated: the stored order would then
+# be a different order from the one on the screen, and nothing would have said so. Ids
+# naming no cover of this gateway are still dropped rather than refused (CONTRACT §9.2) -
+# a browser tab left open across a reconfiguration is not a client bug.
+ORDER = vol.All([str], vol.Unique())
+
+# One batch: which shutters follow which profile, and the order they end up in.
+#
+# Assignment and position are **one write**, because on the screen they are one gesture -
+# a shutter dropped into a group lands at a place in it, and two writes would leave a
+# moment in which it was in the group and nowhere in particular. `order` is the whole
+# resulting order (of the gateway); leave it out and every shutter that changed group
+# goes to the end of the group it went to, which is what the tap and keyboard paths mean.
+#
+# `height` is the window's travel, and it is here because a profile cannot be scaled onto
+# a window whose travel nobody knows: the batch carries the missing ones, which is the
+# same write `set_travel` makes on its own.
+ASSIGNMENT_SCHEMA = vol.Schema(
+    {
+        vol.Required("cover_unique_id"): str,
+        vol.Required("profile"): vol.Any(str, None),
+        vol.Optional("height"): vol.Any(NUMBER, None),
+    }
+)
+
+ASSIGN_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_ASSIGN,
+    vol.Required("entry_id"): str,
+    vol.Required("assignments"): [ASSIGNMENT_SCHEMA],
+    vol.Optional("order"): ORDER,
+}
+
+# `profile` present (`null` included, which is "Senza profilo") means `order` is that one
+# group's full order and the other groups do not move; absent, `order` is the whole
+# gateway's. The full list either way and never a move: a move has to be applied to the
+# state the client last saw, and that is the thing these commands exist not to trust.
+REORDER_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_REORDER,
+    vol.Required("entry_id"): str,
+    vol.Required("order"): ORDER,
+    vol.Optional("profile"): vol.Any(str, None),
+}
+
+SET_TRAVEL_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SET_TRAVEL,
+    vol.Required("entry_id"): str,
+    vol.Required("cover_unique_id"): str,
+    # `null` removes it: the window goes back to whatever its own configuration says.
+    vol.Required("height"): vol.Any(NUMBER, None),
+}
+
+# `null` for a key is "stop overriding" - the key leaves the record and the window
+# inherits again, which is the empty field with its "eredita N" placeholder. A key the
+# message does not mention is not touched, so correcting one number is one number.
+COVER_EDIT_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_COVER_EDIT,
+    vol.Required("entry_id"): str,
+    vol.Required("cover_unique_id"): str,
+    vol.Required("overrides"): vol.Schema(
+        {vol.Optional(key): vol.Any(NUMBER, None) for key in MEASURABLE_KEYS}
+    ),
+    vol.Optional("height"): vol.Any(NUMBER, None),
+}
+
+COVER_FORGET_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_COVER_FORGET,
+    vol.Required("entry_id"): str,
+    vol.Required("cover_unique_id"): str,
+}
+
+PROFILE_EDIT_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_PROFILE_EDIT,
+    vol.Required("entry_id"): str,
+    vol.Required("name"): str,
+    vol.Required("values"): vol.Schema(
+        {vol.Required(key): NUMBER for key in MEASURABLE_KEYS}
+    ),
+    # The window the profile was measured on, which is what scales it onto every other.
+    vol.Required("reference_height"): NUMBER,
+}
+
+PROFILE_RENAME_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_PROFILE_RENAME,
+    vol.Required("entry_id"): str,
+    vol.Required("name"): str,
+    vol.Required("new_name"): str,
+}
+
+PROFILE_DELETE_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_PROFILE_DELETE,
+    vol.Required("entry_id"): str,
+    vol.Required("name"): str,
+}
+
+UNDO_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_UNDO,
+    vol.Required("entry_id"): str,
+    vol.Required("undo_token"): str,
+}
+
+SUBSCRIBE_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SUBSCRIBE,
+    vol.Optional("entry_id"): str,
+}
+
+
 # ----------------------------------------------------------------------- errors
 # The translation keys every refusal carries, alongside `translation_domain="myhome"`,
 # so that the panel shows the same seven-language sentence the dialog shows. Until the
@@ -75,12 +242,32 @@ ERROR_UNKNOWN_ENTRY = "unknown_entry"
 ERROR_ENTRY_NOT_LOADED = "entry_not_loaded"
 ERROR_UNKNOWN_COVER = "unknown_cover"
 ERROR_ADVANCED_COVER = "advanced_cover"
+# ...and the refusals a write can add to those. The first two are the lock: a guided
+# calibration is holding a shutter and has numbers half measured, or another change to
+# the same gateway is being applied and this one would decide against a store it is
+# about to stop being. The rest are what the guided dialog already refuses, under the
+# keys it already uses (`not_a_number`, `out_of_range`, `invalid_name` come from
+# `calibration_flow` itself and are not restated here).
+ERROR_BUSY_CALIBRATING = "busy_calibrating"
+ERROR_WRITE_IN_PROGRESS = "write_in_progress"
+ERROR_MISSING_TRAVEL = "missing_travel"
+ERROR_UNKNOWN_PROFILE = "unknown_profile"
+ERROR_PROFILE_NOT_EDITABLE = "profile_not_editable"
+ERROR_NAME_IN_USE = "name_in_use"
+ERROR_UNDO_EXPIRED = "undo_expired"
 
 WS_ERROR_KEYS: tuple[str, ...] = (
     ERROR_UNKNOWN_ENTRY,
     ERROR_ENTRY_NOT_LOADED,
     ERROR_UNKNOWN_COVER,
     ERROR_ADVANCED_COVER,
+    ERROR_BUSY_CALIBRATING,
+    ERROR_WRITE_IN_PROGRESS,
+    ERROR_MISSING_TRAVEL,
+    ERROR_UNKNOWN_PROFILE,
+    ERROR_PROFILE_NOT_EDITABLE,
+    ERROR_NAME_IN_USE,
+    ERROR_UNDO_EXPIRED,
 )
 
 
@@ -205,6 +392,55 @@ COVER_DETAIL_KEY_KEYS: tuple[str, ...] = (
     "default_value",
 )
 
+# ------------------------------------------------------- what a write answers with
+# Every write answers with the same two keys and then its own. `overview` is the whole
+# payload above, rebuilt after the write: the client replaces its model with it rather
+# than patching, which is what makes a browser tab left open for a day either right or
+# visibly stale and never quietly half of each.
+#
+# `undo_token` is an opaque hex that takes exactly that write back, `null` when the write
+# changed nothing (a drag that ended where it started, a value retyped as it was) - there
+# is nothing to take back and an "Annulla" that did nothing would be worse than none.
+WRITE_KEYS: tuple[str, ...] = ("overview", "undo_token")
+
+# ...how many of the batch's shutters really changed. A row the user did not touch is
+# not counted, so the strip can say "3 tapparelle" and mean it.
+ASSIGN_KEYS: tuple[str, ...] = (*WRITE_KEYS, "applied")
+REORDER_KEYS: tuple[str, ...] = WRITE_KEYS
+SET_TRAVEL_KEYS: tuple[str, ...] = WRITE_KEYS
+COVER_EDIT_KEYS: tuple[str, ...] = WRITE_KEYS
+# Where this window's numbers come from now that its own are gone: "profile", "file" or
+# "defaults", and the profile's name when there is one. Resolved after the deletion
+# rather than predicted before it, so the sentence and the shutter agree.
+COVER_FORGET_KEYS: tuple[str, ...] = (*WRITE_KEYS, "falls_back_to", "profile")
+# Every window that follows the profile, named before the user goes looking for them.
+PROFILE_EDIT_KEYS: tuple[str, ...] = (*WRITE_KEYS, "affected")
+# How many followers moved with the name, and the ones that could not: a window whose
+# own `profile:` line in `myhome.yaml` names the old profile is the user's file talking,
+# and this integration does not write that file.
+PROFILE_RENAME_KEYS: tuple[str, ...] = (*WRITE_KEYS, "moved", "from_file")
+# The same split at a deletion: the assignments that went with the profile, and the
+# `profile:` lines that now name nothing.
+PROFILE_DELETE_KEYS: tuple[str, ...] = (*WRITE_KEYS, "covers_affected", "from_file")
+# An undo answers like any other write and hands back no token of its own (`undo_token`
+# is `null`): undoing an undo would be two buttons swapping a gateway back and forth
+# with nothing on the screen saying which way round it is now. `undone` names the
+# command that was taken back.
+UNDO_KEYS: tuple[str, ...] = (*WRITE_KEYS, "undone")
+
+# ------------------------------------------------------------- what a subscription says
+# `overview` on subscribing, after every successful write and after every undo;
+# `measuring` whenever a guided calibration starts or ends on one of this gateway's
+# shutters, which is what raises and drops the panel's read-only lock.
+#
+# The plan's third event, `applying`, is deliberately absent: it existed to cover the
+# seconds a config entry spends reloading, and a write does not reload one any more
+# (decision 4). There is no window to be honest about.
+WS_EVENT_OVERVIEW = "overview"
+WS_EVENT_MEASURING = "measuring"
+WS_EVENT_TYPES: tuple[str, ...] = (WS_EVENT_OVERVIEW, WS_EVENT_MEASURING)
+
+
 TEXTS_KEYS: tuple[str, ...] = (
     # The language actually served, after the fallback chain.
     "language",
@@ -219,22 +455,67 @@ TEXTS_KEYS: tuple[str, ...] = (
 
 
 __all__ = [
+    "ASSIGNMENT_SCHEMA",
+    "ASSIGN_KEYS",
+    "ASSIGN_SCHEMA",
     "COVER_DETAIL_KEYS",
     "COVER_DETAIL_KEY_KEYS",
     "COVER_DETAIL_SCHEMA",
+    "COVER_EDIT_KEYS",
+    "COVER_EDIT_SCHEMA",
+    "COVER_FORGET_KEYS",
+    "COVER_FORGET_SCHEMA",
     "COVER_KEYS",
     "ERROR_ADVANCED_COVER",
+    "ERROR_BUSY_CALIBRATING",
     "ERROR_ENTRY_NOT_LOADED",
+    "ERROR_MISSING_TRAVEL",
+    "ERROR_NAME_IN_USE",
+    "ERROR_PROFILE_NOT_EDITABLE",
+    "ERROR_UNDO_EXPIRED",
     "ERROR_UNKNOWN_COVER",
     "ERROR_UNKNOWN_ENTRY",
+    "ERROR_UNKNOWN_PROFILE",
+    "ERROR_WRITE_IN_PROGRESS",
+    "MEASURABLE_KEYS",
+    "NUMBER",
+    "ORDER",
     "OVERVIEW_KEYS",
     "OVERVIEW_SCHEMA",
+    "PROFILE_DELETE_KEYS",
+    "PROFILE_DELETE_SCHEMA",
+    "PROFILE_EDIT_KEYS",
+    "PROFILE_EDIT_SCHEMA",
     "PROFILE_KEYS",
+    "PROFILE_RENAME_KEYS",
+    "PROFILE_RENAME_SCHEMA",
+    "REORDER_KEYS",
+    "REORDER_SCHEMA",
+    "SET_TRAVEL_KEYS",
+    "SET_TRAVEL_SCHEMA",
+    "SUBSCRIBE_SCHEMA",
     "TEXTS_KEYS",
     "TEXTS_SCHEMA",
+    "UNDO_KEYS",
+    "UNDO_SCHEMA",
+    "WRITE_KEYS",
     "WS_ERROR_KEYS",
+    "WS_EVENT_MEASURING",
+    "WS_EVENT_OVERVIEW",
+    "WS_EVENT_TYPES",
     "WS_READ_COMMANDS",
+    "WS_TYPE_ASSIGN",
     "WS_TYPE_COVER_DETAIL",
+    "WS_TYPE_COVER_EDIT",
+    "WS_TYPE_COVER_FORGET",
     "WS_TYPE_OVERVIEW",
+    "WS_TYPE_PROFILE_DELETE",
+    "WS_TYPE_PROFILE_EDIT",
+    "WS_TYPE_PROFILE_RENAME",
+    "WS_TYPE_REORDER",
+    "WS_TYPE_SET_TRAVEL",
+    "WS_TYPE_SUBSCRIBE",
     "WS_TYPE_TEXTS",
+    "WS_TYPE_UNDO",
+    "WS_WRITE_COMMANDS",
 ]

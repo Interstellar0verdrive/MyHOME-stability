@@ -121,6 +121,21 @@ CALIBRATION_KEY_ORIGINS: tuple[str, ...] = (
 CALIBRATION_ORIGIN_SELECTOR = "calibration_origin"
 CALIBRATION_ORIGIN_PROFILE_SLOT = "{profile}"
 
+# Something stored about this gateway's calibrations has changed, and the shutters have
+# to be told. Consumers subscribe with SIGNAL_CALIBRATION_CHANGED.format(mac=<mac>) and
+# are handed the `entry_id` that changed.
+#
+# Up to 0.5.0 the only way a stored calibration reached a shutter was a reload of the
+# config entry: a cover reads its travel model in its constructor, so the entry was torn
+# down and built again for every saved measurement. That is the right price to pay once
+# at the end of a guided conversation and much too high for the panel, where assigning a
+# profile to each of twelve windows would take the whole gateway away and back twelve
+# times. So a panel write sends this instead, and every cover of that gateway re-runs
+# the one resolution (`resolve_cover_config`) against the file as it was written
+# (`CONF_COVERS_FROM_FILE`) plus the store as it now is, and swaps its numbers in place
+# (0.6.0, plan decision 4). Nothing is torn down, no entity id changes, no state is lost.
+SIGNAL_CALIBRATION_CHANGED = "myhome_calibration_changed_{mac}"
+
 # Where a guided calibration lives (0.5.0 v2): one `homeassistant.helpers.storage.Store`
 # per config entry, holding every profile and every per-cover record. Up to 0.5.0's first
 # draft the same data was kept in two *config subentry* types, whose names are still

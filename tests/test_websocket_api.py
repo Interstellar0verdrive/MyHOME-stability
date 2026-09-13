@@ -15,16 +15,23 @@ command here that could.
 
 from __future__ import annotations
 
+import asyncio
 import json
+from contextlib import ExitStack
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
+from custom_components.myhome import panel_write
 from custom_components.myhome.calibration_store import (
+    async_forget_store,
     cover_calibration_data,
     cover_profile_data,
     loaded_store,
@@ -40,25 +47,61 @@ from custom_components.myhome.const import (
     DOMAIN,
 )
 from custom_components.myhome.panel_schemas import (
+    ASSIGN_KEYS,
     COVER_DETAIL_KEY_KEYS,
     COVER_DETAIL_KEYS,
+    COVER_EDIT_KEYS,
+    COVER_FORGET_KEYS,
     COVER_KEYS,
     ERROR_ADVANCED_COVER,
+    ERROR_BUSY_CALIBRATING,
     ERROR_ENTRY_NOT_LOADED,
+    ERROR_MISSING_TRAVEL,
+    ERROR_PROFILE_NOT_EDITABLE,
+    ERROR_UNDO_EXPIRED,
     ERROR_UNKNOWN_COVER,
     ERROR_UNKNOWN_ENTRY,
+    ERROR_WRITE_IN_PROGRESS,
+    MEASURABLE_KEYS,
     OVERVIEW_KEYS,
+    PROFILE_DELETE_KEYS,
+    PROFILE_EDIT_KEYS,
     PROFILE_KEYS,
+    PROFILE_RENAME_KEYS,
+    REORDER_KEYS,
+    SET_TRAVEL_KEYS,
     TEXTS_KEYS,
+    UNDO_KEYS,
+    WS_EVENT_MEASURING,
+    WS_EVENT_OVERVIEW,
     WS_READ_COMMANDS,
+    WS_TYPE_ASSIGN,
     WS_TYPE_COVER_DETAIL,
+    WS_TYPE_COVER_EDIT,
+    WS_TYPE_COVER_FORGET,
     WS_TYPE_OVERVIEW,
+    WS_TYPE_PROFILE_DELETE,
+    WS_TYPE_PROFILE_EDIT,
+    WS_TYPE_PROFILE_RENAME,
+    WS_TYPE_REORDER,
+    WS_TYPE_SET_TRAVEL,
+    WS_TYPE_SUBSCRIBE,
     WS_TYPE_TEXTS,
+    WS_TYPE_UNDO,
+    WS_WRITE_COMMANDS,
+)
+from custom_components.myhome.panel_write import (
+    UNDO_TTL,
+    PanelError,
+    async_set_travel,
+    async_subscribers,
+    async_write,
 )
 from custom_components.myhome.websocket_api import WS_REGISTERED
 
-from .helpers_core import MAC
-from .helpers_platforms import entity_object, setup_myhome
+from .helpers_core import MAC, MAC2, make_entry, mock_gateway, write_yaml
+from .helpers_platforms import entity_object, mock_commands, setup_myhome
+from .test_panel_parity import assert_they_agree
 
 FIRST = f"{MAC}-2-81"
 SECOND = f"{MAC}-2-82"
@@ -702,3 +745,1290 @@ async def test_the_store_the_example_was_built_from_is_the_one_on_disk(
         assert store.raw_order == [SECOND, FIRST]
         assert sorted(store.raw_profiles) == ["tall"]
         assert sorted(store.raw_covers) == sorted([FIRST, SECOND])
+
+
+# ======================================================================== the writes
+# Nine commands and one subscription (0.6.0 lot 3). The frames below are the frames the
+# browser sends, and what comes back is what really came down the socket: the schema is
+# the registered one, the admin check the registered decorator's, and the refusals are
+# the codes a client would have to handle.
+#
+# The invariant every one of them ends on is the one `test_panel_parity.py` states - the
+# row the panel draws and the attributes the shutter publishes are one answer - because
+# a write applies its numbers to the entity **in place** now (plan decision 4) rather
+# than reloading the config entry, and an in-place swap is exactly where the two could
+# start disagreeing.
+
+THIRD = f"{MAC}-2-84"
+SECOND_ENTITY = "cover.landing_shutter"
+THIRD_ENTITY = "cover.attic_shutter"
+
+# The reading fixture plus one shutter nobody has ever measured or given a travel to:
+# the window a profile cannot be scaled onto, which is what the "corse mancanti" form
+# exists for. Kept apart from `YAML` so the frozen example stays the payload it is.
+# A second gateway, for the one test that needs two of them: the smallest thing that
+# can be set up beside the first, because what it is for is the keying of the
+# subscriber list and the undo slot and not anything it says about shutters.
+SECOND_GATEWAY_YAML = f"""
+gateway:
+  mac: {MAC2}
+  cover:
+    garage_shutter:
+      where: '81'
+      name: Garage Shutter
+      height: 200
+"""
+
+WRITE_YAML = YAML.replace(
+    """    skylight:""",
+    """    attic_shutter:
+      where: '84'
+      name: Attic Shutter
+    skylight:""",
+)
+
+
+async def refused(client, **payload: Any) -> dict[str, Any]:
+    """...and the same, insisting that it did not work."""
+    message = await ask(client, **payload)
+    assert message["success"] is False, message
+    return message["error"]
+
+
+def row_of(overview: dict[str, Any], unique_id: str) -> dict[str, Any]:
+    return next(row for row in overview["covers"] if row["unique_id"] == unique_id)
+
+
+def profile_of(overview: dict[str, Any], name: str) -> dict[str, Any]:
+    return next(row for row in overview["profiles"] if row["name"] == name)
+
+
+# ------------------------------------------------------------------ registration
+async def test_every_write_command_is_registered_too(hass: HomeAssistant, tmp_path) -> None:
+    """The nine writes and the subscription, under the one flag the reads use."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML) as (_entry, _commands):
+        registered = hass.data["websocket_api"]
+        for command in (*WS_WRITE_COMMANDS, WS_TYPE_SUBSCRIBE):
+            assert command in registered
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"type": WS_TYPE_ASSIGN, "entry_id": "x", "assignments": []},
+        {"type": WS_TYPE_REORDER, "entry_id": "x", "order": []},
+        {"type": WS_TYPE_SET_TRAVEL, "entry_id": "x", "cover_unique_id": FIRST, "height": 200},
+        {"type": WS_TYPE_COVER_EDIT, "entry_id": "x", "cover_unique_id": FIRST, "overrides": {}},
+        {"type": WS_TYPE_COVER_FORGET, "entry_id": "x", "cover_unique_id": FIRST},
+        {
+            "type": WS_TYPE_PROFILE_EDIT,
+            "entry_id": "x",
+            "name": "tall",
+            "values": dict.fromkeys(MEASURABLE_KEYS, 10),
+            "reference_height": 200,
+        },
+        {"type": WS_TYPE_PROFILE_RENAME, "entry_id": "x", "name": "tall", "new_name": "short"},
+        {"type": WS_TYPE_PROFILE_DELETE, "entry_id": "x", "name": "tall"},
+        {"type": WS_TYPE_UNDO, "entry_id": "x", "undo_token": "deadbeef"},
+        {"type": WS_TYPE_SUBSCRIBE},
+    ],
+    ids=[
+        "assign",
+        "reorder",
+        "set_travel",
+        "cover_edit",
+        "cover_forget",
+        "profile_edit",
+        "profile_rename",
+        "profile_delete",
+        "undo",
+        "subscribe",
+    ],
+)
+async def test_a_household_member_may_not_write_either(
+    hass: HomeAssistant, tmp_path, hass_ws_client, hass_admin_user, payload: dict[str, Any]
+) -> None:
+    """Rewriting what "open" means is a setting, and settings are the admin's.
+
+    Mutation caught: dropping `require_admin` from any single write.
+    """
+    hass_admin_user.groups = []
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        _entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(client, **payload)
+        assert error["code"] == ws_const.ERR_UNAUTHORIZED
+
+
+# ------------------------------------------------------------------------- assign
+async def test_assign_points_a_shutter_at_a_profile_and_answers_with_the_gateway(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """One write: the assignment, the travel it needs, and the whole overview back.
+
+    The travel is in the batch because a profile is the measurement of a window of a
+    certain height and this window's height was never known - which is the one thing
+    that can stop an assignment, and the reason the review panel collects it first.
+
+    Mutation caught: answering with a patch instead of the whole overview; dropping the
+    supplied height (the profile would be applied unscaled).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": THIRD, "profile": "tall", "height": 180}],
+        )
+        assert tuple(answer) == ASSIGN_KEYS
+        assert answer["applied"] == 1
+        assert isinstance(answer["undo_token"], str)
+
+        row = row_of(answer["overview"], THIRD)
+        assert row["profile"] == "tall"
+        assert row["profile_from_file"] is False
+        assert row["origin"] == "inherited"
+        assert row["height"] == 180.0
+        # ...and the shutter itself is running on it, with no reload in between.
+        assert_they_agree(hass, row, THIRD_ENTITY, origin="inherited")
+
+
+async def test_assign_refuses_the_whole_batch_when_a_window_has_no_travel(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A profile cannot be scaled onto a window nobody has measured.
+
+    And the batch is refused whole, not half applied: a screen that had to explain which
+    half went through would be worse than one that explains what is missing.
+
+    Mutation caught: writing the items that passed; accepting a profile with no travel
+    (every follower would be scaled as though it were the reference window).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[
+                {"cover_unique_id": SECOND, "profile": None},
+                {"cover_unique_id": THIRD, "profile": "tall"},
+            ],
+        )
+        assert error["code"] == ws_const.ERR_SERVICE_VALIDATION_ERROR
+        assert error["translation_key"] == ERROR_MISSING_TRAVEL
+        assert THIRD in error["message"]
+
+        # Nothing was written: the item that would have passed did not either.
+        overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert row_of(overview, SECOND)["profile"] == "tall"
+
+
+async def test_assign_names_every_item_it_refuses(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """An unknown id, an advanced shutter and a profile nobody defines, in one message.
+
+    A WebSocket error carries one key, so the key is the first kind of problem and the
+    sentence names each offending item with its own reason - which is what lets the panel
+    mark the rows rather than only showing a banner.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[
+                {"cover_unique_id": "nobody", "profile": None},
+                {"cover_unique_id": ADVANCED, "profile": None},
+                {"cover_unique_id": FIRST, "profile": "gone"},
+            ],
+        )
+        assert error["code"] == ws_const.ERR_SERVICE_VALIDATION_ERROR
+        assert f"nobody: {ERROR_UNKNOWN_COVER}" in error["message"]
+        assert f"{ADVANCED}: {ERROR_ADVANCED_COVER}" in error["message"]
+        assert f"{FIRST}: unknown_profile" in error["message"]
+
+
+async def test_assign_puts_a_shutter_at_the_end_of_the_group_it_joins(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Assigned without a drop position - the tap path, the keyboard path.
+
+    The end of the target group is the one place that is not a place somebody else
+    chose. Groups are slices of the one flat order, so the splice is after the last
+    member the group already has.
+
+    Mutation caught: appending to the end of the whole list (the shutter would land
+    under a different group and the user's order would rearrange itself).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        # The stored order is [SECOND, FIRST]; the third shutter follows nothing and so
+        # comes after them both, in the file's order.
+        overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert [row["unique_id"] for row in overview["covers"]] == [SECOND, FIRST, THIRD]
+
+        answer = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": THIRD, "profile": "tall", "height": 180}],
+        )
+        # `tall` is [SECOND, FIRST]; the new follower goes after FIRST and not after
+        # everything else, which here is the same place and in a bigger house is not.
+        assert answer["overview"]["order"] == [SECOND, FIRST, THIRD]
+        assert [row["unique_id"] for row in answer["overview"]["covers"]] == [
+            SECOND,
+            FIRST,
+            THIRD,
+        ]
+
+
+async def test_assign_writes_the_order_it_is_given(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Assignment and position are one write, because on the screen they are one drop."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": THIRD, "profile": "tall", "height": 180}],
+            order=[THIRD, FIRST, SECOND],
+        )
+        assert answer["overview"]["order"] == [THIRD, FIRST, SECOND]
+        assert [row["unique_id"] for row in answer["overview"]["covers"]] == [
+            THIRD,
+            FIRST,
+            SECOND,
+        ]
+
+
+async def test_assign_takes_a_profile_away_and_the_shutter_goes_back_to_its_file(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`profile: null` is "Togli dal profilo", which is a drop zone of its own.
+
+    What the window keeps is what was measured *on it*: the overrides and the travel are
+    statements about that window and have nothing to do with which kind of shutter it is.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+        )
+        row = row_of(answer["overview"], FIRST)
+        assert row["profile"] is None
+        assert row["origin"] == "measured"
+        assert row["has_own"] == sorted([CONF_OPENING_TIME, CONF_SLAT_TIME])
+        assert_they_agree(hass, row, FIRST_ENTITY, origin="measured")
+
+
+# ------------------------------------------------------------------------ reorder
+async def test_reorder_takes_the_whole_gateway_s_order(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The list the overview hands out, sent back whole (CONTRACT §2)."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            order=[FIRST, THIRD, SECOND, "a shutter that is not there"],
+        )
+        assert tuple(answer) == REORDER_KEYS
+        # An id that names nothing is dropped rather than stored: a browser tab left
+        # open across a reconfiguration must not write back a shutter that is gone.
+        assert answer["overview"]["order"] == [FIRST, THIRD, SECOND]
+
+
+async def test_reorder_of_one_group_leaves_the_other_groups_where_they_are(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A drag inside a group is a change to that group and to nothing else.
+
+    The group's members go back into the places that group already holds in the one flat
+    order, so the shutters that follow nothing do not move at all.
+
+    Mutation caught: replacing the whole order with the group's list (every other
+    shutter would be dropped out of the stored order).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            profile="tall",
+            order=[FIRST, SECOND],
+        )
+        assert answer["overview"]["order"] == [FIRST, SECOND, THIRD]
+
+
+async def test_reorder_of_one_group_keeps_every_member_of_it(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A group's list is that group's *full* order, and a short one costs nobody a place.
+
+    The group's members are put back into the seats that group holds in the one flat
+    order - one seat per member - so a list naming fewer than all of them would leave a
+    seat empty and drop a shutter out of the stored order altogether. On the screen that
+    is a window jumping to the end of its group for no reason anybody can see.
+
+    Mutation caught: `zip(seats, wanted, strict=False)` without the tail that puts the
+    members the list left out back at the end of the group.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            profile="tall",
+            order=[FIRST],
+        )
+        assert set(answer["overview"]["order"]) == {FIRST, SECOND, THIRD}
+
+
+async def test_reorder_refuses_an_order_that_names_a_shutter_twice(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Each shutter sits in exactly one place, so a repeated id is a broken client.
+
+    Refused at the schema rather than quietly deduplicated: a deduplicated list is a
+    stored order different from the one on the screen, with nothing saying so.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            order=[FIRST, SECOND, FIRST],
+        )
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
+        error = await refused(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+            order=[FIRST, FIRST],
+        )
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
+
+
+async def test_reorder_refuses_a_shutter_that_does_not_follow_that_profile(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A group's order is about that group: an id from elsewhere is a client bug."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_REORDER,
+            entry_id=entry.entry_id,
+            profile="tall",
+            order=[FIRST, THIRD],
+        )
+        assert error["code"] == ws_const.ERR_SERVICE_VALIDATION_ERROR
+        assert error["translation_key"] == ERROR_UNKNOWN_COVER
+
+
+# --------------------------------------------------------------------- set_travel
+async def test_set_travel_rescales_the_profile_onto_that_window(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The one number every scaled profile depends on, and `null` takes it back."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        before = row_of(
+            await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id), SECOND
+        )
+        answer = await result(
+            client,
+            type=WS_TYPE_SET_TRAVEL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+            height=100,
+        )
+        assert tuple(answer) == SET_TRAVEL_KEYS
+        row = row_of(answer["overview"], SECOND)
+        assert row["height"] == 100.0
+        assert row["values"][CONF_OPENING_TIME] < before["values"][CONF_OPENING_TIME]
+        assert_they_agree(hass, row, SECOND_ENTITY)
+
+
+async def test_set_travel_refuses_a_number_the_guided_form_would_refuse(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The bounds are the dialog's own (`MIN_HEIGHT_CM`/`MAX_HEIGHT_CM`), not a copy.
+
+    Mutation caught: widening the range here (the panel would store a travel the guided
+    conversation refuses, and the two screens would disagree about the same window).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_SET_TRAVEL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+            height=5,
+        )
+        assert error["code"] == ws_const.ERR_SERVICE_VALIDATION_ERROR
+        assert error["translation_key"] == "out_of_range"
+
+
+@pytest.mark.parametrize(
+    ("unique_id", "code", "key"),
+    [
+        ("nobody", ws_const.ERR_NOT_FOUND, ERROR_UNKNOWN_COVER),
+        (ADVANCED, ws_const.ERR_NOT_SUPPORTED, ERROR_ADVANCED_COVER),
+    ],
+    ids=["unknown", "advanced"],
+)
+async def test_a_write_tells_an_unknown_shutter_from_one_it_does_not_do(
+    hass: HomeAssistant, tmp_path, hass_ws_client, unique_id: str, code: str, key: str
+) -> None:
+    """Two different answers, because they ask the user to do two different things."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_SET_TRAVEL,
+            entry_id=entry.entry_id,
+            cover_unique_id=unique_id,
+            height=200,
+        )
+        assert error["code"] == code
+        assert error["translation_key"] == key
+
+
+# --------------------------------------------------------------------- cover_edit
+async def test_cover_edit_stores_a_number_and_an_empty_field_goes_back_to_inheriting(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`null` is "stop overriding": the key leaves the record and the window inherits.
+
+    Which is what the empty field with its "eredita N" placeholder means, and the one
+    way to take back a number measured by mistake without deleting the whole record and
+    the assignment with it.
+
+    Mutation caught: storing `null` as a zero; replacing the whole override block (the
+    key the message does not mention would be thrown away).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_COVER_EDIT,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            overrides={CONF_OPENING_TIME: "26,5", CONF_SLAT_TIME: None},
+        )
+        assert tuple(answer) == COVER_EDIT_KEYS
+        row = row_of(answer["overview"], FIRST)
+        # A comma is a decimal point to the person holding the tape, and the parser is
+        # the guided dialog's own.
+        assert row["values"][CONF_OPENING_TIME] == 26.5
+        assert row["has_own"] == [CONF_OPENING_TIME]
+        # ...and the profile goes on answering for the key that was cleared.
+        assert row["profile"] == "tall"
+        assert row["origin"] == "adjusted"
+        assert_they_agree(hass, row, FIRST_ENTITY, origin="adjusted")
+
+
+async def test_cover_edit_refuses_a_key_the_travel_model_does_not_know(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Refused by the registered schema, naming the key, rather than stored and ignored."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_COVER_EDIT,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            overrides={"curtain_colour": 3},
+        )
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
+
+
+async def test_cover_edit_that_clears_everything_deletes_the_record(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A record holding only a source and a timestamp is invisible and immortal.
+
+    The dialog's hand edit has deleted such a record all along (0.5.0 v2 review,
+    RISK-3); so does this, through the same rule and not a second one.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+        )
+        await result(
+            client,
+            type=WS_TYPE_COVER_EDIT,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            overrides=dict.fromkeys(MEASURABLE_KEYS),
+            height=None,
+        )
+        assert FIRST not in loaded_store(hass, entry).raw_covers
+
+
+# ------------------------------------------------------------------- cover_forget
+async def test_cover_forget_says_where_the_window_falls_back_to(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Removing a measurement names its destination before the user goes looking.
+
+    Resolved after the deletion rather than predicted before it, so the sentence and the
+    shutter are the same answer. This window writes its own run times in `myhome.yaml`
+    and its record carried the assignment, so with the record gone it is the file's.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client, type=WS_TYPE_COVER_FORGET, entry_id=entry.entry_id, cover_unique_id=FIRST
+        )
+        assert tuple(answer) == COVER_FORGET_KEYS
+        assert answer["falls_back_to"] == "file"
+        assert answer["profile"] is None
+        row = row_of(answer["overview"], FIRST)
+        assert row["origin"] == "from_the_file"
+        assert row["has_own"] == []
+        assert_they_agree(hass, row, FIRST_ENTITY, origin="from_the_file")
+
+
+# ------------------------------------------------------------------- profile_edit
+async def test_profile_edit_reaches_every_follower(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A follower holds the *name*, so an edit reaches it on the next resolution.
+
+    Which is now, without a reload: `affected` names the windows and the shutters
+    themselves are already running on the new numbers by the time the answer arrives.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_PROFILE_EDIT,
+            entry_id=entry.entry_id,
+            name="tall",
+            values={
+                CONF_OPENING_TIME: 30.0,
+                "closing_time": 29.0,
+                CONF_SLAT_TIME: 5.0,
+                "opening_roll": 2.0,
+                "closing_roll": 1.8,
+            },
+            reference_height=HEIGHT,
+        )
+        assert tuple(answer) == PROFILE_EDIT_KEYS
+        assert answer["affected"] == sorted([FIRST, SECOND])
+        tall = profile_of(answer["overview"], "tall")
+        assert tall["values"][CONF_OPENING_TIME] == 30.0
+        # The provenance is carried over: the window it was measured on is still the
+        # window it was measured on, and only the date it was last stated moves.
+        assert tall["measured_on"] == FIRST
+        assert tall["measured_at"] != "2026-09-04T18:12:00+00:00"
+        # The follower that measured nothing of its own runs on the new numbers.
+        assert_they_agree(hass, row_of(answer["overview"], SECOND), SECOND_ENTITY)
+
+
+async def test_a_profile_written_in_the_file_is_not_the_panel_s_to_change(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`cover_profiles:` is a block of the user's own file, and this does not write it."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        for payload in (
+            {
+                "type": WS_TYPE_PROFILE_EDIT,
+                "name": "from_the_file",
+                "values": dict.fromkeys(MEASURABLE_KEYS, 10),
+                "reference_height": 200,
+            },
+            {"type": WS_TYPE_PROFILE_RENAME, "name": "from_the_file", "new_name": "taller"},
+            {"type": WS_TYPE_PROFILE_DELETE, "name": "from_the_file"},
+        ):
+            error = await refused(client, entry_id=entry.entry_id, **payload)
+            assert error["code"] == ws_const.ERR_NOT_ALLOWED
+            assert error["translation_key"] == ERROR_PROFILE_NOT_EDITABLE
+
+
+# ----------------------------------------------------------------- profile_rename
+async def test_profile_rename_moves_every_follower_and_leaves_no_old_key(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Three writes in one awaited sequence, in the order that leaves no gap.
+
+    The numbers go in under the new name, the followers are repointed, and only then is
+    the old name removed - so nothing in between leaves a shutter following a name
+    nobody defines.
+
+    Mutation caught: removing the old profile first (`async_remove_profile` would strip
+    the assignment off every follower on the way).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_PROFILE_RENAME,
+            entry_id=entry.entry_id,
+            name="tall",
+            new_name="taller",
+        )
+        assert tuple(answer) == PROFILE_RENAME_KEYS
+        assert answer["moved"] == 2
+        assert answer["from_file"] == []
+        names = [row["name"] for row in answer["overview"]["profiles"]]
+        assert "tall" not in names
+        assert "taller" in names
+        assert row_of(answer["overview"], FIRST)["profile"] == "taller"
+        assert loaded_store(hass, entry).profile("tall") is None
+        assert_they_agree(hass, row_of(answer["overview"], SECOND), SECOND_ENTITY)
+
+
+@pytest.mark.parametrize(
+    ("new_name", "key"),
+    [("from_the_file", "name_in_use"), ("not a name", "invalid_name")],
+    ids=["taken", "not a name"],
+)
+async def test_profile_rename_refuses_a_name_it_cannot_use(
+    hass: HomeAssistant, tmp_path, hass_ws_client, new_name: str, key: str
+) -> None:
+    """A profile name is a YAML key, because the user may move it into their own file."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_PROFILE_RENAME,
+            entry_id=entry.entry_id,
+            name="tall",
+            new_name=new_name,
+        )
+        assert error["code"] == ws_const.ERR_SERVICE_VALIDATION_ERROR
+        assert error["translation_key"] == key
+
+
+# ----------------------------------------------------------------- profile_delete
+async def test_profile_delete_names_the_shutters_before_and_after(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Two lists, because the deletion reaches the two kinds of follower differently.
+
+    A stored assignment goes with the profile; a `profile:` line in `myhome.yaml` stays
+    in the file and starts naming nothing, which this cannot touch and the user has to
+    be told about.
+    """
+    # The validator refuses a `profile:` line naming a profile `cover_profiles:` does
+    # not define, so a window can only follow through the file a name the file defines -
+    # and the only way a *stored* profile has followers of that kind is the clash the
+    # store wins: one name, written in both places. Deleting the stored one is then
+    # exactly the write those windows have to be warned about, because the file's
+    # profile, shadowed until now, comes back and their numbers change.
+    yaml_text = WRITE_YAML.replace(
+        """      name: Attic Shutter""",
+        """      name: Attic Shutter
+      profile: tall""",
+    ).replace(
+        """  cover_profiles:""",
+        """  cover_profiles:
+    tall:
+      reference_height: 200
+      opening_time: 40
+      closing_time: 39
+      roll: 1.1""",
+    )
+    async with setup_myhome(hass, tmp_path, yaml_text, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        before = row_of(
+            await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id), THIRD
+        )
+        answer = await result(
+            client, type=WS_TYPE_PROFILE_DELETE, entry_id=entry.entry_id, name="tall"
+        )
+        assert tuple(answer) == PROFILE_DELETE_KEYS
+        assert answer["covers_affected"] == sorted([FIRST, SECOND])
+        assert answer["from_file"] == [THIRD]
+        # The stored profile is gone and the file's own one is what `tall` means now.
+        row = row_of(answer["overview"], THIRD)
+        assert row["profile"] == "tall"
+        assert row["profile_from_file"] is True
+        assert profile_of(answer["overview"], "tall")["source"] == "yaml"
+        assert row["values"][CONF_OPENING_TIME] != before["values"][CONF_OPENING_TIME]
+        assert_they_agree(hass, row, THIRD_ENTITY)
+
+
+# -------------------------------------------------------------------------- the lock
+async def test_no_write_is_taken_while_a_shutter_is_being_measured(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A guided conversation is holding a shutter and has numbers half measured.
+
+    The panel is told before it tries - `overview.measuring`, and the `measuring` event -
+    so this is the backstop. It is a backstop for every write and not only the ones that
+    touch that window: the conversation will write a profile when it is done, and what
+    that profile is worth depends on the assignments it finds.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        cover = entity_object(hass, "cover", "2-81")
+        with cover.calibration_session():
+            await hass.async_block_till_done()
+            error = await refused(
+                client,
+                type=WS_TYPE_SET_TRAVEL,
+                entry_id=entry.entry_id,
+                cover_unique_id=SECOND,
+                height=160,
+            )
+            assert error["code"] == ws_const.ERR_NOT_ALLOWED
+            assert error["translation_key"] == ERROR_BUSY_CALIBRATING
+            assert error["translation_placeholders"]["cover"] == "Hallway Shutter"
+
+        # ...and the moment it is over, the same write goes through.
+        answer = await result(
+            client,
+            type=WS_TYPE_SET_TRAVEL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+            height=160,
+        )
+        assert row_of(answer["overview"], SECOND)["height"] == 160.0
+
+
+# ---------------------------------------------------------------------------- undo
+async def test_undo_puts_the_records_back_and_only_works_once(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """One slot per gateway: a token is good until the next write, and then it is not.
+
+    An undo is a *new write* of the old records and goes through the same door - which
+    is also why it hands back no token of its own.
+
+    Mutation caught: keeping the token after it is spent; restoring the whole file
+    instead of the records that moved.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        before = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        written = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+        )
+        token = written["undo_token"]
+        assert row_of(written["overview"], FIRST)["profile"] is None
+
+        answer = await result(
+            client, type=WS_TYPE_UNDO, entry_id=entry.entry_id, undo_token=token
+        )
+        assert tuple(answer) == UNDO_KEYS
+        assert answer["undo_token"] is None
+        assert answer["undone"] == "assign"
+        assert row_of(answer["overview"], FIRST) == row_of(before, FIRST)
+        assert_they_agree(hass, row_of(answer["overview"], FIRST), FIRST_ENTITY)
+
+        error = await refused(
+            client, type=WS_TYPE_UNDO, entry_id=entry.entry_id, undo_token=token
+        )
+        assert error["code"] == ws_const.ERR_NOT_FOUND
+        assert error["translation_key"] == ERROR_UNDO_EXPIRED
+
+
+async def test_a_token_is_withdrawn_by_the_next_write(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Two writes later, "as they were" is a state that was never on the screen."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        first = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+        )
+        await result(
+            client,
+            type=WS_TYPE_SET_TRAVEL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+            height=160,
+        )
+        error = await refused(
+            client, type=WS_TYPE_UNDO, entry_id=entry.entry_id, undo_token=first["undo_token"]
+        )
+        assert error["translation_key"] == ERROR_UNDO_EXPIRED
+
+
+async def test_a_token_expires_on_the_clock_too(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """Five minutes is the changing-your-mind window, not the rest of the session."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        written = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": None}],
+        )
+        freezer.tick(UNDO_TTL + timedelta(seconds=1))
+        error = await refused(
+            client, type=WS_TYPE_UNDO, entry_id=entry.entry_id, undo_token=written["undo_token"]
+        )
+        assert error["translation_key"] == ERROR_UNDO_EXPIRED
+
+
+async def test_a_write_that_changes_nothing_offers_no_undo(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """An "Annulla" that does nothing is worse than no "Annulla"."""
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_ASSIGN,
+            entry_id=entry.entry_id,
+            assignments=[{"cover_unique_id": FIRST, "profile": "tall"}],
+        )
+        assert answer["applied"] == 0
+        assert answer["undo_token"] is None
+
+
+# ----------------------------------------------------------------------- no reload
+async def test_a_write_never_reloads_the_config_entry(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Plan decision 4, from the outside: the numbers arrive and the gateway stays up.
+
+    Twelve assignments in a row used to be twelve reloads - every light, sensor and
+    shutter of the house away and back each time. The shutters pick the new model up
+    from a dispatcher signal instead.
+
+    Mutation caught: falling back to `async_schedule_reload` after a write.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        with patch.object(
+            hass.config_entries, "async_reload", autospec=True
+        ) as reload, patch.object(
+            hass.config_entries, "async_schedule_reload", autospec=True
+        ) as scheduled:
+            answer = await result(
+                client,
+                type=WS_TYPE_SET_TRAVEL,
+                entry_id=entry.entry_id,
+                cover_unique_id=SECOND,
+                height=170,
+            )
+        assert reload.call_count == 0
+        assert scheduled.call_count == 0
+        assert hass.states.get(SECOND_ENTITY).attributes["Height"] == 170.0
+        assert_they_agree(hass, row_of(answer["overview"], SECOND), SECOND_ENTITY)
+
+
+# --------------------------------------------------------------------- subscribe
+async def test_subscribe_sends_the_overview_now_and_after_every_write(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """What stops two browser tabs each seeing half of the same twelve shutters.
+
+    The whole payload every time and never a patch: a client that merged server pushes
+    into a model it also edits eventually shows a shutter following a profile the server
+    deleted (CONTRACT §1).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id})
+        subscription = await client.receive_json()
+        assert subscription["success"] is True
+        sub_id = subscription["id"]
+
+        first = await client.receive_json()
+        assert first["id"] == sub_id
+        assert first["event"]["type"] == WS_EVENT_OVERVIEW
+        assert tuple(first["event"]["overview"]) == OVERVIEW_KEYS
+
+        await client.send_json_auto_id(
+            {
+                "type": WS_TYPE_SET_TRAVEL,
+                "entry_id": entry.entry_id,
+                "cover_unique_id": SECOND,
+                "height": 165,
+            }
+        )
+        pushed = await client.receive_json()
+        assert pushed["id"] == sub_id
+        assert pushed["event"]["type"] == WS_EVENT_OVERVIEW
+        assert row_of(pushed["event"]["overview"], SECOND)["height"] == 165.0
+        # ...and the write's own answer comes after it, carrying the same payload.
+        written = await client.receive_json()
+        assert written["success"] is True
+        assert written["result"]["overview"] == pushed["event"]["overview"]
+
+
+async def test_subscribe_says_when_a_measurement_starts_and_when_it_ends(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The read-only lock hangs off this, which is why it names the window.
+
+    Read off the covers' state changes rather than by polling the entity objects: the
+    guided flow marks the entity and writes its state, so the flag reaches the panel the
+    moment it reaches everybody else.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id})
+        assert (await client.receive_json())["success"] is True
+        assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+
+        cover = entity_object(hass, "cover", "2-81")
+        with cover.calibration_session():
+            await hass.async_block_till_done()
+            started = await client.receive_json()
+            assert started["event"] == {
+                "type": WS_EVENT_MEASURING,
+                "cover_unique_id": FIRST,
+                "name": "Hallway Shutter",
+            }
+        await hass.async_block_till_done()
+        ended = await client.receive_json()
+        assert ended["event"] == {
+            "type": WS_EVENT_MEASURING,
+            "cover_unique_id": None,
+            "name": None,
+        }
+
+
+async def test_a_subscription_dies_with_the_socket(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Nothing in 0.6.0 outlives a dropped connection, because nothing holds a shutter.
+
+    Mutation caught: leaving the callback in the list after the unsubscribe (a write
+    would push into a connection that is gone).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id})
+        subscription = await client.receive_json()
+        assert subscription["success"] is True
+        assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+        assert len(async_subscribers(hass, entry.entry_id)) == 1
+
+        await client.send_json_auto_id(
+            {"type": "unsubscribe_events", "subscription": subscription["id"]}
+        )
+        assert (await client.receive_json())["success"] is True
+        await hass.async_block_till_done()
+        assert async_subscribers(hass, entry.entry_id) == []
+
+
+async def test_a_second_write_is_refused_while_the_first_is_being_applied(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Two writes are not independent, so the second is refused and not queued.
+
+    Each of them reads the store, decides against what it read and writes the whole of
+    what it decided; the second would decide against a store the first is halfway
+    through replacing. Driven here without a socket, because the interleaving is the
+    point and a socket would only make it harder to arrange.
+
+    Mutation caught: claiming the gateway after the store is loaded (two frames in one
+    tick would both find it free).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow(_entry, _store) -> dict[str, Any]:
+            started.set()
+            await release.wait()
+            return {}
+
+        first = hass.async_create_task(async_write(hass, entry, "assign", slow))
+        await started.wait()
+        with pytest.raises(PanelError) as refusal:
+            await async_write(hass, entry, "assign", slow)
+        assert refusal.value.code == ws_const.ERR_NOT_ALLOWED
+        assert refusal.value.translation_key == ERROR_WRITE_IN_PROGRESS
+
+        release.set()
+        await first
+        # ...and the gateway is free again the moment the first one is done.
+        await async_write(hass, entry, "assign", lambda _entry, _store: _nothing())
+
+
+async def _nothing() -> dict[str, Any]:
+    return {}
+
+
+async def test_two_frames_in_one_tick_cannot_both_find_the_gateway_free(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The claim is taken with no `await` between it and the refusal that guards it.
+
+    The socket delivers two frames in the same tick whenever the user double-taps, and
+    the first thing a write does after the check is read the store - which really goes
+    to the disk, and really suspends, the first time a gateway is written to after a
+    restart. The suspension is the whole point, so it is arranged here rather than
+    hoped for: a claim taken on the far side of it is a claim both writes get, and two
+    writes each decide against a store the other is about to replace.
+
+    Mutation caught: moving `writing.add(entry.entry_id)` below
+    `await async_get_store(...)`.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        real = panel_write.async_get_store
+
+        async def slow_store(hass_, entry_):
+            # What the first write of a Home Assistant run really does here.
+            await asyncio.sleep(0)
+            return await real(hass_, entry_)
+
+        outcomes: list[Any] = []
+
+        async def write() -> None:
+            try:
+                outcomes.append(
+                    await async_write(
+                        hass,
+                        entry,
+                        "set_travel",
+                        lambda entry_, store: async_set_travel(
+                            hass, entry_, store, cover_unique_id=SECOND, height=165
+                        ),
+                    )
+                )
+            except PanelError as err:
+                outcomes.append(err)
+
+        with patch.object(panel_write, "async_get_store", slow_store):
+            async_forget_store(hass, entry)
+            # Created in the same tick, as two frames off one socket are.
+            await asyncio.gather(
+                hass.async_create_task(write()), hass.async_create_task(write())
+            )
+        refusals = [item for item in outcomes if isinstance(item, PanelError)]
+        assert len(refusals) == 1, outcomes
+        assert refusals[0].translation_key == ERROR_WRITE_IN_PROGRESS
+
+
+async def test_a_measurement_that_opens_while_a_write_is_being_applied(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The one order the lock cannot rule out, and what it comes to.
+
+    `_refuse_if_busy` runs before the write and the guided conversation is many screens
+    long, so the only way round it is a session that opens inside the awaited store
+    write itself. Defined outcome: the write finishes - its records are already on the
+    way to the disk and abandoning half of it would be worse than either - and the
+    signal it ends with reaches a cover that is now measuring, which the cover survives:
+    the swap defers to the end of the run it is in (`_MovementModel`), and `Calibrating`
+    is not one of the attributes a swap rewrites. The *next* write is refused as every
+    write is, which is the state the panel is shown.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        cover = entity_object(hass, "cover", "2-81")
+        with ExitStack() as sessions:
+
+            async def work(entry_, store) -> dict[str, Any]:
+                # The guided conversation takes the shutter exactly here, between the
+                # refusal that guards this write and the signal that ends it.
+                sessions.enter_context(cover.calibration_session())
+                return await async_set_travel(
+                    hass, entry_, store, cover_unique_id=SECOND, height=165
+                )
+
+            answer = await async_write(hass, entry, "set_travel", work)
+            assert answer["undo_token"] is not None
+            assert row_of(answer["overview"], SECOND)["height"] == 165.0
+            # The session the swap landed in is untouched, and says so.
+            assert cover.calibrating is True
+            assert hass.states.get(FIRST_ENTITY).attributes["Calibrating"] is True
+            assert row_of(answer["overview"], FIRST)["calibrating"] is True
+            # ...and the next write is refused, which is what the panel is told.
+            with pytest.raises(PanelError) as refusal:
+                await async_write(hass, entry, "set_travel", lambda *_: _nothing())
+            assert refusal.value.translation_key == ERROR_BUSY_CALIBRATING
+        assert cover.calibrating is False
+
+
+async def test_two_gateways_are_two_subscriptions(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A panel watching one gateway is not woken by a write to the other.
+
+    The subscriber list is keyed by `entry_id` and so is the undo slot; this is the one
+    test in the suite that sets two gateways up, which is what open point 7 of the lot's
+    handoff asked for.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        second = make_entry(write_yaml(tmp_path, SECOND_GATEWAY_YAML, name="second.yaml"), mac=MAC2)
+        with mock_gateway(), mock_commands():
+            second.add_to_hass(hass)
+            assert await hass.config_entries.async_setup(second.entry_id)
+            await hass.async_block_till_done()
+
+            client = await hass_ws_client(hass)
+            await client.send_json_auto_id(
+                {"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id}
+            )
+            assert (await client.receive_json())["success"] is True
+            assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+            assert len(async_subscribers(hass, entry.entry_id)) == 1
+            assert async_subscribers(hass, second.entry_id) == []
+
+            # A write to the other gateway answers, and pushes nothing here.
+            answer = await result(
+                client,
+                type=WS_TYPE_SET_TRAVEL,
+                entry_id=second.entry_id,
+                cover_unique_id=f"{MAC2}-2-81",
+                height=180,
+            )
+            assert answer["undo_token"] is not None
+            # The next frame down the socket is the push from a write to *this* one.
+            await client.send_json_auto_id(
+                {
+                    "type": WS_TYPE_SET_TRAVEL,
+                    "entry_id": entry.entry_id,
+                    "cover_unique_id": SECOND,
+                    "height": 170,
+                }
+            )
+            pushed = await client.receive_json()
+            assert pushed["event"]["type"] == WS_EVENT_OVERVIEW
+            assert row_of(pushed["event"]["overview"], SECOND)["height"] == 170.0
+            assert (await client.receive_json())["success"] is True
+
+        await hass.config_entries.async_unload(second.entry_id)
+        await hass.async_block_till_done()

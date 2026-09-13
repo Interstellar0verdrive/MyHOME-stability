@@ -221,31 +221,57 @@ async def test_the_panel_and_the_shutter_say_the_same_thing(
     Mutation caught: re-deriving the origin in `panel_data` (any rule that is not
     `resolve_cover`'s own will part company with the attribute on at least the
     `adjusted` and the `missing profile` rows).
+
+    `origin` is compared against the expected word, so that a change of precedence has
+    to be *stated* in this table rather than silently adopted by a test that only checks
+    the two halves match each other.
     """
     async with setup_myhome(hass, tmp_path, yaml_text, calibration=calibration) as (
         entry,
         _commands,
     ):
         row = the_row(hass, entry)
-        state = hass.states.get(ENTITY)
-        assert state is not None, case
+        assert_they_agree(hass, row, ENTITY, case=case, origin=origin)
 
-        attributes = state.attributes
+
+def assert_they_agree(
+    hass: HomeAssistant,
+    row: dict[str, Any],
+    entity_id: str,
+    *,
+    case: str = "",
+    origin: str | None = None,
+) -> None:
+    """One overview row against the attributes of the shutter it describes.
+
+    Exported because it is the invariant and not a step of one test: the write commands
+    hold it again after every write they make (`tests/test_websocket_api.py`), where a
+    swap applied in place is what could start the two answers disagreeing.
+
+    `source` is compared verbatim against the attribute rather than reconstructed from
+    the origin: it is the string a user reads in the developer tools next to the shutter
+    they are looking at in the panel, and the whole point is that those two agree
+    character for character.
+    """
+    state = hass.states.get(entity_id)
+    assert state is not None, case
+    attributes = state.attributes
+    if origin is not None:
         assert row["origin"] == origin, case
-        assert row["source"] == attributes[ATTR_CALIBRATION_SOURCE], case
-        # ...and the model itself, key by key, as the entity really runs it. The entity
-        # publishes one `Roll` when both directions agree and two when they do not
-        # (0.4.2), so the pair is read the way a reader of the attributes would read it.
-        assert row["values"][CONF_OPENING_TIME] == attributes["Opening time"], case
-        assert row["values"][CONF_CLOSING_TIME] == attributes["Closing time"], case
-        rolls = (
-            (attributes["Roll"], attributes["Roll"])
-            if "Roll" in attributes
-            else (attributes["Opening roll"], attributes["Closing roll"])
-        )
-        assert (row["values"][CONF_OPENING_ROLL], row["values"][CONF_CLOSING_ROLL]) == rolls, case
-        assert row["profile"] == attributes.get("Profile"), case
-        assert row["height"] == attributes.get("Height"), case
+    assert row["source"] == attributes[ATTR_CALIBRATION_SOURCE], case
+    # ...and the model itself, key by key, as the entity really runs it. The entity
+    # publishes one `Roll` when both directions agree and two when they do not
+    # (0.4.2), so the pair is read the way a reader of the attributes would read it.
+    assert row["values"][CONF_OPENING_TIME] == attributes["Opening time"], case
+    assert row["values"][CONF_CLOSING_TIME] == attributes["Closing time"], case
+    rolls = (
+        (attributes["Roll"], attributes["Roll"])
+        if "Roll" in attributes
+        else (attributes["Opening roll"], attributes["Closing roll"])
+    )
+    assert (row["values"][CONF_OPENING_ROLL], row["values"][CONF_CLOSING_ROLL]) == rolls, case
+    assert row["profile"] == attributes.get("Profile"), case
+    assert row["height"] == attributes.get("Height"), case
 
 
 async def test_a_profile_that_is_not_there_any_more_is_said_out_loud(

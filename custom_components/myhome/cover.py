@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -72,6 +72,7 @@ from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoredExtraData, RestoreEntity
@@ -93,7 +94,7 @@ from .calibration import (
     roll_tau,
     roll_x,
 )
-from .calibration_store import resolve_cover_config
+from .calibration_store import ResolvedCover, resolve_cover_config
 from .const import (
     ATTR_CALIBRATING,
     ATTR_CALIBRATION_SOURCE,
@@ -111,6 +112,7 @@ from .const import (
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
     CONF_COVER_PROFILES,
+    CONF_COVERS_FROM_FILE,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
     CONF_ENTITY,
@@ -146,6 +148,7 @@ from .const import (
     MIN_ROLL,
     SERVICE_COVER_CALIBRATION_COMPUTE,
     SERVICE_COVER_CALIBRATION_RUN,
+    SIGNAL_CALIBRATION_CHANGED,
     bus_full_where,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -305,6 +308,58 @@ CLOSING = "closing"
 # The curtain phase can never be zero: the validator keeps at least one second of it,
 # this only protects the divisions against a hand-crafted device config.
 MIN_CURTAIN_TIME = 0.001
+
+# The extra state attributes that describe the travel model, as opposed to the address
+# the shutter lives at and the `Calibrating` flag a guided step raises. Listed so that a
+# model swapped in place (`_publish_travel_attributes`) can take the previous one's keys
+# away: which keys are *there* is part of the answer - `Slat time` only appears when
+# there is a slat phase, `Roll` only when the two directional ones agree - so writing the
+# new block over the old one would leave a shutter publishing numbers it no longer runs on.
+TRAVEL_ATTRIBUTES: tuple[str, ...] = (
+    "Opening time",
+    "Closing time",
+    "Slat time",
+    "Roll",
+    "Opening roll",
+    "Closing roll",
+    "Stop latency",
+    "Start delay",
+    "Height",
+    "Profile",
+    ATTR_CALIBRATION_SOURCE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _MovementModel:
+    """The numbers one movement is timed by, frozen for the length of that run.
+
+    Up to 0.6.0 there was nothing to freeze: a cover's travel model only ever changed
+    when the config entry was reloaded, which destroyed the entity and every movement
+    it was tracking. The panel changes it in place (`async_apply_calibration`), and a
+    shutter that is running when that happens must not have the arithmetic under it
+    swapped half way: `_travel` and `_travel_time` are each other's inverse *within one
+    run*, which is what makes the estimate come back to the same place it started from,
+    and two different rolls on the two sides of that identity is drift with no way back.
+
+    So the current model is swapped at once - the attributes say the new numbers, the
+    next movement is planned with them - and this snapshot, taken when the movement
+    started, goes on answering for the movement in flight until it ends.
+    """
+
+    slat_time: float
+    opening_roll: float
+    closing_roll: float
+    curtain_up: float
+    curtain_down: float
+    stop_latency: float
+    start_delay: float
+    # Derived from `slat_time`, and frozen with it: `_normalise` is the last line of
+    # both travel functions and decides whether a shutter on the floor still has slats
+    # to account for. Left reading the live flag, a calibration that takes the slat
+    # phase away mid-run makes the estimate drop the whole slat leg of a run that is
+    # still turning the slats - the one thing the snapshot exists to prevent.
+    two_phase: bool
 
 
 # ------------------------------------------------------- when the frame really left
@@ -758,12 +813,7 @@ async def async_setup_entry(
         resolved = resolve_cover_config(
             hass, config_entry, cfg, f"{mac}-{device_id}", yaml_profiles
         )
-        # Written back into the validated configuration rather than kept beside it:
-        # everything that reads a cover's numbers (the entity below, the diagnostics,
-        # whatever comes next) then reads the ones the shutter really runs on.
-        cfg.update(resolved.values)
-        # The legacy spelling of `opening_time` follows it, as it does in the validator.
-        cfg[CONF_SHUTTER_RUN] = cfg[CONF_OPENING_TIME]
+        _merge_the_travel_model(cfg, None, resolved)
         sources[device_id] = resolved.source
     covers = [
         MyHOMECover(
@@ -815,6 +865,63 @@ async def async_setup_entry(
     )
 
     async_add_entities(covers)
+
+
+@callback
+def _merge_the_travel_model(
+    cfg: dict[str, Any], written: Mapping[str, Any] | None, resolved: ResolvedCover
+) -> None:
+    """Write the resolved numbers back into one cover's validated configuration.
+
+    Written back rather than kept beside it: everything that reads a cover's numbers
+    (the entity, the diagnostics, whatever comes next) then reads the ones the shutter
+    really runs on. It is also the reason the panel cannot resolve against this dict -
+    hence the untouched copy `__init__` takes of the cover block before the platforms
+    are forwarded (`CONF_COVERS_FROM_FILE`).
+
+    `written` is that copy, and is passed only by the in-place refresh: at setup the
+    dict *is* the file's and there is nothing to undo. On a refresh there is - a
+    previous resolution is already in it - so the file's own keys are laid down again
+    before the new ones go over them, and the two keys a resolution may stop stating
+    (`height:` and `profile:`, when an assignment is taken away) are removed rather than
+    left behind saying something that is no longer true.
+    """
+    if written is not None:
+        for key in (CONF_HEIGHT, CONF_PROFILE):
+            if key not in written and key not in resolved.values:
+                cfg.pop(key, None)
+        cfg.update(written)
+    cfg.update(resolved.values)
+    # The legacy spelling of `opening_time` follows it, as it does in the validator.
+    cfg[CONF_SHUTTER_RUN] = cfg[CONF_OPENING_TIME]
+
+
+@callback
+def async_refresh_cover_config(
+    hass: HomeAssistant, entry: ConfigEntry, mac: str, device_id: str
+) -> ResolvedCover | None:
+    """Resolve one cover again, now, and merge the answer back into `hass.data`.
+
+    The same call the entity's constructor makes at setup, against the same two inputs:
+    the cover block as `myhome.yaml` wrote it and the store as it stands. Not against the
+    dict in `hass.data[DOMAIN][mac][CONF_PLATFORMS]`, which already carries the previous
+    resolution - re-resolving *that* happens to give the same numbers today, by accident
+    of which branch of the precedence wins, and gives the wrong answer to every question
+    about what the file says (lot 1-2 handoff, §4.6).
+
+    None when this gateway has no such cover, or when it was set up by a version that
+    took no copy: a caller with nothing to resolve leaves the shutter exactly as it is.
+    """
+    gateway = (hass.data.get(DOMAIN) or {}).get(mac) or {}
+    written = (gateway.get(CONF_COVERS_FROM_FILE) or {}).get(device_id)
+    cfg = ((gateway.get(CONF_PLATFORMS) or {}).get(PLATFORM) or {}).get(device_id)
+    if written is None or cfg is None:
+        return None
+    resolved = resolve_cover_config(
+        hass, entry, written, f"{mac}-{device_id}", gateway.get(CONF_COVER_PROFILES) or {}
+    )
+    _merge_the_travel_model(cfg, written, resolved)
+    return resolved
 
 
 class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
@@ -876,94 +983,40 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._attr_icon = icon
 
         self._advanced = bool(advanced)
-        # Contract A guarantees a float >= 1; fall back to the schema default anyway.
-        self._shutter_run = float(shutter_run or DEFAULT_SHUTTER_RUN)
-        # Per-direction runs default to the common `shutter_run` (Contract A / 0.4.0).
-        self._opening_time = float(opening_time or self._shutter_run)
-        self._closing_time = float(closing_time or self._shutter_run)
-        self._slat_time = max(0.0, float(slat_time or 0.0))
-        # Contract A clamps it to [1, 5]; a hand-built entity might not.
-        self._roll = _clamped_roll(roll, DEFAULT_ROLL)
-        # A real shutter is not equally loaded in the two directions (the reference one
-        # measures 1.6 down and 2.1 up), so the curtain phase carries one roll per
-        # direction; both default to the common value (0.4.2 amendment).
-        self._opening_roll = _clamped_roll(opening_roll, self._roll)
-        self._closing_roll = _clamped_roll(closing_roll, self._roll)
-        # The two fixed costs of the bus (0.4.4). Contract A guarantees floats >= 0;
-        # a hand-built entity might not, and a negative one would run time backwards.
-        self._stop_latency = max(0.0, float(stop_latency or 0.0))
-        self._start_delay = max(0.0, float(start_delay or 0.0))
+        self._inverted = bool(inverted)
+        # Whether the slats are *exposed* as tilt controls is an opt-in question of the
+        # file (`tilt:`, 0.4.2) - most actuators cannot hold them at 40 % - and is kept
+        # apart from `_has_tilt`, which also depends on there being a slat phase at all
+        # and therefore on numbers a calibration can change under a running entity.
+        self._tilt = bool(tilt)
         self._height = None if height is None else float(height)
         self._profile = profile
-        # Where the numbers above came from: "guided" when a stored calibration was
+        # Where the numbers below came from: "guided" when a stored calibration was
         # merged into them, "profile <name>" when a profile supplies them, "yaml"
         # otherwise (0.5.0). Resolved by `calibration_store.resolve_cover`, which is
         # the only thing that can tell the three apart.
         self._calibration_source = calibration_source or CALIBRATION_SOURCE_YAML
-        # Curtain-only part of each run (the validator keeps it >= 1 s).
-        self._curtain_up = max(MIN_CURTAIN_TIME, self._opening_time - self._slat_time)
-        self._curtain_down = max(MIN_CURTAIN_TIME, self._closing_time - self._slat_time)
-        self._inverted = bool(inverted)
-        # The two-phase *timing* runs whenever a slat phase is configured on a basic
-        # cover: opening from the floor really does spend `slat_time` on the slats
-        # first, and pretending otherwise would put every later position out by that
-        # much.  Whether the slats are also *exposed* as tilt controls is a separate,
-        # opt-in question (`tilt:`, 0.4.2) - most actuators cannot hold them at 40 %.
-        self._two_phase = not self._advanced and self._slat_time > 0
-        self._has_tilt = bool(tilt) and self._two_phase
-
-        self._attr_supported_features = (
-            CoverEntityFeature.OPEN
-            | CoverEntityFeature.CLOSE
-            | CoverEntityFeature.STOP
-            | CoverEntityFeature.SET_POSITION
+        self._adopt_travel_model(
+            shutter_run=shutter_run,
+            opening_time=opening_time,
+            closing_time=closing_time,
+            slat_time=slat_time,
+            roll=roll,
+            opening_roll=opening_roll,
+            closing_roll=closing_roll,
+            stop_latency=stop_latency,
+            start_delay=start_delay,
         )
-        if self._has_tilt:
-            self._attr_supported_features |= (
-                CoverEntityFeature.OPEN_TILT
-                | CoverEntityFeature.CLOSE_TILT
-                | CoverEntityFeature.SET_TILT_POSITION
-                | CoverEntityFeature.STOP_TILT
-            )
+        # Nothing is moving yet, so the snapshot a movement is timed by is the model
+        # itself; `_start_movement` takes a fresh one for every run.
+        self._run = self._current_movement_model()
+
         # Basic actuators never report their position: everything below the
         # `_estimate` line is an assumption (Contract F).
         self._attr_assumed_state = not self._advanced
 
         self._attr_extra_state_attributes = address_attributes(where, self._interface)
-        if not self._advanced:
-            # The whole model a basic cover's position comes from, in the order it is
-            # read.  `Shutter run` is gone (0.4.2): it was always the same number as
-            # `Opening time`, which is now always published.
-            self._attr_extra_state_attributes["Opening time"] = self._opening_time
-            self._attr_extra_state_attributes["Closing time"] = self._closing_time
-            if self._slat_time > 0:
-                self._attr_extra_state_attributes["Slat time"] = self._slat_time
-            if self._opening_roll == self._closing_roll:
-                # One number describes both runs: publishing two identical ones would
-                # only invite the reader to look for a difference that is not there.
-                self._attr_extra_state_attributes["Roll"] = self._opening_roll
-            else:
-                self._attr_extra_state_attributes["Opening roll"] = self._opening_roll
-                self._attr_extra_state_attributes["Closing roll"] = self._closing_roll
-            # The bus costs are published only when they are not the measured defaults
-            # (0.4.4): every installation has them, so printing 0.1 / 0.5 on all twelve
-            # covers says nothing, while a number somebody tuned is exactly what a
-            # question about a shutter that stops early needs to show.
-            if self._stop_latency != DEFAULT_STOP_LATENCY:
-                self._attr_extra_state_attributes["Stop latency"] = self._stop_latency
-            if self._start_delay != DEFAULT_START_DELAY:
-                self._attr_extra_state_attributes["Start delay"] = self._start_delay
-            # These two say nothing about the movement, they say where the numbers
-            # above came from - so they only appear when the file really has them.
-            if self._height is not None:
-                self._attr_extra_state_attributes["Height"] = self._height
-            if self._profile is not None:
-                self._attr_extra_state_attributes["Profile"] = self._profile
-            # Always published, unlike the two above: a shutter whose times came from a
-            # guided calibration looks exactly like one whose times were typed into the
-            # file, and the difference is the first thing to establish when one of them
-            # stops where it should not.
-            self._attr_extra_state_attributes[ATTR_CALIBRATION_SOURCE] = self._calibration_source
+        self._publish_travel_attributes()
 
         self._attr_current_cover_position: int | None = None
         self._attr_current_cover_tilt_position: int | None = None
@@ -1006,10 +1059,6 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._tick_unsub = None
         # One-shot status re-request after an ignored movement frame (see `_is_echo`).
         self._echo_recheck = None
-        # Upper bound on how long an advanced actuator may report a direction. The
-        # timing keys are used for this and for nothing else on an advanced cover
-        # (see `ADVANCED_MOVE_MARGIN_SEC`): they never produce a position.
-        self._advanced_move_timeout = max(self._opening_time, self._closing_time) + ADVANCED_MOVE_MARGIN_SEC
         self._advanced_timer = None
         # True between the safety timer's status request and its answer (or the end
         # of the grace): see `_async_advanced_movement_timeout`.
@@ -1057,6 +1106,198 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # RISK-D). Set by whatever really ends the run, the shielded stop included.
         self._calib_settled = asyncio.Event()
         self._calib_settled.set()
+
+    # ------------------------------------------------------------- the travel model
+    @callback
+    def _adopt_travel_model(
+        self,
+        *,
+        shutter_run: float | None,
+        opening_time: float | None,
+        closing_time: float | None,
+        slat_time: float | None,
+        roll: float | None,
+        opening_roll: float | None,
+        closing_roll: float | None,
+        stop_latency: float | None,
+        start_delay: float | None,
+    ) -> None:
+        """Take these numbers as the model every *next* movement is timed by.
+
+        One place, called by the constructor and by `async_apply_calibration`, so that a
+        shutter whose calibration changed under a running Home Assistant ends up with
+        exactly the entity a reload would have built - the derived curtain phases, the
+        two-phase timing and the tilt controls included, none of which are numbers the
+        caller can be asked to keep in step.
+        """
+        # Contract A guarantees a float >= 1; fall back to the schema default anyway.
+        self._shutter_run = float(shutter_run or DEFAULT_SHUTTER_RUN)
+        # Per-direction runs default to the common `shutter_run` (Contract A / 0.4.0).
+        self._opening_time = float(opening_time or self._shutter_run)
+        self._closing_time = float(closing_time or self._shutter_run)
+        self._slat_time = max(0.0, float(slat_time or 0.0))
+        # Contract A clamps it to [1, 5]; a hand-built entity might not.
+        self._roll = _clamped_roll(roll, DEFAULT_ROLL)
+        # A real shutter is not equally loaded in the two directions (the reference one
+        # measures 1.6 down and 2.1 up), so the curtain phase carries one roll per
+        # direction; both default to the common value (0.4.2 amendment).
+        self._opening_roll = _clamped_roll(opening_roll, self._roll)
+        self._closing_roll = _clamped_roll(closing_roll, self._roll)
+        # The two fixed costs of the bus (0.4.4). Contract A guarantees floats >= 0;
+        # a hand-built entity might not, and a negative one would run time backwards.
+        self._stop_latency = max(0.0, float(stop_latency or 0.0))
+        self._start_delay = max(0.0, float(start_delay or 0.0))
+        # Curtain-only part of each run (the validator keeps it >= 1 s).
+        self._curtain_up = max(MIN_CURTAIN_TIME, self._opening_time - self._slat_time)
+        self._curtain_down = max(MIN_CURTAIN_TIME, self._closing_time - self._slat_time)
+        # The two-phase *timing* runs whenever a slat phase is configured on a basic
+        # cover: opening from the floor really does spend `slat_time` on the slats
+        # first, and pretending otherwise would put every later position out by that
+        # much.  Whether the slats are also *exposed* as tilt controls is a separate,
+        # opt-in question (`tilt:`, 0.4.2) - most actuators cannot hold them at 40 %.
+        self._two_phase = not self._advanced and self._slat_time > 0
+        self._has_tilt = self._tilt and self._two_phase
+        # Upper bound on how long an advanced actuator may report a direction. The
+        # timing keys are used for this and for nothing else on an advanced cover
+        # (see `ADVANCED_MOVE_MARGIN_SEC`): they never produce a position.
+        self._advanced_move_timeout = (
+            max(self._opening_time, self._closing_time) + ADVANCED_MOVE_MARGIN_SEC
+        )
+        features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+        )
+        if self._has_tilt:
+            features |= (
+                CoverEntityFeature.OPEN_TILT
+                | CoverEntityFeature.CLOSE_TILT
+                | CoverEntityFeature.SET_TILT_POSITION
+                | CoverEntityFeature.STOP_TILT
+            )
+        self._attr_supported_features = features
+
+    @callback
+    def _current_movement_model(self) -> _MovementModel:
+        """The numbers a run started now would be timed by."""
+        return _MovementModel(
+            slat_time=self._slat_time,
+            opening_roll=self._opening_roll,
+            closing_roll=self._closing_roll,
+            curtain_up=self._curtain_up,
+            curtain_down=self._curtain_down,
+            stop_latency=self._stop_latency,
+            start_delay=self._start_delay,
+            two_phase=self._two_phase,
+        )
+
+    @callback
+    def _publish_travel_attributes(self) -> None:
+        """(Re)write the attributes that describe the model, and only those.
+
+        The address attributes stay where they are and so does `Calibrating`, which
+        belongs to a guided step and not to the model. Every key is removed before the
+        block is written again, because which keys there *are* is part of the answer: a
+        shutter that stops having a slat phase stops publishing `Slat time`, and one
+        whose two rolls become equal publishes `Roll` instead of both.
+        """
+        for key in TRAVEL_ATTRIBUTES:
+            self._attr_extra_state_attributes.pop(key, None)
+        if self._advanced:
+            return
+        # The whole model a basic cover's position comes from, in the order it is
+        # read.  `Shutter run` is gone (0.4.2): it was always the same number as
+        # `Opening time`, which is now always published.
+        self._attr_extra_state_attributes["Opening time"] = self._opening_time
+        self._attr_extra_state_attributes["Closing time"] = self._closing_time
+        if self._slat_time > 0:
+            self._attr_extra_state_attributes["Slat time"] = self._slat_time
+        if self._opening_roll == self._closing_roll:
+            # One number describes both runs: publishing two identical ones would
+            # only invite the reader to look for a difference that is not there.
+            self._attr_extra_state_attributes["Roll"] = self._opening_roll
+        else:
+            self._attr_extra_state_attributes["Opening roll"] = self._opening_roll
+            self._attr_extra_state_attributes["Closing roll"] = self._closing_roll
+        # The bus costs are published only when they are not the measured defaults
+        # (0.4.4): every installation has them, so printing 0.1 / 0.5 on all twelve
+        # covers says nothing, while a number somebody tuned is exactly what a
+        # question about a shutter that stops early needs to show.
+        if self._stop_latency != DEFAULT_STOP_LATENCY:
+            self._attr_extra_state_attributes["Stop latency"] = self._stop_latency
+        if self._start_delay != DEFAULT_START_DELAY:
+            self._attr_extra_state_attributes["Start delay"] = self._start_delay
+        # These two say nothing about the movement, they say where the numbers
+        # above came from - so they only appear when the file really has them.
+        if self._height is not None:
+            self._attr_extra_state_attributes["Height"] = self._height
+        if self._profile is not None:
+            self._attr_extra_state_attributes["Profile"] = self._profile
+        # Always published, unlike the two above: a shutter whose times came from a
+        # guided calibration looks exactly like one whose times were typed into the
+        # file, and the difference is the first thing to establish when one of them
+        # stops where it should not.
+        self._attr_extra_state_attributes[ATTR_CALIBRATION_SOURCE] = self._calibration_source
+
+    @callback
+    def async_apply_calibration(self, resolved: ResolvedCover) -> None:
+        """Swap this shutter's travel model for that one, without a reload (0.6.0).
+
+        The whole of plan decision 4 on this side of the wire. A stored calibration used
+        to reach a shutter only through a reload of the config entry - the entity reads
+        its model in its constructor - which is an acceptable price at the end of a
+        guided conversation and an absurd one for a panel on which the user assigns a
+        profile to twelve windows in a row. `resolved` is the answer of the very same
+        function the constructor used (`resolve_cover_config`), so what lands here is
+        what a reload would have built, and it lands without taking the gateway away.
+
+        **A movement in flight keeps its own clock and its own plan.** The numbers below
+        are the model from this instant on, and the attributes say so at once; the run
+        that is already going on is timed by the snapshot it started with (`self._run`)
+        and by the deadline that was armed from it, and picks the new model up when it
+        ends. Half a run planned with one roll and finished with another would leave the
+        estimate somewhere neither model ever described. A guided calibration cannot be
+        interrupted this way at all: the panel refuses every write while one is running.
+        """
+        values = resolved.values
+        self._height = None if resolved.height is None else float(resolved.height)
+        self._profile = resolved.profile
+        self._calibration_source = resolved.source or CALIBRATION_SOURCE_YAML
+        self._adopt_travel_model(
+            shutter_run=values.get(CONF_OPENING_TIME),
+            opening_time=values.get(CONF_OPENING_TIME),
+            closing_time=values.get(CONF_CLOSING_TIME),
+            slat_time=values.get(CONF_SLAT_TIME),
+            roll=values.get(CONF_ROLL),
+            opening_roll=values.get(CONF_OPENING_ROLL),
+            closing_roll=values.get(CONF_CLOSING_ROLL),
+            stop_latency=values.get(CONF_STOP_LATENCY),
+            start_delay=values.get(CONF_START_DELAY),
+        )
+        if self._moving is None:
+            self._run = self._current_movement_model()
+        self._publish_travel_attributes()
+        self._write_state_if_added()
+
+    @callback
+    def _async_calibration_changed(self, entry_id: str) -> None:
+        """Something was written about this gateway's calibrations: resolve again.
+
+        Fired by the panel's write commands, once per write and once per gateway. Every
+        cover of that gateway re-reads its own answer, because a write can reach a
+        shutter it never named - a profile edited, renamed or deleted moves every window
+        that follows it - and deciding which ones on the sending side would be a second
+        implementation of the precedence.
+        """
+        entry = self.hass.config_entries.async_get_entry(entry_id)
+        if entry is None:  # pragma: no cover - the entry sending this is loaded
+            return
+        resolved = async_refresh_cover_config(
+            self.hass, entry, self._gateway_handler.mac, self._device_id
+        )
+        if resolved is not None:
+            self.async_apply_calibration(resolved)
 
     @property
     def _advanced_probe_grace(self) -> float:
@@ -1122,12 +1363,17 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         clamped = int(max(0, min(100, round(position))))
         if clamped > 0:
             return clamped, 100
-        if not self._two_phase:
+        if not self._run.two_phase:
             return 0, 0
-        # `_two_phase`, not `_has_tilt`: a cover with `tilt: false` still tracks where
+        # `two_phase`, not `_has_tilt`: a cover with `tilt: false` still tracks where
         # the slats are, it just never publishes it.  Forgetting it here would make
         # every stop inside the slat phase cost a full `slat_time` again on the next
         # command.
+        #
+        # Read off the run's own snapshot and not off the live flag, because this is
+        # the last line of `_travel` and `_travel_time`: a slat phase taken away by a
+        # calibration written mid-run would otherwise erase the slat leg of a run that
+        # is still turning the slats, while the seconds it is timed by stay frozen.
         return 0, int(max(0, min(100, round(tilt))))
 
     def _curtain_tau(self, position: float, roll: float) -> float:
@@ -1153,7 +1399,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         those seconds turn the slats, they wind nothing on the tube, so they stay
         linear.
         """
-        slat = self._slat_time
+        model = self._run
+        slat = model.slat_time
         if direction == OPENING:
             if position <= 0 and slat > 0 and tilt < 100:
                 # Slat phase first: the curtain does not move until the slats are open.
@@ -1161,14 +1408,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 if elapsed <= slat_left:
                     return self._normalise(0, tilt + elapsed / slat * 100)
                 elapsed -= slat_left
-            roll = self._opening_roll
-            tau = self._curtain_tau(position, roll) - elapsed / self._curtain_up
+            roll = model.opening_roll
+            tau = self._curtain_tau(position, roll) - elapsed / model.curtain_up
             return self._normalise(self._curtain_position(tau, roll), 100)
-        roll = self._closing_roll
+        roll = model.closing_roll
         # Time still to run before the curtain touches the floor (tau = 1).
-        curtain_left = (1.0 - self._curtain_tau(position, roll)) * self._curtain_down
+        curtain_left = (1.0 - self._curtain_tau(position, roll)) * model.curtain_down
         if elapsed < curtain_left:
-            tau = self._curtain_tau(position, roll) + elapsed / self._curtain_down
+            tau = self._curtain_tau(position, roll) + elapsed / model.curtain_down
             return self._normalise(self._curtain_position(tau, roll), 100)
         # The curtain is on the floor: the rest of the run closes the slats.
         elapsed -= curtain_left
@@ -1191,21 +1438,22 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         positions measured on the curtain's time axis of *that direction* (which is what
         the roll model makes linear), the slat leg is unchanged.
         """
-        slat = self._slat_time
+        model = self._run
+        slat = model.slat_time
         if direction == OPENING:
             seconds = 0.0
             if position <= 0 and slat > 0:
                 # Opening past the floor always ends with the slats fully open.
                 slat_target = 100 if target_position > 0 else target_tilt
                 seconds += max(0.0, slat_target - tilt) / 100 * slat
-            roll = self._opening_roll
+            roll = model.opening_roll
             curtain = max(
                 0.0, self._curtain_tau(position, roll) - self._curtain_tau(target_position, roll)
             )
-            return seconds + curtain * self._curtain_up
-        roll = self._closing_roll
+            return seconds + curtain * model.curtain_up
+        roll = model.closing_roll
         curtain = max(0.0, self._curtain_tau(target_position, roll) - self._curtain_tau(position, roll))
-        seconds = curtain * self._curtain_down
+        seconds = curtain * model.curtain_down
         if target_position <= 0 and slat > 0:
             start_tilt = 100 if position > 0 else tilt
             seconds += max(0.0, start_tilt - target_tilt) / 100 * slat
@@ -1308,6 +1556,12 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """
         position, tilt = self._estimate()
         self._cancel_timers()
+        # From here on this run is the one being timed, so it takes the model as it
+        # stands now and keeps it: a calibration written by the panel while the shutter
+        # is moving changes what the *next* movement is planned with, never this one
+        # (`async_apply_calibration`). The estimate above still belongs to the movement
+        # that is ending and is read off its own snapshot, which is why this comes after it.
+        self._run = self._current_movement_model()
         if position is None:
             # Nothing known yet: assume the opposite end so that a full travel
             # settles on the correct position.
@@ -1373,7 +1627,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         target. A free run is ended by the actuator's own end stop and there is nothing
         to anticipate - the timer only settles the estimate where the motor already is.
         """
-        return self._stop_latency if self._target_position is not None else 0.0
+        return self._run.stop_latency if self._target_position is not None else 0.0
 
     @callback
     def _arm_movement_deadline(self, started_at: datetime, duration: float) -> None:
@@ -1463,7 +1717,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # it is handed over, so this lands a hair *before* the clock the enqueue already
         # set (the same `start_delay` after the same instant) and the re-base is
         # skipped: the ordinary single-cover case is untouched, term for term.
-        started = delivered + timedelta(seconds=self._start_delay)
+        started = delivered + timedelta(seconds=self._run.start_delay)
         if started <= self._move_started_at:
             return
         self._move_started_at = started
@@ -1526,7 +1780,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             return
         now = dt_util.utcnow()
         age = (now - delivered).total_seconds()
-        if age > self._start_delay + MOTOR_START_WINDOW_SEC:
+        if age > self._run.start_delay + MOTOR_START_WINDOW_SEC:
             # Too late to be the answer to our command: somebody at the keypad pressed
             # the direction we are already running in. The estimate is right either way.
             return
@@ -1573,6 +1827,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         self._own_free_run = False
         self._echo_after_restart = False
         self._move_duration = None
+        # Nothing is being timed any more, so the snapshot goes back to the model as it
+        # now stands: a calibration the panel wrote while this run was in flight took
+        # effect on the entity at once and takes effect on the arithmetic from here.
+        self._run = self._current_movement_model()
         if position is not None:
             frozen_position, frozen_tilt = self._normalise(position, 100 if tilt is None else tilt)
             self._attr_current_cover_position = frozen_position
@@ -1765,7 +2023,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             # if the movement was re-based meanwhile, exactly from that instant to
             # `stop_latency` past this frame, which is where it really comes to rest.
             elapsed = (
-                (delivered - self._move_started_at).total_seconds() + self._stop_latency
+                (delivered - self._move_started_at).total_seconds() + self._run.stop_latency
                 if rebased
                 else pending.base_elapsed + delay
             )
@@ -2081,6 +2339,15 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if not self._advanced and self._attr_current_cover_position is None:
             await self._async_restore_position()
         await super().async_added_to_hass()
+        # ...and from here on, a calibration written by the panel reaches this shutter
+        # without the config entry being reloaded (0.6.0, plan decision 4).
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_CALIBRATION_CHANGED.format(mac=self._gateway_handler.mac),
+                self._async_calibration_changed,
+            )
+        )
 
     async def _async_restore_position(self) -> None:
         """Bring back the estimate saved by `extra_restore_state_data` (or the old state)."""
@@ -2188,7 +2455,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         # Where the shutter comes to rest if the frame goes out at once: the estimate
         # as it stands now plus the `stop_latency` the motor takes to obey (0.4.4).
         if not await self._async_send_stop(
-            interrupted, self._estimate(self._stop_latency), elapsed + self._stop_latency
+            interrupted,
+            self._estimate(self._run.stop_latency),
+            elapsed + self._run.stop_latency,
         ):
             # The command path would not even take the frame: nothing here changed,
             # and "changes nothing at all" includes writing the state again.

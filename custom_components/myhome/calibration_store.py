@@ -635,6 +635,49 @@ class CalibrationStore:
         await self._async_save()
         return True
 
+    async def async_restore(
+        self,
+        *,
+        profiles: Mapping[str, Mapping[str, Any] | None] | None = None,
+        covers: Mapping[str, Mapping[str, Any] | None] | None = None,
+        order: Sequence[str] | None = None,
+    ) -> bool:
+        """Put these records back exactly as they are given; True when anything moved.
+
+        The undo path, and the only thing in this module that writes a record without
+        deciding anything about it. Every other writer has an opinion - `async_set_-
+        assignments` drops a record that would say nothing, `async_remove_profile` takes
+        the assignment off every follower - and an undo that went through them would be
+        a *second* write of its own rather than the first one taken back. What is handed
+        here is what was read out of the file before the write, key by key, and `None`
+        means the key was not there and must not be there afterwards either.
+
+        One save for the lot, so a half-applied undo is not a state the file can be left
+        in. A key that is not mentioned is not touched, which is what makes the undo of
+        one command safe on a file something else has written to meanwhile.
+        """
+        changed = False
+        for name, data in (profiles or {}).items():
+            if data is None:
+                changed = self._profiles.pop(name, None) is not None or changed
+            elif self._profiles.get(name) != data:
+                self._profiles[name] = dict(data)
+                changed = True
+        for unique_id, record in (covers or {}).items():
+            if record is None:
+                changed = self._covers.pop(unique_id, None) is not None or changed
+            elif self._covers.get(unique_id) != record:
+                self._covers[unique_id] = dict(record)
+                changed = True
+        if order is not None:
+            wanted = normalised_order(order)
+            if wanted != self._order:
+                self._order = wanted
+                changed = True
+        if changed:
+            await self._async_save()
+        return changed
+
     async def async_set_profile(self, name: str, data: Mapping[str, Any]) -> None:
         """Store (or replace) the profile called `name`.
 
