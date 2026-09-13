@@ -47,6 +47,7 @@ from homeassistant.helpers import area_registry as ar, device_registry as dr, en
 
 from .calibration_store import (
     ResolvedCover,
+    keys_written_by_the_file,
     loaded_store,
     merged_profiles,
     profile_overrides,
@@ -61,7 +62,6 @@ from .const import (
     CONF_COVER_PROFILES,
     CONF_COVERS_FROM_FILE,
     CONF_ENTITIES,
-    CONF_KEYS_FROM_FILE,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
@@ -467,7 +467,12 @@ def async_cover_detail(
         calibrating=calibrating_now(hass, entry),
     )
 
-    written = set(cfg.get(CONF_KEYS_FROM_FILE) or ())
+    # The same set the precedence used, fallbacks included: a cover whose file says
+    # `roll: 1.5` has stated both directional rolls, and the loop above calls them
+    # `file` for exactly that reason. Reading the narrower `keys_from_file` here would
+    # print the user's own number as this integration's default, beside an origin that
+    # says the file wrote it.
+    written = keys_written_by_the_file(cfg)
     profile = profiles.get(resolved.profile) if resolved.profile else None
     # The profile scaled to this window, whatever the precedence does with it: the
     # numbers an impact preview compares against, and the same scaling the resolution

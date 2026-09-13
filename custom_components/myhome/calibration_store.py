@@ -185,6 +185,28 @@ def profile_overrides(profile: Mapping[str, Any], height: float | None) -> dict[
 
 
 @callback
+def keys_written_by_the_file(device: Mapping[str, Any]) -> set[str]:
+    """Which travel keys `myhome.yaml` really states for this cover, fallbacks included.
+
+    The validator records the keys it actually read (`keys_from_file`); this widens that
+    by what one written key says about another, exactly as `_finalize_cover` widens the
+    values themselves - a cover whose file says `roll: 1.5` has stated both directional
+    rolls, and one that says `opening_time:` has stated the downward run too.
+
+    One function because there are two readers and they must not disagree: the
+    precedence below decides that such a key comes from the *file*, and the panel's
+    detail view prints what the file writes for it beside that word. Answering the two
+    questions from two different sets is how a screen ends up calling the user's own
+    `roll: 1.5` the integration's default.
+    """
+    written = set(device.get(CONF_KEYS_FROM_FILE) or ())
+    for key, implied in _IMPLIED_BY_THE_FILE.items():
+        if key in written:
+            written.update(implied)
+    return written
+
+
+@callback
 def reset_name_clash_warnings() -> None:
     """Forget which clashing names have been reported (a reload says it again once)."""
     _CLASH_REPORTED.clear()
@@ -909,10 +931,7 @@ def resolve_cover(
     to the file, because a shutter that stops working because a profile was renamed
     would be worse than one that stops where it used to.
     """
-    written = set(device.get(CONF_KEYS_FROM_FILE) or ())
-    for key, implied in _IMPLIED_BY_THE_FILE.items():
-        if key in written:
-            written.update(implied)
+    written = keys_written_by_the_file(device)
     overrides = calibration.overrides if calibration else {}
     name = (calibration.profile if calibration else None) or device.get(CONF_PROFILE)
     height = (calibration.height if calibration else None) or device.get(CONF_HEIGHT)
@@ -1062,6 +1081,7 @@ __all__ = [
     "cover_calibration_data",
     "cover_profile_data",
     "describe_profile",
+    "keys_written_by_the_file",
     "loaded_store",
     "merged_profiles",
     "normalised_order",

@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar, entity_registry as er
+from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
 from custom_components.myhome.calibration_store import (
     cover_calibration_data,
@@ -30,6 +30,7 @@ from custom_components.myhome.calibration_store import (
     loaded_store,
 )
 from custom_components.myhome.const import (
+    CALIBRATION_KEY_ORIGINS,
     CONF_COVER_UNIQUE_ID,
     CONF_COVERS,
     CONF_OPENING_TIME,
@@ -321,6 +322,24 @@ async def test_the_room_is_resolved_on_the_server(
         assert covers[SECOND]["area_id"] is None
         assert covers[SECOND]["area"] is None
 
+        # ...until the *device* has one: a user who filed the gateway under a room and
+        # never touched a single cover still sees rooms in the panel, which is the
+        # fallback the entity registry itself applies.
+        landing = er.async_get(hass).async_get("cover.landing_shutter")
+        assert landing.device_id is not None
+        sala = ar.async_get(hass).async_get_or_create("Sala")
+        dr.async_get(hass).async_update_device(landing.device_id, area_id=sala.id)
+        covers = {
+            row["unique_id"]: row
+            for row in (await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id))[
+                "covers"
+            ]
+        }
+        assert covers[SECOND]["area_id"] == sala.id
+        assert covers[SECOND]["area"] == "Sala"
+        # The cover with its own area keeps it: the entity's answer comes first.
+        assert covers[FIRST]["area"] == "Cucina"
+
 
 async def test_an_unknown_gateway_is_not_found(
     hass: HomeAssistant, tmp_path, hass_ws_client
@@ -376,6 +395,12 @@ async def test_a_cover_says_where_every_single_number_came_from(
         assert detail["cover"]["unique_id"] == FIRST
         keys = {item["key"]: item for item in detail["keys"]}
         assert all(tuple(item) == COVER_DETAIL_KEY_KEYS for item in keys.values())
+        # Four words and no fifth: the detail screen renders each of them, and a token
+        # it has never heard of would render as nothing at all.
+        assert {item["origin"] for item in keys.values()} <= set(CALIBRATION_KEY_ORIGINS)
+        assert {
+            item["inherited_origin"] for item in keys.values()
+        } <= set(CALIBRATION_KEY_ORIGINS) | {None}
 
         # Measured on this window: its own, and it would go back to the profile.
         opening = keys[CONF_OPENING_TIME]
@@ -435,6 +460,70 @@ async def test_a_cover_with_no_profile_inherits_from_its_own_file(
         assert latency["default_value"] == latency["value"]
         assert detail["cover"]["profile"] is None
         assert detail["cover"]["has_own"] == []
+
+
+async def test_a_key_the_file_states_through_a_fallback_is_still_the_file_s(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`roll:` states both directions and `opening_time:` states the descent too.
+
+    The validator records only the keys it read, and the precedence widens that by what
+    one written key says about another (`_finalize_cover`'s own fallbacks) - which is
+    why these keys come back with `origin: "file"`. The two numbers beside that word
+    have to be widened by the same rule: a `roll: 1.5` the user typed is not this
+    integration's default, and a screen that offered it as one would be telling them
+    their own file says nothing.
+
+    Mutation caught: reading the narrower `keys_from_file` in `panel_data` (every one of
+    these keys would come back `file_value: null, default_value: <the user's number>`
+    under an origin that says the file wrote it).
+    """
+    yaml_text = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    hallway_shutter:
+      where: '81'
+      name: Hallway Shutter
+      opening_time: 30
+      roll: 1.2
+      height: {HEIGHT}
+    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+      height: 150
+"""
+    async with setup_myhome(hass, tmp_path, yaml_text) as (entry, _commands):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        keys = {item["key"]: item for item in detail["keys"]}
+        # The descent the file never wrote and nevertheless stated.
+        for key in ("closing_time", "opening_roll", "closing_roll"):
+            assert keys[key]["origin"] == "file", key
+            assert keys[key]["file_value"] == keys[key]["value"], key
+            assert keys[key]["default_value"] is None, key
+
+        # ...and a shutter whose file says nothing at all beyond where it is: every key
+        # is this integration's own number, which is the one case `default_value` is
+        # there for.
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+        )
+        assert detail["cover"]["origin"] == "defaults"
+        for item in detail["keys"]:
+            assert item["origin"] == "default", item["key"]
+            assert item["own"] is False
+            assert item["file_value"] is None
+            assert item["profile_value"] is None
+            assert item["default_value"] == item["value"] == item["inherited_value"]
 
 
 async def test_a_shutter_that_is_not_there_and_one_that_is_not_ours(
