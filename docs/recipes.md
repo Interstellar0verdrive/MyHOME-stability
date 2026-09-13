@@ -753,7 +753,7 @@ curtain travels when it is up than when it is down, see
 — is not: you cannot see it, you can only measure where the shutter *ends up*. That
 is what the two calibration actions do. You measure one shutter with a tape measure,
 and every similar shutter in the house then gets the same model scaled by its own
-height.
+curtain travel.
 
 Two measurements, two independent answers: the descent gives `closing_roll` and the
 ascent gives `opening_roll`. Neither of them is a cross-check on the other, and
@@ -797,15 +797,16 @@ you can actually watch happen.
 > **Measure every centimetre from the same point: where the bottom edge rests with
 > the shutter fully closed.** Not the floor, a sill or a threshold — on some windows
 > those coincide with it, on others they sit a few centimetres above or below it.
-> Use that one reference for the height below, for both calibration readings, and
+> Use that one reference for the curtain travel below, for both calibration readings,
+> and
 > for every check afterwards. A different reference shows up as a constant offset of
 > a few centimetres at every position and in both directions, which looks like the
 > model got something wrong but is not: a constant offset like that is the sign of a
 > reference mismatch, while an error that grows with the length of the run points at
 > the times or the roll coefficient instead.
 
-Measure the **height** as well — from that reference point to the bottom edge with
-the shutter fully open, in centimetres. It is 195 cm in this example.
+Measure the **curtain travel** as well — from that reference point to the bottom edge
+with the shutter fully open, in centimetres. It is 195 cm in this example.
 
 #### Step 1 — the half descent
 
@@ -969,7 +970,7 @@ centimetres of 97 cm. Before the calibration it would have stopped noticeably lo
 
 #### Step 5 — every other shutter in the house
 
-Give the others the same profile and **their own height**, and nothing else:
+Give the others the same profile and **their own curtain travel**, and nothing else:
 
 ```yaml
   cover:
@@ -1018,7 +1019,7 @@ re-synchronises the estimate.
   ascent is the direction where shutters misbehave. Measuring both is ten more
   minutes and it is what step 2 is for.
 - **On the derived covers**: a little more. The derivation assumes the same product —
-  same motor, same slat profile, same tube — and scales it by height alone. A
+  same motor, same slat profile, same tube — and scales it by curtain travel alone. A
   different motor is a different profile.
 - **The end stops are exact either way**: `0` and `100` are reached by running into
   the physical stop, not by a timer, and that is also what re-synchronises the

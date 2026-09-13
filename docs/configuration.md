@@ -260,7 +260,7 @@ A device behind an F422 bus interface is addressed on the bus as
 rejected with the name of the offending cover.
 
 A key written on the cover always wins over a profile. Everything not written there
-is taken from the cover's `profile` (scaled by its `height`, if both are given), and
+is taken from the cover's `profile` (scaled by its `height:`, if both are given), and
 what is left falls back to the defaults in the table above. `stop_latency` and
 `start_delay` resolve the same way — cover, then profile, then default — but they
 are the two keys a profile hands over **unscaled**: a shorter window has less
@@ -275,7 +275,8 @@ dialog. The full order, per key, highest first:
    removable in one click;
 2. a profile **assigned** to the cover — from **Configure → Profiles and covers**,
    or chosen with "(B) It is similar to a cover already measured" — scaled to the
-   cover's height. Assigning a profile this way is a statement about that cover made
+   cover's curtain travel. Assigning a profile this way is a statement about that
+   cover made
    after the configuration file was written, so it is used **instead of** the keys
    the file writes for that cover;
 3. the key as written for that cover here, in the configuration file (including
@@ -283,7 +284,7 @@ dialog. The full order, per key, highest first:
    `opening_time:` for `closing_time:`). A `profile:` the file itself gives the
    cover is not the statement rule 2 is and does not move here: a key the file
    writes for that cover still wins over the profile it names;
-4. the file's own profile chain (the `profile:` it names, scaled to the height),
+4. the file's own profile chain (the `profile:` it names, scaled to the travel),
    and then the defaults.
 
 A measurement of one cover is more specific than a line typed about all of them,
@@ -294,11 +295,11 @@ rule 3. Stored profiles and `cover_profiles:` share one namespace, and a stored
 profile of the same name wins, with one warning in the log per name.
 
 Nothing of an assigned profile is copied into the cover's stored calibration: only
-the name, the flag and the height are. Correcting the profile afterwards — in
+the name, the flag and the curtain travel are. Correcting the profile afterwards — in
 `cover_profiles:` or from **Configure → Profiles and covers → Edit the values by
 hand** — reaches every cover that follows it at the next reload, scaled to each
-one's own height. Deleting the assignment leaves the height and any measurement
-alone; the cover goes back to what the file says.
+one's own curtain travel. Deleting the assignment leaves the curtain travel and any
+measurement alone; the cover goes back to what the file says.
 
 `roll`, `opening_roll`, `closing_roll`, `height`, `profile`, `tilt`, `stop_latency`
 and `start_delay` join `opening_time`, `closing_time`, `slat_time` and `shutter_run`

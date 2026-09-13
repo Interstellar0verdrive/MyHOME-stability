@@ -72,12 +72,12 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   the tube instead of a straight line (`roll`, or `opening_roll` / `closing_roll`
   when the shutter does not behave the same way up and down), and two actions measure
   that model on your own shutter in centimetres and scale it to every other shutter
-  of the same kind by its height (`cover_profiles:`) — see
+  of the same kind by its curtain travel (`cover_profiles:`) — see
   [Calibrating a shutter in centimetres](docs/recipes.md#calibrating-a-shutter-in-centimetres)
 - **Guided calibration**: *Configure → "Calibrate a cover"* drives the shutter,
   times its runs from the actuator's own status frames and asks for three tape
   readings; it stores the model where it beats `myhome.yaml`, and writes a profile
-  every similar shutter inherits by its height — see
+  every similar shutter inherits by its curtain travel — see
   [Guided calibration](docs/guided-calibration.md)
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
