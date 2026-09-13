@@ -141,8 +141,21 @@ every row with one query.
 
 **The texts** (`engine/i18n.ts`, `i18n/keys.ts`) come from `myhome/calibration/texts` with
 named placeholders, plus `Intl` for numbers and dates in the user's language. `keys.ts` is
-the list of every `panel.*` key the bundle asks for, with an English stand-in beside each -
-the texts lot's worklist, and the file it deletes.
+the list of every `panel.*` key the bundle asks for, with the English sentence beside each -
+the offline stand-in, kept equal to `en.json` by `tests/test_translations.py`, which also
+fails if the bundle asks for a key the files do not have.
+
+**Two languages, during development.** The panel's block is `config_panel` in the eight
+files and `panel` in the payload, and it is written in **English and Italian only**
+(decision of 14 September 2026): a sentence that has to be translated into seven languages
+before it can be tried on a screen is a sentence nobody rewrites. `strings.json`, `en.json`
+and `it.json` are held key-for-key over that block; `fr`, `nl`, `es`, `de` and `pt` may
+carry a subset, whose placeholders must still match, and one translation lot before the
+0.6.0 release fills them. Nothing in the frontend has to know: `panel_data.async_texts`
+serves each language **over English, key by key**, so a key a language has not reached yet
+arrives as the English sentence rather than as a dotted identifier. A new panel sentence is
+therefore added in three files — `strings.json`, `translations/en.json`,
+`translations/it.json` — and in `src/i18n/keys.ts` with the same English words.
 
 ## Rules that are not style
 

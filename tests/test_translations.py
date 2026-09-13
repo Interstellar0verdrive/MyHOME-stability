@@ -71,6 +71,33 @@ def flatten(data: Any, prefix: str = "") -> dict[str, Any]:
 # placeholder renders the braces verbatim to the user.
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
+# ------------------------------------------------- the panel is written in two languages
+# **Decision of 14 September** (``.audit-2026-09/PLAN-0.6.0.md``). The panel's own block
+# is being written while the screens that read it are being built, and a sentence that
+# has to be translated into seven languages before it can be tried on a screen is a
+# sentence nobody rewrites. So ``config_panel`` is developed in **English and Italian**:
+# those two, plus ``strings.json``, are held key-for-key; the other five may carry a
+# subset, and every key they *do* carry must still use the same placeholders.
+# ``panel_data.async_texts`` serves each language over English key by key, so a key those
+# five have not reached yet arrives as the English sentence rather than as a dotted
+# identifier. One translation lot before the 0.6.0 release fills them.
+#
+# **Everything else keeps the full eight-file parity**, 0.5.0's blocks included: those
+# sentences are shipped, and a user reading them in French is not a developer waiting
+# for a lot.
+#
+# It is called ``config_panel`` in the file and ``panel`` in the payload - see the long
+# comment above ``PANEL_VIEWS``.
+PANEL_BLOCK = "config_panel"
+PANEL_PREFIX = f"{PANEL_BLOCK}."
+# The languages the panel's sentences are written in today.
+PANEL_LANGUAGES = frozenset({"en", "it"})
+
+
+def panel_may_lag(path: Path) -> bool:
+    """True for a file whose ``config_panel`` block is allowed to be a subset."""
+    return path != STRINGS and path.stem not in PANEL_LANGUAGES
+
 
 def test_the_translation_files_are_found() -> None:
     """A glob that silently matches nothing would make every test below vacuous."""
@@ -80,11 +107,44 @@ def test_the_translation_files_are_found() -> None:
 
 @pytest.mark.parametrize("path", TRANSLATIONS, ids=lambda path: path.stem)
 def test_each_locale_has_the_same_keys_as_strings_json(path: Path) -> None:
-    """Same key set, no more and no less."""
+    """Same key set, no more and no less - except the panel's block, which may lag.
+
+    A key in one file and not the other seven is either an untranslated string the user
+    sees in English or, more often, a leftover nobody removed. The one exception is
+    ``config_panel`` in the five languages the panel is not being written in: see the
+    decision of 14 September above. A key they do not have is still forbidden from being
+    a key ``strings.json`` does not have.
+    """
     expected = leaf_keys(load(STRINGS))
     actual = leaf_keys(load(path))
     assert actual - expected == set(), f"{path.name} has keys strings.json does not"
-    assert expected - actual == set(), f"{path.name} is missing keys of strings.json"
+    missing = expected - actual
+    if panel_may_lag(path):
+        missing = {key for key in missing if not key.startswith(PANEL_PREFIX)}
+    assert missing == set(), f"{path.name} is missing keys of strings.json"
+
+
+def test_the_panel_is_written_in_english_and_italian_and_the_rest_may_lag() -> None:
+    """The decision of 14 September, stated once and checked.
+
+    Three files are held key-for-key over ``config_panel`` - ``strings.json``, ``en`` and
+    ``it`` - and the five others are a subset of them. A *superset* is caught by the test
+    above; what this adds is that the two development languages never drift apart, which
+    is the pair the screens are actually built against, and that "may lag" never quietly
+    becomes "has nothing at all".
+
+    Mutation caught: writing a panel key in English and not in Italian; deleting the
+    block from one of the five while the translation lot is still ahead.
+    """
+    expected = {key for key in leaf_keys(load(STRINGS)) if key.startswith(PANEL_PREFIX)}
+    assert expected, "strings.json has no config_panel block at all"
+    for path in TRANSLATIONS:
+        actual = {key for key in leaf_keys(load(path)) if key.startswith(PANEL_PREFIX)}
+        if panel_may_lag(path):
+            assert actual <= expected, f"{path.name} invents panel keys"
+            assert actual, f"{path.name} has lost the panel's block"
+        else:
+            assert actual == expected, f"{path.name} must carry every panel key"
 
 
 @pytest.mark.parametrize("path", TRANSLATIONS, ids=lambda path: path.stem)
@@ -100,6 +160,10 @@ def test_each_locale_uses_the_same_placeholders_as_strings_json(path: Path) -> N
     actual = flatten(load(path))
     for key, text in expected.items():
         assert isinstance(text, str), key
+        if key not in actual and panel_may_lag(path):
+            # A panel key this language has not reached yet: `async_texts` serves the
+            # English one. The key test above is what holds that to the panel's block.
+            continue
         assert set(PLACEHOLDER.findall(actual[key])) == set(PLACEHOLDER.findall(text)), key
 
 
@@ -642,8 +706,8 @@ def test_no_menu_option_draws_an_arrow_of_its_own(path: Path) -> None:
 # tree of slug keys, meant for exactly this - and no `panel`. A top-level `panel` block
 # turns `.github/workflows/hassfest.yml` red. `panel_data.TEXT_BLOCKS` renames it on the
 # way out so the frontend keeps the `panel.<view>.<element>` namespace it is written
-# against; the tests below are written on the file's name.
-PANEL_BLOCK = "config_panel"
+# against; the tests below are written on the file's name, `PANEL_BLOCK`, which is
+# declared beside the two-language rule at the top of this module.
 
 # The eleven views, in the order `.audit-2026-09/PANEL-TEXT-KEYS.md` lists them. A twelfth
 # view is a decision, not an accident: it changes what lots 5, 7 and 8 may reach for, so
@@ -711,7 +775,11 @@ def test_the_panel_has_its_own_block_in_every_file(path: Path) -> None:
     adding a view without deciding it belongs.
     """
     block = panel_block(path)
-    assert set(block) == set(PANEL_VIEWS), path.name
+    if panel_may_lag(path):
+        assert set(block) <= set(PANEL_VIEWS), path.name
+        assert block, path.name
+    else:
+        assert set(block) == set(PANEL_VIEWS), path.name
     assert all(isinstance(view, dict) and view for view in block.values()), path.name
 
 

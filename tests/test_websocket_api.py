@@ -29,7 +29,7 @@ from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er, translation
 
-from custom_components.myhome import panel_write
+from custom_components.myhome import panel_data, panel_write
 from custom_components.myhome.calibration_flow import (
     ERROR_NOT_A_NUMBER,
     ERROR_OUT_OF_RANGE,
@@ -687,6 +687,72 @@ async def test_the_language_defaults_to_the_one_this_home_assistant_speaks(
         texts = await result(client, type=WS_TYPE_TEXTS)
         assert texts["language"] == "fr"
         assert texts["fallback"] is False
+
+
+def leaves(tree: Any, prefix: str = "") -> set[str]:
+    """Every dotted path of a served block that ends on a string."""
+    if not isinstance(tree, dict):
+        return {prefix}
+    return {key for name, value in tree.items() for key in leaves(value, f"{prefix}.{name}")}
+
+
+async def test_a_language_still_being_written_is_served_over_english(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A key a language has not reached yet arrives in English, not as a dotted key.
+
+    The decision of 14 September: `config_panel` is written in English and Italian while
+    the screens that read it are built, and the other five catch up in one translation
+    lot before the release. Whole-file selection would put a French user in front of an
+    English panel the moment one key was added - or, with no fallback at all, in front of
+    a screen of identifiers. `async_texts` lays the language over English key by key
+    instead.
+
+    Mutation caught: returning the requested language's file as it stands; merging only
+    the top level (a `panel` block would replace English's whole tree); mutating the
+    cached English tree while merging, which would serve French words to an English user.
+    """
+    english = {
+        "config_panel": {"overview": {"title": "Profiles and covers", "summary": "Profiles: 2"}},
+        "options": {"step": {"init": {"title": "Menu"}}},
+    }
+    french = {
+        "config_panel": {"overview": {"title": "Profils et volets"}},
+        "options": {"step": {"init": {"title": "Menu"}}},
+    }
+    files = {"en": english, "fr": french}
+    with patch.object(panel_data, "_read_language", side_effect=files.get):
+        answer = await panel_data.async_texts(hass, "fr")
+        assert answer["language"] == "fr"
+        assert answer["fallback"] is False
+        panel = answer["texts"]["panel"]
+        assert panel["overview"]["title"] == "Profils et volets"
+        assert panel["overview"]["summary"] == "Profiles: 2"
+
+        # ...and English is still English: the merge copies, it does not write back.
+        served = await panel_data.async_texts(hass, "en")
+        assert served["texts"]["panel"]["overview"]["title"] == "Profiles and covers"
+
+
+@pytest.mark.parametrize("language", ["it", "fr", "nl", "es", "de", "pt"])
+async def test_every_sentence_english_has_reaches_every_language(
+    hass: HomeAssistant, tmp_path, language: str
+) -> None:
+    """The invariant the two-language rule rests on, over the real files.
+
+    `tests/test_translations.py` lets the five lagging files carry a subset of
+    `config_panel`; this is the other half of that permission - whatever they are missing,
+    the panel is still served a complete book, because English is underneath. It holds
+    just as well on the day the translation lot fills them.
+
+    Mutation caught: dropping the merge, which would make a missing key a dotted
+    identifier on a French screen with nothing failing anywhere.
+    """
+    english = await panel_data.async_texts(hass, "en")
+    served = await panel_data.async_texts(hass, language)
+    assert served["language"] == language
+    for block in english["texts"]:
+        assert leaves(served["texts"][block]) == leaves(english["texts"][block]), block
 
 
 async def test_the_panels_own_block_arrives_under_the_name_the_frontend_uses(

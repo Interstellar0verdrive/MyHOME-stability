@@ -558,6 +558,23 @@ The same version is passed to the element in the panel's `config`, which is how 
 panel can name its own version without the bundle carrying a stamp — and therefore
 without a release having to rebuild it.
 
+### The panel's words, and the two languages they are written in
+
+Every sentence the panel shows comes from the same eight translation files the guided
+calibration shows, served by `myhome/calibration/texts` as four blocks — `options`,
+`selector`, `exceptions` and the panel's own, which is **`config_panel` in the file and
+`panel` in the payload** (hassfest validates `strings.json` against a closed list of
+top-level keys, and `config_panel` is the entry on it meant for a panel's own words).
+That block is developed in **English and Italian only** (decision of 14 September 2026):
+`tests/test_translations.py` holds `strings.json`, `en.json` and `it.json` key-for-key
+over it, while `fr`, `nl`, `es`, `de` and `pt` may carry a subset whose placeholders must
+still match, and one translation lot before the 0.6.0 release fills them. Every other
+block, 0.5.0's included, keeps the full eight-file parity, because those sentences are
+shipped and a user reading them in French is not a developer waiting for a lot. What
+makes the permission safe is that `panel_data.async_texts` lays the requested language
+**over English, key by key**: a key a language has not reached yet arrives as the English
+sentence, never as the dotted identifier a missing key otherwise renders as.
+
 ### The bundle
 
 The panel is Lit 3 + TypeScript, bundled by esbuild into a single ES module:

@@ -552,6 +552,40 @@ def _candidates(language: str) -> list[str]:
     return [item for item in tries if item and not (item in seen or seen.add(item))]
 
 
+async def _blocks(hass: HomeAssistant, language: str) -> dict[str, Any] | None:
+    """The four blocks of one translation file, renamed, or None when there is no file."""
+    loaded = await hass.async_add_executor_job(_read_language, language)
+    if loaded is None:
+        return None
+    return {served: loaded[block] for block, served in TEXT_BLOCKS.items() if block in loaded}
+
+
+@callback
+def _over_english(english: Mapping[str, Any], wanted: Mapping[str, Any]) -> dict[str, Any]:
+    """`wanted` laid over `english`, key by key, all the way down the tree.
+
+    The panel's own block is written in **two languages during development** - the
+    decision of 14 September, `.audit-2026-09/PLAN-0.6.0.md` - so `fr.json` is allowed to
+    carry only some of `config_panel`, and a key it has not reached yet must arrive as
+    the English sentence rather than as the dotted key. Whole-file selection would put a
+    French user in front of an English panel the moment one key was added, or in front of
+    a screen of identifiers; merging key by key gives them everything French that exists
+    and English for the rest, which is what every screen of Home Assistant does.
+
+    A leaf always wins over a leaf. Only two mappings are merged: a language that turned
+    a sentence into a sub-tree, or the other way round, is taking the key over whole.
+    """
+    merged = dict(english)
+    for key, value in wanted.items():
+        under = merged.get(key)
+        merged[key] = (
+            _over_english(under, value)
+            if isinstance(under, Mapping) and isinstance(value, Mapping)
+            else value
+        )
+    return merged
+
+
 async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
     """The integration's own sentences, in the nearest language it has.
 
@@ -562,6 +596,10 @@ async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
     deliberate phrase.
 
     Four blocks travel, and one of them is renamed on the way out: see `TEXT_BLOCKS`.
+    Every language is served **over English**, key by key, so that a block still being
+    written - which under the decision of 14 September is every language but English and
+    Italian, for `config_panel` - falls back a sentence at a time instead of a file at a
+    time.
 
     Read once per language per Home Assistant run, in an executor, because a translation
     file is disk I/O and the resolution below is the same answer every time.
@@ -569,14 +607,18 @@ async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
     cache: dict[str, dict[str, Any]] = hass.data.setdefault(TEXTS_CACHE_KEY, {})
     for candidate in _candidates(language):
         if (cached := cache.get(candidate)) is None:
-            loaded = await hass.async_add_executor_job(_read_language, candidate)
-            if loaded is None:
+            blocks = await _blocks(hass, candidate)
+            if blocks is None:
                 continue
-            cached = cache[candidate] = {
-                served: loaded[block]
-                for block, served in TEXT_BLOCKS.items()
-                if block in loaded
-            }
+            if candidate == DEFAULT_LANGUAGE:
+                cached = cache[candidate] = blocks
+            else:
+                english = cache.get(DEFAULT_LANGUAGE)
+                if english is None:
+                    english = cache[DEFAULT_LANGUAGE] = (
+                        await _blocks(hass, DEFAULT_LANGUAGE) or {}
+                    )
+                cached = cache[candidate] = _over_english(english, blocks)
         return {
             "language": candidate,
             "requested": language,
