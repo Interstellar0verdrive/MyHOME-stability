@@ -729,9 +729,10 @@ async def test_keypad_stop_is_not_mistaken_for_an_echo(
 class _Model:
     """Just enough of a cover to call the travel model, without Home Assistant.
 
-    `_travel` / `_travel_time` / `_normalise` read six attributes and nothing else, so
-    the model can be exercised on its own - which is the only way to compare it against
-    the pre-0.4.2 formulas over a grid.
+    `_travel` / `_travel_time` / `_normalise` read the movement snapshot `_run` and
+    nothing else, so the model can be exercised on its own - which is the only way to
+    compare it against the pre-0.4.2 formulas over a grid. The attributes beside it are
+    what the linear reference functions below read.
     """
 
     def __init__(
@@ -753,6 +754,18 @@ class _Model:
         self._curtain_down = max(cover_module.MIN_CURTAIN_TIME, closing - slat)
         self._two_phase = slat > 0
         self._has_tilt = slat > 0
+        # What a real cover freezes for the length of one run (0.6.0): the two travel
+        # functions read it and nothing else, so a calibration written while the shutter
+        # is moving cannot change the arithmetic half way through.
+        self._run = cover_module._MovementModel(
+            slat_time=slat,
+            opening_roll=self._opening_roll,
+            closing_roll=self._closing_roll,
+            curtain_up=self._curtain_up,
+            curtain_down=self._curtain_down,
+            stop_latency=0.0,
+            start_delay=0.0,
+        )
 
     _normalise = cover_module.MyHOMECover._normalise
     _curtain_tau = cover_module.MyHOMECover._curtain_tau
