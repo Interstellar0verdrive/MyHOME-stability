@@ -259,9 +259,9 @@
       },
       "path": {
         "title": "Como quer medir esta persiana?",
-        "description": "**Persiana**: {cover}\n\nHá três formas, e a certa depende do que já mediu. Não são passos sucessivos: escolhe-se uma.\n\nA primeira (A) é a longa, cerca de três minutos: três pressões de um botão e três leituras com a fita. No fim nasce um **perfil**, ou seja, a descrição deste tipo de persiana, que todas as persianas semelhantes (mesmo modelo, mesma dimensão, ...) poderão reutilizar.\n\nA segunda (B) foi pensada precisamente para as persianas semelhantes a uma já calibrada: escolhe o perfil, mede a altura, está feito.\n\nA terceira (C) é para uma persiana à qual foi atribuído um perfil mas que para no sítio errado: nesse caso, a calibração desta persiana tem de ser afinada.\n\n**O que tem de fazer**: escolha uma das formas abaixo. Até ao ecrã seguinte nada se move.",
+        "description": "**Persiana**: {cover}\n\nHá três formas, e a certa depende do que já mediu. Não são passos sucessivos: escolhe-se uma.\n\nA primeira (A) é a longa, cerca de quatro minutos: três pressões de um botão e três leituras com a fita. No fim nasce um **perfil**, ou seja, a descrição deste tipo de persiana, que todas as persianas semelhantes (mesmo modelo, mesma dimensão, ...) poderão reutilizar.\n\nA segunda (B) foi pensada precisamente para as persianas semelhantes a uma já calibrada: escolhe o perfil, mede a altura, está feito.\n\nA terceira (C) é para uma persiana à qual foi atribuído um perfil mas que para no sítio errado: nesse caso, a calibração desta persiana tem de ser afinada.\n\n**O que tem de fazer**: escolha uma das formas abaixo. Até ao ecrã seguinte nada se move.",
         "menu_options": {
-          "path_a": "(A) É a primeira persiana deste tipo (medição completa, ~3 minutos)",
+          "path_a": "(A) É a primeira persiana deste tipo (medição completa, ~4 minutos)",
           "path_b": "(B) É semelhante a uma persiana já medida (só a altura)",
           "path_c": "(C) Tem um perfil mas para no sítio errado (afinar a calibração)",
           "cancel_flow": "Cancelar"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Antes de a persiana começar a mover-se",
-        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a calibração está dividida em passos. Em cada passo a persiana faz um único movimento, e antes de cada um chegam as instruções e todo o tempo para se preparar: nenhum movimento arranca sem que seja você a iniciá-lo. Sete movimentos ao todo, cerca de três minutos.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar — um batente aberto, plantas no peitoril, gatos — e tenha a fita métrica à mão. Ser-lhe-á pedido que carregue num botão quando algo acontecer e que leia algumas distâncias.\n\nSe algo correr mal, cada passo pode ser repetido sozinho, sem refazer os já feitos. Pode interromper quando quiser: nada é guardado até ao último ecrã, e os movimentos são comandos normais.",
+        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: a calibração está dividida em passos. Em cada passo a persiana faz os movimentos de que esse passo precisa, e antes de cada um chegam as instruções e todo o tempo para se preparar: nenhum movimento medido arranca sem que seja você a iniciá-lo. Nove movimentos ao todo, cerca de quatro minutos.\n\n**O que tem de fazer**: certifique-se de que nada está a estorvar — um batente aberto, plantas no peitoril, gatos — e tenha a fita métrica à mão. Ser-lhe-á pedido que carregue num botão quando algo acontecer e que leia algumas distâncias.\n\nSe algo correr mal, cada passo pode ser repetido sozinho, sem refazer os já feitos. Pode interromper quando quiser: nada é guardado até ao último ecrã, e os movimentos são comandos normais.",
         "menu_options": {
           "begin": "Percebi, vamos começar",
           "cancel_flow": "Cancelar"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "Até onde quer afinar a calibração?",
-        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: ou dois percursos medidos (um a subir e outro a descer), ou esses mais duas leituras com a fita.\n\nSó os tempos chegam para uma persiana cujo motor é simplesmente mais lento ou mais rápido do que aquele em que o perfil foi medido. Acrescente os coeficientes quando ela também se engana *a meio percurso*: aí não é o motor que roda de outra maneira, é a tela que se enrola de outra maneira.\n\n**O que tem de fazer**: escolha até onde ir. Pode sempre voltar e fazer o resto.",
+        "description": "**Persiana**: {cover}\n\n**O que vai acontecer**: ou três percursos medidos (dois a subir e um a descer), ou esses mais duas leituras com a fita.\n\nSó os tempos chegam para uma persiana cujo motor é simplesmente mais lento ou mais rápido do que aquele em que o perfil foi medido. Acrescente os coeficientes quando ela também se engana *a meio percurso*: aí não é o motor que roda de outra maneira, é a tela que se enrola de outra maneira.\n\n**O que tem de fazer**: escolha até onde ir. Pode sempre voltar e fazer o resto.",
         "menu_options": {
-          "times_only": "Só os seus tempos de percurso (2 pressões, ~1 minuto)",
-          "times_and_rolls": "Os seus tempos e os seus coeficientes (2 pressões e 2 leituras)",
+          "times_only": "Só os seus tempos de percurso (3 pressões, ~2 minutos)",
+          "times_and_rolls": "Os seus tempos e os seus coeficientes (3 pressões e 2 leituras)",
           "cancel_flow": "Cancelar"
         }
       },
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Vamos medir a subida",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Persiana**: {cover}\n\n**O que vai acontecer**: quando carregar no botão abaixo, a persiana arranca de baixo para cima. Durante o primeiro segundo ou dois só se abrem as lâminas, enquanto a borda inferior continua apoiada; depois começa a subir toda a tela, e em cima a persiana para sozinha.\n\n**O que tem de fazer**: aqui terá de ser rápido e preciso. Ser-lhe-ão pedidas duas pressões, uma a seguir à outra:\n\n1. a primeira no instante em que a borda inferior se descola da base;\n2. a segunda no instante em que a persiana chega ao fim de curso e o motor para, o que se reconhece pelo ruído que cessa.\n\nNão está a cronometrar nada: o instante da pressão é a medida. Os ecrãs que se seguem têm uma só linha, porque não há tempo para ler enquanto olha para a persiana.\n\nLeia com calma, ponha-se em posição, e inicie o movimento quando estiver pronto.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Persiana**: {cover}\n\n**O que vai acontecer**: a subida mede-se com dois percursos, uma pressão cada um, e este é o primeiro. Quando carregar no botão abaixo, a persiana arranca da base para cima: durante o primeiro segundo ou dois só se abrem as lâminas, enquanto a borda inferior continua apoiada, e depois começa a subir todo o pano. A persiana é parada no instante da pressão, alguns centímetros acima, e o ecrã seguinte pede-lhe que olhe para onde ficou.\n\n**O que tem de fazer**: aqui terá de ser rápido e preciso. Uma só pressão, no instante em que a borda inferior se descola da base. Não está a cronometrar nada: o instante da pressão é a medida.\n\nO segundo percurso vem a seguir, outra vez a partir da base, e pede a outra pressão: o instante em que a persiana chega ao fim de curso em cima e o motor para, o que se reconhece pelo ruído que cessa. O desenho mostra as duas.\n\nOs ecrãs que se seguem têm uma só linha, porque não há tempo para ler enquanto olha para a persiana.\n\nLeia com calma, ponha-se em posição, e inicie o movimento quando estiver pronto.",
         "menu_options": {
           "open_start": "Iniciar a persiana",
           "repeat_step": "Descê-la primeiro",
@@ -334,6 +334,63 @@
           "not_right": "Não fez o que devia"
         }
       },
+      "lift_check": {
+        "title": "Onde está agora a borda inferior?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\n**O que aconteceu**: a persiana foi parada no instante da pressão. Entre uma pressão e a paragem do motor passa sempre um momento — a reação de quem carrega, o comando a chegar à gateway, o motor a travar — e durante todo esse tempo o pano continua a subir.\n\n**O que tem de fazer**: olhe para a borda inferior e diga qual dos três casos é. Alguns centímetros acima da base é o aspeto de uma pressão que correu bem. Ainda apoiada na base quer dizer que a pressão chegou antes de a borda se descolar: essa medida não se corrige, só se repete. Um palmo ou mais quer dizer que a pressão chegou tarde, e a pressão tardia é o único caso que a fita métrica consegue endireitar.",
+        "menu_options": {
+          "lift_too_early": "Ainda está a tocar na base",
+          "lift_accept": "Está alguns centímetros acima, continuar",
+          "lift_gap": "Quero medir o afastamento, para mais precisão",
+          "not_right": "Não fez o que devia"
+        }
+      },
+      "lift_check_late": {
+        "title": "Onde está agora a borda inferior?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Persiana**: {cover}\n\n**O que aconteceu**: a persiana foi parada no instante da pressão — mas a gateway tinha outros comandos em fila e demorou mais de um segundo a escrever o nosso no barramento. Durante todo esse tempo o pano continuou a subir, por isso o afastamento que vai ver é maior do que o habitual e não é culpa de quem carregou.\n\n**O que tem de fazer**: olhe para a borda inferior e diga qual dos três casos é. Ainda apoiada na base quer dizer que a pressão chegou antes de a borda se descolar: essa medida não se corrige, só se repete. Nos restantes casos vale a pena medir aqui, porque neste percurso só a fita pode dizer quando a borda se descolou de facto.",
+        "menu_options": {
+          "lift_too_early": "Ainda está a tocar na base",
+          "lift_accept": "Está alguns centímetros acima, continuar",
+          "lift_gap": "Quero medir o afastamento, para mais precisão",
+          "not_right": "Não fez o que devia"
+        }
+      },
+      "lift_gap": {
+        "title": "Medir o afastamento — {cover}",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**O que tem de fazer**: meça desde a base — o ponto onde a borda inferior assenta quando a persiana está fechada — até à borda inferior onde ela está agora, e escreva os centímetros abaixo. Essa distância diz exatamente quando a borda se descolou da base, de modo que o tempo das lâminas deixa de depender da rapidez do dedo.\n\nDeixando o campo vazio segue-se sem medir, e a pressão fica tal como foi feita.",
+        "data": {
+          "gap_cm": "Afastamento entre a borda inferior e a base (cm)"
+        },
+        "data_description": {
+          "gap_cm": "Em centímetros, normalmente entre 2 e 5. As decimais podem escrever-se com vírgula ou com ponto: 3,5 ou 3.5. Deixe vazio para continuar sem medir."
+        }
+      },
+      "lift_early": {
+        "title": "A pressão chegou demasiado cedo",
+        "description": "**Persiana**: {cover}\n\n**O que aconteceu**: um afastamento de menos de um centímetro quer dizer que a persiana ainda estava apoiada na base quando o motor parou, ou seja, que a pressão foi feita antes de a borda inferior se descolar. O tempo das lâminas que daí saiu é curto por uma quantidade desconhecida, e nenhuma leitura pode devolver uma distância que nunca foi percorrida.\n\n**O que tem de fazer**: repetir a subida. A persiana volta a descer e arranca outra vez; desta vez espere que a borda inferior se tenha descolado mesmo antes de carregar.",
+        "menu_options": {
+          "repeat_step": "Medir a subida outra vez",
+          "lift_gap": "Escrever o afastamento outra vez",
+          "not_right": "Não fez o que devia"
+        }
+      },
+      "closed_again": {
+        "title": "A persiana está outra vez completamente fechada?",
+        "description": "**Persiana**: {cover}\n\n**O que aconteceu**: a persiana foi mandada descer até à base, porque a subida completa tem de partir dali tal como o primeiro percurso.\n\n**O que tem de fazer**: olhe para ela. Se está completamente fechada, com as lâminas cerradas e a borda inferior apoiada, continue. Se ainda se está a mover, espere e depois continue. Se não se moveu de todo, ou se moveu para o lado errado, diga-o aqui abaixo.",
+        "menu_options": {
+          "confirm_closed_again": "Está completamente fechada",
+          "repeat_step": "Repetir este passo",
+          "not_right": "Não fez o que devia"
+        }
+      },
+      "open_full_brief": {
+        "title": "Agora a subida completa",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Persiana**: {cover}\n\n**O que vai acontecer**: quando carregar no botão abaixo, a persiana arranca outra vez da base para cima, e desta vez deixa-se correr — as lâminas abrem-se, todo o pano sobe, e em cima a persiana para sozinha no seu fim de curso.\n\n**O que tem de fazer**: uma só pressão, no instante em que o motor para em cima. Reconhece-se pelo ruído que cessa. Na base, desta vez, não lhe é pedido nada: essa medida já foi feita.\n\nO ecrã durante o movimento tem uma só linha, porque não há tempo para ler enquanto olha para a persiana.\n\nLeia com calma, ponha-se em posição, e inicie o movimento quando estiver pronto.",
+        "menu_options": {
+          "open_full_start": "Iniciar a persiana",
+          "repeat_step": "Refazer a subida desde o início",
+          "cancel_flow": "Cancelar"
+        }
+      },
       "open_top": {
         "title": "A persiana ainda está a subir",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Persiana**: {cover}\n\nCarregue no instante em que o motor para em cima.",
@@ -345,7 +402,15 @@
       },
       "open_result": {
         "title": "A subida foi medida",
-        "description": "**Persiana**: {cover}\n\n**O que foi medido**: lâminas {slat} s, subida completa {run} s.\n\n**O que tem de fazer**: se as duas pressões lhe pareceram certas, continue. Se alguma saiu tarde ou cedo, repita a medição: a persiana volta a baixo e a subida é refeita desde o início. Uma pressão meio segundo desviada move a estimativa alguns centímetros.",
+        "description": "**Persiana**: {cover}\n\n**O que foi medido**: lâminas {slat} s, subida completa {run} s.\n\n**O que tem de fazer**: se as duas pressões lhe pareceram certas, continue. Se alguma saiu tarde ou cedo, repita a medição: os dois percursos da subida são refeitos a partir da base, porque um tempo de lâminas tirado numa tentativa não vai com uma subida tirada noutra. Uma pressão meio segundo desviada move a estimativa alguns centímetros.",
+        "menu_options": {
+          "accept_step": "Está bem, continuar",
+          "repeat_step": "Repetir a medição"
+        }
+      },
+      "open_result_gap": {
+        "title": "A subida foi medida",
+        "description": "**Persiana**: {cover}\n\n**O que foi medido**: lâminas {slat} s, subida completa {run} s, e um afastamento de {gap} cm acima da base.\n\nO tempo das lâminas acima é o que a pressão produziu. O afastamento medido substitui-o quando os valores são calculados, por isso o que acabar guardado pode diferir dele em alguns décimos de segundo — foi exatamente para isso que foi medido.\n\n**O que tem de fazer**: se a pressão em cima e a leitura lhe pareceram certas, continue. Repetir a medição refaz os dois percursos da subida a partir da base.",
         "menu_options": {
           "accept_step": "Está bem, continuar",
           "repeat_step": "Repetir a medição"
@@ -598,10 +663,12 @@
     "progress": {
       "homing_closed": "{cover} está a ser fechada completamente: deste modo as medições partem de um ponto conhecido. Aguarde, e certifique-se de que nada está a estorvar.",
       "homing_open": "{cover} está a ser aberta completamente: deste modo o movimento seguinte parte de um ponto conhecido. Aguarde, e certifique-se de que nada está a estorvar.",
-      "starting_open": "{cover} está a arrancar a subir. Olhe para ela: daqui a um instante ser-lhe-á pedida a primeira pressão.",
+      "starting_open": "{cover} está a arrancar a subir. Olhe para ela: daqui a um instante ser-lhe-á pedida a pressão na base.",
       "starting_close": "{cover} está a arrancar a descer. Olhe para ela: daqui a um instante ser-lhe-á pedida a pressão.",
       "running_down": "{cover} é aberta completamente e depois descida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta.",
-      "running_up": "{cover} é fechada completamente e depois subida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta."
+      "running_up": "{cover} é fechada completamente e depois subida até cerca de {percent}% do seu percurso. Aguarde, e tenha a fita métrica pronta.",
+      "stopping_lift": "{cover} está a ser parada exatamente onde a pressão a encontrou. Um instante.",
+      "starting_open_full": "{cover} arranca outra vez a subir, desta vez até ao topo. Olhe para ela: daqui a um instante ser-lhe-á pedida a pressão em cima."
     },
     "error": {
       "invalid_host": "Não é um endereço IP nem um nome de anfitrião válido.",

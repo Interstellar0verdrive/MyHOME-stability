@@ -259,9 +259,9 @@
       },
       "path": {
         "title": "Comment voulez-vous mesurer ce volet ?",
-        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ trois minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être affinée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
+        "description": "**Volet** : {cover}\n\nIl y a trois façons, et la bonne dépend de ce que vous avez déjà mesuré. Ce ne sont pas des étapes successives : on en choisit une.\n\nLa première (A) est la longue, environ quatre minutes : trois appuis sur un bouton et trois lectures au mètre. Elle donne un **profil**, c'est-à-dire la description de ce type de volet, que tous les volets semblables (même modèle, même dimension, ...) pourront réutiliser.\n\nLa deuxième (B) est justement pensée pour les volets semblables à un volet déjà calibré : vous choisissez le profil, vous mesurez la hauteur, c'est fini.\n\nLa troisième (C) est pour un volet auquel un profil a été attribué mais qui s'arrête au mauvais endroit : dans ce cas, la calibration de ce volet doit être affinée.\n\n**Ce que vous devez faire** : choisissez une façon parmi celles ci-dessous. Rien ne bouge avant l'écran suivant.",
         "menu_options": {
-          "path_a": "(A) C'est le premier volet de ce type (mesure complète, ~3 minutes)",
+          "path_a": "(A) C'est le premier volet de ce type (mesure complète, ~4 minutes)",
           "path_b": "(B) Il est semblable à un volet déjà mesuré (la hauteur seulement)",
           "path_c": "(C) Il a un profil mais s'arrête au mauvais endroit (affiner la calibration)",
           "cancel_flow": "Annuler"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Avant que le volet ne commence à bouger",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : la calibration est découpée en étapes. À chaque étape, le volet effectue un seul mouvement, et avant chacun arrivent les instructions et tout le temps de se préparer : aucun mouvement ne part sans que vous le lanciez. Sept mouvements en tout, environ trois minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne - un battant ouvert, des plantes sur l'appui, des chats - et gardez le mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de lire quelques distances.\n\nSi quelque chose se passe mal, chaque étape peut être répétée seule, sans refaire celles qui sont déjà faites. Vous pouvez interrompre quand vous voulez : rien n'est enregistré jusqu'au dernier écran, et les mouvements sont des commandes ordinaires.",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : la calibration est découpée en étapes. À chaque étape, le volet effectue les mouvements que cette étape demande, et avant chacun arrivent les instructions et tout le temps de se préparer : aucun mouvement chronométré ne part sans que vous le lanciez. Neuf mouvements en tout, environ quatre minutes.\n\n**Ce que vous devez faire** : assurez-vous que rien ne gêne - un battant ouvert, des plantes sur l'appui, des chats - et gardez le mètre à portée de main. Il vous sera demandé d'appuyer sur un bouton quand quelque chose se produit et de lire quelques distances.\n\nSi quelque chose se passe mal, chaque étape peut être répétée seule, sans refaire celles qui sont déjà faites. Vous pouvez interrompre quand vous voulez : rien n'est enregistré jusqu'au dernier écran, et les mouvements sont des commandes ordinaires.",
         "menu_options": {
           "begin": "J'ai compris, commençons",
           "cancel_flow": "Annuler"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "Jusqu'où voulez-vous affiner la calibration ?",
-        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : soit deux courses mesurées (une à la montée et une à la descente), soit celles-ci plus deux lectures au mètre.\n\nLes seuls temps suffisent pour un volet dont le moteur est simplement plus lent ou plus rapide que celui sur lequel le profil a été mesuré. Ajoutez les coefficients quand il se trompe aussi *à mi-course* : là, ce n'est pas le moteur qui tourne autrement, c'est le tablier qui s'enroule autrement.\n\n**Ce que vous devez faire** : choisissez jusqu'où aller. Vous pouvez toujours revenir faire le reste.",
+        "description": "**Volet** : {cover}\n\n**Ce qui va se passer** : soit trois courses mesurées (deux à la montée et une à la descente), soit celles-ci plus deux lectures au mètre.\n\nLes seuls temps suffisent pour un volet dont le moteur est simplement plus lent ou plus rapide que celui sur lequel le profil a été mesuré. Ajoutez les coefficients quand il se trompe aussi *à mi-course* : là, ce n'est pas le moteur qui tourne autrement, c'est le tablier qui s'enroule autrement.\n\n**Ce que vous devez faire** : choisissez jusqu'où aller. Vous pouvez toujours revenir faire le reste.",
         "menu_options": {
-          "times_only": "Ses seuls temps de course (2 appuis, ~1 minute)",
-          "times_and_rolls": "Ses temps et ses coefficients (2 appuis et 2 lectures)",
+          "times_only": "Ses seuls temps de course (3 appuis, ~2 minutes)",
+          "times_and_rolls": "Ses temps et ses coefficients (3 appuis et 2 lectures)",
           "cancel_flow": "Annuler"
         }
       },
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "Nous allons mesurer la montée",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis le bas. Pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter, et en haut le volet s'arrête tout seul.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Deux appuis vous seront demandés, l'un après l'autre :\n\n1. le premier à l'instant où le bord inférieur se décolle de la base ;\n2. le second à l'instant où le volet arrive en fin de course et où le moteur s'arrête, ce qui se reconnaît au bruit qui cesse.\n\nVous ne chronométrez rien : l'instant de l'appui est la mesure. Les écrans qui suivent ne comportent qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : la montée se mesure en deux courses, un appui chacune, et voici la première. Quand vous appuierez sur le bouton ci-dessous, le volet partira vers le haut depuis la base : pendant la première seconde ou deux, seules les lames s'ouvrent, tandis que le bord inférieur reste en appui ; puis tout le tablier commence à monter. Le volet est arrêté à l'instant de votre appui, quelques centimètres plus haut, et l'écran suivant vous demandera de regarder où il s'est arrêté.\n\n**Ce que vous devez faire** : ici, il faudra être rapide et précis. Un seul appui, à l'instant où le bord inférieur se décolle de la base. Vous ne chronométrez rien : l'instant de l'appui est la mesure.\n\nLa seconde course vient ensuite, depuis la base à nouveau, et demande l'autre appui : l'instant où le volet arrive en fin de course en haut et où le moteur s'arrête, ce qui se reconnaît au bruit qui cesse. Le dessin montre les deux.\n\nLes écrans qui suivent ne comportent qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
         "menu_options": {
           "open_start": "Lancer le volet",
           "repeat_step": "Le redescendre d'abord",
@@ -334,6 +334,63 @@
           "not_right": "Il n'a pas fait ce qu'il devait"
         }
       },
+      "lift_check": {
+        "title": "Où se trouve le bord inférieur maintenant ?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été arrêté à l'instant de votre appui. Entre un appui et l'arrêt du moteur, il s'écoule toujours un moment — votre réaction, la commande qui atteint la passerelle, le moteur qui freine — et pendant tout ce temps le tablier continue de monter.\n\n**Ce que vous devez faire** : regardez le bord inférieur et dites lequel des trois cas c'est. Quelques centimètres au-dessus de la base, c'est l'allure d'un appui réussi. Encore en appui sur la base, cela veut dire que l'appui est arrivé avant que le bord ne se décolle : cette mesure ne se répare pas, elle se refait. Une largeur de main ou plus, cela veut dire que l'appui était en retard, et l'appui en retard est le seul cas qu'un mètre ruban peut rattraper.",
+        "menu_options": {
+          "lift_too_early": "Il touche encore la base",
+          "lift_accept": "Il est quelques centimètres plus haut, continuer",
+          "lift_gap": "Je veux mesurer l'écart pour plus de précision",
+          "not_right": "Il n'a pas fait ce qu'il devait"
+        }
+      },
+      "lift_check_late": {
+        "title": "Où se trouve le bord inférieur maintenant ?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été arrêté à l'instant de votre appui — mais la passerelle avait d'autres commandes en attente et a mis plus d'une seconde à écrire la nôtre sur le bus. Pendant tout ce temps le tablier a continué de monter : l'écart que vous allez voir est donc plus grand que d'habitude, et il ne vient pas de vous.\n\n**Ce que vous devez faire** : regardez le bord inférieur et dites lequel des trois cas c'est. Encore en appui sur la base, cela veut dire que l'appui est arrivé avant que le bord ne se décolle : cette mesure ne se répare pas, elle se refait. Dans tous les autres cas, il vaut la peine de mesurer ici, car sur cette course seul le mètre peut dire quand le bord s'est réellement décollé.",
+        "menu_options": {
+          "lift_too_early": "Il touche encore la base",
+          "lift_accept": "Il est quelques centimètres plus haut, continuer",
+          "lift_gap": "Je veux mesurer l'écart pour plus de précision",
+          "not_right": "Il n'a pas fait ce qu'il devait"
+        }
+      },
+      "lift_gap": {
+        "title": "Mesure de l'écart — {cover}",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Ce que vous devez faire** : mesurez depuis la base — le point où le bord inférieur repose quand le volet est fermé — jusqu'au bord inférieur là où il se trouve maintenant, et écrivez les centimètres ci-dessous. Cette distance dit exactement quand le bord s'est décollé de la base, de sorte que le temps des lames ne dépend plus de la vitesse de votre doigt.\n\nLaisser le champ vide permet de continuer sans mesurer : l'appui reste alors tel qu'il a été fait.",
+        "data": {
+          "gap_cm": "Écart entre le bord inférieur et la base (cm)"
+        },
+        "data_description": {
+          "gap_cm": "En centimètres, en général entre 2 et 5. Les décimales s'écrivent avec une virgule ou un point : 3,5 ou 3.5. Laissez vide pour continuer sans mesurer."
+        }
+      },
+      "lift_early": {
+        "title": "L'appui est arrivé trop tôt",
+        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : un écart de moins d'un centimètre veut dire que le volet reposait encore sur sa base quand le moteur s'est arrêté, donc que l'appui a été fait avant que le bord inférieur ne s'en décolle. Le temps des lames qui en sort est trop court d'une quantité inconnue, et aucune lecture ne peut rendre une distance qui n'a jamais été parcourue.\n\n**Ce que vous devez faire** : refaire la montée. Le volet est redescendu et repart ; cette fois, attendez que le bord inférieur se soit vraiment décollé avant d'appuyer.",
+        "menu_options": {
+          "repeat_step": "Mesurer la montée à nouveau",
+          "lift_gap": "Réécrire l'écart",
+          "not_right": "Il n'a pas fait ce qu'il devait"
+        }
+      },
+      "closed_again": {
+        "title": "Le volet est-il de nouveau complètement fermé ?",
+        "description": "**Volet** : {cover}\n\n**Ce qui s'est passé** : le volet a été redescendu jusqu'à la base, parce que la montée complète doit partir de là exactement comme la première course.\n\n**Ce que vous devez faire** : regardez-le. S'il est complètement fermé, lames serrées et bord inférieur en appui, continuez. S'il bouge encore, attendez puis continuez. S'il n'a pas bougé du tout, ou s'il est parti du mauvais côté, dites-le ci-dessous.",
+        "menu_options": {
+          "confirm_closed_again": "Il est complètement fermé",
+          "repeat_step": "Répéter cette étape",
+          "not_right": "Il n'a pas fait ce qu'il devait"
+        }
+      },
+      "open_full_brief": {
+        "title": "Maintenant la montée complète",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Volet** : {cover}\n\n**Ce qui va se passer** : quand vous appuierez sur le bouton ci-dessous, le volet repartira vers le haut depuis la base, et cette fois on le laisse courir — les lames s'ouvrent, tout le tablier monte, et en haut le volet s'arrête tout seul en fin de course.\n\n**Ce que vous devez faire** : un seul appui, à l'instant où le moteur s'arrête en haut. On le reconnaît au bruit qui cesse. À la base, rien ne vous est demandé cette fois : cette mesure est déjà faite.\n\nL'écran pendant le mouvement ne comporte qu'une seule ligne, parce qu'on n'a pas le temps de lire en regardant le volet.\n\nLisez tranquillement, mettez-vous en position, et lancez vous-même le mouvement quand vous êtes prêt.",
+        "menu_options": {
+          "open_full_start": "Lancer le volet",
+          "repeat_step": "Refaire la montée depuis le début",
+          "cancel_flow": "Annuler"
+        }
+      },
       "open_top": {
         "title": "Le volet monte encore",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Volet** : {cover}\n\nAppuyez à l'instant où le moteur s'arrête en haut.",
@@ -345,7 +402,15 @@
       },
       "open_result": {
         "title": "La montée a été mesurée",
-        "description": "**Volet** : {cover}\n\n**Ce qui a été mesuré** : lames {slat} s, montée complète {run} s.\n\n**Ce que vous devez faire** : si les deux appuis vous semblent bons, continuez. Si l'un des deux est parti en retard ou en avance, répétez la mesure : le volet est redescendu et la montée est refaite depuis le début. Un appui décalé d'une demi-seconde déplace l'estimation de quelques centimètres.",
+        "description": "**Volet** : {cover}\n\n**Ce qui a été mesuré** : lames {slat} s, montée complète {run} s.\n\n**Ce que vous devez faire** : si les deux appuis vous semblent bons, continuez. Si l'un des deux est parti en retard ou en avance, répétez la mesure : les deux courses de la montée sont refaites depuis la base, car un temps de lames pris à un essai ne va pas avec une montée prise à un autre. Un appui décalé d'une demi-seconde déplace l'estimation de quelques centimètres.",
+        "menu_options": {
+          "accept_step": "C'est bon, continuer",
+          "repeat_step": "Répéter la mesure"
+        }
+      },
+      "open_result_gap": {
+        "title": "La montée a été mesurée",
+        "description": "**Volet** : {cover}\n\n**Ce qui a été mesuré** : lames {slat} s, montée complète {run} s, et un écart de {gap} cm au-dessus de la base.\n\nLe temps des lames ci-dessus est celui qu'a produit l'appui. L'écart que vous avez mesuré le remplace au moment du calcul des valeurs : ce qui sera enregistré peut donc en différer de quelques dixièmes de seconde — c'est précisément pour cela qu'il a été mesuré.\n\n**Ce que vous devez faire** : si l'appui en haut et la lecture vous semblent bons, continuez. Répéter la mesure refait les deux courses de la montée depuis la base.",
         "menu_options": {
           "accept_step": "C'est bon, continuer",
           "repeat_step": "Répéter la mesure"
@@ -598,10 +663,12 @@
     "progress": {
       "homing_closed": "{cover} est fermé complètement : ainsi, les mesures partent d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
       "homing_open": "{cover} est ouvert complètement : ainsi, le mouvement suivant part d'un point connu. Patientez, et assurez-vous que rien ne gêne.",
-      "starting_open": "{cover} part vers le haut. Regardez-le : dans un instant, le premier appui vous sera demandé.",
+      "starting_open": "{cover} part vers le haut. Regardez-le : dans un instant, l'appui à la base vous sera demandé.",
       "starting_close": "{cover} part vers le bas. Regardez-le : dans un instant, l'appui vous sera demandé.",
       "running_down": "{cover} est ouvert complètement puis descendu jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
-      "running_up": "{cover} est fermé complètement puis monté jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt."
+      "running_up": "{cover} est fermé complètement puis monté jusqu'à environ {percent} % de sa course. Patientez, et gardez le mètre prêt.",
+      "stopping_lift": "{cover} est arrêté là où votre appui l'a trouvé. Un instant.",
+      "starting_open_full": "{cover} repart vers le haut, cette fois jusqu'en haut. Regardez-le : dans un instant, l'appui en haut vous sera demandé."
     },
     "error": {
       "invalid_host": "Ce n'est ni une adresse IP ni un nom d'hôte valide.",

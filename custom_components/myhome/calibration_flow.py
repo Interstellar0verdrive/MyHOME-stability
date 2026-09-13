@@ -97,7 +97,10 @@ from .calibration import (
     deviation_cm,
     fit_from_run,
     predict_cm,
+    slat_time_from_gap,
+    slat_time_from_press,
     timing_from_presses,
+    timing_with_slat,
 )
 from .calibration_store import (
     PROFILE_NAME_PATTERN,
@@ -197,6 +200,29 @@ ROUGH_TOLERANCE_CM = 15.0
 # integration is translated into, and a `<input type="number">` refuses it.
 MIN_HEIGHT_CM = 20.0
 MAX_HEIGHT_CM = 500.0
+# The lift-off run of the ascent, and what the screen after it is allowed to say.
+#
+# The press that ends that run carries a fifth of a second of human reaction, an HTTP
+# request, whatever the command queue costs and the motor's own eighth of a second of
+# braking - all of it at the slowest the curtain ever moves (the closed end, four to
+# seven centimetres a second on an ordinary window). So a *good* press leaves the bottom
+# edge standing a few centimetres above its rest, and the three cases the check screen
+# offers are exactly the three things the user can see:
+#
+# * still touching  - the press came *before* the edge left, so the slat phase measured
+#   is too short and no arithmetic can put back a distance that was never travelled:
+#   the run has to be made again;
+# * a few centimetres - what a press that went well looks like;
+# * a hand's breadth or more - a late press, and the one case a tape can repair
+#   (`calibration.slat_time_from_gap`).
+TOUCHING_CM = 1.0
+MAX_GAP_CM = 50.0
+# Past this much between the press and the stop frame reaching the bus, the gap is the
+# command queue's doing and not the user's, and the check screen says so rather than
+# leaving them to conclude they were slow. A second is already several centimetres of
+# bar; an idle gateway answers in tens of milliseconds.
+LATE_STOP_SEC = 1.0
+
 # What a height defaults to when nothing at all is known about this window. Deliberately
 # a round number and not the one in the file: a pre-filled 198 looks like a measurement
 # somebody already made, and the whole point of the screen is that it has not been made.
@@ -282,11 +308,16 @@ REASON_UNKNOWN_COVER = "unknown_cover"
 REASON_ALREADY_CALIBRATING = "already_calibrating"
 CLAIM_REASONS: tuple[str, ...] = (REASON_UNKNOWN_COVER, REASON_ALREADY_CALIBRATING)
 
+# The exits of the lift-off check screen, in the order the user's eye runs down the
+# shutter: still on its base, a few centimetres up, a hand's breadth up.
+LIFT_CHECK_OPTIONS = ["lift_too_early", "lift_accept", "lift_gap", "not_right"]
+
 PATH_FIRST = "path_a"
 PATH_PROFILE = "path_b"
 PATH_REFINE = "path_c"
 
 FIELD_COVER = "cover"
+FIELD_GAP_CM = "gap_cm"
 FIELD_MEASURED_CM = "measured_cm"
 FIELD_PROFILE = "profile"
 # "Nessun profilo" in the assignment form. Not the empty string: a select whose option
@@ -420,6 +451,16 @@ class _Measured:
     height_measured: bool = False
     opening: PressTiming | None = None
     closing: PressTiming | None = None
+    # The lift-off run of the ascent, which since 0.5.0 is a run of its own: the slat
+    # phase the press measured, the motor seconds from the start of that run to the
+    # motor coming to rest after the stop it triggered, the gap the user optionally
+    # taped afterwards, and whether that stop left late enough for the gap to be the
+    # gateway's doing. The first is what `opening` is built from; the second and third
+    # are what `calibration.slat_time_from_gap` replaces the first with at fit time.
+    slat_seconds: float | None = None
+    lift_run_sec: float | None = None
+    lift_gap_cm: float | None = None
+    lift_late: bool = False
     # (motor seconds of the run, centimetres read off the tape), in the order measured.
     descent: list[tuple[float, float]] = field(default_factory=list)
     ascent: list[tuple[float, float]] = field(default_factory=list)
@@ -428,8 +469,15 @@ class _Measured:
 
     @property
     def slat_time(self) -> float:
-        """The slat phase, from the one press that measures it (0 until then)."""
-        return (self.opening.slat_time if self.opening else None) or 0.0
+        """The slat phase, from the one press that measures it (0 until then).
+
+        `opening` carries it once the full ascent has been measured too, because that
+        is what the model wants; before then - between the two runs of the ascent - it
+        is only on `slat_seconds`, and the check screen is showing it.
+        """
+        if self.opening is not None and self.opening.slat_time is not None:
+            return self.opening.slat_time
+        return self.slat_seconds or 0.0
 
 
 @dataclass(slots=True)
@@ -1158,6 +1206,8 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         self._stop_first: bool = False
         self._motor_start: datetime | None = None
         self._lift_off: datetime | None = None
+        self._stop_delivered: datetime | None = None
+        self._motor_stopped: datetime | None = None
         self._shown_at: datetime | None = None
         self._report: RunReport | None = None
         self._pending: tuple[str, float] | None = None
@@ -1791,20 +1841,50 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         return await self._async_advance()
 
     # ------------------------------------------------------------- stage: the ascent
+    # One stage, three movements, two presses - and the two presses are on two separate
+    # runs (0.5.0, "path A ascent"). Before, one run carried both: the user pressed as
+    # the bottom edge left its rest and pressed again twenty seconds later at the top,
+    # and the first press was worth whatever their attention was worth after having been
+    # told to watch for two different things at once. Now the first press *ends* its run
+    # - the flow stops the shutter on it - so the measurement can be checked with a tape
+    # (the bottom edge should be standing a few centimetres up) and, where the press was
+    # late, repaired by it. The shutter is then closed again and the whole ascent is run
+    # for the second press.
+    #
+    # "Ripeti questo passo" anywhere in here re-enters `async_step_open_timed`, which is
+    # to say it repeats *both* runs: the two are one measurement and a slat phase from
+    # one attempt does not belong with a full ascent from another.
     async def async_step_open_timed(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Bring it to the bottom, then explain the two presses before anything runs.
+        """Bring it to the bottom, then explain the first press before anything runs.
 
         Nothing starts here. The first live walk-through had the shutter already
         climbing while the user was still reading what they were supposed to watch for,
         and the measurement it produced was the reaction time of somebody who had not
         been told there was anything to react to.
         """
+        if self._task is None:
+            # Entering the stage (or repeating it): everything the two runs collect goes
+            # back to nothing, so a repeat cannot pair a slat phase with the wrong
+            # ascent. Guarded by the task, because Home Assistant re-enters this step
+            # for every frame of the progress bar.
+            self._forget_the_ascent()
         return await self._async_movement(
             step_id="open_timed",
             action=HOMING_ACTION[DIRECTION_CLOSE],
             job=lambda: self._job_home(DIRECTION_CLOSE),
             done_step="open_brief",
         )
+
+    @callback
+    def _forget_the_ascent(self) -> None:
+        """Throw away both runs of the ascent, before the first one is started again."""
+        self._lift_off = None
+        self._stop_delivered = None
+        self._motor_stopped = None
+        self._measured.slat_seconds = None
+        self._measured.lift_run_sec = None
+        self._measured.lift_gap_cm = None
+        self._measured.lift_late = False
 
     async def async_step_open_brief(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The instructions, and the button that starts the run when they are read."""
@@ -1824,45 +1904,265 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     async def async_step_open_lift(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The first press: the bottom edge leaves the floor, the slats are open."""
+        """The one press of the first run: the bottom edge leaves its rest."""
         return self._press_menu("open_lift", "lifted_off")
 
     async def async_step_lifted_off(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Remember when that press reached us, and wait for the end of the run."""
+        """Remember when that press reached us, and stop the shutter on it at once.
+
+        The stop is what turns a press into something a tape can check: the shutter
+        comes to rest a few centimetres up, and where it rests says how late the press
+        was. It goes out on its own progress screen so that a gateway which will not
+        take it lands on `problem_not_stopped` like every other refused frame.
+        """
         if self._timed_out():
             return await self.async_step_problem_timeout()
-        self._lift_off = dt_util.utcnow()
-        return await self.async_step_open_top()
+        if self._lift_off is None:
+            self._lift_off = dt_util.utcnow()
+        return await self.async_step_lift_stop()
+
+    async def async_step_lift_stop(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The stop the press asked for, and the two instants it is measured by."""
+        return await self._async_movement(
+            step_id="lift_stop",
+            action="stopping_lift",
+            job=self._job_stop_lift,
+            done_step="lift_measured",
+        )
+
+    async def _job_stop_lift(self) -> None:
+        """Stop the lift-off run, and note when the frame went out and the motor stopped.
+
+        Two different instants, and both are needed. The delivery is what says whether
+        the command queue held the stop back - the user is told, so that a large gap
+        does not read as their own slowness - and the motor stop is the far end of the
+        distance the tape is about to measure.
+        """
+        cover = self._cover_to_drive()
+        self._stop_delivered = await cover.async_calib_stop()
+        self._motor_stopped = await cover.async_calib_motor_stop()
+
+    async def async_step_lift_measured(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Turn the press into a slat phase, and go and look at where it stopped."""
+        measured = self._measured
+        try:
+            measured.slat_seconds = slat_time_from_press(self._motor_start, self._lift_off)
+        except CalibrationError as err:
+            LOGGER.warning("Guided calibration of %s: %s", self._cover_label, err)
+            return await self.async_step_problem_bad_point()
+        if self._motor_start is not None and self._motor_stopped is not None:
+            measured.lift_run_sec = (self._motor_stopped - self._motor_start).total_seconds()
+        measured.lift_late = (
+            self._stop_delivered is not None
+            and self._lift_off is not None
+            and (self._stop_delivered - self._lift_off).total_seconds() > LATE_STOP_SEC
+        )
+        return await self.async_step_lift_check()
+
+    async def async_step_lift_check(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Where the bottom edge is standing now, which is how good that press was.
+
+        Three exits, one per thing the user can see, plus the usual "it did not do what
+        it should". "Ripeti questo passo" is not offered a fourth time: on this screen it
+        would be the same button as "it is still touching the base" with a vaguer label.
+
+        At the precise level the gap is not offered, it is asked: somebody who is about
+        to spend two more minutes on four tape readings is not going to begrudge a
+        fourth, and it is the one reading that makes an instant exact rather than a
+        distance. The form itself is the way back - left empty, it accepts the press.
+        """
+        self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
+        if self._measured.precise:
+            return await self.async_step_lift_gap()
+        if self._measured.lift_late:
+            return self.async_show_menu(
+                step_id="lift_check_late",
+                menu_options=LIFT_CHECK_OPTIONS,
+                description_placeholders=self._placeholders(),
+            )
+        return self.async_show_menu(
+            step_id="lift_check",
+            menu_options=LIFT_CHECK_OPTIONS,
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_lift_check_late(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The same screen with the busy-gateway paragraph; the router picks between them."""
+        return await self.async_step_lift_check()
+
+    async def async_step_lift_too_early(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """"It is still touching the base": the press came before the edge left it.
+
+        Nothing can be done with that measurement. A gap of zero says the curtain
+        travelled no distance at all before the motor stopped, so the lift-off is
+        somewhere *after* the stop and the slat phase the press produced is short by an
+        unknown amount. The only honest answer is the run again, which is exactly what
+        "Ripeti questo passo" does - the label is what differs, and the label is what
+        the user recognises.
+        """
+        return await self.async_step_repeat_step()
+
+    async def async_step_lift_accept(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """"It stands a few centimetres up": the press is taken at its word."""
+        return await self.async_step_open_home_again()
+
+    async def async_step_lift_gap(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The tape reading that replaces the press: how far the bar rose after it.
+
+        The field may be left empty, which is the way out of this screen for somebody
+        who arrived on it by default and would rather not measure: the press then
+        stands as it is. A reading under a centimetre is not a small gap, it is a
+        shutter still resting on its base, and it goes to a screen of its own instead
+        of being taken as a very good press.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            written = str(user_input.get(FIELD_GAP_CM, "")).strip()
+            if not written:
+                return await self.async_step_open_home_again()
+            value = parse_number(written)
+            if value is None:
+                errors[FIELD_GAP_CM] = ERROR_NOT_A_NUMBER
+            elif not 0.0 <= value <= MAX_GAP_CM:
+                errors[FIELD_GAP_CM] = ERROR_OUT_OF_RANGE
+            elif value < TOUCHING_CM:
+                return await self.async_step_lift_early()
+            else:
+                self._measured.lift_gap_cm = value
+                return await self.async_step_open_home_again()
+        self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
+        return self.async_show_form(
+            step_id="lift_gap",
+            data_schema=vol.Schema({vol.Optional(FIELD_GAP_CM, default=""): _text_field()}),
+            errors=errors,
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_lift_early(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """A gap of nothing: the press was early, and the run has to be made again."""
+        self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
+        return self.async_show_menu(
+            step_id="lift_early",
+            menu_options=["repeat_step", "lift_gap", "not_right"],
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_open_home_again(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Back down to the base: the full ascent starts from the end stop as well."""
+        return await self._async_movement(
+            step_id="open_home_again",
+            action=HOMING_ACTION[DIRECTION_CLOSE],
+            job=lambda: self._job_home(DIRECTION_CLOSE),
+            done_step="closed_again",
+        )
+
+    async def async_step_closed_again(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The same question as at the start of the stage, asked before the second run."""
+        self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
+        return self.async_show_menu(
+            step_id="closed_again",
+            menu_options=["confirm_closed_again", "repeat_step", "not_right"],
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_confirm_closed_again(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """It is closed again: on to the briefing of the full ascent.
+
+        Deliberately not `confirm_closed`, which advances the *plan*: this confirmation
+        is inside a stage and has to come back to it.
+        """
+        return await self.async_step_open_full_brief()
+
+    async def async_step_open_full_brief(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The second run's instructions, and the button that starts it."""
+        return self.async_show_menu(
+            step_id="open_full_brief",
+            menu_options=["open_full_start", "repeat_step", "cancel_flow"],
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_open_full_start(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """"2) Avvia la tapparella": the whole ascent this time, end stop to end stop."""
+        return await self._async_movement(
+            step_id="open_full_start",
+            action="starting_open_full",
+            job=lambda: self._job_start(DIRECTION_OPEN),
+            done_step="open_top",
+        )
 
     async def async_step_open_top(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The second press: the shutter has reached the top and stopped by itself."""
+        """The one press of the second run: the shutter has stopped by itself at the top."""
         return self._press_menu("open_top", "stopped_open")
 
     async def async_step_stopped_open(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Turn the two presses into a slat time and an opening run time."""
+        """Put the two runs together: the slat phase of the first, the ascent of the second."""
         if self._timed_out():
             return await self.async_step_problem_timeout()
         try:
-            self._measured.opening = timing_from_presses(
-                self._motor_start, self._lift_off, dt_util.utcnow()
-            )
+            run = timing_from_presses(self._motor_start, None, dt_util.utcnow())
+            self._measured.opening = timing_with_slat(run, self._measured.slat_seconds or 0.0)
         except CalibrationError as err:
             LOGGER.warning("Guided calibration of %s: %s", self._cover_label, err)
             return await self.async_step_problem_bad_point()
         return await self.async_step_open_result()
 
     async def async_step_open_result(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """The two numbers the presses produced, before anything is built on them."""
+        """The two numbers the two runs produced, before anything is built on them.
+
+        Two screens, because a gap that was taped changes what the slat time on this one
+        *means*: it is still the press's, and the tape will replace it when the values
+        are computed, so a screen that showed the press's number alone would be showing
+        a number that never reaches the profile.
+        """
         opening = self._measured.opening
+        gap = self._measured.lift_gap_cm
         self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
+        placeholders = self._placeholders(
+            slat=f"{(opening.slat_time or 0.0):.1f}" if opening else "-",
+            run=f"{opening.run_time:.1f}" if opening else "-",
+            gap=f"{gap:.1f}" if gap is not None else "-",
+        )
+        if gap is not None:
+            return self.async_show_menu(
+                step_id="open_result_gap",
+                menu_options=["accept_step", "repeat_step"],
+                description_placeholders=placeholders,
+            )
         return self.async_show_menu(
             step_id="open_result",
             menu_options=["accept_step", "repeat_step"],
-            description_placeholders=self._placeholders(
-                slat=f"{(opening.slat_time or 0.0):.1f}" if opening else "-",
-                run=f"{opening.run_time:.1f}" if opening else "-",
-            ),
+            description_placeholders=placeholders,
         )
+
+    async def async_step_open_result_gap(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The result screen of an ascent whose gap was taped; the router picks it."""
+        return await self.async_step_open_result()
 
     # ------------------------------------------------------------ stage: the descent
     async def async_step_close_timed(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -2222,7 +2522,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         return {
             CONF_CLOSING_TIME: down.corrected_run_time,
             CONF_OPENING_TIME: up.corrected_run_time,
-            CONF_SLAT_TIME: self._measured.slat_time,
+            CONF_SLAT_TIME: up.slat_time,
             CONF_CLOSING_ROLL: down.fit.roll,
             CONF_OPENING_ROLL: up.fit.roll,
         }
@@ -2289,8 +2589,58 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         )
 
     # ------------------------------------------------------------------ the summary
+    def _fit_both(self, slat: float) -> tuple[DirectionFit, DirectionFit]:
+        """One fit per direction, both told the same slat phase."""
+        measured = self._measured
+        height = measured.height or 0.0
+        down = fit_from_run(
+            DIRECTION_CLOSE,
+            run_time=measured.closing.run_time if measured.closing else 0.0,
+            slat_time=slat,
+            measurements=measured.descent,
+            height=height,
+        )
+        up = fit_from_run(
+            DIRECTION_OPEN,
+            run_time=measured.opening.run_time if measured.opening else 0.0,
+            slat_time=slat,
+            measurements=measured.ascent,
+            height=height,
+        )
+        return down, up
+
+    def _slat_from_gap(self, raw: float, *, roll: float, height: float | None, curtain: float) -> float:
+        """The slat phase the taped gap implies, or the press's own when none was taped.
+
+        The whole of the gap refinement's plumbing: the pure arithmetic is
+        `calibration.slat_time_from_gap`, and this is the guard in front of it. A
+        conversation with no gap, no measured lift-off run, no height or no curtain time
+        has nothing to correct with and keeps the press.
+        """
+        measured = self._measured
+        if measured.lift_gap_cm is None or measured.lift_run_sec is None:
+            return raw
+        if not height or curtain <= 0:
+            return raw
+        return slat_time_from_gap(
+            stop_seconds=measured.lift_run_sec,
+            gap_cm=measured.lift_gap_cm,
+            roll=roll,
+            height=height,
+            curtain_time=curtain,
+        )
+
     def _fits(self) -> tuple[DirectionFit, DirectionFit] | None:
-        """Fit both directions, or None when this path measured no centimetres."""
+        """Fit both directions, or None when this path measured no centimetres.
+
+        Fitted twice where the user taped the gap the lift-off run left, because the
+        two things are defined in terms of each other: the correction needs the ascent's
+        roll and curtain time, and the fit that produces them needs the slat phase the
+        correction is about. The circle is broken by fitting once with the press's own
+        slat phase - which is right to within the fraction of a second the gap is there
+        to remove - and fitting again with the corrected one. A third round would move
+        the roll by less than the tape can read.
+        """
         measured = self._measured
         if (
             measured.opening is None
@@ -2300,21 +2650,12 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             or not measured.ascent
         ):
             return None
-        slat = measured.slat_time
-        down = fit_from_run(
-            DIRECTION_CLOSE,
-            run_time=measured.closing.run_time,
-            slat_time=slat,
-            measurements=measured.descent,
-            height=measured.height,
+        down, up = self._fit_both(measured.slat_time)
+        refined = self._slat_from_gap(
+            up.slat_time, roll=up.fit.roll, height=measured.height, curtain=up.curtain_time
         )
-        up = fit_from_run(
-            DIRECTION_OPEN,
-            run_time=measured.opening.run_time,
-            slat_time=slat,
-            measurements=measured.ascent,
-            height=measured.height,
-        )
+        if refined != up.slat_time:
+            down, up = self._fit_both(refined)
         return down, up
 
     def _result(self) -> _Result:
@@ -2345,7 +2686,9 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             values = {
                 CONF_OPENING_TIME: round(up.corrected_run_time, 1),
                 CONF_CLOSING_TIME: round(down.corrected_run_time, 1),
-                CONF_SLAT_TIME: round(measured.slat_time, 1),
+                # The fit's, not the press's: `_fits` replaces the press with the taped
+                # gap where there is one, and `DirectionFit` carries what it was told.
+                CONF_SLAT_TIME: round(up.slat_time, 1),
                 CONF_OPENING_ROLL: round(up.fit.roll, 2),
                 CONF_CLOSING_ROLL: round(down.fit.roll, 2),
             }
@@ -2384,11 +2727,25 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                 overrides=values,
                 accuracy_cm=accuracy,
             )
-        # Path C, times only: two presses and nothing to fit.
+        # Path C, times only: three presses and nothing to fit. The gap can still be
+        # corrected for - this path always follows a profile, so the roll and the
+        # curtain time it needs are the profile's, scaled to whatever this window's
+        # height is known to be.
+        slat = measured.slat_time
+        profile = self._all_profiles().get(self._profile or "")
+        height = measured.height or self._known_height(self._cover_unique_id or "")
+        if profile is not None and measured.opening is not None:
+            model = derive_cover_from_profile(profile, height)
+            slat = self._slat_from_gap(
+                slat,
+                roll=model[CONF_OPENING_ROLL],
+                height=height,
+                curtain=measured.opening.run_time - slat,
+            )
         values = {
             CONF_OPENING_TIME: round(measured.opening.run_time, 1) if measured.opening else 0.0,
             CONF_CLOSING_TIME: round(measured.closing.run_time, 1) if measured.closing else 0.0,
-            CONF_SLAT_TIME: round(measured.slat_time, 1),
+            CONF_SLAT_TIME: round(slat, 1),
         }
         return _Result(yaml=overrides_yaml(key, values, None), overrides=values)
 

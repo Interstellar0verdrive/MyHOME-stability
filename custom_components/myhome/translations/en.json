@@ -259,9 +259,9 @@
       },
       "path": {
         "title": "How do you want to measure this cover?",
-        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about three minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be refined.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
+        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the height, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be refined.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
         "menu_options": {
-          "path_a": "(A) It is the first cover of its kind (full measurement, ~3 minutes)",
+          "path_a": "(A) It is the first cover of its kind (full measurement, ~4 minutes)",
           "path_b": "(B) It is similar to a cover already measured (height only)",
           "path_c": "(C) It has a profile but stops in the wrong place (refine the calibration)",
           "cancel_flow": "Cancel"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Before the cover starts moving",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes a single movement, and before each one come the instructions and all the time you need to get ready: no movement starts unless you start it. Seven movements in all, about three minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes the movements that step needs, and before each one come the instructions and all the time you need to get ready: no movement that has to be timed starts unless you start it. Nine movements in all, about four minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
         "menu_options": {
           "begin": "Understood, let's start",
           "cancel_flow": "Cancel"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "How far do you want to refine the calibration?",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: either two measured runs (one up and one down), or those plus two tape readings.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: either three measured runs (two up and one down), or those plus two tape readings.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
         "menu_options": {
-          "times_only": "Its own run times only (2 presses, ~1 minute)",
-          "times_and_rolls": "Its own times and its own coefficients (2 presses and 2 readings)",
+          "times_only": "Its own run times only (3 presses, ~2 minutes)",
+          "times_and_rolls": "Its own times and its own coefficients (3 presses and 2 readings)",
           "cancel_flow": "Cancel"
         }
       },
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "We are about to measure the ascent",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the bottom. For the first second or two only the slats open, while the bottom edge stays on its rest; then the whole curtain starts to rise, and at the top the cover stops by itself.\n\n**What you have to do**: here you will have to be quick and precise. You will be asked for two presses, one after the other:\n\n1. the first at the instant the bottom edge leaves the base;\n2. the second at the instant the cover reaches the end stop and the motor stops, which you recognise by the noise ceasing.\n\nYou are not timing anything: the instant of the press is the measurement. The screens that follow carry a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: the ascent is measured by two runs, one press each, and this is the first. When you press the button below the cover starts upwards from the base: for the first second or two only the slats open, while the bottom edge stays on its rest, and then the whole curtain begins to rise. The cover is stopped the instant you press, a few centimetres up, and the next screen asks you to look at where it stopped.\n\n**What you have to do**: here you will have to be quick and precise. One press, at the instant the bottom edge leaves the base. You are not timing anything: the instant of the press is the measurement.\n\nThe second run comes afterwards, from the base again, and asks for the other press: the instant the cover reaches the end stop at the top and the motor stops, which you recognise by the noise ceasing. The drawing shows both.\n\nThe screens that follow carry a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "open_start": "Start the cover",
           "repeat_step": "Send it back down first",
@@ -334,6 +334,63 @@
           "not_right": "It did not do what it should"
         }
       },
+      "lift_check": {
+        "title": "Where is the bottom edge now?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What happened**: the cover was stopped the instant you pressed. Between a press and the motor coming to rest there is always a moment - your own reaction, the command reaching the gateway, the motor braking - and the curtain goes on rising for all of it.\n\n**What you have to do**: look at the bottom edge and say which of the three it is. A few centimetres above the base is what a press that went well looks like. Still resting on the base means the press came before the edge left it: that measurement cannot be repaired, only made again. A hand's breadth or more means the press was late, and a late press is the one case a tape measure can put right.",
+        "menu_options": {
+          "lift_too_early": "It is still touching the base",
+          "lift_accept": "It stands a few centimetres up, go on",
+          "lift_gap": "I want to measure the gap for more precision",
+          "not_right": "It did not do what it should"
+        }
+      },
+      "lift_check_late": {
+        "title": "Where is the bottom edge now?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What happened**: the cover was stopped the instant you pressed - but the gateway had other commands in its queue and took more than a second to write ours to the bus. The curtain went on rising for all of that, so the gap you are about to see is wider than usual and it is not your doing.\n\n**What you have to do**: look at the bottom edge and say which of the three it is. Still resting on the base means the press came before the edge left it: that measurement cannot be repaired, only made again. Anything above the base is worth measuring here, because on this run the tape is the only thing that can say when the edge really left.",
+        "menu_options": {
+          "lift_too_early": "It is still touching the base",
+          "lift_accept": "It stands a few centimetres up, go on",
+          "lift_gap": "I want to measure the gap for more precision",
+          "not_right": "It did not do what it should"
+        }
+      },
+      "lift_gap": {
+        "title": "Measure the gap - {cover}",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**What you have to do**: measure from the base - the point where the bottom edge rests when the cover is closed - up to the bottom edge where it is now, and write the centimetres below. That distance says exactly when the edge really left the base, so the slat time stops depending on how quick your finger was.\n\nLeaving the field empty goes on without measuring, and the press stands as it was made.",
+        "data": {
+          "gap_cm": "Gap between the bottom edge and the base (cm)"
+        },
+        "data_description": {
+          "gap_cm": "In centimetres, usually between 2 and 5. Decimals may be written with a comma or with a point: 3,5 or 3.5. Leave it empty to go on without measuring."
+        }
+      },
+      "lift_early": {
+        "title": "The press came too early",
+        "description": "**Cover**: {cover}\n\n**What happened**: a gap of less than a centimetre means the cover was still resting on its base when the motor stopped, so the press was made before the bottom edge left it. The slat time it measured is short by an unknown amount, and no reading can put back a distance that was never travelled.\n\n**What you have to do**: make the ascent again. The cover is sent back down and starts up once more; this time wait until the bottom edge has really lifted before pressing.",
+        "menu_options": {
+          "repeat_step": "Measure the ascent again",
+          "lift_gap": "Write the gap again",
+          "not_right": "It did not do what it should"
+        }
+      },
+      "closed_again": {
+        "title": "Is the cover completely closed again?",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent back down to the base, because the full ascent has to start from there exactly as the first run did.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "menu_options": {
+          "confirm_closed_again": "It is completely closed",
+          "repeat_step": "Repeat this step",
+          "not_right": "It did not do what it should"
+        }
+      },
+      "open_full_brief": {
+        "title": "Now the whole ascent",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the base again and this time it is left to run - the slats open, the whole curtain rises, and at the top the cover stops by itself at its end stop.\n\n**What you have to do**: one press only, at the instant the motor stops at the top. You recognise it by the noise ceasing. Nothing is asked of you at the base this time: that measurement is already made.\n\nThe screen during the movement carries a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "menu_options": {
+          "open_full_start": "Start the cover",
+          "repeat_step": "Measure the ascent again from the start",
+          "cancel_flow": "Cancel"
+        }
+      },
       "open_top": {
         "title": "The cover is still rising",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\nPress at the instant the motor stops at the top.",
@@ -345,7 +402,15 @@
       },
       "open_result": {
         "title": "The ascent was measured",
-        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s.\n\n**What you have to do**: if both presses felt right, go on. If either was late or early, repeat the measurement: the cover is sent back down and the ascent is run again. A press half a second out moves the estimate by a few centimetres.",
+        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s.\n\n**What you have to do**: if both presses felt right, go on. If either was late or early, repeat the measurement: both runs of the ascent are made again from the base, because a slat time taken on one attempt does not belong with an ascent taken on another. A press half a second out moves the estimate by a few centimetres.",
+        "menu_options": {
+          "accept_step": "That is right, go on",
+          "repeat_step": "Repeat the measurement"
+        }
+      },
+      "open_result_gap": {
+        "title": "The ascent was measured",
+        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s, and a gap of {gap} cm above the base.\n\nThe slat time above is the one the press produced. The gap you measured replaces it when the values are computed, so what ends up stored may differ from it by a few tenths of a second - that is the whole point of having measured it.\n\n**What you have to do**: if the press at the top and the reading both felt right, go on. Repeating the measurement makes both runs of the ascent again from the base.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_step": "Repeat the measurement"
@@ -598,10 +663,12 @@
     "progress": {
       "homing_closed": "{cover} is being closed completely: this way the measurements start from a known point. Please wait, and make sure nothing is in the way.",
       "homing_open": "{cover} is being opened completely: this way the next movement starts from a known point. Please wait, and make sure nothing is in the way.",
-      "starting_open": "{cover} is starting upwards. Watch it: in a moment you will be asked for the first press.",
+      "starting_open": "{cover} is starting upwards. Watch it: in a moment you will be asked for the press at the base.",
       "starting_close": "{cover} is starting downwards. Watch it: in a moment you will be asked for the press.",
       "running_down": "{cover} is being opened completely and then run down to about {percent}% of its travel. Please wait, and have the tape measure ready.",
-      "running_up": "{cover} is being closed completely and then run up to about {percent}% of its travel. Please wait, and have the tape measure ready."
+      "running_up": "{cover} is being closed completely and then run up to about {percent}% of its travel. Please wait, and have the tape measure ready.",
+      "stopping_lift": "{cover} is being stopped right where your press found it. One moment.",
+      "starting_open_full": "{cover} is starting upwards again, all the way this time. Watch it: in a moment you will be asked for the press at the top."
     },
     "error": {
       "invalid_host": "Not a valid IP address or hostname.",

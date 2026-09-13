@@ -259,9 +259,9 @@
       },
       "path": {
         "title": "Hoe wilt u dit rolluik meten?",
-        "description": "**Rolluik**: {cover}\n\nEr zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is de lange, ongeveer drie minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is juist bedoeld voor rolluiken die lijken op een al gekalibreerd rolluik: u kiest het profiel, meet de hoogte, klaar.\n\nDe derde (C) is voor een rolluik waaraan een profiel is toegewezen maar dat op de verkeerde plek stopt: in dat geval moet de kalibratie van dit rolluik worden verfijnd.\n\n**Wat u moet doen**: kies een van de manieren hieronder. Tot het volgende scherm beweegt er niets.",
+        "description": "**Rolluik**: {cover}\n\nEr zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is de lange, ongeveer vier minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is juist bedoeld voor rolluiken die lijken op een al gekalibreerd rolluik: u kiest het profiel, meet de hoogte, klaar.\n\nDe derde (C) is voor een rolluik waaraan een profiel is toegewezen maar dat op de verkeerde plek stopt: in dat geval moet de kalibratie van dit rolluik worden verfijnd.\n\n**Wat u moet doen**: kies een van de manieren hieronder. Tot het volgende scherm beweegt er niets.",
         "menu_options": {
-          "path_a": "(A) Het is het eerste rolluik van deze soort (volledige meting, ~3 minuten)",
+          "path_a": "(A) Het is het eerste rolluik van deze soort (volledige meting, ~4 minuten)",
           "path_b": "(B) Het lijkt op een al gemeten rolluik (alleen de hoogte)",
           "path_c": "(C) Het heeft een profiel maar stopt op de verkeerde plek (de kalibratie verfijnen)",
           "cancel_flow": "Annuleren"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Voordat het rolluik begint te bewegen",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de kalibratie is opgedeeld in stappen. Bij elke stap maakt het rolluik één beweging, en vóór elke beweging komen de uitleg en alle tijd om u klaar te maken: geen enkele beweging start zonder dat u die start. Zeven bewegingen in totaal, ongeveer drie minuten.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat - een openstaand raam, planten op de vensterbank, katten - en houd de rolmaat bij de hand. U wordt gevraagd op een knop te drukken wanneer er iets gebeurt, en een paar afstanden af te lezen.\n\nGaat er iets mis, dan kan elke stap op zichzelf worden herhaald, zonder de al gedane stappen over te doen. U kunt altijd stoppen: er wordt niets opgeslagen tot het laatste scherm, en de bewegingen zijn gewone commando's.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de kalibratie is opgedeeld in stappen. Bij elke stap maakt het rolluik de bewegingen die die stap nodig heeft, en vóór elke beweging komen de uitleg en alle tijd om u klaar te maken: geen enkele gemeten beweging start zonder dat u die start. Negen bewegingen in totaal, ongeveer vier minuten.\n\n**Wat u moet doen**: zorg dat er niets in de weg staat - een openstaand raam, planten op de vensterbank, katten - en houd de rolmaat bij de hand. U wordt gevraagd op een knop te drukken wanneer er iets gebeurt, en een paar afstanden af te lezen.\n\nGaat er iets mis, dan kan elke stap op zichzelf worden herhaald, zonder de al gedane stappen over te doen. U kunt altijd stoppen: er wordt niets opgeslagen tot het laatste scherm, en de bewegingen zijn gewone commando's.",
         "menu_options": {
           "begin": "Begrepen, we beginnen",
           "cancel_flow": "Annuleren"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "Hoe ver wilt u de kalibratie verfijnen?",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: ofwel twee gemeten ritten (één omhoog en één omlaag), ofwel die plus twee metingen met de rolmaat.\n\nAlleen de tijden volstaan voor een rolluik waarvan de motor eenvoudig langzamer of sneller is dan die waarop het profiel is gemeten. Voeg de factoren toe wanneer het ook *halverwege* misgaat: daar draait niet de motor anders, daar wikkelt het doek zich anders.\n\n**Wat u moet doen**: kies hoe ver u wilt gaan. U kunt altijd terugkomen voor de rest.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: ofwel drie gemeten ritten (twee omhoog en één omlaag), ofwel die plus twee metingen met de rolmaat.\n\nAlleen de tijden volstaan voor een rolluik waarvan de motor eenvoudig langzamer of sneller is dan die waarop het profiel is gemeten. Voeg de factoren toe wanneer het ook *halverwege* misgaat: daar draait niet de motor anders, daar wikkelt het doek zich anders.\n\n**Wat u moet doen**: kies hoe ver u wilt gaan. U kunt altijd terugkomen voor de rest.",
         "menu_options": {
-          "times_only": "Alleen de eigen looptijden (2 keer drukken, ~1 minuut)",
-          "times_and_rolls": "De eigen tijden en de eigen factoren (2 keer drukken en 2 metingen)",
+          "times_only": "Alleen de eigen looptijden (3 keer drukken, ~2 minuten)",
+          "times_and_rolls": "De eigen tijden en de eigen factoren (3 keer drukken en 2 metingen)",
           "cancel_flow": "Annuleren"
         }
       },
@@ -318,7 +318,7 @@
       },
       "open_brief": {
         "title": "We gaan het rolluik omhoog meten",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van onderen omhoog. De eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten; daarna begint het hele doek te stijgen, en bovenaan stopt het rolluik vanzelf.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Er worden twee drukken gevraagd, de een na de ander:\n\n1. de eerste op het moment dat de onderrand van de basis loskomt;\n2. de tweede op het moment dat het rolluik de eindstand bereikt en de motor stopt, wat u herkent doordat het geluid ophoudt.\n\nU klokt niets: het moment van drukken ís de meting. De schermen die volgen hebben maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de stijging wordt met twee ritten gemeten, één druk per rit, en dit is de eerste. Als u op de knop hieronder drukt, vertrekt het rolluik vanaf de basis omhoog: de eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten, en daarna begint het hele pantser te stijgen. Het rolluik wordt gestopt op het moment dat u drukt, een paar centimeter hoger, en het volgende scherm vraagt u te kijken waar het gestopt is.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Eén druk, op het moment dat de onderrand van de basis loskomt. U klokt niets: het moment van drukken ís de meting.\n\nDe tweede rit komt daarna, weer vanaf de basis, en vraagt de andere druk: het moment dat het rolluik de eindstand bovenaan bereikt en de motor stopt, wat u herkent doordat het geluid ophoudt. De tekening laat beide zien.\n\nDe schermen die volgen hebben maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
         "menu_options": {
           "open_start": "Start het rolluik",
           "repeat_step": "Stuur het eerst weer omlaag",
@@ -334,6 +334,63 @@
           "not_right": "Het deed niet wat het moest doen"
         }
       },
+      "lift_check": {
+        "title": "Waar is de onderrand nu?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is gestopt op het moment dat u drukte. Tussen een druk en het stilstaan van de motor zit altijd een moment — uw eigen reactie, het commando dat de gateway bereikt, de motor die remt — en al die tijd blijft het pantser stijgen.\n\n**Wat u moet doen**: kijk naar de onderrand en zeg welk van de drie het is. Een paar centimeter boven de basis is hoe een geslaagde druk eruitziet. Nog op de basis rustend betekent dat de druk kwam vóórdat de rand loskwam: die meting is niet te herstellen, alleen over te doen. Een handbreedte of meer betekent dat de druk te laat was, en een late druk is het enige geval dat een rolmaat kan rechtzetten.",
+        "menu_options": {
+          "lift_too_early": "Hij raakt de basis nog",
+          "lift_accept": "Hij staat een paar centimeter hoger, verder",
+          "lift_gap": "Ik wil de afstand meten voor meer precisie",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "lift_check_late": {
+        "title": "Waar is de onderrand nu?",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is gestopt op het moment dat u drukte — maar de gateway had nog andere commando's in de wachtrij en deed er meer dan een seconde over om het onze naar de bus te schrijven. Al die tijd bleef het pantser stijgen, dus de afstand die u zo ziet is groter dan gewoonlijk en dat ligt niet aan u.\n\n**Wat u moet doen**: kijk naar de onderrand en zeg welk van de drie het is. Nog op de basis rustend betekent dat de druk kwam vóórdat de rand loskwam: die meting is niet te herstellen, alleen over te doen. In alle andere gevallen loont meten hier, want bij deze rit kan alleen de rolmaat zeggen wanneer de rand echt loskwam.",
+        "menu_options": {
+          "lift_too_early": "Hij raakt de basis nog",
+          "lift_accept": "Hij staat een paar centimeter hoger, verder",
+          "lift_gap": "Ik wil de afstand meten voor meer precisie",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "lift_gap": {
+        "title": "De afstand meten — {cover}",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Wat u moet doen**: meet vanaf de basis — het punt waar de onderrand rust wanneer het rolluik dicht is — tot aan de onderrand waar die nu staat, en schrijf de centimeters hieronder. Die afstand zegt precies wanneer de rand echt van de basis loskwam, zodat de lamellentijd niet meer afhangt van hoe snel uw vinger was.\n\nLaat u het veld leeg, dan gaat het verder zonder meting en blijft de druk zoals hij gemaakt is.",
+        "data": {
+          "gap_cm": "Afstand tussen de onderrand en de basis (cm)"
+        },
+        "data_description": {
+          "gap_cm": "In centimeters, meestal tussen 2 en 5. Decimalen mogen met een komma of met een punt: 3,5 of 3.5. Laat leeg om verder te gaan zonder te meten."
+        }
+      },
+      "lift_early": {
+        "title": "De druk kwam te vroeg",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: een afstand van minder dan een centimeter betekent dat het rolluik nog op zijn basis rustte toen de motor stopte, dus dat er gedrukt is vóórdat de onderrand loskwam. De lamellentijd die daaruit komt is met een onbekende hoeveelheid te kort, en geen enkele meting kan een afstand teruggeven die nooit is afgelegd.\n\n**Wat u moet doen**: de stijging opnieuw meten. Het rolluik gaat terug omlaag en vertrekt opnieuw; wacht deze keer tot de onderrand echt los is voordat u drukt.",
+        "menu_options": {
+          "repeat_step": "De stijging opnieuw meten",
+          "lift_gap": "De afstand opnieuw invullen",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "closed_again": {
+        "title": "Is het rolluik weer helemaal dicht?",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is terug omlaag naar de basis gestuurd, omdat de volledige stijging daar moet beginnen, net als de eerste rit.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
+        "menu_options": {
+          "confirm_closed_again": "Het is helemaal dicht",
+          "repeat_step": "Herhaal deze stap",
+          "not_right": "Het deed niet wat het moest doen"
+        }
+      },
+      "open_full_brief": {
+        "title": "Nu de volledige stijging",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik weer vanaf de basis omhoog, en deze keer laten we het lopen — de lamellen gaan open, het hele pantser stijgt, en bovenaan stopt het rolluik vanzelf in zijn eindstand.\n\n**Wat u moet doen**: maar één druk, op het moment dat de motor bovenaan stopt. U herkent het doordat het geluid ophoudt. Bij de basis wordt u deze keer niets gevraagd: die meting is al gedaan.\n\nHet scherm tijdens de beweging heeft maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "menu_options": {
+          "open_full_start": "Start het rolluik",
+          "repeat_step": "De stijging helemaal opnieuw meten",
+          "cancel_flow": "Annuleren"
+        }
+      },
       "open_top": {
         "title": "Het rolluik stijgt nog",
         "description": "![](/myhome_static/top_stop.webp)\n\n**Rolluik**: {cover}\n\nDruk op het moment dat de motor bovenaan stopt.",
@@ -345,7 +402,15 @@
       },
       "open_result": {
         "title": "De beweging omhoog is gemeten",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gemeten is**: lamellen {slat} s, volledige stijging {run} s.\n\n**Wat u moet doen**: leken beide drukken goed, ga dan verder. Was er een te laat of te vroeg, herhaal dan de meting: het rolluik wordt weer omlaag gestuurd en de stijging wordt opnieuw gedaan. Een druk die er een halve seconde naast zit, verschuift de schatting een paar centimeter.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gemeten is**: lamellen {slat} s, volledige stijging {run} s.\n\n**Wat u moet doen**: leken beide drukken goed, ga dan verder. Was er een te laat of te vroeg, herhaal dan de meting: beide ritten van de stijging worden opnieuw vanaf de basis gedaan, want een lamellentijd uit de ene poging hoort niet bij een stijging uit de andere. Een druk die er een halve seconde naast zit, verschuift de schatting een paar centimeter.",
+        "menu_options": {
+          "accept_step": "Goed zo, verder",
+          "repeat_step": "Herhaal de meting"
+        }
+      },
+      "open_result_gap": {
+        "title": "De beweging omhoog is gemeten",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gemeten is**: lamellen {slat} s, volledige stijging {run} s, en een afstand van {gap} cm boven de basis.\n\nDe lamellentijd hierboven is die van de druk. De afstand die u gemeten hebt vervangt hem bij het berekenen van de waarden, dus wat opgeslagen wordt kan er een paar tienden van een seconde van afwijken — juist daarvoor is hij gemeten.\n\n**Wat u moet doen**: leken de druk bovenaan en de meting goed, ga dan verder. De meting herhalen doet beide ritten van de stijging opnieuw vanaf de basis.",
         "menu_options": {
           "accept_step": "Goed zo, verder",
           "repeat_step": "Herhaal de meting"
@@ -598,10 +663,12 @@
     "progress": {
       "homing_closed": "{cover} wordt helemaal gesloten: zo vertrekken de metingen van een bekend punt. Even geduld, en zorg dat er niets in de weg staat.",
       "homing_open": "{cover} wordt helemaal geopend: zo vertrekt de volgende beweging van een bekend punt. Even geduld, en zorg dat er niets in de weg staat.",
-      "starting_open": "{cover} vertrekt omhoog. Kijk ernaar: zo meteen wordt de eerste druk gevraagd.",
+      "starting_open": "{cover} vertrekt omhoog. Kijk ernaar: zo meteen wordt de druk bij de basis gevraagd.",
       "starting_close": "{cover} vertrekt omlaag. Kijk ernaar: zo meteen wordt de druk gevraagd.",
       "running_down": "{cover} wordt helemaal geopend en daarna tot ongeveer {percent}% van zijn loop omlaag gestuurd. Even geduld, en houd de rolmaat klaar.",
-      "running_up": "{cover} wordt helemaal gesloten en daarna tot ongeveer {percent}% van zijn loop omhoog gestuurd. Even geduld, en houd de rolmaat klaar."
+      "running_up": "{cover} wordt helemaal gesloten en daarna tot ongeveer {percent}% van zijn loop omhoog gestuurd. Even geduld, en houd de rolmaat klaar.",
+      "stopping_lift": "{cover} wordt gestopt precies waar uw druk het aantrof. Een ogenblik.",
+      "starting_open_full": "{cover} vertrekt weer omhoog, deze keer helemaal. Kijk ernaar: zo meteen wordt de druk bovenaan gevraagd."
     },
     "error": {
       "invalid_host": "Dit is geen geldig IP-adres of hostnaam.",

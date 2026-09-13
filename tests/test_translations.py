@@ -222,8 +222,19 @@ STEP_PLACEHOLDERS: dict[str, set[str]] = {
     "home_open_done": {"cover"},
     "open_brief": {"cover"},
     "open_lift": {"cover"},
+    # The lift-off run's own screens: the check, the tape reading that can replace the
+    # press, and the screen for a press that came before the bottom edge moved at all.
+    "lift_check": {"cover"},
+    "lift_check_late": {"cover"},
+    "lift_gap": {"cover"},
+    "lift_early": {"cover"},
+    "closed_again": {"cover"},
+    "open_full_brief": {"cover"},
     "open_top": {"cover"},
-    "open_result": {"cover", "slat", "run"},
+    # `gap` is passed to both, and only the second says it: the first is the screen for
+    # a conversation that measured no gap, where it would read "- cm".
+    "open_result": {"cover", "slat", "run", "gap"},
+    "open_result_gap": {"cover", "slat", "run", "gap"},
     "close_brief": {"cover"},
     "close_bottom": {"cover"},
     "close_result": {"cover", "run"},
@@ -268,6 +279,8 @@ PROGRESS_PLACEHOLDERS: dict[str, set[str]] = {
     "homing_closed": {"cover"},
     "homing_open": {"cover"},
     "starting_open": {"cover"},
+    "starting_open_full": {"cover"},
+    "stopping_lift": {"cover"},
     "starting_close": {"cover"},
     "running_down": {"cover", "percent"},
     "running_up": {"cover", "percent"},
@@ -326,6 +339,9 @@ def test_every_screen_the_flow_can_show_is_written_down() -> None:
         "home_open",
         "open_timed",
         "open_start",
+        "lift_stop",
+        "open_home_again",
+        "open_full_start",
         "close_timed",
         "close_start",
         "half_down",
@@ -549,6 +565,10 @@ STEP_IMAGES: dict[str, str] = {
     "height": "height.webp",
     "open_brief": "ascent_presses.webp",
     "open_lift": "lift_off.webp",
+    "lift_check": "lift_off.webp",
+    "lift_check_late": "lift_off.webp",
+    "lift_gap": "lift_off.webp",
+    "open_full_brief": "top_stop.webp",
     "open_top": "top_stop.webp",
     "measure_descent": "reading.webp",
     "measure_ascent": "reading.webp",
@@ -642,7 +662,13 @@ def test_the_italian_says_none_of_the_words_the_live_test_struck_out() -> None:
 # The screens a shutter is moving through while they are on the screen. "Nobody reads
 # while watching the shutter": everything they would have said belongs to the briefing
 # before the "Avvia" button, and what is left is one line and a button.
-DURING_THE_MOVEMENT = {"open_lift": "open_brief", "open_top": "open_brief", "close_bottom": "close_brief"}
+DURING_THE_MOVEMENT = {
+    "open_lift": "open_brief",
+    # Since the ascent became two runs, the screen that briefs the second press is the
+    # second run's own briefing and not the first's.
+    "open_top": "open_full_brief",
+    "close_bottom": "close_brief",
+}
 
 
 @pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
@@ -698,7 +724,7 @@ def test_both_briefings_name_the_motor_the_slats_and_the_base(path: Path) -> Non
     check would otherwise see.
     """
     steps = options_block(path)["step"]
-    for briefing in ("open_brief", "close_brief"):
+    for briefing in ("open_brief", "open_full_brief", "close_brief"):
         description = steps[briefing]["description"].lower()
         for word in TIMED_VOCABULARY[path.stem]:
             assert word in description, f"{path.name}: {briefing}: {word!r}"
