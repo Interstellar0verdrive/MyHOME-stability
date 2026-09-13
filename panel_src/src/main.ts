@@ -98,9 +98,13 @@ export class MyHomeCalibrationPanel extends LitElement {
         height: calc(56px + env(safe-area-inset-top, 0px));
       }
 
+      /* The page's one <h1>, styled as the toolbar's title and not as a heading. */
       .toolbar .title {
         flex: 1;
         min-width: 0;
+        margin: 0;
+        font-size: inherit;
+        font-weight: inherit;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -484,7 +488,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     return html`
       <div class="toolbar">
         ${this._renderMenuButton()} ${this._renderBackButton()}
-        <div class="title">${title}</div>
+        <h1 class="title">${title}</h1>
         ${gateway && (state.overview?.entries.length ?? 0) > 1
           ? html`<div class="gateway">
               ${this._i18n.t("panel.overview.gateway", { gateway: gateway.title })}

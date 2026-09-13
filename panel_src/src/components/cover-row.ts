@@ -7,6 +7,12 @@
 // full name on hover, because a German label is a third longer than an Italian one and a
 // house full of "Tapparella camera da letto grande" must still be readable.
 //
+// The row's button carries **no `aria-label`**. An `aria-label` replaces everything inside
+// the element it is on, so one saying "open the details of X" would hide the room, the
+// travel and the origin chip from a screen reader while leaving them on the screen for
+// everybody else. The button's own contents are already the sentence to read, and the
+// prototype's markup carries no label either.
+//
 // **The handle is rendered and inert in this lot.** Assignment - drag, tap, keyboard - is
 // lot 7. It is drawn because the row's geometry depends on it and because a control that
 // appears later moves everything else when it does; it is `disabled` because a grab that
@@ -148,7 +154,6 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
       class="main"
       type="button"
       title=${cover.name}
-      aria-label=${i18n.t("panel.overview.action.open_cover", { cover: cover.name })}
       @click=${() => context.onOpen(cover)}
     >
       <span class="name">${cover.name}</span>

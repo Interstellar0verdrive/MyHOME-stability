@@ -82,7 +82,6 @@ export const FALLBACK_TEXTS: Record<string, string> = {
   "panel.overview.action.measure": "Measure a shutter ↗",
   "panel.overview.action.clear_filters": "Clear the search and the filter",
   "panel.overview.action.open_profile": "Open the profile card",
-  "panel.overview.action.open_cover": "Open the details of {cover}",
   "panel.overview.handle_label": "Move {cover} to another group or reorder it",
   "panel.overview.handle_inert": "Assignment and reordering arrive in a later version",
 
