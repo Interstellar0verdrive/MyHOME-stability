@@ -835,6 +835,7 @@ DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
         "2) Press when the motor stops at the top",
         "Press when the motor stops at the bottom",
         "Repeat the measurement",
+        "It did not do what it should",
         "View the values",
         "Edit the values by hand",
         "Measure it again",

@@ -238,7 +238,7 @@ The screens are built around that:
   to press during them, only something to measure afterwards. They are announced
   together, once, by a screen that says how many readings follow and asks you to stand
   clear; after that they chain, each movement naming itself on the progress bar
-  ("is being closed completely", "is being run up to about 50 % of its travel").
+  ("is being closed completely", "is being run up to about 50% of its travel").
 - A press that never comes is not believed: after about ninety seconds the step is
   abandoned with an explanation and a way to repeat it.
 

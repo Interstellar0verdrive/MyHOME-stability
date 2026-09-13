@@ -981,6 +981,45 @@ async def test_the_ascent_is_read_first_and_the_shutter_is_opened_once(
         assert movements(runner.log) - movements(before) == 3
 
 
+# How far into the walk of path A, where the shutter is standing once that much of it
+# has been done, and what put it there. The two `None`s are the movements that end
+# between the end stops: the lift-off run, which the flow stops a few centimetres up,
+# and a run to a percentage.
+WHERE_IT_STANDS: tuple[tuple[int, str | None, str], ...] = (
+    (6, DIRECTION_CLOSE, "home_closed"),
+    (8, None, "the lift-off run, stopped on the press"),
+    (10, DIRECTION_CLOSE, "open_home_again, between the two runs of the ascent"),
+    (12, DIRECTION_OPEN, "the full ascent, which ends at the top end stop"),
+    (13, DIRECTION_OPEN, "height_read's homing, which had nothing to run"),
+    (17, DIRECTION_CLOSE, "the measured descent, which ends at the bottom end stop"),
+    (19, None, "half_up's run to 50 % of the travel"),
+)
+
+
+async def test_where_the_shutter_stands_is_remembered_only_while_it_is_true(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`_at` is an end stop the shutter is really standing at, or it is nothing.
+
+    It is the whole input of `order_the_readings`, and it is worth nothing unless it is
+    given up the moment the shutter leaves that end stop. A wrong `_at` cannot skip a
+    homing - the frame is sent for every reading whatever it says - but it deals the
+    readings the long way round, which is the one thing the order is there to avoid.
+
+    Mutation caught: a homing that does not record the end stop it reached, or a
+    movement that leaves behind the end stop the movement before it reached.
+    """
+    async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        result = await open_dialog(hass, entry)
+        flow = next(iter(hass.config_entries.options._progress.values()))  # noqa: SLF001
+        done = 0
+        for upto, standing_at, why in WHERE_IT_STANDS:
+            result = await drive(hass, freezer, result, PATH_A_BASIC[done:upto])
+            done = upto
+            assert flow._at == standing_at, why  # noqa: SLF001
+
+
 async def test_path_a_makes_the_number_of_movements_it_promises(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -1144,7 +1183,11 @@ async def test_the_watchdog_is_put_off_again_by_every_automatic_movement(
 
     Mutation caught: arming the watchdog on the menus and the forms alone, which would
     give the shutter back in the middle of the phase and leave the next reading
-    landing on "the session expired".
+    landing on "the session expired". The second half of the test is what says so: the
+    stretch between "Va bene, avanti" and the next reading's form is two progress bars
+    and nothing else, and two thirds of a whole patience passes in front of each - so
+    the timer the confirmation armed runs out under the second bar unless that bar has
+    put it off.
     """
     async with calibrating(hass, tmp_path, YAML) as (entry, _commands):
         cover = entity_object(hass, COVER, DEVICE_KEY)
@@ -1152,16 +1195,39 @@ async def test_the_watchdog_is_put_off_again_by_every_automatic_movement(
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_A_BASIC[:19])
         assert result["step_id"] == "measure_ascent"
 
-        for act in PATH_A_BASIC[19:22]:
+        # Long enough in front of the form for the timer the last movement armed to be
+        # the one that matters, and not long enough for it to run out.
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3)
+        )
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3))
+        result = await drive(hass, freezer, result, PATH_A_BASIC[19:20])
+        assert result["step_id"] == "tape_result"
+
+        # From here to the next reading there is no screen a user touches: the homing
+        # and the run to the percentage, one bar each, with nothing between them but
+        # the shutter moving. `drive` would resolve them without letting any time pass,
+        # so they are walked by hand with the clock running.
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "accept_step"}
+        )
+        bars = 0
+        while result["type"] is FlowResultType.SHOW_PROGRESS:
+            bars += 1
+            await hass.async_block_till_done()
             async_fire_time_changed(
                 hass, dt_util.utcnow() + timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3)
             )
             await hass.async_block_till_done()
             freezer.tick(timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC * 2 / 3))
-            result = await drive(hass, freezer, result, (act,))
+            result = await hass.config_entries.options.async_configure(result["flow_id"])
 
+        # Two bars, a whole patience and a third of another between them, and the
+        # shutter is still ours.
+        assert bars == 2
         assert cover.calibrating is True
-        assert result["step_id"] == "tape_result"
+        assert result["step_id"] == "measure_descent"
 
 
 # --------------------------------------------------------------------------------------
