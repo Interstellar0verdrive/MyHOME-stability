@@ -27,6 +27,7 @@ from typing import Any
 
 import voluptuous as vol
 import yaml
+from homeassistant.components import frontend
 from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR
 from homeassistant.components.button import DOMAIN as BUTTON
 from homeassistant.components.climate import DOMAIN as CLIMATE
@@ -52,6 +53,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from OWNd.message import OWNCommand, OWNGatewayCommand
 
 from .calibration_store import (
@@ -135,6 +137,26 @@ STATIC_URL_PATH = "/myhome_static"
 IMAGES_DIR = str(Path(__file__).parent / "images")
 # One registration per Home Assistant run, however many gateways are configured.
 _STATIC_PATH_REGISTERED = "myhome_static_path_registered"
+
+# "Profili e tapparelle": the panel, its element, and the URL its bundle is served from.
+#
+# The bundle gets its *own* URL prefix rather than a folder under ``/myhome_static``.
+# Two aiohttp static resources where one prefix contains the other resolve by
+# registration order, so ``/myhome_static/panel/myhome-panel.js`` would be matched by
+# the drawings' resource first and looked for at ``images/panel/...`` -> 404.  Keeping
+# them apart also leaves the five ``![](/myhome_static/*.webp)`` spellings in the seven
+# translation files exactly as `tests/test_translations.py` asserts them.
+PANEL_URL_PATH = "myhome-calibration"
+PANEL_ELEMENT = "myhome-calibration-panel"
+PANEL_STATIC_URL = "/myhome_panel"
+PANEL_DIR = str(Path(__file__).parent / "frontend")
+PANEL_BUNDLE = "myhome-panel.js"
+# The one string Home Assistant renders server-side, so the one string the panel's own
+# translations cannot reach: a panel is global, not per user, and re-registering it per
+# language is not a thing the frontend offers.  It is the repository's own name for the
+# feature, in the language the feature was designed in.
+PANEL_SIDEBAR_TITLE = "Profili e tapparelle"
+PANEL_SIDEBAR_ICON = "mdi:window-shutter-cog"
 
 SERVICE_GATEWAY_SCHEMA = vol.Schema({vol.Optional(ATTR_GATEWAY): cv.string})
 SERVICE_SEND_MESSAGE_SCHEMA = SERVICE_GATEWAY_SCHEMA.extend({vol.Required(ATTR_MESSAGE): cv.string})
@@ -434,26 +456,32 @@ def _parse_raw_command(raw: str) -> OWNCommand | None:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration (config entries only; YAML is rejected by CONFIG_SCHEMA)."""
     hass.data.setdefault(DOMAIN, {})
-    await _async_register_images(hass)
+    await _async_register_static_paths(hass)
     # The panel's read commands, once per Home Assistant run and not once per gateway:
     # a command name is global, and `websocket_api` is a stage-0 dependency declared in
     # the manifest, so it is up before this runs. Guarded the same way the drawings are.
     async_register_websocket_api(hass)
+    await _async_register_panel(hass)
     return True
 
 
-async def _async_register_images(hass: HomeAssistant) -> None:
-    """Serve ``custom_components/myhome/images`` at ``/myhome_static``.
+async def _async_register_static_paths(hass: HomeAssistant) -> None:
+    """Serve the drawings at ``/myhome_static`` and the panel's bundle at ``/myhome_panel``.
 
     The guided calibration explains its four trickiest moments with a drawing, and
     a config-flow description is rendered as Markdown: an ``![](/myhome_static/x.webp)``
     in the text is all it takes, provided the file is reachable at that URL.  Registered
     here rather than per entry, because the URL is the same for every gateway.
 
+    The panel's bundle rides along in the same call, under the same flag: it is the same
+    question ("what does this integration put on the HTTP server?") asked about a second
+    directory, and aiohttp's router is append-only, so one call is also the only way to
+    keep the two registrations from drifting apart on a retry.
+
     ``http`` is a stage-0 integration, so in a running Home Assistant ``hass.http`` is
     always there by the time a custom integration is set up; on a bare ``hass`` - what
     the test suite builds - the attribute is declared and left at ``None``, and the
-    drawings are the only thing that ``hass`` loses.
+    drawings and the bundle are the only things that ``hass`` loses.
     """
     if hass.data.get(_STATIC_PATH_REGISTERED) or getattr(hass, "http", None) is None:
         return
@@ -463,9 +491,74 @@ async def _async_register_images(hass: HomeAssistant) -> None:
     # raised would otherwise leave the drawings off for the rest of the Home Assistant
     # run with nothing left to retry them (0.5.0 v2 review, RISK-6).
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(STATIC_URL_PATH, IMAGES_DIR, cache_headers=True)]
+        [
+            StaticPathConfig(STATIC_URL_PATH, IMAGES_DIR, cache_headers=True),
+            StaticPathConfig(PANEL_STATIC_URL, PANEL_DIR, cache_headers=True),
+        ]
     )
     hass.data[_STATIC_PATH_REGISTERED] = True
+
+
+async def _async_register_panel(hass: HomeAssistant) -> None:
+    """Register "Profili e tapparelle" as a custom panel, once per Home Assistant run.
+
+    `frontend.async_register_built_in_panel` and not `panel_custom.async_register_panel`,
+    although the second is the documented wrapper: the wrapper cannot express
+    ``sidebar_default_visible``, and the decision for 0.6.0 is that the panel is *present
+    but off* - discoverable in the sidebar editor, invisible to a household that does not
+    want a shutter-calibration entry between Impostazioni and Sviluppo.  So the
+    ``_panel_custom`` block is assembled here by hand, with the four keys the wrapper
+    writes (`homeassistant/components/panel_custom/__init__.py`) and nothing else.
+
+    ``config_panel_domain`` is deliberately **not** set.  It would move the integration
+    page's "Configura" button to this panel, and "Configura" still owns the guided
+    calibration and the connection form - which 0.6.0 does not reimplement.
+
+    Cache busting is the query string, not a hashed file name: ``release.yml`` rewrites
+    and asserts ``manifest.json``'s version before it tags, so ``?v=`` changes on every
+    release and on nothing else.  The version is read back out of the integration rather
+    than restated here, and the panel reads it from its own ``config`` at runtime - which
+    is why the committed bundle carries no version and does not have to be rebuilt for a
+    release.
+
+    A failure here costs the panel and nothing else: the options flow is a complete path
+    to everything the panel does, and a gateway that refuses to load because a sidebar
+    entry could not be registered would be a poor trade.  Logged, loudly, and continued.
+    """
+    if frontend.async_panel_exists(hass, PANEL_URL_PATH):
+        return
+    try:
+        integration = await async_get_integration(hass, DOMAIN)
+        version = str(integration.version)
+        frontend.async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            frontend_url_path=PANEL_URL_PATH,
+            sidebar_title=PANEL_SIDEBAR_TITLE,
+            sidebar_icon=PANEL_SIDEBAR_ICON,
+            sidebar_default_visible=False,
+            show_in_sidebar=True,
+            require_admin=True,
+            config={
+                # Read by the element itself, so that a bug report can name the version
+                # of the panel that produced it without the bundle carrying a stamp that
+                # a release would have to rewrite.
+                "version": version,
+                "_panel_custom": {
+                    "name": PANEL_ELEMENT,
+                    # No iframe: the element is created in the main frontend document and
+                    # inherits the theme's CSS variables - light, dark and any user theme,
+                    # with no code of ours.
+                    "embed_iframe": False,
+                    "trust_external": False,
+                    # The panel draws its own safe-area insets.
+                    "handle_safe_area": True,
+                    "module_url": f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}",
+                },
+            },
+        )
+    except Exception:  # noqa: BLE001 - the panel is an addition; the gateways are not
+        LOGGER.exception("Could not register the MyHOME panel; use Configure instead")
 
 
 @callback

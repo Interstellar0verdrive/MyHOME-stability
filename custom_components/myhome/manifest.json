@@ -1,6 +1,9 @@
 {
   "domain": "myhome",
   "name": "MyHome (Stability)",
+  "after_dependencies": [
+    "frontend"
+  ],
   "codeowners": [
     "@Interstellar0verdrive"
   ],
