@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configurazione di questo gateway",
-        "description": "**Gateway**: {gateway}\n\nDa qui si configura il gateway e si calibrano le tapparelle “semplici”, quelle la cui posizione Home Assistant deve stimare dai tempi di corsa.\n\n**Cosa fare**: scegliere una voce. Le modifiche si applicano solo dopo il salvataggio. Prima di ogni movimento della tapparella, una schermata avvisa che sta per iniziare.",
+        "description": "**Gateway**: {gateway}\n\nDa qui si configura il gateway e si calibrano le tapparelle “semplici”, quelle la cui posizione Home Assistant deve stimare dai tempi di corsa.\n\n**Cosa fare**: scegliere una voce. Niente viene scritto finché non si salva, e quello che si salva si applica alla chiusura del dialogo. Prima di ogni movimento della tapparella, una schermata avvisa che sta per iniziare.",
         "menu_options": {
           "calibrate": "Calibra una tapparella",
           "profiles_covers": "Profili e tapparelle",
@@ -130,7 +130,7 @@
       },
       "profile_actions": {
         "title": "Profilo di tapparella",
-        "description": "**Profilo**: “{profile}”\n\nTapparelle che lo seguono: {count}.\n\n**Cosa devi fare tu**: scegli cosa farne. Vedere i valori non cambia niente; modificarli o eliminare il profilo ha effetto appena chiudi il dialogo.",
+        "description": "**Profilo**: “{profile}”\n\nTapparelle che lo seguono: {count}.\n\n**Cosa fare**: scegliere un'operazione. Visualizzare i valori non comporta modifiche; la modifica dei valori e l'eliminazione del profilo vengono scritte subito e si applicano alla chiusura del dialogo.",
         "menu_options": {
           "profile_view": "Vedi i valori",
           "profile_edit": "Modifica i valori a mano",
@@ -146,7 +146,7 @@
         "title": "Modificare il profilo “{profile}”",
         "description": "**Cosa sta per succedere**: i valori qui sotto sostituiscono quelli misurati, per tutte le tapparelle che seguono questo profilo. La tapparella non si muove: vengono modificati solo i valori.\n\n**Cosa fare**: correggere solo i valori per cui si dispone di dati più affidabili della calibrazione, per esempio i tempi dichiarati dal costruttore. Lasciare invariati gli altri valori. I decimali si scrivono con la virgola o con il punto.",
         "data": {
-          "reference_height": "Altezza di riferimento (cm)",
+          "reference_height": "Corsa di riferimento (cm)",
           "opening_time": "Tempo di apertura (s)",
           "closing_time": "Tempo di chiusura (s)",
           "slat_time": "Tempo di apertura delle lamelle (s)",
@@ -158,13 +158,13 @@
           "opening_time": "Secondi dalla chiusura completa all'apertura completa, lamelle comprese (1-600).",
           "closing_time": "Secondi dall'apertura completa alla chiusura completa (1-600).",
           "slat_time": "Secondi in cui si aprono le lamelle prima che il telo cominci a salire (0-60).",
-          "opening_roll": "Quanto il telo avvolto accelera la salita: 1 è un rullo nudo, 2 un rullo ben carico (1-5).",
-          "closing_roll": "Lo stesso in discesa (1-5)."
+          "opening_roll": "Il rapporto fra il diametro del rullo a tapparella tutta aperta (rullo pieno) e quello a tapparella tutta chiusa (rullo vuoto): da 1,5 a 2,5 sulla maggior parte delle tapparelle, 1 un rullo di diametro costante (1-5).",
+          "closing_roll": "Lo stesso rapporto in discesa (1-5)."
         }
       },
       "profile_delete": {
         "title": "Eliminare questo profilo?",
-        "description": "**Profilo**: “{profile}”\n\n**Cosa sta per succedere**: il profilo viene eliminato e queste {count} tapparelle tornano ai valori del file di configurazione, se presente, o a quelli predefiniti: {covers}\n\nLe misure di ciascuna tapparella restano memorizzate: viene eliminata solo la descrizione del tipo. Se in `cover_profiles:` esiste un profilo con lo stesso nome, da adesso torna a valere quello.",
+        "description": "**Profilo**: “{profile}”\n\n**Cosa sta per succedere**: il profilo viene eliminato e queste {count} tapparelle tornano ai valori del file di configurazione, se presente, o a quelli predefiniti: {covers}\n\nLe misure di ciascuna tapparella restano memorizzate: viene eliminata solo la descrizione del tipo. Se in `cover_profiles:` esiste un profilo con lo stesso nome, smette di essere nascosto: torna a valere per le tapparelle che lo nominano nel file di configurazione, mentre le tapparelle a cui il profilo era stato assegnato solo da qui non ne seguono più nessuno.",
         "menu_options": {
           "profile_delete_confirm": "Sì, elimina il profilo",
           "profile_actions": "No, torna indietro"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profilo “{profile}” eliminato",
-        "description": "Il profilo non c'è più. Tapparelle che lo seguivano e sono tornate ai valori del file o a quelli predefiniti: {count} — {covers}\n\nPer ricreare un profilo eliminato per errore, eseguire nuovamente la misura completa su una tapparella dello stesso tipo e assegnare al profilo lo stesso nome."
+        "description": "Il profilo non c'è più. Tapparelle che lo seguivano e sono tornate ai valori del file o a quelli predefiniti: {count} — {covers}\n\nUn profilo con lo stesso nome in `cover_profiles:` non è più nascosto e torna a valere per le tapparelle che lo nominano nel file di configurazione.\n\nPer ricreare un profilo eliminato per errore, eseguire nuovamente la misura completa su una tapparella dello stesso tipo e assegnare al profilo lo stesso nome."
       },
       "calibrations": {
         "title": "Calibrazioni",
@@ -183,7 +183,7 @@
       },
       "no_calibrations": {
         "title": "Nessuna calibrazione conservata",
-        "description": "Nessuna tapparella di questo gateway ha ancora valori propri conservati dall'integrazione: tutte si muovono con quello che dice il file di configurazione, se lo usi, o con i valori predefiniti.\n\n**Cosa devi fare tu**: torna al menu e scegli “Calibra una tapparella” per misurarne una.",
+        "description": "Nessuna tapparella di questo gateway ha ancora valori propri conservati dall'integrazione: tutte si muovono con quello che dice il file di configurazione, se presente, o con i valori predefiniti.\n\n**Cosa fare**: tornare al menu e scegliere “Calibra una tapparella” per misurarne una.",
         "menu_options": {
           "init": "Torna al menu"
         }
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibrazione di questa tapparella",
-        "description": "**Tapparella**: {cover}\n\nValori conservati per questa tapparella:\n\n{values}\n**Cosa devi fare tu**: scegli cosa farne. “Misura di nuovo” rifà la calibrazione guidata su questa tapparella e sostituisce quello che c'è; “Elimina” la riporta al file di configurazione, se lo usi.",
+        "description": "**Tapparella**: {cover}\n\nValori conservati per questa tapparella:\n\n{values}\n**Cosa fare**: scegliere un'operazione. “Misura di nuovo” ripete la calibrazione guidata su questa tapparella e sostituisce i valori presenti. “Elimina la calibrazione” riporta questa tapparella ai valori del file di configurazione, se presente, al profilo che segue o ai valori predefiniti.",
         "menu_options": {
           "calibration_view": "Vedi i valori",
           "calibration_edit": "Modifica i valori a mano",
@@ -226,8 +226,8 @@
           "opening_time": "Secondi dalla chiusura completa all'apertura completa, lamelle comprese (1-600).",
           "closing_time": "Secondi dall'apertura completa alla chiusura completa (1-600).",
           "slat_time": "Secondi in cui si aprono le lamelle prima che il telo cominci a salire (0-60).",
-          "opening_roll": "Quanto il telo avvolto accelera la salita: 1 è un rullo nudo, 2 un rullo ben carico (1-5).",
-          "closing_roll": "Lo stesso in discesa (1-5)."
+          "opening_roll": "Il rapporto fra il diametro del rullo a tapparella tutta aperta (rullo pieno) e quello a tapparella tutta chiusa (rullo vuoto): da 1,5 a 2,5 sulla maggior parte delle tapparelle, 1 un rullo di diametro costante (1-5).",
+          "closing_roll": "Lo stesso rapporto in discesa (1-5)."
         }
       },
       "calibration_delete": {
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Calibrazione guidata delle tapparelle",
-        "description": "Questo strumento calibra le tapparelle “semplici”: quelle il cui attuatore non riporta la posizione. La percentuale che vedi in Home Assistant, per quelle, è una stima calcolata sui tempi di corsa; la calibrazione misura quei tempi e la geometria del rullo, per ottenere una stima più precisa.\n\nNon sarà perfetta. Aspettati qualche centimetro di scarto: 1-2 cm vicino ai finecorsa, 2-4 cm tra le posizioni intermedie. Ogni apertura o chiusura completa riallinea la stima, quindi l'errore non si accumula.\n\nLe tapparelle “avanzate” riportano la posizione da sole e non hanno bisogno di tutto questo: per questo non compaiono nell'elenco nei prossimi passaggi.\n\n**Cosa sta per succedere**: sceglierai una tapparella e uno dei tre modi di misurarla. La tapparella si muoverà più volte fino ai finecorsa.\n\n**Cosa devi fare tu**: tieni a portata di mano un metro, assicurati che nulla sia d'intralcio alla tapparella e resta dove puoi vederla. Non viene salvato niente fino all'ultima schermata: puoi chiudere il dialogo quando vuoi e non sarà cambiato nulla.",
+        "description": "Questo strumento calibra le tapparelle “semplici”: quelle il cui attuatore non riporta la posizione. La percentuale visualizzata in Home Assistant per queste tapparelle è una stima calcolata sui tempi di corsa; la calibrazione misura quei tempi e la geometria del rullo, per ottenere una stima più precisa.\n\nNon sarà perfetta. È previsto qualche centimetro di scarto: 1-2 cm vicino ai finecorsa, 2-4 cm nelle posizioni intermedie. Ogni apertura o chiusura completa riallinea la stima, quindi l'errore non si accumula.\n\nLe tapparelle “avanzate” riportano la posizione da sole e non hanno bisogno di tutto questo: per questo non compaiono nell'elenco nei prossimi passaggi.\n\n**Cosa sta per succedere**: si sceglieranno una tapparella e una delle tre modalità di misurazione. La tapparella si muoverà più volte fino ai finecorsa.\n\n**Cosa fare**: tenere un metro a portata di mano. Assicurarsi che nulla ostacoli la tapparella e rimanere in una posizione da cui sia visibile. Non viene salvato niente fino all'ultima schermata: si può chiudere il dialogo quando si vuole, e una corsa in atto finisce da sola al finecorsa.",
         "menu_options": {
           "cover": "Inizia",
           "init": "Torna al menu"
@@ -259,7 +259,7 @@
       },
       "path": {
         "title": "Come misurare questa tapparella?",
-        "description": "**Tapparella**: {cover}\n\nCi sono tre modi, e quello giusto dipende da cosa hai già misurato. Non sono passi in sequenza: se ne sceglie uno.\n\nIl primo (A) è quello lungo, circa quattro minuti: tre pressioni di un pulsante e tre letture col metro. Alla fine nasce un **profilo**, cioè la descrizione di questo tipo di tapparella, che tutte le altre tapparelle simili (stesso modello, dimensione, ...) potranno riutilizzare.\n\nIl secondo (B) è pensato proprio per le tapparelle simili a una già calibrata: scegli il profilo, misuri l'altezza, fatto.\n\nIl terzo (C) è per una tapparella a cui è stato assegnato un profilo ma che si ferma nel posto sbagliato: in questo caso va affinata la calibrazione di questa tapparella.\n\n**Cosa devi fare tu**: scegli un modo tra quelli sottostanti. Fino alla prossima schermata non si muove niente.",
+        "description": "**Tapparella**: {cover}\n\nCi sono tre modi, e la scelta dipende dalle misure già effettuate. Non sono passi in sequenza: se ne sceglie uno.\n\nIl primo (A) è quello lungo, circa quattro minuti: tre pressioni di un pulsante e tre letture col metro. Alla fine si ottiene un **profilo**, cioè la descrizione di questo tipo di tapparella, che tutte le altre tapparelle simili (stesso modello, dimensione, ...) potranno riutilizzare.\n\nIl secondo (B) è pensato proprio per le tapparelle simili a una già calibrata: basta scegliere il profilo e misurare l'altezza.\n\nIl terzo (C) è per una tapparella a cui è stato assegnato un profilo ma che si ferma nel posto sbagliato: in questo caso va affinata la calibrazione di questa tapparella.\n\n**Cosa fare**: scegliere una delle modalità qui sotto. Fino alla prossima schermata non si muove niente.",
         "menu_options": {
           "path_a": "(A) È la prima tapparella di questo tipo (misura completa, ~4 minuti)",
           "path_b": "(B) È simile a una tapparella già misurata (solo l'altezza)",
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Prima che la tapparella cominci a muoversi",
-        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: la calibrazione è divisa in passi. A ogni passo la tapparella fa i movimenti che quel passo richiede, e prima di ciascuno arrivano le istruzioni e tutto il tempo per prepararsi: nessun movimento a tempo parte senza che tu lo avvii. In tutto sono nove movimenti, circa quattro minuti.\n\n**Cosa devi fare tu**: assicurati che non ci sia niente d'intralcio — un'anta aperta, piante sul davanzale, gatti — e tieni il metro a portata di mano. Ti sarà chiesto di premere un pulsante quando succede qualcosa e di leggere qualche distanza.\n\nSe qualcosa va storto, ogni passo si può ripetere da solo, senza rifare quelli già fatti. Puoi interrompere quando vuoi: non viene salvato niente fino all'ultima schermata, e i movimenti sono comandi normali.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: la calibrazione è divisa in passi. A ogni passo la tapparella fa i movimenti che quel passo richiede, e prima di ciascuno arrivano le istruzioni e tutto il tempo per prepararsi: nessun movimento a tempo parte senza essere avviato a mano. In tutto sono nove movimenti, circa quattro minuti.\n\n**Cosa fare**: assicurarsi che non ci sia niente d'intralcio — un'anta aperta, piante sul davanzale, gatti — e tenere il metro a portata di mano. Sarà richiesto di premere un pulsante quando succede qualcosa e di leggere qualche distanza.\n\nSe qualcosa va storto, ogni passo si può ripetere da solo, senza rifare quelli già fatti. Si può chiudere quando si vuole: non viene salvato niente fino all'ultima schermata, e una corsa in atto finisce da sola al finecorsa.",
         "menu_options": {
           "begin": "Ho capito, cominciamo",
           "cancel_flow": "Annulla"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "Quanto affinare la calibrazione?",
-        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: o tre corse misurate (due in salita e una in discesa), oppure quelle più due letture col metro.\n\nI soli tempi bastano per una tapparella il cui motore è semplicemente più lento o più veloce di quello su cui è stato misurato il profilo. Aggiungi i coefficienti quando sbaglia anche *a metà corsa*: lì non è il motore che gira diversamente, è il telo che si avvolge diversamente.\n\n**Cosa devi fare tu**: scegli fin dove arrivare. Puoi sempre tornare e fare il resto.",
+        "description": "**Tapparella**: {cover}\n\n**Cosa sta per succedere**: o tre corse misurate (due in salita e una in discesa), oppure quelle più tre letture col metro: la corsa del telo e una a metà corsa per ogni direzione.\n\nI soli tempi bastano per una tapparella il cui motore è semplicemente più lento o più veloce di quello su cui è stato misurato il profilo. Aggiungere i coefficienti quando sbaglia anche *a metà corsa*: lì non è il motore che gira diversamente, è il telo che si avvolge diversamente.\n\n**Cosa fare**: scegliere quanto affinare la calibrazione. È possibile tornare in seguito per completarla.",
         "menu_options": {
           "times_only": "Solo i suoi tempi di corsa (3 pressioni, ~2 minuti)",
-          "times_and_rolls": "I suoi tempi e i suoi coefficienti (3 pressioni e 2 letture)",
+          "times_and_rolls": "I suoi tempi e i suoi coefficienti (3 pressioni e 3 letture)",
           "cancel_flow": "Annulla"
         }
       },
@@ -467,17 +467,17 @@
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
         "data_description": {
-          "measured_cm": "Atteso circa {expected} cm; entro {tolerance} cm è tutto normale. I decimali si scrivono con la virgola o con il punto."
+          "measured_cm": "Sono attesi circa {expected} cm; qualsiasi valore entro {tolerance} cm da {expected} è del tutto normale. I decimali si scrivono con la virgola o con il punto."
         }
       },
       "measure_ascent": {
         "title": "Misurare {cover} — al {percent}% della salita",
-        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata chiusa completamente e poi fatta salire per le lamelle più circa il {percent}% della sua corsa.\n\n**Cosa fare**: misurare dalla base al bordo inferiore nella posizione attuale e inserire qui sotto la misura in centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Cosa è successo**: la tapparella è stata chiusa completamente e poi fatta salire: prima si sono aperte le lamelle, poi il telo ha percorso circa il {percent}% della sua corsa.\n\n**Cosa fare**: misurare dalla base al bordo inferiore nella posizione attuale e inserire qui sotto la misura in centimetri. Una tapparella non è caricata allo stesso modo in salita e in discesa: per questo la stessa frazione si misura due volte.",
         "data": {
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
         "data_description": {
-          "measured_cm": "Atteso circa {expected} cm; entro {tolerance} cm è tutto normale. I decimali si scrivono con la virgola o con il punto."
+          "measured_cm": "Sono attesi circa {expected} cm; qualsiasi valore entro {tolerance} cm da {expected} è del tutto normale. I decimali si scrivono con la virgola o con il punto."
         }
       },
       "measure_verify": {
@@ -487,7 +487,7 @@
           "measured_cm": "Altezza del bordo inferiore (cm)"
         },
         "data_description": {
-          "measured_cm": "Atteso circa {expected} cm; entro {tolerance} cm è tutto normale. I decimali si scrivono con la virgola o con il punto."
+          "measured_cm": "Sono attesi circa {expected} cm; qualsiasi valore entro {tolerance} cm da {expected} è del tutto normale. I decimali si scrivono con la virgola o con il punto."
         }
       },
       "tape_result": {
@@ -524,16 +524,16 @@
       },
       "summary_basic": {
         "title": "Cosa è stato misurato",
-        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n\n**Dove finiscono questi valori**: se salvi, restano dentro Home Assistant, qui in Configura → Calibrazioni, e da subito la tapparella li usa al posto di quelli del file di configurazione, se lo usi. Da quella stessa schermata puoi rivederli, correggerli a mano o cancellarli in qualsiasi momento.\n\nSe preferisci scriverli nel file a mano, qui sotto c'è lo snippet equivalente: copialo prima di chiudere, perché senza salvare non viene conservato nulla.\n\n{yaml}\nLa precisione non è ancora stata verificata. Con “Migliora la precisione” si misurano quattro punti in più e si vede lo scarto in centimetri.\n\n**Cosa devi fare tu**: salva, oppure spendi altri due minuti e quattro letture col metro.",
+        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n\n**Dove vengono salvati i valori**: salvando, i valori restano in Home Assistant, in Configura → Calibrazioni. Vengono scritti al momento del salvataggio e la tapparella comincia a usarli alla chiusura del dialogo, al posto di quelli del file di configurazione, se presente. Da quella schermata è possibile visualizzarli, correggerli a mano o eliminarli in qualsiasi momento.\n\nPer inserire i valori a mano nel file, copiare il frammento di configurazione qui sotto prima di chiudere: senza salvare non viene conservato nulla.\n\n{yaml}\nLa precisione non è ancora stata verificata. Con “Migliora la precisione” si misurano quattro punti in più, a un quarto e a tre quarti della corsa in ciascuna direzione, e il modello viene poi messo alla prova con una quinta lettura presa dove non è stato calcolato niente.\n\n**Cosa fare**: salvare, oppure proseguire con altre cinque letture col metro, per circa due minuti.",
         "menu_options": {
           "save": "Salva",
-          "refine": "Migliora la precisione (~2 minuti, altre 4 letture)",
+          "refine": "Migliora la precisione (~2 minuti, altre 5 letture)",
           "cancel_flow": "Annulla senza salvare"
         }
       },
       "summary_short": {
         "title": "Cosa è stato misurato",
-        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n\n**Dove vengono salvati i valori**: salvando, i valori restano in Home Assistant, in Configura → Calibrazioni, e la tapparella li usa subito al posto di quelli del file di configurazione, se presente. Da quella schermata è possibile visualizzarli, correggerli a mano o eliminarli in qualsiasi momento.\n\nPer inserire i valori a mano nel file, copiare il frammento di configurazione qui sotto prima di chiudere: senza salvare non viene conservato nulla.\n\n{yaml}\n**Cosa viene sostituito e cosa resta**: salvando vengono scritti {replacing}, e tutto il resto di quello che è già memorizzato per questa tapparella resta com'è: {keeping}.\n\n**Cosa fare**: salvare, oppure uscire senza salvare.",
+        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n\n**Dove vengono salvati i valori**: salvando, i valori restano in Home Assistant, in Configura → Calibrazioni. Vengono scritti al momento del salvataggio e la tapparella comincia a usarli alla chiusura del dialogo, al posto di quelli del file di configurazione, se presente. Da quella schermata è possibile visualizzarli, correggerli a mano o eliminarli in qualsiasi momento.\n\nPer inserire i valori a mano nel file, copiare il frammento di configurazione qui sotto prima di chiudere: senza salvare non viene conservato nulla.\n\n{yaml}\n**Cosa viene sostituito e cosa resta**: salvando vengono scritti {replacing}, e tutto il resto di quello che è già memorizzato per questa tapparella resta com'è: {keeping}.\n\n**Cosa fare**: salvare, oppure uscire senza salvare.",
         "menu_options": {
           "save": "Salva",
           "cancel_flow": "Annulla senza salvare"
@@ -541,7 +541,7 @@
       },
       "summary_precise": {
         "title": "Cosa è stato misurato",
-        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n**Precisione**: entro {accuracy}, verificata al {percent}%\n\nLa precisione è la distanza fra dove il modello colloca il bordo inferiore e dove il metro lo ha davvero trovato, misurata in una posizione su cui non è stato fatto nessun calcolo.\n\n**Dove vengono salvati i valori**: salvando, i valori restano in Home Assistant, in Configura → Calibrazioni, e la tapparella li usa subito al posto di quelli del file di configurazione, se presente. Da quella schermata è possibile visualizzarli, correggerli a mano o eliminarli in qualsiasi momento.\n\nPer inserire i valori a mano nel file, copiare il frammento di configurazione qui sotto prima di chiudere: senza salvare non viene conservato nulla.\n\n{yaml}\n**Cosa fare**: salvare.",
+        "description": "**Tapparella**: {cover}\n\n**Corsa del telo**: {height}\n**Precisione**: entro {accuracy}\n\nLa precisione è la distanza massima fra dove il modello colloca il bordo inferiore e dove il metro lo ha davvero trovato, sulle sei letture su cui il modello è stato calcolato. La verifica al {percent}% della discesa — una posizione su cui non è stato calcolato niente — è stata riportata nella schermata precedente.\n\n**Dove vengono salvati i valori**: salvando, i valori restano in Home Assistant, in Configura → Calibrazioni. Vengono scritti al momento del salvataggio e la tapparella comincia a usarli alla chiusura del dialogo, al posto di quelli del file di configurazione, se presente. Da quella schermata è possibile visualizzarli, correggerli a mano o eliminarli in qualsiasi momento.\n\nPer inserire i valori a mano nel file, copiare il frammento di configurazione qui sotto prima di chiudere: senza salvare non viene conservato nulla.\n\n{yaml}\n**Cosa fare**: salvare.",
         "menu_options": {
           "save": "Salva",
           "cancel_flow": "Annulla senza salvare"
@@ -549,7 +549,7 @@
       },
       "saved": {
         "title": "Calibrazione salvata",
-        "description": "La calibrazione di {cover} è salvata e già in uso. Da adesso {cover} si muove con i valori appena misurati su questa tapparella; sono disponibili tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}”, misurato su questa tapparella, in Configura → Profili e tapparelle. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere. Le altre tapparelle simili a questa si calibrano in due schermate scegliendo “(B) È simile a una tapparella già misurata”.",
+        "description": "La calibrazione di {cover} è salvata e viene applicata alla chiusura del dialogo: da quel momento {cover} si muove con i valori appena misurati su questa tapparella. Gli attributi dell'entità indicano allora `guided` sotto “Calibration source”, mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}”, misurato su questa tapparella, in Configura → Profili e tapparelle. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere. Le altre tapparelle simili a questa si calibrano in due schermate scegliendo “(B) È simile a una tapparella già misurata”.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -557,7 +557,7 @@
       },
       "saved_profile": {
         "title": "Calibrazione salvata",
-        "description": "{cover} adesso segue il profilo “{profile}” e lo sta già usando. Non sono stati misurati i tempi di corsa di questa tapparella: l'unica cosa misurata su questa tapparella è la sua altezza, e i tempi del profilo vengono adattati a quella. Il risultato è disponibile tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}” in Configura → Profili e tapparelle, dove è condiviso con tutte le tapparelle che lo seguono. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: dare lo stesso profilo a un'altra tapparella, oppure chiudere. Se {cover} dovesse fermarsi nel posto sbagliato, “(C) Ha un profilo ma si ferma nel posto sbagliato” misura i tempi di corsa di questa tapparella.",
+        "description": "{cover} adesso segue il profilo “{profile}”, e lo segue dalla chiusura del dialogo. Non sono stati misurati i tempi di corsa di questa tapparella: l'unica cosa misurata su questa tapparella è la sua altezza, e i tempi del profilo vengono adattati a quella. Gli attributi dell'entità indicano allora `profile {profile}` sotto “Calibration source”, mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, e il profilo “{profile}” in Configura → Profili e tapparelle, dove è condiviso con tutte le tapparelle che lo seguono. Per tornare ai valori del file di configurazione, eliminare la calibrazione dalla schermata Calibrazioni.\n\n**Cosa fare adesso**: dare lo stesso profilo a un'altra tapparella, oppure chiudere. Se {cover} dovesse fermarsi nel posto sbagliato, “(C) Ha un profilo ma si ferma nel posto sbagliato” misura i tempi di corsa di questa tapparella.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -565,7 +565,7 @@
       },
       "saved_refined": {
         "title": "Calibrazione salvata",
-        "description": "La calibrazione di {cover} è salvata e già in uso. {cover} continua a seguire il profilo “{profile}”, e quello che è appena stato misurato su questa sola tapparella adesso ha la precedenza sul profilo; tutto quello che qui non è stato misurato continua a venire dal profilo. Il risultato è disponibile tra gli attributi dell'entità, sotto “Calibration source”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, dove è possibile visualizzare i valori, correggerli a mano o eliminarli. Il profilo non è stato toccato: le altre tapparelle che lo seguono restano come sono.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere.",
+        "description": "La calibrazione di {cover} è salvata e viene applicata alla chiusura del dialogo. {cover} continua a seguire il profilo “{profile}”, e quello che è appena stato misurato su questa sola tapparella adesso ha la precedenza sul profilo; tutto quello che qui non è stato misurato continua a venire dal profilo. Gli attributi dell'entità indicano allora `guided` sotto “Calibration source”, mentre i valori numerici si trovano sotto “Opening time”, “Closing time”, “Slat time”, i coefficienti di rullo e “Height”.\n\n**Dove ritrovare la calibrazione**: qui in Configura → Calibrazioni, dove è possibile visualizzare i valori, correggerli a mano o eliminarli. Il profilo non è stato toccato: le altre tapparelle che lo seguono restano come sono.\n\n**Cosa fare adesso**: calibrare un'altra tapparella, oppure chiudere.",
         "menu_options": {
           "calibrate": "Calibra un'altra tapparella",
           "init": "Torna al menu"
@@ -605,7 +605,7 @@
       },
       "problem_no_echo": {
         "title": "La tapparella non ha risposto",
-        "description": "**Tapparella**: {cover}\n\nIl comando è arrivato sul bus ma l'attuatore non ha mai segnalato di essersi messo in moto, quindi non c'è nessun istante rispetto a cui misurare e il passo è stato abbandonato.\n\n**La tapparella potrebbe essere ancora in movimento**: il comando è partito davvero, quindi con ogni probabilità il motore si è avviato. Subito dopo l'errore è stato mandato uno stop, ma se la tapparella è ancora in movimento, fermarla manualmente prima di ripetere il passo.\n\n**Cosa fare**: controllare che la tapparella non sia bloccata, che nessun altro (un pulsante a muro, un'automazione) la stia tenendo, e ripetere il passo. Se succede ogni volta, questo attuatore non riporta il proprio stato e la calibrazione guidata non può misurarlo.",
+        "description": "**Tapparella**: {cover}\n\nIl comando è arrivato sul bus ma l'attuatore non ha mai segnalato di essersi messo in moto, quindi non c'è nessun istante rispetto a cui misurare e il passo è stato abbandonato.\n\n**La tapparella potrebbe essere ancora in movimento**: il comando è partito davvero, quindi con ogni probabilità il motore si è avviato. Subito dopo l'errore è stato mandato uno stop, ma se la tapparella è ancora in movimento, fermarla manualmente prima di ripetere il passo.\n\n**Cosa fare**: controllare che la tapparella non sia bloccata e ripetere il passo. Se succede ogni volta, questo attuatore non riporta il proprio stato e la calibrazione guidata non può misurarlo.",
         "menu_options": {
           "repeat_step": "Ripeti questo passo",
           "cancel_flow": "Annulla"
@@ -613,7 +613,7 @@
       },
       "problem_not_delivered": {
         "title": "Il comando non è mai arrivato sul bus",
-        "description": "Il gateway non ha né scritto il nostro comando né detto di averci rinunciato, quindi a {cover} non è mai stato chiesto di muoversi e non è stato misurato niente.\n\n**Cosa fare**: verificare nella pagina dell'integrazione che il gateway sia connesso, poi ripetere il passo.",
+        "description": "Il gateway non ha mai scritto il nostro comando sul bus — non l'ha accettato, l'ha scartato, oppure non ha mai detto che fine abbia fatto — quindi a {cover} non è mai stato chiesto di muoversi e non è stato misurato niente.\n\n**Cosa fare**: verificare nella pagina dell'integrazione che il gateway sia connesso, poi ripetere il passo.",
         "menu_options": {
           "repeat_step": "Ripeti questo passo",
           "cancel_flow": "Annulla"
@@ -645,7 +645,7 @@
       },
       "problem_timeout": {
         "title": "Non è stato premuto niente in tempo",
-        "description": "Questa schermata aspetta circa un minuto e mezzo la pressione di cui parla, molto più di quanto ci metta qualsiasi tapparella a fare la sua corsa. Oltre quel limite la pressione non misura più niente, quindi è stata scartata perché non valida.\n\n**Cosa fare**: ripetere il passo e premere appena si verifica l'evento descritto nella schermata.",
+        "description": "Questa schermata aspetta circa un minuto e mezzo la pressione di cui parla, e in quel tempo non è stato premuto niente. Non resta nessun istante da cui misurare, quindi il passo è stato abbandonato invece di essere calcolato su una pressione arrivata dopo.\n\n**Cosa fare**: ripetere il passo e premere appena si verifica l'evento descritto nella schermata.",
         "menu_options": {
           "repeat_step": "Ripeti questo passo",
           "cancel_flow": "Annulla"

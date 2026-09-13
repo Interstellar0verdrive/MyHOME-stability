@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuring this gateway",
-        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: choose an option. Nothing changes until something is saved, and no cover moves before a screen says it is about to.",
+        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: choose an option. Nothing is written until something is saved, what is saved is applied when this dialog is closed, and no cover moves before a screen says it is about to.",
         "menu_options": {
           "calibrate": "Calibrate a cover",
           "profiles_covers": "Profiles and covers",
@@ -130,7 +130,7 @@
       },
       "profile_actions": {
         "title": "Cover profile",
-        "description": "**Profile**: “{profile}”\n\nCovers following it: {count}.\n\n**What you have to do**: choose what to do with it. Viewing the values changes nothing; editing them or deleting the profile takes effect as soon as you close this dialog.",
+        "description": "**Profile**: “{profile}”\n\nCovers following it: {count}.\n\n**What you have to do**: choose what to do with it. Viewing the values changes nothing; editing them or deleting the profile is written at once and applied when this dialog is closed.",
         "menu_options": {
           "profile_view": "View the values",
           "profile_edit": "Edit the values by hand",
@@ -158,13 +158,13 @@
           "opening_time": "Seconds from fully closed to fully open, slats included (1-600).",
           "closing_time": "Seconds from fully open to fully closed (1-600).",
           "slat_time": "Seconds the slats take to open before the curtain starts to rise (0-60).",
-          "opening_roll": "How much the wound curtain speeds the ascent up: 1 is a bare tube, 2 a well-loaded one (1-5).",
-          "closing_roll": "The same going down (1-5)."
+          "opening_roll": "The ratio between the diameter of the roll with the cover fully open (a full tube) and with it fully closed (an empty tube): 1.5 to 2.5 on most shutters, 1 a tube whose diameter never changes (1-5).",
+          "closing_roll": "The same ratio going down (1-5)."
         }
       },
       "profile_delete": {
         "title": "Delete this profile?",
-        "description": "**Profile**: “{profile}”\n\n**What is about to happen**: the profile is deleted and these {count} covers go back to the values of the configuration file, if you use one, or to the defaults: {covers}\n\nWhat was measured on each cover stays where it is: only the description of the kind is removed. If a profile of the same name exists in `cover_profiles:`, that one applies again from now on.",
+        "description": "**Profile**: “{profile}”\n\n**What is about to happen**: the profile is deleted and these {count} covers go back to the values of the configuration file, if you use one, or to the defaults: {covers}\n\nWhat was measured on each cover stays where it is: only the description of the kind is removed. If a profile of the same name exists in `cover_profiles:`, it stops being shadowed: the covers whose configuration file names it follow that one again, while the covers that were given the profile here alone are left following none.",
         "menu_options": {
           "profile_delete_confirm": "Yes, delete the profile",
           "profile_actions": "No, go back"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Profile “{profile}” deleted",
-        "description": "The profile is gone. Covers that followed it and went back to the file's values or to the defaults: {count} - {covers}\n\nIf the profile was deleted by mistake, run the full measurement again on a cover of this kind and give the new profile the same name."
+        "description": "The profile is gone. Covers that followed it and went back to the file's values or to the defaults: {count} - {covers}\n\nA profile of the same name in `cover_profiles:` is no longer shadowed and applies again to the covers whose configuration file names it.\n\nIf the profile was deleted by mistake, run the full measurement again on a cover of this kind and give the new profile the same name."
       },
       "calibrations": {
         "title": "Calibrations",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibration of this cover",
-        "description": "**Cover**: {cover}\n\nWhat is kept for this cover:\n\n{values}\n**What you have to do**: choose what to do with it. “Measure it again” runs the guided calibration on this cover and replaces what is here; “Delete” hands it back to the configuration file, if you use one.",
+        "description": "**Cover**: {cover}\n\nWhat is kept for this cover:\n\n{values}\n**What you have to do**: choose what to do with it. “Measure it again” runs the guided calibration on this cover and replaces what is here; “Delete the calibration” hands this cover back to the configuration file, if you use one, to the profile it follows, or to the defaults.",
         "menu_options": {
           "calibration_view": "View the values",
           "calibration_edit": "Edit the values by hand",
@@ -226,8 +226,8 @@
           "opening_time": "Seconds from fully closed to fully open, slats included (1-600).",
           "closing_time": "Seconds from fully open to fully closed (1-600).",
           "slat_time": "Seconds the slats take to open before the curtain starts to rise (0-60).",
-          "opening_roll": "How much the wound curtain speeds the ascent up: 1 is a bare tube, 2 a well-loaded one (1-5).",
-          "closing_roll": "The same going down (1-5)."
+          "opening_roll": "The ratio between the diameter of the roll with the cover fully open (a full tube) and with it fully closed (an empty tube): 1.5 to 2.5 on most shutters, 1 a tube whose diameter never changes (1-5).",
+          "closing_roll": "The same ratio going down (1-5)."
         }
       },
       "calibration_delete": {
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Guided cover calibration",
-        "description": "This tool calibrates “basic” covers: the ones whose actuator does not report its position. For those, the percentage you see in Home Assistant is an estimate computed from the run times; the calibration measures those times and the geometry of the roller, so as to obtain a more accurate estimate.\n\nIt will not be perfect. Expect a few centimetres out: 1-2 cm near the end stops, 2-4 cm between intermediate positions. Every full open or close re-synchronises the estimate, so the error does not build up.\n\n“Advanced” covers report their position by themselves and need none of this, which is why they do not appear in the list in the next steps.\n\n**What is about to happen**: you will pick a cover and one of three ways of measuring it. The cover will run to its end stops several times.\n\n**What you have to do**: keep a tape measure to hand, make sure nothing is in the cover's way, and stay where you can see it. Nothing is saved until the last screen: you can close this dialog whenever you like and nothing will have changed.",
+        "description": "This tool calibrates “basic” covers: the ones whose actuator does not report its position. For those, the percentage you see in Home Assistant is an estimate computed from the run times; the calibration measures those times and the geometry of the roller, so as to obtain a more accurate estimate.\n\nIt will not be perfect. Expect a few centimetres out: 1-2 cm near the end stops, 2-4 cm at intermediate positions. Every full open or close re-synchronises the estimate, so the error does not build up.\n\n“Advanced” covers report their position by themselves and need none of this, which is why they do not appear in the list in the next steps.\n\n**What is about to happen**: you will pick a cover and one of three ways of measuring it. The cover will run to its end stops several times.\n\n**What you have to do**: keep a tape measure to hand, make sure nothing is in the cover's way, and stay where you can see it. Nothing is saved until the last screen: you can close this dialog whenever you like and nothing will have changed, and a run already under way ends by itself at the end stop.",
         "menu_options": {
           "cover": "Start",
           "init": "Back to the menu"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Before the cover starts moving",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes the movements that step needs, and before each one come the instructions and all the time you need to get ready: no movement that has to be timed starts unless you start it. Nine movements in all, about four minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can stop whenever you like: nothing is saved until the last screen, and the movements are ordinary commands.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: the calibration is divided into steps. At each step the cover makes the movements that step needs, and before each one come the instructions and all the time you need to get ready: no movement that has to be timed starts unless you start it. Nine movements in all, about four minutes.\n\n**What you have to do**: make sure nothing is in the way - an open casement, plants on the sill, cats - and keep the tape measure to hand. You will be asked to press a button when something happens, and to read a few distances.\n\nIf something goes wrong, every step can be repeated on its own, without redoing the ones already done. You can close whenever you like: nothing is saved until the last screen, and a run already under way ends by itself at the end stop.",
         "menu_options": {
           "begin": "Understood, let's start",
           "cancel_flow": "Cancel"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "How far do you want to refine the calibration?",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: either three measured runs (two up and one down), or those plus two tape readings.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: either three measured runs (two up and one down), or those plus three tape readings: the curtain travel, and one at half the travel in each direction.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
         "menu_options": {
           "times_only": "Its own run times only (3 presses, ~2 minutes)",
-          "times_and_rolls": "Its own times and its own coefficients (3 presses and 2 readings)",
+          "times_and_rolls": "Its own times and its own coefficients (3 presses and 3 readings)",
           "cancel_flow": "Cancel"
         }
       },
@@ -467,17 +467,17 @@
           "measured_cm": "Height of the bottom edge (cm)"
         },
         "data_description": {
-          "measured_cm": "About {expected} cm is expected; within {tolerance} cm is perfectly normal. Decimals may be written with a comma or with a point."
+          "measured_cm": "About {expected} cm is expected; anything within {tolerance} cm of {expected} is perfectly normal. Decimals may be written with a comma or with a point."
         }
       },
       "measure_ascent": {
         "title": "Measure {cover} - {percent}% of the way up",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run up through the slats plus about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run upwards: first the slats opened, then the curtain travelled about {percent}% of its way.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
         "data_description": {
-          "measured_cm": "About {expected} cm is expected; within {tolerance} cm is perfectly normal. Decimals may be written with a comma or with a point."
+          "measured_cm": "About {expected} cm is expected; anything within {tolerance} cm of {expected} is perfectly normal. Decimals may be written with a comma or with a point."
         }
       },
       "measure_verify": {
@@ -487,7 +487,7 @@
           "measured_cm": "Height of the bottom edge (cm)"
         },
         "data_description": {
-          "measured_cm": "About {expected} cm is expected; within {tolerance} cm is perfectly normal. Decimals may be written with a comma or with a point."
+          "measured_cm": "About {expected} cm is expected; anything within {tolerance} cm of {expected} is perfectly normal. Decimals may be written with a comma or with a point."
         }
       },
       "tape_result": {
@@ -524,16 +524,16 @@
       },
       "summary_basic": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” measures four more points and shows the gap in centimetres.\n\n**What you have to do**: save, or continue with four more tape readings, taking about two minutes.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Improve the accuracy” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
         "menu_options": {
           "save": "Save",
-          "refine": "Improve the accuracy (~2 minutes, 4 more readings)",
+          "refine": "Improve the accuracy (~2 minutes, 5 more readings)",
           "cancel_flow": "Cancel without saving anything"
         }
       },
       "summary_short": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save, or leave without saving anything.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save, or leave without saving anything.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"
@@ -541,7 +541,7 @@
       },
       "summary_precise": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}, checked at {percent}%\n\nThe accuracy is the distance between where the model puts the bottom edge and where the tape really found it, measured at a position nothing was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations, and the cover uses them at once instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}\n\nThe accuracy is the largest distance between where the model puts the bottom edge and where the tape really found it, over the six readings the model was fitted to. The check at {percent}% of the descent - a position nothing was fitted to - was reported on the screen before this one.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What you have to do**: save.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"
@@ -549,7 +549,7 @@
       },
       "saved": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved and already in use. From now on {cover} moves on the values measured on it just now; you will find them among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}”, measured on this cover, under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
+        "description": "Done: the calibration of {cover} is saved. It is applied when this dialog is closed, and from then on {cover} moves on the values measured on it just now. The entity's attributes then say `guided` under “Calibration source”, and carry the numbers themselves under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}”, measured on this cover, under Configure → Profiles and covers. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: calibrate another cover, or close. Every cover similar to this one takes two screens, by choosing “(B) It is similar to a cover already measured”.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -557,7 +557,7 @@
       },
       "saved_profile": {
         "title": "Calibration saved",
-        "description": "Done: {cover} now follows the profile “{profile}” and is already using it. No run of its own was timed here: the only thing measured on this cover is its height, and the profile's times are scaled to it. You will find the result among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
+        "description": "Done: {cover} now follows the profile “{profile}”, and does so from the moment this dialog is closed. No run of its own was timed here: the only thing measured on this cover is its height, and the profile's times are scaled to it. The entity's attributes then say `profile {profile}` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, and the profile “{profile}” under Configure → Profiles and covers, where it is shared with every cover that follows it. If one day you want the values written in the configuration file back, all you have to do is delete the calibration from that screen.\n\n**What you can do now**: give the same profile to another cover, or close. If {cover} turns out to stop in the wrong place, “(C) It has a profile but stops in the wrong place” measures its own run times.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -565,7 +565,7 @@
       },
       "saved_refined": {
         "title": "Calibration saved",
-        "description": "Done: the calibration of {cover} is saved and already in use. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. You will find the result among the entity's attributes, under “Calibration source”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
+        "description": "Done: the calibration of {cover} is saved, and it is applied when this dialog is closed. {cover} goes on following the profile “{profile}”, and what was just measured on this cover alone now takes precedence over it; everything that was not measured here still comes from the profile. The entity's attributes then say `guided` under “Calibration source”, and the numbers themselves are under “Opening time”, “Closing time”, “Slat time”, the roll coefficients and “Height”.\n\n**Where to find it again**: here under Configure → Calibrations, where you can look at the values again, correct them by hand or delete them. The profile itself was not touched: the other covers that follow it are unaffected.\n\n**What you can do now**: calibrate another cover, or close.",
         "menu_options": {
           "calibrate": "Calibrate another cover",
           "init": "Back to the menu"
@@ -605,7 +605,7 @@
       },
       "problem_no_echo": {
         "title": "The cover did not answer",
-        "description": "**Cover**: {cover}\n\nThe command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure against and the step was abandoned.\n\n**The cover may still be moving**: the command really did go out, so the motor most likely started. A stop was sent straight after the failure, but if the cover is still running, stop it yourself before repeating the step.\n\n**What you have to do**: check that the cover is not jammed, that nobody else (a wall switch, an automation) is holding it, and repeat the step. If it happens every time, this actuator does not report its own state and the guided calibration cannot measure it.",
+        "description": "**Cover**: {cover}\n\nThe command reached the bus but the actuator never reported that it had started moving, so there is no instant to measure against and the step was abandoned.\n\n**The cover may still be moving**: the command really did go out, so the motor most likely started. A stop was sent straight after the failure, but if the cover is still running, stop it yourself before repeating the step.\n\n**What you have to do**: check that the cover is not jammed, and repeat the step. If it happens every time, this actuator does not report its own state and the guided calibration cannot measure it.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -613,7 +613,7 @@
       },
       "problem_not_delivered": {
         "title": "The command never reached the bus",
-        "description": "The gateway neither wrote our command nor said it had given up on it, so {cover} was never asked to move and nothing was measured.\n\n**What you have to do**: check that the gateway is connected - the integration page says so - and repeat the step.",
+        "description": "The gateway never wrote our command to the bus - it would not take it, it dropped it, or it never said what became of it - so {cover} was never asked to move and nothing was measured.\n\n**What you have to do**: check that the gateway is connected - the integration page says so - and repeat the step.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"
@@ -645,7 +645,7 @@
       },
       "problem_timeout": {
         "title": "Nothing was pressed in time",
-        "description": "This screen waits about a minute and a half for the press it is about, far longer than any cover takes to run. Past that limit the press no longer measures anything, so it was rejected as invalid.\n\n**What you have to do**: repeat the step and this time press as soon as the cover does what the screen describes.",
+        "description": "This screen waits about a minute and a half for the press it is about, and nothing was pressed in that time. There is no instant left to measure from, so the step was abandoned rather than timed from a press that came afterwards.\n\n**What you have to do**: repeat the step and this time press as soon as the cover does what the screen describes.",
         "menu_options": {
           "repeat_step": "Repeat this step",
           "cancel_flow": "Cancel"

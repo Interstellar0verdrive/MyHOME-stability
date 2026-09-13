@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuración de esta pasarela",
-        "description": "**Pasarela**: {gateway}\n\nDesde aquí se configura la pasarela y se calibran las persianas «sencillas», aquellas cuya posición Home Assistant tiene que estimar a partir de los tiempos de recorrido.\n\n**Lo que tienes que hacer**: elige una opción. Mientras no se guarde nada no cambia nada, y ninguna persiana se mueve antes de que una pantalla lo anuncie.",
+        "description": "**Pasarela**: {gateway}\n\nDesde aquí se configura la pasarela y se calibran las persianas «sencillas», aquellas cuya posición Home Assistant tiene que estimar a partir de los tiempos de recorrido.\n\n**Lo que tienes que hacer**: elige una opción. No se escribe nada mientras no se guarde, lo que se guarda se aplica al cerrar este diálogo, y ninguna persiana se mueve antes de que una pantalla lo anuncie.",
         "menu_options": {
           "calibrate": "Calibrar una persiana",
           "profiles_covers": "Perfiles y persianas",
@@ -130,7 +130,7 @@
       },
       "profile_actions": {
         "title": "Perfil de persiana",
-        "description": "**Perfil**: «{profile}»\n\nPersianas que lo siguen: {count}.\n\n**Lo que tienes que hacer**: elige qué hacer con él. Ver los valores no cambia nada; modificarlos o eliminar el perfil surte efecto en cuanto cierres este diálogo.",
+        "description": "**Perfil**: «{profile}»\n\nPersianas que lo siguen: {count}.\n\n**Lo que tienes que hacer**: elige qué hacer con él. Ver los valores no cambia nada; modificarlos o eliminar el perfil se escribe enseguida y surte efecto al cerrar este diálogo.",
         "menu_options": {
           "profile_view": "Ver los valores",
           "profile_edit": "Modificar los valores a mano",
@@ -146,7 +146,7 @@
         "title": "Modificar el perfil «{profile}»",
         "description": "**Lo que va a pasar**: los valores de abajo sustituyen a los medidos, para todas las persianas que siguen este perfil. La persiana no se mueve: solo se modifican los valores.\n\n**Lo que tienes que hacer**: corrige solo los valores para los que tengas datos más fiables que la calibración, como los tiempos indicados por el fabricante. Deja los demás valores sin cambios. Los decimales se escriben con coma o con punto.",
         "data": {
-          "reference_height": "Altura de referencia (cm)",
+          "reference_height": "Recorrido de referencia (cm)",
           "opening_time": "Tiempo de apertura (s)",
           "closing_time": "Tiempo de cierre (s)",
           "slat_time": "Tiempo de apertura de las lamas (s)",
@@ -158,13 +158,13 @@
           "opening_time": "Segundos desde completamente cerrada hasta completamente abierta, lamas incluidas (1-600).",
           "closing_time": "Segundos desde completamente abierta hasta completamente cerrada (1-600).",
           "slat_time": "Segundos en los que se abren las lamas antes de que el paño empiece a subir (0-60).",
-          "opening_roll": "Cuánto acelera la subida el paño enrollado: 1 es un eje desnudo, 2 un eje bien cargado (1-5).",
-          "closing_roll": "Lo mismo al bajar (1-5)."
+          "opening_roll": "La relación entre el diámetro del eje con la persiana completamente abierta (eje lleno) y con la persiana completamente cerrada (eje vacío): de 1,5 a 2,5 en la mayoría de las persianas, 1 en un eje cuyo diámetro no cambia (1-5).",
+          "closing_roll": "La misma relación al bajar (1-5)."
         }
       },
       "profile_delete": {
         "title": "¿Eliminar este perfil?",
-        "description": "**Perfil**: «{profile}»\n\n**Lo que va a pasar**: el perfil se elimina y estas {count} persianas vuelven a los valores del archivo de configuración, si lo usas, o a los predeterminados: {covers}\n\nLo que se midió en cada persiana se queda donde está: solo desaparece la descripción del tipo. Si en `cover_profiles:` existe un perfil con el mismo nombre, a partir de ahora vuelve a valer ese.",
+        "description": "**Perfil**: «{profile}»\n\n**Lo que va a pasar**: el perfil se elimina y estas {count} persianas vuelven a los valores del archivo de configuración, si lo usas, o a los predeterminados: {covers}\n\nLo que se midió en cada persiana se queda donde está: solo desaparece la descripción del tipo. Si en `cover_profiles:` existe un perfil con el mismo nombre, deja de estar tapado: las persianas cuyo archivo de configuración lo nombra vuelven a seguirlo, mientras que las persianas a las que el perfil se les asignó solo desde aquí ya no siguen ninguno.",
         "menu_options": {
           "profile_delete_confirm": "Sí, eliminar el perfil",
           "profile_actions": "No, volver atrás"
@@ -172,7 +172,7 @@
       },
       "profile_deleted": {
         "title": "Perfil «{profile}» eliminado",
-        "description": "El perfil ya no está. Persianas que lo seguían y han vuelto a los valores del archivo o a los predeterminados: {count} — {covers}\n\nSi el perfil se ha eliminado por error, repite la medición completa en una persiana de este tipo y asigna el mismo nombre al nuevo perfil."
+        "description": "El perfil ya no está. Persianas que lo seguían y han vuelto a los valores del archivo o a los predeterminados: {count} — {covers}\n\nUn perfil con el mismo nombre en `cover_profiles:` ya no está tapado y vuelve a valer para las persianas cuyo archivo de configuración lo nombra.\n\nSi el perfil se ha eliminado por error, repite la medición completa en una persiana de este tipo y asigna el mismo nombre al nuevo perfil."
       },
       "calibrations": {
         "title": "Calibraciones",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibración de esta persiana",
-        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**Lo que tienes que hacer**: elige qué hacer con ellos. «Medir de nuevo» repite la calibración guiada en esta persiana y sustituye lo que hay; «Eliminar» la devuelve al archivo de configuración, si lo usas.",
+        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**Lo que tienes que hacer**: elige qué hacer con ellos. «Medir de nuevo» repite la calibración guiada en esta persiana y sustituye lo que hay; «Eliminar la calibración» devuelve esta persiana al archivo de configuración, si lo usas, al perfil que sigue, o a los valores predeterminados.",
         "menu_options": {
           "calibration_view": "Ver los valores",
           "calibration_edit": "Modificar los valores a mano",
@@ -226,8 +226,8 @@
           "opening_time": "Segundos desde completamente cerrada hasta completamente abierta, lamas incluidas (1-600).",
           "closing_time": "Segundos desde completamente abierta hasta completamente cerrada (1-600).",
           "slat_time": "Segundos en los que se abren las lamas antes de que el paño empiece a subir (0-60).",
-          "opening_roll": "Cuánto acelera la subida el paño enrollado: 1 es un eje desnudo, 2 un eje bien cargado (1-5).",
-          "closing_roll": "Lo mismo al bajar (1-5)."
+          "opening_roll": "La relación entre el diámetro del eje con la persiana completamente abierta (eje lleno) y con la persiana completamente cerrada (eje vacío): de 1,5 a 2,5 en la mayoría de las persianas, 1 en un eje cuyo diámetro no cambia (1-5).",
+          "closing_roll": "La misma relación al bajar (1-5)."
         }
       },
       "calibration_delete": {
@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Calibración guiada de persianas",
-        "description": "Esta herramienta calibra las persianas «sencillas»: aquellas cuyo actuador no informa de su posición. Para esas, el porcentaje que ves en Home Assistant es una estimación calculada a partir de los tiempos de recorrido; la calibración mide esos tiempos y la geometría del eje, para obtener una estimación más precisa.\n\nNo será perfecta. Cuenta con unos centímetros de desviación: 1-2 cm cerca de los finales de carrera, 2-4 cm entre las posiciones intermedias. Cada apertura o cierre completo vuelve a alinear la estimación, así que el error no se acumula.\n\nLas persianas «avanzadas» informan de su posición por sí solas y no necesitan nada de esto: por eso no aparecen en la lista de los próximos pasos.\n\n**Lo que va a pasar**: elegirás una persiana y una de las tres formas de medirla. La persiana se moverá varias veces hasta sus finales de carrera.\n\n**Lo que tienes que hacer**: ten a mano una cinta métrica, asegúrate de que nada estorbe a la persiana y quédate donde puedas verla. No se guarda nada hasta la última pantalla: puedes cerrar este diálogo cuando quieras y no habrá cambiado nada.",
+        "description": "Esta herramienta calibra las persianas «sencillas»: aquellas cuyo actuador no informa de su posición. Para esas, el porcentaje que ves en Home Assistant es una estimación calculada a partir de los tiempos de recorrido; la calibración mide esos tiempos y la geometría del eje, para obtener una estimación más precisa.\n\nNo será perfecta. Cuenta con unos centímetros de desviación: 1-2 cm cerca de los finales de carrera, 2-4 cm en las posiciones intermedias. Cada apertura o cierre completo vuelve a alinear la estimación, así que el error no se acumula.\n\nLas persianas «avanzadas» informan de su posición por sí solas y no necesitan nada de esto: por eso no aparecen en la lista de los próximos pasos.\n\n**Lo que va a pasar**: elegirás una persiana y una de las tres formas de medirla. La persiana se moverá varias veces hasta sus finales de carrera.\n\n**Lo que tienes que hacer**: ten a mano una cinta métrica, asegúrate de que nada estorbe a la persiana y quédate donde puedas verla. No se guarda nada hasta la última pantalla: puedes cerrar este diálogo cuando quieras y no habrá cambiado nada, y un recorrido ya lanzado llega solo hasta el final de carrera.",
         "menu_options": {
           "cover": "Empezar",
           "init": "Volver al menú"
@@ -269,7 +269,7 @@
       },
       "path_a": {
         "title": "Antes de que la persiana empiece a moverse",
-        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: la calibración está dividida en pasos. En cada paso la persiana hace los movimientos que ese paso necesita, y antes de cada uno llegan las instrucciones y todo el tiempo para prepararse: ningún movimiento medido arranca sin que lo lances tú. Nueve movimientos en total, unos cuatro minutos.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando — una hoja abierta, plantas en el alféizar, gatos — y ten la cinta métrica a mano. Se te pedirá que pulses un botón cuando ocurra algo y que leas unas cuantas distancias.\n\nSi algo sale mal, cada paso se puede repetir por separado, sin rehacer los ya hechos. Puedes interrumpir cuando quieras: no se guarda nada hasta la última pantalla, y los movimientos son comandos normales.",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: la calibración está dividida en pasos. En cada paso la persiana hace los movimientos que ese paso necesita, y antes de cada uno llegan las instrucciones y todo el tiempo para prepararse: ningún movimiento medido arranca sin que lo lances tú. Nueve movimientos en total, unos cuatro minutos.\n\n**Lo que tienes que hacer**: asegúrate de que no haya nada estorbando — una hoja abierta, plantas en el alféizar, gatos — y ten la cinta métrica a mano. Se te pedirá que pulses un botón cuando ocurra algo y que leas unas cuantas distancias.\n\nSi algo sale mal, cada paso se puede repetir por separado, sin rehacer los ya hechos. Puedes cerrar cuando quieras: no se guarda nada hasta la última pantalla, y un recorrido ya lanzado llega solo hasta el final de carrera.",
         "menu_options": {
           "begin": "Entendido, empecemos",
           "cancel_flow": "Cancelar"
@@ -291,10 +291,10 @@
       },
       "refine_scope": {
         "title": "¿Hasta dónde quieres afinar la calibración?",
-        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: o dos recorridos medidos (uno de subida y otro de bajada), o esos más dos lecturas con la cinta.\n\nSolo los tiempos bastan para una persiana cuyo motor es sencillamente más lento o más rápido que aquel en el que se midió el perfil. Añade los coeficientes cuando también se equivoque *a medio recorrido*: ahí no es el motor el que gira distinto, es el paño el que se enrolla distinto.\n\n**Lo que tienes que hacer**: elige hasta dónde llegar. Siempre puedes volver y hacer el resto.",
+        "description": "**Persiana**: {cover}\n\n**Lo que va a pasar**: o tres recorridos medidos (dos de subida y uno de bajada), o esos más tres lecturas con la cinta: el recorrido del paño y una a mitad del recorrido en cada sentido.\n\nSolo los tiempos bastan para una persiana cuyo motor es sencillamente más lento o más rápido que aquel en el que se midió el perfil. Añade los coeficientes cuando también se equivoque *a medio recorrido*: ahí no es el motor el que gira distinto, es el paño el que se enrolla distinto.\n\n**Lo que tienes que hacer**: elige hasta dónde llegar. Siempre puedes volver y hacer el resto.",
         "menu_options": {
           "times_only": "Solo sus tiempos de recorrido (3 pulsaciones, ~2 minutos)",
-          "times_and_rolls": "Sus tiempos y sus coeficientes (3 pulsaciones y 2 lecturas)",
+          "times_and_rolls": "Sus tiempos y sus coeficientes (3 pulsaciones y 3 lecturas)",
           "cancel_flow": "Cancelar"
         }
       },
@@ -467,17 +467,17 @@
           "measured_cm": "Altura del borde inferior (cm)"
         },
         "data_description": {
-          "measured_cm": "Se esperan unos {expected} cm; dentro de {tolerance} cm todo es normal. Los decimales se escriben con coma o con punto."
+          "measured_cm": "Se esperan unos {expected} cm; cualquier valor dentro de {tolerance} cm de {expected} es completamente normal. Los decimales se escriben con coma o con punto."
         }
       },
       "measure_ascent": {
         "title": "Mide {cover} — al {percent}% de la subida",
-        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha cerrado completamente y luego se ha subido las lamas más alrededor del {percent}% de su recorrido.\n\n**Lo que tienes que hacer**: mide desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. Una persiana no está cargada igual al subir que al bajar: por eso la misma fracción se mide dos veces.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha cerrado completamente y luego se ha subido: primero se han abierto las lamas, después el paño ha recorrido alrededor del {percent}% de su recorrido.\n\n**Lo que tienes que hacer**: mide desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. Una persiana no está cargada igual al subir que al bajar: por eso la misma fracción se mide dos veces.",
         "data": {
           "measured_cm": "Altura del borde inferior (cm)"
         },
         "data_description": {
-          "measured_cm": "Se esperan unos {expected} cm; dentro de {tolerance} cm todo es normal. Los decimales se escriben con coma o con punto."
+          "measured_cm": "Se esperan unos {expected} cm; cualquier valor dentro de {tolerance} cm de {expected} es completamente normal. Los decimales se escriben con coma o con punto."
         }
       },
       "measure_verify": {
@@ -487,7 +487,7 @@
           "measured_cm": "Altura del borde inferior (cm)"
         },
         "data_description": {
-          "measured_cm": "Se esperan unos {expected} cm; dentro de {tolerance} cm todo es normal. Los decimales se escriben con coma o con punto."
+          "measured_cm": "Se esperan unos {expected} cm; cualquier valor dentro de {tolerance} cm de {expected} es completamente normal. Los decimales se escriben con coma o con punto."
         }
       },
       "tape_result": {
@@ -524,16 +524,16 @@
       },
       "summary_basic": {
         "title": "Lo que se ha medido",
-        "description": "**Persiana**: {cover}\n\n**Recorrido del paño**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\nLa precisión todavía no se ha comprobado. Con «Mejorar la precisión» se miden cuatro puntos más y se ve la desviación en centímetros.\n\n**Lo que tienes que hacer**: guarda, o continúa con cuatro lecturas más con la cinta. Llevará unos dos minutos.",
+        "description": "**Persiana**: {cover}\n\n**Recorrido del paño**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones. Se escriben al guardar y la persiana empieza a usarlos al cerrar este diálogo, en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\nLa precisión todavía no se ha comprobado. Con «Mejorar la precisión» se miden cuatro puntos más, a un cuarto y a tres cuartos del recorrido en cada sentido, y luego el modelo se pone a prueba con una quinta lectura tomada donde no se ha calculado nada.\n\n**Lo que tienes que hacer**: guarda, o continúa con cinco lecturas más con la cinta. Llevará unos dos minutos.",
         "menu_options": {
           "save": "Guardar",
-          "refine": "Mejorar la precisión (~2 minutos, 4 lecturas más)",
+          "refine": "Mejorar la precisión (~2 minutos, 5 lecturas más)",
           "cancel_flow": "Cancelar sin guardar nada"
         }
       },
       "summary_short": {
         "title": "Lo que se ha medido",
-        "description": "**Persiana**: {cover}\n\n**Recorrido del paño**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Qué se sustituye y qué se queda**: al guardar se escriben {replacing}, y todo lo demás que ya está guardado para esta persiana se queda como está: {keeping}.\n\n**Lo que tienes que hacer**: guarda, o sal sin guardar nada.",
+        "description": "**Persiana**: {cover}\n\n**Recorrido del paño**: {height}\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones. Se escriben al guardar y la persiana empieza a usarlos al cerrar este diálogo, en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Qué se sustituye y qué se queda**: al guardar se escriben {replacing}, y todo lo demás que ya está guardado para esta persiana se queda como está: {keeping}.\n\n**Lo que tienes que hacer**: guarda, o sal sin guardar nada.",
         "menu_options": {
           "save": "Guardar",
           "cancel_flow": "Cancelar sin guardar nada"
@@ -541,7 +541,7 @@
       },
       "summary_precise": {
         "title": "Lo que se ha medido",
-        "description": "**Persiana**: {cover}\n\n**Recorrido del paño**: {height}\n**Precisión**: dentro de {accuracy}, comprobada al {percent}%\n\nLa precisión es la distancia entre donde el modelo coloca el borde inferior y donde la cinta lo ha encontrado de verdad, medida en una posición sobre la que no se ha hecho ningún cálculo.\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones, y desde ese momento la persiana los usa en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Lo que tienes que hacer**: guarda.",
+        "description": "**Persiana**: {cover}\n\n**Recorrido del paño**: {height}\n**Precisión**: dentro de {accuracy}\n\nLa precisión es la mayor distancia entre donde el modelo coloca el borde inferior y donde la cinta lo ha encontrado de verdad, sobre las seis lecturas con las que se ha calculado el modelo. La comprobación al {percent}% de la bajada — una posición sobre la que no se ha calculado nada — se mostró en la pantalla anterior.\n\n**Dónde acaban estos valores**: si guardas, se quedan dentro de Home Assistant, aquí en Configurar → Calibraciones. Se escriben al guardar y la persiana empieza a usarlos al cerrar este diálogo, en lugar de los del archivo de configuración, si lo usas. Desde esa misma pantalla puedes volver a verlos, corregirlos a mano o borrarlos en cualquier momento.\n\nSi prefieres escribirlos tú mismo en el archivo, abajo está el fragmento equivalente: cópialo antes de cerrar, porque sin guardar no se conserva nada.\n\n{yaml}\n**Lo que tienes que hacer**: guarda.",
         "menu_options": {
           "save": "Guardar",
           "cancel_flow": "Cancelar sin guardar nada"
@@ -549,7 +549,7 @@
       },
       "saved": {
         "title": "Calibración guardada",
-        "description": "Hecho: la calibración de {cover} está guardada y ya en uso. A partir de ahora {cover} se mueve con los valores recién medidos sobre ella; los encuentras entre los atributos de la entidad, en «Calibration source».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}», medido en esta persiana, en Configurar → Perfiles y persianas. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar. Las demás persianas parecidas a esta se hacen en dos pantallas eligiendo «(B) Es parecida a una persiana ya medida».",
+        "description": "Hecho: la calibración de {cover} está guardada y se aplica al cerrar este diálogo; a partir de ese momento {cover} se mueve con los valores recién medidos sobre ella. Los atributos de la entidad dicen entonces `guided` en «Calibration source», y llevan los números en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}», medido en esta persiana, en Configurar → Perfiles y persianas. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar. Las demás persianas parecidas a esta se hacen en dos pantallas eligiendo «(B) Es parecida a una persiana ya medida».",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -557,7 +557,7 @@
       },
       "saved_profile": {
         "title": "Calibración guardada",
-        "description": "Hecho: {cover} ahora sigue el perfil «{profile}» y ya lo está usando. Aquí no se ha cronometrado ningún recorrido suyo: lo único medido en esta persiana es su altura, y los tiempos del perfil se ajustan a ella. El resultado lo encuentras entre los atributos de la entidad, en «Calibration source».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}» en Configurar → Perfiles y persianas, donde lo comparten todas las persianas que lo siguen. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: dar el mismo perfil a otra persiana, o cerrar. Si {cover} acaba parándose en el sitio equivocado, «(C) Tiene un perfil pero se para en el sitio equivocado» mide sus propios tiempos de recorrido.",
+        "description": "Hecho: {cover} ahora sigue el perfil «{profile}», y lo sigue desde que se cierre este diálogo. Aquí no se ha cronometrado ningún recorrido suyo: lo único medido en esta persiana es su altura, y los tiempos del perfil se ajustan a ella. Los atributos de la entidad dicen entonces `profile {profile}` en «Calibration source», y los números están en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}» en Configurar → Perfiles y persianas, donde lo comparten todas las persianas que lo siguen. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: dar el mismo perfil a otra persiana, o cerrar. Si {cover} acaba parándose en el sitio equivocado, «(C) Tiene un perfil pero se para en el sitio equivocado» mide sus propios tiempos de recorrido.",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -565,7 +565,7 @@
       },
       "saved_refined": {
         "title": "Calibración guardada",
-        "description": "Hecho: la calibración de {cover} está guardada y ya en uso. {cover} continúa siguiendo el perfil «{profile}», y lo que se acaba de medir en esta persiana sola ahora tiene preferencia sobre él; todo lo que aquí no se ha medido sigue viniendo del perfil. El resultado lo encuentras entre los atributos de la entidad, en «Calibration source».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, donde puedes volver a ver los valores, corregirlos a mano o borrarlos. El perfil no se ha tocado: las demás persianas que lo siguen quedan como están.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar.",
+        "description": "Hecho: la calibración de {cover} está guardada y se aplica al cerrar este diálogo. {cover} continúa siguiendo el perfil «{profile}», y lo que se acaba de medir en esta persiana sola ahora tiene preferencia sobre él; todo lo que aquí no se ha medido sigue viniendo del perfil. Los atributos de la entidad dicen entonces `guided` en «Calibration source», y los números están en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, donde puedes volver a ver los valores, corregirlos a mano o borrarlos. El perfil no se ha tocado: las demás persianas que lo siguen quedan como están.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar.",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -605,7 +605,7 @@
       },
       "problem_no_echo": {
         "title": "La persiana no ha respondido",
-        "description": "**Persiana**: {cover}\n\nEl comando ha llegado al bus pero el actuador no ha señalado nunca haberse puesto en marcha, así que no hay ningún instante respecto al que medir y el paso se ha abandonado.\n\n**La persiana podría seguir en movimiento**: el comando ha salido de verdad, así que lo más probable es que el motor haya arrancado. Justo después del error se ha enviado una parada, pero si la persiana sigue andando, párala tú antes de repetir el paso.\n\n**Lo que tienes que hacer**: comprueba que la persiana no esté atascada, que nadie más (un pulsador de pared, una automatización) la esté reteniendo, y repite el paso. Si pasa cada vez, este actuador no informa de su propio estado y la calibración guiada no puede medirlo.",
+        "description": "**Persiana**: {cover}\n\nEl comando ha llegado al bus pero el actuador no ha señalado nunca haberse puesto en marcha, así que no hay ningún instante respecto al que medir y el paso se ha abandonado.\n\n**La persiana podría seguir en movimiento**: el comando ha salido de verdad, así que lo más probable es que el motor haya arrancado. Justo después del error se ha enviado una parada, pero si la persiana sigue andando, párala tú antes de repetir el paso.\n\n**Lo que tienes que hacer**: comprueba que la persiana no esté atascada y repite el paso. Si pasa cada vez, este actuador no informa de su propio estado y la calibración guiada no puede medirlo.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"
@@ -613,7 +613,7 @@
       },
       "problem_not_delivered": {
         "title": "El comando no ha llegado nunca al bus",
-        "description": "La pasarela ni ha escrito nuestro comando ni ha dicho haber renunciado a él, así que a {cover} no se le ha pedido nunca que se moviera y no se ha medido nada.\n\n**Lo que tienes que hacer**: comprueba que la pasarela esté conectada — lo dice la página de la integración — y repite el paso.",
+        "description": "La pasarela nunca ha escrito nuestro comando en el bus — no lo ha aceptado, lo ha descartado, o nunca ha dicho qué ha sido de él — así que a {cover} no se le ha pedido nunca que se moviera y no se ha medido nada.\n\n**Lo que tienes que hacer**: comprueba que la pasarela esté conectada — lo dice la página de la integración — y repite el paso.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"
@@ -645,7 +645,7 @@
       },
       "problem_timeout": {
         "title": "No se ha pulsado nada a tiempo",
-        "description": "Esta pantalla espera alrededor de un minuto y medio la pulsación de la que habla, mucho más de lo que tarda cualquier persiana en hacer su recorrido. Pasado ese límite la pulsación ya no mide nada, por lo que se ha descartado por no ser válida.\n\n**Lo que tienes que hacer**: repite el paso y esta vez pulsa en cuanto la persiana haga lo que la pantalla describe.",
+        "description": "Esta pantalla espera alrededor de un minuto y medio la pulsación de la que habla, y en ese tiempo no se ha pulsado nada. No queda ningún instante desde el que medir, así que el paso se ha abandonado en lugar de calcularse sobre una pulsación llegada después.\n\n**Lo que tienes que hacer**: repite el paso y esta vez pulsa en cuanto la persiana haga lo que la pantalla describe.",
         "menu_options": {
           "repeat_step": "Repetir este paso",
           "cancel_flow": "Cancelar"
