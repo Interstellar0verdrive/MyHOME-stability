@@ -700,6 +700,93 @@ FORBIDDEN_ITALIAN: dict[str, str] = {
 }
 
 
+# ------------------------------------------------------------------- the lexicon
+# The words the lexicon of 13 September struck out, per language, with what they were
+# replaced by. They are checked against the `options` block alone - the screens of the
+# dialog and the forms around them - because that is what the lexicon is about; the
+# `services` descriptions and the entity names are prose about the actions and have
+# their own vocabulary.
+#
+# Only unambiguous terms are here. "altezza"/"height" is not, and cannot be: the word
+# is right for the height of the bottom edge above its rest, which three reading forms
+# ask for, and wrong for the distance between the end stops, which is the curtain
+# travel - a substring test cannot tell the two apart, and a test that forbade the word
+# outright would forbid the screens that need it.
+FORBIDDEN_BY_THE_LEXICON: dict[str, dict[str, str]] = {
+    "en": {
+        "basic level": 'the first level is the "basic calibration"',
+        "precise level": 'the second level is the "thorough calibration"',
+        "refine": 'path C is the "correction"; the level it offers is the thorough calibration',
+        "improve the accur": '"Continue with the thorough calibration"',
+        "rescaled": '"scaled", or "adjusted" where a profile is adapted to a cover',
+    },
+    "it": {
+        "livello base": 'il primo livello è la "calibrazione base"',
+        "livello preciso": 'il secondo livello è la "calibrazione approfondita"',
+        "affin": 'il percorso C è la "correzione"; il livello che offre è quello approfondito',
+        "migliora la precis": '"Continua con la calibrazione approfondita"',
+        "riadatt": '"adattato": il profilo viene adattato alla tapparella, non riadattato',
+        "taratura": '"calibrazione" per tutta la funzione',
+    },
+    "fr": {
+        "calibrage": '"la calibration" partout, y compris pour les deux niveaux',
+        "affin": 'le chemin C est la "correction"',
+        "niveau précis": '"la calibration approfondie"',
+        "réadapt": '"adapté" / "ajusté"',
+    },
+    "nl": {
+        "basisniveau": '"basiskalibratie"',
+        "nauwkeurig niveau": '"uitgebreide kalibratie"',
+        "verfijn": 'pad C is de "correctie"',
+        "herschaal": '"geschaald" / "aangepast"',
+    },
+    "es": {
+        "nivel básico": '"calibración básica"',
+        "nivel preciso": '"calibración detallada"',
+        "afina": 'la vía C es la "corrección"',
+        "reescalad": '"escalado" / "ajustado"',
+    },
+    "de": {
+        "basisstufe": '"Basis-Kalibrierung"',
+        "genaue stufe": '"erweiterte Kalibrierung"',
+        "verfeiner": 'Weg C ist die "Korrektur"',
+        "neu skaliert": '"umgerechnet" / "angepasst"',
+    },
+    "pt": {
+        "nível básico": '"calibração básica"',
+        "nível preciso": '"calibração aprofundada"',
+        "afina": 'o caminho C é a "correção"',
+        "reescalad": '"ajustado"',
+    },
+}
+FORBIDDEN_BY_THE_LEXICON["strings"] = FORBIDDEN_BY_THE_LEXICON["en"]
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_screen_says_a_word_the_lexicon_struck_out(path: Path) -> None:
+    """One word per concept, in eight files, after two renamings that went half way.
+
+    The second level was "il livello preciso", then "affina", then "migliora la
+    precisione", each on a different screen and each in seven languages; path C was
+    "affina la calibrazione" on one screen and "la correzione" on the next. The sweep
+    of 13 September settled all of it, and this is what keeps the next text review from
+    reintroducing one of them on the one screen nobody rereads.
+
+    Mutation caught: any struck-out term coming back into any `options` text, in any
+    language - the menu labels and the field names included.
+    """
+    forbidden = FORBIDDEN_BY_THE_LEXICON[path.stem]
+    offences = [
+        (key, word, instead)
+        for key, text in flatten(options_block(path)).items()
+        for word, instead in forbidden.items()
+        if word in text.lower()
+    ]
+    assert not offences, "\n".join(
+        f"{path.name}: {key}: {word!r} - say {instead}" for key, word, instead in offences
+    )
+
+
 # One "finestra" is a window of time and not a hole in a wall: the label of the probe
 # window, in the connection form, which has nothing to do with shutters.
 EXEMPT_FROM_THE_ITALIAN_RULES = {"options.step.gateway.data.probe_window_sec"}
