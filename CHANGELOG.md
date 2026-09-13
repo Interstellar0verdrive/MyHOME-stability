@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-13
+
 A basic shutter can now be calibrated from a dialog instead of from a stopwatch, a
 tape measure and two action calls. **Settings → Devices & services → MyHOME →
 Configure → "Calibrate a cover"** drives the shutter, times its runs from the
@@ -1147,7 +1149,8 @@ Baseline release of this fork (branched from `anotherjulien/MyHOME` via
 the YAML, quieter power-sensor logging, discovery refinements, and assorted Home Assistant
 compatibility fixes.
 
-[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/Interstellar0verdrive/MyHOME-stability/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.5.0
 [0.4.5]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.5
 [0.4.4]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.4
 [0.4.3]: https://github.com/Interstellar0verdrive/MyHOME-stability/releases/tag/v0.4.3
