@@ -2521,11 +2521,15 @@ async def test_the_screens_that_need_a_profile_go_back_when_there_is_none_left(
         assert (await flow.async_step_path_c())["step_id"] == "path"
         assert (await flow.async_step_pick_profile())["step_id"] == "profiles_covers"
         # The two refusal screens are reachable as steps of their own, which is what
-        # the translations are checked against.
-        assert (await flow.async_step_refused_unknown_cover())["step_id"] == "refused_unknown_cover"
-        assert (await flow.async_step_refused_already_calibrating())[
-            "step_id"
-        ] == "refused_already_calibrating"
+        # the translations are checked against. Both are given the shutter's name:
+        # a text that used it and was not given it is replaced *in full* by
+        # "[formatjs Error: MISSING_VALUE]", so the whole screen is lost to one brace.
+        refused = await flow.async_step_refused_unknown_cover()
+        assert refused["step_id"] == "refused_unknown_cover"
+        assert "cover" in refused["description_placeholders"]
+        refused = await flow.async_step_refused_already_calibrating()
+        assert refused["step_id"] == "refused_already_calibrating"
+        assert "cover" in refused["description_placeholders"]
         assert result["step_id"] == "init"
 
 

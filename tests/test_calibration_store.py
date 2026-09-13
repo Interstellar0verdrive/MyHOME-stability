@@ -15,6 +15,7 @@ there is one), and last what the validator already resolved.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -481,8 +482,10 @@ def test_a_profile_carries_one_slat_time_and_no_second_one() -> None:
     model ever learn the distinction, the key comes back with the code that uses it.
 
     Mutation caught: reintroducing a second slat time in the stored schema without a
-    reader for it.
+    reader for it - as a key of the built profile, or as a parameter of the builder,
+    which is where it came back from the last time.
     """
+    assert "closing_slat_time" not in inspect.signature(cover_profile_data).parameters
     data = cover_profile_data(
         "tall",
         reference_height=195.0,
