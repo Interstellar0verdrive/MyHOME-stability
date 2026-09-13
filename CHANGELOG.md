@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 A basic shutter can now be calibrated from a dialog instead of from a stopwatch, a
 tape measure and two action calls. **Settings → Devices & services → MyHOME →
-Configure → "Calibrate a shutter"** drives the shutter, times its runs from the
+Configure → "Calibrate a cover"** drives the shutter, times its runs from the
 actuator's own status frames, asks for three tape readings and stores the result
 where the shutter reads it. Nothing changes for a cover that is not calibrated this
 way, and nothing is ever written to `myhome.yaml`.

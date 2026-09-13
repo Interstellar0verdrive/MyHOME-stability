@@ -738,7 +738,7 @@ incoming frames, so both directions stay consistent.
 ### Calibrating a shutter in centimetres
 
 > **There is a dialog that does all of this for you.** Since 0.5.0,
-> **Settings → Devices & services → MyHOME → Configure → "Calibrate a shutter"**
+> **Settings → Devices & services → MyHOME → Configure → "Calibrate a cover"**
 > drives the shutter, times the runs from the actuator's own status frames, asks
 > for the same centimetres and stores the model itself — no stopwatch, no action
 > calls, no pasting. It is the recommended way for a basic cover: see

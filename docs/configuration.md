@@ -78,7 +78,7 @@ card and enter the current OpenWebNet password.
 ### Options
 
 Since **0.5.0** **Settings → Devices & services → MyHOME → Configure** opens a
-menu rather than a form: **"Calibrate a shutter"**, **"Profiles and shutters"** and
+menu rather than a form: **"Calibrate a cover"**, **"Profiles and covers"** and
 **"Calibrations"** are the [guided calibration](guided-calibration.md) and what it
 stores, and **"Gateway and connection"** is the form that used to be there, with
 the same fields. Everything below is that form.
@@ -271,12 +271,13 @@ for that shutter, if it measured one, and a profile assigned to it from that sam
 dialog. The full order, per key, highest first:
 
 1. the values the guided calibration stored **for that cover** — a measurement of
-   that one cover (path A, or "Affina la calibrazione"), removable in one click;
-2. a profile **assigned** to the cover — from **Configura → Profili e tapparelle**,
-   or chosen with "È simile a una tapparella già misurata" — scaled to the cover's
-   height. Assigning a profile this way is a statement about that cover made after
-   the configuration file was written, so it is used **instead of** the keys the
-   file writes for that cover;
+   that one cover (path A, or "(C) It has a profile but stops in the wrong place"),
+   removable in one click;
+2. a profile **assigned** to the cover — from **Configure → Profiles and covers**,
+   or chosen with "(B) It is similar to a cover already measured" — scaled to the
+   cover's height. Assigning a profile this way is a statement about that cover made
+   after the configuration file was written, so it is used **instead of** the keys
+   the file writes for that cover;
 3. the key as written for that cover here, in the configuration file (including
    what the file implies: `roll:` stands for both directional rolls,
    `opening_time:` for `closing_time:`). A `profile:` the file itself gives the
@@ -294,8 +295,8 @@ profile of the same name wins, with one warning in the log per name.
 
 Nothing of an assigned profile is copied into the cover's stored calibration: only
 the name, the flag and the height are. Correcting the profile afterwards — in
-`cover_profiles:` or from **Configura → Profili e tapparelle → Modifica i
-valori** — reaches every cover that follows it at the next reload, scaled to each
+`cover_profiles:` or from **Configure → Profiles and covers → Edit the values by
+hand** — reaches every cover that follows it at the next reload, scaled to each
 one's own height. Deleting the assignment leaves the height and any measurement
 alone; the cover goes back to what the file says.
 
@@ -586,7 +587,7 @@ is a validation error, and the message lists the names that are defined.
 A profile can also be **measured** rather than written: path A of the
 [guided calibration](guided-calibration.md) ends by naming one, and it is then kept
 in the integration's own storage instead of in this file, assigned to the other
-shutters from **Configure → Profiles and shutters**. The two kinds share one
+shutters from **Configure → Profiles and covers**. The two kinds share one
 namespace: a stored profile of the same name shadows a `cover_profiles:` entry —
 the entry in the file is never touched, and applies again the moment the stored one
 is deleted.
@@ -654,7 +655,7 @@ own — either with its own keys, or with a second profile.
 ### Guided calibration (recommended)
 
 Since **0.5.0** none of the measurements below has to be taken by hand. **Settings
-→ Devices & services → MyHOME → Configure → "Calibrate a shutter"** opens a dialog
+→ Devices & services → MyHOME → Configure → "Calibrate a cover"** opens a dialog
 that drives the shutter, times the runs from the actuator's own status frames,
 takes the centimetres you read off a tape and stores the model where it beats the
 configuration file. It measures the same things the sections below describe — the

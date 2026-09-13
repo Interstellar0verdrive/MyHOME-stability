@@ -144,9 +144,9 @@ way down and too high on the way up. See
 
 **The guided calibration will not measure a shutter:**
 
-The dialog under *Configure → "Calibrate a shutter"* times a run from the
+The dialog under *Configure → "Calibrate a cover"* times a run from the
 actuator's own "moving" status, so it needs the shutter to report that it has
-started. When it does not, the step stops with *"the shutter did not answer"*; when
+started. When it does not, the step stops with *"the cover did not answer"*; when
 the gateway never wrote the frame at all, with *"the command never reached the
 bus"*. Check that nothing else is driving the shutter — a wall pushbutton, an
 automation, another dialog — and repeat the step. If it fails every time, that
