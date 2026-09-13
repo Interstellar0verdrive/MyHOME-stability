@@ -636,7 +636,14 @@ class CalibrationManagementMixin(CalibrationContextMixin):
             for label, unique_id in fields.items():
                 chosen = user_input.get(label, NO_PROFILE)
                 profile = None if chosen == NO_PROFILE else str(chosen)
-                if profile == self._assigned_profile(unique_id):
+                current = self._assigned_profile(unique_id)
+                # The second half is the window that follows a profile the select
+                # cannot offer, because the *file* called that profile like the
+                # sentinel: the row opens on "Nessun profilo" for want of anything else
+                # to show, so submitting the form untouched must not be read as an
+                # instruction to take the assignment away. Such a profile can only be
+                # given from path B, and only ever taken back from "Calibrazioni".
+                if profile == current or (profile is None and current == NO_PROFILE):
                     # This row was left as it was. Collecting it anyway wrote a record
                     # for every shutter the form had ever shown - stamped `guided`,
                     # listed under "Calibrazioni" as something measured, and (with a

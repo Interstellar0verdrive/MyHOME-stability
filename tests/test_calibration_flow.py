@@ -2962,6 +2962,74 @@ async def test_clearing_every_field_by_hand_deletes_the_record(
         assert the_store(hass, entry).raw_covers == {}
 
 
+# A `myhome.yaml` that calls one of its profiles exactly like the select's sentinel.
+# The dialog refuses that name (`test_a_profile_may_not_be_named_like_the_no_profile_option`),
+# so the file is the only door it can come through - and since 0.5.0 the sentinel is
+# spelled `no_profile` rather than `__none__`, which is a name somebody might write.
+SENTINEL_NAME_YAML = (
+    YAML
+    + f"""  cover_profiles:
+    {NO_PROFILE}:
+      reference_height: {HEIGHT}
+      opening_time: {OPENING}
+      closing_time: {CLOSING}
+      slat_time: {SLAT}
+      roll: {ROLL_DOWN}
+"""
+)
+
+
+async def test_a_profile_named_like_the_sentinel_is_not_taken_away_by_a_glance(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The select cannot show it, so submitting the form untouched must not undo it.
+
+    Path B offers every profile the gateway knows, so a cover really can end up
+    following one the file called `no_profile`. The assignment select then has no
+    option that means it: the row opens on "Nessun profilo" because there is nothing
+    else to show. Reading that back as a choice turned a screen the user had only
+    looked at into an explicit "no profile" written over a real assignment, and
+    reloaded the gateway to do it - the very thing the unchanged-row guard exists to
+    prevent (review BUG-2). Taking that assignment back is still possible, from
+    "Calibrazioni".
+
+    The sentinel is also kept out of the list of names, or the dropdown would offer it
+    twice: once as itself and once as "Nessun profilo".
+
+    Mutation caught: comparing the submitted row against `_assigned_profile` alone, or
+    building the options from every profile the gateway knows.
+    """
+    async with calibrating(
+        hass,
+        tmp_path,
+        SENTINEL_NAME_YAML,
+        calibration={
+            "profiles": {},
+            "covers": {
+                UNIQUE_ID: {
+                    CONF_PROFILE: NO_PROFILE,
+                    CONF_PROFILE_WINS: True,
+                    "source": "guided",
+                }
+            },
+        },
+    ) as (entry, _commands):
+        with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+            result = await _assignment_form(hass, entry)
+            options = result["data_schema"].schema[COVER_NAME].config["options"]
+            assert options == [NO_PROFILE]
+            assert _suggested(result, COVER_NAME) == NO_PROFILE
+
+            result = await submit(hass, result, {COVER_NAME: NO_PROFILE})
+            assert result["step_id"] == "profiles_covers"
+            assert the_store(hass, entry).calibration(UNIQUE_ID).profile == NO_PROFILE
+
+            result = await choose(hass, result, "init")
+            await choose(hass, result, "finish")
+            await hass.async_block_till_done()
+        assert reload.call_count == 0
+
+
 async def test_a_profile_may_not_be_named_like_the_no_profile_option(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
