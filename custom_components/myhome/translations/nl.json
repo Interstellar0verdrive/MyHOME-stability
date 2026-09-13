@@ -706,6 +706,283 @@
       }
     }
   },
+  "config_panel": {
+    "common": {
+      "loading": "Laden…",
+      "gateway": "Gateway {gateway}",
+      "search": "Zoek een rolluik",
+      "room_filter": "Filteren op ruimte",
+      "all_rooms": "Alle ruimtes",
+      "opens_configure": "Hiermee gaat het dialoogvenster Configureren open. Bij het sluiten werkt het paneel zichzelf bij.",
+      "not_loaded": "Deze gateway is niet geladen, dus valt er hier nog niets te lezen.",
+      "action": {
+        "menu": "Open het menu van Home Assistant",
+        "configure": "Configureren openen",
+        "close": "Sluiten",
+        "cancel": "Annuleren",
+        "back": "Terug",
+        "save": "Opslaan",
+        "show_all": "Toon alle waarden, ook de rolcoëfficiënten",
+        "hide_all": "Verberg de rolcoëfficiënten"
+      },
+      "unit": {
+        "seconds": "s",
+        "centimetres": "cm"
+      }
+    },
+    "firstrun": {
+      "title": "Nog geen profiel",
+      "body": "Een profiel beschrijft een type rolluik: hoe lang het erover doet, hoe lang de lamellen duren en hoe het pantser op de rol wikkelt. Elk rolluik kan er een volgen, en Home Assistant past het aan de eigen loopafstand aan.",
+      "how": "Een profiel wordt niet geschreven maar gemeten. Kies één representatief rolluik en meet het eenmalig, met de begeleide kalibratie: ongeveer drie minuten. Soortgelijke rolluiken kunnen het daarna volgen.",
+      "action": {
+        "measure": "Meet een rolluik"
+      },
+      "note": "Hiermee gaat het dialoogvenster Configureren open: daar wordt gemeten. Daarna verschijnt het profiel hier."
+    },
+    "overview": {
+      "title": "Profielen en rolluiken",
+      "summary": "Op deze gateway staan {profiles} profielen en {covers} eenvoudige rolluiken.",
+      "explanation": "Een profiel beschrijft een type rolluik: hoe lang het erover doet, hoe lang de lamellen duren en hoe het pantser op de rol wikkelt. Elk rolluik kan er een volgen, en Home Assistant past het aan de eigen loopafstand aan.",
+      "group": {
+        "profile": "Profiel “{profile}”",
+        "no_profile": "Zonder profiel",
+        "no_profile_note": "Waarden uit het configuratiebestand, of de standaardwaarden. Dat is geen fout: een rolluik met eigen metingen staat hier prima.",
+        "values": "Referentieloopafstand {travel} cm · stijging {opening} s · daling {closing} s · lamellen {slat} s",
+        "measured_on": "Gemeten op {cover} · {date}",
+        "provenance_missing": "Waar het gemeten is, staat niet vast.",
+        "count": "{count} rolluiken",
+        "count_one": "1 rolluik",
+        "empty": "Geen rolluik in deze groep.",
+        "open": "Open de profielkaart"
+      },
+      "cover": {
+        "travel": "loopafstand {travel} cm",
+        "travel_unknown": "loopafstand niet opgegeven",
+        "travel_needed": "loopafstand nog in te vullen",
+        "follows": "volgt “{profile}”",
+        "profile_missing": "Het profiel “{profile}” bestaat niet meer: dit rolluik draait op zijn eigen configuratie.",
+        "from_file": "Dit profiel wordt door het configuratiebestand toegewezen: het wordt daar gewijzigd, niet hier."
+      },
+      "no_basic_covers": "Alle rolluiken van deze gateway melden hun stand zelf: er is geen loopmodel te kalibreren en hier valt niets te doen."
+    },
+    "assign": {
+      "handle": "Verplaats {cover} naar een andere groep of wijzig de volgorde",
+      "handle_hint": "Sleep om toe te wijzen of te herordenen, Enter om uit een lijst te kiezen",
+      "drop_zone": "Uit het profiel halen — hier loslaten",
+      "armed": "Tik op de doelgroep voor “{cover}”",
+      "target_profile": "het profiel “{profile}”",
+      "target_none": "“Zonder profiel”",
+      "announce": {
+        "armed": "Tik op de doelgroep.",
+        "pending": "“{cover}” staat in de wacht, naar {target}. Er is nog niets weggeschreven.",
+        "withdrawn": "“{cover}” gaat terug naar waar het stond: wijziging ingetrokken.",
+        "reordered": "Volgorde bijgewerkt: die wordt onthouden.",
+        "drag_cancelled": "Slepen geannuleerd.",
+        "discarded": "Alle wachtende wijzigingen zijn verworpen.",
+        "applying": "De wijzigingen worden toegepast.",
+        "missing_travel": "Van sommige rolluiken ontbreekt de loopafstand."
+      },
+      "action": {
+        "withdraw": "Deze wijziging intrekken",
+        "discard_all": "Alles verwerpen",
+        "review": "Nakijken en bevestigen",
+        "review_hint": "De toewijzingen nakijken en bevestigen"
+      },
+      "pending": {
+        "count": "{count} wachtende wijzigingen — er is nog niets weggeschreven",
+        "count_one": "1 wachtende wijziging — er is nog niets weggeschreven",
+        "route": "{from} → {to}",
+        "all_own": "Alle waarden zijn eigen: er verandert niets",
+        "some_own": "Eigen waarden: die blijven"
+      }
+    },
+    "review": {
+      "title": "Nakijken en bevestigen",
+      "intro": "De wijzigingen worden in één keer weggeschreven. Voor elk rolluik is dit wat het echt gaat gebruiken: de waarden van het profiel omgerekend naar de eigen loopafstand.",
+      "travel": {
+        "title": "Hoe ver loopt het pantser van deze rolluiken?",
+        "hint": "Een profiel is de meting van één rolluik met een bepaalde loopafstand, en het wordt naar de andere omgerekend. Van deze is de loopafstand niet bekend: meet de afstand die de onderrand aflegt van helemaal dicht tot helemaal open, en schrijf die in centimeters (decimalen met een komma of met een punt).",
+        "label": "Loopafstand van het pantser",
+        "aria": "Loopafstand van het pantser in centimeters",
+        "placeholder": "bv. 145",
+        "required": "De loopafstand is nodig, in centimeters."
+      },
+      "before": "Voor",
+      "after": "Na",
+      "note": {
+        "all_own": "Het heeft voor alles eigen waarden: er verandert niets. Het profiel zou alleen gelden voor waarden die later worden weggehaald.",
+        "some_own": "Het heeft enkele eigen waarden: die blijven. Alleen de geërfde waarden veranderen.",
+        "scaled": "Waarden van profiel “{profile}” (gemeten op {reference} cm) omgerekend naar een loopafstand van {travel} cm.",
+        "back_to_file": "De waarden uit het configuratiebestand komen terug. De loopafstand en elke eigen waarde blijven.",
+        "back_to_defaults": "De standaardwaarden komen terug: de stand in procent wordt een ruwe schatting. De loopafstand en elke eigen waarde blijven."
+      },
+      "action": {
+        "back": "Terug naar het overzicht",
+        "confirm": "Bevestig {count} toewijzingen",
+        "confirm_one": "Bevestig 1 toewijzing",
+        "missing_travel": "{count} loopafstanden ontbreken",
+        "missing_travel_one": "1 loopafstand ontbreekt"
+      }
+    },
+    "dialog": {
+      "title": "Welk profiel?",
+      "subtitle": "“{cover}” — de keuze blijft in de wacht tot ze bevestigd wordt.",
+      "option": {
+        "profile": "Profiel “{profile}”",
+        "profile_meta": "{travel} cm · stijging {opening} s · daling {closing} s",
+        "none": "Geen profiel",
+        "none_meta": "Waarden uit het configuratiebestand, of de standaardwaarden. De loopafstand en de eigen waarden blijven.",
+        "current": "huidig"
+      }
+    },
+    "toast": {
+      "assigned": "{count} toewijzingen toegepast",
+      "assigned_one": "1 toewijzing toegepast",
+      "order_saved": "De nieuwe volgorde wordt onthouden.",
+      "values_saved": "De waarden van “{cover}” zijn opgeslagen: ze gaan boven het profiel en het bestand.",
+      "measure_removed": "Meting verwijderd: “{cover}” gebruikt nu {destination}.",
+      "profile_saved": "Profiel “{profile}” bijgewerkt: {count} rolluiken bereikt.",
+      "profile_saved_one": "Profiel “{profile}” bijgewerkt: 1 rolluik bereikt.",
+      "profile_renamed": "Hernoemd naar “{profile}”: de naamswijziging volgt elk rolluik dat het gebruikt.",
+      "profile_deleted": "Profiel “{profile}” verwijderd: de rolluiken gaan terug naar het bestand of de standaardwaarden.",
+      "action": {
+        "undo": "Ongedaan maken"
+      },
+      "undone": "Wijzigingen ongedaan gemaakt: alles zoals het was."
+    },
+    "detail": {
+      "title": "Details van het rolluik",
+      "measured_at": "Gemeten op {date}",
+      "level_basic": "basiskalibratie",
+      "level_thorough": "uitgebreide kalibratie",
+      "verify_note": "{deviation} cm afwijking bij de controle",
+      "values": {
+        "title": "Waarden in gebruik",
+        "intro": "Wat het rolluik nu gebruikt, waarde voor waarde, met de herkomst: een eigen waarde wint altijd; dan het toegewezen profiel, dan het bestand, dan de standaardwaarden."
+      },
+      "source": {
+        "own": "eigen waarde, gemeten op dit rolluik",
+        "profile": "geërfd van profiel “{profile}”",
+        "file": "uit het configuratiebestand",
+        "default": "standaardwaarde"
+      },
+      "action": {
+        "edit": "De waarden met de hand wijzigen",
+        "assign": "Aan een profiel toewijzen…",
+        "measure_again": "Opnieuw meten",
+        "measure_again_note": "Volledige basiskalibratie, in het dialoogvenster",
+        "correct": "Corrigeren…",
+        "correct_note": "Als het op de verkeerde plek stopt: alleen de tijden, tijden en rollen, of alleen de uitgebreide kalibratie",
+        "thorough": "Uitgebreide kalibratie",
+        "thorough_note": "Daarbovenop: aflezingen op 25 en 75 % per richting, en een controle",
+        "remove": "De meting verwijderen…"
+      },
+      "correct": {
+        "intro": "De correctie opent het dialoogvenster Configureren op het gekozen pad. Bij terugkomst werkt het paneel zichzelf bij.",
+        "times": "Alleen de tijden",
+        "times_note": "Eén loop per richting, de rollen blijven",
+        "times_rolls": "Tijden en rollen",
+        "times_rolls_note": "Volledige basiskalibratie",
+        "thorough": "Alleen de uitgebreide kalibratie",
+        "thorough_note": "Aflezingen op 25 en 75 % per richting, en een controle"
+      },
+      "edit": {
+        "title": "De waarden met de hand wijzigen",
+        "intro": "Deze waarden gelden alleen voor dit rolluik en gaan boven zowel het profiel als het bestand. Een leeg veld is geen nul: het betekent “hierover valt niets te zeggen”, en de waarde komt weer van het profiel of uit het bestand. Alle velden leegmaken staat gelijk aan de meting verwijderen.",
+        "inherits": "erft {value}",
+        "empty": "leeg = niets te zeggen",
+        "action": {
+          "save": "De waarden opslaan"
+        }
+      },
+      "remove": {
+        "title": "De meting verwijderen?",
+        "body": "De metingen van “{cover}” worden verwijderd en zijn niet terug te halen. Het rolluik gaat weer {destination} gebruiken.",
+        "travel_stays": "De loopafstand van het pantser blijft: iemand heeft die met een meetlint opgemeten.",
+        "action": "De meting verwijderen"
+      },
+      "destination": {
+        "profile": "de waarden die van profiel “{profile}” geërfd worden",
+        "file": "de waarden uit het configuratiebestand",
+        "defaults": "de standaardwaarden"
+      }
+    },
+    "profile": {
+      "title": "Profielkaart",
+      "name": "Profiel “{profile}”",
+      "stored": "Profiel uit de opslag",
+      "from_file": "Profiel uit het configuratiebestand: hier alleen-lezen.",
+      "reference_travel": "Referentieloopafstand",
+      "provenance": "Gemeten op {cover} · {date}",
+      "provenance_missing": "Waar het gemeten is, staat niet vast.",
+      "provenance_now_profile": "volgt nu “{profile}”",
+      "provenance_now_none": "volgt nu geen profiel",
+      "followers": {
+        "count": "{count} rolluiken volgen het",
+        "count_one": "1 rolluik volgt het",
+        "none": "Geen enkel rolluik volgt het.",
+        "measured": "gemeten: niets geërfd",
+        "adjusted": "aangepast: eigen waarden voor {keys}",
+        "inherited": "geërfd"
+      },
+      "edit": {
+        "intro": "Een wijziging aan het profiel verandert alles voor de rolluiken die de waarden ervan erven, en bij de aangepaste alleen de geërfde waarden: hun eigen waarden blijven, sleutel voor sleutel.",
+        "reach": "De wijziging bereikt {target}",
+        "reach_all": "alle {count} rolluiken die het profiel volgen",
+        "reach_one": "1 rolluik",
+        "action": {
+          "save": "Toepassen op {count} rolluiken",
+          "save_one": "Toepassen op 1 rolluik"
+        }
+      },
+      "impact": {
+        "title": "Voorbeeld van het effect",
+        "no_change": "geen verandering: alle waarden zijn eigen",
+        "no_travel": "loopafstand niet opgegeven: het gebruikt de waarden van het profiel zoals ze zijn",
+        "invalid": "corrigeer de velden om het voorbeeld te zien",
+        "state_measured": "gemeten",
+        "state_adjusted": "aangepast: alleen de geërfde waarden veranderen",
+        "state_inherited": "geërfd: alles verandert",
+        "kept": "eigen blijven: {keys}"
+      },
+      "action": {
+        "edit": "De waarden wijzigen…",
+        "rename": "Hernoemen…",
+        "delete": "Het profiel verwijderen…"
+      },
+      "rename": {
+        "title": "Het profiel hernoemen",
+        "field": "Nieuwe naam van het profiel",
+        "rule": "Alleen letters, cijfers en lage streepjes: geen spaties, geen accenten — de naam is ook een sleutel in het configuratiebestand. De naamswijziging volgt elk rolluik dat het profiel gebruikt.",
+        "action": "Hernoemen"
+      },
+      "delete": {
+        "title": "Het profiel “{profile}” verwijderen?",
+        "affects": "Dit raakt deze rolluiken:",
+        "body": "Ze gaan terug naar de waarden uit het configuratiebestand, waar die bestaan, of naar de standaardwaarden. Hun loopafstanden en hun eigen waarden blijven. De metingen van het profiel zijn niet terug te halen.",
+        "action": "Het profiel verwijderen"
+      }
+    },
+    "banner": {
+      "measuring": {
+        "title": "Meting bezig",
+        "body": "Een begeleide kalibratie gebruikt “{cover}”. Zolang de sessie loopt, leest dit paneel alleen: er wordt niets weggeschreven.",
+        "action": {
+          "resume": "De sessie hervatten",
+          "stop": "Beëindigen"
+        }
+      },
+      "applying": {
+        "title": "De wijzigingen worden toegepast…",
+        "body": "De rolluiken zijn een paar seconden niet beschikbaar"
+      }
+    },
+    "error": {
+      "not_found": "Het paneel kon deze gateway niet lezen.",
+      "write_failed": "De wijziging is niet weggeschreven. Er is niets opgeslagen.",
+      "no_connection": "Home Assistant antwoordt niet. Het paneel probeert het opnieuw."
+    }
+  },
   "issues": {
     "yaml_invalid": {
       "title": "Het MyHOME-configuratiebestand is ongeldig",
@@ -835,6 +1112,48 @@
     },
     "climate_unsupported_hvac_mode": {
       "message": "HVAC-modus {hvac_mode} wordt niet ondersteund door {entity_id}."
+    },
+    "unknown_entry": {
+      "message": "Er is geen MyHome-gateway met dat kenmerk geconfigureerd."
+    },
+    "entry_not_loaded": {
+      "message": "De gateway {gateway} is wel geconfigureerd maar niet geladen, dus de rolluiken ervan zijn nog niet te lezen."
+    },
+    "unknown_cover": {
+      "message": "Deze gateway heeft dat rolluik niet."
+    },
+    "advanced_cover": {
+      "message": "Dit rolluik meldt zijn stand zelf: er is geen loopmodel om te kalibreren."
+    },
+    "busy_calibrating": {
+      "message": "Er loopt een begeleide kalibratie op {cover}. Tot die klaar is wordt er niets weggeschreven."
+    },
+    "write_in_progress": {
+      "message": "Een andere wijziging aan deze gateway wordt nog toegepast. Probeer het zo meteen opnieuw."
+    },
+    "profile_not_editable": {
+      "message": "Het profiel “{profile}” staat in het configuratiebestand: het wordt daar gewijzigd, niet vanuit het paneel."
+    },
+    "unknown_profile": {
+      "message": "Er is geen opgeslagen profiel dat “{profile}” heet."
+    },
+    "undo_expired": {
+      "message": "Er is te veel tijd verstreken: deze wijziging is niet meer ongedaan te maken."
+    },
+    "missing_travel": {
+      "message": "Rolluiken waarvan de loopafstand van het pantser onbekend is ({count}): {covers}. Een profiel kan alleen worden omgerekend naar een rolluik waarvan de loopafstand bekend is."
+    },
+    "invalid_name": {
+      "message": "“{profile}” is geen bruikbare profielnaam: alleen letters, cijfers en lage streepjes, geen spaties en geen accenten."
+    },
+    "name_in_use": {
+      "message": "Er bestaat al een profiel dat “{profile}” heet."
+    },
+    "out_of_range": {
+      "message": "{key} aanvaardt een getal tussen {min} en {max}."
+    },
+    "not_a_number": {
+      "message": "{key} vraagt een getal. Decimalen mogen met een komma of met een punt."
     }
   },
   "services": {

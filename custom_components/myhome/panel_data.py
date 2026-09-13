@@ -98,12 +98,30 @@ CALIBRATION_LEVEL_PRECISE = "precise"
 # The translations, and the one language every fallback ends at.
 _TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 DEFAULT_LANGUAGE = "en"
-# The blocks the panel is served. `options.*` is the guided flow's own wording, which
-# the panel reuses wherever it says the same thing (the key labels, the error reasons);
-# `selector.*` carries the five origin phrases, which is the one vocabulary the panel is
-# forbidden from having its own copy of; `panel.*` is the panel's own block and is
-# absent until the texts lot writes it, which is why this is a filter and not a schema.
-TEXT_BLOCKS: tuple[str, ...] = ("options", "selector", "panel")
+# The blocks the panel is served, as `{the name in the file: the name in the payload}`.
+#
+# `options.*` is the guided flow's own wording, which the panel reuses wherever it says
+# the same thing (the key labels, the four form errors); `selector.*` carries the five
+# origin phrases, which is the one vocabulary the panel is forbidden from having its own
+# copy of; `exceptions.*` holds the sentence behind every `translation_key` a refusal
+# carries, so the panel prints the same words Home Assistant would.
+#
+# The rename is the fourth. The panel's own block is **`config_panel` in the file and
+# `panel` in the payload**, because those are two different authorities: Home Assistant's
+# `hassfest` validates `strings.json` against a fixed list of top-level keys and rejects
+# everything else (`script/hassfest/translations.py`, `gen_strings_schema`, a schema with
+# `PREVENT_EXTRA`), and `config_panel` is the one entry on that list meant for a panel's
+# own words - an arbitrarily nested tree of slug keys. The frontend, meanwhile, is
+# written against `panel.<view>.<element>` and would have to change in every file to say
+# `config_panel.` instead, for a prefix nobody reading the screen would learn anything
+# from. So the file uses the name the validator knows and the payload uses the name the
+# panel knows, and this one line is where the two meet.
+TEXT_BLOCKS: Mapping[str, str] = {
+    "options": "options",
+    "selector": "selector",
+    "exceptions": "exceptions",
+    "config_panel": "panel",
+}
 # Read once per language per Home Assistant run.
 TEXTS_CACHE_KEY = f"{DOMAIN}_panel_texts"
 
@@ -543,6 +561,8 @@ async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
     as the key, which is visible in a screenshot and impossible to mistake for a
     deliberate phrase.
 
+    Four blocks travel, and one of them is renamed on the way out: see `TEXT_BLOCKS`.
+
     Read once per language per Home Assistant run, in an executor, because a translation
     file is disk I/O and the resolution below is the same answer every time.
     """
@@ -553,7 +573,9 @@ async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
             if loaded is None:
                 continue
             cached = cache[candidate] = {
-                block: loaded[block] for block in TEXT_BLOCKS if block in loaded
+                served: loaded[block]
+                for block, served in TEXT_BLOCKS.items()
+                if block in loaded
             }
         return {
             "language": candidate,

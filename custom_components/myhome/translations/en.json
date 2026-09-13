@@ -706,6 +706,283 @@
       }
     }
   },
+  "config_panel": {
+    "common": {
+      "loading": "Loading…",
+      "gateway": "Gateway {gateway}",
+      "search": "Search for a cover",
+      "room_filter": "Filter by room",
+      "all_rooms": "All rooms",
+      "opens_configure": "This opens the Configure dialog. The panel refreshes on its own when it closes.",
+      "not_loaded": "This gateway is not loaded, so there is nothing to read here yet.",
+      "action": {
+        "menu": "Open the Home Assistant menu",
+        "configure": "Open Configure",
+        "close": "Close",
+        "cancel": "Cancel",
+        "back": "Back",
+        "save": "Save",
+        "show_all": "Show every value, roll coefficients included",
+        "hide_all": "Hide the roll coefficients"
+      },
+      "unit": {
+        "seconds": "s",
+        "centimetres": "cm"
+      }
+    },
+    "firstrun": {
+      "title": "No profile yet",
+      "body": "A profile describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
+      "how": "A profile is not written, it is measured. Pick one representative cover and measure it once, with the guided calibration: about three minutes. Similar covers can then follow it.",
+      "action": {
+        "measure": "Measure a cover"
+      },
+      "note": "This opens the Configure dialog: that is where the measuring happens. When it is done, the profile appears here."
+    },
+    "overview": {
+      "title": "Profiles and covers",
+      "summary": "There are {profiles} profiles and {covers} basic covers on this gateway.",
+      "explanation": "A profile describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
+      "group": {
+        "profile": "Profile “{profile}”",
+        "no_profile": "No profile",
+        "no_profile_note": "Values from the configuration file, or the defaults. It is not a fault: a cover with measurements of its own sits perfectly well here.",
+        "values": "Reference travel {travel} cm · ascent {opening} s · descent {closing} s · slats {slat} s",
+        "measured_on": "Measured on {cover} · {date}",
+        "provenance_missing": "Where it was measured is not recorded.",
+        "count": "{count} covers",
+        "count_one": "1 cover",
+        "empty": "No cover in this group.",
+        "open": "Open the profile card"
+      },
+      "cover": {
+        "travel": "travel {travel} cm",
+        "travel_unknown": "travel not recorded",
+        "travel_needed": "travel to be entered",
+        "follows": "follows “{profile}”",
+        "profile_missing": "The profile “{profile}” is no longer defined: this cover is running on its own configuration.",
+        "from_file": "The configuration file assigns this profile: it is changed there, not here."
+      },
+      "no_basic_covers": "Every cover of this gateway reports its own position, so there is no travel model to calibrate and nothing for this panel to do."
+    },
+    "assign": {
+      "handle": "Move {cover} to another group, or reorder it",
+      "handle_hint": "Drag to assign or reorder, Enter to pick from a list",
+      "drop_zone": "Take out of the profile — drop here",
+      "armed": "Tap the destination group for “{cover}”",
+      "target_profile": "the profile “{profile}”",
+      "target_none": "“No profile”",
+      "announce": {
+        "armed": "Tap the destination group.",
+        "pending": "“{cover}” is pending, towards {target}. Nothing is written yet.",
+        "withdrawn": "“{cover}” goes back where it was: the change is withdrawn.",
+        "reordered": "Order updated: it will be remembered.",
+        "drag_cancelled": "Drag cancelled.",
+        "discarded": "Every pending change has been discarded.",
+        "applying": "The changes are being applied.",
+        "missing_travel": "Some covers have no travel."
+      },
+      "action": {
+        "withdraw": "Withdraw this change",
+        "discard_all": "Discard everything",
+        "review": "Review and confirm",
+        "review_hint": "Review and confirm the assignments"
+      },
+      "pending": {
+        "count": "{count} pending changes — nothing is written yet",
+        "count_one": "1 pending change — nothing is written yet",
+        "route": "{from} → {to}",
+        "all_own": "All values its own: nothing changes",
+        "some_own": "Own values: those stay"
+      }
+    },
+    "review": {
+      "title": "Review and confirm",
+      "intro": "The changes are written all at once. For each cover, this is what it will really use: the profile's values brought to its own travel.",
+      "travel": {
+        "title": "How far does the curtain of these covers run?",
+        "hint": "A profile is the measurement of one cover with a certain travel, and it is brought to the others in proportion. The travel of these is not known: measure the distance the bottom edge covers from fully closed to fully open, and write it in centimetres (decimals with a comma or with a point).",
+        "label": "Curtain travel",
+        "aria": "Curtain travel in centimetres",
+        "placeholder": "e.g. 145",
+        "required": "The travel is needed, in centimetres."
+      },
+      "before": "Before",
+      "after": "After",
+      "note": {
+        "all_own": "It has values of its own for everything: nothing changes. The profile would only count for values removed later on.",
+        "some_own": "It has some values of its own: those stay. Only the inherited values change.",
+        "scaled": "Values of the profile “{profile}” (measured on {reference} cm) brought to a travel of {travel} cm.",
+        "back_to_file": "The values of the configuration file come back. The travel and any value of its own stay.",
+        "back_to_defaults": "The default values come back: the position in per cent will be a rough estimate. The travel and any value of its own stay."
+      },
+      "action": {
+        "back": "Back to the overview",
+        "confirm": "Confirm {count} assignments",
+        "confirm_one": "Confirm 1 assignment",
+        "missing_travel": "{count} travels missing",
+        "missing_travel_one": "1 travel missing"
+      }
+    },
+    "dialog": {
+      "title": "Which profile?",
+      "subtitle": "“{cover}” — the choice stays pending until it is confirmed.",
+      "option": {
+        "profile": "Profile “{profile}”",
+        "profile_meta": "{travel} cm · ascent {opening} s · descent {closing} s",
+        "none": "No profile",
+        "none_meta": "Values from the configuration file, or the defaults. The travel and the values of its own stay.",
+        "current": "current"
+      }
+    },
+    "toast": {
+      "assigned": "{count} assignments applied",
+      "assigned_one": "1 assignment applied",
+      "order_saved": "The new order will be remembered.",
+      "values_saved": "The values of “{cover}” are saved: they beat the profile and the file.",
+      "measure_removed": "Measurement removed: “{cover}” now uses {destination}.",
+      "profile_saved": "Profile “{profile}” updated: {count} covers reached.",
+      "profile_saved_one": "Profile “{profile}” updated: 1 cover reached.",
+      "profile_renamed": "Renamed to “{profile}”: the rename follows every cover that uses it.",
+      "profile_deleted": "Profile “{profile}” deleted: the covers go back to the file or to the defaults.",
+      "action": {
+        "undo": "Undo"
+      },
+      "undone": "Changes undone: everything as it was."
+    },
+    "detail": {
+      "title": "Cover detail",
+      "measured_at": "Measured on {date}",
+      "level_basic": "basic calibration",
+      "level_thorough": "thorough calibration",
+      "verify_note": "{deviation} cm out at the check",
+      "values": {
+        "title": "Values in use",
+        "intro": "What the cover is using right now, value by value, with where it comes from: a value of its own always wins; then the assigned profile, then the file, then the defaults."
+      },
+      "source": {
+        "own": "own value, measured on this cover",
+        "profile": "inherited from the profile “{profile}”",
+        "file": "from the configuration file",
+        "default": "default value"
+      },
+      "action": {
+        "edit": "Edit the values by hand",
+        "assign": "Assign to a profile…",
+        "measure_again": "Measure again",
+        "measure_again_note": "Full basic calibration, in the dialog",
+        "correct": "Correct…",
+        "correct_note": "If it stops in the wrong place: times only, times and rolls, or the thorough calibration only",
+        "thorough": "Thorough calibration",
+        "thorough_note": "On top: readings at 25 and 75 % per direction, and a check",
+        "remove": "Remove the measurement…"
+      },
+      "correct": {
+        "intro": "The correction opens the Configure dialog on the path chosen. When it comes back, the panel refreshes on its own.",
+        "times": "Times only",
+        "times_note": "One run per direction, the rolls stay",
+        "times_rolls": "Times and rolls",
+        "times_rolls_note": "Full basic calibration",
+        "thorough": "Thorough calibration only",
+        "thorough_note": "Readings at 25 and 75 % per direction, and a check"
+      },
+      "edit": {
+        "title": "Edit the values by hand",
+        "intro": "These values count for this cover alone and beat both the profile and the file. A field left empty is not a zero: it means “nothing to say about this one”, and the value goes back to coming from the profile or from the file. Emptying every field is the same as removing the measurement.",
+        "inherits": "inherits {value}",
+        "empty": "empty = nothing to say",
+        "action": {
+          "save": "Save the values"
+        }
+      },
+      "remove": {
+        "title": "Remove the measurement?",
+        "body": "The measurements made on “{cover}” will be removed and cannot be recovered. The cover will go back to using {destination}.",
+        "travel_stays": "The curtain travel stays: somebody measured it with a tape.",
+        "action": "Remove the measurement"
+      },
+      "destination": {
+        "profile": "the values inherited from the profile “{profile}”",
+        "file": "the values of the configuration file",
+        "defaults": "the default values"
+      }
+    },
+    "profile": {
+      "title": "Profile card",
+      "name": "Profile “{profile}”",
+      "stored": "Stored profile",
+      "from_file": "Profile of the configuration file: read-only here.",
+      "reference_travel": "Reference travel",
+      "provenance": "Measured on {cover} · {date}",
+      "provenance_missing": "Where it was measured is not recorded.",
+      "provenance_now_profile": "now follows “{profile}”",
+      "provenance_now_none": "now follows no profile",
+      "followers": {
+        "count": "{count} covers follow it",
+        "count_one": "1 cover follows it",
+        "none": "No cover follows it.",
+        "measured": "measured: nothing inherited",
+        "adjusted": "adjusted: own values for {keys}",
+        "inherited": "inherited"
+      },
+      "edit": {
+        "intro": "A change to the profile changes everything for the covers that inherit its values, and only the inherited values for the adjusted ones: the values of their own stay, key by key.",
+        "reach": "The change reaches {target}",
+        "reach_all": "every one of the {count} covers that follow the profile",
+        "reach_one": "1 cover",
+        "action": {
+          "save": "Apply to {count} covers",
+          "save_one": "Apply to 1 cover"
+        }
+      },
+      "impact": {
+        "title": "Impact preview",
+        "no_change": "no change: all values are its own",
+        "no_travel": "travel not recorded: it will use the profile's values as they are",
+        "invalid": "correct the fields to see the preview",
+        "state_measured": "measured",
+        "state_adjusted": "adjusted: only the inherited values change",
+        "state_inherited": "inherited: everything changes",
+        "kept": "own values stay: {keys}"
+      },
+      "action": {
+        "edit": "Edit the values…",
+        "rename": "Rename…",
+        "delete": "Delete the profile…"
+      },
+      "rename": {
+        "title": "Rename the profile",
+        "field": "New name of the profile",
+        "rule": "Letters, digits and underscores only: no spaces, no accents — the name is also a key of the configuration file. The rename follows every cover that uses the profile.",
+        "action": "Rename"
+      },
+      "delete": {
+        "title": "Delete the profile “{profile}”?",
+        "affects": "It affects these covers:",
+        "body": "They will go back to the values of the configuration file, where those exist, or to the defaults. Their travels and their own values stay. The profile's measurements cannot be recovered.",
+        "action": "Delete the profile"
+      }
+    },
+    "banner": {
+      "measuring": {
+        "title": "Measurement in progress",
+        "body": "A guided calibration is using “{cover}”. Until the session ends, this panel only reads: nothing is written.",
+        "action": {
+          "resume": "Resume the session",
+          "stop": "End it"
+        }
+      },
+      "applying": {
+        "title": "The changes are being applied…",
+        "body": "The covers are unavailable for a few seconds"
+      }
+    },
+    "error": {
+      "not_found": "The panel could not read this gateway.",
+      "write_failed": "The change was not written. Nothing has been saved.",
+      "no_connection": "Home Assistant is not answering. The panel will try again."
+    }
+  },
   "issues": {
     "yaml_invalid": {
       "title": "MyHOME configuration file is invalid",
@@ -835,6 +1112,48 @@
     },
     "climate_unsupported_hvac_mode": {
       "message": "HVAC mode {hvac_mode} is not supported by {entity_id}."
+    },
+    "unknown_entry": {
+      "message": "No MyHome gateway is configured with that identifier."
+    },
+    "entry_not_loaded": {
+      "message": "The gateway {gateway} is configured but not loaded, so its covers cannot be read yet."
+    },
+    "unknown_cover": {
+      "message": "This gateway has no such cover."
+    },
+    "advanced_cover": {
+      "message": "This cover reports its own position: it has no travel model to calibrate."
+    },
+    "busy_calibrating": {
+      "message": "A guided calibration is running on {cover}. Nothing is written until it ends."
+    },
+    "write_in_progress": {
+      "message": "Another change to this gateway is still being applied. Try again in a moment."
+    },
+    "profile_not_editable": {
+      "message": "The profile “{profile}” is written in the configuration file: it is changed there, not from the panel."
+    },
+    "unknown_profile": {
+      "message": "No stored profile is called “{profile}”."
+    },
+    "undo_expired": {
+      "message": "Too much time has passed: this change can no longer be undone."
+    },
+    "missing_travel": {
+      "message": "Covers with no curtain travel ({count}): {covers}. A profile can only be brought to a cover whose travel is known."
+    },
+    "invalid_name": {
+      "message": "“{profile}” is not a usable profile name: only letters, digits and underscores, no spaces and no accents."
+    },
+    "name_in_use": {
+      "message": "A profile called “{profile}” already exists."
+    },
+    "out_of_range": {
+      "message": "{key} takes a number between {min} and {max}."
+    },
+    "not_a_number": {
+      "message": "{key} needs a number. Decimals may be written with a comma or with a point."
     }
   },
   "services": {
