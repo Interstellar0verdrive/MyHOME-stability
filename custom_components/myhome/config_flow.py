@@ -523,6 +523,10 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         # (0.5.0 v2 review, BUG-3).
         self._store_ref: CalibrationStore | None = None
         self._changed = False
+        # The words the screens print for "where do this cover's numbers come from",
+        # loaded from the translations by `async_step_init` (which every way into this
+        # dialog goes through) and then kept for as long as the dialog is open.
+        self._origin_words: dict[str, str] | None = None
         # Whether this dialog has asked to be told when the entry is unloaded.
         self._unload_watched = False
         # The management screens' pointers.
@@ -541,6 +545,7 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
         self._saved_cover: str = ""
         self._saved_profile: str = ""
         self._saved_path: str = ""
+        self._saved_origin: str = ""
         # The `cancelled` screen names the shutter, and `async_step_cancel_flow` has
         # thrown the conversation away by the time that screen is shown.
         self._cancelled_cover: str = ""
@@ -554,6 +559,7 @@ class MyHomeOptionsFlowHandler(GuidedCalibrationMixin, CalibrationManagementMixi
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The first screen: what this dialog can do, and what it will not do by itself."""
         await self._async_store()
+        await self._async_load_origin_words()
         options = []
         if self._covers():
             options.append("calibrate")

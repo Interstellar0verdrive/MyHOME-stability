@@ -106,7 +106,7 @@
       },
       "profiles_covers": {
         "title": "Perfiles y persianas",
-        "description": "Un **perfil** describe un tipo de persiana: cuánto tarda en completar el recorrido, cuánto tardan en abrirse las lamas y cómo se enrolla el paño en el eje. Cada persiana puede seguir uno, y Home Assistant lo adapta a su propia altura.\n\nAhora mismo hay {profiles} perfiles y {covers} persianas sencillas en esta pasarela.",
+        "description": "Un **perfil** describe un tipo de persiana: cuánto tarda en completar el recorrido, cuánto tardan en abrirse las lamas y cómo se enrolla el paño en el eje. Cada persiana puede seguir uno, y Home Assistant lo adapta a su propio recorrido del paño.\n\nAhora mismo hay {profiles} perfiles y {covers} persianas sencillas en esta pasarela.",
         "menu_options": {
           "assign_covers": "Asignar un perfil a cada persiana",
           "pick_profile": "Ver, modificar o eliminar un perfil",
@@ -115,11 +115,11 @@
       },
       "assign_covers": {
         "title": "Qué perfil sigue cada persiana",
-        "description": "**Lo que va a pasar**: no se mueve nada. Asignar un perfil significa decirle a Home Assistant «esta persiana es como aquellas»: a partir de ese momento la persiana sigue ese perfil, tiempos de recorrido incluidos, adaptados a su altura.\n\nEl perfil se asigna aquí después de crear el archivo de configuración. Por eso tiene prioridad sobre los valores del archivo para esta persiana, si lo usas. Los valores medidos en esta persiana siguen teniendo prioridad cuando están disponibles. Los cambios posteriores en el perfil se aplican a todas las persianas que lo siguen.\n\nUn `profile:` escrito en el archivo de configuración para una persiana aparece aquí como su valor actual y no se puede quitar desde esta pantalla: está definido en el archivo y debe gestionarse allí.\n\n**Lo que tienes que hacer**: elige un perfil para cada persiana, o «Sin perfil» para dejarla con los valores del archivo o con los predeterminados."
+        "description": "**Lo que va a pasar**: no se mueve nada. Asignar un perfil significa decirle a Home Assistant «esta persiana es como aquellas»: a partir de ese momento la persiana sigue ese perfil, tiempos de recorrido incluidos, adaptados a su recorrido del paño.\n\nEl perfil se asigna aquí después de crear el archivo de configuración. Por eso tiene prioridad sobre los valores del archivo para esta persiana, si lo usas. Los valores medidos en esta persiana siguen teniendo prioridad cuando están disponibles. Los cambios posteriores en el perfil se aplican a todas las persianas que lo siguen.\n\nUn `profile:` escrito en el archivo de configuración para una persiana aparece aquí como su valor actual y no se puede quitar desde esta pantalla: está definido en el archivo y debe gestionarse allí.\n\n**De dónde vienen hoy los valores de cada persiana**: {covers}.\n\n**Lo que tienes que hacer**: elige un perfil para cada persiana, o «Sin perfil» para dejarla con los valores del archivo o con los predeterminados."
       },
       "assign_heights": {
-        "title": "¿Qué altura tienen estas persianas?",
-        "description": "Un perfil contiene las medidas de una persiana de referencia y se adapta a las demás en proporción a su altura. No se puede adaptar el perfil a las siguientes persianas porque se desconoce su altura: {covers}.\n\n**Lo que tienes que hacer**: mide, para cada una, la distancia que recorre el borde inferior desde completamente cerrada hasta completamente abierta, y escríbela en centímetros. Los decimales se escriben con coma o con punto."
+        "title": "¿Cuál es el recorrido del paño de estas persianas?",
+        "description": "Un perfil contiene las medidas de una persiana de referencia y se adapta a las demás en proporción a su recorrido del paño. No se puede adaptar el perfil a las siguientes persianas porque se desconoce su recorrido del paño: {covers}.\n\n**Lo que tienes que hacer**: mide, para cada una, la distancia que recorre el borde inferior desde completamente cerrada hasta completamente abierta, y escríbela en centímetros. Los decimales se escriben con coma o con punto."
       },
       "pick_profile": {
         "title": "¿Qué perfil?",
@@ -140,7 +140,7 @@
       },
       "profile_view": {
         "title": "Valores del perfil «{profile}»",
-        "description": "Estos son los valores del perfil. Home Assistant los adapta a cada persiana que lo sigue, en proporción a la altura de esa persiana.\n\n{values}\nPersianas que lo siguen: {covers}"
+        "description": "Estos son los valores del perfil. Home Assistant los adapta a cada persiana que lo sigue, en proporción al recorrido del paño de esa persiana.\n\n{values}\nPersianas que lo siguen: {followers}"
       },
       "profile_edit": {
         "title": "Modificar el perfil «{profile}»",
@@ -197,7 +197,7 @@
       },
       "calibration_actions": {
         "title": "Calibración de esta persiana",
-        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**Lo que tienes que hacer**: elige qué hacer con ellos. «Medir de nuevo» repite la calibración guiada en esta persiana y sustituye lo que hay; «Eliminar la calibración» devuelve esta persiana al archivo de configuración, si lo usas, al perfil que sigue, o a los valores predeterminados.",
+        "description": "**Persiana**: {cover}\n\nValores guardados para esta persiana:\n\n{values}\n**De dónde vienen los valores en uso**: {origin}.\n\n**Lo que tienes que hacer**: elige qué hacer con ellos. «Medir de nuevo» repite la calibración guiada en esta persiana y sustituye lo que hay; «Eliminar la calibración» devuelve esta persiana al archivo de configuración, si lo usas, al perfil que sigue, o a los valores predeterminados.",
         "menu_options": {
           "calibration_view": "Ver los valores",
           "calibration_edit": "Modificar los valores a mano",
@@ -208,7 +208,7 @@
       },
       "calibration_view": {
         "title": "Valores de {cover}",
-        "description": "Esto es lo que la integración guarda para esta persiana:\n\n{values}\nLas claves que aparecen aquí tienen preferencia sobre las escritas en el archivo de configuración, si lo usas; las que no aparecen siguen viniendo del archivo, del perfil o de los valores predeterminados."
+        "description": "Esto es lo que la integración guarda para esta persiana:\n\n{values}\n**De dónde vienen los valores en uso**: {origin}.\n\nLas claves que aparecen aquí tienen preferencia sobre las escritas en el archivo de configuración, si lo usas; las que no aparecen siguen viniendo del archivo, del perfil o de los valores predeterminados."
       },
       "calibration_edit": {
         "title": "Modificar los valores de {cover}",
@@ -259,10 +259,10 @@
       },
       "path": {
         "title": "¿Cómo quieres medir esta persiana?",
-        "description": "**Persiana**: {cover}\n\nHay tres formas, y la adecuada depende de lo que ya hayas medido. No son pasos sucesivos: se elige una.\n\nLa primera (A) es la larga, unos cuatro minutos: tres pulsaciones de un botón y tres lecturas con la cinta. Al final nace un **perfil**, es decir, la descripción de este tipo de persiana, que todas las persianas parecidas (mismo modelo, misma medida, ...) podrán reutilizar.\n\nLa segunda (B) está pensada precisamente para las persianas parecidas a una ya calibrada: eliges el perfil, mides la altura, listo.\n\nLa tercera (C) es para una persiana a la que se ha asignado un perfil pero que se para en el sitio equivocado: en ese caso hay que corregir la calibración de esta persiana.\n\n**Lo que tienes que hacer**: elige una de las formas de abajo. Hasta la pantalla siguiente no se mueve nada.",
+        "description": "**Persiana**: {cover}\n\nHay tres formas, y la adecuada depende de lo que ya hayas medido. No son pasos sucesivos: se elige una.\n\nLa primera (A) es la larga, unos cuatro minutos: tres pulsaciones de un botón y tres lecturas con la cinta. Al final nace un **perfil**, es decir, la descripción de este tipo de persiana, que todas las persianas parecidas (mismo modelo, misma medida, ...) podrán reutilizar.\n\nLa segunda (B) está pensada precisamente para las persianas parecidas a una ya calibrada: eliges el perfil, mides el recorrido del paño, listo.\n\nLa tercera (C) es para una persiana a la que se ha asignado un perfil pero que se para en el sitio equivocado: en ese caso hay que corregir la calibración de esta persiana.\n\n**Lo que tienes que hacer**: elige una de las formas de abajo. Hasta la pantalla siguiente no se mueve nada.",
         "menu_options": {
           "path_a": "(A) Es la primera persiana de este tipo (medida completa, ~4 minutos)",
-          "path_b": "(B) Es parecida a una persiana ya medida (solo la altura)",
+          "path_b": "(B) Es parecida a una persiana ya medida (solo el recorrido del paño)",
           "path_c": "(C) Tiene un perfil pero se para en el sitio equivocado (corrección)",
           "cancel_flow": "Cancelar"
         }
@@ -277,7 +277,7 @@
       },
       "path_b": {
         "title": "¿De qué tipo es {cover}?",
-        "description": "Un perfil describe un modelo de persiana: cuánto tarda en completar el recorrido, cuánto tardan en abrirse las lamas y cómo se enrolla el paño en el eje. Home Assistant lo adapta a esta persiana en cuanto sabe qué altura tiene.\n\n**Lo que tienes que hacer**: elige el perfil medido en una persiana parecida a esta. En la pantalla siguiente medirás la altura de esta.",
+        "description": "Un perfil describe un modelo de persiana: cuánto tarda en completar el recorrido, cuánto tardan en abrirse las lamas y cómo se enrolla el paño en el eje. Home Assistant lo adapta a esta persiana en cuanto sabe cuál es su recorrido del paño.\n\n**Lo que tienes que hacer**: elige el perfil medido en una persiana parecida a esta. En la pantalla siguiente medirás el recorrido del paño de esta.",
         "data": {
           "profile": "Perfil"
         }
@@ -435,7 +435,7 @@
         }
       },
       "height": {
-        "title": "¿Qué altura tiene {cover}?",
+        "title": "¿Cuál es el recorrido del paño de {cover}?",
         "description": "![](/myhome_static/height.webp)\n\n**Lo que tienes que hacer**: con la persiana completamente abierta, mide desde el punto donde el borde inferior de la persiana apoya cuando está cerrada (la base) hasta el borde inferior de la persiana en su posición actual (completamente abierta). Dicho de otro modo, mide la distancia que recorre la persiana de completamente abierta a completamente cerrada (o al revés), y escribe abajo los centímetros.\n\nEsa distancia es el recorrido del paño, y es la referencia con la que se compara cualquier otra medida. Mide el paño, no el hueco: si el borde inferior apoya en un alféizar y no en el suelo, mide desde el alféizar.",
         "data": {
           "height": "Recorrido del paño (cm)"
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "El recorrido del paño se ha anotado",
-        "description": "**Persiana**: {cover}\n\n**Lo que se ha anotado**: {height} cm desde la base hasta el borde inferior con la persiana completamente abierta.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Comprueba el valor: las lecturas con la cinta de los próximos pasos se comparan con esta altura. Si la persiana no está completamente abierta, y por tanto este no es el recorrido entero, dilo aquí abajo: se abre de nuevo y la lectura se repite.",
+        "description": "**Persiana**: {cover}\n\n**Lo que se ha anotado**: {height} cm desde la base hasta el borde inferior con la persiana completamente abierta.\n\n**Lo que tienes que hacer**: si es el número que has leído en la cinta, continúa. Comprueba el valor: las lecturas con la cinta de los próximos pasos se comparan con este recorrido del paño. Si la persiana no está completamente abierta, y por tanto este no es el recorrido entero, dilo aquí abajo: se abre de nuevo y la lectura se repite.",
         "menu_options": {
           "accept_step": "Está bien, seguir",
           "repeat_measure": "Repetir la medida",
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Mide {cover} — al {percent}% de la bajada",
-        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha abierto completamente y luego se ha bajado alrededor del {percent}% de su recorrido.\n\n**Lo que tienes que hacer**: mide desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. La misma referencia que la altura, para que las dos medidas se puedan comparar.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Lo que ha pasado**: la persiana se ha abierto completamente y luego se ha bajado alrededor del {percent}% de su recorrido.\n\n**Lo que tienes que hacer**: mide desde la base hasta el borde inferior tal como está ahora, y escribe abajo los centímetros. La misma referencia que el recorrido del paño, para que las dos medidas se puedan comparar.",
         "data": {
           "measured_cm": "Altura del borde inferior (cm)"
         },
@@ -502,7 +502,7 @@
       },
       "verify_offer": {
         "title": "¿Quieres comprobar la persiana?",
-        "description": "**Persiana**: {cover}\n\nLa altura era todo lo que hacía falta: la calibración ya se puede guardar así.\n\n**Qué es la comprobación**: la persiana se envía a medio recorrido y tú mides dónde se ha parado de verdad, lo que dice si esta persiana se comporta realmente como el perfil. Lleva alrededor de un minuto y una lectura con la cinta.",
+        "description": "**Persiana**: {cover}\n\nEl recorrido del paño era todo lo que hacía falta: la calibración ya se puede guardar así.\n\n**Qué es la comprobación**: la persiana se envía a medio recorrido y tú mides dónde se ha parado de verdad, lo que dice si esta persiana se comporta realmente como el perfil. Lleva alrededor de un minuto y una lectura con la cinta.",
         "menu_options": {
           "verify_now": "Comprobar ahora (~1 minuto)",
           "skip_verify": "No, ir al resumen"
@@ -560,7 +560,7 @@
       },
       "saved": {
         "title": "Calibración guardada",
-        "description": "Hecho: la calibración de {cover} está guardada y se aplica al cerrar este diálogo; a partir de ese momento {cover} se mueve con los valores recién medidos sobre ella. Los atributos de la entidad dicen entonces `guided` en «Calibration source», y llevan los números en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}», medido en esta persiana, en Configurar → Perfiles y persianas. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar. Las demás persianas parecidas a esta se hacen en dos pantallas eligiendo «(B) Es parecida a una persiana ya medida».",
+        "description": "Hecho: la calibración de {cover} está guardada y se aplica al cerrar este diálogo; a partir de ese momento {cover} se mueve con los valores recién medidos sobre ella. Los atributos de la entidad dicen entonces `guided` en «Calibration source» — es decir, **{origin}** — y llevan los números en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}», medido en esta persiana, en Configurar → Perfiles y persianas. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar. Las demás persianas parecidas a esta se hacen en dos pantallas eligiendo «(B) Es parecida a una persiana ya medida».",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -568,7 +568,7 @@
       },
       "saved_profile": {
         "title": "Calibración guardada",
-        "description": "Hecho: {cover} ahora sigue el perfil «{profile}», y lo sigue desde que se cierre este diálogo. Aquí no se ha cronometrado ningún recorrido suyo: lo único medido en esta persiana es su altura, y los tiempos del perfil se ajustan a ella. Los atributos de la entidad dicen entonces `profile {profile}` en «Calibration source», y los números están en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}» en Configurar → Perfiles y persianas, donde lo comparten todas las persianas que lo siguen. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: dar el mismo perfil a otra persiana, o cerrar. Si {cover} acaba parándose en el sitio equivocado, «(C) Tiene un perfil pero se para en el sitio equivocado» mide sus propios tiempos de recorrido.",
+        "description": "Hecho: {cover} ahora sigue el perfil «{profile}», y lo sigue desde que se cierre este diálogo. Aquí no se ha cronometrado ningún recorrido suyo: lo único medido en esta persiana es su recorrido del paño, y los tiempos del perfil se ajustan a ella. Los atributos de la entidad dicen entonces `profile {profile}` en «Calibration source» — es decir, **{origin}** — y los números están en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, y el perfil «{profile}» en Configurar → Perfiles y persianas, donde lo comparten todas las persianas que lo siguen. Si algún día quieres volver a los valores escritos en el archivo de configuración, basta con eliminar la calibración desde esa pantalla.\n\n**Lo que puedes hacer ahora**: dar el mismo perfil a otra persiana, o cerrar. Si {cover} acaba parándose en el sitio equivocado, «(C) Tiene un perfil pero se para en el sitio equivocado» mide sus propios tiempos de recorrido.",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -576,7 +576,7 @@
       },
       "saved_refined": {
         "title": "Calibración guardada",
-        "description": "Hecho: la calibración de {cover} está guardada y se aplica al cerrar este diálogo. {cover} continúa siguiendo el perfil «{profile}», y lo que se acaba de medir en esta persiana sola ahora tiene preferencia sobre él; todo lo que aquí no se ha medido sigue viniendo del perfil. Los atributos de la entidad dicen entonces `{source}` en «Calibration source», y los números están en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, donde puedes volver a ver los valores, corregirlos a mano o borrarlos. El perfil no se ha tocado: las demás persianas que lo siguen quedan como están.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar.",
+        "description": "Hecho: la calibración de {cover} está guardada y se aplica al cerrar este diálogo. {cover} continúa siguiendo el perfil «{profile}», y lo que se acaba de medir en esta persiana sola ahora tiene preferencia sobre él; todo lo que aquí no se ha medido sigue viniendo del perfil. Los atributos de la entidad dicen entonces `{source}` en «Calibration source» — es decir, **{origin}** — y los números están en «Opening time», «Closing time», «Slat time», los coeficientes de eje y «Height».\n\n**Dónde la vuelves a encontrar**: aquí en Configurar → Calibraciones, donde puedes volver a ver los valores, corregirlos a mano o borrarlos. El perfil no se ha tocado: las demás persianas que lo siguen quedan como están.\n\n**Lo que puedes hacer ahora**: calibrar otra persiana, o cerrar.",
         "menu_options": {
           "calibrate": "Calibrar otra persiana",
           "init": "Volver al menú"
@@ -691,6 +691,15 @@
     }
   },
   "selector": {
+    "calibration_origin": {
+      "options": {
+        "measured": "Medida",
+        "inherited": "Heredada del perfil «{profile}»",
+        "adjusted": "Ajustada del perfil «{profile}»",
+        "from_the_file": "Del archivo",
+        "defaults": "Valores predeterminados"
+      }
+    },
     "profile_choice": {
       "options": {
         "no_profile": "Sin perfil (los valores del archivo, o los predeterminados)"

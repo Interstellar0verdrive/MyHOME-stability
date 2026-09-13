@@ -260,7 +260,7 @@ A device behind an F422 bus interface is addressed on the bus as
 rejected with the name of the offending cover.
 
 A key written on the cover always wins over a profile. Everything not written there
-is taken from the cover's `profile` (scaled by its `height`, if both are given), and
+is taken from the cover's `profile` (scaled by its `height:`, if both are given), and
 what is left falls back to the defaults in the table above. `stop_latency` and
 `start_delay` resolve the same way — cover, then profile, then default — but they
 are the two keys a profile hands over **unscaled**: a shorter window has less
@@ -275,7 +275,8 @@ dialog. The full order, per key, highest first:
    removable in one click;
 2. a profile **assigned** to the cover — from **Configure → Profiles and covers**,
    or chosen with "(B) It is similar to a cover already measured" — scaled to the
-   cover's height. Assigning a profile this way is a statement about that cover made
+   cover's curtain travel. Assigning a profile this way is a statement about that
+   cover made
    after the configuration file was written, so it is used **instead of** the keys
    the file writes for that cover;
 3. the key as written for that cover here, in the configuration file (including
@@ -283,7 +284,7 @@ dialog. The full order, per key, highest first:
    `opening_time:` for `closing_time:`). A `profile:` the file itself gives the
    cover is not the statement rule 2 is and does not move here: a key the file
    writes for that cover still wins over the profile it names;
-4. the file's own profile chain (the `profile:` it names, scaled to the height),
+4. the file's own profile chain (the `profile:` it names, scaled to the travel),
    and then the defaults.
 
 A measurement of one cover is more specific than a line typed about all of them,
@@ -294,11 +295,11 @@ rule 3. Stored profiles and `cover_profiles:` share one namespace, and a stored
 profile of the same name wins, with one warning in the log per name.
 
 Nothing of an assigned profile is copied into the cover's stored calibration: only
-the name, the flag and the height are. Correcting the profile afterwards — in
+the name, the flag and the curtain travel are. Correcting the profile afterwards — in
 `cover_profiles:` or from **Configure → Profiles and covers → Edit the values by
 hand** — reaches every cover that follows it at the next reload, scaled to each
-one's own height. Deleting the assignment leaves the height and any measurement
-alone; the cover goes back to what the file says.
+one's own curtain travel. Deleting the assignment leaves the curtain travel and any
+measurement alone; the cover goes back to what the file says.
 
 `roll`, `opening_roll`, `closing_roll`, `height`, `profile`, `tilt`, `stop_latency`
 and `start_delay` join `opening_time`, `closing_time`, `slat_time` and `shutter_run`
@@ -728,7 +729,7 @@ The loaded values are exposed on basic covers as the `Opening time` and
 `Closing time` attributes and either `Roll` — when the two directions agree — or
 `Opening roll` and `Closing roll`, plus `Slat time`, `Height` and `Profile` when
 they are set. `Calibration source` says where they came from: `guided`,
-`profile <name>` or `yaml`.
+`profile <name>`, `profile <name>, adjusted` or `yaml`.
 
 See [Recipes → Covers](recipes.md#covers) for tuning the travel times,
 `set_cover_position` behaviour, "closed with the slats open" and `inverted` wiring.
@@ -976,7 +977,7 @@ States** and in `state_attr(...)` templates.
 | `Where` | The same entities with a General, Area or Group WHERE | The WHERE verbatim: cutting `"0"` or `"#3"` in half would mean nothing. |
 | `Int` | Any of the above with an `interface:` | The F422 bus interface, unpadded (`"3"`). |
 | `Opening time`, `Closing time`, `Roll` / `Opening roll` + `Closing roll`, `Slat time`, `Height`, `Profile` | Basic covers | The cover model actually loaded: the two travel times in seconds and the roll are always there — as a single `Roll` when the two directions carry the same coefficient, as `Opening roll` and `Closing roll` when they differ. `Slat time` appears when it is greater than `0`, `Height` and `Profile` when the keys are written. Times are rounded to 0.1 s and roll coefficients to 0.01 for display. The `Shutter run` attribute of 0.4.1 and earlier is gone — it was `Opening time` under another name. |
-| `Calibration source` | Basic covers | Where the numbers above come from: `guided` (the [guided calibration](guided-calibration.md) measured this shutter — including one that was assigned a profile and then refined, since the refinement is the measurement — or its stored values were edited by hand), `profile <name>` (it follows that profile and was not measured itself), or `yaml` (the configuration file, the file's profile chain, or the defaults). |
+| `Calibration source` | Basic covers | Where the numbers above come from: `guided` (every key of the travel model was measured on this shutter by the [guided calibration](guided-calibration.md), or edited by hand, and nothing of a profile is left in use), `profile <name>` (it follows that profile and was not measured itself), `profile <name>, adjusted` (some keys were measured on this shutter and the profile still answers for the rest — what a correction of the run times alone leaves behind), or `yaml` (the configuration file, the file's profile chain, or the defaults). Only the five keys a guided calibration can measure decide between the first three: `roll` is the fallback of the two directional coefficients and is never what a shutter that has both of them runs on. |
 | `Calibrating` | Basic covers, while it lasts | `true` while a guided step owns the shutter — the dialog, or `myhome.cover_calibration_run`. `cover.set_cover_position` is refused for as long as it is there. |
 | `Sensor` | WHO 25 dry contacts | The WHERE split as OpenWebNet writes it, `(<type>)<number>`: `301` renders as `(3)01`, i.e. dry contact number `01`. Type `3` is a dry contact, type `4` an IR detector. A WHERE of any other shape is reported verbatim. |
 | `Auxiliary channel` | WHO 9 auxiliary binary sensors | The WHERE, verbatim. |

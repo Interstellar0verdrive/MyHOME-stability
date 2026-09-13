@@ -62,6 +62,14 @@ PRESS_REACTION_SEC = 0.0
 # not a fit, it is a measurement that belongs to another shutter.
 DEFAULT_ROLL_BOUNDS = (MIN_ROLL, MAX_ROLL)
 DEFAULT_SCALE_BOUNDS = (0.7, 1.3)
+# ...and the bounds for a fit that has no press to correct. The time scale exists to
+# measure the finger: the seconds a press was late by, spread over the run it ended.
+# "Solo la calibrazione approfondita" times nothing - its run times are the ones the
+# cover already moves on - so there is no reaction time in them to fit out, and a scale
+# fitted there would be a correction of somebody else's shutter applied to this one's
+# stored roll. Pinned at 1, the two readings per direction fit the roll alone and the
+# model that is stored is exactly the model the check at 40 % was asked about.
+FIXED_SCALE_BOUNDS = (1.0, 1.0)
 
 # The search: a grid over (k, s) that is re-drawn around its own best cell, five times.
 # Nothing cleverer is warranted - the surface is smooth and two-dimensional, the whole
@@ -630,6 +638,7 @@ def deviation_cm(
 __all__ = [
     "DEFAULT_ROLL_BOUNDS",
     "DEFAULT_SCALE_BOUNDS",
+    "FIXED_SCALE_BOUNDS",
     "PRESS_REACTION_SEC",
     "REASON_ADVANCED",
     "REASON_BAD_POINT",

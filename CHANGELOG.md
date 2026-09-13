@@ -18,11 +18,14 @@ way, and nothing is ever written to `myhome.yaml`.
   cover"*. Three ways in: **(A)** the first shutter of a kind — three button
   presses and three tape readings, about four minutes, ending on a named
   **profile** every similar shutter can inherit; **(B)** a shutter similar to one
-  already measured — pick the profile, measure the height, with an optional check at
-  half the travel; **(C)** a shutter that has a profile and stops in the wrong place
+  already measured — pick the profile, measure the curtain travel, with an optional
+  check at half of it; **(C)** a shutter that has a profile and stops in the wrong place
   — its own run times, its own roll coefficients if it needs them, or the **thorough
   calibration on its own**: no timed run at all, four tape readings and a check, on
-  the times the shutter already moves on. There is no
+  the times the shutter already moves on, of which it stores the two roll coefficients
+  and nothing else. A correction measures some of the model and leaves the shutter
+  following its profile for the rest, which is what `profile <name>, adjusted` says.
+  There is no
   stopwatch anywhere: the integration knows when the motor started (the actuator
   says so itself), so a press marks only the end of a run, which halves the human
   error and leaves the tape as the only tool. The ascent is measured by **two runs
@@ -46,7 +49,7 @@ way, and nothing is ever written to `myhome.yaml`.
   [docs/guided-calibration.md](docs/guided-calibration.md).
 - **Screens that manage what was measured**, in the same dialog. *Profiles and
   covers*: one selector per basic cover to assign a profile (and a follow-up form
-  for the heights nobody knows yet), plus view, hand-edit and delete for each
+  for the curtain travels nobody knows yet), plus view, hand-edit and delete for each
   profile — the delete names the shutters that lose it. *Calibrations*: per shutter,
   view the stored values, correct them by hand, measure again, or delete them and go
   back to the configuration file. A profile written in `cover_profiles:` is shown
@@ -79,6 +82,26 @@ way, and nothing is ever written to `myhome.yaml`.
   the keys the cover's own configuration-file entry writes — it is a statement
   about that cover made after the file — while a `profile:` the file names itself
   does not, and a measurement of the cover always wins over either.
+- **Where a cover's values come from, on the screens and not only in an attribute.**
+  The **Calibrations** list, the action menu and **View the values** under it, **Give
+  each cover a profile**, the three screens that close a calibration and a profile's
+  list of followers all say it in words: *Measured*, *Inherited from profile "name"*,
+  *Adjusted from profile "name"*, *From the file*, *Defaults*. They are decided in
+  the same place as the `Calibration source` token, so a screen and the attribute can
+  never disagree about one shutter; the fifth exists because `yaml` covers both "the
+  file writes these times" and "nobody ever said", which is one word for two pieces of
+  news.
+- **One name per thing, on every screen and in the documentation.** The second level is
+  the **thorough calibration** everywhere (it had been "the precise level", "refine"
+  and "improve the accuracy" in different places), path C is the **correction**, a
+  movement the user times is a **timed run**, and the distance the bottom edge runs
+  between the end stops is the **curtain travel** — never "height", which had survived
+  on thirteen screens that were not the ones measuring it, the path menu's
+  "(height only)" among them. The `height:` key and the `Height` attribute keep their
+  spelling, and the height of the bottom edge *above its rest* keeps its name, because
+  it is a position and not the travel. In French the feature is *la calibration*
+  throughout: the correction screen used to offer *le calibrage approfondi* two lines
+  under *corriger la calibration*.
 - **`myhome.cover_calibration_run` marks the cover `Calibrating` while it runs**, so
   `cover.set_cover_position` is refused for the half minute it takes. It is built
   out of the same primitives as the guided steps, and two things timing one motor
@@ -90,11 +113,11 @@ way, and nothing is ever written to `myhome.yaml`.
   glossary each language settled on — *bottom edge*, *curtain*, *slat opening
   time*, *takes precedence over*, and their equivalents. Buttons keep Home
   Assistant's own imperative. The counts and the claims were then checked against
-  the code rather than against the review: the refinement asks for three tape
+  the code rather than against the review: the correction asks for three tape
   readings and not two, the thorough calibration for five and not four, `Calibration
   source` is named as holding the origin and not the numbers, what is saved is
   applied when the dialog closes rather than at once, and the accuracy on the
-  precise summary is the verification's own answer — the gap at the one position
+  thorough summary is the verification's own answer — the gap at the one position
   nothing was fitted to — with the percentage the screen quotes taken from the run
   that produced it instead of a constant.
 - **The deletion of a profile counts every shutter that follows it.** The count and

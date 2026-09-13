@@ -87,9 +87,11 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
 )
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
 from .calibration import (
+    FIXED_SCALE_BOUNDS,
     REASON_BAD_POINT,
     REASON_BUSY,
     REASON_NO_ECHO,
@@ -122,6 +124,8 @@ from .calibration_store import (
     stored_calibration,
 )
 from .const import (
+    CALIBRATION_ORIGIN_PROFILE_SLOT,
+    CALIBRATION_ORIGIN_SELECTOR,
     CALIBRATION_SOURCE_GUIDED,
     CALIBRATION_SOURCE_MANUAL,
     CALIBRATION_SOURCE_PROFILE,
@@ -606,6 +610,9 @@ class CalibrationContextMixin:
     config_entry: Any
     _store_ref: CalibrationStore | None
     _changed: bool
+    # The five origin phrases in the installation's language, read once per dialog by
+    # `_async_load_origin_words`; `None` until then.
+    _origin_words: dict[str, str] | None
 
     @property
     def _store(self) -> CalibrationStore:
@@ -711,6 +718,38 @@ class CalibrationContextMixin:
             from_file.append(str(cfg.get(CONF_NAME) or key))
         return assigned, sorted(from_file)
 
+    def _followers_with_origin(self, name: str) -> list[str]:
+        """The shutters that follow one profile, each with where its numbers come from.
+
+        "Covers following it" is a list of names on `profile_view`, and a name does not
+        say whether that shutter is running on the profile whole or on the profile plus
+        three numbers of its own - which is the question somebody looking at a profile's
+        values is usually asking. The origin comes from `resolve_cover` through
+        `_origin_in_words`, so it is the same answer the attribute gives.
+        """
+        assigned = list(self._store.covers_following(name))
+        from_file = [
+            f"{self._mac}-{key}"
+            for key, cfg in self._covers().items()
+            if cfg.get(CONF_PROFILE) == name
+            and not (
+                (stored := self._store.calibration(f"{self._mac}-{key}")) is not None
+                and stored.profile
+            )
+        ]
+        labelled = [
+            f"{self._cover_name(unique_id)} ({origin})"
+            if (origin := self._origin_in_words(unique_id))
+            else self._cover_name(unique_id)
+            for unique_id in assigned
+        ]
+        return labelled + sorted(
+            f"{self._cover_name(unique_id)} ({origin})"
+            if (origin := self._origin_in_words(unique_id))
+            else self._cover_name(unique_id)
+            for unique_id in from_file
+        )
+
     def _own_height(self, unique_id: str) -> float | None:
         """The travel *this* window is known to have: its record's, else the file's.
 
@@ -751,6 +790,59 @@ class CalibrationContextMixin:
     def _mark_changed(self) -> None:
         """Something stored changed: the entry has to be rebuilt before we are done."""
         self._changed = True
+
+    # ------------------------------------------------------- the origin, in words
+    async def _async_load_origin_words(self) -> None:
+        """Read the five origin phrases out of the translations, once per dialog.
+
+        `description_placeholders` are substituted by the frontend into a text Home
+        Assistant has already translated, so a phrase *this* side of the wire has to
+        pick its own language: `hass.config.language`, which is the installation's,
+        because the backend is never told which one the browser is showing. The
+        alternative is a screen that says the same five things in English to everybody.
+
+        A dialog asks for them once and keeps them: they cannot change while it is
+        open, and every screen that prints an origin would otherwise ask again.
+        """
+        if self._origin_words is not None:
+            return
+        prefix = f"component.{DOMAIN}.selector.{CALIBRATION_ORIGIN_SELECTOR}.options."
+        found = await async_get_translations(
+            self.hass, self.hass.config.language, "selector", {DOMAIN}
+        )
+        self._origin_words = {
+            key.removeprefix(prefix): text
+            for key, text in found.items()
+            if key.startswith(prefix)
+        }
+
+    @callback
+    def _origin_in_words(self, unique_id: str) -> str:
+        """Where this cover's numbers come from today, as a screen says it.
+
+        The same question `Calibration source` answers and the same answer:
+        `resolve_cover` decides which of the five it is, here and for the attribute, so
+        a screen cannot call a shutter measured while its attribute calls it adjusted.
+        The token itself is the fall-back - a dialog that never loaded the phrases
+        (nothing in this release opens one without `async_step_init`) says `guided`
+        rather than nothing at all.
+        """
+        device = self._cover_config(unique_id)
+        if not device:
+            return ""
+        resolved = resolve_cover(
+            device,
+            profiles=self._all_profiles(),
+            calibration=self._store.calibration(unique_id),
+        )
+        words = self._origin_words or {}
+        # `replace` and not `format`: a profile name is matched against
+        # `PROFILE_NAME_PATTERN` before it is stored, but a name out of `myhome.yaml`
+        # reaches this screen unfiltered, and a stray brace in it must not be able to
+        # turn a label into a `KeyError` three screens deep.
+        return words.get(resolved.origin, resolved.source).replace(
+            CALIBRATION_ORIGIN_PROFILE_SLOT, resolved.profile or ""
+        )
 
 
 # ------------------------------------------------------------------ management
@@ -855,7 +947,14 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         return self.async_show_form(
             step_id="assign_covers",
             data_schema=vol.Schema(schema),
-            description_placeholders={"covers": ", ".join(fields)},
+            # Not the bare list of names: this is the screen that *changes* where a
+            # cover's numbers come from, so it says where each one's come from now.
+            description_placeholders={
+                "covers": ", ".join(
+                    f"{label} ({origin})" if (origin := self._origin_in_words(unique_id)) else label
+                    for label, unique_id in fields.items()
+                )
+            },
         )
 
     def _cover_fields(self) -> dict[str, str]:
@@ -958,6 +1057,11 @@ class CalibrationManagementMixin(CalibrationContextMixin):
             "count": str(len(followers)),
             "assigned": str(len(assigned)),
             "from_file": str(len(from_file)),
+            # The same list again, with each shutter's origin after its name. Only
+            # "Vedi i valori" prints it: the screens that are about to *delete* the
+            # profile name the shutters plainly, because there the question is which
+            # ones lose it and not what each of them is running on today.
+            "followers": ", ".join(self._followers_with_origin(name)),
         }
 
     async def async_step_profile_actions(
@@ -1105,8 +1209,14 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Which shutter's own measurements the next screens are about."""
+        # The entry is the shutter's name and, after it, where the model it runs on
+        # comes from: the list is read to find the shutter whose numbers are wrong, and
+        # "measured" against "adjusted from profile tall" is most of that answer before
+        # the user has opened anything.
         stored = {
-            unique_id: self._cover_name(unique_id)
+            unique_id: f"{self._cover_name(unique_id)} - {origin}"
+            if (origin := self._origin_in_words(unique_id))
+            else self._cover_name(unique_id)
             for unique_id, record in self._store.calibrations.items()
             if record.says_anything
         }
@@ -1152,6 +1262,11 @@ class CalibrationManagementMixin(CalibrationContextMixin):
             "values": "```yaml\n" + "\n".join(lines or ["-"]) + "\n```",
             "profile": (record.profile if record and record.profile else ""),
             "measured_at": (record.measured_at if record and record.measured_at else ""),
+            # What the block above *amounts to*: the keys are what is stored, and this
+            # is what the shutter runs on once the profile and the file have had their
+            # say. The two screens that show the keys say it; the edit and the delete
+            # are given it and do not.
+            "origin": self._origin_in_words(unique_id),
         }
 
     async def async_step_calibration_actions(
@@ -2945,15 +3060,29 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
 
     # ------------------------------------------------------------------ the summary
     def _fit_both(self, slat: float) -> tuple[DirectionFit, DirectionFit]:
-        """One fit per direction, both told the same slat phase."""
+        """One fit per direction, both told the same slat phase.
+
+        The time scale is fitted with the roll wherever the run times were *pressed*
+        for: it is the reaction time of those presses, measured on the shutter instead
+        of guessed at. "Solo la calibrazione approfondita" pressed for nothing - its
+        times are the ones the cover already moves on - so there is no finger in them
+        to correct and the scale is pinned at 1. That is also what makes the two
+        readings per direction fit one unknown rather than two, which leaves a residual
+        worth reading, and what makes the model that is stored the same model the check
+        at 40 % was asked about.
+        """
         measured = self._measured
         height = measured.height or 0.0
+        scale_bounds = (
+            {"scale_bounds": FIXED_SCALE_BOUNDS} if measured.times_adopted else {}
+        )
         down = fit_from_run(
             DIRECTION_CLOSE,
             run_time=measured.closing.run_time if measured.closing else 0.0,
             slat_time=slat,
             measurements=measured.descent,
             height=height,
+            **scale_bounds,
         )
         up = fit_from_run(
             DIRECTION_OPEN,
@@ -2961,6 +3090,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             slat_time=slat,
             measurements=measured.ascent,
             height=height,
+            **scale_bounds,
         )
         return down, up
 
@@ -3075,6 +3205,23 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
                     # file (spec 1.3) and the file is where a basic cover's run times
                     # usually live.
                     overrides=dict(values),
+                    accuracy_cm=accuracy,
+                )
+            if measured.times_adopted:
+                # The scope that timed nothing measured the two roll coefficients and
+                # nothing else. Writing the run times it *started from* as this cover's
+                # own would be a measurement nobody made - `raw` already says
+                # `times_measured: false` - and worse than idle: an override freezes
+                # the profile's times into this cover, so correcting the profile would
+                # afterwards reach every window that follows it except the one that was
+                # measured most carefully.
+                rolls = {
+                    CONF_OPENING_ROLL: values[CONF_OPENING_ROLL],
+                    CONF_CLOSING_ROLL: values[CONF_CLOSING_ROLL],
+                }
+                return _Result(
+                    yaml=overrides_yaml(key, rolls, measured.height),
+                    overrides=rolls,
                     accuracy_cm=accuracy,
                 )
             return _Result(
@@ -3305,6 +3452,33 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             kept.append(CONF_HEIGHT)
         return replaced, kept
 
+    @callback
+    def _profile_still_wins(self, record: Any, result: _Result) -> bool:
+        """Whether the cover goes on following its profile *above* what the file writes.
+
+        `profile_wins` is the flag that puts a profile over the keys the configuration
+        file writes for this cover: it means "somebody said, on this installation and
+        after that file was written, that this shutter is one of those". A correction
+        was taking it away, because the flag was read off `follows_profile` and only
+        path B sets that. The cover then fell back under its own file for every key the
+        correction did not measure - three run times measured, and both roll
+        coefficients silently moved from the profile's to the file's - and
+        `Calibration source` reported `guided`, because after the flip the profile
+        answered for nothing at all. That is the opposite of what `path_c` promises
+        ("everything you do not measure goes on coming from the profile"), on the one
+        screen whose whole purpose is to make the model better.
+
+        So a correction keeps it: the profile confirmed on `path_c` is that statement
+        being made, and a record that already carried the flag keeps carrying it. The
+        same reasoning as `async_step_calibration_edit`, which has never let a hand edit
+        of one number change which kind of shutter this is.
+        """
+        if result.follows_profile:  # path B, which is the statement itself
+            return True
+        if self._path != PATH_REFINE:
+            return False
+        return self._profile is not None or bool(record is not None and record.profile_wins)
+
     async def async_step_save(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Write the store - the first and only thing this conversation writes."""
         result = self._result()
@@ -3332,7 +3506,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             cover_calibration_data(
                 self._cover_unique_id,
                 profile=self._measured_name or self._profile,
-                profile_wins=result.follows_profile,
+                profile_wins=self._profile_still_wins(record, result),
                 height=height,
                 overrides=merged or None,
                 source=(
@@ -3357,6 +3531,9 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         # whether the profile still answers for anything, and the screen quotes the
         # attribute the user is about to go and look at.
         self._saved_source = self._source_now()
+        # ...and the same answer in words, for the sentence that tells the user what
+        # this shutter is running on now rather than what the attribute spells.
+        self._saved_origin = self._origin_in_words(self._cover_unique_id)
         self._disarm()
         self._release()
         # ...and the conversation is over: without this, rendering the `saved` screen
@@ -3385,6 +3562,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
             "cover": self._saved_cover,
             "profile": self._saved_profile,
             "source": self._saved_source,
+            "origin": self._saved_origin,
         }
 
     async def async_step_saved(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
