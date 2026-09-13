@@ -27,6 +27,7 @@
 // token the model gave it; what that token means belongs to whoever built the model.
 
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
+import { styleMap } from "lit/directives/style-map.js";
 
 import { I18n } from "./i18n";
 import { renderMarkdown } from "./markdown";
@@ -131,6 +132,37 @@ export interface ScreenModel {
   summary?: ScreenSummary;
   outcome?: "saved" | "cancelled" | "expired" | "problem";
 }
+
+// The drawing is the one place a step's model reaches CSS, and CSS built by joining
+// strings is CSS somebody else can add declarations to: a `src` carrying `");` would turn
+// the illustration slot into any rule it liked, including a full-screen overlay and a
+// request to a host nobody chose. So the three values are checked here, at the point of
+// use, rather than trusted from wherever the model was built - `splitLeadingImage` already
+// refuses an image from outside `/myhome_static/`, and this says the same thing again where
+// it cannot be skipped. They are then set through `styleMap`, which writes one property at
+// a time and cannot grow a second declaration.
+
+/** A path this integration serves, and nothing else: no scheme, no host, no quoting. */
+const SAFE_SRC = /^\/myhome_static\/[A-Za-z0-9._~\-/]+$/;
+/** ...and no climbing back out of it with dot segments. */
+const DOT_SEGMENT = /(^|\/)\.\.?(\/|$)/;
+/** `background-size` / `background-position`: lengths, percentages and the CSS keywords. */
+const SAFE_VALUE = /^[A-Za-z0-9 %.,\-]+$/;
+
+const drawingStyle = (
+  image: NonNullable<ScreenModel["image"]>,
+): Record<string, string> | null => {
+  if (!SAFE_SRC.test(image.src) || DOT_SEGMENT.test(image.src)) {
+    return null;
+  }
+  const size = image.size && SAFE_VALUE.test(image.size) ? image.size : "100% auto";
+  const position = image.pos && SAFE_VALUE.test(image.pos) ? image.pos : "50% 60%";
+  return {
+    backgroundImage: `url("${image.src}")`,
+    backgroundSize: size,
+    backgroundPosition: position,
+  };
+};
 
 /** What a template is handed besides its model. */
 export interface ScreenContext {
@@ -316,6 +348,7 @@ export class MyHomeScreen extends LitElement {
     }
     const context: ScreenContext = { i18n: this.i18n, fire: this._fire };
     const single = model.model === "pos";
+    const drawing = model.image ? drawingStyle(model.image) : null;
     return html`<div class="screen">
       <main class=${single ? "single" : ""}>
         <div class="text-column">
@@ -335,14 +368,12 @@ export class MyHomeScreen extends LitElement {
             ${model.outcome ? html`<span class="outcome-icon ${model.outcome}" aria-hidden="true"></span>` : nothing}
             <span>${model.title}</span>
           </h1>
-          ${model.image
+          ${drawing
             ? html`<div
                 class="drawing"
                 role="img"
-                aria-label=${model.image.alt}
-                style=${`background-image:url("${model.image.src}");background-size:${
-                  model.image.size ?? "100% auto"
-                };background-position:${model.image.pos ?? "50% 60%"}`}
+                aria-label=${model.image?.alt ?? ""}
+                style=${styleMap(drawing)}
               ></div>`
             : nothing}
           ${model.body ? html`<div class="prose">${renderMarkdown(model.body)}</div>` : nothing}
