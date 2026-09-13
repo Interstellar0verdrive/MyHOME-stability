@@ -250,6 +250,13 @@ export class MyHomeScreen extends LitElement {
           grid-template-columns: minmax(0, 1fr) 400px;
           gap: 0 44px;
           align-items: start;
+          /*
+           * "margin: 0 auto" centres the column, and in doing so it switches off the
+           * cross-axis stretch a flex item would otherwise get - which left this element
+           * as wide as its own text rather than as wide as the 1080 px the handoff fixes.
+           * The explicit width says so.
+           */
+          width: 100%;
           max-width: 1080px;
           margin: 0 auto;
           padding: 24px 32px 48px;
