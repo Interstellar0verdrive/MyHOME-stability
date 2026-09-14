@@ -24,11 +24,13 @@ import ast
 from dataclasses import fields
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
 
+from custom_components.myhome import panel_data
 from custom_components.myhome.calibration_store import (
     keys_written_by_the_file,
     loaded_store,
@@ -41,16 +43,20 @@ from custom_components.myhome.const import (
     CONF_OPENING_TIME,
     CONF_ROLL,
     CONF_SLAT_TIME,
+    DOMAIN,
 )
 from custom_components.myhome.cover import _MovementModel
 from custom_components.myhome.panel_schemas import (
     ERROR_MISSING_TRAVEL,
+    ERROR_UNKNOWN_ENTRY,
     ERROR_UNKNOWN_PROFILE,
     WS_TYPE_ASSIGN,
     WS_TYPE_COVER_DETAIL,
     WS_TYPE_COVER_FORGET,
+    WS_TYPE_OVERVIEW,
     WS_TYPE_PREVIEW,
     WS_TYPE_PROFILE_EDIT,
+    WS_TYPE_PROFILE_RENAME,
     WS_TYPE_REORDER,
 )
 
@@ -473,3 +479,94 @@ def test_every_test_this_register_points_at_is_still_there() -> None:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
         }
         assert name in defined, f"{path} no longer has {name} ({review})"
+
+
+# ------------------------------------------------------- three branches nothing ran
+# Not defects: three answers the contract states, that no test had ever asked for. They
+# are here rather than in a file of their own because they are the same kind of thing as
+# the register - a statement somebody made once, with nothing holding it - and because
+# each of them is the answer a screen shows at exactly the moment the user is confused.
+
+
+async def test_a_house_with_no_loaded_gateway_is_told_so_and_not_shown_an_empty_one(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`entry_id` omitted means "the one gateway I have", and there may be none.
+
+    The panel opens and asks what there is before it can draw anything, so this is the
+    first frame of a first run and of every run where the gateway failed to set up.
+    "Not found" and an empty overview are very different screens: the second is a house
+    with no shutters in it and no reason why.
+
+    Mutation caught: answering an overview built from no gateway at all; letting
+    `loaded[0]` raise an `IndexError` into the connection.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML) as (entry, _commands):
+        await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+        client = await hass_ws_client(hass)
+        error = await refused(client, type=WS_TYPE_OVERVIEW)
+        assert error["code"] == ws_const.ERR_NOT_FOUND
+        assert error["translation_key"] == ERROR_UNKNOWN_ENTRY
+        assert error["translation_domain"] == DOMAIN
+
+
+async def test_renaming_a_profile_to_the_name_it_has_moves_nothing(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """CONTRACT §9.7: "renaming to the same name is a no-op with `moved: 0`".
+
+    The rename is three store writes in one awaited sequence - the numbers under the new
+    name, every follower repointed, the old name removed - and running that sequence
+    with both names the same would write the profile, repoint its followers to where
+    they already are, and then *delete the name it had just written*. The early return
+    is what stops it, and nothing was asking for it.
+
+    Mutation caught: dropping the `new_name == name` branch (the profile disappears and
+    takes its followers' assignments with it).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_PROFILE_RENAME,
+            entry_id=entry.entry_id,
+            name="tall",
+            new_name="tall",
+        )
+        assert answer["moved"] == 0
+        assert answer["from_file"] == []
+        # A write that changed nothing offers no undo, and the profile is still there
+        # with its followers on it.
+        assert answer["undo_token"] is None
+        assert loaded_store(hass, entry).profile("tall")["opening_time"] == 22.3
+        assert sorted(loaded_store(hass, entry).covers_following("tall")) == sorted([FIRST, SECOND])
+
+
+async def test_an_installation_with_no_translations_at_all_gets_an_empty_book(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The last line of `async_texts`, which a shipped installation cannot reach.
+
+    `translations/en.json` ships with the integration, so the fallback chain always ends
+    somewhere - unless the files are not there, which is what a half-finished HACS
+    update or a partially restored backup looks like. The panel then shows its keys
+    instead of its sentences, which is ugly and readable; an exception three layers up
+    would be a panel that does not paint at all, on an installation whose owner is
+    already trying to work out what went wrong.
+
+    Mutation caught: raising, or returning `None`, when no language could be read.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML) as (_entry, _commands):
+        with patch.object(panel_data, "_read_language", return_value=None):
+            hass.data.pop(panel_data.TEXTS_CACHE_KEY, None)
+            answer = await panel_data.async_texts(hass, "it")
+        assert answer == {
+            "language": "en",
+            "requested": "it",
+            "fallback": True,
+            "texts": {},
+        }
