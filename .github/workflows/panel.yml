@@ -55,6 +55,14 @@ jobs:
         # variables. All three are dev-only and none of them needs a browser.
         run: npm run a11y && npm run keyboard && npm run contrast
 
+      - name: Live updates
+        working-directory: panel_src
+        # The committed bundle against a socket that drops, comes back and flaps,
+        # counting how many subscriptions the panel is holding. A second one is
+        # invisible from the screen and permanent, so it is the one thing here that
+        # no screenshot and no person at a browser would ever catch.
+        run: npm run socket
+
       - name: Build
         working-directory: panel_src
         run: npm run build

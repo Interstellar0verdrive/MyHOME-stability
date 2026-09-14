@@ -10,7 +10,8 @@
     "test": "node test/run.mjs",
     "a11y": "node tools/a11y.mjs",
     "keyboard": "node tools/keyboard.mjs",
-    "contrast": "node tools/contrast.mjs"
+    "contrast": "node tools/contrast.mjs",
+    "socket": "node tools/socket.mjs"
   },
   "dependencies": {
     "lit": "3.3.3"

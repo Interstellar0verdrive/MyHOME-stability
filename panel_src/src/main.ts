@@ -130,6 +130,10 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _impactTimer: ReturnType<typeof setTimeout> | null = null;
   private _followTimer: ReturnType<typeof setTimeout> | null = null;
   private _followedAt = 0;
+  /** The queue `_listen` runs on, so that two callers can never open two subscriptions. */
+  private _listening: Promise<void> = Promise.resolve();
+  /** How many attempts are on that queue, waiting or in the air. */
+  private _subscribing = 0;
   /** Every preview answer but the last is thrown away: they arrive out of order. */
   private _previewSeq = 0;
 
@@ -396,7 +400,9 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
     this._store.set({ connection: this._unsubscribeWs ? "live" : "polling" });
     await this._refresh();
-    if (!this._unsubscribeWs) {
+    // `_listen` is queued and so is safe to call twice; this only keeps a socket that
+    // flaps from buying a round trip for every flap.
+    if (!this._unsubscribeWs && !this._subscribing) {
       await this._listen();
     }
     this._store.announce(this._i18n.t("panel.common.reconnected"));
@@ -432,19 +438,42 @@ export class MyHomeCalibrationPanel extends LitElement {
    * `unknown_command` is caught: an installation without it falls back to asking every
    * thirty seconds, and says so at the foot of the page.
    */
-  private async _listen(): Promise<void> {
-    // Asked for a second time - "Try again" on the refusal card - the old subscription is
-    // given back first. Two live subscriptions on one gateway would each push a whole
-    // overview at every write, and only one of them would ever be unsubscribed.
+  private _listen(): Promise<void> {
+    // **One at a time, whoever asks.** Giving the old subscription back before opening a
+    // new one is not enough on its own: `subscribe` is a round trip, and two callers that
+    // reach it before either has stored its answer both get a live subscription, of which
+    // only the last is ever unsubscribed. That is not a hypothetical - "Try again" pressed
+    // twice, and a socket that drops and comes back twice while the panel is polling, both
+    // do it - and the leak is permanent: a subscription nobody holds the handle of goes on
+    // pushing a whole overview at every write for the life of the tab. So the attempts are
+    // queued, and each one still gives back whatever the one before it left.
+    this._subscribing += 1;
+    const next = this._listening
+      .then(() => this._subscribeOnce())
+      .finally(() => {
+        this._subscribing -= 1;
+      });
+    this._listening = next.catch(() => undefined);
+    return next;
+  }
+
+  private async _subscribeOnce(): Promise<void> {
     const previous = this._unsubscribeWs;
     this._unsubscribeWs = null;
     await previous?.().catch(() => undefined);
     try {
-      this._unsubscribeWs = await subscribe(
+      const unsubscribe = await subscribe(
         this.hass.connection,
         this._store.state.entryId,
         (event: CalibrationEvent) => this._onEvent(event),
       );
+      if (!this.isConnected) {
+        // The panel was navigated away from while this was in the air, and
+        // `disconnectedCallback` has already given back the nothing there was to give.
+        void unsubscribe().catch(() => undefined);
+        return;
+      }
+      this._unsubscribeWs = unsubscribe;
       this._store.set({ connection: "live" });
       this._stopPolling();
     } catch (error) {
