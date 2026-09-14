@@ -153,13 +153,23 @@ export class MyHomeCalibrationPanel extends LitElement {
         white-space: nowrap;
       }
 
-      .toolbar .gateway {
+      /* The gateway select, drawn only in a house with two of them. */
+      .toolbar select.gateway {
+        font: inherit;
         font-size: 13px;
-        opacity: 0.8;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
         max-width: 40%;
+        min-height: 44px;
+        border-radius: 8px;
+        border: 1px solid currentColor;
+        background: transparent;
+        color: inherit;
+        padding: 0 6px;
+      }
+
+      /* A native option list is painted by the platform, not by the header. */
+      .toolbar select.gateway option {
+        color: var(--myhome-text);
+        background: var(--myhome-card);
       }
 
       /* 48x48, like every target in the handoff. */
@@ -1148,6 +1158,32 @@ export class MyHomeCalibrationPanel extends LitElement {
     });
   }
 
+  /**
+   * The one `<h1>` of the page, which says which screen this is.
+   *
+   * A panel with four screens and one title is a panel whose browser tab, whose back
+   * button and whose screen reader all say the same thing about four different places.
+   */
+  private _title(): string {
+    const state = this._store.state;
+    const route = state.route;
+    if (route.view === "cover") {
+      const cover = this._detailCover;
+      return cover
+        ? this._i18n.t("panel.detail.named", { cover: cover.name })
+        : this._i18n.t("panel.detail.title");
+    }
+    if (route.view === "profile") {
+      const known = state.overview?.profiles.some(
+        (profile) => profile.name === route.params.name,
+      );
+      return known
+        ? this._i18n.t("panel.profile.name", { profile: route.params.name })
+        : this._i18n.t("panel.profile.title");
+    }
+    return this._i18n.t("panel.overview.title");
+  }
+
   private _renderView(): TemplateResult {
     const state = this._store.state;
     if (state.status === "loading") {
@@ -1205,19 +1241,14 @@ export class MyHomeCalibrationPanel extends LitElement {
 
   protected override render(): TemplateResult {
     const state = this._store.state;
-    const title = this._i18n.t("panel.overview.title");
-    const gateway = state.overview?.entries.find((entry) => entry.entry_id === state.entryId);
+    const title = this._title();
     const measuring = state.overview?.measuring ?? null;
     const routed = state.route.view !== "overview";
     return html`
       <div class="toolbar">
         ${this._renderMenuButton()} ${this._renderBackButton()}
         <h1 class="title">${title}</h1>
-        ${gateway && (state.overview?.entries.length ?? 0) > 1
-          ? html`<div class="gateway">
-              ${this._i18n.t("panel.common.gateway", { gateway: gateway.title })}
-            </div>`
-          : nothing}
+        ${this._renderGatewayPicker()}
       </div>
       ${measuring ? measuringBanner(this._i18n, measuring.name, FLOW_URL) : nothing}
       <div class="content">
@@ -1242,6 +1273,69 @@ export class MyHomeCalibrationPanel extends LitElement {
     `;
   }
 
+  /**
+   * Which gateway this screen is about - shown only when there is a choice.
+   *
+   * The design's own decision, and the handoff's ("Header: hide the gateway select with a
+   * single gateway"): nearly every installation has one, and a picker with one entry is a
+   * control that teaches the user their house is more complicated than it is. A house with
+   * two gets a real select, because `overview` is about one gateway at a time and merging
+   * two orders into one list is not a screen anybody asked for.
+   */
+  private _renderGatewayPicker(): TemplateResult | typeof nothing {
+    const state = this._store.state;
+    const entries = state.overview?.entries ?? [];
+    const current = entries.find((entry) => entry.entry_id === state.entryId);
+    if (entries.length <= 1) {
+      return nothing;
+    }
+    const label = this._i18n.t("panel.common.gateway", { gateway: current?.title ?? "" });
+    return html`<select
+      class="gateway"
+      aria-label=${label}
+      .value=${state.entryId ?? ""}
+      ?disabled=${state.applying}
+      @change=${(event: Event) =>
+        void this._switchGateway((event.target as HTMLSelectElement).value)}
+    >
+      ${entries.map(
+        (entry) => html`<option value=${entry.entry_id} ?selected=${entry.entry_id === state.entryId}>
+          ${entry.title}
+        </option>`,
+      )}
+    </select>`;
+  }
+
+  /**
+   * Look at another gateway.
+   *
+   * Everything the screen was holding belongs to the one it is leaving - the pending
+   * changes name shutters of that gateway, the card is about one of them - so all of it is
+   * dropped rather than carried across, and the subscription is moved with the model: a
+   * socket still pushing the old gateway's overviews would replace the new one's the next
+   * time anybody wrote to it.
+   */
+  private async _switchGateway(entryId: string): Promise<void> {
+    if (!entryId || entryId === this._store.state.entryId) {
+      return;
+    }
+    const unsubscribe = this._unsubscribeWs;
+    this._unsubscribeWs = null;
+    await unsubscribe?.().catch(() => undefined);
+    this._clearSnack();
+    this._store.set({
+      ...NOTHING_PENDING,
+      entryId,
+      detail: NO_DETAIL,
+      profile: NO_PROFILE_CARD,
+      search: "",
+      room: "",
+      snack: null,
+    });
+    this._navigate("/");
+    await this._refresh();
+    await this._listen();
+  }
 }
 
 // The two elements the shell renders. Referenced rather than merely imported, so that a
