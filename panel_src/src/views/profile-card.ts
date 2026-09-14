@@ -360,7 +360,7 @@ export class MyHomeProfileCard extends LitElement {
       </span>
       <span class="instead">${note}</span>
       ${cover.profile_from_file
-        ? html`<span class="from">${this.i18n.t("panel.overview.cover.from_file")}</span>`
+        ? html`<span class="from">${this.i18n.t("panel.detail.source.file")}</span>`
         : nothing}
     </div>`;
   }

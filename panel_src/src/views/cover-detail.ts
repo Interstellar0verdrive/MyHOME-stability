@@ -287,7 +287,7 @@ export class MyHomeCoverDetail extends LitElement {
         : nothing}
       ${cover.profile_from_file
         ? html`<p class="sub" style="margin-top:8px">
-            ${this.i18n.t("panel.overview.cover.from_file")}
+            ${this.i18n.t("panel.overview.group.from_file")}
           </p>`
         : nothing}
     </section>`;

@@ -760,8 +760,7 @@
         "travel_unknown": "course non indiquée",
         "travel_needed": "course à saisir",
         "follows": "suit « {profile} »",
-        "profile_missing": "Le profil « {profile} » n'est plus défini : ce volet fonctionne avec sa propre configuration.",
-        "from_file": "C'est le fichier de configuration qui attribue ce profil : il se change là-bas, pas ici."
+        "profile_missing": "Le profil « {profile} » n'est plus défini : ce volet fonctionne avec sa propre configuration."
       },
       "no_basic_covers": "Tous les volets de cette passerelle rapportent eux-mêmes leur position : il n'y a aucun modèle de course à calibrer et rien à faire ici."
     },

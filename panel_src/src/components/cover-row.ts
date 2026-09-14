@@ -1,6 +1,12 @@
 // One shutter, one row: the name, where it is and how far it runs, the chip that says
 // where its numbers come from - and, once the user has moved it, where it is heading.
 //
+// **What the row does not say.** A shutter whose profile is stated in the configuration
+// file used to carry the sentence "the configuration file assigns this profile: it is
+// changed there, not here" - on every row of the group, under every name. The first live
+// pass called it what it is: the same sentence twelve times. The group's own header says
+// it once now (`panel.overview.group.from_file`), and the row keeps the chip.
+//
 // Transcribed from the prototype's own markup, which is the specification: 48 px minimum
 // height, 8 px padding, an 8 px radius, and a 1 px divider at 60 % opacity between rows
 // rather than a border on each. The name wraps to two lines and then truncates, with the
@@ -220,10 +226,17 @@ export const coverRowStyles = css`
     max-width: 100%;
   }
 
+  /*
+   * The destination is never shortened.
+   *
+   * It used to be one line with an ellipsis, and in a 300 px column
+   * *"«alte» → «alte_nuovo_…»"* hid the only half of the chip that is news: where the
+   * shutter is going. It wraps instead - two lines is the usual worst case, and a profile
+   * name is at most 64 characters by the rename rule - and the ✕ stays beside it.
+   */
   .route .text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /*
@@ -372,9 +385,6 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
                 profile: cover.profile ?? "",
               })}</span
             >`
-          : nothing}
-        ${cover.profile_from_file && !cover.profile_missing
-          ? html`<span class="sub">${i18n.t("panel.overview.cover.from_file")}</span>`
           : nothing}
       </button>
       <div class="chips" id=${chipsId}>

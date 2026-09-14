@@ -16,10 +16,14 @@ import {
   needsTravel,
   orderedCovers,
   parseTravel,
+  routeEnd,
+  routeLabel,
   travelProblem,
   withPending,
 } from "../src/engine/assign";
+import { I18n } from "../src/engine/i18n";
 import { type PendingChange } from "../src/engine/store";
+import { type HaConnection } from "../src/types/ha";
 import { type CoverRow, type Overview } from "../src/engine/ws";
 
 const cover = (unique_id: string, extra: Partial<CoverRow> = {}): CoverRow => ({
@@ -228,5 +232,51 @@ describe("a travel as somebody types it", () => {
     assert.equal(travelProblem("501"), "out_of_range");
     assert.equal(travelProblem("20"), null);
     assert.equal(travelProblem("500"), null);
+  });
+});
+
+describe("the pending chip's label", () => {
+  // The two sentences the chip is built out of, as the server serves them.
+  const italian = async (): Promise<I18n> => {
+    const i18n = new I18n();
+    await i18n.load(
+      {
+        sendMessagePromise: async () =>
+          ({
+            language: "it",
+            requested: "it",
+            fallback: false,
+            texts: {
+              panel: {
+                assign: {
+                  pending: { route: "{from} → {to}", route_name: "«{profile}»" },
+                  target_none: "«Senza profilo»",
+                },
+              },
+            },
+          }) as never,
+        subscribeMessage: async () => async () => undefined,
+      } as HaConnection,
+      "it",
+    );
+    return i18n;
+  };
+
+  it("names the two ends without the word Profilo, in the lexicon's quotes", async () => {
+    const i18n = await italian();
+    assert.equal(routeLabel(i18n, "alte", "alte_nuovo_test"), "«alte» → «alte_nuovo_test»");
+  });
+
+  it("says where a shutter leaving every profile is going", async () => {
+    const i18n = await italian();
+    assert.equal(routeLabel(i18n, "alte", null), "«alte» → «Senza profilo»");
+    assert.equal(routeLabel(i18n, null, "alte"), "«Senza profilo» → «alte»");
+  });
+
+  it("never abbreviates the destination: what it is given is what it says", async () => {
+    const i18n = await italian();
+    const long = "tapparelle_alte_del_soggiorno_sul_giardino_sul_retro";
+    assert.equal(routeEnd(i18n, long), `«${long}»`);
+    assert.ok(routeLabel(i18n, "alte", long).endsWith(`«${long}»`));
   });
 });

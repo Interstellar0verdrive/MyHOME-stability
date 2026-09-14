@@ -760,8 +760,7 @@
         "travel_unknown": "loopafstand niet opgegeven",
         "travel_needed": "loopafstand nog in te vullen",
         "follows": "volgt “{profile}”",
-        "profile_missing": "Het profiel “{profile}” bestaat niet meer: dit rolluik draait op zijn eigen configuratie.",
-        "from_file": "Dit profiel wordt door het configuratiebestand toegewezen: het wordt daar gewijzigd, niet hier."
+        "profile_missing": "Het profiel “{profile}” bestaat niet meer: dit rolluik draait op zijn eigen configuratie."
       },
       "no_basic_covers": "Alle rolluiken van deze gateway melden hun stand zelf: er is geen loopmodel te kalibreren en hier valt niets te doen."
     },

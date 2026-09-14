@@ -751,7 +751,7 @@
       "group": {
         "profile": "Profile “{profile}”",
         "missing": "This profile is not defined any more: the covers below have quietly fallen back to their own configuration.",
-        "from_file": "Defined in the configuration file, and read-only from here.",
+        "from_file": "Stated in the configuration file: this is changed there, not here.",
         "no_profile": "No profile",
         "no_profile_note": "Values from the configuration file, or the defaults. It is not a fault: a cover with measurements of its own sits perfectly well here.",
         "values": "Reference travel {travel} cm · ascent {opening} s · descent {closing} s · slats {slat} s",
@@ -770,7 +770,6 @@
         "travel_needed": "travel to be entered",
         "follows": "follows “{profile}”",
         "profile_missing": "The profile “{profile}” is no longer defined: this cover is running on its own configuration.",
-        "from_file": "The configuration file assigns this profile: it is changed there, not here.",
         "origin_inherited": "Inherited",
         "origin_adjusted": "Adjusted"
       },
@@ -809,6 +808,7 @@
         "count": "{count} pending changes — nothing is written yet",
         "count_one": "1 pending change — nothing is written yet",
         "route": "{from} → {to}",
+        "route_name": "«{profile}»",
         "all_own": "All values its own: nothing changes",
         "some_own": "Own values: those stay"
       }

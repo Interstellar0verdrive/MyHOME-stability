@@ -33,6 +33,7 @@ import {
   movedTo,
   orderedCovers,
   pendingFor,
+  routeLabel,
 } from "../engine/assign";
 import { DragController, flipPlay, flipStart, type DropTarget } from "../engine/dnd";
 import { I18n } from "../engine/i18n";
@@ -499,23 +500,13 @@ export class MyHomeOverview extends LitElement {
     return !this.state.room || cover.area === this.state.room;
   }
 
-  /** The heading a group has, which is also the word a route between two of them uses. */
-  private _groupName(profile: string | null): string {
-    return profile === null
-      ? this.i18n.t("panel.overview.group.no_profile")
-      : this.i18n.t("panel.overview.group.profile", { profile });
-  }
-
-  /** "Profilo «Alte» → Senza profilo": where this shutter came from and where it is going. */
+  /** "«alte» → «alte_nuovo_test»": where this shutter came from and where it is going. */
   private _route = (cover: CoverRow): string => {
     const change = pendingFor(cover.unique_id, this.state.pending);
     if (!change) {
       return "";
     }
-    return this.i18n.t("panel.assign.pending.route", {
-      from: this._groupName(cover.profile ?? null),
-      to: this._groupName(change.to),
-    });
+    return routeLabel(this.i18n, cover.profile ?? null, change.to);
   };
 
   /**
@@ -540,8 +531,23 @@ export class MyHomeOverview extends LitElement {
    * window that now follows another profile is not wrong, but it is surprising, and a
    * surprise the screen does not mention is a surprise the user finds out later.
    */
+  /**
+   * The third line of a group's header: where this profile came from.
+   *
+   * **And, once, what the file has to say about its members.** The sentence about a
+   * profile the configuration file assigns used to be on every row of the group; the
+   * first live pass found twelve copies of it under twelve names. It is one sentence
+   * here, and it is drawn when the file states either half - the profile itself, or the
+   * assignment of any shutter to it - because from the user's side both come to the same
+   * thing: this is read-only, and the place to change it is the file.
+   */
   private _provenanceLine(profile: ProfileRow): string {
-    if (profile.source === "yaml") {
+    const statedInTheFile =
+      profile.source === "yaml" ||
+      (this._overview?.covers ?? []).some(
+        (cover: CoverRow) => cover.profile === profile.name && cover.profile_from_file,
+      );
+    if (statedInTheFile) {
       return this.i18n.t("panel.overview.group.from_file");
     }
     if (!profile.measured_on) {
