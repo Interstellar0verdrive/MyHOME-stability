@@ -83,6 +83,11 @@ menu rather than a form: **"Calibrate a cover"**, **"Profiles and covers"** and
 stores, and **"Gateway and connection"** is the form that used to be there, with
 the same fields. Everything below is that form.
 
+Since **0.6.0** the two management items also exist as a full page of their own, the
+[Profiles and covers panel](panel.md): the same stored data, admin only, with a
+sidebar entry that is hidden until somebody turns it on. It writes to the same place
+the dialog writes to and never to `myhome.yaml`; the measuring stays in the dialog.
+
 From **Configure → Gateway and connection** you can change, without removing the
 integration:
 
@@ -272,9 +277,11 @@ dialog. The full order, per key, highest first:
 
 1. the values the guided calibration stored **for that cover** — a measurement of
    that one cover (path A, or "(C) It has a profile but stops in the wrong place"),
-   removable in one click;
+   or the same values corrected by hand from **Configure → Calibrations** or from the
+   [panel](panel.md)'s cover card, removable in one click;
 2. a profile **assigned** to the cover — from **Configure → Profiles and covers**,
-   or chosen with "(B) It is similar to a cover already measured" — scaled to the
+   from the [panel](panel.md)'s overview, or chosen with "(B) It is similar to a
+   cover already measured" — scaled to the
    cover's curtain travel. Assigning a profile this way is a statement about that
    cover made
    after the configuration file was written, so it is used **instead of** the keys
@@ -297,9 +304,17 @@ profile of the same name wins, with one warning in the log per name.
 Nothing of an assigned profile is copied into the cover's stored calibration: only
 the name, the flag and the curtain travel are. Correcting the profile afterwards — in
 `cover_profiles:` or from **Configure → Profiles and covers → Edit the values by
-hand** — reaches every cover that follows it at the next reload, scaled to each
-one's own curtain travel. Deleting the assignment leaves the curtain travel and any
-measurement alone; the cover goes back to what the file says.
+hand**, or from the [panel](panel.md)'s profile card — reaches every cover that
+follows it, scaled to each one's own curtain travel. Deleting the assignment leaves
+the curtain travel and any measurement alone; the cover goes back to what the file
+says.
+
+Everything the dialog and the panel store lives in Home Assistant's own storage, one
+file per gateway under `.storage`, and **never in `myhome.yaml`**: neither of them
+writes your configuration file. That is also why a `cover_profiles:` profile is shown
+and never rewritten, and why a `profile:` line the file gives a cover cannot be
+reassigned from either screen. The file stays the thing you edit; the store is the
+thing that beats it, key by key, in the order above.
 
 `roll`, `opening_roll`, `closing_roll`, `height`, `profile`, `tilt`, `stop_latency`
 and `start_delay` join `opening_time`, `closing_time`, `slat_time` and `shutter_run`
@@ -977,7 +992,7 @@ States** and in `state_attr(...)` templates.
 | `Where` | The same entities with a General, Area or Group WHERE | The WHERE verbatim: cutting `"0"` or `"#3"` in half would mean nothing. |
 | `Int` | Any of the above with an `interface:` | The F422 bus interface, unpadded (`"3"`). |
 | `Opening time`, `Closing time`, `Roll` / `Opening roll` + `Closing roll`, `Slat time`, `Height`, `Profile` | Basic covers | The cover model actually loaded: the two travel times in seconds and the roll are always there — as a single `Roll` when the two directions carry the same coefficient, as `Opening roll` and `Closing roll` when they differ. `Slat time` appears when it is greater than `0`, `Height` and `Profile` when the keys are written. Times are rounded to 0.1 s and roll coefficients to 0.01 for display. The `Shutter run` attribute of 0.4.1 and earlier is gone — it was `Opening time` under another name. |
-| `Calibration source` | Basic covers | Where the numbers above come from: `guided` (every key of the travel model was measured on this shutter by the [guided calibration](guided-calibration.md), or edited by hand, and nothing of a profile is left in use), `profile <name>` (it follows that profile and was not measured itself), `profile <name>, adjusted` (some keys were measured on this shutter and the profile still answers for the rest — what a correction of the run times alone leaves behind), or `yaml` (the configuration file, the file's profile chain, or the defaults). Only the five keys a guided calibration can measure decide between the first three: `roll` is the fallback of the two directional coefficients and is never what a shutter that has both of them runs on. |
+| `Calibration source` | Basic covers | Where the numbers above come from: `guided` (every key of the travel model was measured on this shutter by the [guided calibration](guided-calibration.md), or edited by hand, and nothing of a profile is left in use), `profile <name>` (it follows that profile and was not measured itself), `profile <name>, adjusted` (some keys were measured on this shutter and the profile still answers for the rest — what a correction of the run times alone leaves behind), or `yaml` (the configuration file, the file's profile chain, or the defaults). Only the five keys a guided calibration can measure decide between the first three: `roll` is the fallback of the two directional coefficients and is never what a shutter that has both of them runs on. The screens say the same thing in words — *Measured*, *Inherited from profile “name”*, *Adjusted from profile “name”*, *From the file*, *Defaults* — and decide it in the same place, so an attribute and a screen cannot disagree about one cover: see [Guided calibration → Precedence](guided-calibration.md#precedence) and the [panel](panel.md#the-origin-chip). |
 | `Calibrating` | Basic covers, while it lasts | `true` while a guided step owns the shutter — the dialog, or `myhome.cover_calibration_run`. `cover.set_cover_position` is refused for as long as it is there. |
 | `Sensor` | WHO 25 dry contacts | The WHERE split as OpenWebNet writes it, `(<type>)<number>`: `301` renders as `(3)01`, i.e. dry contact number `01`. Type `3` is a dry contact, type `4` an IR detector. A WHERE of any other shape is reported verbatim. |
 | `Auxiliary channel` | WHO 9 auxiliary binary sensors | The WHERE, verbatim. |

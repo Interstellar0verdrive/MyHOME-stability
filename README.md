@@ -79,6 +79,13 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   readings; it stores the model where it beats `myhome.yaml`, and writes a profile
   every similar shutter inherits by its curtain travel — see
   [Guided calibration](docs/guided-calibration.md)
+- **Profiles and covers panel**: a full page inside Home Assistant showing every
+  basic cover grouped by the profile it follows, where a cover is assigned by
+  dragging it into another group (or a long press on a phone, or the keyboard), a
+  batch is reviewed with the values each cover would end up on before anything is
+  written, and the last write can be undone. Admin only, hidden in the sidebar until
+  you turn it on, and it never writes `myhome.yaml` — see
+  [Profiles and covers panel](docs/panel.md)
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
 - **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy
@@ -186,6 +193,21 @@ copy-paste automations.
 
 ## What's new / Upgrading
 
+**0.6.0** (unreleased) puts the management half of the calibration on **a page of its
+own**. "Profili e tapparelle" is a full-page panel — admin only, hidden in the
+sidebar until you add it from your own user page — that shows every basic cover of a
+gateway grouped by the profile it follows. A cover is assigned by dragging it into
+another group, by a long press and a tap on a phone, or from the keyboard; nothing is
+written until a review panel has shown, cover by cover, the values it would end up
+running on, and the write that follows can be undone. There is a card per cover, with
+every value saying where it comes from and a hand edit where an empty field means
+"inherit", and a card per profile, with its followers and a live preview of what
+changing it would do to each of them. Assignments now reach the covers **without
+reloading the integration**: nothing goes unavailable, no history is lost. The
+measuring itself stays in *Configure → "Calibrate a cover"*, which remains a complete
+alternative to everything the panel does. Home Assistant **2026.9** or newer is
+required. See [Profiles and covers panel](docs/panel.md).
+
 **0.5.0** (13 September 2026) is the current release. Its one theme is that a basic
 roller shutter can be **calibrated without a stopwatch**: **Settings → Devices &
 services → MyHOME → Configure → "Calibrate a cover"** drives the shutter, times its
@@ -287,6 +309,9 @@ The [`docs/`](docs/README.md) folder goes deeper than this README:
 - [Guided calibration](docs/guided-calibration.md) — the *Configure → "Calibrate a
   cover"* dialog: the three paths, the two levels, the management screens and
   where the values are kept
+- [Profiles and covers panel](docs/panel.md) — the full-page screen: opening it,
+  the overview and its origin chips, assigning and reviewing, the two cards, and
+  troubleshooting
 - [Energy monitoring](docs/energy.md) — the instant-power keep-alive, the push
   filter, daily/monthly/total energy, and deriving kWh without gateway totals
 - [Discovery](docs/discovery.md) — what a discovery run writes and does not touch

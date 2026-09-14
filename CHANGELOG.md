@@ -5,6 +5,85 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 0.6.0 (in preparation)
+
+The management half of the guided calibration moves out of the dialog and onto a page
+of its own. **"Profili e tapparelle"** shows every basic cover of a gateway grouped by
+the profile it follows, and assigning a cover is moving it from one group to another.
+The measuring stays where it is: *Configure → "Calibrate a cover"* is unchanged, is
+still the only place a shutter is measured, and is still a complete alternative to
+everything the panel does.
+
+### Added
+
+- **A panel, "Profili e tapparelle"**, at `/myhome-calibration`. Admin only, and its
+  sidebar entry is **hidden until somebody adds it** from their own user page: the
+  sidebar of a house is not an integration's to fill. It shows the basic covers of one
+  gateway grouped by the profile they follow, with a last group for those that follow
+  none, a chip per cover saying where its numbers come from, the line saying which
+  cover each profile was measured on, a search and a room filter. A cover is assigned
+  by **dragging** it into another group on a desktop, by a **long press and a tap** on
+  a phone, or from the **keyboard** — three complete paths to the same change, and
+  none of them writes anything: changes stay pending, can be withdrawn one at a time
+  or all at once, and go through a **review** that shows, cover by cover, a before and
+  after of the values it would really end up running on, with a form collecting the
+  curtain travels nobody has measured yet, because a profile cannot be brought to a
+  cover whose travel is unknown. The whole batch is then written **once**, and the
+  strip that follows offers **Undo** for seven seconds (the server holds it for five
+  minutes, or until the next write). The order covers are in is the panel's own and is
+  remembered. Two cards go with it: a **cover card** with every value, who said it and
+  what it would fall back to, a hand edit where an empty field means "inherit" rather
+  than zero, and a removal that names its destination before it removes anything; and
+  a **profile card** with its values, its provenance, its followers and what each of
+  them takes from it, an editor with a live preview of the effect on every follower, a
+  rename that follows the covers, and a delete that names them. It never moves a
+  shutter, never writes `myhome.yaml`, and refuses everything while a guided
+  calibration is running on any cover of that gateway — which it says in a banner
+  before anything is attempted rather than in a refusal afterwards. The full page is
+  [docs/panel.md](docs/panel.md).
+- **The order of the covers, and where a profile was measured**, in the calibration
+  store (version 1, **minor 2**). One flat list of cover ids per gateway for the order,
+  and `measured_on` / `measured_at` per profile — the cover a profile was taken from
+  and the date, written by the guided conversation that held the tape. The migration
+  adds the empty list and touches nothing else, so a rollback to 0.5.0 still reads the
+  file; profiles stored before this version have no provenance and nothing guesses
+  one, which is what the screens say in words.
+- **A WebSocket API behind the panel** — fourteen commands, every one admin only,
+  every answer built from the same resolution the cover entity itself runs, so a screen
+  and an attribute cannot disagree about a cover. Four reads (the overview of a
+  gateway, one cover in detail, the texts of a language, and a preview of what a change
+  *would* come to without making it), nine writes and a subscription that pushes the
+  whole picture to every open tab after every write. It is documented for contributors
+  in [docs/architecture.md](docs/architecture.md#the-websocket-api); it is internal to
+  the panel and carries no compatibility promise.
+
+### Changed
+
+- **A calibration written from the panel reaches the covers without reloading the
+  integration.** Up to 0.5.0 the only way a stored calibration could reach a cover was
+  a rebuild of the config entry — a cover reads its travel model when it is created —
+  which is the right price at the end of one guided measurement and the wrong one for
+  a page where a profile is given to twelve covers in a row. The covers now re-read
+  their model in place: nothing is destroyed, no entity id changes, nothing goes
+  unavailable and no history is lost. A movement already under way keeps the numbers it
+  was timed with until it ends — half a run planned with one roll and finished with
+  another would end where neither model ever put it — while the attributes and the next
+  movement change at once. The dialog is unchanged and still rebuilds the entry when it
+  is closed.
+- **The two run times are called the same thing on every screen.** The hand-edit forms
+  of *Profiles and covers* and *Calibrations* said "Opening time (s)" and "Closing time
+  (s)" while every screen that measured them said ascent and descent; they now read
+  **"Ascent time (s)"** and **"Descent time (s)"**, in all seven languages, which is
+  the word the lexicon fixed for the concept and the word the panel prints beside the
+  same numbers. The `opening_time:` and `closing_time:` keys of `myhome.yaml`, and the
+  `Opening time` / `Closing time` attributes, are unchanged.
+- **Home Assistant 2026.9 or newer** (`hacs.json`), raised from 2026.8. The panel is
+  built and tested against the frontend of that release, and a floor lower than the
+  version anybody tested is a promise nobody made.
+- **The count of profiles and covers is a line and not a sentence**: *Profiles: N ·
+  Basic covers: N*, on the dialog's own screen and on the panel, where the two now say
+  it identically.
+
 ## [0.5.0] - 2026-09-13
 
 A basic shutter can now be calibrated from a dialog instead of from a stopwatch, a
