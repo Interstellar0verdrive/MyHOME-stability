@@ -74,6 +74,21 @@ export const stripStyles = css`
     align-items: center;
   }
 
+  /*
+   * Two lines at most. The sentence carries the shutter's name and a shutter can be called
+   * "Tapparella della camera da letto grande al primo piano", which on a 375 px screen is
+   * five lines and a strip 185 px tall sitting on the very targets it is telling somebody
+   * to tap. The name is on the row that is dimmed behind it; what this has to say is where
+   * to tap.
+   */
+  .armed .what {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-width: 0;
+  }
+
   .applying {
     z-index: 70;
     padding: 12px 20px;
@@ -187,7 +202,7 @@ export const armedStrip = (
   onCancel: () => void,
 ): TemplateResult =>
   html`<div class="strip dark armed" role="status">
-    <span>${i18n.t("panel.assign.armed", { cover })}</span>
+    <span class="what" title=${cover}>${i18n.t("panel.assign.armed", { cover })}</span>
     <button type="button" @click=${onCancel}>${i18n.t("panel.common.action.cancel")}</button>
   </div>`;
 

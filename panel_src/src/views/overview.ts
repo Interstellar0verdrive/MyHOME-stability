@@ -280,6 +280,17 @@ export class MyHomeOverview extends LitElement {
         margin-bottom: 96px;
       }
 
+      /*
+       * While a shutter is armed every card is collapsed to a 48 px title and every title
+       * is a target, so the strip saying "tap the destination" must not be drawn on top of
+       * one. Ninety-six pixels is enough for every other strip and not for this one, which
+       * wraps to two lines on a phone. The list is being rebuilt at that moment anyway -
+       * seven cards becoming seven titles - so the extra room costs no jump anybody sees.
+       */
+      .groups.armed {
+        margin-bottom: 120px;
+      }
+
       /* The label that follows the pointer. Positioned by the drag, never by Lit. */
       .drag-ghost {
         position: fixed;
@@ -855,7 +866,7 @@ export class MyHomeOverview extends LitElement {
               </button>
             </div>
           </div>`
-        : html`<div class="groups">
+        : html`<div class="groups ${this.state.armed !== null ? "armed" : ""}">
             ${groups.map((group) => {
               const key = groupAttr(group.key);
               const insert = drag?.insert ?? null;
