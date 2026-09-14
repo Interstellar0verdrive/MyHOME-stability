@@ -17,6 +17,7 @@ Available since **0.5.0**.
 - [The two levels](#the-two-levels)
 - [How timing by button press works](#how-timing-by-button-press-works)
 - [The management screens](#the-management-screens)
+- [The panel, for the same job on one page](#the-panel-for-the-same-job-on-one-page)
 - [Where the data lives](#where-the-data-lives)
 - [Idle timers and expired sessions](#idle-timers-and-expired-sessions)
 - [Troubleshooting](#troubleshooting)
@@ -346,6 +347,26 @@ One entry per shutter the integration is keeping something for:
 The form **Configure** used to open on, unchanged: address, port, password, the
 path of the configuration file, the number of command sessions, the event option
 and the session tunables. Saving it reloads the integration, as before.
+
+## The panel, for the same job on one page
+
+Since **0.6.0** everything under *Profiles and covers* and *Calibrations* also exists
+as a full-page screen, **Profiles and covers**, which shows every basic cover of a
+gateway grouped by the profile it follows instead of one selector at a time. Covers
+are moved between groups by dragging, by a long press on a phone or from the
+keyboard; the batch is reviewed with a before/after of the values each cover would
+end up on, confirmed in one write, and undone from the strip that follows it. It has
+a card per cover and a card per profile, with the same hand edit, the same removal
+and the same deletion as the screens above.
+
+It is admin only and its sidebar entry is hidden until somebody turns it on. The full
+page is [Profiles and covers panel](panel.md).
+
+The panel never measures anything: **"Calibrate a cover"** and the corrections stay
+here, in this dialog, and the panel's buttons open it. The two are the same stored
+data seen twice — a change made in either is visible in the other as soon as the
+screen is drawn again — and the dialog goes on working unchanged on an installation
+where the panel cannot be loaded.
 
 ## Where the data lives
 
