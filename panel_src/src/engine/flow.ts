@@ -88,11 +88,17 @@ export interface OpenFlowRequest {
 /**
  * Open the options flow, or go to the page that has the button that opens it.
  *
- * Returns which path it took, so the caller can say something true about what is about to
- * happen rather than guessing. `"dialog"` means the event was fired and a dialog attached
- * within the watchdog; `"page"` means the panel navigated.
+ * Returns which path it took: `"page"` when the panel has already navigated, `"waiting"`
+ * when the event went out and the watchdog is running. There is no `"dialog"`, because
+ * whether one opened is not known when this returns and the watchdog is the only thing
+ * that ever asks - and it asks `document`, where Home Assistant does not put it. What that
+ * check can really tell us is "nothing appeared in the light DOM", which is the answer on
+ * every installation today; looking harder would mean knowing where the frontend keeps the
+ * dialog and whether a closed one is still there, which is private and would turn a slow
+ * button into a dead one when it was wrong. So the honest contract is the one the head of
+ * this file states: the page always happens, at worst 400 ms late.
  */
-export const openOptionsFlow = (request: OpenFlowRequest): "dialog" | "page" | "waiting" => {
+export const openOptionsFlow = (request: OpenFlowRequest): "page" | "waiting" => {
   if (!flowDialogDefined()) {
     // Step 1: nothing to fire at. Straight to the page, with no half-open state.
     request.onLeaving();
