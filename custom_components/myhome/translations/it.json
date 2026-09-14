@@ -932,6 +932,7 @@
       "from_file": "Profilo del file di configurazione: qui è di sola lettura.",
       "unknown": "Nessun profilo con quel nome è definito o seguito qui.",
       "reference_travel": "Corsa di riferimento",
+      "values": "Valori del profilo",
       "provenance": "Misurato su {cover} · {date}",
       "provenance_missing": "Non è registrato dove è stato misurato.",
       "provenance_now_profile": "ora segue “{profile}”",

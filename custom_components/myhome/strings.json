@@ -932,6 +932,7 @@
       "from_file": "Profile of the configuration file: read-only here.",
       "unknown": "No profile of that name is defined or followed here.",
       "reference_travel": "Reference travel",
+      "values": "Values of the profile",
       "provenance": "Measured on {cover} · {date}",
       "provenance_missing": "Where it was measured is not recorded.",
       "provenance_now_profile": "now follows “{profile}”",

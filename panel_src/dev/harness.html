@@ -54,6 +54,7 @@
   <label><input type="checkbox" id="refuse" /> writes refuse</label>
   <label><input type="checkbox" id="live" checked /> live updates</label>
   <label><input type="checkbox" id="filetravel" /> travel from the file</label>
+  <label><input type="checkbox" id="twogateways" /> two gateways</label>
   <button type="button" id="reset">reset the gateway</button>
   <span id="note"></span>
 </div>
@@ -106,7 +107,7 @@
   // second change what the *server* says, and are pushed down the subscription instead -
   // which is the only way to see a measurement starting while changes are already pending,
   // and that is a state with a sentence of its own on the bar.
-  for (const id of ["dark", "narrow", "empty", "advanced", "fail"]) {
+  for (const id of ["dark", "narrow", "empty", "advanced", "fail", "twogateways"]) {
     const box = document.getElementById(id);
     flags[id] = () => box.checked;
     box.addEventListener("change", render);
@@ -129,8 +130,17 @@
     render();
   });
 
-  const overview = () => {
+  // A second gateway, so the header's picker has something to pick. The stub has one set
+  // of shutters and hands them back whichever is asked for - what is being exercised here
+  // is the control and the resubscription, not two houses.
+  const SECOND_ENTRY = { entry_id: "01SECONDGATEWAY", title: "Cascina", mac: "00:03:50:dd:ee:ff", loaded: true };
+
+  const overview = (entryId) => {
     const answer = structuredClone(gateway);
+    if (flags.twogateways()) {
+      answer.entries = [answer.entries[0], SECOND_ENTRY];
+      answer.entry_id = entryId ?? answer.entry_id;
+    }
     answer.covers.forEach((cover, index) => { cover.order_index = index; });
     // Every profile's follower lists, rebuilt so the group headers stay honest.
     for (const profile of answer.profiles) {
@@ -302,7 +312,7 @@
         return flags.fail()
           ? Promise.reject({ code: "not_found", message: "Config entry not loaded",
                              translation_key: "entry_not_loaded" })
-          : Promise.resolve(overview());
+          : Promise.resolve(overview(message.entry_id));
       }
       if (message.type === "myhome/calibration/cover_detail") {
         const detail = detailOf(message.cover_unique_id);
@@ -490,7 +500,7 @@
         return Promise.reject({ code: "unknown_command", message: "unknown command" });
       }
       subscriber = callback;
-      callback({ type: "overview", overview: overview() });
+      callback({ type: "overview", overview: overview(message.entry_id) });
       return Promise.resolve(async () => { subscriber = null; });
     },
   };

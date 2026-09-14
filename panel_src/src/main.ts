@@ -51,6 +51,9 @@ import {
   coverEdit as sendCoverEdit,
   coverForget as sendCoverForget,
   isUnknownCommand,
+  profileDelete as sendProfileDelete,
+  profileEdit as sendProfileEdit,
+  profileRename as sendProfileRename,
   overview as fetchOverview,
   preview as fetchPreview,
   reorder as sendReorder,
@@ -60,12 +63,14 @@ import {
   type CalibrationEvent,
   type CoverRow,
   type Overview,
+  type ProfileRow,
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
 import { DETAIL_KEYS, MyHomeCoverDetail, type DetailActions } from "./views/cover-detail";
+import { MyHomeProfileCard, PROFILE_KEYS, type ProfileActions } from "./views/profile-card";
 import { MyHomeScreen, type ScreenModel } from "./engine/screen";
 
 /** How often the panel asks again when the backend has no subscription to offer. */
@@ -110,6 +115,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _snackTimer: ReturnType<typeof setTimeout> | null = null;
   private _previewTimer: ReturnType<typeof setTimeout> | null = null;
   private _travelTimer: ReturnType<typeof setTimeout> | null = null;
+  private _impactTimer: ReturnType<typeof setTimeout> | null = null;
   /** Every preview answer but the last is thrown away: they arrive out of order. */
   private _previewSeq = 0;
 
@@ -250,6 +256,10 @@ export class MyHomeCalibrationPanel extends LitElement {
     if (this._travelTimer) {
       clearTimeout(this._travelTimer);
       this._travelTimer = null;
+    }
+    if (this._impactTimer) {
+      clearTimeout(this._impactTimer);
+      this._impactTimer = null;
     }
     const unsubscribe = this._unsubscribeWs;
     this._unsubscribeWs = null;
@@ -1184,8 +1194,237 @@ export class MyHomeCalibrationPanel extends LitElement {
     return this._i18n.t("panel.overview.title");
   }
 
+  // --- the profile card (lot 8) ---------------------------------------------------------
+  //
+  // Everything this screen draws is already in `overview`, so there is no read of its own.
+  // The one thing it asks the server is the impact preview, which is the editor's whole
+  // reason for existing and the one number on it the panel may not work out.
+
+  private get _profileRow(): ProfileRow | null {
+    const state = this._store.state;
+    return (
+      state.overview?.profiles.find((row: ProfileRow) => row.name === state.profile.for) ?? null
+    );
+  }
+
+  /** Every window that follows it, however it was told to. */
+  private _followersOf(profile: ProfileRow | null): CoverRow[] {
+    const covers = this._store.state.overview?.covers ?? [];
+    if (!profile) {
+      return [];
+    }
+    const ids = new Set([...profile.followers, ...profile.followers_from_file]);
+    return covers.filter((cover: CoverRow) => ids.has(cover.unique_id));
+  }
+
+  /** The six fields as the form wants them: the profile's own numbers, written out. */
+  private _profileForm(profile: ProfileRow | null): Record<string, string> {
+    const form: Record<string, string> = {};
+    for (const key of PROFILE_KEYS) {
+      const value =
+        key === "reference_height" ? profile?.reference_height : profile?.values[key];
+      form[key] =
+        value === null || value === undefined
+          ? ""
+          : this._i18n.number(value, DECIMALS[key] ?? 0);
+    }
+    return form;
+  }
+
+  /** The typed numbers, or `null` while one of them cannot be used. */
+  private _typedProfile(): Record<string, number> | null {
+    const form = this._store.state.profile.form;
+    const values: Record<string, number> = {};
+    for (const key of PROFILE_KEYS) {
+      if (isEmpty(form[key]) || valueProblem(key, form[key]) !== null) {
+        return null;
+      }
+      values[key] = parseTravel(form[key] ?? "") as number;
+    }
+    return values;
+  }
+
+  private _profileActions: ProfileActions = {
+    back: () => this._navigate("/"),
+    openCover: (uniqueId) => this._navigate(`/cover/${encodeURIComponent(uniqueId)}`),
+
+    mode: (mode) => {
+      const profile = this._store.state.profile;
+      this._store.set({
+        profile: {
+          ...profile,
+          mode,
+          form: mode === "edit" ? this._profileForm(this._profileRow) : {},
+          errors: {},
+          newName: mode === "rename" ? (profile.for ?? "") : "",
+          nameError: "",
+          impact: null,
+          impacting: false,
+        },
+        writeError: null,
+      });
+      if (mode === "edit") {
+        void this._refreshImpact();
+      }
+    },
+
+    field: (key, value) => {
+      const profile = this._store.state.profile;
+      this._store.set({ profile: { ...profile, form: { ...profile.form, [key]: value } } });
+      this._scheduleImpact();
+    },
+
+    newName: (value) =>
+      this._store.set({
+        profile: { ...this._store.state.profile, newName: value, nameError: "" },
+      }),
+
+    saveValues: () => void this._saveProfile(),
+    rename: () => void this._renameProfile(),
+    remove: () => void this._deleteProfile(),
+  };
+
+  private async _saveProfile(): Promise<void> {
+    const state = this._store.state;
+    const name = state.profile.for;
+    const values = this._typedProfile();
+    if (this._locked || !name || !state.entryId || !values) {
+      return;
+    }
+    const { reference_height: travel, ...rest } = values;
+    const entryId = state.entryId;
+    await this._write(
+      () => sendProfileEdit(this.hass.connection, entryId, name, rest, travel),
+      (result) => {
+        this._store.set({
+          profile: { ...this._store.state.profile, mode: "view", impact: null },
+        });
+        this._store.setOverview(result.overview);
+        this._snack(
+          result.affected.length === 1
+            ? this._i18n.t("panel.toast.profile_saved_one", { profile: name })
+            : this._i18n.t("panel.toast.profile_saved", {
+                profile: name,
+                count: result.affected.length,
+              }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  /**
+   * A rename is a write and a navigation: the address bar names the profile, so staying
+   * where we were would leave the card asking about a name nothing defines any more.
+   *
+   * Its refusal goes under the field rather than to the top of the card, because the two
+   * that can happen - the name is not usable, the name is taken - are both about the
+   * eight characters the user just typed.
+   */
+  private async _renameProfile(): Promise<void> {
+    const state = this._store.state;
+    const name = state.profile.for;
+    const next = state.profile.newName.trim();
+    if (this._locked || !name || !state.entryId || !next || next === name) {
+      return;
+    }
+    const entryId = state.entryId;
+    await this._write(
+      () => sendProfileRename(this.hass.connection, entryId, name, next),
+      (result) => {
+        this._store.setOverview(result.overview);
+        this._navigate(`/profile/${encodeURIComponent(next)}`);
+        this._snack(
+          this._i18n.t("panel.toast.profile_renamed", { profile: next }),
+          result.undo_token,
+        );
+      },
+      (sentence) =>
+        this._store.set({
+          profile: { ...this._store.state.profile, nameError: sentence },
+          writeError: null,
+        }),
+    );
+  }
+
+  private async _deleteProfile(): Promise<void> {
+    const state = this._store.state;
+    const name = state.profile.for;
+    if (this._locked || !name || !state.entryId) {
+      return;
+    }
+    const entryId = state.entryId;
+    await this._write(
+      () => sendProfileDelete(this.hass.connection, entryId, name),
+      (result) => {
+        this._store.setOverview(result.overview);
+        // The screen this card was is gone with the profile; the list is where the
+        // shutters it used to describe now are.
+        this._navigate("/");
+        this._snack(
+          this._i18n.t("panel.toast.profile_deleted", { profile: name }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  private _scheduleImpact(): void {
+    if (this._impactTimer) {
+      clearTimeout(this._impactTimer);
+    }
+    this._impactTimer = setTimeout(() => {
+      this._impactTimer = null;
+      void this._refreshImpact();
+    }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  /**
+   * What the typed numbers would mean for every follower (contract §11, `profile_values`).
+   *
+   * One item per follower carrying that follower's *current* assignment, so that nothing
+   * but the profile is hypothetical - `currentAssignment` is what makes that exact for a
+   * window whose `myhome.yaml` names the profile rather than this panel. The scaling is
+   * the server's, here as everywhere: a profile scaled in the browser would be the second
+   * travel model the whole API exists to prevent.
+   */
+  private async _refreshImpact(): Promise<void> {
+    const state = this._store.state;
+    const values = this._typedProfile();
+    const name = state.profile.for;
+    const followers = this._followersOf(this._profileRow);
+    if (!state.entryId || !name || !values || followers.length === 0) {
+      this._store.set({ profile: { ...this._store.state.profile, impact: null } });
+      return;
+    }
+    const seq = ++this._previewSeq;
+    this._store.set({ profile: { ...this._store.state.profile, impacting: true } });
+    try {
+      const answer = await fetchPreview(
+        this.hass.connection,
+        state.entryId,
+        followers.map((cover) => currentAssignment(cover)),
+        { [name]: values },
+      );
+      if (seq !== this._previewSeq) {
+        return;
+      }
+      this._store.set({
+        profile: { ...this._store.state.profile, impact: answer.items, impacting: false },
+      });
+    } catch (error) {
+      if (seq === this._previewSeq) {
+        this._store.set({ profile: { ...this._store.state.profile, impacting: false } });
+      }
+      if (!isUnknownCommand(error)) {
+        console.warn("MyHOME panel: the impact preview could not be read", asWsError(error));
+      }
+    }
+  }
+
   private _renderView(): TemplateResult {
     const state = this._store.state;
+
     if (state.status === "loading") {
       return html`<div class="card waiting" role="status">
         ${this._i18n.t("panel.common.loading")}
@@ -1216,14 +1455,11 @@ export class MyHomeCalibrationPanel extends LitElement {
       ></myhome-cover-detail>`;
     }
     if (route.view === "profile") {
-      const name = route.params.name;
-      const known = state.overview.profiles.some((profile) => profile.name === name);
-      return this._renderPlaceholder(
-        known
-          ? this._i18n.t("panel.profile.name", { profile: name })
-          : this._i18n.t("panel.profile.unknown"),
-        this._i18n.t("panel.common.not_yet"),
-      );
+      return html`<myhome-profile-card
+        .i18n=${this._i18n}
+        .state=${state}
+        .actions=${this._profileActions}
+      ></myhome-profile-card>`;
     }
     if (route.view !== "overview") {
       // `/calibrate/…` is reserved for 0.7.0, and anything else is a typed URL.
@@ -1342,6 +1578,7 @@ export class MyHomeCalibrationPanel extends LitElement {
 // bundler with aggressive side-effect pruning cannot decide the registrations are dead.
 void MyHomeOverview;
 void MyHomeCoverDetail;
+void MyHomeProfileCard;
 void MyHomeScreen;
 
 // Defined once, and only once: Home Assistant keeps a panel's module in the document after

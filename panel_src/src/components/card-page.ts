@@ -96,6 +96,12 @@ export const cardPageStyles = css`
       font-variant-numeric: tabular-nums;
     }
 
+    h3 {
+      margin: 16px 0 4px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
     .actions {
       display: flex;
       flex-direction: column;
@@ -145,6 +151,12 @@ export const cardPageStyles = css`
       line-height: 1.5;
     }
 
+    .warn strong {
+      font-weight: 500;
+      display: block;
+      margin-bottom: 4px;
+    }
+
     .danger {
       background: var(--myhome-error-pastel);
       border-radius: 8px;
@@ -159,6 +171,12 @@ export const cardPageStyles = css`
 
     .danger p {
       margin: 8px 0 0;
+    }
+
+    .danger ul {
+      margin: 4px 0 0;
+      padding: 0 0 0 20px;
+      line-height: 1.7;
     }
 
     .danger .soft {
