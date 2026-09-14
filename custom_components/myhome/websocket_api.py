@@ -1,4 +1,4 @@
-"""The panel's way in: three read commands over Home Assistant's WebSocket API.
+"""The panel's way in: fourteen commands over Home Assistant's WebSocket API.
 
 Registered once per Home Assistant run - not once per gateway - from `async_setup`,
 behind the same kind of flag the drawings' static path uses, because a command name is

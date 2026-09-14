@@ -320,8 +320,8 @@ with the numbers as they are being typed, so it is the real answer and not an
 estimate — and while a field is unusable it says to correct the fields rather than
 showing the last good answer as if it still applied.
 
-**Rename…** takes a name of letters, digits and underscores — no spaces and no
-accents, because the name is also a key of the configuration file. The rename follows
+**Rename…** takes a name of letters, digits and underscores, up to 64 of them — no
+spaces and no accents, because the name is also a key of the configuration file. The rename follows
 every cover the panel assigned to the profile. Covers whose own `profile:` line in
 the file names the old profile are not moved, and the confirmation says which ones
 those are.

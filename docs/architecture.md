@@ -40,6 +40,7 @@ that will ship as the next release) and `OWNd` 0.7.49.
 | `panel_schemas.py` | The shape of every WebSocket payload the panel reads or writes, frozen before the first write command existed: one place both halves are checked against. |
 | `panel_data.py` | The panel's reads — `overview`, `cover_detail`, `preview`, `texts` — and the language fallback behind the last of them. |
 | `panel_write.py` | The panel's writes, the one-write-at-a-time lock, the refusal while a calibration is running, the undo slot, and the dispatcher signal that reaches the covers without a reload. |
+| `websocket_api.py` | The panel's way in: the fourteen commands registered once per Home Assistant run, every one of them admin-only. The handlers hold no logic — a frame is unwrapped, one function of the two modules above is called, and its answer is sent back. |
 | `frontend/` | The built panel bundle (`myhome-panel.js`) and its third-party notices, served at `/myhome_panel`. Generated from `panel_src/`, committed because HACS ships this directory as it is. |
 | `discovery.py` | The bus-listening discovery service: a 60 s run, message classification, the public `myhome_device_discovered` / `myhome_discovery_completed` events. |
 | `config_flow_discovery.py` | Turns discovered devices into YAML suggestions and writes `myhome_discovered.yaml` atomically. Never touches `myhome.yaml`. |
@@ -694,9 +695,11 @@ the thing behind it expired is worse than no offer. Undoing an undo is not offer
 
 ### The WebSocket API
 
-`websocket_api` is a hard dependency. The commands live in `panel_data.py` (the
-reads), `panel_write.py` (the writes) and `panel_schemas.py` (the payload shapes,
-frozen before the first write command existed). Every command carries
+`websocket_api` is a hard dependency. The commands are registered and handled in
+`websocket_api.py`, whose handlers are deliberately thin: each unwraps a frame, calls
+one function and sends back what it is given. What those functions do lives in
+`panel_data.py` (the reads) and `panel_write.py` (the writes), and the shape of every
+payload in `panel_schemas.py` (frozen before the first write command existed). Every command carries
 `@websocket_api.require_admin`; `entry_id` is optional on the reads, where leaving it
 out means "the one gateway I have", and required on the writes, because a change
 applied to whichever gateway happened to be first is not a thing anybody asked for.
