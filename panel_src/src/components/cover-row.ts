@@ -7,10 +7,19 @@
 // full name on hover, because a German label is a third longer than an Italian one and a
 // house full of "Tapparella camera da letto grande" must still be readable.
 //
+// **The row is three siblings, not one button with things inside it.** The name and the
+// two texts are a button that opens the detail; the chips - the origin and, once a change
+// is pending, the route with its ✕ - are a `<div>` beside it. They used to be inside that
+// button, and the ✕ was a `<span role="button" tabindex="0">` nested in it: invalid HTML
+// (a button may contain no interactive content), and Safari does not put a button's
+// descendants in the tab order, so on that browser the only way to take a change back was
+// to drag the shutter home. The chips are still read with the row, through
+// `aria-describedby`, which is what an `aria-label` on the button would have thrown away.
+//
 // The row's button carries **no `aria-label`**. An `aria-label` replaces everything inside
-// the element it is on, so one saying "open the details of X" would hide the room, the
-// travel and the origin chip from a screen reader while leaving them on the screen for
-// everybody else. The button's own contents are already the sentence to read.
+// the element it is on, so one saying "open the details of X" would hide the room and the
+// travel from a screen reader while leaving them on the screen for everybody else. The
+// button's own contents are already the sentence to read.
 //
 // **The handle is the way in to all three gestures.** A pointer press starts a drag on a
 // desktop and arms a long press on a phone; Enter or Space opens "Quale profilo?", which
@@ -139,9 +148,19 @@ export const coverRowStyles = css`
     }
   }
 
-  .row .main {
+  /*
+   * The column beside the handle. It exists so that the chips can be a sibling of the
+   * button rather than a child of it, and still sit under the texts as the design draws
+   * them - the button is no longer the thing that owns the row's width.
+   */
+  .row .body {
     flex: 1 1 auto;
     min-width: 0;
+  }
+
+  .row .main {
+    display: block;
+    width: 100%;
     text-align: left;
     border: none;
     background: transparent;
@@ -166,6 +185,10 @@ export const coverRowStyles = css`
     font-size: 12.5px;
     color: var(--myhome-text-soft);
     margin-top: 2px;
+  }
+
+  .row .chips:empty {
+    display: none;
   }
 
   .row .chips {
@@ -300,6 +323,9 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
   const { i18n, pending } = context;
   const needsTravel = !!pending && pending.to !== null && cover.height === null;
   const note = pending ? ownNote(i18n, cover) : "";
+  // The chips are outside the button now, so the button has to point at them: a unique id
+  // per row, and `unique_id` is the one string on a row that is guaranteed to be one.
+  const chipsId = `chips-${cover.unique_id}`;
   return html`<div class="row" data-row=${cover.unique_id}>
     ${context.insertBefore
       ? html`<div class="insert-line" aria-hidden="true"></div>`
@@ -331,51 +357,44 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
     >
       ⠿
     </button>
-    <button
-      class="main"
-      type="button"
-      title=${cover.name}
-      @click=${() => context.onOpen(cover)}
+    <div
+      class="body"
       @pointerdown=${(event: PointerEvent) => context.onRowPress(cover, event)}
     >
-      <span class="name">${cover.name}</span>
-      <span class="sub">${subtitle(i18n, cover, needsTravel)}</span>
-      <span class="chips">
+      <button class="main" type="button" title=${cover.name} aria-describedby=${chipsId}
+        @click=${() => context.onOpen(cover)}>
+        <span class="name">${cover.name}</span>
+        <span class="sub">${subtitle(i18n, cover, needsTravel)}</span>
+        ${note ? html`<span class="note">${note}</span>` : nothing}
+        ${cover.profile_missing
+          ? html`<span class="warn"
+              >${i18n.t("panel.overview.cover.profile_missing", {
+                profile: cover.profile ?? "",
+              })}</span
+            >`
+          : nothing}
+        ${cover.profile_from_file && !cover.profile_missing
+          ? html`<span class="sub">${i18n.t("panel.overview.cover.from_file")}</span>`
+          : nothing}
+      </button>
+      <div class="chips" id=${chipsId}>
         ${originChip(i18n, cover.origin, cover.profile, context.short)}
         ${pending
           ? html`<span class="route">
               <span class="text">${context.route}</span>
-              <span
+              <button
                 class="withdraw"
-                role="button"
-                tabindex="0"
+                type="button"
                 aria-label=${i18n.t("panel.assign.action.withdraw")}
                 title=${i18n.t("panel.assign.action.withdraw")}
-                @click=${(event: Event) => {
-                  event.stopPropagation();
-                  context.onWithdraw(cover);
-                }}
-                @keydown=${(event: KeyboardEvent) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    context.onWithdraw(cover);
-                  }
-                }}
-                >✕</span
+                @pointerdown=${(event: Event) => event.stopPropagation()}
+                @click=${() => context.onWithdraw(cover)}
               >
+                ✕
+              </button>
             </span>`
           : nothing}
-      </span>
-      ${note ? html`<span class="note">${note}</span>` : nothing}
-      ${cover.profile_missing
-        ? html`<span class="warn"
-            >${i18n.t("panel.overview.cover.profile_missing", { profile: cover.profile ?? "" })}</span
-          >`
-        : nothing}
-      ${cover.profile_from_file && !cover.profile_missing
-        ? html`<span class="sub">${i18n.t("panel.overview.cover.from_file")}</span>`
-        : nothing}
-    </button>
+      </div>
+    </div>
   </div>`;
 };
