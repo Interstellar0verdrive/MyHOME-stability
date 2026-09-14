@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuratie van deze gateway",
-        "description": "**Gateway**: {gateway}\n\nHier wordt de gateway ingesteld en worden “eenvoudige” rolluiken gekalibreerd - de rolluiken waarvan Home Assistant de stand moet schatten uit de looptijden.\n\n**Wat u moet doen**: kies een optie. Er wordt niets weggeschreven tot er iets wordt opgeslagen, wat opgeslagen is gaat in zodra dit dialoogvenster gesloten wordt, en geen enkel rolluik beweegt voordat een scherm het aankondigt.",
+        "description": "**Gateway**: {gateway}\n\nHier wordt de gateway ingesteld en worden “eenvoudige” rolluiken gekalibreerd - de rolluiken waarvan Home Assistant de stand moet schatten uit de looptijden.\n\nProfielen en rolluiken kunnen ook vanuit het [paneel](/myhome-calibration) worden beheerd.\n\n**Wat u moet doen**: kies een optie. Er wordt niets weggeschreven tot er iets wordt opgeslagen, wat opgeslagen is gaat in zodra dit dialoogvenster gesloten wordt, en geen enkel rolluik beweegt voordat een scherm het aankondigt.",
         "menu_options": {
           "calibrate": "Kalibreer een rolluik",
           "profiles_covers": "Profielen en rolluiken",

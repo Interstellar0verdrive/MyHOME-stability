@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuring this gateway",
-        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: choose an option. Nothing is written until something is saved, what is saved is applied when this dialog is closed, and no cover moves before a screen says it is about to.",
+        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\nProfiles and covers can also be managed from the [panel](/myhome-calibration).\n\n**What you have to do**: choose an option. Nothing is written until something is saved, what is saved is applied when this dialog is closed, and no cover moves before a screen says it is about to.",
         "menu_options": {
           "calibrate": "Calibrate a cover",
           "profiles_covers": "Profiles and covers",

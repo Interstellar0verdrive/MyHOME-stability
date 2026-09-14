@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configurazione di questo gateway",
-        "description": "**Gateway**: {gateway}\n\nDa qui si configura il gateway e si calibrano le tapparelle “semplici”, quelle la cui posizione Home Assistant deve stimare dai tempi di corsa.\n\n**Cosa fare**: scegliere una voce. Niente viene scritto finché non si salva, e quello che si salva si applica alla chiusura del dialogo. Prima di ogni movimento della tapparella, una schermata avvisa che sta per iniziare.",
+        "description": "**Gateway**: {gateway}\n\nDa qui si configura il gateway e si calibrano le tapparelle “semplici”, quelle la cui posizione Home Assistant deve stimare dai tempi di corsa.\n\nProfili e tapparelle si gestiscono anche dal [pannello](/myhome-calibration).\n\n**Cosa fare**: scegliere una voce. Niente viene scritto finché non si salva, e quello che si salva si applica alla chiusura del dialogo. Prima di ogni movimento della tapparella, una schermata avvisa che sta per iniziare.",
         "menu_options": {
           "calibrate": "Calibra una tapparella",
           "profiles_covers": "Profili e tapparelle",

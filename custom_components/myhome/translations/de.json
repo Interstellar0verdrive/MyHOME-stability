@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Konfiguration dieses Gateways",
-        "description": "**Gateway**: {gateway}\n\nHier können Sie das Gateway einrichten und „einfache“ Rollläden kalibrieren – jene, deren Position Home Assistant aus den Laufzeiten schätzen muss.\n\n**Was Sie tun müssen**: wählen Sie einen Eintrag. Solange nichts gespeichert wird, wird nichts geschrieben; was gespeichert wurde, wird wirksam, sobald dieser Dialog geschlossen wird, und kein Rollladen bewegt sich, bevor ein Bildschirm es ankündigt.",
+        "description": "**Gateway**: {gateway}\n\nHier können Sie das Gateway einrichten und „einfache“ Rollläden kalibrieren – jene, deren Position Home Assistant aus den Laufzeiten schätzen muss.\n\nProfile und Rollläden lassen sich auch über das [Panel](/myhome-calibration) verwalten.\n\n**Was Sie tun müssen**: wählen Sie einen Eintrag. Solange nichts gespeichert wird, wird nichts geschrieben; was gespeichert wurde, wird wirksam, sobald dieser Dialog geschlossen wird, und kein Rollladen bewegt sich, bevor ein Bildschirm es ankündigt.",
         "menu_options": {
           "calibrate": "Einen Rollladen kalibrieren",
           "profiles_covers": "Profile und Rollläden",

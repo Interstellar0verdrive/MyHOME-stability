@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuración de esta pasarela",
-        "description": "**Pasarela**: {gateway}\n\nDesde aquí se configura la pasarela y se calibran las persianas «sencillas», aquellas cuya posición Home Assistant tiene que estimar a partir de los tiempos de recorrido.\n\n**Lo que tienes que hacer**: elige una opción. No se escribe nada mientras no se guarde, lo que se guarda se aplica al cerrar este diálogo, y ninguna persiana se mueve antes de que una pantalla lo anuncie.",
+        "description": "**Pasarela**: {gateway}\n\nDesde aquí se configura la pasarela y se calibran las persianas «sencillas», aquellas cuya posición Home Assistant tiene que estimar a partir de los tiempos de recorrido.\n\nLos perfiles y las persianas también se gestionan desde el [panel](/myhome-calibration).\n\n**Lo que tienes que hacer**: elige una opción. No se escribe nada mientras no se guarde, lo que se guarda se aplica al cerrar este diálogo, y ninguna persiana se mueve antes de que una pantalla lo anuncie.",
         "menu_options": {
           "calibrate": "Calibrar una persiana",
           "profiles_covers": "Perfiles y persianas",
