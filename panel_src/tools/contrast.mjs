@@ -61,7 +61,6 @@ const LIGHT = {
   success: "#43a047",
   info: "#039be5",
   onPrimary: "#ffffff",
-  snackAction: "#ffc107",
   divider: "#e0e0e0",
 };
 
@@ -81,7 +80,6 @@ const DARK = {
   success: "#66bb6a",
   info: "#4fc3f7",
   onPrimary: "#0b1417",
-  snackAction: "#8a5300",
   divider: "#3a3a3a",
 };
 
@@ -102,6 +100,23 @@ const DARK = {
  */
 const ink = (t, colour) => mix(colour, t.text, 50);
 
+/**
+ * `--myhome-snack-action`: the word "Annulla" on a strip that inverts the theme.
+ *
+ * The strip's ground is `--primary-text-color` and its text is `--primary-background-color`,
+ * so the one thing an action colour can be sure of is that moving towards the *text*
+ * colour moves it away from the ground - in both themes, which is the point. 40 % is the
+ * number at which the darker of the two (a dark theme's near-white strip) clears 4.5:1.
+ *
+ * Until 14 September this was a literal per theme - `#ffc107` for light, `#8a5300` for
+ * dark - and the dark one was `dev/harness.html`'s invention. Home Assistant defines
+ * `--snack-action-color` nowhere, so what a real dark installation used was the amber
+ * fallback on a near-white strip: 1.6:1, and unreadable, which is what the first live
+ * pass found. A check that measured the harness's number and not the panel's was the
+ * reason nothing caught it.
+ */
+const snackAction = (t) => mix(t.accent, t.background, 40);
+
 const pairs = (t) => [
   ["chip, neutral (Inherited / From the file / Defaults)", ink(t, t.soft), t.backgroundSoft, 12],
   ["chip, Measured", t.text, mix(t.primary, t.card, 20), 12],
@@ -110,7 +125,6 @@ const pairs = (t) => [
   ["row name", t.text, t.card, 14.5],
   ["row second line", t.soft, t.card, 12.5],
   ["group values and provenance", t.soft, t.card, 13],
-  ["the profile title, which is a link", ink(t, t.primary), t.card, 17],
   ["a cover on a profile nobody defines", ink(t, t.warning), t.card, 12.5],
   ["the note about own values", ink(t, t.info), t.card, 12.5],
   ["secondary button", ink(t, t.primary), t.card, 15],
@@ -120,10 +134,22 @@ const pairs = (t) => [
   ["the measuring banner", t.text, mix(t.warning, t.card, 12), 14],
   ["the banner's two links", ink(t, t.primary), mix(t.warning, t.card, 12), 14],
   ["the applying / undo strip", t.background, t.text, 14],
-  ["the word Annulla on that strip", t.snackAction, t.text, 14],
+  ["the word Annulla on that strip", snackAction(t), t.text, 14],
   ["the offline banner", t.text, mix(t.warning, t.card, 12), 14],
   ["the refusal card", t.text, mix(t.error, t.card, 12), 14],
   ["page text on the page background", t.text, t.background, 14],
+];
+
+/**
+ * WCAG's large text - 18.66 px bold or 24 px - held to 3:1 rather than to 4.5:1.
+ *
+ * The panel had none until 14 September. The profile's name at the head of a group is
+ * 19 px and 700 now, and is painted in the theme's own `--primary-color` rather than in
+ * the mixed ink lot 9 gave it: the decision of the first live pass, which read the ink on
+ * a real theme and found a grey-blue where the rest of Home Assistant paints its primary.
+ */
+const largeText = (t) => [
+  ["the profile's name at the head of a group", t.primary, t.card, "19 px / 700"],
 ];
 
 /**
@@ -143,6 +169,7 @@ const indicators = (t) => [
 /** What the panel cannot fix from inside a theme, measured and reported all the same. */
 const theirs = (t) => [
   ["the filled primary button (--text-primary-color on --primary-color)", t.onPrimary, t.primary],
+  ["the profile's name, large, on a card (--primary-color)", t.primary, t.card],
 ];
 
 let failures = 0;
@@ -157,6 +184,14 @@ for (const theme of [LIGHT, DARK]) {
     console.log(
       `  ${ok ? "AA " : "✖  "} ${value.toFixed(2).padStart(5)}:1  ${what} (${size} px)`,
     );
+  }
+  console.log(`${theme.name} - large text, held to 3:1 (WCAG 1.4.3 AA)`);
+  for (const [what, front, ground, size] of largeText(theme)) {
+    const value = ratio(front, ground);
+    // Reported and not counted, for the reason under `theirs` below: this is Home
+    // Assistant's own colour on Home Assistant's own card, and the panel diverging from
+    // it alone would be a panel that looks unlike the app it is in.
+    console.log(`  ${value >= 3 ? "AA " : "!  "} ${value.toFixed(2).padStart(5)}:1  ${what} (${size})`);
   }
   console.log(`${theme.name} - indicators, held to 3:1 (WCAG 1.4.11 AA)`);
   for (const [what, front, ground] of indicators(theme)) {

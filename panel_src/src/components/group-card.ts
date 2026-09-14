@@ -104,18 +104,36 @@ export const groupCardStyles = css`
     flex-wrap: wrap;
   }
 
+  /*
+   * 19 px and 700: the profile's name is the one heading on this screen painted in a
+   * colour, and WCAG's "large text" starts at 18.66 px bold. Which matters because of
+   * the colour it is painted in - see the button below.
+   */
   .group-head h2 {
     margin: 0;
-    font-size: 17px;
-    font-weight: 500;
+    font-size: 19px;
+    font-weight: 700;
     flex: 1 1 auto;
     min-width: 0;
   }
 
+  /*
+   * The theme's primary colour, undiluted.
+   *
+   * Lot 9 painted every coloured text in --myhome-<x>-ink, which is the colour mixed half
+   * and half with the theme's text colour, because at 12.5-17 px the pure colours are
+   * under AA on a card. The first live pass looked at the result on a real theme and
+   * called it what it is: a profile name in a muddy grey-blue, in a panel whose host
+   * paints its own titles in the theme's primary. So the title takes the primary itself,
+   * and it is made large text (above) so that 1.4.3's 3:1 is the bar it is held to. It is
+   * still under that in Home Assistant's *default* light theme, which is the same
+   * 2.63:1 pair as the filled primary button - the maintainer's decision, reported and not
+   * counted by npm run contrast, exactly as that button is.
+   */
   .group-head h2 button {
     border: none;
     background: transparent;
-    color: var(--myhome-primary-ink);
+    color: var(--myhome-primary);
     font: inherit;
     cursor: pointer;
     padding: 0;
