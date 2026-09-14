@@ -153,6 +153,38 @@ def storage_key(entry_id: str) -> str:
 # per-gateway dicts keyed by MAC address and nothing else (const.py, core-03).
 STORE_DATA_KEY = f"{DOMAIN}_calibration_stores"
 
+# ...and where the panel's one-slot undo of each gateway lives. The slot belongs to
+# `panel_write.py`, which is the only thing that fills it and the only thing that spends
+# it; the *key* is here because this module is the one that knows when the records under
+# that slot have stopped being the records it was taken against.
+#
+# An undo is a write of the file as it was before one particular change. That is worth
+# offering while nothing else has touched the file, and is a silent data loss the moment
+# something has: the guided calibration writes the same records through the same store
+# (`async_step_save`, the hand edit, "Elimina"), and before this the offer survived all
+# three. Three minutes with a tape against a window, and an "Annulla" still on the screen
+# from before it, put the old numbers back with nothing saying so.
+#
+# So every save withdraws it - see `CalibrationStore._async_save`, which is the one
+# chokepoint every writer of this module goes through. A panel write withdraws its
+# predecessor on the way past and then installs its own (`panel_write._remember` runs
+# after the command it is remembering), which is the behaviour that was already
+# documented and is now also true of the writers this module has that the panel does not.
+UNDO_DATA_KEY = f"{DOMAIN}_panel_undo"
+
+
+@callback
+def forget_the_undo(hass: HomeAssistant, entry_id: str) -> None:
+    """Withdraw the panel's outstanding "Annulla" for one gateway.
+
+    Called on every write of the store, from `_async_save`. Doing nothing when there is
+    no slot is the common case by a long way - most installations never open the panel -
+    so this is a `dict.get` and a `pop` and is meant to be.
+    """
+    slots = hass.data.get(UNDO_DATA_KEY)
+    if slots:
+        slots.pop(entry_id, None)
+
 # The file's own fallbacks, mirrored here. `_finalize_cover` lets a cover that writes
 # `roll:` say what *both* directions do and one that writes only `opening_time` say what
 # the downward run does too, so a cover whose file says `roll: 1.5` has stated its two
@@ -685,6 +717,14 @@ class CalibrationStore:
 
     # ----------------------------------------------------------------- writing
     async def _async_save(self) -> None:
+        """Write the file, and withdraw whatever undo was standing against the old one.
+
+        The one chokepoint: every writer in this module comes through here, which is why
+        the withdrawal is here and not in each of them. See `UNDO_DATA_KEY` for what the
+        offer was surviving before, and `panel_write.async_write` for why a panel write
+        that installs its own token immediately afterwards is unaffected.
+        """
+        forget_the_undo(self._hass, self._entry_id)
         await self._store.async_save(
             {
                 CONF_PROFILES: self._profiles,
@@ -1197,6 +1237,7 @@ __all__ = [
     "STORAGE_MINOR_VERSION",
     "STORAGE_VERSION",
     "STORE_DATA_KEY",
+    "UNDO_DATA_KEY",
     "CalibrationStore",
     "ResolvedCover",
     "ResolvedKey",
@@ -1207,6 +1248,7 @@ __all__ = [
     "cover_calibration_data",
     "cover_profile_data",
     "describe_profile",
+    "forget_the_undo",
     "keys_written_by_the_file",
     "loaded_store",
     "merged_profiles",
