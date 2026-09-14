@@ -58,6 +58,7 @@ from .calibration_store import (
     keys_written_by_the_file,
     loaded_store,
     merged_profiles,
+    profile_as_config,
     profile_overrides,
     profile_provenance,
     resolve_cover,
@@ -591,6 +592,7 @@ PREVIEW_PROBLEMS: tuple[str, ...] = (
 def _hypothetical_profiles(
     profiles: Mapping[str, Mapping[str, Any]],
     profile_values: Mapping[str, Mapping[str, Any]] | None,
+    raw_profiles: Mapping[str, Mapping[str, Any]],
 ) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
     """The gateway's profiles with some of their numbers replaced, for one answer only.
 
@@ -611,7 +613,18 @@ def _hypothetical_profiles(
       through it carries that problem instead of an answer - the same shape a bad
       `height` already has, and the reason this read still refuses nothing.
 
-    Nothing is written: the mapping is a copy that lives for the length of the call.
+    **The overridden profile is built the way the write's would be.** The six numbers
+    are `profile_edit`'s, and what `profile_edit` writes reaches the resolution through
+    `profile_as_config` - which derives `roll` from `closing_roll`, because a stored
+    profile does not carry one. Merging the six numbers straight into the config-shaped
+    mapping would leave the old `roll` standing beside the new directional pair, and the
+    preview would answer a number the write it is previewing could not produce. So a
+    profile the store owns is re-shaped from its own record; one that only
+    `cover_profiles:` defines is not, because its `roll:` is the file's own statement and
+    no write from here can touch it.
+
+    Nothing is written: the mapping is a copy that lives for the length of the call, and
+    so is the record `profile_as_config` is handed.
     """
     merged = dict(profiles)
     broken: dict[str, str] = {}
@@ -632,7 +645,9 @@ def _hypothetical_profiles(
         if problem is not None:
             broken[name] = problem
             continue
-        merged[name] = {**merged[name], **numbers}
+        stored = raw_profiles.get(name)
+        shaped = None if stored is None else profile_as_config(name, {**stored, **numbers})
+        merged[name] = shaped if shaped is not None else {**merged[name], **numbers}
     return merged, broken
 
 
@@ -785,6 +800,7 @@ def async_preview(
     profiles, broken = _hypothetical_profiles(
         merged_profiles(yaml_profiles(hass, entry), store.profiles if store else {}),
         profile_values,
+        store.raw_profiles if store else {},
     )
     covers = basic_covers(hass, entry)
     return {

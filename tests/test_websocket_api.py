@@ -51,6 +51,7 @@ from custom_components.myhome.const import (
     CONF_OPENING_TIME,
     CONF_ORDER,
     CONF_PROFILES,
+    CONF_ROLL,
     CONF_SLAT_TIME,
     DOMAIN,
 )
@@ -2854,3 +2855,93 @@ async def test_an_override_must_state_every_number_a_profile_has(
             profile_values={"tall": {CONF_OPENING_TIME: 18.0}},
         )
         assert error["code"] == ws_const.ERR_INVALID_FORMAT
+
+
+async def test_the_impact_preview_is_exactly_what_the_profile_edit_would_produce(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The parity invariant of the review panel, one level up.
+
+    `profile_values` takes exactly `profile_edit`'s six numbers because the card that
+    asks it is the card that then writes them. So the answer has to be what the write
+    produces, whole: the same `values`, the same per-key origins, the same
+    `Calibration source` string. Asking with one function and writing with another is
+    the drift this command exists to make impossible, and the assignment preview has
+    had this assertion since lot 3 - the override never got one.
+
+    Mutation caught: building the hypothetical profile by a different rule from
+    `profile_as_config`'s, which is what the write's numbers go through on their way
+    back out. `roll` is the key that catches it: a stored profile does not carry one,
+    and the read side derives it from `closing_roll`.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[
+                {"cover_unique_id": FIRST, "profile": "tall"},
+                {"cover_unique_id": SECOND, "profile": "tall"},
+            ],
+            profile_values={"tall": FASTER},
+        )
+        answer = await result(
+            client,
+            type=WS_TYPE_PROFILE_EDIT,
+            entry_id=entry.entry_id,
+            name="tall",
+            values={key: FASTER[key] for key in MEASURABLE_KEYS},
+            reference_height=FASTER["reference_height"],
+        )
+        for unique_id in (FIRST, SECOND):
+            row = row_of(answer["overview"], unique_id)
+            item = await item_of(preview, unique_id)
+            for field in ("values", "origin", "source", "has_own", "height", "profile"):
+                assert item[field] == row[field], f"{unique_id} {field}"
+
+
+async def test_an_override_of_a_file_profile_leaves_the_files_own_roll_alone(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`cover_profiles:` is a block of the user's file, and `roll:` in it is a statement.
+
+    The six numbers an override carries are `profile_edit`'s, and `profile_edit` refuses
+    a file profile: there is no write here whose result this could be. So the one key
+    the six do not name - `roll`, which a stored profile does not have and a written one
+    may - is left exactly as the file wrote it, while the two directional coefficients
+    follow the override like the rest.
+
+    Mutation caught: deriving `roll` from `closing_roll` for every profile rather than
+    only for the ones the store owns, which would answer a number the file does not say
+    and no write could make it say.
+    """
+    async with setup_myhome(hass, tmp_path, FILE_PROFILE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        item = {"cover_unique_id": PORCH, "profile": None}
+        plain = await result(
+            client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=[item]
+        )
+        overridden = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[item],
+            # The file's own reference height, so that the only thing moving in the
+            # comparison below is the coefficient and not the scale it is grown by.
+            profile_values={"from_the_file": {**FASTER, "reference_height": 200}},
+        )
+        assert overridden["items"][0]["problem"] is None
+        assert (
+            overridden["items"][0]["values"][CONF_CLOSING_ROLL]
+            != plain["items"][0]["values"][CONF_CLOSING_ROLL]
+        )
+        assert overridden["items"][0]["values"][CONF_ROLL] == pytest.approx(
+            plain["items"][0]["values"][CONF_ROLL]
+        )
