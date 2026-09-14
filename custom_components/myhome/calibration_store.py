@@ -207,6 +207,54 @@ def keys_written_by_the_file(device: Mapping[str, Any]) -> set[str]:
 
 
 @callback
+def _a_stored_number(value: Any) -> float | None:
+    """One number as a `.storage` file holds it, or None when it is not one.
+
+    Every number below this line has been through a JSON file that a person is allowed
+    to open in an editor, so `float(value)` is a call that can raise on a byte nobody
+    typed on purpose - and raising here takes the whole cover platform down, because
+    the resolution runs inside `cover.async_setup_entry`. A key that is not a number is
+    therefore a key that was never said, which is the same answer the file would give
+    by leaving it out, and the shutter goes on running on what is left.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+@callback
+def _records_only(
+    section: Mapping[str, Any], what: str, entry_id: str
+) -> dict[str, dict[str, Any]]:
+    """The entries of one stored section that are records, and a word about the rest.
+
+    A record is a mapping keyed by a string; anything else in that place is a file
+    somebody edited by hand (or a section a future version writes differently), and it
+    is dropped rather than handed on. Dropping it here, once, is what keeps every
+    reader below - `profile_as_config`, `stored_calibration`, `covers_following`,
+    `calibrations` - from having to ask whether its own input is a mapping, and what
+    stops a single bad line in `.storage` from taking every shutter of the gateway off
+    the screen with an `AttributeError` inside the cover platform's setup.
+    """
+    kept: dict[str, dict[str, Any]] = {}
+    for key, value in section.items():
+        if isinstance(key, str) and isinstance(value, Mapping):
+            kept[key] = dict(value)
+        else:
+            LOGGER.warning(
+                "Ignoring a stored %s that is not a record (%s, in the calibration file "
+                "of %s); the shutters go on running on what is left",
+                what,
+                key,
+                entry_id,
+            )
+    return kept
+
+
+@callback
 def reset_name_clash_warnings() -> None:
     """Forget which clashing names have been reported (a reload says it again once)."""
     _CLASH_REPORTED.clear()
@@ -365,14 +413,21 @@ class StoredCalibration:
 @callback
 def stored_calibration(data: Mapping[str, Any]) -> StoredCalibration:
     """Read one cover's record out of the store (or out of a legacy subentry)."""
-    overrides = data.get(CONF_OVERRIDES) or {}
+    stored = data.get(CONF_OVERRIDES)
+    overrides = stored if isinstance(stored, Mapping) else {}
+    profile = data.get(CONF_PROFILE)
     return StoredCalibration(
         cover_unique_id=str(data.get(CONF_COVER_UNIQUE_ID, "")),
-        profile=data.get(CONF_PROFILE),
+        # Every field is read the way the file may really hold it rather than the way
+        # the flow writes it: this record has been through a JSON file a person can
+        # edit, and a `TypeError` here is raised inside the cover platform's setup.
+        profile=profile if isinstance(profile, str) else None,
         profile_wins=bool(data.get(CONF_PROFILE_WINS)),
-        height=data.get(CONF_HEIGHT),
+        height=_a_stored_number(data.get(CONF_HEIGHT)),
         overrides={
-            key: float(value) for key, value in overrides.items() if key in COVER_CALIBRATION_KEYS
+            key: number
+            for key, value in overrides.items()
+            if key in COVER_CALIBRATION_KEYS and (number := _a_stored_number(value)) is not None
         },
         source=data.get(CONF_SOURCE, CALIBRATION_SOURCE_GUIDED),
         measured_at=data.get(CONF_MEASURED_AT),
@@ -390,8 +445,8 @@ def profile_as_config(name: str, data: Mapping[str, Any]) -> dict[str, Any] | No
     one does not understand): ignoring it leaves the cover on its YAML numbers, which
     is the safe way to be wrong.
     """
-    opening = data.get(CONF_OPENING_TIME)
-    reference = data.get(CONF_REFERENCE_HEIGHT)
+    opening = _a_stored_number(data.get(CONF_OPENING_TIME))
+    reference = _a_stored_number(data.get(CONF_REFERENCE_HEIGHT))
     if not name or opening is None or not reference:
         LOGGER.warning(
             "Ignoring a stored cover profile without a name, an opening time or a "
@@ -399,22 +454,28 @@ def profile_as_config(name: str, data: Mapping[str, Any]) -> dict[str, Any] | No
             name or "unnamed",
         )
         return None
-    closing_roll = data.get(CONF_CLOSING_ROLL, data.get(CONF_ROLL, 1.0))
+
+    def number(key: str, fallback: float) -> float:
+        """One of the profile's numbers, or the fallback where the file has nonsense."""
+        read = _a_stored_number(data.get(key))
+        return fallback if read is None else read
+
+    closing_roll = number(CONF_CLOSING_ROLL, number(CONF_ROLL, 1.0))
     return {
-        CONF_REFERENCE_HEIGHT: float(reference),
-        CONF_OPENING_TIME: float(opening),
-        CONF_CLOSING_TIME: float(data.get(CONF_CLOSING_TIME, opening)),
-        CONF_SLAT_TIME: float(data.get(CONF_SLAT_TIME, 0.0)),
+        CONF_REFERENCE_HEIGHT: reference,
+        CONF_OPENING_TIME: opening,
+        CONF_CLOSING_TIME: number(CONF_CLOSING_TIME, opening),
+        CONF_SLAT_TIME: number(CONF_SLAT_TIME, 0.0),
         # `roll` is the fallback of the two directional ones and the one
         # `derive_cover_from_profile` grows the *curtain time* from, which is a length
         # of fabric and therefore the closing one (see that function).
-        CONF_ROLL: float(closing_roll),
-        CONF_OPENING_ROLL: float(data.get(CONF_OPENING_ROLL, closing_roll)),
-        CONF_CLOSING_ROLL: float(closing_roll),
+        CONF_ROLL: closing_roll,
+        CONF_OPENING_ROLL: number(CONF_OPENING_ROLL, closing_roll),
+        CONF_CLOSING_ROLL: closing_roll,
         # Never measured by the flow, never scaled by the profile: constants of the
         # installation (0.4.4).
-        CONF_STOP_LATENCY: float(data.get(CONF_STOP_LATENCY, DEFAULT_STOP_LATENCY)),
-        CONF_START_DELAY: float(data.get(CONF_START_DELAY, DEFAULT_START_DELAY)),
+        CONF_STOP_LATENCY: number(CONF_STOP_LATENCY, DEFAULT_STOP_LATENCY),
+        CONF_START_DELAY: number(CONF_START_DELAY, DEFAULT_START_DELAY),
     }
 
 
@@ -499,6 +560,7 @@ class CalibrationStore:
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         """Nothing is read here; `async_load` does that."""
         self._hass = hass
+        self._entry_id = entry_id
         self._store: Store[dict[str, Any]] = _MyHomeCalibrationStore(
             hass,
             STORAGE_VERSION,
@@ -516,8 +578,16 @@ class CalibrationStore:
         profiles = data.get(CONF_PROFILES)
         covers = data.get(CONF_COVERS)
         order = data.get(CONF_ORDER)
-        self._profiles = dict(profiles) if isinstance(profiles, dict) else {}
-        self._covers = dict(covers) if isinstance(covers, dict) else {}
+        self._profiles = (
+            _records_only(profiles, "cover profile", self._entry_id)
+            if isinstance(profiles, dict)
+            else {}
+        )
+        self._covers = (
+            _records_only(covers, "calibration", self._entry_id)
+            if isinstance(covers, dict)
+            else {}
+        )
         # Forgiven exactly as the two dicts above are: a list that is not a list is no
         # list at all, and the shutters go back to the file's own order.
         self._order = normalised_order(order) if isinstance(order, list) else []

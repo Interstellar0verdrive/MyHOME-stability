@@ -559,6 +559,144 @@ async def test_a_store_file_that_is_not_a_store_leaves_the_covers_alone(
         assert hass.states.get(ENTITY).attributes["Opening time"] == 20.0
 
 
+# Eight shapes a `.storage` file can really be in once somebody has opened it in an
+# editor - or once a future version of this integration has written a section this one
+# does not understand. Every one of them used to raise inside `cover.async_setup_entry`,
+# which is where the resolution runs: the exception took the *whole cover platform* of
+# that gateway down, so a single mistyped line in one record removed every shutter of
+# the house from Home Assistant, with an `AttributeError` in the log and nothing on any
+# screen saying which line it was.
+CORRUPTED_FILES: list[tuple[str, dict[str, Any]]] = [
+    ("a profile that is null", {CONF_PROFILES: {"tall": None}, CONF_COVERS: {}}),
+    ("a profile that is a string", {CONF_PROFILES: {"tall": "22.3"}, CONF_COVERS: {}}),
+    ("a profile that is a list", {CONF_PROFILES: {"tall": [22.3, 21.7]}, CONF_COVERS: {}}),
+    ("a record that is null", {CONF_PROFILES: {}, CONF_COVERS: {UNIQUE_ID: None}}),
+    ("a record that is a string", {CONF_PROFILES: {}, CONF_COVERS: {UNIQUE_ID: "tall"}}),
+    (
+        "overrides that are not a mapping",
+        {CONF_PROFILES: {}, CONF_COVERS: {UNIQUE_ID: {CONF_OVERRIDES: "22.3"}}},
+    ),
+    (
+        "an override that is not a number",
+        {
+            CONF_PROFILES: {},
+            CONF_COVERS: {UNIQUE_ID: {CONF_OVERRIDES: {CONF_OPENING_TIME: "quite slow"}}},
+        },
+    ),
+    (
+        "a travel that is not a number",
+        {CONF_PROFILES: {}, CONF_COVERS: {UNIQUE_ID: {CONF_HEIGHT: "tall"}}},
+    ),
+    (
+        "a profile whose numbers are words",
+        {
+            CONF_PROFILES: {
+                "tall": {
+                    CONF_NAME: "tall",
+                    CONF_REFERENCE_HEIGHT: 195.0,
+                    CONF_OPENING_TIME: 22.3,
+                    CONF_CLOSING_TIME: "about twenty",
+                    CONF_ROLL: "one and a half",
+                }
+            },
+            CONF_COVERS: {},
+        },
+    ),
+    (
+        "a profile with no numbers at all",
+        {CONF_PROFILES: {"tall": {CONF_NAME: "tall"}}, CONF_COVERS: {}},
+    ),
+    ("an order that is not a list", {CONF_PROFILES: {}, CONF_COVERS: {}, CONF_ORDER: "82,81"}),
+    (
+        "an order of nulls, numbers and repeats",
+        {CONF_PROFILES: {}, CONF_COVERS: {}, CONF_ORDER: [None, 3, UNIQUE_ID, UNIQUE_ID, ""]},
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("case", "calibration"),
+    CORRUPTED_FILES,
+    ids=[case for case, _file in CORRUPTED_FILES],
+)
+async def test_a_line_somebody_mistyped_costs_that_line_and_not_the_shutters(
+    hass: HomeAssistant, tmp_path, caplog, case: str, calibration: dict[str, Any]
+) -> None:
+    """A hand-edited calibration file loses what it got wrong and nothing else.
+
+    The rule the module already states for the two top-level sections
+    (`test_a_store_file_that_is_not_a_store_leaves_the_covers_alone`) applied only to
+    them: one section could be a mapping of perfectly good records and one string, and
+    the string reached `profile_as_config` / `stored_calibration` / `resolve_cover`,
+    where `.get`, `**` and `float()` raise. That happens inside
+    `cover.async_setup_entry`, so the cost was every shutter of the gateway.
+
+    Now the cover is set up, it runs on what `myhome.yaml` says, and the store answers
+    with what it could read. The reading is forgiving in exactly two places and both are
+    stated: a section entry that is not a record is dropped (`_records_only`), and a key
+    that is not a number is a key that was never said (`_a_stored_number`) - which is the
+    same answer the file gives by leaving it out.
+
+    Mutation caught: reading a section entry without asking whether it is a mapping;
+    `float(value)` anywhere on this side of the file.
+    """
+    with caplog.at_level(logging.WARNING):
+        async with setup_myhome(hass, tmp_path, PLAIN_YAML, calibration=calibration) as (
+            entry,
+            _commands,
+        ):
+            # The shutter is there, and it is running on its own file.
+            state = hass.states.get(ENTITY)
+            assert state is not None, case
+            assert state.attributes["Opening time"] == 20.0, case
+            assert state.attributes[ATTR_CALIBRATION_SOURCE] == "yaml", case
+            # ...and every question the panel and the resolution ask of the store is
+            # answered rather than raised, with a shape the callers can use.
+            store = loaded_store(hass, entry)
+            assert all(isinstance(item, dict) for item in store.profiles.values()), case
+            assert all(
+                isinstance(item, StoredCalibration) for item in store.calibrations.values()
+            ), case
+            assert store.covers_following("tall") == [], case
+            assert all(isinstance(item, str) and item for item in store.raw_order), case
+
+
+async def test_a_travel_the_file_states_in_words_is_a_travel_nobody_stated(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """...and the forgiveness is a *dropped* key, not a zero or a guess.
+
+    A record whose `height` is the word "tall" is a record with no travel in it, which
+    is the state the panel calls "corsa mancante" and offers a form for. Reading it as
+    0.0 would be a window 0 cm tall, and every profile scaled onto it would be nonsense
+    the user could not see the cause of.
+
+    Mutation caught: `float(value) if value else 0.0` instead of "not a number, not a
+    key".
+    """
+    calibration = {
+        CONF_PROFILES: {},
+        CONF_COVERS: {
+            UNIQUE_ID: {
+                CONF_HEIGHT: "tall",
+                CONF_OVERRIDES: {CONF_OPENING_TIME: 25.0, CONF_CLOSING_TIME: "slow"},
+                CONF_PROFILE: {"not": "a name"},
+            }
+        },
+    }
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML, calibration=calibration) as (
+        entry,
+        _commands,
+    ):
+        record = loaded_store(hass, entry).calibration(UNIQUE_ID)
+        assert record.height is None
+        assert record.profile is None
+        # The one number that *was* a number is kept, and the shutter runs on it.
+        assert record.overrides == {CONF_OPENING_TIME: 25.0}
+        assert hass.states.get(ENTITY).attributes["Opening time"] == 25.0
+        assert hass.states.get(ENTITY).attributes["Closing time"] == 19.0
+
+
 def test_the_builders_keep_only_what_the_travel_model_knows(caplog) -> None:
     """A key the model never reads is a key nobody would ever notice doing nothing."""
     with caplog.at_level(logging.WARNING):
