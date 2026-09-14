@@ -631,17 +631,22 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
     const items = assignItems(state.pending, state.heights);
     const order = state.order ?? undefined;
-    const count = items.length;
     this._store.announce(this._i18n.t("panel.assign.announce.applying"));
     await this._write(
       () => sendAssign(this.hass.connection, entryId, items, order),
       (result) => {
         this._store.set({ ...NOTHING_PENDING });
         this._store.setOverview(result.overview);
+        // `applied` and not the length of the batch: the server counts the rows that
+        // really changed something (contract §9.1), and they are not always the same
+        // number. Taking a shutter out of a profile its *file* gives it writes nothing -
+        // the record had no profile to remove - and the row goes back where it was, so
+        // "1 assignment applied" beside a list that did not move is the screen saying
+        // something the gateway did not.
         this._snack(
-          count === 1
+          result.applied === 1
             ? this._i18n.t("panel.toast.assigned_one")
-            : this._i18n.t("panel.toast.assigned", { count }),
+            : this._i18n.t("panel.toast.assigned", { count: result.applied }),
           result.undo_token,
         );
       },
