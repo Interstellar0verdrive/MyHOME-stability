@@ -589,6 +589,11 @@ Lit is bundled into that file, and BSD-3-Clause asks a binary redistribution to 
 its copyright notice: esbuild's `legalComments: "eof"` puts the notices at the end of
 the bundle and the full licence text ships beside it.
 
+`build.mjs` also minifies the stylesheets, which `--minify` cannot: a Lit stylesheet is a
+tagged template literal, and a template literal's contents are part of the program. Each
+block is handed to esbuild's own CSS minifier on the way in, which is fourteen kilobytes
+of indentation in a file with a 150 kB ceiling.
+
 The built file is committed because HACS copies `custom_components/myhome/` as it is
 at the tag and `release.yml` zips the same directory: there is no build step at a
 user's end. Three things keep it honest — `.github/workflows/panel.yml`
@@ -615,6 +620,32 @@ exactly as `async_set_assignments` would rewrite it, handed to `resolve_cover`, 
 nothing stored and no lock taken. It is the only command that refuses per item rather than
 per batch: a preview writes nothing, so a row that still needs its travel is a form to
 fill in and not a reason to blank the other eleven answers.
+
+The same command answers the other two screens that would otherwise have had to do
+arithmetic. The cover card's travel field asks it with the typed travel and the shutter's
+own assignment, because a travel is what a profile is scaled by; and the profile card's
+editor asks it with **`profile_values`** — the numbers being typed, in the profile's place,
+for the length of one answer — and one item per follower, which is the live impact preview
+beside the fields. Neither writes anything, and neither has a copy of the travel model in
+it.
+
+`cover_detail` grew a `forget` block for the third of those screens. "Rimuovi la misura"
+takes the whole record — the assignment goes with it, and so does a travel nobody else
+states — so the per-key `inherited_value`, which takes only the overrides away, is the
+wrong number to build that confirmation from. The block is the window resolved once more
+with the record gone, which is exactly what `cover_forget` does after the write, so the
+sentence read before and the sentence read after are one answer.
+
+### Getting to the options flow from the panel
+
+Five of the panel's controls end in the guided calibration, which stays in the options flow
+for 0.6.0. There is no public way to open one from a custom panel: the frontend's
+`show-dialog` event wants a `flowConfig` of some twenty callbacks that only code built
+against the frontend source can construct. So the panel probes for the dialog element,
+fires the event when it is there, watches for 400 ms, and otherwise — which is the expected
+case on a fresh page load — navigates to `/config/integrations/integration/myhome`, where
+the next click is "Configura". The page is the contract; the dialog is an optimisation, and
+nothing becomes unreachable if it never works.
 
 ## The validator contract
 
