@@ -111,6 +111,25 @@ export const movedTo = (
 };
 
 /**
+ * The order with one shutter put at the end of the group it has just been sent to.
+ *
+ * A tap and a keyboard assignment mean "append", which is what a batch with **no** `order`
+ * already means to the server (contract §9.1). But a batch that carries an order - and it
+ * does the moment anything has been dragged - carries the whole gateway's list, and the
+ * shutter would keep the place it had in it. So the same meaning is written into the list
+ * the batch is about to send: after the last member of the destination group, or at the
+ * end of everything when that group is empty.
+ */
+export const appendedToGroup = (
+  order: readonly string[],
+  cover: string,
+  membersInOrder: readonly string[],
+): string[] => {
+  const last = membersInOrder.filter((id) => id !== cover).at(-1) ?? null;
+  return movedTo(order, cover, { beforeId: null, afterId: last });
+};
+
+/**
  * The batch, as `assign` wants it: one item per pending change, with the travel where the
  * review panel collected one.
  *

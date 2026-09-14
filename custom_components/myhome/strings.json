@@ -715,6 +715,7 @@
       "all_rooms": "All rooms",
       "opens_configure": "This opens the Configure dialog. The panel refreshes on its own when it closes.",
       "not_loaded": "This gateway is not loaded, so there is nothing to read here yet.",
+      "required": "This field cannot be left empty.",
       "not_yet": "This screen arrives in a later version. Until then “Configure” does everything it will do.",
       "polling": "Live updates are not available on this version: the page refreshes on its own every 30 seconds.",
       "action": {
@@ -1003,6 +1004,7 @@
       "not_in_this_version": "This step belongs to the guided calibration, which moves into the panel in a later version.",
       "motor": "Motor",
       "position": "Estimated position",
+      "progress": "Positioning progress",
       "completed": "Completed"
     },
     "error": {

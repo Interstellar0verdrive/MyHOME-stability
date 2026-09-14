@@ -715,6 +715,7 @@
       "all_rooms": "Tutte le stanze",
       "opens_configure": "Si apre il dialogo Configura. Alla chiusura il pannello si aggiorna da solo.",
       "not_loaded": "Questo gateway non è caricato: per ora non c'è niente da leggere.",
+      "required": "Questo campo non può restare vuoto.",
       "not_yet": "Questa schermata arriva in una versione successiva. Fino ad allora “Configura” fa tutto quello che farà.",
       "polling": "Gli aggiornamenti in tempo reale non sono disponibili su questa versione: la pagina si aggiorna da sola ogni 30 secondi.",
       "action": {
@@ -1003,6 +1004,7 @@
       "not_in_this_version": "Questo passaggio appartiene alla calibrazione guidata, che si sposta nel pannello in una versione successiva.",
       "motor": "Motore",
       "position": "Posizione stimata",
+      "progress": "Avanzamento del posizionamento",
       "completed": "Completato"
     },
     "error": {

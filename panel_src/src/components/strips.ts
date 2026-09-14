@@ -59,9 +59,15 @@ export const stripStyles = css`
     font-size: 14px;
   }
 
+  /*
+   * The armed strip used to sit 84 px up, where the pending bar would have been. Only one
+   * strip is ever drawn at a time (the view returns the first that applies), so
+   * that gap bought nothing - and on a short page, with every group collapsed to a 48 px
+   * title, it landed on top of one of the targets the user is being asked to tap. It sits
+   * where every other strip sits now, inside the 96 px the list already keeps clear.
+   */
   .armed {
     z-index: 40;
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     padding: 10px 16px;
     display: flex;
     gap: 16px;

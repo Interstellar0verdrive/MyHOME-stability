@@ -91,6 +91,17 @@ const SNACK_MS = 7_000;
  */
 const PREVIEW_DEBOUNCE_MS = 400;
 
+/**
+ * The shortest gap between two reads caused by a *server push*.
+ *
+ * A push arrives after every write of every browser looking at this gateway, and two
+ * payloads have to be asked again when one does: the batch preview, while the review panel
+ * is open, and the open card, which a push says nothing about. On a house where something
+ * else writes often that was one round trip each per write, unthrottled. They are asked at
+ * most this often now, and always at least once - the follow-up is delayed, never dropped.
+ */
+const PUSH_FOLLOW_MS = 2_000;
+
 export class MyHomeCalibrationPanel extends LitElement {
   static override properties = {
     hass: { attribute: false },
@@ -116,6 +127,8 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _previewTimer: ReturnType<typeof setTimeout> | null = null;
   private _travelTimer: ReturnType<typeof setTimeout> | null = null;
   private _impactTimer: ReturnType<typeof setTimeout> | null = null;
+  private _followTimer: ReturnType<typeof setTimeout> | null = null;
+  private _followedAt = 0;
   /** Every preview answer but the last is thrown away: they arrive out of order. */
   private _previewSeq = 0;
 
@@ -261,6 +274,10 @@ export class MyHomeCalibrationPanel extends LitElement {
       clearTimeout(this._impactTimer);
       this._impactTimer = null;
     }
+    if (this._followTimer) {
+      clearTimeout(this._followTimer);
+      this._followTimer = null;
+    }
     const unsubscribe = this._unsubscribeWs;
     this._unsubscribeWs = null;
     // The socket outlives the element, so a subscription that is not given back keeps a
@@ -354,6 +371,12 @@ export class MyHomeCalibrationPanel extends LitElement {
    * thirty seconds, and says so at the foot of the page.
    */
   private async _listen(): Promise<void> {
+    // Asked for a second time - "Try again" on the refusal card - the old subscription is
+    // given back first. Two live subscriptions on one gateway would each push a whole
+    // overview at every write, and only one of them would ever be unsubscribed.
+    const previous = this._unsubscribeWs;
+    this._unsubscribeWs = null;
+    await previous?.().catch(() => undefined);
     try {
       this._unsubscribeWs = await subscribe(
         this.hass.connection,
@@ -380,15 +403,10 @@ export class MyHomeCalibrationPanel extends LitElement {
       // is halfway through composing here. What the new model *can* change is what those
       // assignments would come to, so the preview is asked again.
       this._store.setOverview(event.overview);
-      if (this._store.state.review) {
-        this._schedulePreview();
-      }
-      // The card is a second payload and a push says nothing about it. Re-read it while
-      // it is on the screen, so a measurement finished in the dialog - or a change made
-      // in another tab - reaches the rows that are being looked at.
-      if (this._store.state.detail.for) {
-        void this._loadDetail();
-      }
+      // The preview and the open card are second payloads a push says nothing about, so
+      // both are asked again - through one throttle, because a gateway somebody else is
+      // writing to can push faster than a round trip takes.
+      this._followPush();
       return;
     }
     if (event.type === "measuring") {
@@ -416,6 +434,30 @@ export class MyHomeCalibrationPanel extends LitElement {
         );
       }
     }
+  }
+
+  /**
+   * The two reads a push implies, at most one burst every `PUSH_FOLLOW_MS`.
+   *
+   * Delayed and never dropped: while a follow-up is already waiting, a second push is
+   * answered by the one that is coming, and it reads the state as it will be then rather
+   * than as it is now.
+   */
+  private _followPush(): void {
+    if (this._followTimer) {
+      return;
+    }
+    const wait = Math.max(0, PUSH_FOLLOW_MS - (Date.now() - this._followedAt));
+    this._followTimer = setTimeout(() => {
+      this._followTimer = null;
+      this._followedAt = Date.now();
+      if (this._store.state.review) {
+        this._schedulePreview();
+      }
+      if (this._store.state.detail.for) {
+        void this._loadDetail();
+      }
+    }, wait);
   }
 
   private _startPolling(): void {
@@ -1431,6 +1473,21 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
   }
 
+  /**
+   * "Try again", which re-reads the gateway **and** asks for live updates again.
+   *
+   * The subscription is attempted once, at boot. A panel that started while the backend
+   * was reloading caught the refusal, fell back to the thirty-second poll, and stayed
+   * there for the life of the tab - the one button on the screen that says "try again"
+   * only ever retried the half that had nothing to do with it.
+   */
+  private async _retry(): Promise<void> {
+    await this._refresh();
+    if (this._store.state.connection !== "live") {
+      await this._listen();
+    }
+  }
+
   private _renderView(): TemplateResult {
     const state = this._store.state;
 
@@ -1447,7 +1504,7 @@ export class MyHomeCalibrationPanel extends LitElement {
         </div>
         <div class="soft">${error ? `${error.code}: ${error.message}` : ""}</div>
         <div class="soft">
-          <button class="cta text" type="button" @click=${() => void this._refresh()}>
+          <button class="cta text" type="button" @click=${() => void this._retry()}>
             ${this._i18n.t("panel.common.action.retry")}
           </button>
           <a href=${FLOW_URL}>${this._i18n.t("panel.common.action.configure")}</a>

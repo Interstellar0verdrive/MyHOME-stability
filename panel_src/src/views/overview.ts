@@ -27,7 +27,13 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { FocusTrap } from "../engine/a11y";
-import { effectiveProfile, movedTo, orderedCovers, pendingFor } from "../engine/assign";
+import {
+  appendedToGroup,
+  effectiveProfile,
+  movedTo,
+  orderedCovers,
+  pendingFor,
+} from "../engine/assign";
 import { DragController, flipPlay, flipStart, type DropTarget } from "../engine/dnd";
 import { I18n } from "../engine/i18n";
 import { renderMarkdown } from "../engine/markdown";
@@ -299,11 +305,13 @@ export class MyHomeOverview extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener("keydown", this._onKey);
+    this._narrowQuery?.addEventListener("change", this._onWidth);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._onKey);
+    this._narrowQuery?.removeEventListener("change", this._onWidth);
     // A drag that outlived its view would go on hit-testing a shadow root nothing renders.
     this._drag.stop();
     this._trap.release();
@@ -340,6 +348,18 @@ export class MyHomeOverview extends LitElement {
    * are about pixels that exist, and they can only be measured after Lit has painted.
    */
   protected override updated(changed: PropertyValues): void {
+    // A measurement can start while a finger is still down. `main.ts` drops `state.drag`
+    // the moment the event arrives, but the controller is a different object and would go
+    // on moving its ghost until the finger came up - and nothing would have been said. The
+    // flight is given back here, where the lock is first *drawn*, and the same call kills a
+    // long press that would otherwise arm a shutter nobody may move.
+    if (this._locked) {
+      const flying = this._drag.dragging !== null;
+      this._drag.stop();
+      if (flying) {
+        this.actions.announce(this.i18n.t("panel.assign.announce.drag_cancelled"));
+      }
+    }
     if (changed.has("state")) {
       const before = changed.get("state") as PanelState | undefined;
       this._manageFocus(before);
@@ -416,9 +436,21 @@ export class MyHomeOverview extends LitElement {
     return this._overview?.measuring != null || this.state.applying;
   }
 
-  /** Below 600 px the gesture is press-and-tap: no drag, and the handles are not drawn. */
+  /**
+   * Below 600 px the gesture is press-and-tap: no drag, and the handles are not drawn.
+   *
+   * The query is kept and listened to rather than asked at render time. A window dragged
+   * across 600 px changes what the CSS draws immediately and what the gestures do only at
+   * the next state change, which left the two disagreeing - a handle back on the screen
+   * that still armed a long press, or gone from it while a drag was still the way in.
+   */
+  private _narrowQuery: MediaQueryList | null =
+    typeof matchMedia === "function" ? matchMedia("(max-width: 599px)") : null;
+
+  private _onWidth = (): void => this.requestUpdate();
+
   private get _narrow(): boolean {
-    return typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
+    return this._narrowQuery?.matches ?? false;
   }
 
   private _cover(uniqueId: string): CoverRow | undefined {
@@ -557,6 +589,32 @@ export class MyHomeOverview extends LitElement {
   private _onGrab = (cover: CoverRow, event: PointerEvent): void => {
     this._drag.press(cover.unique_id, event);
   };
+
+  /**
+   * A tap or a keyboard assignment lands at the end of the group it was sent to.
+   *
+   * While nothing has been dragged there is no local order and the batch carries none,
+   * which the server already reads as "append" (contract §9.1). Once a drag has set one,
+   * the batch carries the whole gateway's list and the shutter would otherwise keep the
+   * place it had in it - so the appending is written into the list instead. Called before
+   * the assignment, because the destination group is read out of the pending changes as
+   * they are now.
+   */
+  private _appendAtEnd(cover: CoverRow, to: string | null): void {
+    if (this.state.order === null || to === (cover.profile ?? null)) {
+      return;
+    }
+    const covers = this._covers;
+    this.actions.setOrder(
+      appendedToGroup(
+        covers.map((row) => row.unique_id),
+        cover.unique_id,
+        covers
+          .filter((row) => effectiveProfile(row, this.state.pending) === to)
+          .map((row) => row.unique_id),
+      ),
+    );
+  }
 
   /** A press on the row's body only ever arms the phone's long press. */
   private _onRowPress = (cover: CoverRow, event: PointerEvent): void => {
@@ -707,6 +765,7 @@ export class MyHomeOverview extends LitElement {
       current: effectiveProfile(cover, this.state.pending),
       onPick: (profile) => {
         this._beforeMove();
+        this._appendAtEnd(cover, profile);
         this.actions.assign(cover, profile);
       },
       onClose: () => this.actions.dialog(null),
@@ -724,6 +783,7 @@ export class MyHomeOverview extends LitElement {
       covers: new Map(overview.covers.map((cover) => [cover.unique_id, cover])),
       profiles: new Map(overview.profiles.map((profile) => [profile.name, profile])),
       preview: this.state.preview,
+      previewing: this.state.previewing,
       heights: this.state.heights,
       forced: this.state.heightsForced,
       showAll: this.state.showAll,
@@ -807,6 +867,7 @@ export class MyHomeOverview extends LitElement {
                   const armed = this.state.armed ? this._cover(this.state.armed) : undefined;
                   if (armed) {
                     this._beforeMove();
+                    this._appendAtEnd(armed, target);
                     this.actions.assign(armed, target);
                   }
                 },

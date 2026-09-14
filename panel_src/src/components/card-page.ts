@@ -57,6 +57,18 @@ export const cardPageStyles = css`
       line-height: 1.5;
     }
 
+    /*
+     * A preview in the air: the numbers on the screen fade half a step and the region is
+     * marked busy. Nothing is removed and nothing moves - the answer being replaced is
+     * still the answer to almost the same question, and a table that vanished on every
+     * keystroke would be worse than a slightly old one.
+     */
+    table[aria-busy="true"],
+    .rows[aria-busy="true"] {
+      opacity: 0.55;
+      transition: opacity 120ms ease;
+    }
+
     .rows {
       display: flex;
       flex-direction: column;

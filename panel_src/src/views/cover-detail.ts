@@ -486,7 +486,7 @@ export class MyHomeCoverDetail extends LitElement {
         ? html`<p class="field-error">${this._problem("height", item.problem)}</p>`
         : nothing}
       ${rows.length > 0
-        ? html`<table>
+        ? html`<table aria-busy=${this.state.detail.previewing ? "true" : "false"}>
             <thead>
               <tr>
                 <th class="what"></th>

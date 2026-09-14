@@ -378,17 +378,24 @@ export class MyHomeProfileCard extends LitElement {
             label: this._label(key),
             value: form[key] ?? "",
             unit: this._unit(key),
-            error: (() => {
-              const problem = valueProblem(key, form[key]);
-              return problem ? this._problem(key, problem) : null;
-            })(),
+            // An emptied field is a different sentence from a bad number, and it used
+             // to be no sentence at all: Save went grey, the impact line said "correct
+             // the fields", and nothing under the field said which one or why. On this
+             // card every one of the six is required - a profile with a blank in it is
+             // not a profile - unlike the detail card, where empty means "inherit".
+            error: isEmpty(form[key])
+              ? this.i18n.t("panel.common.required")
+              : (() => {
+                  const problem = valueProblem(key, form[key]);
+                  return problem ? this._problem(key, problem) : null;
+                })(),
             disabled: this.state.applying,
             onInput: (value) => this.actions.field(key, value),
           }),
         )}
       </div>
       <h3>${this.i18n.t("panel.profile.impact.title")}</h3>
-      <div class="rows">
+      <div class="rows" aria-busy=${this.state.profile.impacting ? "true" : "false"}>
         ${followers.map((cover) => this._impact(cover, broken))}
       </div>
       ${cardFoot(

@@ -100,6 +100,12 @@ export const reviewPanelStyles = css`
     border-radius: 24px;
   }
 
+  .sheet .body[aria-busy="true"] table,
+  .sheet .body[aria-busy="true"] .note {
+    opacity: 0.55;
+    transition: opacity 120ms ease;
+  }
+
   .sheet .body {
     flex: 1;
     overflow: auto;
@@ -314,6 +320,15 @@ export interface ReviewContext {
   applying: boolean;
   /** A refused write, kept above the list with the pending changes still there. */
   refusal: string;
+  /**
+   * True while `preview` is in the air.
+   *
+   * It is drawn as `aria-busy` and half a step of opacity and **nothing else**: the answer
+   * on the screen is still the answer to a question with one number changed in it, and
+   * replacing it with a spinner would take the table away every time somebody typed a
+   * digit. A reader is told the panel is still asking; a looker sees the numbers fade.
+   */
+  previewing: boolean;
   route: (cover: CoverRow) => string;
   onHeight: (cover: string, value: string) => void;
   onToggleShowAll: () => void;
@@ -420,7 +435,7 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
           ✕
         </button>
       </div>
-      <div class="body">
+      <div class="body" aria-busy=${context.previewing ? "true" : "false"}>
         <p class="intro">${i18n.t("panel.review.intro")}</p>
         ${context.refusal
           ? html`<div class="refusal" role="alert">${context.refusal}</div>`
