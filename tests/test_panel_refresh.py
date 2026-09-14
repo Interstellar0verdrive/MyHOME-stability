@@ -19,10 +19,12 @@ that is running.
 
 from __future__ import annotations
 
+import random
 from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
@@ -34,9 +36,11 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_SUPPORTED_FEATURES
 from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache
 
+from custom_components.myhome import panel_write
 from custom_components.myhome.calibration_store import (
     cover_calibration_data,
     cover_profile_data,
@@ -53,9 +57,15 @@ from custom_components.myhome.const import (
     SIGNAL_CALIBRATION_CHANGED,
 )
 from custom_components.myhome.panel_data import async_cover_detail, async_overview
+from custom_components.myhome.panel_schemas import (
+    ERROR_BUSY_CALIBRATING,
+    ERROR_UNKNOWN_PROFILE,
+    MEASURABLE_KEYS,
+)
 
 from .helpers_core import MAC
 from .helpers_platforms import device_config, entity_object, setup_myhome
+from .test_panel_parity import assert_they_agree
 
 FIRST = "2-81"
 SECOND = "2-82"
@@ -520,3 +530,226 @@ async def test_a_reversal_after_a_refresh_is_planned_with_the_new_model(
         assert entity._run.slat_time == 4.0  # noqa: SLF001
         assert entity._run.opening_roll == 2.0  # noqa: SLF001
         assert entity._run.two_phase is True  # noqa: SLF001
+
+
+# --------------------------------------------------------------------------------------
+# The same thing again, without a script
+# --------------------------------------------------------------------------------------
+# Every test above is a story somebody thought of: assign, then move; move, then assign;
+# take the slat phase away at exactly the wrong moment. The failure this mechanism can
+# really have is the one nobody thought of - the eleventh write landing on the third
+# shutter while the second is two seconds into a run and the first is being measured -
+# and a story-shaped test cannot reach it.
+#
+# So: bounded random sequences over a fixed set of seeds, deterministic and replayable,
+# asserting the four things that must hold whatever the order was.
+#
+#   1. A movement's frozen model never changes while that movement is in flight. Not
+#      "has the same numbers": the same object, because `_travel` and `_travel_time` are
+#      each other's inverse within one run and a swap half way through lands the shutter
+#      somewhere neither model ever described.
+#   2. Once everything has settled, every shutter's own numbers are what a fresh
+#      resolution says - which is the same assertion `test_panel_parity` makes, run here
+#      against an entity that has been refreshed in place a dozen times instead of built.
+#   3. Nothing raises. A refusal is an answer (`busy_calibrating` while a measurement is
+#      running, `write_in_progress` under the lock); anything else is a bug.
+#   4. A shutter being measured is left alone: `Calibrating` survives every swap, because
+#      it is not one of the attributes a swap rewrites.
+
+STEPS = 28
+SEEDS = [1, 2, 3, 5, 8, 13]
+
+MOVES = ("open_cover", "close_cover", "set_cover_position")
+
+
+def a_profile(name: str) -> dict[str, Any]:
+    """A profile with numbers of its own, so a swap to it is visible in an attribute."""
+    return cover_profile_data(
+        name,
+        reference_height=HEIGHT,
+        opening_time=18.0 + len(name),
+        closing_time=17.0 + len(name),
+        slat_time=float(len(name) % 5),
+        opening_roll=1.5 + len(name) / 10,
+        closing_roll=1.4 + len(name) / 10,
+    )
+
+
+async def _a_write(
+    hass: HomeAssistant, entry: Any, store: Any, rng: random.Random, unique_id: str
+) -> tuple[str, Any]:
+    """One of the panel's writes, chosen at random, as the command layer makes it."""
+    what = rng.choice(
+        ("assign", "unassign", "set_travel", "cover_edit", "cover_forget", "profile_edit")
+    )
+    if what == "assign":
+        name = rng.choice(["tall", "short"])
+        return what, lambda e, s: panel_write.async_assign(
+            hass,
+            e,
+            s,
+            assignments=[
+                {"cover_unique_id": unique_id, "profile": name, "height": rng.choice([150, 195])}
+            ],
+            order=None,
+        )
+    if what == "unassign":
+        return what, lambda e, s: panel_write.async_assign(
+            hass, e, s, assignments=[{"cover_unique_id": unique_id, "profile": None}], order=None
+        )
+    if what == "set_travel":
+        return what, lambda e, s: panel_write.async_set_travel(
+            hass, e, s, cover_unique_id=unique_id, height=rng.choice([120, 195, None])
+        )
+    if what == "cover_edit":
+        key = rng.choice([CONF_OPENING_TIME, CONF_SLAT_TIME])
+        value = rng.choice([None, 12.0, 3.0])
+        return what, lambda e, s: panel_write.async_cover_edit(
+            hass,
+            e,
+            s,
+            cover_unique_id=unique_id,
+            overrides={key: value},
+            height=None,
+            height_given=False,
+        )
+    if what == "cover_forget":
+        return what, lambda e, s: panel_write.async_cover_forget(
+            hass, e, s, cover_unique_id=unique_id
+        )
+    name = rng.choice(["tall", "short"])
+    numbers = a_profile(name)
+    return what, lambda e, s: panel_write.async_profile_edit(
+        hass,
+        e,
+        s,
+        name=name,
+        values={key: numbers[key] for key in MEASURABLE_KEYS},
+        reference_height=rng.choice([150.0, HEIGHT]),
+    )
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+async def test_any_order_of_writes_and_movements_leaves_a_shutter_we_can_describe(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, seed: int
+) -> None:
+    """Twenty-eight steps in an order nobody chose, six times over, and four invariants.
+
+    The steps are writes (the real commands, through `panel_write.async_write`, so the
+    lock and the signal are the real ones), movements, stops, ticks of the clock and
+    guided-calibration sessions opening and closing. The seeds are fixed, so a failure is
+    a failure somebody can replay rather than a flake to be re-run until it goes away.
+
+    Mutation caught: `_start_movement` not taking its snapshot - two of the six seeds
+    fail, which is the point of running six. (The two neighbouring mutations are each
+    caught by a story-shaped test rather than by this one, and are named here so the
+    division of labour is on the page: `_finish_movement` not restoring the snapshot
+    fails `test_a_reversal_after_a_refresh_is_planned_with_the_new_model`, and
+    `_publish_travel_attributes` taking `Calibrating` away with the travel block fails
+    `test_websocket_api.py::test_a_measurement_that_opens_while_a_write_is_being_applied`
+    - the only state in which a swap and a session overlap, because every write is
+    refused while a measurement is running.)
+    """
+    rng = random.Random(seed)
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        store = loaded_store(hass, entry)
+        for name in ("tall", "short"):
+            await store.async_set_profile(name, a_profile(name))
+
+        entities = {
+            FIRST_ENTITY: entity_object(hass, COVER, FIRST),
+            SECOND_ENTITY: entity_object(hass, COVER, SECOND),
+        }
+        ids = {FIRST_ENTITY: FIRST_ID, SECOND_ENTITY: SECOND_ID}
+        # The plan each run is being flown under. Re-taken after every *movement*
+        # command, because a command may legitimately plan a new run (a reversal under
+        # the motor ends one movement and starts another); held across everything else,
+        # which is where the invariant lives - a write, a tick of the clock or a
+        # measurement starting must not touch a plan already in flight.
+        frozen: dict[str, Any] = {}
+        sessions: dict[str, Any] = {}
+
+        def remember_the_plans() -> None:
+            """Whatever is moving now, keep the model it is moving under."""
+            for entity_id, entity in entities.items():
+                if entity._moving is None:  # noqa: SLF001
+                    frozen.pop(entity_id, None)
+                else:
+                    frozen[entity_id] = entity._run  # noqa: SLF001
+
+        def the_plans_have_not_moved() -> None:
+            for entity_id, plan in frozen.items():
+                entity = entities[entity_id]
+                if entity._moving is not None:  # noqa: SLF001
+                    # 1. The same object, not merely the same numbers.
+                    assert entity._run is plan, (seed, entity_id)  # noqa: SLF001
+            # 4. ...and a shutter under the tape is left alone by every swap.
+            for entity_id in sessions:
+                assert entities[entity_id].calibrating is True, (seed, entity_id)
+                assert hass.states.get(entity_id).attributes["Calibrating"] is True
+
+        for step in range(STEPS):
+            entity_id = rng.choice(list(entities))
+            entity = entities[entity_id]
+            what = rng.choice(("write", "write", "move", "tick", "stop", "session"))
+
+            if what == "write":
+                name, work = await _a_write(hass, entry, store, rng, ids[entity_id])
+                try:
+                    # 3. A refusal is an answer; anything else is a bug.
+                    await panel_write.async_write(hass, entry, name, work)
+                except panel_write.PanelError as refusal:
+                    assert refusal.translation_key in (
+                        ERROR_BUSY_CALIBRATING,
+                        ERROR_UNKNOWN_PROFILE,
+                    ), (seed, step, refusal.translation_key)
+                await hass.async_block_till_done()
+            elif what in ("move", "stop"):
+                move = "stop_cover" if what == "stop" else rng.choice(MOVES)
+                data: dict[str, Any] = {ATTR_ENTITY_ID: entity_id}
+                if move == "set_cover_position":
+                    data[ATTR_POSITION] = rng.randrange(0, 101, 10)
+                try:
+                    await hass.services.async_call(COVER, move, data, blocking=True)
+                except ServiceValidationError:
+                    # A shutter under the tape refuses to be driven, which is the
+                    # guided calibration's own rule and not this mechanism's.
+                    assert entity_id in sessions, (seed, step)
+                # A movement command may plan a new run; everything else may not.
+                remember_the_plans()
+            elif what == "session":
+                if entity_id in sessions:
+                    sessions.pop(entity_id).__exit__(None, None, None)
+                else:
+                    held = entity.calibration_session()
+                    held.__enter__()
+                    sessions[entity_id] = held
+                await hass.async_block_till_done()
+            else:
+                freezer.tick(timedelta(seconds=rng.randint(1, 9)))
+                async_fire_time_changed(hass)
+                await hass.async_block_till_done()
+
+            the_plans_have_not_moved()
+            remember_the_plans()
+
+
+        # Everything settles: the sessions end and the clock runs past any movement.
+        for held in list(sessions.values()):
+            held.__exit__(None, None, None)
+        sessions.clear()
+        for _ in range(4):
+            freezer.tick(timedelta(seconds=60))
+            async_fire_time_changed(hass)
+            await hass.async_block_till_done()
+
+        assert all(entity._moving is None for entity in entities.values())  # noqa: SLF001
+        # 2. ...and every shutter is running on exactly what a fresh resolution says.
+        overview = async_overview(hass, entry)
+        for entity_id, unique_id in ids.items():
+            row = next(item for item in overview["covers"] if item["unique_id"] == unique_id)
+            assert_they_agree(hass, row, entity_id, case=f"seed {seed} / {entity_id}")
+            # The frozen model is the current one again, which is what makes the
+            # deferral one run long and not a run longer.
+            entity = entities[entity_id]
+            assert entity._run == entity._current_movement_model()  # noqa: SLF001
