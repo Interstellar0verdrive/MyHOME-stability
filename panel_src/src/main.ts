@@ -67,6 +67,7 @@ import {
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
+import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
 import { DETAIL_KEYS, MyHomeCoverDetail, type DetailActions } from "./views/cover-detail";
@@ -144,6 +145,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     buttonStyles,
     srOnly,
     measuringBannerStyles,
+    skeletonStyles,
     stripStyles,
     css`
       .toolbar {
@@ -236,6 +238,20 @@ export class MyHomeCalibrationPanel extends LitElement {
         color: var(--myhome-text-soft);
       }
 
+      /*
+       * Home Assistant restarting, seen from here. The frontend draws its own bar for it,
+       * eventually and at the top of the window; this is the panel saying the same thing
+       * about the thing the user is looking at, in the place the measuring banner uses,
+       * so that "live" at the foot of the page is never a claim nobody is checking.
+       */
+      .offline {
+        display: block;
+        padding: 12px 16px;
+        background: var(--myhome-warning-pastel);
+        color: var(--myhome-text);
+        font-size: 14px;
+      }
+
       a {
         color: var(--myhome-primary);
       }
@@ -257,6 +273,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     this._router.stop();
     window.removeEventListener("location-changed", this._onReturn);
     document.removeEventListener("visibilitychange", this._onReturn);
+    this._unwatchSocket();
     this._stopPolling();
     if (this._snackTimer) {
       clearTimeout(this._snackTimer);
@@ -332,12 +349,57 @@ export class MyHomeCalibrationPanel extends LitElement {
       return;
     }
     this._started = true;
+    this._watchSocket();
     await this._loadTexts();
     await this._refresh();
     // A deep link is answered only now: `cover_detail` needs a gateway, and until the
     // overview has named one there is nothing to ask it about.
     await this._loadDetail();
     await this._listen();
+  }
+
+  /**
+   * Home Assistant restarting, and coming back.
+   *
+   * The socket reconnects on its own and replays its subscriptions, so nothing here is
+   * needed to keep the model arriving. What it is for is honesty and freshness: the foot
+   * of the page said "live" throughout a restart, and a panel that had fallen back to
+   * polling never tried the subscription again. On `ready` the gateway is read once - the
+   * replayed subscription pushes an overview too, and one extra read is cheaper than a
+   * screen that is right only if a private replay behaviour is.
+   */
+  private _watchSocket(): void {
+    const connection = this.hass?.connection;
+    connection?.addEventListener?.("disconnected", this._onSocketDown);
+    connection?.addEventListener?.("ready", this._onSocketReady);
+  }
+
+  private _unwatchSocket(): void {
+    const connection = this.hass?.connection;
+    connection?.removeEventListener?.("disconnected", this._onSocketDown);
+    connection?.removeEventListener?.("ready", this._onSocketReady);
+  }
+
+  private _onSocketDown = (): void => {
+    if (this._store.state.connection === "offline") {
+      return;
+    }
+    this._store.set({ connection: "offline" });
+    this._store.announce(this._i18n.t("panel.error.no_connection"));
+  };
+
+  private _onSocketReady = (): void => void this._afterReconnect();
+
+  private async _afterReconnect(): Promise<void> {
+    if (!this._started) {
+      return;
+    }
+    this._store.set({ connection: this._unsubscribeWs ? "live" : "polling" });
+    await this._refresh();
+    if (!this._unsubscribeWs) {
+      await this._listen();
+    }
+    this._store.announce(this._i18n.t("panel.common.reconnected"));
   }
 
   private async _loadTexts(): Promise<void> {
@@ -1492,9 +1554,11 @@ export class MyHomeCalibrationPanel extends LitElement {
     const state = this._store.state;
 
     if (state.status === "loading") {
-      return html`<div class="card waiting" role="status">
-        ${this._i18n.t("panel.common.loading")}
-      </div>`;
+      // The shape of the screen that is coming, not a sentence where it will be: a page
+      // that grows its content under the reader is the thing a slow network must not do.
+      return state.route.view === "cover" || state.route.view === "profile"
+        ? cardSkeleton(this._i18n)
+        : overviewSkeleton(this._i18n);
     }
     if (state.status === "error" || !state.overview) {
       const error = state.error;
@@ -1552,6 +1616,11 @@ export class MyHomeCalibrationPanel extends LitElement {
         <h1 class="title">${title}</h1>
         ${this._renderGatewayPicker()}
       </div>
+      ${state.connection === "offline"
+        ? html`<div class="offline" role="status">
+            ${this._i18n.t("panel.error.no_connection")}
+          </div>`
+        : nothing}
       ${measuring ? measuringBanner(this._i18n, measuring.name, FLOW_URL) : nothing}
       <div class="content">
         ${liveRegion(state.announce)} ${this._renderView()}

@@ -808,9 +808,18 @@ export class MyHomeOverview extends LitElement {
       return html`<p>${this.i18n.t("panel.common.loading")}</p>`;
     }
     if (overview.no_basic_covers) {
-      return html`<div class="card notice">
-        ${renderMarkdown(this.i18n.t("panel.overview.no_basic_covers"))}
-      </div>`;
+      // A gateway whose covers all report their own position has no travel model to
+      // calibrate, so this is not an empty list waiting to fill: it is the answer. It is
+      // drawn as the welcome is - a heading, the sentence, and the way to the dialog for
+      // everything else this integration does - rather than as a notice above a list that
+      // is never coming.
+      return html`<section class="card welcome">
+        <h2>${this.i18n.t("panel.overview.no_basic_covers_title")}</h2>
+        <div>${renderMarkdown(this.i18n.t("panel.overview.no_basic_covers"))}</div>
+        <a class="cta secondary" href=${FLOW_URL} title=${this.i18n.t("panel.common.opens_configure")}
+          >${this.i18n.t("panel.common.action.configure")}</a
+        >
+      </section>`;
     }
     // `profiles` carries every name defined *or* followed, so an empty list really is an
     // installation where nothing has ever been measured.

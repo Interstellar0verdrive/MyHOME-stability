@@ -716,6 +716,7 @@
       "opens_configure": "Si apre il dialogo Configura. Alla chiusura il pannello si aggiorna da solo.",
       "not_loaded": "Questo gateway non è caricato: per ora non c'è niente da leggere.",
       "required": "Questo campo non può restare vuoto.",
+      "reconnected": "Home Assistant risponde di nuovo: questa pagina è stata appena riletta.",
       "not_yet": "Questa schermata arriva in una versione successiva. Fino ad allora “Configura” fa tutto quello che farà.",
       "polling": "Gli aggiornamenti in tempo reale non sono disponibili su questa versione: la pagina si aggiorna da sola ogni 30 secondi.",
       "action": {
@@ -774,6 +775,7 @@
         "origin_adjusted": "Adattata"
       },
       "no_basic_covers": "Tutte le tapparelle di questo gateway riportano da sole la posizione: non c'è nessun modello di corsa da calibrare e niente da fare da qui.",
+      "no_basic_covers_title": "Niente da calibrare su questo gateway",
       "no_results": "Nessuna tapparella corrisponde a questa ricerca.",
       "action": {
         "clear_filters": "Azzera la ricerca e il filtro"

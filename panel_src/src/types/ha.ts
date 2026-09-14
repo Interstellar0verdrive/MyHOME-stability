@@ -12,6 +12,24 @@ export interface HaConnection {
     callback: (message: T) => void,
     subscribeMessage: Record<string, unknown>,
   ): Promise<() => Promise<void>>;
+  /**
+   * The socket's own lifecycle: `"ready"`, `"disconnected"`, `"reconnect-error"`.
+   *
+   * `home-assistant-js-websocket` reconnects by itself and replays its subscriptions, so
+   * the panel needs these for one thing only - to stop claiming at the foot of the page
+   * that it is live while Home Assistant is restarting, and to read the gateway again on
+   * the way back. Optional because a caller may hand over a narrower object than the real
+   * `Connection` (the development harness does), and a panel that threw on a missing
+   * listener would be a panel that could not be stood up offline.
+   */
+  addEventListener?(
+    eventType: string,
+    callback: (connection: unknown, result?: unknown) => void,
+  ): void;
+  removeEventListener?(
+    eventType: string,
+    callback: (connection: unknown, result?: unknown) => void,
+  ): void;
 }
 
 export interface HaLocale {
