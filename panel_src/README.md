@@ -33,6 +33,15 @@ explanation for a red diff.
 minified, no source map. The bundle opens with the line `/* MyHOME calibration panel */`,
 which is how the Python test recognises a file the build actually made.
 
+It also **minifies the stylesheets**, and it has to do that itself. A Lit stylesheet is a
+tagged template literal, and `--minify` will not touch a character inside one: without the
+plugin in `build.mjs` every component's CSS ships with the indentation it was written with,
+which across the panel is more than fourteen kilobytes of spaces. Each ``css`…` `` block is
+handed to esbuild's own CSS minifier on the way in; nothing here parses CSS, and the only
+home-made part is finding the blocks. That is safe because no `css` block in `src/`
+interpolates (`${`) or escapes anything - one that did would make the build throw rather
+than be mangled, because the closing backtick would be the wrong one. Keep it that way.
+
 **Commit the rebuilt bundle with the source change that caused it.** A pull request that
 changes `src/` and not `custom_components/myhome/frontend/` fails CI, and so does the
 reverse.
@@ -44,7 +53,10 @@ Assistant hands it, and stands in for the backend: the reads answer the real fix
 (`tests/fixtures/panel_overview_example.json`, which the Python suite regenerates from the
 real server) and the real `strings.json`, and the writes — `preview`, `assign`, `reorder`,
 `undo` and the subscription — work against a mutable copy of it with one undo slot, so the
-whole assignment loop can be walked offline. Serve the repository root and open it:
+whole assignment loop can be walked offline. Lot 8 added `cover_detail` and the six writes
+the two routed cards make, and `profile_values` on a preview, so those can be walked offline
+too - by clicking a row or a group heading, or straight at `#/cover/<unique id>` and
+`#/profile/<name>`. Serve the repository root and open it:
 
 ```sh
 python3 -m http.server 8765     # from the repository root
@@ -53,7 +65,9 @@ open http://localhost:8765/panel_src/dev/harness.html
 
 The checkboxes across the top switch the states that are otherwise hard to reach: dark
 theme, narrow, a measurement in progress, an installation with no profile yet, a gateway
-whose shutters are all advanced, an `overview` that refuses and a write that does. The
+whose shutters are all advanced, an `overview` that refuses and a write that does, a second
+gateway so the header's picker has something to pick, and whether `myhome.yaml` states a
+cover's travel - which is the one fact "Rimuovi la misura" cannot work out for itself. The
 measuring and live-updates ones are **pushed down the subscription** rather than rebuilding
 the element, because a measurement that starts while changes are already pending is a state
 with a sentence of its own.
@@ -79,7 +93,7 @@ remember to rebuild it. Instead:
 Three, pinned exactly: **lit** (runtime, bundled), **typescript** and **esbuild** (build
 only). Nothing else goes in here. No framework, no router library, no CSS framework, no
 Markdown library, no icon font, no date library — `Intl` and the frontend's own
-`ha-markdown` cover the last two, and the bundle has a 150 kB ceiling asserted by
+`ha-markdown` cover the last two, and the bundle has a 250 kB ceiling asserted by
 `tests/test_panel_build.py`.
 
 Lit is bundled rather than borrowed from a frontend global: a global is not a contract.
@@ -108,13 +122,18 @@ src/engine/a11y.ts      the live region, focus return and the focus trap
 src/engine/ha.ts        customElements.get() guards for every ha-* element used
 src/engine/ws.ts        typed wrappers over every command; mirrors panel_schemas.py
 src/engine/assign.ts    the pending-change model: pure functions, and no arithmetic
+src/engine/fields.ts    the numeric fields of the two cards, and the bounds they obey
+src/engine/flow.ts      opening the options flow: the probe, the watchdog, the page
 src/engine/dnd.ts       FLIP, the pointer drag and the long press
 src/i18n/keys.ts        every panel.* key the bundle asks for, and its English stand-in
 src/i18n/fallback.json  the stand-ins themselves, held equal to en.json by the suite
 src/templates/*.ts      the eight wizard step templates
 src/components/*.ts     origin chip, cover row, group card, measuring banner,
-                        the five bottom strips, "Quale profilo?", the review panel
+                        the five bottom strips, "Quale profilo?", the review panel,
+                        and card-page.ts: the shape both routed cards are cut from
 src/views/overview.ts   <myhome-overview>, the management screen
+src/views/cover-detail.ts   <myhome-cover-detail>, one shutter key by key
+src/views/profile-card.ts   <myhome-profile-card>, one profile and its followers
 src/types/ha.ts         the four properties Home Assistant sets, and the connection
 ```
 
@@ -138,6 +157,58 @@ Three rules the code follows and a reviewer should hold it to:
 * **The before/after numbers come from `myhome/calibration/preview`.** The panel never
   scales a profile.
 
+## The two routed cards
+
+`#/cover/<unique id>` and `#/profile/<name>` are **screens**, not panels over the list: the
+plan routes both and asks a deep link to render on the first paint, and a modal over a list
+nobody has loaded is not a thing a URL can produce. The prototype draws them as panels and
+everything else about them is transcribed from it - the rows, the modes, the sentences, the
+order of the buttons - and `components/card-page.ts` is the one stylesheet and the four
+pieces they share.
+
+What they ask the server, and what they do not:
+
+* **the cover detail** reads `cover_detail`: on arrival, after each of its three writes and
+  on each push while it is open. Every number, every origin, what an emptied field would
+  inherit and what removing the measurement would leave is in that answer. The one thing
+  that is not is what the shutter would run on at a **different** travel - a travel is what
+  a profile is scaled by - so that field's before/after is `preview`'s, asked with the
+  shutter's own assignment carried unchanged;
+* **the profile card** reads nothing of its own: `overview` already carries every profile
+  whole. Its editor asks `preview` with **`profile_values`** - the typed numbers in the
+  profile's place - and one item per follower carrying that follower's current assignment,
+  so that nothing but the profile is hypothetical. That is what the live impact preview is,
+  and it is the third place the same rule applies: the panel does not scale a profile.
+
+Both honour the measuring lock, keep a refused write where the user was working, and offer
+the same seven-second undo strip as the rest of the panel. Escape steps back once - out of
+a form into the card, out of the card to the list - and focus lands on the heading of
+whatever has arrived.
+
+## Getting to "Configura"
+
+Five controls end in the guided calibration, which stays in the options flow for 0.6.0.
+`engine/flow.ts` is the whole of it, and the order matters (plan section 3.7):
+
+1. **probe** `customElements.get("dialog-data-entry-flow")`. Undefined - which is what a
+   fresh page load is expected to give, since the frontend loads its dialogs lazily - and
+   the panel navigates at once, with no event fired and no half-open state;
+2. **fire and watch.** Defined, and `show-dialog` goes out; 400 ms later the document is
+   asked whether a dialog really attached;
+3. **the page.** It did not, so the panel says one line and navigates to
+   `/config/integrations/integration/myhome`, where the user's next click is "Configura".
+
+**The page is the contract and the dialog is the optimisation.** The parameters that dialog
+wants carry a `flowConfig` of some twenty callbacks - how to create a flow, how to fetch
+it, how to render each kind of step - which is the flow dialog's own configuration and not
+something a panel bundled on its own can construct. HACS can fire the event because it is
+built against the frontend source; we are not. So nothing in 0.6.0 becomes unreachable if
+the event never works, and the acceptance criteria ask for the fallback rather than for it.
+
+Neither path can preselect the shutter or the scope: the flow's `init` step is a menu that
+takes no argument. The buttons name the path so the user knows which entry to pick, and an
+entry point that carries one is a 0.7.0 item.
+
 ## The screen engine
 
 Four pieces, and each is the thing 0.7.0 reuses without changing it.
@@ -145,8 +216,8 @@ Four pieces, and each is the thing 0.7.0 reuses without changing it.
 **The router** (`engine/router.ts`) turns a location into `{view, params}` over four
 patterns: `/`, `/cover/:id`, `/profile/:name` and - reserved, and rendered as "not in this
 version" until 0.7.0 - `/calibrate/:session`. (The plan's fifth, `/gateway/:entry_id`, is
-not routed: the gateway is chosen in the header and the header is lot 8's, and a house with
-one gateway - which is nearly all of them - never sees either.) It reads the panel's **own hash** first (`#/cover/…`, written by the
+not routed: the gateway is chosen by a select in the header, and a house with
+one gateway - which is nearly all of them - never sees it.) It reads the panel's **own hash** first (`#/cover/…`, written by the
 panel and moved by `hashchange`, both of them platform behaviour) and falls back to the
 `route.path` property Home Assistant sets, so a deep link of the form
 `/myhome-calibration/cover/<id>` still opens the right screen on the first paint. Links

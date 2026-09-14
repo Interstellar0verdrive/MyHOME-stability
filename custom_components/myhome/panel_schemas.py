@@ -40,6 +40,7 @@ from .const import (
     CONF_CLOSING_TIME,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
+    CONF_REFERENCE_HEIGHT,
     CONF_SLAT_TIME,
 )
 
@@ -180,10 +181,29 @@ ASSIGN_SCHEMA: VolDictType = {
 # item out, in the same order, and `ASSIGNMENT_SCHEMA` for both so that the panel sends
 # the batch it is composing rather than a translation of it. No `order`: a position is
 # not a number the shutter runs on and previewing one would answer nothing.
+# ...and, optionally, the numbers to pretend a profile has while the question is
+# answered. `{name: {the five values, reference_height}}` - exactly what `profile_edit`
+# would write - because the profile card's impact preview asks "if this profile said
+# these instead, what would its followers run on?", and the panel may no more scale a
+# profile for that screen than for the review panel. It overrides the numbers of a
+# profile the gateway already has and never defines a new name; the whole override is
+# read-only and reaches nothing but the answer (`panel_data._hypothetical_profiles`).
+PROFILE_VALUES_SCHEMA = vol.Schema(
+    {
+        str: vol.Schema(
+            {
+                vol.Required(key): NUMBER
+                for key in (*MEASURABLE_KEYS, CONF_REFERENCE_HEIGHT)
+            }
+        )
+    }
+)
+
 PREVIEW_SCHEMA: VolDictType = {
     vol.Required("type"): WS_TYPE_PREVIEW,
     vol.Required("entry_id"): str,
     vol.Required("items"): [ASSIGNMENT_SCHEMA],
+    vol.Optional("profile_values"): PROFILE_VALUES_SCHEMA,
 }
 
 # `profile` present (`null` included, which is "Senza profilo") means `order` is that one
@@ -394,7 +414,15 @@ COVER_KEYS: tuple[str, ...] = (
     "order_index",
 )
 
-COVER_DETAIL_KEYS: tuple[str, ...] = ("entry_id", "cover", "keys")
+# `forget` (lot 8) is what "Rimuovi la misura" would leave: `falls_back_to`
+# (`"profile"` / `"file"` / `"defaults"`), the profile's name when there is one, and
+# whether the curtain travel survives the removal - `myhome.yaml`'s own `height:` does,
+# a travel somebody typed into the panel does not. It is the same three facts
+# `cover_forget` answers with *after* the write, read the same way (resolve the window
+# with the record gone), so the confirmation and the result cannot disagree.
+COVER_DETAIL_KEYS: tuple[str, ...] = ("entry_id", "cover", "keys", "forget")
+
+COVER_DETAIL_FORGET_KEYS: tuple[str, ...] = ("falls_back_to", "profile", "travel_stays")
 
 PREVIEW_KEYS: tuple[str, ...] = ("entry_id", "items")
 
@@ -510,6 +538,7 @@ __all__ = [
     "ASSIGNMENT_SCHEMA",
     "ASSIGN_KEYS",
     "ASSIGN_SCHEMA",
+    "COVER_DETAIL_FORGET_KEYS",
     "COVER_DETAIL_KEYS",
     "COVER_DETAIL_KEY_KEYS",
     "COVER_DETAIL_SCHEMA",
@@ -544,6 +573,7 @@ __all__ = [
     "PROFILE_KEYS",
     "PROFILE_RENAME_KEYS",
     "PROFILE_RENAME_SCHEMA",
+    "PROFILE_VALUES_SCHEMA",
     "REORDER_KEYS",
     "REORDER_SCHEMA",
     "SET_TRAVEL_KEYS",

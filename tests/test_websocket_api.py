@@ -43,18 +43,22 @@ from custom_components.myhome.calibration_store import (
 )
 from custom_components.myhome.const import (
     CALIBRATION_KEY_ORIGINS,
+    CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
     CONF_COVER_UNIQUE_ID,
     CONF_COVERS,
+    CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_ORDER,
     CONF_PROFILES,
+    CONF_ROLL,
     CONF_SLAT_TIME,
     DOMAIN,
 )
 from custom_components.myhome.panel_data import PREVIEW_PROBLEMS
 from custom_components.myhome.panel_schemas import (
     ASSIGN_KEYS,
+    COVER_DETAIL_FORGET_KEYS,
     COVER_DETAIL_KEY_KEYS,
     COVER_DETAIL_KEYS,
     COVER_EDIT_KEYS,
@@ -632,6 +636,148 @@ async def test_a_payload_that_is_not_one_is_refused_by_the_schema(
         message = await ask(client, type=WS_TYPE_COVER_DETAIL, entry_id=entry.entry_id)
         assert message["success"] is False
         assert message["error"]["code"] == ws_const.ERR_INVALID_FORMAT
+
+
+# A window the *file* assigns to a profile and whose travel the file states too: the one
+# shape in which "Rimuovi la misura" leaves the shutter still following something. The
+# assignment made in this panel lives in the record, and the record is what goes.
+FORGET_YAML = YAML.replace(
+    """    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+      height: 150
+""",
+    """    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+      profile: from_the_file
+      height: 150
+""",
+)
+
+
+async def test_the_detail_says_what_removing_the_measurement_would_leave(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The confirmation has to name a destination, and name the one that is true.
+
+    `inherited_value` answers a narrower question - one key with this window's
+    *overrides* taken away - and it is the right answer for the empty field. It is the
+    wrong answer for "Rimuovi la misura", which takes the whole record: the assignment
+    goes with it, and so does a travel nobody else states. A window whose travel only
+    the record knew cannot be scaled a profile afterwards at all, so the keys would
+    promise a profile the shutter would never reach.
+
+    Two windows, the two cases. `Landing Shutter` is assigned by `myhome.yaml` and has
+    its travel there, so both survive the removal. `Hallway Shutter` writes its own run
+    times in the file and is assigned here, so what is left is the file.
+
+    Mutation caught: reading the destination off the keys' `inherited_origin`;
+    answering `travel_stays` from the record's own travel instead of from the
+    resolution.
+    """
+    async with setup_myhome(hass, tmp_path, FORGET_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+        )
+        assert tuple(detail["forget"]) == COVER_DETAIL_FORGET_KEYS
+        assert detail["forget"] == {
+            "falls_back_to": "profile",
+            "profile": "from_the_file",
+            "travel_stays": True,
+        }
+
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        # The assignment was made here, so it goes with the record; the file's own run
+        # times are what the shutter is left with.
+        assert detail["forget"] == {
+            "falls_back_to": "file",
+            "profile": None,
+            "travel_stays": True,
+        }
+
+
+async def test_a_travel_only_the_record_knows_does_not_survive_the_removal(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """"La corsa del telo resta" is true of a travel the file states, and only then.
+
+    Mutation caught: rendering that line unconditionally, which is a promise about a
+    number the write is in fact about to take away.
+    """
+    no_travel = YAML.replace(
+        """      name: Landing Shutter
+      height: 150
+""",
+        """      name: Landing Shutter
+""",
+    )
+    calibration = deepcopy(CALIBRATION)
+    calibration[CONF_COVERS][SECOND] = record(
+        SECOND, profile="tall", profile_wins=True, height=150.0
+    )
+    async with setup_myhome(hass, tmp_path, no_travel, calibration=calibration) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+        )
+        assert detail["forget"]["travel_stays"] is False
+        # ...and with no travel, no profile can be brought to this window at all.
+        assert detail["forget"]["falls_back_to"] != "profile"
+
+
+async def test_the_detail_and_the_forget_that_follows_it_are_one_answer(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Read it, remove it, and the write says exactly what the read said it would.
+
+    Both resolve the window with the record gone, and that is the whole guarantee: a
+    confirmation that named one destination and a result that named another would be the
+    screen teaching the user something false about their own shutters.
+
+    Mutation caught: the two computing the same thing by two rules (a change to one of
+    them would drift silently, which is the failure this asserts against).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        answer = await result(
+            client,
+            type=WS_TYPE_COVER_FORGET,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        assert answer["falls_back_to"] == detail["forget"]["falls_back_to"]
+        assert answer["profile"] == detail["forget"]["profile"]
+        assert (row_of(answer["overview"], FIRST)["height"] is not None) == detail["forget"][
+            "travel_stays"
+        ]
 
 
 # ----------------------------------------------------------------------- texts
@@ -2467,3 +2613,335 @@ async def test_the_preview_needs_a_gateway_and_a_household_member_may_not_ask(
             client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=[]
         )
         assert error["code"] == ws_const.ERR_UNAUTHORIZED
+
+
+# ------------------------------------------------- the profile the file answers for
+# A shutter whose `myhome.yaml` names its profile itself. Nothing in `WRITE_YAML` has
+# one, and that is exactly why the parity test above could pass while the preview's
+# `profile` field disagreed with the overview's (REVIEW 0.6.0 lot 7, open point 1): the
+# only field of the two answers that can differ needs a window the *file* speaks for.
+PORCH = f"{MAC}-2-85"
+
+FILE_PROFILE_YAML = WRITE_YAML.replace(
+    """    skylight:""",
+    """    porch_shutter:
+      where: '85'
+      name: Porch Shutter
+      profile: from_the_file
+      height: 160
+    skylight:""",
+)
+
+
+@pytest.mark.parametrize(
+    ("item", "expected"),
+    [
+        ({"cover_unique_id": PORCH, "profile": None}, "from_the_file"),
+        ({"cover_unique_id": PORCH, "profile": "tall"}, "tall"),
+    ],
+    ids=["taken_out_of_a_profile_the_file_gives_back", "moved_to_another_profile"],
+)
+async def test_the_preview_names_the_profile_the_shutter_would_really_follow(
+    hass: HomeAssistant, tmp_path, hass_ws_client, item: dict[str, Any], expected: str
+) -> None:
+    """`profile` is what the row would say afterwards, not what the question asked.
+
+    A window whose file carries a `profile:` line cannot be taken out of that profile
+    from here - the line is in the user's file. So an item asking for `null` is answered
+    with the profile the window goes on following, which is what the overview says about
+    it a moment later, and the review panel's before/after is then comparable field by
+    field instead of in five fields out of six.
+
+    Mutation caught: answering the profile that was asked about (the row would read
+    "Profile «tall» → No profile" beside numbers that had not moved, and the six-way
+    comparison below would fail on `profile` alone).
+    """
+    async with setup_myhome(hass, tmp_path, FILE_PROFILE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=[item]
+        )
+        assert preview["items"][0]["profile"] == expected
+
+        answer = await result(
+            client, type=WS_TYPE_ASSIGN, entry_id=entry.entry_id, assignments=[item]
+        )
+        row = row_of(answer["overview"], PORCH)
+        for field in ("values", "origin", "source", "has_own", "height", "profile"):
+            assert preview["items"][0][field] == row[field], field
+
+
+# ------------------------------------------------------ a profile's other numbers
+# `profile_values`: the profile card's live impact preview. The question is one level up
+# from the review panel's - "if this profile said these numbers instead, what would each
+# of its followers run on?" - and it is asked of the server for the same reason: the
+# panel may not scale a profile itself, on any screen.
+
+FASTER = {
+    CONF_OPENING_TIME: 18.0,
+    CONF_CLOSING_TIME: 17.0,
+    CONF_SLAT_TIME: 3.0,
+    CONF_OPENING_ROLL: 2.0,
+    CONF_CLOSING_ROLL: 1.6,
+    "reference_height": HEIGHT,
+}
+
+
+async def test_a_preview_can_ask_what_other_numbers_for_a_profile_would_mean(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Two followers, one of them adjusted: the edit reaches one of them completely.
+
+    This is the sentence the profile card has to be able to show honestly - "everything
+    changes for the windows that inherit, and only the inherited values for the adjusted
+    ones" - and it is a claim about numbers, so it is answered by the resolution rather
+    than asserted by a screen.
+
+    Mutation caught: applying the override to a copy nobody resolves against (the
+    impact preview would show the stored numbers on both sides and the screen would say
+    a change reached shutters it never touched).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        before = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[
+                {"cover_unique_id": FIRST, "profile": "tall"},
+                {"cover_unique_id": SECOND, "profile": "tall"},
+            ],
+            profile_values={"tall": FASTER},
+        )
+        adjusted = await item_of(preview, FIRST)
+        inherited = await item_of(preview, SECOND)
+        assert adjusted["problem"] is None and inherited["problem"] is None
+
+        # The window that measured its own ascent keeps it to the number.
+        assert adjusted["values"][CONF_OPENING_TIME] == 25.0
+        assert adjusted["values"][CONF_SLAT_TIME] == 4.0
+        # ...and everything it did not measure moves with the profile.
+        assert adjusted["values"][CONF_CLOSING_TIME] != row_of(before, FIRST)["values"][
+            CONF_CLOSING_TIME
+        ]
+        # The window that measured nothing moves entirely.
+        assert inherited["values"][CONF_OPENING_TIME] != row_of(before, SECOND)["values"][
+            CONF_OPENING_TIME
+        ]
+        assert inherited["has_own"] == []
+
+
+async def test_the_hypothetical_numbers_are_not_written_anywhere(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """It is still a read, and a read that changed the profile would be the write itself.
+
+    Mutation caught: overriding the store's own mapping rather than a copy of the merged
+    one (every later read of that Home Assistant run would answer the numbers nobody
+    confirmed, and no write would have happened to explain them).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        stored = deepcopy(loaded_store(hass, entry).raw_profiles)
+        await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[{"cover_unique_id": SECOND, "profile": "tall"}],
+            profile_values={"tall": FASTER},
+        )
+        assert loaded_store(hass, entry).raw_profiles == stored
+        after = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert profile_of(after, "tall")["values"][CONF_OPENING_TIME] == 22.3
+
+
+@pytest.mark.parametrize(
+    ("number", "problem"),
+    [("abc", ERROR_NOT_A_NUMBER), (9000, ERROR_OUT_OF_RANGE)],
+    ids=["not_a_number", "out_of_range"],
+)
+async def test_a_hypothetical_number_that_cannot_be_used_stops_only_its_own_followers(
+    hass: HomeAssistant, tmp_path, hass_ws_client, number: Any, problem: str
+) -> None:
+    """A bad override is a per-row problem, like a bad travel, and not a dead command.
+
+    The screen it serves has five fields being typed into, so half of them are
+    unfinished half of the time; a whole answer refused on the first keystroke would
+    take the table off the screen exactly while the user was working on it. The
+    offending profile's followers say what is wrong in `assign`'s own words, and a
+    window that runs on something else still answers.
+
+    Mutation caught: applying an unreadable number as though it had parsed (the
+    preview would answer the stored numbers and the screen would show "no change" for
+    an edit that is in fact invalid).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[
+                {"cover_unique_id": SECOND, "profile": "tall"},
+                {"cover_unique_id": THIRD, "profile": None},
+            ],
+            profile_values={"tall": {**FASTER, CONF_OPENING_TIME: number}},
+        )
+        stopped = await item_of(preview, SECOND)
+        assert stopped["problem"] == problem
+        assert stopped["values"] == {}
+        assert problem in PREVIEW_PROBLEMS
+        # The window that does not follow that profile is answered in full.
+        assert (await item_of(preview, THIRD))["problem"] is None
+
+
+async def test_an_override_never_invents_a_profile_the_gateway_does_not_have(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The override replaces numbers; it does not define names.
+
+    A preview that could define a profile would be a way of asking the resolution about
+    something no shutter could ever be assigned to, and `unknown_profile` - the one
+    answer that tells the user their profile has gone - would stop being reachable
+    through the very screen that shows it.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[{"cover_unique_id": SECOND, "profile": "invented"}],
+            profile_values={"invented": FASTER},
+        )
+        assert preview["items"][0]["problem"] == ERROR_UNKNOWN_PROFILE
+
+
+async def test_an_override_must_state_every_number_a_profile_has(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Five values and the travel they were measured at, exactly as `profile_edit` asks.
+
+    A partial override would be a profile half from the form and half from the store,
+    and there is no screen that means that: the fields are all on one card and are all
+    sent together.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[{"cover_unique_id": SECOND, "profile": "tall"}],
+            profile_values={"tall": {CONF_OPENING_TIME: 18.0}},
+        )
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
+
+
+async def test_the_impact_preview_is_exactly_what_the_profile_edit_would_produce(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The parity invariant of the review panel, one level up.
+
+    `profile_values` takes exactly `profile_edit`'s six numbers because the card that
+    asks it is the card that then writes them. So the answer has to be what the write
+    produces, whole: the same `values`, the same per-key origins, the same
+    `Calibration source` string. Asking with one function and writing with another is
+    the drift this command exists to make impossible, and the assignment preview has
+    had this assertion since lot 3 - the override never got one.
+
+    Mutation caught: building the hypothetical profile by a different rule from
+    `profile_as_config`'s, which is what the write's numbers go through on their way
+    back out. `roll` is the key that catches it: a stored profile does not carry one,
+    and the read side derives it from `closing_roll`.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[
+                {"cover_unique_id": FIRST, "profile": "tall"},
+                {"cover_unique_id": SECOND, "profile": "tall"},
+            ],
+            profile_values={"tall": FASTER},
+        )
+        answer = await result(
+            client,
+            type=WS_TYPE_PROFILE_EDIT,
+            entry_id=entry.entry_id,
+            name="tall",
+            values={key: FASTER[key] for key in MEASURABLE_KEYS},
+            reference_height=FASTER["reference_height"],
+        )
+        for unique_id in (FIRST, SECOND):
+            row = row_of(answer["overview"], unique_id)
+            item = await item_of(preview, unique_id)
+            for field in ("values", "origin", "source", "has_own", "height", "profile"):
+                assert item[field] == row[field], f"{unique_id} {field}"
+
+
+async def test_an_override_of_a_file_profile_leaves_the_files_own_roll_alone(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`cover_profiles:` is a block of the user's file, and `roll:` in it is a statement.
+
+    The six numbers an override carries are `profile_edit`'s, and `profile_edit` refuses
+    a file profile: there is no write here whose result this could be. So the one key
+    the six do not name - `roll`, which a stored profile does not have and a written one
+    may - is left exactly as the file wrote it, while the two directional coefficients
+    follow the override like the rest.
+
+    Mutation caught: deriving `roll` from `closing_roll` for every profile rather than
+    only for the ones the store owns, which would answer a number the file does not say
+    and no write could make it say.
+    """
+    async with setup_myhome(hass, tmp_path, FILE_PROFILE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        item = {"cover_unique_id": PORCH, "profile": None}
+        plain = await result(
+            client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=[item]
+        )
+        overridden = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[item],
+            # The file's own reference height, so that the only thing moving in the
+            # comparison below is the coefficient and not the scale it is grown by.
+            profile_values={"from_the_file": {**FASTER, "reference_height": 200}},
+        )
+        assert overridden["items"][0]["problem"] is None
+        assert (
+            overridden["items"][0]["values"][CONF_CLOSING_ROLL]
+            != plain["items"][0]["values"][CONF_CLOSING_ROLL]
+        )
+        assert overridden["items"][0]["values"][CONF_ROLL] == pytest.approx(
+            plain["items"][0]["values"][CONF_ROLL]
+        )

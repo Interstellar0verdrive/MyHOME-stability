@@ -29,26 +29,48 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 
 import { I18n } from "./engine/i18n";
 import { defined, toggleSidebar } from "./engine/ha";
-import { assignItems, needsTravel, travelProblem, withPending } from "./engine/assign";
+import {
+  assignItems,
+  currentAssignment,
+  needsTravel,
+  parseTravel,
+  travelProblem,
+  withPending,
+} from "./engine/assign";
+import { DECIMALS } from "./engine/assign";
+import { isEmpty, valueProblem } from "./engine/fields";
+import { openOptionsFlow } from "./engine/flow";
 import { Router, type Route } from "./engine/router";
-import { NOTHING_PENDING, Store } from "./engine/store";
+import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
 import { liveRegion } from "./engine/a11y";
 import {
   asWsError,
   assign as sendAssign,
+  coverDetail as fetchCoverDetail,
+  coverEdit as sendCoverEdit,
+  coverForget as sendCoverForget,
   isUnknownCommand,
+  profileDelete as sendProfileDelete,
+  profileEdit as sendProfileEdit,
+  profileRename as sendProfileRename,
   overview as fetchOverview,
   preview as fetchPreview,
   reorder as sendReorder,
+  setTravel as sendSetTravel,
   subscribe,
   undo as sendUndo,
   type CalibrationEvent,
   type CoverRow,
+  type Overview,
+  type ProfileRow,
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
+import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
+import { DETAIL_KEYS, MyHomeCoverDetail, type DetailActions } from "./views/cover-detail";
+import { MyHomeProfileCard, PROFILE_KEYS, type ProfileActions } from "./views/profile-card";
 import { MyHomeScreen, type ScreenModel } from "./engine/screen";
 
 /** How often the panel asks again when the backend has no subscription to offer. */
@@ -92,6 +114,8 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _started = false;
   private _snackTimer: ReturnType<typeof setTimeout> | null = null;
   private _previewTimer: ReturnType<typeof setTimeout> | null = null;
+  private _travelTimer: ReturnType<typeof setTimeout> | null = null;
+  private _impactTimer: ReturnType<typeof setTimeout> | null = null;
   /** Every preview answer but the last is thrown away: they arrive out of order. */
   private _previewSeq = 0;
 
@@ -107,6 +131,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     buttonStyles,
     srOnly,
     measuringBannerStyles,
+    stripStyles,
     css`
       .toolbar {
         display: flex;
@@ -134,13 +159,23 @@ export class MyHomeCalibrationPanel extends LitElement {
         white-space: nowrap;
       }
 
-      .toolbar .gateway {
+      /* The gateway select, drawn only in a house with two of them. */
+      .toolbar select.gateway {
+        font: inherit;
         font-size: 13px;
-        opacity: 0.8;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
         max-width: 40%;
+        min-height: 44px;
+        border-radius: 8px;
+        border: 1px solid currentColor;
+        background: transparent;
+        color: inherit;
+        padding: 0 6px;
+      }
+
+      /* A native option list is painted by the platform, not by the header. */
+      .toolbar select.gateway option {
+        color: var(--myhome-text);
+        background: var(--myhome-card);
       }
 
       /* 48x48, like every target in the handoff. */
@@ -197,7 +232,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this._unsubscribeStore = this._store.subscribe(() => this.requestUpdate());
-    this._router.start((route: Route) => this._store.set({ route }));
+    this._router.start((route: Route) => this._onRoute(route));
     window.addEventListener("location-changed", this._onReturn);
     document.addEventListener("visibilitychange", this._onReturn);
   }
@@ -217,6 +252,14 @@ export class MyHomeCalibrationPanel extends LitElement {
     if (this._previewTimer) {
       clearTimeout(this._previewTimer);
       this._previewTimer = null;
+    }
+    if (this._travelTimer) {
+      clearTimeout(this._travelTimer);
+      this._travelTimer = null;
+    }
+    if (this._impactTimer) {
+      clearTimeout(this._impactTimer);
+      this._impactTimer = null;
     }
     const unsubscribe = this._unsubscribeWs;
     this._unsubscribeWs = null;
@@ -239,7 +282,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   protected override updated(changed: PropertyValues): void {
     if (changed.has("route")) {
       this._router.setHostPath(this.route?.path);
-      this._store.set({ route: this._router.current });
+      this._onRoute(this._router.current);
     }
     if (!changed.has("hass") || !this.hass) {
       return;
@@ -274,6 +317,9 @@ export class MyHomeCalibrationPanel extends LitElement {
     this._started = true;
     await this._loadTexts();
     await this._refresh();
+    // A deep link is answered only now: `cover_detail` needs a gateway, and until the
+    // overview has named one there is nothing to ask it about.
+    await this._loadDetail();
     await this._listen();
   }
 
@@ -337,6 +383,12 @@ export class MyHomeCalibrationPanel extends LitElement {
       if (this._store.state.review) {
         this._schedulePreview();
       }
+      // The card is a second payload and a push says nothing about it. Re-read it while
+      // it is on the screen, so a measurement finished in the dialog - or a change made
+      // in another tab - reaches the rows that are being looked at.
+      if (this._store.state.detail.for) {
+        void this._loadDetail();
+      }
       return;
     }
     if (event.type === "measuring") {
@@ -397,6 +449,40 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
     void this._refresh();
   };
+
+  /**
+   * A new address, and whatever the screen behind it has to read.
+   *
+   * The two routed cards of lot 8 are a second server model each - `cover_detail` for the
+   * shutter, and the profile's own row out of the overview - so arriving at one is a read
+   * and leaving it throws the read away rather than leaving a stale card to be shown again
+   * on the way back. Nothing here touches the pending changes: a user who opens a card in
+   * the middle of composing a batch comes back to the batch.
+   */
+  private _onRoute(route: Route): void {
+    this._store.set({ route });
+    if (route.view === "cover") {
+      const id = route.params.id;
+      if (this._store.state.detail.for !== id) {
+        this._store.set({ detail: { ...NO_DETAIL, for: id, loading: true } });
+        void this._loadDetail();
+      }
+    } else if (this._store.state.detail.for !== null) {
+      this._store.set({ detail: NO_DETAIL });
+    }
+    if (route.view === "profile") {
+      const name = route.params.name;
+      if (this._store.state.profile.for !== name) {
+        this._store.set({ profile: { ...NO_PROFILE_CARD, for: name } });
+      }
+    } else if (this._store.state.profile.for !== null) {
+      this._store.set({ profile: NO_PROFILE_CARD });
+    }
+    if (!this._started) {
+      return;
+    }
+    this._store.set({ writeError: null });
+  }
 
   private get _version(): string {
     return this.panel?.config?.version ?? "";
@@ -771,8 +857,583 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
   }
 
+  // --- the cover detail (lot 8) ---------------------------------------------------------
+  //
+  // Same arrangement as the assignment above: the view does the screen, this does the API.
+  // Three writes - `cover_edit`, `set_travel`, `cover_forget` - each with the undo strip
+  // the rest of the panel has, each refused visibly, and each followed by a fresh read of
+  // the card, because a write answers with an `overview` and the card is a second payload.
+
+  /** The shutter the card is about, out of the model the overview already holds. */
+  private get _detailCover(): CoverRow | null {
+    const state = this._store.state;
+    const id = state.detail.for;
+    return (
+      state.overview?.covers.find((cover: CoverRow) => cover.unique_id === id) ?? null
+    );
+  }
+
+  private async _loadDetail(): Promise<void> {
+    const state = this._store.state;
+    const id = state.detail.for;
+    if (!this._started || !this.hass || !id || !state.entryId) {
+      return;
+    }
+    try {
+      const answer = await fetchCoverDetail(this.hass.connection, state.entryId, id);
+      // The address may have moved on while the answer was in the air; a card drawn from
+      // the previous shutter's numbers under the current shutter's name is the one thing
+      // this screen must never do.
+      if (this._store.state.detail.for !== id) {
+        return;
+      }
+      this._store.set({
+        detail: { ...this._store.state.detail, answer, loading: false, error: null },
+      });
+    } catch (error) {
+      if (this._store.state.detail.for !== id) {
+        return;
+      }
+      this._store.set({
+        detail: {
+          ...this._store.state.detail,
+          answer: null,
+          loading: false,
+          error: asWsError(error),
+        },
+      });
+    }
+  }
+
+  /** The five fields as the form wants them: an own value written out, or empty. */
+  private _detailForm(): Record<string, string> {
+    const answer = this._store.state.detail.answer;
+    const form: Record<string, string> = {};
+    for (const key of DETAIL_KEYS) {
+      const row = answer?.keys.find((item) => item.key === key);
+      form[key] = row && row.own ? this._i18n.number(row.value, DECIMALS[key] ?? 1) : "";
+    }
+    return form;
+  }
+
+  private _detailActions: DetailActions = {
+    back: () => this._navigate("/"),
+    retry: () => {
+      this._store.set({ detail: { ...this._store.state.detail, loading: true, error: null } });
+      void this._loadDetail();
+    },
+    openProfile: (name) => this._navigate(`/profile/${encodeURIComponent(name)}`),
+
+    /**
+     * "Assegna a un profilo…" is the overview's own gesture, so it is the overview's own
+     * dialog: the card hands the shutter over and steps out of the way, rather than
+     * growing a second copy of "Quale profilo?" with a second idea of what a pending
+     * change is.
+     */
+    assign: () => {
+      const id = this._store.state.detail.for;
+      this._store.set({ dialog: id });
+      this._navigate("/");
+    },
+
+    mode: (mode) => {
+      const detail = this._store.state.detail;
+      const cover = this._detailCover;
+      const form =
+        mode === "edit"
+          ? this._detailForm()
+          : mode === "travel"
+            ? { height: cover?.height != null ? this._i18n.number(cover.height, 0) : "" }
+            : {};
+      this._store.set({
+        detail: { ...detail, mode, form, errors: {}, preview: null, previewing: false },
+        writeError: null,
+      });
+      if (mode === "travel") {
+        void this._refreshTravelPreview();
+      }
+    },
+
+    field: (key, value) => {
+      const detail = this._store.state.detail;
+      // A travel that cannot be used takes its table with it *now* rather than in four
+      // hundred milliseconds: a before/after worked out from the previous number, sitting
+      // under a field that says the current one is out of range, reads as the answer.
+      //
+      // Clearing the table is only half of that. A preview asked for the *previous*
+      // number may still be in the air, and it would land on an empty table and fill it
+      // back in - under the sentence saying the number is out of range. So the sequence
+      // moves on here too: the answer to a question the screen has stopped asking is
+      // dropped when it arrives, exactly as one overtaken by a newer question is.
+      const unusable = key === "height" && valueProblem("height", value) !== null;
+      if (unusable) {
+        this._previewSeq += 1;
+      }
+      this._store.set({
+        detail: {
+          ...detail,
+          form: { ...detail.form, [key]: value },
+          ...(unusable ? { preview: null } : {}),
+        },
+      });
+      if (key === "height") {
+        this._scheduleTravelPreview();
+      }
+    },
+
+    saveValues: () => void this._saveValues(),
+    saveTravel: () => void this._saveTravel(),
+    remove: () => void this._removeMeasure(),
+    openFlow: (source) => this._openFlow(source),
+  };
+
+  /**
+   * The hand edit, as the patch `cover_edit` wants (contract §9.4).
+   *
+   * A field with a number sets it; a field left **empty** clears it, which is what sends
+   * the key back to being inherited - the whole meaning of "vuoto = niente da dire". Every
+   * one of the five is sent on every save, because the form shows all five and a key left
+   * out would be a value the user watched themselves delete and that stayed.
+   */
+  private async _saveValues(): Promise<void> {
+    const state = this._store.state;
+    const id = state.detail.for;
+    if (this._locked || !id || !state.entryId) {
+      return;
+    }
+    const overrides: Record<string, number | null> = {};
+    for (const key of DETAIL_KEYS) {
+      const typed = state.detail.form[key];
+      if (valueProblem(key, typed) !== null) {
+        return;
+      }
+      overrides[key] = isEmpty(typed) ? null : parseTravel(typed ?? "");
+    }
+    const cleared = Object.values(overrides).every((value) => value === null);
+    const name = this._detailCover?.name ?? "";
+    const entryId = state.entryId;
+    await this._write(
+      () => sendCoverEdit(this.hass.connection, entryId, id, overrides),
+      (result) => {
+        this._store.set({ detail: { ...this._store.state.detail, mode: "view", form: {} } });
+        this._store.setOverview(result.overview);
+        void this._loadDetail();
+        // Emptying every field *is* removing the measurement, and the prototype says so
+        // in those words rather than "saved". Where the window lands is read off the row
+        // the write itself answered with, not predicted here.
+        this._snack(
+          cleared
+            ? this._i18n.t("panel.toast.measure_removed", {
+                cover: name,
+                destination: this._destinationOf(result.overview, id),
+              })
+            : this._i18n.t("panel.toast.values_saved", { cover: name }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  private async _saveTravel(): Promise<void> {
+    const state = this._store.state;
+    const id = state.detail.for;
+    const typed = state.detail.form.height;
+    if (this._locked || !id || !state.entryId || isEmpty(typed) || valueProblem("height", typed)) {
+      return;
+    }
+    const height = parseTravel(typed ?? "");
+    const name = this._detailCover?.name ?? "";
+    const entryId = state.entryId;
+    await this._write(
+      () => sendSetTravel(this.hass.connection, entryId, id, height),
+      (result) => {
+        this._store.set({
+          detail: { ...this._store.state.detail, mode: "view", form: {}, preview: null },
+        });
+        this._store.setOverview(result.overview);
+        void this._loadDetail();
+        this._snack(this._i18n.t("panel.toast.travel_saved", { cover: name }), result.undo_token);
+      },
+    );
+  }
+
+  /**
+   * "Rimuovi la misura": the whole record, and the sentence that says what is left.
+   *
+   * The destination comes from the command's own answer (`falls_back_to` / `profile`),
+   * which is the window resolved again with the record gone - the same resolution the
+   * confirmation read out of `cover_detail`'s `forget` block a moment earlier. So the
+   * warning and the result cannot disagree.
+   */
+  private async _removeMeasure(): Promise<void> {
+    const state = this._store.state;
+    const id = state.detail.for;
+    if (this._locked || !id || !state.entryId) {
+      return;
+    }
+    const name = this._detailCover?.name ?? "";
+    const entryId = state.entryId;
+    await this._write(
+      () => sendCoverForget(this.hass.connection, entryId, id),
+      (result) => {
+        this._store.set({ detail: { ...this._store.state.detail, mode: "view" } });
+        this._store.setOverview(result.overview);
+        void this._loadDetail();
+        this._snack(
+          this._i18n.t("panel.toast.measure_removed", {
+            cover: name,
+            destination:
+              result.falls_back_to === "profile"
+                ? this._i18n.t("panel.detail.destination.profile", {
+                    profile: result.profile ?? "",
+                  })
+                : result.falls_back_to === "file"
+                  ? this._i18n.t("panel.detail.destination.file")
+                  : this._i18n.t("panel.detail.destination.defaults"),
+          }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  /** Where a shutter's numbers come from now, said in the words of a destination. */
+  private _destinationOf(overview: Overview, uniqueId: string): string {
+    const row = overview.covers.find((cover: CoverRow) => cover.unique_id === uniqueId);
+    if (row?.origin === "inherited" || row?.origin === "adjusted") {
+      return this._i18n.t("panel.detail.destination.profile", { profile: row.profile ?? "" });
+    }
+    return row?.origin === "from_the_file"
+      ? this._i18n.t("panel.detail.destination.file")
+      : this._i18n.t("panel.detail.destination.defaults");
+  }
+
+  private _scheduleTravelPreview(): void {
+    if (this._travelTimer) {
+      clearTimeout(this._travelTimer);
+    }
+    this._travelTimer = setTimeout(() => {
+      this._travelTimer = null;
+      void this._refreshTravelPreview();
+    }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  /**
+   * What this window would run on at the typed travel.
+   *
+   * The one number on the detail screen the panel may not work out: a travel is what a
+   * profile is scaled by, and scaling one here would be the second copy of
+   * `derive_cover_from_profile` the whole API exists to prevent. The item carries the
+   * shutter's *current* assignment so that nothing but the travel is hypothetical.
+   */
+  private async _refreshTravelPreview(): Promise<void> {
+    const state = this._store.state;
+    const cover = this._detailCover;
+    const typed = state.detail.form.height;
+    if (!state.entryId || !cover || isEmpty(typed) || valueProblem("height", typed) !== null) {
+      this._store.set({ detail: { ...this._store.state.detail, preview: null } });
+      return;
+    }
+    const seq = ++this._previewSeq;
+    this._store.set({ detail: { ...this._store.state.detail, previewing: true } });
+    try {
+      const answer = await fetchPreview(this.hass.connection, state.entryId, [
+        { ...currentAssignment(cover), height: parseTravel(typed ?? "") },
+      ]);
+      if (seq !== this._previewSeq) {
+        return;
+      }
+      this._store.set({
+        detail: {
+          ...this._store.state.detail,
+          preview: answer.items[0] ?? null,
+          previewing: false,
+        },
+      });
+    } catch (error) {
+      if (seq === this._previewSeq) {
+        this._store.set({ detail: { ...this._store.state.detail, previewing: false } });
+      }
+      if (!isUnknownCommand(error)) {
+        console.warn("MyHOME panel: the preview could not be read", asWsError(error));
+      }
+    }
+  }
+
+  /**
+   * Everything that ends in "Configura", from wherever it was asked for.
+   *
+   * `engine/flow.ts` probes the frontend's private flow dialog and, when it is not there
+   * or does not open, navigates to the integration page - which is the path the
+   * acceptance criteria require and the only one that cannot be taken away. The panel says
+   * a sentence first either way: a change of environment nobody announced is worse than a
+   * slow one.
+   */
+  private _openFlow(source: HTMLElement): void {
+    openOptionsFlow({
+      source,
+      entryId: this._store.state.entryId,
+      onLeaving: () => this._store.announce(this._i18n.t("panel.common.opens_configure")),
+    });
+  }
+
+  /**
+   * The one `<h1>` of the page, which says which screen this is.
+   *
+   * A panel with four screens and one title is a panel whose browser tab, whose back
+   * button and whose screen reader all say the same thing about four different places.
+   */
+  private _title(): string {
+    const state = this._store.state;
+    const route = state.route;
+    if (route.view === "cover") {
+      const cover = this._detailCover;
+      return cover
+        ? this._i18n.t("panel.detail.named", { cover: cover.name })
+        : this._i18n.t("panel.detail.title");
+    }
+    if (route.view === "profile") {
+      const known = state.overview?.profiles.some(
+        (profile) => profile.name === route.params.name,
+      );
+      return known
+        ? this._i18n.t("panel.profile.name", { profile: route.params.name })
+        : this._i18n.t("panel.profile.title");
+    }
+    return this._i18n.t("panel.overview.title");
+  }
+
+  // --- the profile card (lot 8) ---------------------------------------------------------
+  //
+  // Everything this screen draws is already in `overview`, so there is no read of its own.
+  // The one thing it asks the server is the impact preview, which is the editor's whole
+  // reason for existing and the one number on it the panel may not work out.
+
+  private get _profileRow(): ProfileRow | null {
+    const state = this._store.state;
+    return (
+      state.overview?.profiles.find((row: ProfileRow) => row.name === state.profile.for) ?? null
+    );
+  }
+
+  /** Every window that follows it, however it was told to. */
+  private _followersOf(profile: ProfileRow | null): CoverRow[] {
+    const covers = this._store.state.overview?.covers ?? [];
+    if (!profile) {
+      return [];
+    }
+    const ids = new Set([...profile.followers, ...profile.followers_from_file]);
+    return covers.filter((cover: CoverRow) => ids.has(cover.unique_id));
+  }
+
+  /** The six fields as the form wants them: the profile's own numbers, written out. */
+  private _profileForm(profile: ProfileRow | null): Record<string, string> {
+    const form: Record<string, string> = {};
+    for (const key of PROFILE_KEYS) {
+      const value =
+        key === "reference_height" ? profile?.reference_height : profile?.values[key];
+      form[key] =
+        value === null || value === undefined
+          ? ""
+          : this._i18n.number(value, DECIMALS[key] ?? 0);
+    }
+    return form;
+  }
+
+  /** The typed numbers, or `null` while one of them cannot be used. */
+  private _typedProfile(): Record<string, number> | null {
+    const form = this._store.state.profile.form;
+    const values: Record<string, number> = {};
+    for (const key of PROFILE_KEYS) {
+      if (isEmpty(form[key]) || valueProblem(key, form[key]) !== null) {
+        return null;
+      }
+      values[key] = parseTravel(form[key] ?? "") as number;
+    }
+    return values;
+  }
+
+  private _profileActions: ProfileActions = {
+    back: () => this._navigate("/"),
+    openCover: (uniqueId) => this._navigate(`/cover/${encodeURIComponent(uniqueId)}`),
+
+    mode: (mode) => {
+      const profile = this._store.state.profile;
+      this._store.set({
+        profile: {
+          ...profile,
+          mode,
+          form: mode === "edit" ? this._profileForm(this._profileRow) : {},
+          errors: {},
+          newName: mode === "rename" ? (profile.for ?? "") : "",
+          nameError: "",
+          impact: null,
+          impacting: false,
+        },
+        writeError: null,
+      });
+      if (mode === "edit") {
+        void this._refreshImpact();
+      }
+    },
+
+    field: (key, value) => {
+      const profile = this._store.state.profile;
+      this._store.set({ profile: { ...profile, form: { ...profile.form, [key]: value } } });
+      this._scheduleImpact();
+    },
+
+    newName: (value) =>
+      this._store.set({
+        profile: { ...this._store.state.profile, newName: value, nameError: "" },
+      }),
+
+    saveValues: () => void this._saveProfile(),
+    rename: () => void this._renameProfile(),
+    remove: () => void this._deleteProfile(),
+  };
+
+  private async _saveProfile(): Promise<void> {
+    const state = this._store.state;
+    const name = state.profile.for;
+    const values = this._typedProfile();
+    if (this._locked || !name || !state.entryId || !values) {
+      return;
+    }
+    const { reference_height: travel, ...rest } = values;
+    const entryId = state.entryId;
+    await this._write(
+      () => sendProfileEdit(this.hass.connection, entryId, name, rest, travel),
+      (result) => {
+        this._store.set({
+          profile: { ...this._store.state.profile, mode: "view", impact: null },
+        });
+        this._store.setOverview(result.overview);
+        this._snack(
+          result.affected.length === 1
+            ? this._i18n.t("panel.toast.profile_saved_one", { profile: name })
+            : this._i18n.t("panel.toast.profile_saved", {
+                profile: name,
+                count: result.affected.length,
+              }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  /**
+   * A rename is a write and a navigation: the address bar names the profile, so staying
+   * where we were would leave the card asking about a name nothing defines any more.
+   *
+   * Its refusal goes under the field rather than to the top of the card, because the two
+   * that can happen - the name is not usable, the name is taken - are both about the
+   * eight characters the user just typed.
+   */
+  private async _renameProfile(): Promise<void> {
+    const state = this._store.state;
+    const name = state.profile.for;
+    const next = state.profile.newName.trim();
+    if (this._locked || !name || !state.entryId || !next || next === name) {
+      return;
+    }
+    const entryId = state.entryId;
+    await this._write(
+      () => sendProfileRename(this.hass.connection, entryId, name, next),
+      (result) => {
+        this._store.setOverview(result.overview);
+        this._navigate(`/profile/${encodeURIComponent(next)}`);
+        this._snack(
+          this._i18n.t("panel.toast.profile_renamed", { profile: next }),
+          result.undo_token,
+        );
+      },
+      (sentence) =>
+        this._store.set({
+          profile: { ...this._store.state.profile, nameError: sentence },
+          writeError: null,
+        }),
+    );
+  }
+
+  private async _deleteProfile(): Promise<void> {
+    const state = this._store.state;
+    const name = state.profile.for;
+    if (this._locked || !name || !state.entryId) {
+      return;
+    }
+    const entryId = state.entryId;
+    await this._write(
+      () => sendProfileDelete(this.hass.connection, entryId, name),
+      (result) => {
+        this._store.setOverview(result.overview);
+        // The screen this card was is gone with the profile; the list is where the
+        // shutters it used to describe now are.
+        this._navigate("/");
+        this._snack(
+          this._i18n.t("panel.toast.profile_deleted", { profile: name }),
+          result.undo_token,
+        );
+      },
+    );
+  }
+
+  private _scheduleImpact(): void {
+    if (this._impactTimer) {
+      clearTimeout(this._impactTimer);
+    }
+    this._impactTimer = setTimeout(() => {
+      this._impactTimer = null;
+      void this._refreshImpact();
+    }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  /**
+   * What the typed numbers would mean for every follower (contract §11, `profile_values`).
+   *
+   * One item per follower carrying that follower's *current* assignment, so that nothing
+   * but the profile is hypothetical - `currentAssignment` is what makes that exact for a
+   * window whose `myhome.yaml` names the profile rather than this panel. The scaling is
+   * the server's, here as everywhere: a profile scaled in the browser would be the second
+   * travel model the whole API exists to prevent.
+   */
+  private async _refreshImpact(): Promise<void> {
+    const state = this._store.state;
+    const values = this._typedProfile();
+    const name = state.profile.for;
+    const followers = this._followersOf(this._profileRow);
+    if (!state.entryId || !name || !values || followers.length === 0) {
+      this._store.set({ profile: { ...this._store.state.profile, impact: null } });
+      return;
+    }
+    const seq = ++this._previewSeq;
+    this._store.set({ profile: { ...this._store.state.profile, impacting: true } });
+    try {
+      const answer = await fetchPreview(
+        this.hass.connection,
+        state.entryId,
+        followers.map((cover) => currentAssignment(cover)),
+        { [name]: values },
+      );
+      if (seq !== this._previewSeq) {
+        return;
+      }
+      this._store.set({
+        profile: { ...this._store.state.profile, impact: answer.items, impacting: false },
+      });
+    } catch (error) {
+      if (seq === this._previewSeq) {
+        this._store.set({ profile: { ...this._store.state.profile, impacting: false } });
+      }
+      if (!isUnknownCommand(error)) {
+        console.warn("MyHOME panel: the impact preview could not be read", asWsError(error));
+      }
+    }
+  }
+
   private _renderView(): TemplateResult {
     const state = this._store.state;
+
     if (state.status === "loading") {
       return html`<div class="card waiting" role="status">
         ${this._i18n.t("panel.common.loading")}
@@ -796,25 +1457,18 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
     const route = state.route;
     if (route.view === "cover") {
-      const cover = state.overview.covers.find(
-        (candidate: CoverRow) => candidate.unique_id === route.params.id,
-      );
-      return this._renderPlaceholder(
-        cover
-          ? this._i18n.t("panel.detail.named", { cover: cover.name })
-          : this._i18n.t("panel.detail.unknown"),
-        this._i18n.t("panel.common.not_yet"),
-      );
+      return html`<myhome-cover-detail
+        .i18n=${this._i18n}
+        .state=${state}
+        .actions=${this._detailActions}
+      ></myhome-cover-detail>`;
     }
     if (route.view === "profile") {
-      const name = route.params.name;
-      const known = state.overview.profiles.some((profile) => profile.name === name);
-      return this._renderPlaceholder(
-        known
-          ? this._i18n.t("panel.profile.name", { profile: name })
-          : this._i18n.t("panel.profile.unknown"),
-        this._i18n.t("panel.common.not_yet"),
-      );
+      return html`<myhome-profile-card
+        .i18n=${this._i18n}
+        .state=${state}
+        .actions=${this._profileActions}
+      ></myhome-profile-card>`;
     }
     if (route.view !== "overview") {
       // `/calibrate/…` is reserved for 0.7.0, and anything else is a typed URL.
@@ -832,18 +1486,14 @@ export class MyHomeCalibrationPanel extends LitElement {
 
   protected override render(): TemplateResult {
     const state = this._store.state;
-    const title = this._i18n.t("panel.overview.title");
-    const gateway = state.overview?.entries.find((entry) => entry.entry_id === state.entryId);
+    const title = this._title();
     const measuring = state.overview?.measuring ?? null;
+    const routed = state.route.view !== "overview";
     return html`
       <div class="toolbar">
         ${this._renderMenuButton()} ${this._renderBackButton()}
         <h1 class="title">${title}</h1>
-        ${gateway && (state.overview?.entries.length ?? 0) > 1
-          ? html`<div class="gateway">
-              ${this._i18n.t("panel.common.gateway", { gateway: gateway.title })}
-            </div>`
-          : nothing}
+        ${this._renderGatewayPicker()}
       </div>
       ${measuring ? measuringBanner(this._i18n, measuring.name, FLOW_URL) : nothing}
       <div class="content">
@@ -852,13 +1502,92 @@ export class MyHomeCalibrationPanel extends LitElement {
           ? html`<p class="connection">${this._i18n.t("panel.common.polling")}</p>`
           : nothing}
       </div>
+      <!--
+        The overview draws its own five strips, because three of them are about a gesture
+        it owns. The routed cards have no gestures and two of the five still apply to them:
+        a write in the air, and what it came to with "Annulla" beside it.
+      -->
+      ${routed && state.applying ? applyingStrip(this._i18n) : nothing}
+      ${routed && state.snack && !state.applying
+        ? snackStrip(
+            this._i18n,
+            state.snack.message,
+            state.snack.undoToken ? () => void this._undo() : null,
+          )
+        : nothing}
     `;
+  }
+
+  /**
+   * Which gateway this screen is about - shown only when there is a choice.
+   *
+   * The design's own decision, and the handoff's ("Header: hide the gateway select with a
+   * single gateway"): nearly every installation has one, and a picker with one entry is a
+   * control that teaches the user their house is more complicated than it is. A house with
+   * two gets a real select, because `overview` is about one gateway at a time and merging
+   * two orders into one list is not a screen anybody asked for.
+   */
+  private _renderGatewayPicker(): TemplateResult | typeof nothing {
+    const state = this._store.state;
+    const entries = state.overview?.entries ?? [];
+    const current = entries.find((entry) => entry.entry_id === state.entryId);
+    if (entries.length <= 1) {
+      return nothing;
+    }
+    const label = this._i18n.t("panel.common.gateway", { gateway: current?.title ?? "" });
+    return html`<select
+      class="gateway"
+      aria-label=${label}
+      .value=${state.entryId ?? ""}
+      ?disabled=${state.applying}
+      @change=${(event: Event) =>
+        void this._switchGateway((event.target as HTMLSelectElement).value)}
+    >
+      ${entries.map(
+        (entry) => html`<option value=${entry.entry_id} ?selected=${entry.entry_id === state.entryId}>
+          ${entry.title}
+        </option>`,
+      )}
+    </select>`;
+  }
+
+  /**
+   * Look at another gateway.
+   *
+   * Everything the screen was holding belongs to the one it is leaving - the pending
+   * changes name shutters of that gateway, the card is about one of them - so all of it is
+   * dropped rather than carried across, and the subscription is moved with the model: a
+   * socket still pushing the old gateway's overviews would replace the new one's the next
+   * time anybody wrote to it.
+   */
+  private async _switchGateway(entryId: string): Promise<void> {
+    if (!entryId || entryId === this._store.state.entryId) {
+      return;
+    }
+    const unsubscribe = this._unsubscribeWs;
+    this._unsubscribeWs = null;
+    await unsubscribe?.().catch(() => undefined);
+    this._clearSnack();
+    this._store.set({
+      ...NOTHING_PENDING,
+      entryId,
+      detail: NO_DETAIL,
+      profile: NO_PROFILE_CARD,
+      search: "",
+      room: "",
+      snack: null,
+    });
+    this._navigate("/");
+    await this._refresh();
+    await this._listen();
   }
 }
 
 // The two elements the shell renders. Referenced rather than merely imported, so that a
 // bundler with aggressive side-effect pruning cannot decide the registrations are dead.
 void MyHomeOverview;
+void MyHomeCoverDetail;
+void MyHomeProfileCard;
 void MyHomeScreen;
 
 // Defined once, and only once: Home Assistant keeps a panel's module in the document after

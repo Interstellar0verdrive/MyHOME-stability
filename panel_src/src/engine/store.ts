@@ -19,7 +19,7 @@
 // dependency somebody has to keep in step with Lit.
 
 import { type Route } from "./router";
-import { type Overview, type PreviewItem, type WsError } from "./ws";
+import { type CoverDetail, type Overview, type PreviewItem, type WsError } from "./ws";
 
 /** Where the model is coming from, which the panel says out loud when it is not live. */
 export type Connection = "starting" | "live" | "polling" | "offline";
@@ -58,6 +58,84 @@ export interface Snack {
   message: string;
   undoToken: string | null;
 }
+
+/**
+ * The routed cover detail (`#/cover/<unique_id>`), which is a second server model.
+ *
+ * It is kept beside `overview` rather than inside it for the same reason the pending
+ * changes are: `cover_detail` answers a different question - per key, where each number
+ * comes from and what it would fall back to - and a push replaces the overview without
+ * saying anything about the shutter whose card is open. `for` records which shutter the
+ * answer is about, so a stale answer is never drawn under a new name.
+ *
+ * `mode` is the prototype's own four states, and the three that are not `view` are the
+ * three that write.
+ */
+export interface DetailState {
+  for: string | null;
+  answer: CoverDetail | null;
+  loading: boolean;
+  error: WsError | null;
+  mode: "view" | "edit" | "travel" | "correct" | "remove";
+  /** The five value fields and `height`, as typed. An empty field means "inherit". */
+  form: Record<string, string>;
+  /** What the panel's own pre-validation found; the server checks again and wins. */
+  errors: Record<string, string>;
+  /**
+   * What the typed travel would come to, from `preview`. Only the travel: a hand-edited
+   * value is either the number typed or the key's own `inherited_value`, which
+   * `cover_detail` already answers, and asking the server to repeat it would be a round
+   * trip for a lookup. A travel, on the other hand, rescales the profile - which is
+   * arithmetic, and therefore the server's.
+   */
+  preview: PreviewItem | null;
+  previewing: boolean;
+}
+
+/**
+ * The routed profile card (`#/profile/<name>`). Everything it draws except the impact
+ * preview comes out of `overview`, which already carries every profile whole.
+ */
+export interface ProfileState {
+  for: string | null;
+  mode: "view" | "edit" | "rename" | "delete";
+  /** The five values and `reference_height`, as typed. */
+  form: Record<string, string>;
+  errors: Record<string, string>;
+  /** The rename field and what is wrong with it. */
+  newName: string;
+  nameError: string;
+  /**
+   * One `preview` item per follower, answered with the typed numbers in the profile's
+   * place (`profile_values`, contract §11). The panel does not scale a profile on this
+   * screen any more than on the review panel.
+   */
+  impact: PreviewItem[] | null;
+  impacting: boolean;
+}
+
+export const NO_DETAIL: DetailState = {
+  for: null,
+  answer: null,
+  loading: false,
+  error: null,
+  mode: "view",
+  form: {},
+  errors: {},
+  preview: null,
+  previewing: false,
+};
+
+export const NO_PROFILE_CARD: ProfileState = {
+  for: null,
+  mode: "view",
+  form: {},
+  errors: {},
+  newName: "",
+  nameError: "",
+  impact: null,
+  impacting: false,
+};
 
 export interface PanelState {
   /** The gateway this model is about; `null` until the first answer names one. */
@@ -106,6 +184,10 @@ export interface PanelState {
   snack: Snack | null;
   /** A refused write, shown where the user was working and never as a whole-page error. */
   writeError: WsError | null;
+
+  // --- the two routed cards (lot 8) --------------------------------------------------
+  detail: DetailState;
+  profile: ProfileState;
 }
 
 export const initialState = (route: Route): PanelState => ({
@@ -132,6 +214,8 @@ export const initialState = (route: Route): PanelState => ({
   applying: false,
   snack: null,
   writeError: null,
+  detail: NO_DETAIL,
+  profile: NO_PROFILE_CARD,
 });
 
 /** Everything the user was composing, dropped: what "Scarta tutto" and a confirm leave. */

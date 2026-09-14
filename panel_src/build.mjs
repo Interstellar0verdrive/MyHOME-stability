@@ -14,8 +14,8 @@
 // runtime instead, out of the `config` the registration hands it, and the URL it is
 // fetched from carries `?v=<version>` so a browser still cannot serve an old one.
 
-import { build } from "esbuild";
-import { mkdir } from "node:fs/promises";
+import { build, transform } from "esbuild";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,6 +25,47 @@ const outfile = join(here, "..", "custom_components", "myhome", "frontend", "myh
 // `tests/test_panel_build.py` asserts this exact first line, so a bundle built by
 // something else - or edited by hand - is a failing test and not a mystery.
 const BANNER = "/* MyHOME calibration panel */";
+
+// The stylesheets are minified, and they have to be minified here.
+//
+// A Lit stylesheet is a tagged template literal, and a template literal's contents are
+// part of the program's meaning: `--minify` will not touch a character inside one, so
+// every rule of every component ships with the indentation it was written with. Across the
+// panel that is more than ten kilobytes of spaces in a file with a budget.
+//
+// So each `css`...`` block is handed to **esbuild's own CSS minifier** on the way in.
+// Nothing here parses CSS: the extraction is the only home-made part of it, and it is
+// safe because no `css` block in this source interpolates (`${`) or escapes anything - a
+// grep over `src/` holds that, and a block that did would throw here rather than be
+// mangled, because the closing backtick would be the wrong one.
+//
+// The source stays readable and the bundle stays small, which is the whole trade.
+const CSS_BLOCK = /(^|[\s=(,[:])css`([^`]*)`/g;
+
+const minifyStylesheets = {
+  name: "minify-lit-css",
+  setup(pluginBuild) {
+    pluginBuild.onLoad({ filter: /\.ts$/ }, async (args) => {
+      const source = await readFile(args.path, "utf8");
+      if (!source.includes("css`")) {
+        return null;
+      }
+      const blocks = [...source.matchAll(CSS_BLOCK)];
+      if (blocks.length === 0) {
+        return null;
+      }
+      const minified = await Promise.all(
+        blocks.map((match) => transform(match[2], { loader: "css", minify: true })),
+      );
+      let index = 0;
+      const contents = source.replace(CSS_BLOCK, (_whole, before) => {
+        const done = minified[index++].code.trim();
+        return `${before}css\`${done}\``;
+      });
+      return { contents, loader: "ts" };
+    });
+  },
+};
 
 await mkdir(dirname(outfile), { recursive: true });
 
@@ -46,6 +87,7 @@ await build({
   // The full licence text is beside the bundle in THIRD_PARTY_NOTICES.md.
   legalComments: "eof",
   banner: { js: BANNER },
+  plugins: [minifyStylesheets],
   charset: "utf8",
   logLevel: "info",
 });

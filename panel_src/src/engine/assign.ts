@@ -166,6 +166,23 @@ export const travelProblem = (raw: string | undefined): TravelProblem | null => 
   return value < MIN_TRAVEL_CM || value > MAX_TRAVEL_CM ? "out_of_range" : null;
 };
 
+/**
+ * The item that leaves a shutter's assignment exactly as it is.
+ *
+ * The profile card's impact preview asks `preview` about every follower with the profile's
+ * numbers changed and *nothing else* changed, so each item has to rewrite the record into
+ * what it already was. For a window the store assigned that is its own profile name; for
+ * one whose `myhome.yaml` carries the `profile:` line it is `null` - popping an assignment
+ * the record does not have leaves the record alone, and the file goes on answering, which
+ * is what `profile_from_file` means. Sending the name instead would set `profile_wins` on
+ * a window that does not have it, and the preview would promise the profile's numbers
+ * where the file's own run times really win.
+ */
+export const currentAssignment = (cover: CoverRow): AssignItem => ({
+  cover_unique_id: cover.unique_id,
+  profile: cover.profile_from_file ? null : (cover.profile ?? null),
+});
+
 /** True when this shutter needs a travel typed before the batch can be written. */
 export const needsTravel = (cover: CoverRow, change: PendingChange): boolean =>
   change.to !== null && cover.height === null;

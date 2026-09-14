@@ -854,6 +854,7 @@
       "assigned_one": "1 assegnazione applicata",
       "order_saved": "Il nuovo ordine verrà ricordato.",
       "values_saved": "I valori di “{cover}” sono salvati: battono il profilo e il file.",
+      "travel_saved": "La corsa di “{cover}” è salvata: il profilo viene portato su questa misura.",
       "measure_removed": "Misura rimossa: “{cover}” ora usa {destination}.",
       "profile_saved": "Profilo “{profile}” aggiornato: {count} tapparelle raggiunte.",
       "profile_saved_one": "Profilo “{profile}” aggiornato: 1 tapparella raggiunta.",
@@ -885,6 +886,7 @@
       "action": {
         "edit": "Modifica i valori a mano",
         "assign": "Assegna a un profilo…",
+        "travel": "Imposta la corsa del telo…",
         "measure_again": "Misura di nuovo",
         "measure_again_note": "Calibrazione base completa, nel dialogo",
         "correct": "Correggi…",
@@ -930,6 +932,7 @@
       "from_file": "Profilo del file di configurazione: qui è di sola lettura.",
       "unknown": "Nessun profilo con quel nome è definito o seguito qui.",
       "reference_travel": "Corsa di riferimento",
+      "values": "Valori del profilo",
       "provenance": "Misurato su {cover} · {date}",
       "provenance_missing": "Non è registrato dove è stato misurato.",
       "provenance_now_profile": "ora segue “{profile}”",
