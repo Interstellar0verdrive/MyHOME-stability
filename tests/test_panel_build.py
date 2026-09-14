@@ -14,6 +14,7 @@ and run in the suite everybody already runs.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import custom_components.myhome as myhome
@@ -131,3 +132,43 @@ def test_the_bundle_stays_inside_its_budget() -> None:
     Mutation caught: a dependency that doubles the download for a convenience.
     """
     assert BUNDLE.stat().st_size < 250 * 1024
+
+
+# `build.mjs` minifies every Lit `css` block through esbuild's CSS minifier, and it finds
+# those blocks with a regular expression. The expression is safe only while no `css` block
+# in the panel's source interpolates or escapes anything - a block that did would have the
+# wrong closing backtick, and the build would either throw or, worse, ship a stylesheet
+# somebody's editor cannot explain. Nothing in the toolchain enforces that: `tsc` reads the
+# source, not the transform, so a mangled stylesheet is a silent change of appearance.
+CSS_BLOCK = re.compile(r"(?:^|[\s=(,\[:])css`([^`]*)`", re.MULTILINE)
+
+PANEL_SOURCE = Path(myhome.__file__).parent.parent.parent / "panel_src" / "src"
+
+
+def test_every_stylesheet_is_one_the_build_can_minify() -> None:
+    """One `css` block, one match, and nothing interpolated inside any of them.
+
+    Two assertions, because the regular expression can fail in two directions. Counting
+    the bare occurrences of ``css`` against the blocks it matched catches a stylesheet the
+    expression walks past - which would ship unminified and unnoticed. Looking inside each
+    block for `${` or a backslash catches the case the head of `build.mjs` warns about: an
+    interpolation makes the closing backtick the wrong one, so the "stylesheet" handed to
+    the minifier would be half a program.
+
+    It is a Python test about TypeScript because this is the suite everybody runs and
+    `panel_src/` has no test runner of its own; the file it reads is in the repository
+    either way.
+
+    Mutation caught: writing `css` with an interpolated value in it (a token, a shared
+    length), which is the natural thing to reach for and the one thing this build cannot
+    take.
+    """
+    sources = sorted(PANEL_SOURCE.rglob("*.ts"))
+    assert sources, PANEL_SOURCE
+    for source in sources:
+        text = source.read_text(encoding="utf-8")
+        blocks = CSS_BLOCK.findall(text)
+        assert text.count("css`") == len(blocks), f"{source.name}: a stylesheet is not matched"
+        for block in blocks:
+            assert "${" not in block, f"{source.name}: a stylesheet interpolates"
+            assert "\\" not in block, f"{source.name}: a stylesheet escapes"
