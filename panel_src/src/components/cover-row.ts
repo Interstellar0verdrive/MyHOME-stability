@@ -73,14 +73,14 @@ export const coverRowStyles = css`
     top: -2px;
     height: 3px;
     border-radius: 2px;
-    background: var(--myhome-primary);
+    background: var(--myhome-primary-ink);
     pointer-events: none;
   }
 
   .row .pending-outline {
     position: absolute;
     inset: 0;
-    border: 2px dashed var(--myhome-primary);
+    border: 2px dashed var(--myhome-primary-ink);
     border-radius: 8px;
     pointer-events: none;
   }
@@ -202,7 +202,7 @@ export const coverRowStyles = css`
   .row .warn {
     display: block;
     font-size: 12.5px;
-    color: var(--myhome-warning);
+    color: var(--myhome-warning-ink);
     margin-top: 4px;
   }
 
@@ -212,9 +212,9 @@ export const coverRowStyles = css`
     align-items: center;
     gap: 2px;
     font-size: 12px;
-    color: var(--myhome-primary);
+    color: var(--myhome-primary-ink);
     background: var(--myhome-primary-faint);
-    border: 1px dashed var(--myhome-primary);
+    border: 1px dashed var(--myhome-primary-ink);
     border-radius: 10px;
     padding: 2px 2px 2px 8px;
     max-width: 100%;
@@ -251,7 +251,7 @@ export const coverRowStyles = css`
   .row .note {
     display: block;
     font-size: 12.5px;
-    color: var(--myhome-info);
+    color: var(--myhome-info-ink);
     margin-top: 4px;
   }
 `;

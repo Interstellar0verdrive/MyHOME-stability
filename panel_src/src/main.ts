@@ -253,7 +253,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       }
 
       a {
-        color: var(--myhome-primary);
+        color: var(--myhome-primary-ink);
       }
     `,
   ];
@@ -1611,11 +1611,18 @@ export class MyHomeCalibrationPanel extends LitElement {
     const measuring = state.overview?.measuring ?? null;
     const routed = state.route.view !== "overview";
     return html`
-      <div class="toolbar">
-        ${this._renderMenuButton()} ${this._renderBackButton()}
-        <h1 class="title">${title}</h1>
-        ${this._renderGatewayPicker()}
-      </div>
+      <!--
+        One named landmark for everything the panel draws, and deliberately not "main" or
+        "banner": a custom panel is rendered inside Home Assistant's own document and the
+        shell owns those. A region named by the page's own heading is a landmark a reader
+        can jump to and one that cannot collide with the host's.
+      -->
+      <div class="page" role="region" aria-labelledby="panel-title">
+        <div class="toolbar">
+          ${this._renderMenuButton()} ${this._renderBackButton()}
+          <h1 class="title" id="panel-title">${title}</h1>
+          ${this._renderGatewayPicker()}
+        </div>
       ${state.connection === "offline"
         ? html`<div class="offline" role="status">
             ${this._i18n.t("panel.error.no_connection")}
@@ -1641,6 +1648,7 @@ export class MyHomeCalibrationPanel extends LitElement {
             state.snack.undoToken ? () => void this._undo() : null,
           )
         : nothing}
+      </div>
     `;
   }
 

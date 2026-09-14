@@ -175,7 +175,7 @@ export const reviewPanelStyles = css`
     width: 96px;
     height: 44px;
     border-radius: 8px;
-    border: 1px solid var(--myhome-divider);
+    border: 1px solid var(--myhome-field-border);
     background: var(--myhome-card);
     color: inherit;
     padding: 0 10px;
@@ -185,13 +185,13 @@ export const reviewPanelStyles = css`
   }
 
   .sheet label.travel input[aria-invalid="true"] {
-    border-color: var(--myhome-error);
+    border-color: var(--myhome-error-ink);
   }
 
   .sheet .field-error {
     margin: 2px 0 0;
     font-size: 12.5px;
-    color: var(--myhome-error);
+    color: var(--myhome-error-ink);
     text-align: right;
   }
 
@@ -244,14 +244,14 @@ export const reviewPanelStyles = css`
   .sheet .problem {
     margin: 10px 0 0;
     font-size: 12.5px;
-    color: var(--myhome-error);
+    color: var(--myhome-error-ink);
     line-height: 1.5;
   }
 
   .sheet .show-all {
     border: none;
     background: transparent;
-    color: var(--myhome-primary);
+    color: var(--myhome-primary-ink);
     font: inherit;
     font-size: 13.5px;
     cursor: pointer;
@@ -417,13 +417,12 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
         }
       }}
     ></div>
-    <aside
-      class="sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="review-title"
-      data-focus-root
-    >
+    <!--
+      A div and not an aside: an aside is a complementary landmark, and a landmark that
+      also carries role="dialog" is an element claiming to be two things at once. The
+      geometry is the sheet class either way.
+    -->
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="review-title" data-focus-root>
       <div class="head">
         <h2 id="review-title">${i18n.t("panel.review.title")}</h2>
         <button
@@ -547,6 +546,6 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
                 : i18n.t("panel.review.action.confirm", { count: items.length })}
         </button>
       </div>
-    </aside>
+    </div>
   `;
 };

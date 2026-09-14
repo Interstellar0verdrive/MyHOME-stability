@@ -48,8 +48,8 @@ export const stripStyles = css`
   }
 
   .drop-zone.over {
-    border: 2px solid var(--myhome-primary);
-    color: var(--myhome-primary);
+    border: 2px solid var(--myhome-primary-ink);
+    color: var(--myhome-primary-ink);
   }
 
   .dark {
@@ -123,7 +123,7 @@ export const stripStyles = css`
 
   .pending-bar .locked {
     font-size: 13px;
-    color: var(--myhome-warning);
+    color: var(--myhome-warning-ink);
     flex-basis: 100%;
   }
 

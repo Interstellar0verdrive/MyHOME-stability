@@ -47,6 +47,14 @@ jobs:
         # handoff's open point and is stated there.
         run: npm test
 
+      - name: Accessibility
+        working-directory: panel_src
+        # axe-core over the committed bundle in jsdom, in sixteen states; the flows
+        # walked with the keyboard; and the contrast of every coloured surface in
+        # both themes, worked out from the documented defaults of the theme
+        # variables. All three are dev-only and none of them needs a browser.
+        run: npm run a11y && npm run keyboard && npm run contrast
+
       - name: Build
         working-directory: panel_src
         run: npm run build

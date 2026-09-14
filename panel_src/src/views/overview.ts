@@ -289,7 +289,7 @@ export class MyHomeOverview extends LitElement {
         pointer-events: none;
         background: var(--myhome-card);
         color: var(--myhome-text);
-        border: 1px solid var(--myhome-primary);
+        border: 1px solid var(--myhome-primary-ink);
         border-radius: 8px;
         box-shadow: var(--myhome-shadow);
         padding: 10px 14px;
@@ -405,8 +405,15 @@ export class MyHomeOverview extends LitElement {
       this._returnTo = null;
       this._returnToRow = null;
       requestAnimationFrame(() => {
+        // Walked rather than selected. A unique id is `00:03:50:aa:bb:cc-2-81`, which needs
+        // escaping before it can go inside an attribute selector - and `CSS.escape` is a
+        // global this file would then be depending on, inside a callback whose exception
+        // nobody catches and whose only symptom is focus quietly landing on the document.
+        // Comparing the attribute needs no global and cannot throw.
         const again = row
-          ? this.renderRoot.querySelector<HTMLElement>(`[data-row="${CSS.escape(row)}"] .handle`)
+          ? [...this.renderRoot.querySelectorAll<HTMLElement>("[data-row]")]
+              .find((element) => element.getAttribute("data-row") === row)
+              ?.querySelector<HTMLElement>(".handle")
           : null;
         const target = again ?? (back?.isConnected ? back : null);
         target?.focus();

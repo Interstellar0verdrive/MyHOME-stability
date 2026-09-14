@@ -25,6 +25,12 @@
 //
 // A screen never acts. It renders a model and fires `myhome-screen-action` with the action
 // token the model gave it; what that token means belongs to whoever built the model.
+//
+// **No landmark is claimed here.** The two columns used to be a `<main>`, which reads as a
+// layout element and is not one: a custom panel is rendered inside Home Assistant's own
+// document, the shell owns whatever `main` and `banner` that document has, and a second
+// `main` inside a panel is a page with two of them. The one landmark the panel declares is
+// the named region in `main.ts` that holds everything it draws.
 
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { styleMap } from "lit/directives/style-map.js";
@@ -177,7 +183,7 @@ export class MyHomeScreen extends LitElement {
         position: relative;
       }
 
-      main {
+      .pane {
         flex: 1;
         padding: 16px 16px 230px;
       }
@@ -215,7 +221,7 @@ export class MyHomeScreen extends LitElement {
           max-width: 100%;
         }
 
-        main {
+        .pane {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 400px;
           gap: 0 44px;
@@ -233,7 +239,7 @@ export class MyHomeScreen extends LitElement {
         }
 
         /* The pos template has no operative column: one centred column at every width. */
-        main.single {
+        .pane.single {
           display: block;
           max-width: 560px;
         }
@@ -327,7 +333,7 @@ export class MyHomeScreen extends LitElement {
     const single = model.model === "pos";
     const drawing = model.image ? drawingStyle(model.image) : null;
     return html`<div class="screen">
-      <main class=${single ? "single" : ""}>
+      <div class="pane ${single ? "single" : ""}">
         <div class="text-column">
           ${model.phase
             ? html`<p class="phase">
@@ -358,7 +364,7 @@ export class MyHomeScreen extends LitElement {
         <div class="right">
           ${this._renderOperative(model, context)} ${this._renderFooter(model, context)}
         </div>
-      </main>
+      </div>
     </div>`;
   }
 }
