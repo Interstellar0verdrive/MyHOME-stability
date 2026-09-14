@@ -6,12 +6,14 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "node test/run.mjs"
   },
   "dependencies": {
     "lit": "3.3.3"
   },
   "devDependencies": {
+    "@types/node": "24.10.1",
     "esbuild": "0.28.2",
     "typescript": "5.9.3"
   }

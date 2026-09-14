@@ -1,0 +1,12 @@
+{
+  // The tests, type-checked. They are the one thing in this package that runs in Node, so
+  // they are the one thing that may see Node's globals; `tsconfig.json` says `types: []`
+  // so the panel itself never does. The sources are included because the tests import
+  // them and a project that checked the tests alone would check nothing about the seam.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "types": ["node"]
+  },
+  "include": ["test/**/*.ts", "src/**/*.ts", "src/**/*.json"]
+}

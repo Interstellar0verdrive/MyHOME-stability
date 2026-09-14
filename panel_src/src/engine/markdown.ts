@@ -14,13 +14,18 @@
 // the element is defined and another way when it is not is a screen nobody can design.
 // The guard rule stands for *chrome* - `ha-menu-button` and its like - not for content.
 //
-// Images are restricted to `/myhome_static/`, the path the integration itself serves. An
-// image from anywhere else renders as its alt text: a translation file is not a place from
-// which to fetch.
+// Images are restricted to `/myhome_static/`, the path the integration itself serves - and
+// to paths that stay inside it, which is not the same test: a browser resolves
+// `/myhome_static/../../anything` before it fetches it, so a prefix check alone would let a
+// translation file ask for any address on the Home Assistant host and report back, by
+// whether the drawing appeared, whether it exists. The rule is `engine/safe-style.ts`'s
+// `servedByUs`, which the wizard's illustration slot uses as well. An image from anywhere
+// else renders as its alt text: a translation file is not a place from which to fetch.
 
 import { html, type TemplateResult } from "lit";
 
-const STATIC_PREFIX = "/myhome_static/";
+import { servedByUs } from "./safe-style";
+
 const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
 const LEADING_IMAGE = /^!\[[^\]]*\]\([^)\s]*\)\s*\n\s*\n/;
 
@@ -38,7 +43,7 @@ export const splitLeadingImage = (
   }
   const line = match[0].trim();
   const parsed = IMAGE_LINE.exec(line);
-  if (!parsed || !parsed[2].startsWith(STATIC_PREFIX)) {
+  if (!parsed || !servedByUs(parsed[2])) {
     return { image: null, body: text || "" };
   }
   return { image: { alt: parsed[1], src: parsed[2] }, body: (text || "").slice(match[0].length) };
@@ -48,14 +53,17 @@ export const splitLeadingImage = (
 const inline = (text: string): TemplateResult[] => {
   const out: TemplateResult[] = [];
   const parts = text.split("**");
+  // n markers give n+1 parts, so an even number of parts means one marker is unpaired and
+  // the tail after it was never opened. It stays plain: half-typed emphasis in a
+  // translation file must not bold the rest of the paragraph, which is what it did.
+  const unpaired = parts.length % 2 === 0;
   parts.forEach((part, index) => {
     if (!part) {
       return;
     }
-    // Odd segments are the ones between a pair of markers. An unmatched marker leaves an
-    // odd number of parts and the tail stays plain, which is what a reader expects from
-    // half-typed emphasis.
-    out.push(index % 2 === 1 ? html`<strong>${part}</strong>` : html`<span>${part}</span>`);
+    // Odd segments are the ones between a pair of markers.
+    const bold = index % 2 === 1 && !(unpaired && index === parts.length - 1);
+    out.push(bold ? html`<strong>${part}</strong>` : html`<span>${part}</span>`);
   });
   return out;
 };
@@ -77,7 +85,7 @@ export const renderMarkdown = (text: string): TemplateResult => {
     const image = IMAGE_LINE.exec(block);
     if (image) {
       rendered.push(
-        image[2].startsWith(STATIC_PREFIX)
+        servedByUs(image[2])
           ? html`<img class="md-image" src=${image[2]} alt=${image[1]} />`
           : html`<p>${inline(image[1])}</p>`,
       );

@@ -37,6 +37,16 @@ jobs:
         working-directory: panel_src
         run: npm run check
 
+      - name: Test
+        working-directory: panel_src
+        # The pure half of the panel under `node --test`: the pending model, the
+        # sentences, the router, the Markdown renderer, the illustration check and
+        # the options-flow opener. No browser and no new dependency - the runner
+        # compiles each test with the esbuild the build already uses. The views are
+        # walked by a person in `panel_src/dev/harness.html`; that boundary is the
+        # handoff's open point and is stated there.
+        run: npm test
+
       - name: Build
         working-directory: panel_src
         run: npm run build

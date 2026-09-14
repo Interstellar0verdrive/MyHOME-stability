@@ -31,6 +31,7 @@ import { styleMap } from "lit/directives/style-map.js";
 
 import { I18n } from "./i18n";
 import { renderMarkdown } from "./markdown";
+import { drawingStyle, type ScreenImage } from "./safe-style";
 import { buttonStyles, cardStyles, fieldStyles, srOnly, themeStyles } from "./theme";
 import { renderLettura } from "../templates/lettura";
 import { renderScelta } from "../templates/scelta";
@@ -120,7 +121,7 @@ export interface ScreenModel {
   title: string;
   /** Markdown, with any leading illustration already lifted into `image`. */
   body?: string;
-  image?: { src: string; alt: string; size?: string; pos?: string };
+  image?: ScreenImage;
   /** The handoff's "testo nuovo - da tradurre" badge. */
   newText?: boolean;
   primary?: ScreenAction;
@@ -132,37 +133,6 @@ export interface ScreenModel {
   summary?: ScreenSummary;
   outcome?: "saved" | "cancelled" | "expired" | "problem";
 }
-
-// The drawing is the one place a step's model reaches CSS, and CSS built by joining
-// strings is CSS somebody else can add declarations to: a `src` carrying `");` would turn
-// the illustration slot into any rule it liked, including a full-screen overlay and a
-// request to a host nobody chose. So the three values are checked here, at the point of
-// use, rather than trusted from wherever the model was built - `splitLeadingImage` already
-// refuses an image from outside `/myhome_static/`, and this says the same thing again where
-// it cannot be skipped. They are then set through `styleMap`, which writes one property at
-// a time and cannot grow a second declaration.
-
-/** A path this integration serves, and nothing else: no scheme, no host, no quoting. */
-const SAFE_SRC = /^\/myhome_static\/[A-Za-z0-9._~\-/]+$/;
-/** ...and no climbing back out of it with dot segments. */
-const DOT_SEGMENT = /(^|\/)\.\.?(\/|$)/;
-/** `background-size` / `background-position`: lengths, percentages and the CSS keywords. */
-const SAFE_VALUE = /^[A-Za-z0-9 %.,\-]+$/;
-
-const drawingStyle = (
-  image: NonNullable<ScreenModel["image"]>,
-): Record<string, string> | null => {
-  if (!SAFE_SRC.test(image.src) || DOT_SEGMENT.test(image.src)) {
-    return null;
-  }
-  const size = image.size && SAFE_VALUE.test(image.size) ? image.size : "100% auto";
-  const position = image.pos && SAFE_VALUE.test(image.pos) ? image.pos : "50% 60%";
-  return {
-    backgroundImage: `url("${image.src}")`,
-    backgroundSize: size,
-    backgroundPosition: position,
-  };
-};
 
 /** What a template is handed besides its model. */
 export interface ScreenContext {

@@ -28,15 +28,28 @@ import { type TemplateResult } from "lit";
 
 export type Placeholders = Record<string, string | number>;
 
+/** `{name}`, and nothing else is a placeholder - a brace around a space is a brace. */
+const PLACEHOLDER = /\{([A-Za-z0-9_]+)\}/g;
+
+/**
+ * One pass over the sentence, and never a second one over what came out of it.
+ *
+ * This used to substitute placeholder by placeholder, each over the whole string - which
+ * meant a *value* containing `{profile}` was rewritten by the next substitution. Names are
+ * the user's: a shutter really can be called "{profile}", and it would have come out of
+ * this saying the profile's name instead of its own. Scanning once makes what is written
+ * into the sentence text and nothing else, and it leaves a placeholder nobody passed
+ * exactly as it is, which is how a missing one stays visible.
+ */
 const fill = (sentence: string, placeholders?: Placeholders): string => {
   if (!placeholders) {
     return sentence;
   }
-  let out = sentence;
-  for (const [name, value] of Object.entries(placeholders)) {
-    out = out.split(`{${name}}`).join(String(value));
-  }
-  return out;
+  return sentence.replace(PLACEHOLDER, (whole, name: string) =>
+    Object.prototype.hasOwnProperty.call(placeholders, name)
+      ? String(placeholders[name])
+      : whole,
+  );
 };
 
 export class I18n {
