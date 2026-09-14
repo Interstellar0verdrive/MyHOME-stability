@@ -126,10 +126,27 @@ export interface CoverKeyRow {
   default_value: number | null;
 }
 
+/**
+ * What "Rimuovi la misura" would leave, read before it removes anything (contract §3).
+ *
+ * The same three facts `cover_forget` answers with afterwards, computed the same way -
+ * this window resolved once more with the record gone. `keys[].inherited_*` is **not**
+ * the answer to this question: it takes the overrides away and leaves the record, which
+ * is right for an emptied field and wrong for a removal that takes the assignment and
+ * the travel with it.
+ */
+export interface CoverForgetOutcome {
+  falls_back_to: "profile" | "file" | "defaults";
+  profile: string | null;
+  /** `myhome.yaml`'s own `height:` survives; a travel typed into this panel does not. */
+  travel_stays: boolean;
+}
+
 export interface CoverDetail {
   entry_id: string;
   cover: CoverRow;
   keys: CoverKeyRow[];
+  forget: CoverForgetOutcome;
 }
 
 /**
@@ -170,15 +187,28 @@ export interface PreviewResult {
   items: PreviewItem[];
 }
 
+/**
+ * The numbers to pretend a profile has while the question is answered (contract §11).
+ *
+ * Exactly what `profile_edit` would write - the five values and the travel they were
+ * measured at - because the profile card's impact preview asks what those numbers would
+ * mean for each follower, and the panel may no more scale a profile for that screen than
+ * for the review panel. The override replaces the numbers of a profile the gateway
+ * already has; it never defines a new name.
+ */
+export type ProfileValues = Record<string, Record<string, number>>;
+
 export const preview = (
   connection: HaConnection,
   entryId: string,
   items: AssignItem[],
+  profileValues?: ProfileValues,
 ): Promise<PreviewResult> =>
   connection.sendMessagePromise<PreviewResult>({
     type: "myhome/calibration/preview",
     entry_id: entryId,
     items,
+    ...(profileValues ? { profile_values: profileValues } : {}),
   });
 
 // --- the subscription -----------------------------------------------------------------

@@ -854,6 +854,7 @@
       "assigned_one": "1 assignment applied",
       "order_saved": "The new order will be remembered.",
       "values_saved": "The values of “{cover}” are saved: they beat the profile and the file.",
+      "travel_saved": "The travel of “{cover}” is saved: the profile is brought to this measurement.",
       "measure_removed": "Measurement removed: “{cover}” now uses {destination}.",
       "profile_saved": "Profile “{profile}” updated: {count} covers reached.",
       "profile_saved_one": "Profile “{profile}” updated: 1 cover reached.",
@@ -885,6 +886,7 @@
       "action": {
         "edit": "Edit the values by hand",
         "assign": "Assign to a profile…",
+        "travel": "Set the curtain travel…",
         "measure_again": "Measure again",
         "measure_again_note": "Full basic calibration, in the dialog",
         "correct": "Correct…",

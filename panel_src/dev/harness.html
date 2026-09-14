@@ -17,6 +17,13 @@
   shapes back (`translation_key` plus an English `message`) so the refusal path can be seen
   without breaking anything.
 
+  Lot 8 added the two routed cards, so it answers `cover_detail`, `cover_edit`,
+  `set_travel`, `cover_forget`, `profile_edit`, `profile_rename` and `profile_delete`, and
+  takes `profile_values` on a preview. Walk them at `#/cover/<unique id>` and
+  `#/profile/tall`, or by clicking a row and a group heading. The "travel from the file"
+  box decides whether a removal would leave the curtain travel behind, which is the one
+  fact the confirmation cannot work out for itself.
+
   **The arithmetic in `preview` below is the stub's, not the panel's.** The panel is
   forbidden from scaling a profile (that is the parity invariant); a fake server is not,
   because it is standing in for the one that does. The numbers it produces are roughly
@@ -46,6 +53,7 @@
   <label><input type="checkbox" id="fail" /> overview refuses</label>
   <label><input type="checkbox" id="refuse" /> writes refuse</label>
   <label><input type="checkbox" id="live" checked /> live updates</label>
+  <label><input type="checkbox" id="filetravel" /> travel from the file</label>
   <button type="button" id="reset">reset the gateway</button>
   <span id="note"></span>
 </div>
@@ -103,7 +111,7 @@
     flags[id] = () => box.checked;
     box.addEventListener("change", render);
   }
-  for (const id of ["measuring", "refuse", "live"]) {
+  for (const id of ["measuring", "refuse", "live", "filetravel"]) {
     const box = document.getElementById(id);
     flags[id] = () => box.checked;
     box.addEventListener("change", () => {
@@ -216,6 +224,67 @@
     };
   };
 
+  // --- the two routed cards (lot 8) -----------------------------------------------------
+  // The five numbers a window can measure for itself, which is what both cards show and
+  // both forms edit.
+  const KEYS = ["opening_time", "closing_time", "slat_time", "opening_roll", "closing_roll"];
+
+  const ownOf = (cover) => {
+    const own = {};
+    for (const key of cover.has_own) own[key] = cover.values[key];
+    return own;
+  };
+
+  /** What `myhome.yaml` would say about this window, as far as this stub pretends to know. */
+  const fileTravel = (cover) => (flags.filetravel() && cover.height !== null ? cover.height : null);
+
+  const detailOf = (id) => {
+    const cover = coverOf(id);
+    if (!cover) return null;
+    const profile = cover.profile ? profileOf(cover.profile) : null;
+    const own = ownOf(cover);
+    const inherited = profile && cover.height ? scaled(profile, cover.height) : null;
+    const keys = KEYS.map((key) => {
+      const isOwn = key in own;
+      const under = inherited ? inherited[key] : null;
+      return {
+        key,
+        value: cover.values[key],
+        origin: isOwn ? "own" : profile ? "profile" : "default",
+        own: isOwn,
+        inherited_value: under ?? (isOwn ? null : cover.values[key]),
+        inherited_origin: profile ? "inherited" : "defaults",
+        profile_value: under,
+        file_value: null,
+        default_value: profile ? null : cover.values[key],
+      };
+    });
+    // With the record gone: only a `profile:` line in the file survives, and this stub
+    // has none, so every window falls back to the file or to the defaults.
+    return {
+      entry_id: gateway.entry_id,
+      cover: structuredClone(cover),
+      keys,
+      forget: {
+        falls_back_to: cover.profile_from_file ? "profile" : "defaults",
+        profile: cover.profile_from_file ? cover.profile : null,
+        travel_stays: fileTravel(cover) !== null,
+      },
+    };
+  };
+
+  /** Re-resolve one window after a write, the way the server would on the next read. */
+  const resettle = (cover) => {
+    const profile = cover.profile ? profileOf(cover.profile) : null;
+    const own = ownOf(cover);
+    const base = profile && cover.height ? scaled(profile, cover.height) : { ...cover.values };
+    cover.values = { ...base, ...own };
+    cover.origin = profile
+      ? cover.has_own.length === 0 ? "inherited" : "adjusted"
+      : cover.has_own.length > 0 ? "measured" : "defaults";
+    cover.source = profile ? `profile ${profile.name}` : "yaml";
+  };
+
   const publish = () => {
     if (subscriber && flags.live()) {
       subscriber({ type: "overview", overview: overview() });
@@ -235,8 +304,28 @@
                              translation_key: "entry_not_loaded" })
           : Promise.resolve(overview());
       }
+      if (message.type === "myhome/calibration/cover_detail") {
+        const detail = detailOf(message.cover_unique_id);
+        return detail
+          ? Promise.resolve(detail)
+          : Promise.reject({ code: "not_found", message: "No such cover",
+                             translation_key: "unknown_cover" });
+      }
       if (message.type === "myhome/calibration/preview") {
-        return Promise.resolve({ entry_id: gateway.entry_id, items: message.items.map(previewItem) });
+        // `profile_values` replaces a profile's numbers for the length of the answer and
+        // nothing else - the profile card's impact preview, contract section 11.
+        const saved = new Map();
+        for (const [name, values] of Object.entries(message.profile_values ?? {})) {
+          const profile = profileOf(name);
+          if (!profile) continue;
+          saved.set(name, { values: profile.values, reference_height: profile.reference_height });
+          const { reference_height, ...rest } = values;
+          profile.values = { ...profile.values, ...rest };
+          profile.reference_height = Number(String(reference_height).replace(",", "."));
+        }
+        const items = message.items.map(previewItem);
+        for (const [name, before] of saved) Object.assign(profileOf(name), before);
+        return Promise.resolve({ entry_id: gateway.entry_id, items });
       }
       if (flags.measuring() && message.type.startsWith("myhome/calibration/")) {
         return Promise.reject({ code: "not_allowed", message: "A guided calibration is running",
@@ -284,6 +373,105 @@
         gateway.order = [...message.order];
         publish();
         return Promise.resolve({ overview: overview(), undo_token: undoSlot.token });
+      }
+      if (message.type === "myhome/calibration/cover_edit") {
+        if (flags.refuse()) return refuse("write_in_progress", "Another change is still being applied");
+        const cover = coverOf(message.cover_unique_id);
+        undoSlot = { token: "stub-undo", before: structuredClone(gateway) };
+        const own = ownOf(cover);
+        for (const [key, value] of Object.entries(message.overrides)) {
+          if (value === null) delete own[key];
+          else own[key] = Number(String(value).replace(",", "."));
+        }
+        cover.has_own = KEYS.filter((key) => key in own);
+        cover.values = { ...cover.values, ...own };
+        resettle(cover);
+        publish();
+        return Promise.resolve({ overview: overview(), undo_token: undoSlot.token });
+      }
+      if (message.type === "myhome/calibration/set_travel") {
+        if (flags.refuse()) return refuse("write_in_progress", "Another change is still being applied");
+        const cover = coverOf(message.cover_unique_id);
+        undoSlot = { token: "stub-undo", before: structuredClone(gateway) };
+        cover.height = message.height === null
+          ? null : Number(String(message.height).replace(",", "."));
+        resettle(cover);
+        publish();
+        return Promise.resolve({ overview: overview(), undo_token: undoSlot.token });
+      }
+      if (message.type === "myhome/calibration/cover_forget") {
+        if (flags.refuse()) return refuse("write_in_progress", "Another change is still being applied");
+        const cover = coverOf(message.cover_unique_id);
+        const outcome = detailOf(cover.unique_id).forget;
+        undoSlot = { token: "stub-undo", before: structuredClone(gateway) };
+        cover.has_own = [];
+        cover.measured_at = null;
+        cover.level = null;
+        cover.verify_note = null;
+        if (!cover.profile_from_file) cover.profile = null;
+        if (!outcome.travel_stays) cover.height = null;
+        resettle(cover);
+        publish();
+        return Promise.resolve({ overview: overview(), undo_token: undoSlot.token,
+                                 falls_back_to: outcome.falls_back_to, profile: outcome.profile });
+      }
+      if (message.type === "myhome/calibration/profile_edit") {
+        if (flags.refuse()) return refuse("write_in_progress", "Another change is still being applied");
+        const profile = profileOf(message.name);
+        if (!profile) {
+          return Promise.reject({ code: "not_found", message: "No such profile",
+                                  translation_key: "unknown_profile",
+                                  translation_placeholders: { profile: message.name } });
+        }
+        if (!profile.editable) {
+          return Promise.reject({ code: "not_allowed", message: "That profile is in the file",
+                                  translation_key: "profile_not_editable",
+                                  translation_placeholders: { profile: message.name } });
+        }
+        undoSlot = { token: "stub-undo", before: structuredClone(gateway) };
+        const number = (value) => Number(String(value).replace(",", "."));
+        for (const key of KEYS) profile.values[key] = number(message.values[key]);
+        profile.reference_height = number(message.reference_height);
+        const affected = gateway.covers.filter((c) => c.profile === message.name);
+        affected.forEach(resettle);
+        publish();
+        return Promise.resolve({ overview: overview(), undo_token: undoSlot.token,
+                                 affected: affected.map((c) => c.unique_id) });
+      }
+      if (message.type === "myhome/calibration/profile_rename") {
+        if (flags.refuse()) return refuse("write_in_progress", "Another change is still being applied");
+        if (!/^[A-Za-z0-9_]+$/.test(message.new_name)) {
+          return refuse("invalid_name", "That is not a usable profile name",
+                        { profile: message.new_name });
+        }
+        if (profileOf(message.new_name)) {
+          return refuse("name_in_use", "There is already a profile of that name",
+                        { profile: message.new_name });
+        }
+        const profile = profileOf(message.name);
+        undoSlot = { token: "stub-undo", before: structuredClone(gateway) };
+        profile.name = message.new_name;
+        const moved = gateway.covers.filter((c) => c.profile === message.name);
+        moved.forEach((c) => { c.profile = message.new_name; resettle(c); });
+        publish();
+        return Promise.resolve({ overview: overview(), undo_token: undoSlot.token,
+                                 moved: moved.length, from_file: [] });
+      }
+      if (message.type === "myhome/calibration/profile_delete") {
+        if (flags.refuse()) return refuse("write_in_progress", "Another change is still being applied");
+        const profile = profileOf(message.name);
+        if (!profile?.editable) {
+          return Promise.reject({ code: "not_allowed", message: "That profile is in the file",
+                                  translation_key: "profile_not_editable",
+                                  translation_placeholders: { profile: message.name } });
+        }
+        undoSlot = { token: "stub-undo", before: structuredClone(gateway) };
+        const orphans = gateway.covers.filter((c) => c.profile === message.name && !c.profile_from_file);
+        gateway.profiles = gateway.profiles.filter((p) => p.name !== message.name);
+        orphans.forEach((c) => { c.profile = null; resettle(c); });
+        publish();
+        return Promise.resolve({ overview: overview(), undo_token: undoSlot.token,
+                                 covers_affected: orphans.map((c) => c.unique_id), from_file: [] });
       }
       if (message.type === "myhome/calibration/undo") {
         if (!undoSlot || undoSlot.token !== message.undo_token) {
