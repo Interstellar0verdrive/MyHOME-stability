@@ -27,6 +27,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
 
@@ -38,9 +39,12 @@ from custom_components.myhome.calibration_store import (
 from custom_components.myhome.const import (
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
+    CONF_HEIGHT,
     CONF_KEYS_FROM_FILE,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
+    CONF_OVERRIDES,
+    CONF_RAW,
     CONF_ROLL,
     CONF_SLAT_TIME,
     DOMAIN,
@@ -62,6 +66,16 @@ from custom_components.myhome.panel_schemas import (
 
 from .helpers_core import MAC
 from .helpers_platforms import setup_myhome
+from .test_calibration_flow import (
+    OWN_NUMBERS_YAML,
+    UNIQUE_ID,
+    calibrating,
+    choose,
+    measured_profile,
+    open_dialog,
+    submit,
+    the_store,
+)
 from .test_websocket_api import (
     CALIBRATION,
     FIRST,
@@ -570,3 +584,40 @@ async def test_an_installation_with_no_translations_at_all_gets_an_empty_book(
             "fallback": True,
             "texts": {},
         }
+
+
+async def test_a_hand_edit_in_the_dialog_keeps_the_measurements_behind_the_numbers(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The `raw` block survives a correction typed into the dialog — audit, 0.6.0.
+
+    A guided calibration keeps the readings it took, under `raw`, for a human to argue
+    with six months later. The panel's own hand edit carries that block over and said so
+    in a docstring; the *dialog's* hand edit built the record without it, so a number
+    corrected under "Configura" threw the evidence away.
+
+    Harmless while nothing read it. 0.6.0 reads it: `cover_detail.cover.level` is how
+    thorough the calibration was and `verify_note` is what the tape check came to, and
+    both are taken out of `raw`. So correcting one run time by one tenth emptied two
+    columns of a screen that had not asked about them, and no screen said why.
+
+    The two writers agree now. This drives the dialog because that is the half that was
+    wrong; `test_websocket_api` holds the panel's half from the other side.
+
+    Mutation caught: dropping `raw=` from `async_step_calibration_edit` again; passing
+    the record's own `raw` after the record has been rewritten, which is `None`.
+    """
+    async with calibrating(hass, tmp_path, OWN_NUMBERS_YAML) as (entry, _commands):
+        await measured_profile(hass, entry, freezer)
+        before = the_store(hass, entry).raw_covers[UNIQUE_ID][CONF_RAW]
+        assert before, "path A is supposed to leave its readings on the record"
+
+        result = await choose(hass, await open_dialog(hass, entry), "calibrations")
+        result = await submit(hass, result, {"cover": UNIQUE_ID})
+        result = await choose(hass, result, "calibration_edit")
+        result = await submit(hass, result, {CONF_HEIGHT: "190", CONF_OPENING_TIME: "24,5"})
+        assert result["step_id"] == "calibration_actions"
+
+        record = the_store(hass, entry).raw_covers[UNIQUE_ID]
+        assert record[CONF_OVERRIDES][CONF_OPENING_TIME] == 24.5
+        assert record[CONF_RAW] == before

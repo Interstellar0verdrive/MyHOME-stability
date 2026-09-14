@@ -1314,6 +1314,13 @@ class CalibrationManagementMixin(CalibrationContextMixin):
         """
         unique_id = self._cover_unique_id or ""
         record = self._store.calibration(unique_id)
+        # The measurements the guided conversation kept for a human to argue with six
+        # months later. Correcting one number by hand is not a reason to forget how the
+        # other five were arrived at - and since 0.6.0 it is also where the panel reads
+        # how thorough that calibration was and what the tape check came to, so dropping
+        # the block emptied two columns of a screen that never asked for a correction.
+        # Carried over exactly as the panel's own hand edit carries it.
+        measurements = (self._store.raw_covers.get(unique_id) or {}).get(CONF_RAW)
         errors: dict[str, str] = {}
         if user_input is not None:
             height = parse_number(user_input.get(CONF_HEIGHT))
@@ -1345,6 +1352,7 @@ class CalibrationManagementMixin(CalibrationContextMixin):
                     height=height,
                     overrides=overrides or None,
                     source=CALIBRATION_SOURCE_MANUAL,
+                    raw=measurements,
                 )
                 store = await self._async_store()
                 if stored_calibration(data).says_anything:
