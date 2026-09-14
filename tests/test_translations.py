@@ -1448,6 +1448,73 @@ DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
         "The command never reached the bus",
         "The cover is already moving",
         "This cover is already being calibrated",
+        # ...and the panel, which the page's last section sends the reader to by the
+        # name at the top of its overview.
+        "Profiles and covers",
+    ),
+    # The panel's own page. Forty-six labels, which is what a page describing four
+    # screens costs: the same two assertions as everywhere else, and the reason they
+    # matter more here is that the panel's words live in `config_panel`, a block the
+    # guided dialog never renders - so nothing else in the suite would notice a rename
+    # on one side of it. Sentences carrying a placeholder (`{profile}`, `{count}`) are
+    # deliberately absent: the page paraphrases those in italics, because an exact value
+    # is what this test compares and a placeholder cannot be one.
+    "docs/panel.md": (
+        "Profiles and covers",
+        "No profile",
+        "Where it was measured is not recorded.",
+        # The three origin words with no placeholder in them. The other two
+        # (`inherited`, `adjusted`) carry `{profile}` in the selector and are quoted
+        # from the panel's own placeholder-free pair instead.
+        "Measured",
+        "From the file",
+        "Defaults",
+        "Inherited",
+        "Adjusted",
+        "Search for a cover",
+        "Filter by room",
+        "All rooms",
+        "No profile yet",
+        "Measure a cover",
+        "Take out of the profile \u2014 drop here",
+        "Which profile?",
+        "Withdraw this change",
+        "Discard everything",
+        "Review and confirm",
+        "Before",
+        "After",
+        "How far does the curtain of these covers run?",
+        "Curtain travel",
+        "Back to the overview",
+        "Undo",
+        "Cover detail",
+        "Values in use",
+        "Edit the values by hand",
+        "Set the curtain travel\u2026",
+        "Remove the measurement\u2026",
+        "Measure again",
+        "Correct\u2026",
+        "Times only",
+        "Times and rolls",
+        "Thorough calibration only",
+        "Thorough calibration",
+        "Profile card",
+        "Impact preview",
+        "Edit the values\u2026",
+        "Rename\u2026",
+        "Delete the profile\u2026",
+        "Measurement in progress",
+        "Resume the session",
+        "End it",
+        # The two doors out of the panel and into the dialog, which the page names
+        # because every measurement still happens there. `Calibrate a cover` - the
+        # third one - is *not* here: lot 11's handoff lists it, but the page never
+        # quotes the label, it links the guided-calibration page instead. The map says
+        # what the page really does, because the test asserts both directions and a
+        # label listed here that the page does not carry is a failing suite, not a
+        # documented one.
+        "Calibrations",
+        "Gateway and connection",
     ),
     "docs/configuration.md": (
         "Calibrate a cover",
