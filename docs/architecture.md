@@ -37,6 +37,10 @@ that will ship as the next release) and `OWNd` 0.7.49.
 | `calibration.py` | The maths of the guided calibration, on its own: floats in, floats out, no `hass` and no bus. The roll model, the least-squares fit of a roll and a time scale per direction, the timing of two button presses, and the deviation of a prediction from a tape reading. |
 | `calibration_store.py` | One `homeassistant.helpers.storage.Store` per config entry: the measured profiles, the per-cover records, the precedence that merges them with `myhome.yaml`, and the `Calibration source` attribute. |
 | `calibration_flow.py` | The screens: the guided conversation (three paths, two levels), the management screens, the idle watchdog. Mixed into the options flow handler. |
+| `panel_schemas.py` | The shape of every WebSocket payload the panel reads or writes, frozen before the first write command existed: one place both halves are checked against. |
+| `panel_data.py` | The panel's reads — `overview`, `cover_detail`, `preview`, `texts` — and the language fallback behind the last of them. |
+| `panel_write.py` | The panel's writes, the one-write-at-a-time lock, the refusal while a calibration is running, the undo slot, and the dispatcher signal that reaches the covers without a reload. |
+| `frontend/` | The built panel bundle (`myhome-panel.js`) and its third-party notices, served at `/myhome_panel`. Generated from `panel_src/`, committed because HACS ships this directory as it is. |
 | `discovery.py` | The bus-listening discovery service: a 60 s run, message classification, the public `myhome_device_discovered` / `myhome_discovery_completed` events. |
 | `config_flow_discovery.py` | Turns discovered devices into YAML suggestions and writes `myhome_discovered.yaml` atomically. Never touches `myhome.yaml`. |
 | `light.py` | WHO 1 lights and dimmers (brightness, transition, flash). |
@@ -471,13 +475,23 @@ operation stays quiet.
 ## The calibration store and the options flow
 
 The guided calibration keeps its numbers in Home Assistant's own storage, one
-`Store` per config entry (`myhome.calibration.<entry id>`, version 1). It is loaded
+`Store` per config entry (`myhome.calibration.<entry id>`, version 1, minor 2 since
+0.6.0). It is loaded
 once in `async_setup_entry`, before the platforms are forwarded, because a basic
 cover reads its travel model in its constructor. It holds two mappings: `profiles`,
 keyed by name, and `covers`, keyed by the cover's `unique_id` (`<mac>-<device
 key>`), each record carrying the profile it was assigned, its height, the values
 measured for it, and whether those were measured, derived from a profile or typed
 by hand.
+
+**Store v2** (minor 1 → 2, 0.6.0) adds keys and removes none: a top-level `order`,
+the flat list of cover unique ids the panel keeps its groups in, and `measured_on` /
+`measured_at` per profile — the cover it was measured on, and when. The migration
+writes the empty `order` and touches nothing else, so a rollback to 0.5.0 still reads
+the file; profiles stored before the bump have no provenance and nothing guesses one
+for them, which is the sentence both the panel and the dialog print. `profile_as_config()`
+goes on dropping the bookkeeping keys, so what reaches the travel model is exactly
+what reached it in 0.5.0.
 
 `resolve_cover_config()` merges that with the validated file, per key: the cover's
 own stored values, then the key as the file writes it, then the profile scaled to
@@ -506,7 +520,8 @@ browser's X included — and only when something was really stored.
 `/myhome-calibration`, admin-only, and hidden from the sidebar until somebody turns
 it on in the sidebar editor. It reads and writes the stored calibration data of the
 loaded gateways; it never moves a shutter, and the options flow remains a complete
-path to everything it does.
+path to everything it does. The page written for the people who use it is
+[Profiles and covers panel](panel.md).
 
 ### Registration
 
@@ -635,6 +650,83 @@ states — so the per-key `inherited_value`, which takes only the overrides away
 wrong number to build that confirmation from. The block is the window resolved once more
 with the record gone, which is exactly what `cover_forget` does after the write, so the
 sentence read before and the sentence read after are one answer.
+
+### One resolution, and how a write reaches a cover
+
+Every number and every origin the panel shows comes from `resolve_cover_config()` —
+the very call `cover.py` makes in a basic cover's constructor. The panel is forbidden
+from re-deriving an origin or rescaling a profile in JavaScript; `tests/test_panel_parity.py`
+holds the two answers against each other over a matrix of store states, and a grep
+test keeps a second copy of the precedence loop from appearing. A page that disagreed
+with the entity about one cover would make the whole page untrustworthy, and there is
+exactly one place that can be wrong.
+
+**A write does not reload the config entry.** Up to 0.5.0 the only way a stored
+calibration reached a cover was a rebuild of the entry — a cover reads its travel
+model in its constructor — which is the right price for one guided measurement and
+much too high for a panel, where assigning twelve covers would take the gateway away
+and back twelve times. So a write publishes `SIGNAL_CALIBRATION_CHANGED.format(mac=…)`
+instead, and every cover of that gateway re-runs the one resolution against the file
+as it was written (`CONF_COVERS_FROM_FILE`) plus the store as it now is, and swaps its
+numbers in place. Nothing is torn down, no entity id changes, no state is lost; a
+movement already in flight keeps the model it started with and picks the new one up
+when it ends. The plan's `applying` event went with the reload: there is no window of
+unavailability left to be honest about.
+
+**The lock.** Any basic cover of the entry with `calibrating` true makes the whole
+gateway read-only — `not_allowed` / `busy_calibrating`, with the cover's name in the
+placeholders. The whole gateway and not the one cover, because a guided conversation
+stores a profile when it ends and what that profile is worth depends on the
+assignments around it. The panel is told *before* it attempts anything
+(`overview.measuring`, and the `measuring` event), so the refusal is a backstop and
+not the user interface. A write arriving while another is being applied to the same
+gateway is refused as well (`write_in_progress`) rather than queued: each write reads
+the store, decides against what it read, and writes the whole of what it decided.
+
+**Undo** is one slot per gateway holding only the records the last write actually
+changed, as they were before it — so an undo leaves alone whatever else was written
+meanwhile, instead of putting a whole file back over the top of it. Applying it is an
+ordinary write: it takes the same lock and reaches the covers the same way. The slot
+is withdrawn by the next write of that gateway and by the clock after **five
+minutes**, whichever comes first, while the panel's own strip offers it for seven
+seconds — deliberately the shorter of the two, because an offer still on screen after
+the thing behind it expired is worse than no offer. Undoing an undo is not offered.
+
+### The WebSocket API
+
+`websocket_api` is a hard dependency. The commands live in `panel_data.py` (the
+reads), `panel_write.py` (the writes) and `panel_schemas.py` (the payload shapes,
+frozen before the first write command existed). Every command carries
+`@websocket_api.require_admin`; `entry_id` is optional on the reads, where leaving it
+out means "the one gateway I have", and required on the writes, because a change
+applied to whichever gateway happened to be first is not a thing anybody asked for.
+Nothing is localised, formatted or rounded: tokens travel, and the panel turns them
+into sentences with the texts command.
+
+| Command | What it does |
+|---|---|
+| `myhome/calibration/overview` | the whole picture of one gateway: every configured entry, the profiles with their followers and provenance, the covers in the stored order with their values, origin and exact `Calibration source`, and `measuring` |
+| `myhome/calibration/cover_detail` | one cover: its `overview` row, a per-key origin with what each key would fall back to, and what removing the record would leave |
+| `myhome/calibration/texts` | the `options`, `selector`, `exceptions` and `config_panel` blocks of one language, resolved `it-CH` → `it` → `en` |
+| `myhome/calibration/preview` | what an assignment, a typed travel or a profile's edited numbers *would* resolve to — nothing stored, no lock taken, and the only command that refuses per item rather than per batch |
+| `myhome/calibration/assign` | assignment, the travels collected with it and the resulting order, in one write |
+| `myhome/calibration/reorder` | a whole gateway's order, or one group's, sent back whole and never as a move |
+| `myhome/calibration/set_travel` | one cover's curtain travel — the number every scaled profile depends on |
+| `myhome/calibration/cover_edit` | a patch of a cover's own values: a number sets, `null` removes and inherits again, an absent key is untouched |
+| `myhome/calibration/cover_forget` | the whole record, with the destination read by resolving the cover once more without it |
+| `myhome/calibration/profile_edit` | a profile's five values and its reference travel, answering with every cover the change reaches |
+| `myhome/calibration/profile_rename` | three store writes in the order that leaves no gap: the numbers under the new name, the followers repointed, then the old name removed |
+| `myhome/calibration/profile_delete` | the profile, with the covers that lose it split by whether the store or the file assigned it |
+| `myhome/calibration/undo` | the last write of that gateway, taken back |
+| `myhome/calibration/subscribe` | pushes the whole `overview` on subscribing and after every write, and a `measuring` object whenever a guided step takes one of this gateway's covers or gives it back |
+
+Every write answers with a fresh `overview` of exactly the shape the read freezes, and
+pushes the identical payload to every subscriber first. The client replaces its model
+and never merges into it, which is what stops two browser tabs on the same twelve
+covers from each holding half of the truth. Refusals carry `translation_domain="myhome"`,
+a `translation_key` and an English `message` beside it, so a client is never left with
+a bare token. The subscription dies with the socket, and nothing in 0.6.0 outlives it,
+because nothing in 0.6.0 holds a cover.
 
 ### Getting to the options flow from the panel
 
