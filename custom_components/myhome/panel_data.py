@@ -42,6 +42,7 @@ everywhere: nothing groups, filters or sorts on it being present.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -115,6 +116,14 @@ CALIBRATION_LEVEL_PRECISE = "precise"
 # The translations, and the one language every fallback ends at.
 _TRANSLATIONS_DIR = Path(__file__).parent / "translations"
 DEFAULT_LANGUAGE = "en"
+
+# What a language may be spelled with before it is allowed to name a file. The panel
+# sends the *user's* language, which arrives from the browser through a WebSocket frame
+# and is therefore a string somebody can choose - and one keystroke later it is half of
+# a path. A BCP 47 tag is letters, digits and hyphens and nothing else; anything with a
+# separator, a dot or a null byte in it is not a language this integration has ever
+# shipped, and is refused before the disk is touched rather than after.
+_A_LANGUAGE = re.compile(r"^[A-Za-z0-9-]{1,32}$")
 # The blocks the panel is served, as `{the name in the file: the name in the payload}`.
 #
 # `options.*` is the guided flow's own wording, which the panel reuses wherever it says
@@ -814,7 +823,20 @@ def async_preview(
 
 # ------------------------------------------------------------------------- texts
 def _read_language(language: str) -> dict[str, Any] | None:
-    """Read one translation file off disk. Runs in an executor, never in the loop."""
+    """Read one translation file off disk. Runs in an executor, never in the loop.
+
+    The name is checked before it is joined to a path. `Path.__truediv__` resolves
+    `..`, so a `language` of `../../../../etc/something` named a file well outside the
+    integration - and a JSON file found there was served back through `_blocks`, which
+    keeps whichever of `options` / `selector` / `config_panel` it happened to carry. It
+    took an administrator to ask, and an administrator has no business reading arbitrary
+    files off the host through a shutter panel either. A name that is not a language tag
+    reads as "no file for that language", which is what the fallback chain already knows
+    how to answer.
+    """
+    if not _A_LANGUAGE.match(language):
+        LOGGER.warning("Ignoring a language that is not a language tag (%r)", language[:64])
+        return None
     path = _TRANSLATIONS_DIR / f"{language}.json"
     try:
         return json.loads(path.read_text(encoding="utf-8"))
