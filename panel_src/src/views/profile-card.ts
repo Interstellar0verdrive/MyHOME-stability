@@ -22,8 +22,9 @@
 // three buttons that would be refused: the file belongs to the user and this integration
 // has never written it.
 
-import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from "lit";
+import { LitElement, html, nothing, type TemplateResult } from "lit";
 
+import { focusWhenPainted } from "../engine/a11y";
 import { DECIMALS, MEASURABLE_KEYS } from "../engine/assign";
 import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
 import { I18n } from "../engine/i18n";
@@ -103,21 +104,29 @@ export class MyHomeProfileCard extends LitElement {
     this.actions.back();
   };
 
-  /** Focus lands on the heading of whatever is now on the screen. */
-  protected override updated(changed: PropertyValues): void {
-    if (!changed.has("state")) {
+  /**
+   * Focus lands on the heading of whatever is now on the screen.
+   *
+   * Compared against what was *focused* rather than against the previous state: the card
+   * paints before `overview` has arrived, and there is no heading to focus then. See the
+   * same method in `cover-detail.ts`.
+   */
+  protected override updated(): void {
+    const profile = this.state.profile;
+    const screen = `${profile.for ?? ""}|${profile.mode}`;
+    if (screen === this._focused) {
       return;
     }
-    const before = changed.get("state") as PanelState | undefined;
-    const mode = this.state.profile.mode;
-    const arrived = (before?.profile.for ?? null) !== this.state.profile.for;
-    if (before !== undefined && before.profile.mode === mode && !arrived) {
+    const heading = this.renderRoot.querySelector<HTMLElement>("[data-heading]");
+    if (!heading) {
       return;
     }
-    requestAnimationFrame(() => {
-      this.renderRoot.querySelector<HTMLElement>("[data-heading]")?.focus();
-    });
+    this._focused = screen;
+    focusWhenPainted(() => heading);
   }
+
+  /** The screen whose heading already has focus, so it is not taken again on a repaint. */
+  private _focused = "";
 
   private get _locked(): boolean {
     return this.state.overview?.measuring != null || this.state.applying;

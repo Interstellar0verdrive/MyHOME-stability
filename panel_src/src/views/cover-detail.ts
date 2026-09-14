@@ -28,8 +28,9 @@
 // Printing them would be offering the user three more numbers to correct that correct
 // nothing, and none of the three has a label in any of the eight translation files.
 
-import { LitElement, html, nothing, type PropertyValues, type TemplateResult } from "lit";
+import { LitElement, html, nothing, type TemplateResult } from "lit";
 
+import { focusWhenPainted } from "../engine/a11y";
 import { DECIMALS, ROLL_KEYS, TABLE_KEYS } from "../engine/assign";
 import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
 import { I18n } from "../engine/i18n";
@@ -131,21 +132,29 @@ export class MyHomeCoverDetail extends LitElement {
    * reader would start reading anyway, and `tabindex="-1"` makes it a target without
    * putting it in the tab order.
    */
-  protected override updated(changed: PropertyValues): void {
-    if (!changed.has("state")) {
+  protected override updated(): void {
+    // Which screen this is, as far as focus is concerned: a different shutter or a
+    // different mode is a different screen, and the same one repainted is not.
+    //
+    // It is compared against what was *focused*, not against the previous state, because
+    // the heading does not exist yet at the moment the route changes: the card is still
+    // waiting for `cover_detail` and there is nothing to focus. Remembering the pair
+    // means the move happens on the paint that first draws a heading, whenever that is.
+    const detail = this.state.detail;
+    const screen = `${detail.for ?? ""}|${detail.mode}`;
+    if (screen === this._focused) {
       return;
     }
-    const before = changed.get("state") as PanelState | undefined;
-    const mode = this.state.detail.mode;
-    const was = before?.detail.mode;
-    const arrived = (before?.detail.for ?? null) !== this.state.detail.for;
-    if (was !== undefined && was === mode && !arrived) {
+    const heading = this.renderRoot.querySelector<HTMLElement>("[data-heading]");
+    if (!heading) {
       return;
     }
-    requestAnimationFrame(() => {
-      this.renderRoot.querySelector<HTMLElement>("[data-heading]")?.focus();
-    });
+    this._focused = screen;
+    focusWhenPainted(() => heading);
   }
+
+  /** The screen whose heading already has focus, so it is not taken again on a repaint. */
+  private _focused = "";
 
   private get _locked(): boolean {
     return this.state.overview?.measuring != null || this.state.applying;
