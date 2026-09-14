@@ -744,6 +744,14 @@ export class MyHomeOverview extends LitElement {
   /** The five strips, in the order of the gesture; never two of them at once. */
   private _renderStrips(): TemplateResult | typeof nothing {
     const state = this.state;
+    // A drawer is over this list: the shell draws what still applies (a write in the air,
+    // and its result with "Annulla" beside it) and the three that are about a gesture on
+    // this screen have nothing to say while nobody can reach it. Two elements drawing a
+    // strip each would be two strips, which is the one thing this file promises never to
+    // do.
+    if (state.route.view !== "overview") {
+      return nothing;
+    }
     if (state.drag) {
       return dropZone(this.i18n, state.drag.over === "none");
     }

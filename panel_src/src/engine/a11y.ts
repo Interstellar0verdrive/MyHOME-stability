@@ -87,8 +87,7 @@ export class FocusTrap {
     }
     const first = stops[0];
     const last = stops[stops.length - 1];
-    // `activeElement` inside a shadow root is the host, so the root's own is what to ask.
-    const active = (this._root.getRootNode() as unknown as DocumentOrShadowRoot).activeElement;
+    const active = deepActiveElement(this._root.getRootNode() as unknown as DocumentOrShadowRoot);
     if (event.shiftKey && (active === first || active === this._root)) {
       event.preventDefault();
       last.focus();
@@ -98,12 +97,22 @@ export class FocusTrap {
     }
   };
 
-  /** Start trapping inside `root` and put focus on its first stop. */
-  hold(root: HTMLElement): void {
+  /**
+   * Start trapping inside `root`.
+   *
+   * `focusFirst` is true for a panel whose first control is where a user should start -
+   * the review sheet, "Quale profilo?" - and false for one whose contents move focus
+   * themselves: the routed cards each take their own heading on the paint that first
+   * draws it, and two things calling `focus()` in the same frame is a race whose winner
+   * depends on which element updated first.
+   */
+  hold(root: HTMLElement, focusFirst = true): void {
     this.release();
     this._root = root;
     root.addEventListener("keydown", this._onKey);
-    focusWhenPainted(() => focusable(root)[0] ?? root);
+    if (focusFirst) {
+      focusWhenPainted(() => focusable(root)[0] ?? root);
+    }
   }
 
   release(): void {
@@ -112,10 +121,51 @@ export class FocusTrap {
   }
 }
 
-/** Everything inside `root` a Tab can reach, in document order. */
-const focusable = (root: HTMLElement): HTMLElement[] =>
-  Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((element) => element.offsetParent !== null || element === root);
+/** What a Tab can land on: the rule the trap uses, and the one `npm run keyboard` walks. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +
+  ' textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Everything inside `root` a Tab can reach, in document order - **shadow roots included**.
+ *
+ * The panel's first two traps held plain markup, so `querySelectorAll` was the whole of
+ * it. The drawer of the routed cards is not: its contents are `<myhome-cover-detail>` and
+ * `<myhome-profile-card>`, each with a shadow root of its own, and a trap that could not
+ * see into one would have found exactly one stop - the drawer's own close - and held the
+ * keyboard on it while the card behind the glass stayed unreachable.
+ *
+ * The walk enters a host's shadow root at the host, which puts that content before any
+ * light children of the same host. Nothing in this panel has both; a component that grew
+ * a slot would want a real flattened-tree walk here.
+ */
+const focusable = (root: HTMLElement | ShadowRoot): HTMLElement[] => {
+  const found: HTMLElement[] = [];
+  const walk = (node: ParentNode): void => {
+    for (const element of node.querySelectorAll<HTMLElement>("*")) {
+      if (element.matches(FOCUSABLE)) {
+        found.push(element);
+      }
+      if (element.shadowRoot) {
+        walk(element.shadowRoot);
+      }
+    }
+  };
+  walk(root);
+  return found.filter((element) => element.offsetParent !== null);
+};
+
+/**
+ * The element that really has focus, however many shadow roots down it is.
+ *
+ * `activeElement` answers with the *host* of the root the focused element is in, so a
+ * comparison against the last stop of a trap whose contents are a custom element would
+ * always be false - and the keyboard would walk out of the panel at the end of it.
+ */
+export const deepActiveElement = (root: DocumentOrShadowRoot): Element | null => {
+  let active = root.activeElement;
+  while (active?.shadowRoot?.activeElement) {
+    active = active.shadowRoot.activeElement;
+  }
+  return active;
+};

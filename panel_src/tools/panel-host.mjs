@@ -292,13 +292,30 @@ export const STATES = [
     },
     expect: ".sheet",
   },
-  { name: "cover detail", state: "ready", hash: COVER },
-  { name: "cover detail, first action", state: "ready", hash: COVER, drive: pressWide(0) },
-  { name: "cover detail, second action", state: "ready", hash: COVER, drive: pressWide(1) },
-  { name: "cover detail, last action", state: "ready", hash: COVER, drive: pressWide(-1) },
-  { name: "profile card", state: "ready", hash: "#/profile/tall" },
-  { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0) },
-  { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1) },
-  { name: "profile card, last action", state: "ready", hash: "#/profile/tall", drive: pressWide(-1) },
+  // The two routed cards are drawers over the list since the first live pass, so each of
+  // these states is "the overview, and a panel over it" - and `expect` is the drawer
+  // itself, because a hash that stopped opening one would otherwise audit the list twice
+  // and pass.
+  { name: "cover detail", state: "ready", hash: COVER, expect: "[data-drawer]" },
+  { name: "cover detail, first action", state: "ready", hash: COVER, drive: pressWide(0), expect: "[data-drawer]" },
+  { name: "cover detail, second action", state: "ready", hash: COVER, drive: pressWide(1), expect: "[data-drawer]" },
+  { name: "cover detail, last action", state: "ready", hash: COVER, drive: pressWide(-1), expect: "[data-drawer]" },
+  {
+    name: "cover detail, the profile choice over it",
+    state: "ready",
+    hash: COVER,
+    drive: async (context) => {
+      const assign = context
+        .deepAll(context.panel.shadowRoot, "button.wide:not([disabled])")
+        .find((button) => (button.textContent ?? "").includes("profile"));
+      assign?.click();
+      await context.settle();
+    },
+    expect: ".dialog",
+  },
+  { name: "profile card", state: "ready", hash: "#/profile/tall", expect: "[data-drawer]" },
+  { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-drawer]" },
+  { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1), expect: "[data-drawer]" },
+  { name: "profile card, last action", state: "ready", hash: "#/profile/tall", drive: pressWide(-1), expect: "[data-drawer]" },
 ];
 
