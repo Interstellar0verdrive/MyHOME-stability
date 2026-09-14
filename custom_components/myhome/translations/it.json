@@ -687,7 +687,7 @@
       "not_a_number": "Inserire un numero. I decimali si scrivono con la virgola o con il punto: 198,5 oppure 198.5.",
       "out_of_range": "Il numero è fuori dall'intervallo che questo campo accetta.",
       "above_the_travel": "È più dell'intera corsa di questo telo. Misurare dal punto dove il bordo inferiore appoggia quando la tapparella è chiusa, non dal pavimento.",
-      "invalid_name": "Il nome di un profilo può contenere solo lettere, cifre e trattini bassi: niente spazi, niente accenti, niente trattini."
+      "invalid_name": "Il nome di un profilo può contenere solo lettere, cifre e trattini bassi, non più di 64: niente spazi, niente accenti, niente trattini."
     }
   },
   "selector": {
@@ -976,7 +976,7 @@
       "rename": {
         "title": "Rinomina il profilo",
         "field": "Nuovo nome del profilo",
-        "rule": "Solo lettere, cifre e trattini bassi: niente spazi, niente accenti — il nome è anche una chiave del file di configurazione. La rinomina segue tutte le tapparelle che usano il profilo.",
+        "rule": "Solo lettere, cifre e trattini bassi, non più di 64: niente spazi, niente accenti — il nome è anche una chiave del file di configurazione. La rinomina segue tutte le tapparelle che usano il profilo.",
         "action": "Rinomina"
       },
       "delete": {
@@ -1176,7 +1176,7 @@
       "message": "Tapparelle di cui non si conosce la corsa del telo ({count}): {covers}. Un profilo si può riportare solo a una tapparella di cui si conosce la corsa."
     },
     "invalid_name": {
-      "message": "“{profile}” non è un nome di profilo utilizzabile: solo lettere, cifre e trattini bassi, niente spazi e niente accenti."
+      "message": "“{profile}” non è un nome di profilo utilizzabile: solo lettere, cifre e trattini bassi, non più di 64, niente spazi e niente accenti."
     },
     "name_in_use": {
       "message": "Esiste già un profilo che si chiama “{profile}”."

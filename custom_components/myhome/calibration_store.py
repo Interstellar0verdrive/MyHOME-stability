@@ -115,7 +115,19 @@ from .validate import derive_cover_from_profile
 
 # A profile name may look like a YAML key, because it is one: the user can move a
 # guided profile into `cover_profiles:` by hand and nothing else has to change.
-PROFILE_NAME_PATTERN = r"^[A-Za-z0-9_]+$"
+#
+# ...and it is no longer than this. The length is part of the pattern rather than a
+# second check beside it, so that the two readers of the pattern - the guided dialog
+# (`calibration_flow._NAME_RE`) and the panel (`panel_write._refuse_a_bad_name`) - cannot
+# come to disagree about what a usable name is: the panel must never refuse a name the
+# dialog accepts, and the one way to guarantee that is for there to be one rule.
+#
+# Sixty-four characters is longer than any name a person types and short enough that the
+# string is bounded everywhere it ends up: a key of the `.storage` file, a segment of the
+# panel's own hash route, a `{profile}` in a refusal, a heading on a card. Without it the
+# only bound was the WebSocket frame limit, which is not a bound anybody chose.
+PROFILE_NAME_MAX_LENGTH = 64
+PROFILE_NAME_PATTERN = rf"^[A-Za-z0-9_]{{1,{PROFILE_NAME_MAX_LENGTH}}}$"
 
 # One store per config entry, version 1. The entry id is in the key because a house
 # with two gateways has two sets of shutters and one set of files.
@@ -140,6 +152,38 @@ def storage_key(entry_id: str) -> str:
 # Where the loaded stores are kept. Not under `hass.data[DOMAIN]`, which holds only
 # per-gateway dicts keyed by MAC address and nothing else (const.py, core-03).
 STORE_DATA_KEY = f"{DOMAIN}_calibration_stores"
+
+# ...and where the panel's one-slot undo of each gateway lives. The slot belongs to
+# `panel_write.py`, which is the only thing that fills it and the only thing that spends
+# it; the *key* is here because this module is the one that knows when the records under
+# that slot have stopped being the records it was taken against.
+#
+# An undo is a write of the file as it was before one particular change. That is worth
+# offering while nothing else has touched the file, and is a silent data loss the moment
+# something has: the guided calibration writes the same records through the same store
+# (`async_step_save`, the hand edit, "Elimina"), and before this the offer survived all
+# three. Three minutes with a tape against a window, and an "Annulla" still on the screen
+# from before it, put the old numbers back with nothing saying so.
+#
+# So every save withdraws it - see `CalibrationStore._async_save`, which is the one
+# chokepoint every writer of this module goes through. A panel write withdraws its
+# predecessor on the way past and then installs its own (`panel_write._remember` runs
+# after the command it is remembering), which is the behaviour that was already
+# documented and is now also true of the writers this module has that the panel does not.
+UNDO_DATA_KEY = f"{DOMAIN}_panel_undo"
+
+
+@callback
+def forget_the_undo(hass: HomeAssistant, entry_id: str) -> None:
+    """Withdraw the panel's outstanding "Annulla" for one gateway.
+
+    Called on every write of the store, from `_async_save`. Doing nothing when there is
+    no slot is the common case by a long way - most installations never open the panel -
+    so this is a `dict.get` and a `pop` and is meant to be.
+    """
+    slots = hass.data.get(UNDO_DATA_KEY)
+    if slots:
+        slots.pop(entry_id, None)
 
 # The file's own fallbacks, mirrored here. `_finalize_cover` lets a cover that writes
 # `roll:` say what *both* directions do and one that writes only `opening_time` say what
@@ -673,6 +717,14 @@ class CalibrationStore:
 
     # ----------------------------------------------------------------- writing
     async def _async_save(self) -> None:
+        """Write the file, and withdraw whatever undo was standing against the old one.
+
+        The one chokepoint: every writer in this module comes through here, which is why
+        the withdrawal is here and not in each of them. See `UNDO_DATA_KEY` for what the
+        offer was surviving before, and `panel_write.async_write` for why a panel write
+        that installs its own token immediately afterwards is unaffected.
+        """
+        forget_the_undo(self._hass, self._entry_id)
         await self._store.async_save(
             {
                 CONF_PROFILES: self._profiles,
@@ -1180,10 +1232,12 @@ def describe_profile(name: str, data: Mapping[str, Any]) -> str:
 
 
 __all__ = [
+    "PROFILE_NAME_MAX_LENGTH",
     "PROFILE_NAME_PATTERN",
     "STORAGE_MINOR_VERSION",
     "STORAGE_VERSION",
     "STORE_DATA_KEY",
+    "UNDO_DATA_KEY",
     "CalibrationStore",
     "ResolvedCover",
     "ResolvedKey",
@@ -1194,6 +1248,7 @@ __all__ = [
     "cover_calibration_data",
     "cover_profile_data",
     "describe_profile",
+    "forget_the_undo",
     "keys_written_by_the_file",
     "loaded_store",
     "merged_profiles",

@@ -72,6 +72,7 @@ from .calibration_flow import (
 )
 from .calibration_store import (
     PROFILE_NAME_PATTERN,
+    UNDO_DATA_KEY,
     CalibrationStore,
     async_get_store,
     cover_calibration_data,
@@ -119,11 +120,15 @@ from .panel_schemas import (
     ERROR_WRITE_IN_PROGRESS,
 )
 
-# Where the one-slot undo of each entry lives, and where the entries being written to
-# right now are remembered. Both in `hass.data` and not in a module global: a test runs
-# several Home Assistants in one process, and a lock that outlived one of them would be
-# a write refused for a reason nobody could see.
-UNDO_DATA_KEY = f"{DOMAIN}_panel_undo"
+# Where the entries being written to right now are remembered. In `hass.data` and not in
+# a module global: a test runs several Home Assistants in one process, and a lock that
+# outlived one of them would be a write refused for a reason nobody could see.
+#
+# The one-slot undo of each entry lives beside it, under `UNDO_DATA_KEY` - which is
+# declared in `calibration_store` rather than here although only this module reads it,
+# because the store is what knows when the records the slot was taken against have
+# stopped being those records. Every write of the file withdraws the offer
+# (`CalibrationStore._async_save`), this module's and the guided dialog's alike.
 WRITING_DATA_KEY = f"{DOMAIN}_panel_writing"
 
 # How long a token is worth offering. The strip in the panel offers "Annulla" for a few

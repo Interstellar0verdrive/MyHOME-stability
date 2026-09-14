@@ -27,7 +27,11 @@ from homeassistant.components.websocket_api import const as ws_const
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from custom_components.myhome.calibration_store import loaded_store
+from custom_components.myhome.calibration_store import (
+    cover_calibration_data,
+    loaded_store,
+)
+from custom_components.myhome.const import CALIBRATION_SOURCE_GUIDED, CONF_OPENING_TIME
 from custom_components.myhome.panel_schemas import (
     ERROR_BUSY_CALIBRATING,
     ERROR_UNDO_EXPIRED,
@@ -290,6 +294,66 @@ async def test_a_write_that_lands_first_takes_the_undo_offer_away(
         assert answer["undone"] == "set_travel"
         assert loaded_store(hass, entry).calibration(SECOND).height == 150.0
         assert loaded_store(hass, entry).calibration(FIRST).height == 180.0
+
+
+async def test_the_dialog_writing_takes_the_undo_offer_away_too(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The guided calibration is a write of the same gateway, so it withdraws the offer.
+
+    Before this, the offer was withdrawn only by a write that came through the panel.
+    That left the sequence nobody would think to try and everybody eventually does:
+    assign a profile from the panel, walk away, measure that same shutter with a tape
+    under "Configura", come back and press Annulla. The token was still live - five
+    minutes on the clock, and the guided calibration had not touched it - and the undo
+    put the record back as it had been *before the measurement was taken*, silently,
+    because an undo restores whatever it snapshotted rather than what it last saw.
+
+    `store.async_set_calibration` is exactly the call `async_step_save` ends with, and
+    the hand edit and "Elimina" reach the file through the same `_async_save`, which is
+    where the withdrawal is. Driving the store rather than twenty screens of dialog is
+    what keeps this test about the rule and not about the conversation.
+
+    Mutation caught: withdrawing from `panel_write` instead of from the store, which
+    leaves every writer the panel does not own free to be undone over.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        token = (
+            await result(
+                client,
+                type=WS_TYPE_SET_TRAVEL,
+                entry_id=entry.entry_id,
+                cover_unique_id=FIRST,
+                height=180,
+            )
+        )["undo_token"]
+        assert token is not None
+
+        # ...and now the shutter is really measured, through the door the panel is not.
+        store = loaded_store(hass, entry)
+        await store.async_set_calibration(
+            FIRST,
+            cover_calibration_data(
+                FIRST,
+                height=205.0,
+                overrides={CONF_OPENING_TIME: 31.5},
+                source=CALIBRATION_SOURCE_GUIDED,
+            ),
+        )
+
+        error = await refused(
+            client, type=WS_TYPE_UNDO, entry_id=entry.entry_id, undo_token=token
+        )
+        assert error["code"] == ws_const.ERR_NOT_FOUND
+        assert error["translation_key"] == ERROR_UNDO_EXPIRED
+        # The measurement is still the measurement: the refusal changed nothing.
+        record = loaded_store(hass, entry).calibration(FIRST)
+        assert record.height == 205.0
+        assert record.overrides[CONF_OPENING_TIME] == 31.5
 
 
 async def test_an_undo_is_a_write_and_takes_the_lock_like_one(

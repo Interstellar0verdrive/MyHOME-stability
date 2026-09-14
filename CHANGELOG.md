@@ -83,6 +83,24 @@ everything the panel does.
 - **The count of profiles and covers is a line and not a sentence**: *Profiles: N ·
   Basic covers: N*, on the dialog's own screen and on the panel, where the two now say
   it identically.
+- **A profile name is at most 64 characters**, on top of the letters, digits and
+  underscores it already had to be. There was no limit at all before: a name of any
+  length was accepted, became a key of the calibration store, and was printed wherever
+  a profile is named. One rule for the dialog and the panel alike, and the refusal says
+  so in all seven languages.
+
+### Fixed
+
+- **One mistyped line in the calibration store no longer costs every cover of that
+  gateway.** `.storage/myhome.calibration.<entry>` is a file a user is free to open in
+  an editor, and a single malformed record in it — a profile that is `null`, a
+  calibration that is a string, a run time written in words — was read straight into
+  the resolution, which runs inside the cover platform's own setup. The result was
+  every shutter of that gateway gone from Home Assistant, with an `AttributeError` in
+  the log and nothing naming the line responsible. A record that is not a record is now
+  dropped at load with a warning that names it, a value that is not a number reads as a
+  key nobody wrote, and the shutters go on running on what is left. Affects anyone who
+  hand-edited the file under 0.5.0.
 
 ## [0.5.0] - 2026-09-13
 

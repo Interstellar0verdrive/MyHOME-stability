@@ -5,7 +5,7 @@ data key, service field and YAML key below is taken from the code, not from
 memory.
 
 Automations use the current Home Assistant syntax (`triggers:` / `conditions:` /
-`actions:`), which this integration's minimum version (2026.8.0) supports. The
+`actions:`), which this integration's minimum version (2026.9.0) supports. The
 older `trigger:` / `action:` spelling still works if you prefer it.
 
 ## Contents

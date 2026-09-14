@@ -22,7 +22,7 @@ continuation, not a rewrite of the configuration surface.
 
 ## Before you start
 
-- **Minimum Home Assistant version is 2026.8.0.** Earlier versions will not run
+- **Minimum Home Assistant version is 2026.9.0.** Earlier versions will not run
   this integration. Check **Settings → About** first.
 - Config entries are migrated from **version 1 to version 2** on the first load.
   The migration is automatic and needs no input, but it is one-way: you cannot

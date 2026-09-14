@@ -851,8 +851,16 @@ def _candidates(language: str) -> list[str]:
     `it-CH` is Italian even though no `it-CH.json` exists, and an unknown language is
     English rather than nothing at all - a panel with no words is worse than a panel in
     the wrong one.
+
+    **Lower-cased, because the answer must not depend on the filesystem.** A BCP 47 tag
+    is case-insensitive and every file this integration ships is named in lower case, so
+    `IT` is Italian; without the fold it was Italian on a macOS installation - whose
+    filesystem matches `IT.json` to `it.json` - and English on a Linux one, from one
+    request, over a name that came out of a browser. A language is half of a path
+    (`_read_language`), and a path that resolves differently per host is not a thing to
+    leave to the host.
     """
-    wanted = (language or "").strip().replace("_", "-")
+    wanted = (language or "").strip().replace("_", "-").lower()
     tries = [wanted] if wanted else []
     if "-" in wanted:
         tries.append(wanted.split("-", 1)[0])
@@ -914,7 +922,13 @@ async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
     file is disk I/O and the resolution below is the same answer every time.
     """
     cache: dict[str, dict[str, Any]] = hass.data.setdefault(TEXTS_CACHE_KEY, {})
-    for candidate in _candidates(language):
+    candidates = _candidates(language)
+    # The request as the chain really read it, which is what `fallback` is about: `IT`
+    # served out of `it.json` is the language that was asked for and not a fallback from
+    # it, and a panel that was told otherwise would show the "translated into English"
+    # notice on a fully Italian screen.
+    asked_for = candidates[0]
+    for candidate in candidates:
         if (cached := cache.get(candidate)) is None:
             blocks = await _blocks(hass, candidate)
             if blocks is None:
@@ -931,7 +945,7 @@ async def async_texts(hass: HomeAssistant, language: str) -> dict[str, Any]:
         return {
             "language": candidate,
             "requested": language,
-            "fallback": candidate != language,
+            "fallback": candidate != asked_for,
             "texts": cached,
         }
     # Unreachable while `translations/en.json` ships with the integration; a broken

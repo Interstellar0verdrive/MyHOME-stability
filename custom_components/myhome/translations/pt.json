@@ -687,7 +687,7 @@
       "not_a_number": "Escreva um número. As casas decimais escrevem-se com vírgula ou com ponto: 198,5 ou 198.5.",
       "out_of_range": "O número está fora do intervalo que este campo aceita.",
       "above_the_travel": "É mais do que todo o percurso deste pano. Meça a partir do ponto onde a borda inferior assenta quando a persiana está fechada, não a partir do chão.",
-      "invalid_name": "O nome de um perfil só pode conter letras, algarismos e sublinhados: sem espaços, sem acentos, sem hífenes."
+      "invalid_name": "O nome de um perfil só pode conter letras, algarismos e sublinhados, no máximo 64: sem espaços, sem acentos, sem hífenes."
     }
   },
   "selector": {
@@ -953,7 +953,7 @@
       "rename": {
         "title": "Mudar o nome do perfil",
         "field": "Novo nome do perfil",
-        "rule": "Só letras, algarismos e sublinhados: sem espaços, sem acentos — o nome é também uma chave do ficheiro de configuração. A mudança de nome segue todas as persianas que usam o perfil.",
+        "rule": "Só letras, algarismos e sublinhados, no máximo 64: sem espaços, sem acentos — o nome é também uma chave do ficheiro de configuração. A mudança de nome segue todas as persianas que usam o perfil.",
         "action": "Mudar o nome"
       },
       "delete": {
@@ -1144,7 +1144,7 @@
       "message": "Persianas cujo percurso do pano se desconhece ({count}): {covers}. Um perfil só pode ser trazido para uma persiana cujo percurso seja conhecido."
     },
     "invalid_name": {
-      "message": "«{profile}» não é um nome de perfil utilizável: só letras, algarismos e sublinhados, sem espaços e sem acentos."
+      "message": "«{profile}» não é um nome de perfil utilizável: só letras, algarismos e sublinhados, no máximo 64, sem espaços e sem acentos."
     },
     "name_in_use": {
       "message": "Já existe um perfil chamado «{profile}»."

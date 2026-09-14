@@ -848,7 +848,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       this._store.announce(this._i18n.t("panel.assign.announce.missing_travel"));
       return;
     }
-    const items = assignItems(state.pending, state.heights);
+    const items = assignItems(state.pending, state.heights, state.overview?.covers ?? []);
     const order = state.order ?? undefined;
     this._store.announce(this._i18n.t("panel.assign.announce.applying"));
     await this._write(
@@ -975,7 +975,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       const answer = await fetchPreview(
         this.hass.connection,
         state.entryId,
-        assignItems(state.pending, state.heights),
+        assignItems(state.pending, state.heights, state.overview?.covers ?? []),
       );
       if (seq === this._previewSeq) {
         this._store.set({ preview: answer.items, previewing: false });

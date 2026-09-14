@@ -42,8 +42,18 @@ import {
 /** The six a profile states: the travel it was measured at, then the five values. */
 export const PROFILE_KEYS: readonly string[] = ["reference_height", ...MEASURABLE_KEYS];
 
-/** The name a profile may have: it is also a key of the user's configuration file. */
-const NAME_PATTERN = /^[A-Za-z0-9_]+$/;
+/**
+ * The name a profile may have: it is also a key of the user's configuration file.
+ *
+ * The length is the server's own (`calibration_store.PROFILE_NAME_MAX_LENGTH`), restated
+ * here because the panel refuses before it asks and must refuse exactly what the server
+ * refuses - a field that let a name be typed and a button that sent it to be turned down
+ * is worse than a field that stops at the limit. The `maxlength` on the input is the
+ * same number a third time, where the browser can enforce it without a keystroke
+ * reaching us; it is the one place a user ever meets it.
+ */
+const NAME_MAX_LENGTH = 64;
+const NAME_PATTERN = new RegExp(`^[A-Za-z0-9_]{1,${NAME_MAX_LENGTH}}$`);
 
 export interface ProfileActions {
   back: () => void;
@@ -489,6 +499,7 @@ export class MyHomeProfileCard extends LitElement {
           class="field"
           type="text"
           style="width:220px;text-align:left"
+          maxlength=${NAME_MAX_LENGTH}
           .value=${typed}
           ?disabled=${this.state.applying}
           aria-label=${this.i18n.t("panel.profile.rename.field")}

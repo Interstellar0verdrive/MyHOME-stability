@@ -687,7 +687,7 @@
       "not_a_number": "Schreiben Sie eine Zahl. Dezimalstellen dürfen mit Komma oder mit Punkt geschrieben werden: 198,5 oder 198.5.",
       "out_of_range": "Die Zahl liegt außerhalb des Bereichs, den dieses Feld annimmt.",
       "above_the_travel": "Das ist mehr als der ganze Weg dieses Panzers. Messen Sie ab der Stelle, an der die Unterkante aufliegt, wenn der Rollladen geschlossen ist, nicht ab dem Boden.",
-      "invalid_name": "Ein Profilname darf nur Buchstaben, Ziffern und Unterstriche enthalten: keine Leerzeichen, keine Akzente oder Umlaute, keine Bindestriche."
+      "invalid_name": "Ein Profilname darf nur Buchstaben, Ziffern und Unterstriche enthalten, höchstens 64 davon: keine Leerzeichen, keine Akzente oder Umlaute, keine Bindestriche."
     }
   },
   "selector": {
@@ -953,7 +953,7 @@
       "rename": {
         "title": "Das Profil umbenennen",
         "field": "Neuer Name des Profils",
-        "rule": "Nur Buchstaben, Ziffern und Unterstriche: keine Leerzeichen, keine Akzente — der Name ist zugleich ein Schlüssel der Konfigurationsdatei. Die Umbenennung folgt jedem Rollladen, der das Profil verwendet.",
+        "rule": "Nur Buchstaben, Ziffern und Unterstriche, höchstens 64 davon: keine Leerzeichen, keine Akzente — der Name ist zugleich ein Schlüssel der Konfigurationsdatei. Die Umbenennung folgt jedem Rollladen, der das Profil verwendet.",
         "action": "Umbenennen"
       },
       "delete": {
@@ -1144,7 +1144,7 @@
       "message": "Rollläden mit unbekanntem Panzerweg ({count}): {covers}. Ein Profil lässt sich nur auf einen Rollladen übertragen, dessen Weg bekannt ist."
     },
     "invalid_name": {
-      "message": "„{profile}“ ist kein brauchbarer Profilname: nur Buchstaben, Ziffern und Unterstriche, keine Leerzeichen und keine Akzente."
+      "message": "„{profile}“ ist kein brauchbarer Profilname: nur Buchstaben, Ziffern und Unterstriche, höchstens 64 davon, keine Leerzeichen und keine Akzente."
     },
     "name_in_use": {
       "message": "Ein Profil namens „{profile}“ gibt es bereits."

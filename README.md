@@ -14,7 +14,7 @@ their own, commands that are never silently dropped, strict configuration
 validation, and closed deprecations.
 
 - Current release: **0.5.0** (13 September 2026) — see [CHANGELOG.md](CHANGELOG.md)
-- Requires **Home Assistant 2026.8.0 or newer**
+- Requires **Home Assistant 2026.9.0 or newer**
 - Devices are declared in a YAML file (`myhome.yaml`); the gateway is added from the UI
 
 ## Contents
@@ -215,8 +215,8 @@ runs from the actuator's own status frames, asks for a few tape readings and sto
 the result inside Home Assistant, where the cover reads it. A basic calibration takes
 about four minutes and lands within a couple of centimetres of the end stops; a
 thorough one adds four readings and a check. **Profiles** let every similar shutter
-inherit a measured one, rescaled to its own curtain travel, and a **correction** path
-refines a cover that stops in the wrong place. Nothing is written to `myhome.yaml`,
+inherit a measured one, scaled to its own curtain travel, and a **correction** path
+puts right a cover that stops in the wrong place. Nothing is written to `myhome.yaml`,
 covers that are not calibrated this way behave exactly as before, and the `Calibration
 source` attribute always says where a cover's values come from. See
 [Guided calibration](docs/guided-calibration.md).

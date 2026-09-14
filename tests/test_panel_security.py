@@ -32,7 +32,11 @@ from custom_components.myhome import (
     __file__ as INTEGRATION_FILE,
 )
 from custom_components.myhome.calibration_flow import _NAME_RE, NO_PROFILE
-from custom_components.myhome.calibration_store import PROFILE_NAME_PATTERN, loaded_store
+from custom_components.myhome.calibration_store import (
+    PROFILE_NAME_MAX_LENGTH,
+    PROFILE_NAME_PATTERN,
+    loaded_store,
+)
 from custom_components.myhome.panel_schemas import (
     MEASURABLE_KEYS,
     WS_READ_COMMANDS,
@@ -346,13 +350,21 @@ async def test_a_frame_nobody_meant_to_send_is_answered_and_never_raised(
 # ------------------------------------------------------------------- profile names
 # A profile name is a YAML key, because the user may move a guided profile into their
 # own `cover_profiles:` by hand and nothing else has to change. That is the whole rule,
-# and it is one regular expression shared by the panel and the guided dialog.
+# and it is one regular expression shared by the panel and the guided dialog - the
+# alphabet and the length together, so that neither side can hold half of it.
 NAMES: list[tuple[str, bool]] = [
     ("tall", True),
     ("__proto__", True),
     ("constructor", True),
     ("toString", True),
-    ("a" * 200, True),
+    # The cap, from both sides of it. Before 0.6.0 there was none, and `x` * 200 - or
+    # `x` * 100 000 - was a name: accepted by the dialog and by the panel, written into
+    # `.storage` as a dict key, and printed as a heading on a card and as a segment of
+    # the panel's own hash route. The only bound was the WebSocket frame's, which is
+    # not a bound anybody chose.
+    ("a" * PROFILE_NAME_MAX_LENGTH, True),
+    ("a" * (PROFILE_NAME_MAX_LENGTH + 1), False),
+    ("a" * 200, False),
     ("_", True),
     ("0", True),
     ("", False),
