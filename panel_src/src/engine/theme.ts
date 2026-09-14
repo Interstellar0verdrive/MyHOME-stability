@@ -41,7 +41,7 @@ export const themeStyles = css`
     --myhome-card: var(--card-background-color, #ffffff);
     --myhome-divider: var(--divider-color, rgba(0, 0, 0, 0.12));
     --myhome-error: var(--error-color, #db4437);
-    --myhome-warning: var(--warning-color, #b26b00);
+    --myhome-warning: var(--warning-color, #ffa600);
     --myhome-success: var(--success-color, #43a047);
     --myhome-info: var(--info-color, #039be5);
     --myhome-header: var(--app-header-background-color, var(--primary-color, #03a9f4));
@@ -70,24 +70,27 @@ export const themeStyles = css`
      * (tools/contrast.mjs), those sit between 2.4:1 and 4.3:1 - under AA, every one of
      * them, at 12.5 to 17 px.
      *
-     * So a colour that is going to be read is mixed 60/40 towards the theme's own text
-     * colour. That number is the one at which every pair the panel draws clears 4.5:1 in
-     * both themes with room to spare, and mixing towards --primary-text-color is what
-     * makes one rule work for both: it is near-black where the ground is light and
-     * near-white where the ground is dark, so the ink always moves away from the
-     * background and never towards it. The hue survives - a link is still blue, an error
-     * still red - which is the point of not simply painting them all in the text colour.
+     * So a colour that is going to be read is mixed half and half with the theme's own
+     * text colour. That number is the one at which every pair the panel draws clears
+     * 4.5:1 in both themes with room to spare - amber included, which is the one that
+     * fixes it: --warning-color is #ffa600 in Home Assistant's default light theme, the
+     * lightest of the five, and at 60 % of itself it read 4.21:1 on a card. Mixing towards
+     * --primary-text-color is what makes one rule work for both themes: it is near-black
+     * where the ground is light and near-white where the ground is dark, so the ink always
+     * moves away from the background and never towards it. The hue survives - a link is
+     * still blue, an error still red - which is the point of not simply painting them all
+     * in the text colour.
      *
      * Borders, dots, bars and fills keep the pure colour: they are not read, and 1.4.11
      * asks 3:1 of them, which the unmixed colours meet.
      */
-    --myhome-primary-ink: color-mix(in srgb, var(--myhome-primary) 60%, var(--myhome-text));
-    --myhome-error-ink: color-mix(in srgb, var(--myhome-error) 60%, var(--myhome-text));
-    --myhome-warning-ink: color-mix(in srgb, var(--myhome-warning) 60%, var(--myhome-text));
-    --myhome-success-ink: color-mix(in srgb, var(--myhome-success) 60%, var(--myhome-text));
-    --myhome-info-ink: color-mix(in srgb, var(--myhome-info) 60%, var(--myhome-text));
+    --myhome-primary-ink: color-mix(in srgb, var(--myhome-primary) 50%, var(--myhome-text));
+    --myhome-error-ink: color-mix(in srgb, var(--myhome-error) 50%, var(--myhome-text));
+    --myhome-warning-ink: color-mix(in srgb, var(--myhome-warning) 50%, var(--myhome-text));
+    --myhome-success-ink: color-mix(in srgb, var(--myhome-success) 50%, var(--myhome-text));
+    --myhome-info-ink: color-mix(in srgb, var(--myhome-info) 50%, var(--myhome-text));
     /* ...and the quiet grey of a neutral chip, which sits on the secondary background. */
-    --myhome-text-soft-ink: color-mix(in srgb, var(--myhome-text-soft) 60%, var(--myhome-text));
+    --myhome-text-soft-ink: color-mix(in srgb, var(--myhome-text-soft) 50%, var(--myhome-text));
 
     /*
      * The edge of a field or of a choice, which is a UI component boundary and not a

@@ -37,7 +37,15 @@ const ratio = (a, b) => {
   return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05);
 };
 
-/** Home Assistant's own light theme, which is what `engine/theme.ts` falls back to. */
+/**
+ * Home Assistant's own light theme, which is what `engine/theme.ts` falls back to.
+ *
+ * Every value here is the default Home Assistant itself defines, and that is the point:
+ * a fallback the panel invents is a colour nobody ever sees, because the theme defines
+ * the variable and the fallback never fires. `--warning-color` used to be read here as
+ * a darker amber than Home Assistant's `#ffa600`, and the run said the panel was AA about
+ * a colour it does not paint.
+ */
 const LIGHT = {
   name: "light",
   primary: "#03a9f4",
@@ -49,7 +57,7 @@ const LIGHT = {
   backgroundSoft: "#e5e5e5",
   card: "#ffffff",
   error: "#db4437",
-  warning: "#b26b00",
+  warning: "#ffa600",
   success: "#43a047",
   info: "#039be5",
   onPrimary: "#ffffff",
@@ -84,8 +92,15 @@ const DARK = {
  * biggest coloured text on it is the 17 px group title. So every line below is held to
  * 4.5:1, which is the stricter reading and the one worth reporting.
  */
-/** `--myhome-<x>-ink`: the colour, 60 % of it, over the theme's own text colour. */
-const ink = (t, colour) => mix(colour, t.text, 60);
+/**
+ * `--myhome-<x>-ink`: the colour, half of it, over the theme's own text colour.
+ *
+ * The percentage is `engine/theme.ts`'s and has to stay in step with it. It is 50 and not
+ * 60 because of one pair: amber. Home Assistant's default `--warning-color` is `#ffa600`,
+ * the lightest of the five, and at 60 % of itself it is 4.21:1 on a white card - under AA
+ * at the 12.5 px the sentence about a profile nobody defines is drawn at.
+ */
+const ink = (t, colour) => mix(colour, t.text, 50);
 
 const pairs = (t) => [
   ["chip, neutral (Inherited / From the file / Defaults)", ink(t, t.soft), t.backgroundSoft, 12],
