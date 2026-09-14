@@ -129,28 +129,84 @@ const check = (what, ok, detail = "") => {
   dom.window.close();
 }
 
-// --- the two cards ---------------------------------------------------------------------
+// --- the two cards, which are drawers over the list --------------------------------------
+//
+// A deep link opens both: the list on the page and the card in a panel over it. So what is
+// asserted here is the pair - that the list really is behind, that the keyboard cannot
+// walk into it, and that Escape gives the whole thing back and lands on the list.
 for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile/tall"]]) {
   console.log(`\n${name} → edit`);
   const { window, panel, dom, settle } = await mount({ name, state: "ready", hash });
-  const stops = tabOrder(panel.shadowRoot);
+  const sheet = deep(panel.shadowRoot, "[data-drawer]");
+  check("the deep link opened the list and a drawer over it", sheet !== null &&
+    deep(panel.shadowRoot, "myhome-overview") !== null);
+  check("the drawer holds the keyboard", sheet?.getAttribute("aria-modal") === "true");
+  const stops = tabOrder(sheet ?? panel.shadowRoot);
   console.log(`  tab order (${stops.length}): ${stops.slice(0, 6).map(describe).join(" → ")} …`);
-  check("the back arrow is the first stop", describe(stops[0]).includes("button"));
+  check("its own control is the first stop inside it", describe(stops[0]).includes("button"));
   check(
     "the card's heading took focus on the paint that drew it",
     active(panel)?.hasAttribute?.("data-heading") === true,
     describe(active(panel)),
   );
-  const wide = deepAll(panel.shadowRoot, "button.wide:not([disabled])")[0];
+  // The list behind is still rendered, and its controls are still in the document: what
+  // keeps them out of reach is the trap, and what the trap is given is this element.
+  check(
+    "the list's own controls are outside the drawer",
+    deep(panel.shadowRoot, "input.field.search") !== null &&
+      sheet?.contains(deep(panel.shadowRoot, "input.field.search")) === false,
+  );
+  const wide = deepAll(sheet ?? panel.shadowRoot, "button.wide:not([disabled])")[0];
   wide?.click();
   await settle();
-  const fields = deepAll(panel.shadowRoot, "input.field");
+  const fields = deepAll(deep(panel.shadowRoot, "[data-drawer]") ?? panel.shadowRoot, "input.field");
   check("the form it opens has fields with names",
     fields.length > 0 && fields.every((one) => one.getAttribute("aria-label")));
   check("every field says whether it is refused",
     fields.every((one) => one.hasAttribute("aria-invalid")));
   press(window, active(panel) ?? panel, "Escape");
   await settle();
+  check("Escape steps out of the form and leaves the drawer open",
+    deep(panel.shadowRoot, "[data-drawer]") !== null);
+  press(window, active(panel) ?? panel, "Escape");
+  await settle();
+  check("Escape again closes the drawer", deep(panel.shadowRoot, "[data-drawer]") === null);
+  check("and the list is what is left", deep(panel.shadowRoot, "button.handle") !== null);
+  dom.window.close();
+}
+
+// --- the drawer's one level of back stack ------------------------------------------------
+{
+  console.log("\ndetail → profile → back");
+  const { window, panel, dom, settle } = await mount({
+    name: "back stack",
+    state: "ready",
+    hash: COVER,
+    expect: "[data-drawer]",
+  });
+  const head = () => deep(panel.shadowRoot, "[data-drawer] .head button");
+  check("a drawer opened from the list closes, and does not go back",
+    head()?.getAttribute("aria-label") === "Close", describe(head()));
+  // The detail's link to the profile it follows: the drawer's contents are replaced.
+  // Asked of the drawer element rather than of a descendant selector: the card inside it
+  // is a custom element, and `[data-drawer] button` cannot cross a shadow boundary.
+  const toProfile = deepAll(deep(panel.shadowRoot, "[data-drawer]"), "button.wide").find(
+    (button) => (button.textContent ?? "").includes("Open the profile card"),
+  );
+  toProfile?.click();
+  await settle();
+  check("the profile is in the same drawer", window.location.hash.startsWith("#/profile/"));
+  check("and its control is now a way back", head()?.getAttribute("aria-label") === "Back",
+    describe(head()));
+  head()?.click();
+  await settle();
+  check("which lands on the cover it came from", window.location.hash === COVER);
+  check("and is a close again, because the stack is one level deep",
+    head()?.getAttribute("aria-label") === "Close", describe(head()));
+  head()?.click();
+  await settle();
+  check("the list is what is behind it", deep(panel.shadowRoot, "[data-drawer]") === null &&
+    deep(panel.shadowRoot, "button.handle") !== null);
   dom.window.close();
 }
 

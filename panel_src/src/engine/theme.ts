@@ -28,7 +28,29 @@ export const themeStyles = css`
   :host {
     /* Project-introduced, with the documented fallbacks. */
     --myhome-text-on-primary: var(--text-primary-color, #ffffff);
-    --myhome-snack-action: var(--snack-action-color, #ffc107);
+    /*
+     * The action word inside an inverted strip - "Annulla" - computed against the strip
+     * it sits on rather than fixed.
+     *
+     * It used to fall back to amber #ffc107, which is readable on the near-black strip a
+     * light theme produces and unreadable on the near-white one a dark theme produces:
+     * the strip's ground is --primary-text-color, which swaps with the theme, and the
+     * fallback did not. The first live pass read it on a dark theme and could not.
+     *
+     * Home Assistant defines no theme-level colour for this. Its own snackbar sets
+     * --mdc-snackbar-action-color on the ha-toast element itself, which is not a variable
+     * that reaches a custom panel, so reading it would mean reading something usually
+     * unset. --snack-action-color is this project's own name for it (design handoff §1)
+     * and stays the override; what it falls back to is the accent brought 60 % of the way
+     * to the strip's *text* colour, which is the theme's background: on a light theme
+     * that is nearly white and the word ends up pale amber on near-black, on a dark theme
+     * it is nearly black and the word ends up deep amber on near-white. One rule, both
+     * themes, and npm run contrast measures the result rather than a literal.
+     */
+    --myhome-snack-action: var(
+      --snack-action-color,
+      color-mix(in srgb, var(--myhome-accent) 40%, var(--myhome-background))
+    );
 
     /* Home Assistant's own, each behind a fallback. */
     --myhome-primary: var(--primary-color, #03a9f4);

@@ -119,6 +119,11 @@ export class MyHomeCoverDetail extends LitElement {
     if (event.key !== "Escape" || this.state.applying) {
       return;
     }
+    // "Quale profilo?" is open over this card and owns the key: the list's own handler
+    // closes it, and this one would take the drawer with it in the same keystroke.
+    if (this.state.dialog !== null) {
+      return;
+    }
     if (this.state.detail.mode !== "view") {
       this.actions.mode("view");
       return;
@@ -287,7 +292,7 @@ export class MyHomeCoverDetail extends LitElement {
         : nothing}
       ${cover.profile_from_file
         ? html`<p class="sub" style="margin-top:8px">
-            ${this.i18n.t("panel.overview.cover.from_file")}
+            ${this.i18n.t("panel.overview.group.from_file")}
           </p>`
         : nothing}
     </section>`;

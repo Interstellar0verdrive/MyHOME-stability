@@ -69,7 +69,9 @@ at it, and the page's own title reads **Profiles and covers**.
 not the sidebar entry is showing, which is the quickest way in if you only need it
 now and then. The two cards have addresses of their own — the panel routes
 `/myhome-calibration/cover/<unique id>` and `/myhome-calibration/profile/<name>` —
-so a card can be bookmarked or linked from a dashboard.
+so a card can be bookmarked or linked from a dashboard. Opening one of those
+addresses shows the overview with that card open over it, which is also what happens
+when you open a card from the list: the list never goes away underneath.
 
 **From the dialog**: the first screen of **Configure** ends with a line saying that
 profiles and covers can also be managed from the panel, and the word *panel* in it is
@@ -243,7 +245,11 @@ dropped on the next write rather than being an error anybody has to see.
 ## The cover detail
 
 Opening a cover's name opens its card: **Cover detail**, at
-`/myhome-calibration/cover/<unique id>`.
+`/myhome-calibration/cover/<unique id>`. It opens **over** the overview — a panel
+from the right on a desktop, a sheet from the bottom on a phone — and the list stays
+behind it, so closing the card leaves you where you were in it. The ✕ in the card's
+own header closes it, and so does Escape; on a phone, so does a tap on the dark half
+of the screen.
 
 ### Values in use
 
@@ -303,13 +309,18 @@ there is nothing to reload by hand.
 
 Opening a profile's name opens **Profile card**, at
 `/myhome-calibration/profile/<name>`: its values, its reference travel, where it was
-measured and everything that follows it.
+measured and everything that follows it. It opens over the overview in the same panel
+the cover's card uses, and when you reach it *from* a cover's card — or a cover's card
+from it — the ✕ becomes an arrow back to the card you came from. One step: the second
+press closes the panel and leaves the list.
 
 **Followers** are listed with what each one actually takes from the profile —
 inherited, adjusted with the keys that are the cover's own named, or measured and
 therefore taking nothing — and each is a way into its own card. A cover that follows
-through its own `profile:` line in `myhome.yaml` is marked as such, because a change
-made here cannot move it: that line is in your file.
+through its own `profile:` line in `myhome.yaml` is marked *from the configuration
+file*, because a change made here cannot move it: that line is in your file. On the
+overview the same fact is said once, in the group's own header, rather than under
+every cover in it.
 
 **Edit the values…** is the profile's own five numbers and its reference travel,
 with an **Impact preview** beside the fields: one line per follower, saying what that

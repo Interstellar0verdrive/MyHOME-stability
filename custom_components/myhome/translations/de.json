@@ -760,8 +760,7 @@
         "travel_unknown": "Weg nicht angegeben",
         "travel_needed": "Weg noch einzutragen",
         "follows": "folgt „{profile}“",
-        "profile_missing": "Das Profil „{profile}“ ist nicht mehr definiert: dieser Rollladen läuft mit seiner eigenen Konfiguration.",
-        "from_file": "Dieses Profil weist die Konfigurationsdatei zu: geändert wird es dort, nicht hier."
+        "profile_missing": "Das Profil „{profile}“ ist nicht mehr definiert: dieser Rollladen läuft mit seiner eigenen Konfiguration."
       },
       "no_basic_covers": "Alle Rollläden dieses Gateways melden ihre Position selbst: es gibt kein Wegmodell zu kalibrieren und hier nichts zu tun."
     },

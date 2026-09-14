@@ -29,9 +29,26 @@ export const originChipStyles = css`
     color: var(--myhome-text-soft-ink);
   }
 
+  /*
+   * The pastel, and a 1 px ring of the colour itself.
+   *
+   * The ring is the first live pass's finding. The fill is the design's 20 % of
+   * --primary-color over the card, and 20 % of a colour is 20 % of its chroma too: with
+   * Home Assistant's own blue it comes out #cdeefd, which is pale, and with a theme whose
+   * primary is desaturated it is grey by arithmetic and indistinguishable from the
+   * neutral chip beside it. Measured in a browser: the chip does read the variable (a
+   * theme's --primary-color, and a --primary-color defined as another var, both land in
+   * the mix), so the fill was never the bug - it is simply not enough colour to see.
+   *
+   * An inset ring at the full primary is the vocabulary this panel already uses for
+   * "this one is the chosen one" (the selected option of "Quale profilo?"), it is a
+   * non-text contrast of 1.4.11's kind rather than a second pastel nobody can tell from
+   * the first, and being inset it changes no measurement of the chip.
+   */
   .chip.measured {
     background: var(--myhome-primary-pastel);
     color: var(--myhome-text);
+    box-shadow: inset 0 0 0 1px var(--myhome-primary);
   }
 
   .chip.adjusted {

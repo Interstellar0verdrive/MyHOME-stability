@@ -17,6 +17,7 @@
 // prototype's `rescale` and `effKeys` are deliberately not ported: they are a JavaScript
 // re-implementation of `derive_cover_from_profile`, and the two would drift.
 
+import { type I18n } from "./i18n";
 import { type PendingChange } from "./store";
 import { type AssignItem, type CoverRow, type Overview } from "./ws";
 
@@ -33,6 +34,28 @@ export const pendingFor = (
   coverUniqueId: string,
   pending: readonly PendingChange[],
 ): PendingChange | undefined => pending.find((item) => item.cover === coverUniqueId);
+
+/**
+ * One end of a pending route: `«alte»`, or `«Senza profilo»`.
+ *
+ * **Without the word "Profilo".** The chip used to read
+ * *"Profilo «alte» → Profilo «alte_nuovo_test»"*, which on a 300 px column is a sentence
+ * whose second half is an ellipsis - and the second half is the only half that is news.
+ * The design writes this chip as `«A» → «B»` (Consegna 0.6.0, §2, "Chip «in sospeso»")
+ * and the group heading above the row already says the word; the first live pass asked
+ * for the design's version back.
+ */
+export const routeEnd = (i18n: I18n, profile: string | null): string =>
+  profile === null
+    ? i18n.t("panel.assign.target_none")
+    : i18n.t("panel.assign.pending.route_name", { profile });
+
+/** "«alte» → «alte_nuovo_test»": where this shutter came from and where it is going. */
+export const routeLabel = (i18n: I18n, from: string | null, to: string | null): string =>
+  i18n.t("panel.assign.pending.route", {
+    from: routeEnd(i18n, from),
+    to: routeEnd(i18n, to),
+  });
 
 /**
  * The pending list with one shutter sent somewhere - or with its change withdrawn.

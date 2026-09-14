@@ -40,10 +40,11 @@ import {
 import { DECIMALS } from "./engine/assign";
 import { isEmpty, valueProblem } from "./engine/fields";
 import { openOptionsFlow } from "./engine/flow";
+import { backPath, isDrawerRoute, nextBack } from "./engine/drawer";
 import { Router, type Route } from "./engine/router";
 import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
-import { liveRegion } from "./engine/a11y";
+import { FocusTrap, deepActiveElement, focusWhenPainted, liveRegion } from "./engine/a11y";
 import {
   asWsError,
   assign as sendAssign,
@@ -66,7 +67,9 @@ import {
   type ProfileRow,
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
+import { drawer, drawerStyles } from "./components/drawer";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
+import { sheetStyles } from "./components/sheet";
 import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
@@ -131,6 +134,11 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _followTimer: ReturnType<typeof setTimeout> | null = null;
   private _followedAt = 0;
   /** The queue `_listen` runs on, so that two callers can never open two subscriptions. */
+  /** The one screen remembered behind the drawer, and the control it draws. */
+  private _drawerBack: Route | null = null;
+  private _trap = new FocusTrap();
+  private _returnTo: HTMLElement | null = null;
+
   private _listening: Promise<void> = Promise.resolve();
   /** How many attempts are on that queue, waiting or in the air. */
   private _subscribing = 0;
@@ -151,6 +159,8 @@ export class MyHomeCalibrationPanel extends LitElement {
     measuringBannerStyles,
     skeletonStyles,
     stripStyles,
+    sheetStyles,
+    drawerStyles,
     css`
       .toolbar {
         display: flex;
@@ -275,6 +285,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     this._unsubscribeStore?.();
     this._unsubscribeStore = null;
     this._router.stop();
+    this._trap.release();
     window.removeEventListener("location-changed", this._onReturn);
     document.removeEventListener("visibilitychange", this._onReturn);
     this._unwatchSocket();
@@ -318,6 +329,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   protected override updated(changed: PropertyValues): void {
+    this._manageDrawerFocus();
     if (changed.has("route")) {
       this._router.setHostPath(this.route?.path);
       this._onRoute(this._router.current);
@@ -334,6 +346,62 @@ export class MyHomeCalibrationPanel extends LitElement {
     if (this._languageOf(this.hass) !== this._language) {
       void this._loadTexts();
     }
+  }
+
+  /** Whether a drawer was on the screen the last time focus was looked at. */
+  private _drawerWasOpen = false;
+  private _dialogWasOpen = false;
+
+  /**
+   * The keyboard, while the drawer is open - the review panel's arrangement, moved up one
+   * element because this drawer is the shell's and not the list's.
+   *
+   * Three things happen, and each of them is one of the handoff's §5 rules:
+   *
+   * * **the trap holds the drawer**, so Tab cannot walk out of it into the list behind,
+   *   which is still full of rows and handles. It holds without taking focus: the card
+   *   inside takes its own heading on the paint that first draws it, and two `focus()`
+   *   calls in one frame is a race;
+   * * **focus comes back** to whatever opened it - the row's own button, the group's
+   *   heading - and it is read *deep*, because the control that was clicked lives in the
+   *   overview's shadow root and `activeElement` would answer with the host;
+   * * **"Quale profilo?" borrows the keyboard** while it is over the drawer, and gives it
+   *   back to the drawer's first stop when it closes, rather than to the document.
+   */
+  private _manageDrawerFocus(): void {
+    const state = this._store.state;
+    const open = isDrawerRoute(state.route) && state.status !== "error";
+    const dialog = state.dialog !== null;
+    const root = (): HTMLElement | null =>
+      this.renderRoot.querySelector<HTMLElement>("[data-drawer]");
+    if (open && !this._drawerWasOpen) {
+      this._returnTo = deepActiveElement(this.renderRoot as unknown as DocumentOrShadowRoot) as
+        | HTMLElement
+        | null;
+      requestAnimationFrame(() => {
+        const element = root();
+        if (element) {
+          this._trap.hold(element, false);
+        }
+      });
+    } else if (!open && this._drawerWasOpen) {
+      this._trap.release();
+      const back = this._returnTo;
+      this._returnTo = null;
+      focusWhenPainted(() => (back?.isConnected ? back : null));
+    } else if (open && this._dialogWasOpen && !dialog) {
+      // The dialog has just closed over an open drawer: the overview's own focus return
+      // has nothing to give it back to, because what opened the dialog was not in the
+      // overview. The drawer takes the keyboard again.
+      requestAnimationFrame(() => {
+        const element = root();
+        if (element) {
+          this._trap.hold(element);
+        }
+      });
+    }
+    this._drawerWasOpen = open;
+    this._dialogWasOpen = dialog;
   }
 
   private _languageOf(hass: HomeAssistant | undefined): string {
@@ -593,6 +661,8 @@ export class MyHomeCalibrationPanel extends LitElement {
    * the middle of composing a batch comes back to the batch.
    */
   private _onRoute(route: Route): void {
+    // One level, worked out from the two routes and nothing else: see `engine/drawer.ts`.
+    this._drawerBack = nextBack(this._drawerBack, this._store.state.route, route);
     this._store.set({ route });
     if (route.view === "cover") {
       const id = route.params.id;
@@ -625,6 +695,20 @@ export class MyHomeCalibrationPanel extends LitElement {
     this._router.navigate(path);
   }
 
+  /**
+   * The drawer's one way out: one screen back where there is one, the list otherwise.
+   *
+   * Every road leads here - the head's control, Escape inside the card, a click on the
+   * dark half - so there is one answer to "what does going back mean" and the address bar
+   * is always told, which is what keeps the browser's own back button in step.
+   */
+  private _closeDrawer = (): void => {
+    if (this._store.state.applying) {
+      return;
+    }
+    this._navigate(backPath(this._drawerBack));
+  };
+
   private _renderMenuButton(): TemplateResult | typeof nothing {
     if (!this.narrow) {
       return nothing;
@@ -641,19 +725,6 @@ export class MyHomeCalibrationPanel extends LitElement {
       @click=${() => toggleSidebar(this)}
     >
       ☰
-    </button>`;
-  }
-
-  private _renderBackButton(): TemplateResult | typeof nothing {
-    if (this._store.state.route.view === "overview") {
-      return nothing;
-    }
-    return html`<button
-      type="button"
-      aria-label=${this._i18n.t("panel.common.action.back")}
-      @click=${() => this._navigate("/")}
-    >
-      ←
     </button>`;
   }
 
@@ -715,6 +786,15 @@ export class MyHomeCalibrationPanel extends LitElement {
       }
       const { pending, withdrawn } = withPending(this._store.state.pending, cover, to);
       this._store.set({ pending, dialog: null, armed: null, writeError: null });
+      // Chosen from "Quale profilo?" over an open drawer - the detail card's "Assegna a
+      // un profilo…". The change is a fact about the list: the row that now carries a
+      // dashed outline, the bar that counts it and the panel that would write it are all
+      // behind the drawer, so the drawer steps out of the way rather than leaving the
+      // user looking at a card that cannot show what they just did.
+      if (isDrawerRoute(this._store.state.route)) {
+        this._drawerBack = null;
+        this._navigate("/");
+      }
       this._store.announce(
         withdrawn
           ? this._i18n.t("panel.assign.announce.withdrawn", { cover: cover.name })
@@ -1050,7 +1130,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   private _detailActions: DetailActions = {
-    back: () => this._navigate("/"),
+    back: this._closeDrawer,
     retry: () => {
       this._store.set({ detail: { ...this._store.state.detail, loading: true, error: null } });
       void this._loadDetail();
@@ -1059,14 +1139,18 @@ export class MyHomeCalibrationPanel extends LitElement {
 
     /**
      * "Assegna a un profilo…" is the overview's own gesture, so it is the overview's own
-     * dialog: the card hands the shutter over and steps out of the way, rather than
-     * growing a second copy of "Quale profilo?" with a second idea of what a pending
-     * change is.
+     * dialog: the card hands the shutter over rather than growing a second copy of
+     * "Quale profilo?" with a second idea of what a pending change is.
+     *
+     * It used to navigate to the list first, because the card *was* the screen and the
+     * dialog could not be drawn over something that was no longer there. The card is a
+     * drawer now, so the dialog opens on top of it (z-index 60 over the drawer's 51) and
+     * the shutter the user is reading about stays on the screen while they choose. What
+     * the choice does is in `_assignActions.assign`: a pending change belongs to the
+     * list, so that is where it hands them back.
      */
     assign: () => {
-      const id = this._store.state.detail.for;
-      this._store.set({ dialog: id });
-      this._navigate("/");
+      this._store.set({ dialog: this._store.state.detail.for });
     },
 
     mode: (mode) => {
@@ -1316,7 +1400,8 @@ export class MyHomeCalibrationPanel extends LitElement {
    * A panel with four screens and one title is a panel whose browser tab, whose back
    * button and whose screen reader all say the same thing about four different places.
    */
-  private _title(): string {
+  /** The drawer's own heading: which shutter, or which profile, is inside it. */
+  private _drawerTitle(): string {
     const state = this._store.state;
     const route = state.route;
     if (route.view === "cover") {
@@ -1333,6 +1418,18 @@ export class MyHomeCalibrationPanel extends LitElement {
         ? this._i18n.t("panel.profile.name", { profile: route.params.name })
         : this._i18n.t("panel.profile.title");
     }
+    return this._i18n.t("panel.overview.title");
+  }
+
+  /**
+   * The page's one h1, which is the list's title and stays it.
+   *
+   * It used to become the name of whatever card was open, because the card *was* the
+   * page. The card is a drawer over the list now, so the name is the drawer's own
+   * heading - the thing `aria-modal` points a reader at - and the h1 goes on naming the
+   * region behind it.
+   */
+  private _title(): string {
     return this._i18n.t("panel.overview.title");
   }
 
@@ -1387,7 +1484,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   private _profileActions: ProfileActions = {
-    back: () => this._navigate("/"),
+    back: this._closeDrawer,
     openCover: (uniqueId) => this._navigate(`/cover/${encodeURIComponent(uniqueId)}`),
 
     mode: (mode) => {
@@ -1579,15 +1676,20 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
   }
 
+  /**
+   * What is on the page itself, which since the first live pass is always the list.
+   *
+   * The two routed cards are drawn over it by `_renderDrawer`, so this answers one
+   * question - what is *behind* - and a deep link to a shutter renders the list first and
+   * the drawer on top of it, on the same paint.
+   */
   private _renderView(): TemplateResult {
     const state = this._store.state;
 
     if (state.status === "loading") {
       // The shape of the screen that is coming, not a sentence where it will be: a page
       // that grows its content under the reader is the thing a slow network must not do.
-      return state.route.view === "cover" || state.route.view === "profile"
-        ? cardSkeleton(this._i18n)
-        : overviewSkeleton(this._i18n);
+      return overviewSkeleton(this._i18n);
     }
     if (state.status === "error" || !state.overview) {
       const error = state.error;
@@ -1606,21 +1708,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       </div>`;
     }
     const route = state.route;
-    if (route.view === "cover") {
-      return html`<myhome-cover-detail
-        .i18n=${this._i18n}
-        .state=${state}
-        .actions=${this._detailActions}
-      ></myhome-cover-detail>`;
-    }
-    if (route.view === "profile") {
-      return html`<myhome-profile-card
-        .i18n=${this._i18n}
-        .state=${state}
-        .actions=${this._profileActions}
-      ></myhome-profile-card>`;
-    }
-    if (route.view !== "overview") {
+    if (route.view !== "overview" && !isDrawerRoute(route)) {
       // `/calibrate/…` is reserved for 0.7.0, and anything else is a typed URL.
       return this._renderPlaceholder(
         this._i18n.t("panel.overview.title"),
@@ -1632,6 +1720,44 @@ export class MyHomeCalibrationPanel extends LitElement {
       .state=${state}
       .actions=${this._assignActions}
     ></myhome-overview>`;
+  }
+
+  /**
+   * The cover's detail, or the profile's card, as a panel over the list.
+   *
+   * Nothing is drawn while the overview itself has refused to load: the drawer would be a
+   * panel over a refusal, with a "try again" underneath it that the backdrop swallows.
+   * While it is merely *late*, the drawer is there with the card's own skeleton in it -
+   * which is what a deep link on a cold browser looks like, and it is the shape of the
+   * card rather than a spinner for the same reason the list gets one.
+   */
+  private _renderDrawer(): TemplateResult | typeof nothing {
+    const state = this._store.state;
+    if (!isDrawerRoute(state.route) || state.status === "error") {
+      return nothing;
+    }
+    const content =
+      state.status === "loading"
+        ? cardSkeleton(this._i18n)
+        : state.route.view === "cover"
+          ? html`<myhome-cover-detail
+              .i18n=${this._i18n}
+              .state=${state}
+              .actions=${this._detailActions}
+            ></myhome-cover-detail>`
+          : html`<myhome-profile-card
+              .i18n=${this._i18n}
+              .state=${state}
+              .actions=${this._profileActions}
+            ></myhome-profile-card>`;
+    return drawer({
+      i18n: this._i18n,
+      title: this._drawerTitle(),
+      hasBack: this._drawerBack !== null,
+      applying: state.applying,
+      onClose: this._closeDrawer,
+      content,
+    });
   }
 
   protected override render(): TemplateResult {
@@ -1648,7 +1774,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       -->
       <div class="page" role="region" aria-labelledby="panel-title">
         <div class="toolbar">
-          ${this._renderMenuButton()} ${this._renderBackButton()}
+          ${this._renderMenuButton()}
           <h1 class="title" id="panel-title">${title}</h1>
           ${this._renderGatewayPicker()}
         </div>
@@ -1664,10 +1790,14 @@ export class MyHomeCalibrationPanel extends LitElement {
           ? html`<p class="connection">${this._i18n.t("panel.common.polling")}</p>`
           : nothing}
       </div>
+      ${this._renderDrawer()}
       <!--
         The overview draws its own five strips, because three of them are about a gesture
-        it owns. The routed cards have no gestures and two of the five still apply to them:
-        a write in the air, and what it came to with "Annulla" beside it.
+        it owns, and it stops drawing them while a drawer is over it. The routed cards
+        have no gestures and two of the five still apply to them: a write in the air, and
+        what it came to with "Annulla" beside it. So exactly one of the two is drawing
+        strips at any moment, and they are drawn over the drawer (z-index 70) because a
+        refusal of a write made *inside* the drawer has to be readable from there.
       -->
       ${routed && state.applying ? applyingStrip(this._i18n) : nothing}
       ${routed && state.snack && !state.applying

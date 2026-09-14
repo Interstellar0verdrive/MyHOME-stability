@@ -23,6 +23,10 @@
 // the profile is being brought to this travel, or the values are going back to the file or
 // to the defaults - and which of those it is comes from the preview's own `origin`.
 
+// The box itself - the backdrop, the panel from the right, the sheet from the bottom,
+// the head and the scrolling body - is `components/sheet.ts`, which the routed cards'
+// drawer is drawn in too. What is below is what goes *inside* this one.
+
 import { css, html, nothing, type TemplateResult } from "lit";
 
 import {
@@ -37,79 +41,10 @@ import { type PendingChange } from "../engine/store";
 import { type CoverRow, type PreviewItem, type ProfileRow } from "../engine/ws";
 
 export const reviewPanelStyles = css`
-  .sheet-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 50;
-  }
-
-  /* The phone: a sheet from the bottom, never taller than 86 vh. */
-  .sheet {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-height: 86vh;
-    background: var(--myhome-card);
-    color: var(--myhome-text);
-    z-index: 51;
-    border-radius: 16px 16px 0 0;
-    box-shadow: var(--myhome-shadow);
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* From 600 px, a panel from the right instead. */
-  @media (min-width: 600px) {
-    .sheet {
-      top: 0;
-      left: auto;
-      right: 0;
-      bottom: 0;
-      width: min(480px, 100vw);
-      max-height: none;
-      border-radius: 0;
-    }
-  }
-
-  .sheet .head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--myhome-divider);
-  }
-
-  .sheet .head h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 500;
-    flex: 1;
-  }
-
-  .sheet .head button {
-    width: 48px;
-    height: 48px;
-    flex: 0 0 48px;
-    border: none;
-    background: transparent;
-    color: var(--myhome-text-soft);
-    font-size: 20px;
-    cursor: pointer;
-    border-radius: 24px;
-  }
-
   .sheet .body[aria-busy="true"] table,
   .sheet .body[aria-busy="true"] .note {
     opacity: 0.55;
     transition: opacity 120ms ease;
-  }
-
-  .sheet .body {
-    flex: 1;
-    overflow: auto;
-    padding: 16px;
   }
 
   .sheet .intro {

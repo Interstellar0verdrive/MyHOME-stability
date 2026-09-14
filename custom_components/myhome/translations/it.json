@@ -751,7 +751,7 @@
       "group": {
         "profile": "Profilo «{profile}»",
         "missing": "Questo profilo non è più definito: le tapparelle qui sotto sono tornate in silenzio alla propria configurazione.",
-        "from_file": "Definito nel file di configurazione, e di sola lettura da qui.",
+        "from_file": "Dichiarato nel file di configurazione: si cambia lì, non qui.",
         "no_profile": "Senza profilo",
         "no_profile_note": "Valori dal file di configurazione o predefiniti. Non è un errore: anche una tapparella con misure proprie sta benissimo qui.",
         "values": "Corsa di riferimento {travel} cm · salita {opening} s · discesa {closing} s · lamelle {slat} s",
@@ -770,7 +770,6 @@
         "travel_needed": "corsa da inserire",
         "follows": "segue «{profile}»",
         "profile_missing": "Il profilo «{profile}» non è più definito: questa tapparella sta usando la propria configurazione.",
-        "from_file": "Questo profilo lo assegna il file di configurazione: si cambia lì, non qui.",
         "origin_inherited": "Ereditata",
         "origin_adjusted": "Adattata"
       },
@@ -809,6 +808,7 @@
         "count": "{count} modifiche in sospeso — niente è ancora scritto",
         "count_one": "1 modifica in sospeso — niente è ancora scritto",
         "route": "{from} → {to}",
+        "route_name": "«{profile}»",
         "all_own": "Valori tutti propri: niente cambia",
         "some_own": "Valori propri: quelli restano"
       }

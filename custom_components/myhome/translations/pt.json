@@ -760,8 +760,7 @@
         "travel_unknown": "percurso não indicado",
         "travel_needed": "percurso por introduzir",
         "follows": "segue «{profile}»",
-        "profile_missing": "O perfil «{profile}» já não está definido: esta persiana está a usar a sua própria configuração.",
-        "from_file": "Este perfil é atribuído pelo ficheiro de configuração: altera-se lá, não aqui."
+        "profile_missing": "O perfil «{profile}» já não está definido: esta persiana está a usar a sua própria configuração."
       },
       "no_basic_covers": "Todas as persianas desta gateway comunicam a sua própria posição: não há nenhum modelo de percurso para calibrar nem nada a fazer aqui."
     },

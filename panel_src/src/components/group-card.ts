@@ -40,18 +40,48 @@ export const groupCardStyles = css`
    * From 600 px the groups stand side by side and the row of them scrolls sideways, which
    * is what makes a drag between two profiles one gesture. Below it they stack, and the
    * gesture is press-and-tap instead.
+   *
+   * **260 px and not the design's 300.** The content column is 1200 px wide at most and
+   * has 16 px of padding on each side, so 1168 px is all four groups ever get: at 300 px
+   * plus three 16 px gaps they need 1248 and the fourth column is off the edge of a
+   * 1280-1440 px window - which is what the first live pass found, on a house with four.
+   * At 260 the four fit (1088 px) and the columns are drawn at 280 because they are
+   * 1fr; the minimum only decides when the row starts to scroll, which is at five.
+   *
+   * **The scrollbar is drawn on purpose.** macOS hides overlay scrollbars until something
+   * moves, so a row that scrolled looked like a row that was cut off. scrollbar-width:
+   * thin (and the WebKit rules under it, which Safari needs) keeps a visible track under
+   * the cards, and a column that is half in view is the second half of the affordance.
+   * scroll-padding keeps a card the keyboard reaches off the very edge.
    */
   @media (min-width: 600px) {
     .groups {
       display: grid;
       grid-auto-flow: column;
-      grid-auto-columns: minmax(300px, 1fr);
+      grid-auto-columns: minmax(260px, 1fr);
       gap: 16px;
       align-items: start;
       overflow-x: auto;
-      padding-bottom: 8px;
+      /* overflow-x makes the other axis auto too: 4 px so a card's shadow is not cut. */
+      padding: 4px 0 8px;
+      scroll-padding-inline: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--myhome-field-border) transparent;
       /* A drag near the edge scrolls this; the browser must not fight it with inertia. */
       overscroll-behavior-x: contain;
+    }
+
+    .groups::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    .groups::-webkit-scrollbar-thumb {
+      background: var(--myhome-field-border);
+      border-radius: 4px;
+    }
+
+    .groups::-webkit-scrollbar-track {
+      background: transparent;
     }
   }
 
@@ -74,18 +104,36 @@ export const groupCardStyles = css`
     flex-wrap: wrap;
   }
 
+  /*
+   * 19 px and 700: the profile's name is the one heading on this screen painted in a
+   * colour, and WCAG's "large text" starts at 18.66 px bold. Which matters because of
+   * the colour it is painted in - see the button below.
+   */
   .group-head h2 {
     margin: 0;
-    font-size: 17px;
-    font-weight: 500;
+    font-size: 19px;
+    font-weight: 700;
     flex: 1 1 auto;
     min-width: 0;
   }
 
+  /*
+   * The theme's primary colour, undiluted.
+   *
+   * Lot 9 painted every coloured text in --myhome-<x>-ink, which is the colour mixed half
+   * and half with the theme's text colour, because at 12.5-17 px the pure colours are
+   * under AA on a card. The first live pass looked at the result on a real theme and
+   * called it what it is: a profile name in a muddy grey-blue, in a panel whose host
+   * paints its own titles in the theme's primary. So the title takes the primary itself,
+   * and it is made large text (above) so that 1.4.3's 3:1 is the bar it is held to. It is
+   * still under that in Home Assistant's *default* light theme, which is the same
+   * 2.63:1 pair as the filled primary button - the maintainer's decision, reported and not
+   * counted by npm run contrast, exactly as that button is.
+   */
   .group-head h2 button {
     border: none;
     background: transparent;
-    color: var(--myhome-primary-ink);
+    color: var(--myhome-primary);
     font: inherit;
     cursor: pointer;
     padding: 0;
