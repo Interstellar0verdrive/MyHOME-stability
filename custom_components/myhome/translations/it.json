@@ -717,7 +717,7 @@
       "not_loaded": "Questo gateway non è caricato: per ora non c'è niente da leggere.",
       "required": "Questo campo non può restare vuoto.",
       "reconnected": "Home Assistant risponde di nuovo: questa pagina è stata appena riletta.",
-      "not_yet": "Questa schermata arriva in una versione successiva. Fino ad allora “Configura” fa tutto quello che farà.",
+      "not_yet": "Questa schermata arriva in una versione successiva. Fino ad allora «Configura» fa tutto quello che farà.",
       "polling": "Gli aggiornamenti in tempo reale non sono disponibili su questa versione: la pagina si aggiorna da sola ogni 30 secondi.",
       "action": {
         "menu": "Apri il menu di Home Assistant",
@@ -749,7 +749,7 @@
       "summary": "Profili: {profiles} · Tapparelle semplici: {covers}",
       "explanation": "Un profilo descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
       "group": {
-        "profile": "Profilo “{profile}”",
+        "profile": "Profilo «{profile}»",
         "missing": "Questo profilo non è più definito: le tapparelle qui sotto sono tornate in silenzio alla propria configurazione.",
         "from_file": "Definito nel file di configurazione, e di sola lettura da qui.",
         "no_profile": "Senza profilo",
@@ -768,8 +768,8 @@
         "travel": "corsa {travel} cm",
         "travel_unknown": "corsa non indicata",
         "travel_needed": "corsa da inserire",
-        "follows": "segue “{profile}”",
-        "profile_missing": "Il profilo “{profile}” non è più definito: questa tapparella sta usando la propria configurazione.",
+        "follows": "segue «{profile}»",
+        "profile_missing": "Il profilo «{profile}» non è più definito: questa tapparella sta usando la propria configurazione.",
         "from_file": "Questo profilo lo assegna il file di configurazione: si cambia lì, non qui.",
         "origin_inherited": "Ereditata",
         "origin_adjusted": "Adattata"
@@ -786,13 +786,13 @@
       "handle_hint": "Trascinare per assegnare o riordinare, Invio per scegliere da un elenco",
       "handle_inert": "L'assegnazione e il riordino arrivano in una versione successiva",
       "drop_zone": "Togli dal profilo — rilascia qui",
-      "armed": "Toccare il gruppo di destinazione per “{cover}”",
-      "target_profile": "il profilo “{profile}”",
-      "target_none": "“Senza profilo”",
+      "armed": "Toccare il gruppo di destinazione per «{cover}»",
+      "target_profile": "il profilo «{profile}»",
+      "target_none": "«Senza profilo»",
       "announce": {
         "armed": "Toccare il gruppo di destinazione.",
-        "pending": "“{cover}” in sospeso verso {target}. Niente è ancora scritto.",
-        "withdrawn": "“{cover}” torna dov'era: modifica ritirata.",
+        "pending": "«{cover}» in sospeso verso {target}. Niente è ancora scritto.",
+        "withdrawn": "«{cover}» torna dov'era: modifica ritirata.",
         "reordered": "Ordine aggiornato: verrà ricordato.",
         "drag_cancelled": "Trascinamento annullato.",
         "discarded": "Tutte le modifiche in sospeso sono state scartate.",
@@ -829,7 +829,7 @@
       "note": {
         "all_own": "Ha valori propri per tutto: niente cambia. Il profilo varrebbe solo per i valori rimossi in futuro.",
         "some_own": "Ha alcuni valori propri: quelli restano. Cambiano solo i valori ereditati.",
-        "scaled": "Valori del profilo “{profile}” (misurato su {reference} cm) riportati a una corsa di {travel} cm.",
+        "scaled": "Valori del profilo «{profile}» (misurato su {reference} cm) riportati a una corsa di {travel} cm.",
         "back_to_file": "Tornano i valori del file di configurazione. Restano la corsa e qualunque valore proprio.",
         "back_to_defaults": "Tornano i valori predefiniti: la posizione in percentuale sarà una stima grossolana. Restano la corsa e qualunque valore proprio."
       },
@@ -843,9 +843,9 @@
     },
     "dialog": {
       "title": "Quale profilo?",
-      "subtitle": "“{cover}” — la scelta resta in sospeso finché non viene confermata.",
+      "subtitle": "«{cover}» — la scelta resta in sospeso finché non viene confermata.",
       "option": {
-        "profile": "Profilo “{profile}”",
+        "profile": "Profilo «{profile}»",
         "profile_meta": "{travel} cm · salita {opening} s · discesa {closing} s",
         "none": "Nessun profilo",
         "none_meta": "Valori dal file di configurazione o predefiniti. Restano la corsa e i valori propri.",
@@ -856,13 +856,13 @@
       "assigned": "{count} assegnazioni applicate",
       "assigned_one": "1 assegnazione applicata",
       "order_saved": "Il nuovo ordine verrà ricordato.",
-      "values_saved": "I valori di “{cover}” sono salvati: battono il profilo e il file.",
-      "travel_saved": "La corsa di “{cover}” è salvata: il profilo viene portato su questa misura.",
-      "measure_removed": "Misura rimossa: “{cover}” ora usa {destination}.",
-      "profile_saved": "Profilo “{profile}” aggiornato: {count} tapparelle raggiunte.",
-      "profile_saved_one": "Profilo “{profile}” aggiornato: 1 tapparella raggiunta.",
-      "profile_renamed": "Rinominato in “{profile}”: la rinomina segue tutte le tapparelle che lo usano.",
-      "profile_deleted": "Profilo “{profile}” eliminato: le tapparelle tornano al file o ai predefiniti.",
+      "values_saved": "I valori di «{cover}» sono salvati: battono il profilo e il file.",
+      "travel_saved": "La corsa di «{cover}» è salvata: il profilo viene portato su questa misura.",
+      "measure_removed": "Misura rimossa: «{cover}» ora usa {destination}.",
+      "profile_saved": "Profilo «{profile}» aggiornato: {count} tapparelle raggiunte.",
+      "profile_saved_one": "Profilo «{profile}» aggiornato: 1 tapparella raggiunta.",
+      "profile_renamed": "Rinominato in «{profile}»: la rinomina segue tutte le tapparelle che lo usano.",
+      "profile_deleted": "Profilo «{profile}» eliminato: le tapparelle tornano al file o ai predefiniti.",
       "action": {
         "undo": "Annulla"
       },
@@ -882,7 +882,7 @@
       },
       "source": {
         "own": "valore proprio, misurato su questa tapparella",
-        "profile": "ereditato dal profilo “{profile}”",
+        "profile": "ereditato dal profilo «{profile}»",
         "file": "dal file di configurazione",
         "default": "valore predefinito"
       },
@@ -909,7 +909,7 @@
       },
       "edit": {
         "title": "Modifica i valori a mano",
-        "intro": "Questi valori valgono solo per questa tapparella e battono sia il profilo sia il file. Un campo lasciato vuoto non è uno zero: significa “su questo non c'è niente da dire”, e il valore torna ad arrivare dal profilo o dal file. Svuotare tutti i campi equivale a rimuovere la misura.",
+        "intro": "Questi valori valgono solo per questa tapparella e battono sia il profilo sia il file. Un campo lasciato vuoto non è uno zero: significa «su questo non c'è niente da dire», e il valore torna ad arrivare dal profilo o dal file. Svuotare tutti i campi equivale a rimuovere la misura.",
         "inherits": "eredita {value}",
         "empty": "vuoto = niente da dire",
         "action": {
@@ -918,19 +918,19 @@
       },
       "remove": {
         "title": "Rimuovere la misura?",
-        "body": "Le misure fatte su “{cover}” verranno rimosse e non si recuperano. La tapparella tornerà a usare {destination}.",
+        "body": "Le misure fatte su «{cover}» verranno rimosse e non si recuperano. La tapparella tornerà a usare {destination}.",
         "travel_stays": "La corsa del telo resta: qualcuno l'ha misurata col metro.",
         "action": "Rimuovi la misura"
       },
       "destination": {
-        "profile": "i valori ereditati dal profilo “{profile}”",
+        "profile": "i valori ereditati dal profilo «{profile}»",
         "file": "i valori del file di configurazione",
         "defaults": "i valori predefiniti"
       }
     },
     "profile": {
       "title": "Scheda del profilo",
-      "name": "Profilo “{profile}”",
+      "name": "Profilo «{profile}»",
       "stored": "Profilo dell'archivio",
       "from_file": "Profilo del file di configurazione: qui è di sola lettura.",
       "unknown": "Nessun profilo con quel nome è definito o seguito qui.",
@@ -938,7 +938,7 @@
       "values": "Valori del profilo",
       "provenance": "Misurato su {cover} · {date}",
       "provenance_missing": "Non è registrato dove è stato misurato.",
-      "provenance_now_profile": "ora segue “{profile}”",
+      "provenance_now_profile": "ora segue «{profile}»",
       "provenance_now_none": "ora non segue nessun profilo",
       "followers": {
         "count": "{count} tapparelle lo seguono",
@@ -980,7 +980,7 @@
         "action": "Rinomina"
       },
       "delete": {
-        "title": "Eliminare il profilo “{profile}”?",
+        "title": "Eliminare il profilo «{profile}»?",
         "affects": "Riguarda queste tapparelle:",
         "body": "Torneranno ai valori del file di configurazione, dove esistono, o ai predefiniti. Restano le loro corse e i loro valori propri. Le misure del profilo non si recuperano.",
         "action": "Elimina il profilo"
@@ -989,7 +989,7 @@
     "banner": {
       "measuring": {
         "title": "Misurazione in corso",
-        "body": "Una calibrazione guidata sta usando “{cover}”. Finché la sessione non termina, da qui si può solo leggere: non viene scritto niente.",
+        "body": "Una calibrazione guidata sta usando «{cover}». Finché la sessione non termina, da qui si può solo leggere: non viene scritto niente.",
         "action": {
           "resume": "Riprendi la sessione",
           "stop": "Termina"
