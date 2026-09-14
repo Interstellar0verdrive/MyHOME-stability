@@ -31,7 +31,7 @@ export const measuringBannerStyles = css`
   }
 
   .measuring strong {
-    color: var(--myhome-warning);
+    color: var(--myhome-warning-ink);
     font-weight: 500;
   }
 
@@ -46,7 +46,7 @@ export const measuringBannerStyles = css`
   }
 
   .measuring a {
-    color: var(--myhome-primary);
+    color: var(--myhome-primary-ink);
     min-height: 44px;
     display: inline-flex;
     align-items: center;

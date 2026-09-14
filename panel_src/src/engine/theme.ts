@@ -41,7 +41,7 @@ export const themeStyles = css`
     --myhome-card: var(--card-background-color, #ffffff);
     --myhome-divider: var(--divider-color, rgba(0, 0, 0, 0.12));
     --myhome-error: var(--error-color, #db4437);
-    --myhome-warning: var(--warning-color, #b26b00);
+    --myhome-warning: var(--warning-color, #ffa600);
     --myhome-success: var(--success-color, #43a047);
     --myhome-info: var(--info-color, #039be5);
     --myhome-header: var(--app-header-background-color, var(--primary-color, #03a9f4));
@@ -58,6 +58,49 @@ export const themeStyles = css`
     --myhome-warning-pastel: color-mix(in srgb, var(--myhome-warning) 12%, var(--myhome-card));
     --myhome-success-pastel: color-mix(in srgb, var(--myhome-success) 12%, var(--myhome-card));
     --myhome-info-pastel: color-mix(in srgb, var(--myhome-info) 12%, var(--myhome-card));
+
+    /*
+     * The inks: the same colours, made readable as *text*.
+     *
+     * The pastels are backgrounds and the handoff's rule holds for them - the text on a
+     * pastel is the theme's own full text colour, and that is AA in both themes. What the
+     * rule does not cover is text painted in a status colour on a card: a link in
+     * --primary-color, an error line, the amber sentence about a profile nobody defines
+     * any more. Measured against Home Assistant's own default light theme
+     * (tools/contrast.mjs), those sit between 2.4:1 and 4.3:1 - under AA, every one of
+     * them, at 12.5 to 17 px.
+     *
+     * So a colour that is going to be read is mixed half and half with the theme's own
+     * text colour. That number is the one at which every pair the panel draws clears
+     * 4.5:1 in both themes with room to spare - amber included, which is the one that
+     * fixes it: --warning-color is #ffa600 in Home Assistant's default light theme, the
+     * lightest of the five, and at 60 % of itself it read 4.21:1 on a card. Mixing towards
+     * --primary-text-color is what makes one rule work for both themes: it is near-black
+     * where the ground is light and near-white where the ground is dark, so the ink always
+     * moves away from the background and never towards it. The hue survives - a link is
+     * still blue, an error still red - which is the point of not simply painting them all
+     * in the text colour.
+     *
+     * Borders, dots, bars and fills keep the pure colour: they are not read, and 1.4.11
+     * asks 3:1 of them, which the unmixed colours meet.
+     */
+    --myhome-primary-ink: color-mix(in srgb, var(--myhome-primary) 50%, var(--myhome-text));
+    --myhome-error-ink: color-mix(in srgb, var(--myhome-error) 50%, var(--myhome-text));
+    --myhome-warning-ink: color-mix(in srgb, var(--myhome-warning) 50%, var(--myhome-text));
+    --myhome-success-ink: color-mix(in srgb, var(--myhome-success) 50%, var(--myhome-text));
+    --myhome-info-ink: color-mix(in srgb, var(--myhome-info) 50%, var(--myhome-text));
+    /* ...and the quiet grey of a neutral chip, which sits on the secondary background. */
+    --myhome-text-soft-ink: color-mix(in srgb, var(--myhome-text-soft) 50%, var(--myhome-text));
+
+    /*
+     * The edge of a field or of a choice, which is a UI component boundary and not a
+     * separator: 1.4.11 asks 3:1 of it. --divider-color is 0.12 alpha black in Home
+     * Assistant's light theme - 1.3:1 against a card, which is a box a low-vision reader
+     * cannot find. The dividers *between* rows go on using it, because a line that is
+     * only decoration is exempt and because making them darker would draw a grid where
+     * the design draws a list.
+     */
+    --myhome-field-border: color-mix(in srgb, var(--myhome-text-soft) 80%, var(--myhome-card));
 
     /*
      * The one surface that is not a theme colour, and deliberately so: the wizard's
@@ -81,7 +124,7 @@ export const themeStyles = css`
   }
 
   :host * :focus-visible {
-    outline: 2px solid var(--myhome-primary);
+    outline: 2px solid var(--myhome-primary-ink);
     outline-offset: 2px;
   }
 
@@ -123,20 +166,20 @@ export const buttonStyles = css`
 
   .cta.secondary {
     background: transparent;
-    border: 1px solid var(--myhome-primary);
-    color: var(--myhome-primary);
+    border: 1px solid var(--myhome-primary-ink);
+    color: var(--myhome-primary-ink);
   }
 
   .cta.text {
     background: transparent;
     border: none;
-    color: var(--myhome-primary);
+    color: var(--myhome-primary-ink);
     padding: 0 12px;
   }
 
   .cta.destructive {
     background: var(--myhome-error-strong);
-    color: var(--myhome-error);
+    color: var(--myhome-error-ink);
   }
 
   .cta[disabled] {
@@ -158,7 +201,7 @@ export const fieldStyles = css`
   .field {
     height: 44px;
     border-radius: 8px;
-    border: 1px solid var(--myhome-divider);
+    border: 1px solid var(--myhome-field-border);
     background: var(--myhome-card);
     color: var(--myhome-text);
     padding: 0 12px;

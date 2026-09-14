@@ -71,6 +71,17 @@ now and then. The two cards have addresses of their own — the panel routes
 `/myhome-calibration/cover/<unique id>` and `/myhome-calibration/profile/<name>` —
 so a card can be bookmarked or linked from a dashboard.
 
+**From the dialog**: the first screen of **Configure** ends with a line saying that
+profiles and covers can also be managed from the panel, and the word *panel* in it is
+a link straight to `/myhome-calibration`. It is the one route into the panel that
+needs neither the sidebar entry nor a typed address, and it is the route somebody who
+has just finished measuring a cover is already standing on.
+
+Whether that link opens in this tab or another is the frontend's own behaviour for a
+link inside a dialog and is not something this integration chooses. Either way the
+panel re-reads the gateway every time it is looked at again, so a measurement made in
+the dialog is on the screen without a reload.
+
 **One gateway or several**: the header carries a gateway selector only when more
 than one MyHOME gateway is configured. Switching gateway drops anything half-composed
 on the screen, because the covers it names belong to the gateway being left.

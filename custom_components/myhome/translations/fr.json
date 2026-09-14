@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuration de cette passerelle",
-        "description": "**Passerelle** : {gateway}\n\nC'est ici que la passerelle se configure et que les volets « simples » se calibrent - ceux dont Home Assistant doit estimer la position à partir des temps de course.\n\n**Ce que vous devez faire** : choisissez une option. Rien n'est écrit tant que rien n'est enregistré, ce qui est enregistré s'applique à la fermeture de cette boîte de dialogue, et aucun volet ne bouge avant qu'un écran ne l'annonce.",
+        "description": "**Passerelle** : {gateway}\n\nC'est ici que la passerelle se configure et que les volets « simples » se calibrent - ceux dont Home Assistant doit estimer la position à partir des temps de course.\n\nLes profils et les volets se gèrent aussi depuis le [panneau](/myhome-calibration).\n\n**Ce que vous devez faire** : choisissez une option. Rien n'est écrit tant que rien n'est enregistré, ce qui est enregistré s'applique à la fermeture de cette boîte de dialogue, et aucun volet ne bouge avant qu'un écran ne l'annonce.",
         "menu_options": {
           "calibrate": "Calibrer un volet",
           "profiles_covers": "Profils et volets",

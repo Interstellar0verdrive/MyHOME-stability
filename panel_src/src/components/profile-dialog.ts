@@ -74,13 +74,13 @@ export const dialogStyles = css`
     padding: 12px;
     min-height: 48px;
     cursor: pointer;
-    border: 1px solid var(--myhome-divider);
+    border: 1px solid var(--myhome-field-border);
     background: transparent;
     color: inherit;
   }
 
   .dialog .option.current {
-    border-color: var(--myhome-primary);
+    border-color: var(--myhome-primary-ink);
     box-shadow: inset 0 0 0 1px var(--myhome-primary);
     background: var(--myhome-primary-faint);
   }
@@ -98,7 +98,7 @@ export const dialogStyles = css`
 
   .dialog .option .tag {
     font-size: 12.5px;
-    color: var(--myhome-primary);
+    color: var(--myhome-primary-ink);
   }
 
   .dialog .option .meta {

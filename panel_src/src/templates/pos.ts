@@ -24,6 +24,7 @@ export const renderPos = (
     <div
       class="progress-track"
       role="progressbar"
+      aria-label=${progress.text || context.i18n.t("panel.screen.progress")}
       aria-valuemin="0"
       aria-valuemax="100"
       aria-valuenow=${Math.round(percent)}

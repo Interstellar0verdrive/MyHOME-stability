@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuração desta gateway",
-        "description": "**Gateway**: {gateway}\n\nÉ aqui que se configura a gateway e se calibram as persianas «simples», aquelas cuja posição o Home Assistant tem de estimar a partir dos tempos de percurso.\n\n**O que tem de fazer**: escolha uma opção. Enquanto nada for guardado nada é escrito, o que for guardado aplica-se quando esta caixa de diálogo for fechada, e nenhuma persiana se move antes de um ecrã o anunciar.",
+        "description": "**Gateway**: {gateway}\n\nÉ aqui que se configura a gateway e se calibram as persianas «simples», aquelas cuja posição o Home Assistant tem de estimar a partir dos tempos de percurso.\n\nOs perfis e as persianas também se gerem a partir do [painel](/myhome-calibration).\n\n**O que tem de fazer**: escolha uma opção. Enquanto nada for guardado nada é escrito, o que for guardado aplica-se quando esta caixa de diálogo for fechada, e nenhuma persiana se move antes de um ecrã o anunciar.",
         "menu_options": {
           "calibrate": "Calibrar uma persiana",
           "profiles_covers": "Perfis e persianas",

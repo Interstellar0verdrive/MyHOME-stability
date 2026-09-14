@@ -6,13 +6,21 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "node test/run.mjs",
+    "a11y": "node tools/a11y.mjs",
+    "keyboard": "node tools/keyboard.mjs",
+    "contrast": "node tools/contrast.mjs",
+    "socket": "node tools/socket.mjs"
   },
   "dependencies": {
     "lit": "3.3.3"
   },
   "devDependencies": {
+    "@types/node": "24.10.1",
+    "axe-core": "4.12.0",
     "esbuild": "0.28.2",
+    "jsdom": "27.0.1",
     "typescript": "5.9.3"
   }
 }

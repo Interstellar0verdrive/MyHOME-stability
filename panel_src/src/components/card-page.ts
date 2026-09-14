@@ -33,7 +33,7 @@ export const cardPageStyles = css`
     }
 
     h2:focus-visible {
-      outline: 2px solid var(--myhome-primary);
+      outline: 2px solid var(--myhome-primary-ink);
       outline-offset: 4px;
     }
 
@@ -55,6 +55,18 @@ export const cardPageStyles = css`
       font-size: 13px;
       color: var(--myhome-text-soft);
       line-height: 1.5;
+    }
+
+    /*
+     * A preview in the air: the numbers on the screen fade half a step and the region is
+     * marked busy. Nothing is removed and nothing moves - the answer being replaced is
+     * still the answer to almost the same question, and a table that vanished on every
+     * keystroke would be worse than a slightly old one.
+     */
+    table[aria-busy="true"],
+    .rows[aria-busy="true"] {
+      opacity: 0.55;
+      transition: opacity 120ms ease;
     }
 
     .rows {
@@ -114,7 +126,7 @@ export const cardPageStyles = css`
       border: none;
       border-radius: 8px;
       background: var(--myhome-primary-faint);
-      color: var(--myhome-primary);
+      color: var(--myhome-primary-ink);
       font: inherit;
       font-size: 14px;
       cursor: pointer;
@@ -126,7 +138,7 @@ export const cardPageStyles = css`
 
     .wide.destructive {
       background: var(--myhome-error-strong);
-      color: var(--myhome-error);
+      color: var(--myhome-error-ink);
     }
 
     .wide[disabled] {
@@ -212,13 +224,13 @@ export const cardPageStyles = css`
     }
 
     .field[aria-invalid="true"] {
-      border-color: var(--myhome-error);
+      border-color: var(--myhome-error-ink);
     }
 
     .field-error {
       margin: 2px 26px 0 0;
       font-size: 12.5px;
-      color: var(--myhome-error);
+      color: var(--myhome-error-ink);
       text-align: right;
     }
 
@@ -269,7 +281,7 @@ export const cardPageStyles = css`
     }
 
     a {
-      color: var(--myhome-primary);
+      color: var(--myhome-primary-ink);
     }
 
     .refusal {

@@ -67,6 +67,7 @@ import {
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
+import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
 import { DETAIL_KEYS, MyHomeCoverDetail, type DetailActions } from "./views/cover-detail";
@@ -90,6 +91,17 @@ const SNACK_MS = 7_000;
  * batch would come to. Long enough that typing "145" is one question and not three.
  */
 const PREVIEW_DEBOUNCE_MS = 400;
+
+/**
+ * The shortest gap between two reads caused by a *server push*.
+ *
+ * A push arrives after every write of every browser looking at this gateway, and two
+ * payloads have to be asked again when one does: the batch preview, while the review panel
+ * is open, and the open card, which a push says nothing about. On a house where something
+ * else writes often that was one round trip each per write, unthrottled. They are asked at
+ * most this often now, and always at least once - the follow-up is delayed, never dropped.
+ */
+const PUSH_FOLLOW_MS = 2_000;
 
 export class MyHomeCalibrationPanel extends LitElement {
   static override properties = {
@@ -116,6 +128,12 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _previewTimer: ReturnType<typeof setTimeout> | null = null;
   private _travelTimer: ReturnType<typeof setTimeout> | null = null;
   private _impactTimer: ReturnType<typeof setTimeout> | null = null;
+  private _followTimer: ReturnType<typeof setTimeout> | null = null;
+  private _followedAt = 0;
+  /** The queue `_listen` runs on, so that two callers can never open two subscriptions. */
+  private _listening: Promise<void> = Promise.resolve();
+  /** How many attempts are on that queue, waiting or in the air. */
+  private _subscribing = 0;
   /** Every preview answer but the last is thrown away: they arrive out of order. */
   private _previewSeq = 0;
 
@@ -131,6 +149,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     buttonStyles,
     srOnly,
     measuringBannerStyles,
+    skeletonStyles,
     stripStyles,
     css`
       .toolbar {
@@ -223,8 +242,22 @@ export class MyHomeCalibrationPanel extends LitElement {
         color: var(--myhome-text-soft);
       }
 
+      /*
+       * Home Assistant restarting, seen from here. The frontend draws its own bar for it,
+       * eventually and at the top of the window; this is the panel saying the same thing
+       * about the thing the user is looking at, in the place the measuring banner uses,
+       * so that "live" at the foot of the page is never a claim nobody is checking.
+       */
+      .offline {
+        display: block;
+        padding: 12px 16px;
+        background: var(--myhome-warning-pastel);
+        color: var(--myhome-text);
+        font-size: 14px;
+      }
+
       a {
-        color: var(--myhome-primary);
+        color: var(--myhome-primary-ink);
       }
     `,
   ];
@@ -244,6 +277,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     this._router.stop();
     window.removeEventListener("location-changed", this._onReturn);
     document.removeEventListener("visibilitychange", this._onReturn);
+    this._unwatchSocket();
     this._stopPolling();
     if (this._snackTimer) {
       clearTimeout(this._snackTimer);
@@ -260,6 +294,10 @@ export class MyHomeCalibrationPanel extends LitElement {
     if (this._impactTimer) {
       clearTimeout(this._impactTimer);
       this._impactTimer = null;
+    }
+    if (this._followTimer) {
+      clearTimeout(this._followTimer);
+      this._followTimer = null;
     }
     const unsubscribe = this._unsubscribeWs;
     this._unsubscribeWs = null;
@@ -315,12 +353,59 @@ export class MyHomeCalibrationPanel extends LitElement {
       return;
     }
     this._started = true;
+    this._watchSocket();
     await this._loadTexts();
     await this._refresh();
     // A deep link is answered only now: `cover_detail` needs a gateway, and until the
     // overview has named one there is nothing to ask it about.
     await this._loadDetail();
     await this._listen();
+  }
+
+  /**
+   * Home Assistant restarting, and coming back.
+   *
+   * The socket reconnects on its own and replays its subscriptions, so nothing here is
+   * needed to keep the model arriving. What it is for is honesty and freshness: the foot
+   * of the page said "live" throughout a restart, and a panel that had fallen back to
+   * polling never tried the subscription again. On `ready` the gateway is read once - the
+   * replayed subscription pushes an overview too, and one extra read is cheaper than a
+   * screen that is right only if a private replay behaviour is.
+   */
+  private _watchSocket(): void {
+    const connection = this.hass?.connection;
+    connection?.addEventListener?.("disconnected", this._onSocketDown);
+    connection?.addEventListener?.("ready", this._onSocketReady);
+  }
+
+  private _unwatchSocket(): void {
+    const connection = this.hass?.connection;
+    connection?.removeEventListener?.("disconnected", this._onSocketDown);
+    connection?.removeEventListener?.("ready", this._onSocketReady);
+  }
+
+  private _onSocketDown = (): void => {
+    if (this._store.state.connection === "offline") {
+      return;
+    }
+    this._store.set({ connection: "offline" });
+    this._store.announce(this._i18n.t("panel.error.no_connection"));
+  };
+
+  private _onSocketReady = (): void => void this._afterReconnect();
+
+  private async _afterReconnect(): Promise<void> {
+    if (!this._started) {
+      return;
+    }
+    this._store.set({ connection: this._unsubscribeWs ? "live" : "polling" });
+    await this._refresh();
+    // `_listen` is queued and so is safe to call twice; this only keeps a socket that
+    // flaps from buying a round trip for every flap.
+    if (!this._unsubscribeWs && !this._subscribing) {
+      await this._listen();
+    }
+    this._store.announce(this._i18n.t("panel.common.reconnected"));
   }
 
   private async _loadTexts(): Promise<void> {
@@ -353,13 +438,42 @@ export class MyHomeCalibrationPanel extends LitElement {
    * `unknown_command` is caught: an installation without it falls back to asking every
    * thirty seconds, and says so at the foot of the page.
    */
-  private async _listen(): Promise<void> {
+  private _listen(): Promise<void> {
+    // **One at a time, whoever asks.** Giving the old subscription back before opening a
+    // new one is not enough on its own: `subscribe` is a round trip, and two callers that
+    // reach it before either has stored its answer both get a live subscription, of which
+    // only the last is ever unsubscribed. That is not a hypothetical - "Try again" pressed
+    // twice, and a socket that drops and comes back twice while the panel is polling, both
+    // do it - and the leak is permanent: a subscription nobody holds the handle of goes on
+    // pushing a whole overview at every write for the life of the tab. So the attempts are
+    // queued, and each one still gives back whatever the one before it left.
+    this._subscribing += 1;
+    const next = this._listening
+      .then(() => this._subscribeOnce())
+      .finally(() => {
+        this._subscribing -= 1;
+      });
+    this._listening = next.catch(() => undefined);
+    return next;
+  }
+
+  private async _subscribeOnce(): Promise<void> {
+    const previous = this._unsubscribeWs;
+    this._unsubscribeWs = null;
+    await previous?.().catch(() => undefined);
     try {
-      this._unsubscribeWs = await subscribe(
+      const unsubscribe = await subscribe(
         this.hass.connection,
         this._store.state.entryId,
         (event: CalibrationEvent) => this._onEvent(event),
       );
+      if (!this.isConnected) {
+        // The panel was navigated away from while this was in the air, and
+        // `disconnectedCallback` has already given back the nothing there was to give.
+        void unsubscribe().catch(() => undefined);
+        return;
+      }
+      this._unsubscribeWs = unsubscribe;
       this._store.set({ connection: "live" });
       this._stopPolling();
     } catch (error) {
@@ -380,15 +494,10 @@ export class MyHomeCalibrationPanel extends LitElement {
       // is halfway through composing here. What the new model *can* change is what those
       // assignments would come to, so the preview is asked again.
       this._store.setOverview(event.overview);
-      if (this._store.state.review) {
-        this._schedulePreview();
-      }
-      // The card is a second payload and a push says nothing about it. Re-read it while
-      // it is on the screen, so a measurement finished in the dialog - or a change made
-      // in another tab - reaches the rows that are being looked at.
-      if (this._store.state.detail.for) {
-        void this._loadDetail();
-      }
+      // The preview and the open card are second payloads a push says nothing about, so
+      // both are asked again - through one throttle, because a gateway somebody else is
+      // writing to can push faster than a round trip takes.
+      this._followPush();
       return;
     }
     if (event.type === "measuring") {
@@ -416,6 +525,30 @@ export class MyHomeCalibrationPanel extends LitElement {
         );
       }
     }
+  }
+
+  /**
+   * The two reads a push implies, at most one burst every `PUSH_FOLLOW_MS`.
+   *
+   * Delayed and never dropped: while a follow-up is already waiting, a second push is
+   * answered by the one that is coming, and it reads the state as it will be then rather
+   * than as it is now.
+   */
+  private _followPush(): void {
+    if (this._followTimer) {
+      return;
+    }
+    const wait = Math.max(0, PUSH_FOLLOW_MS - (Date.now() - this._followedAt));
+    this._followTimer = setTimeout(() => {
+      this._followTimer = null;
+      this._followedAt = Date.now();
+      if (this._store.state.review) {
+        this._schedulePreview();
+      }
+      if (this._store.state.detail.for) {
+        void this._loadDetail();
+      }
+    }, wait);
   }
 
   private _startPolling(): void {
@@ -1431,13 +1564,30 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
   }
 
+  /**
+   * "Try again", which re-reads the gateway **and** asks for live updates again.
+   *
+   * The subscription is attempted once, at boot. A panel that started while the backend
+   * was reloading caught the refusal, fell back to the thirty-second poll, and stayed
+   * there for the life of the tab - the one button on the screen that says "try again"
+   * only ever retried the half that had nothing to do with it.
+   */
+  private async _retry(): Promise<void> {
+    await this._refresh();
+    if (this._store.state.connection !== "live") {
+      await this._listen();
+    }
+  }
+
   private _renderView(): TemplateResult {
     const state = this._store.state;
 
     if (state.status === "loading") {
-      return html`<div class="card waiting" role="status">
-        ${this._i18n.t("panel.common.loading")}
-      </div>`;
+      // The shape of the screen that is coming, not a sentence where it will be: a page
+      // that grows its content under the reader is the thing a slow network must not do.
+      return state.route.view === "cover" || state.route.view === "profile"
+        ? cardSkeleton(this._i18n)
+        : overviewSkeleton(this._i18n);
     }
     if (state.status === "error" || !state.overview) {
       const error = state.error;
@@ -1447,7 +1597,7 @@ export class MyHomeCalibrationPanel extends LitElement {
         </div>
         <div class="soft">${error ? `${error.code}: ${error.message}` : ""}</div>
         <div class="soft">
-          <button class="cta text" type="button" @click=${() => void this._refresh()}>
+          <button class="cta text" type="button" @click=${() => void this._retry()}>
             ${this._i18n.t("panel.common.action.retry")}
           </button>
           <a href=${FLOW_URL}>${this._i18n.t("panel.common.action.configure")}</a>
@@ -1490,11 +1640,23 @@ export class MyHomeCalibrationPanel extends LitElement {
     const measuring = state.overview?.measuring ?? null;
     const routed = state.route.view !== "overview";
     return html`
-      <div class="toolbar">
-        ${this._renderMenuButton()} ${this._renderBackButton()}
-        <h1 class="title">${title}</h1>
-        ${this._renderGatewayPicker()}
-      </div>
+      <!--
+        One named landmark for everything the panel draws, and deliberately not "main" or
+        "banner": a custom panel is rendered inside Home Assistant's own document and the
+        shell owns those. A region named by the page's own heading is a landmark a reader
+        can jump to and one that cannot collide with the host's.
+      -->
+      <div class="page" role="region" aria-labelledby="panel-title">
+        <div class="toolbar">
+          ${this._renderMenuButton()} ${this._renderBackButton()}
+          <h1 class="title" id="panel-title">${title}</h1>
+          ${this._renderGatewayPicker()}
+        </div>
+      ${state.connection === "offline"
+        ? html`<div class="offline" role="status">
+            ${this._i18n.t("panel.error.no_connection")}
+          </div>`
+        : nothing}
       ${measuring ? measuringBanner(this._i18n, measuring.name, FLOW_URL) : nothing}
       <div class="content">
         ${liveRegion(state.announce)} ${this._renderView()}
@@ -1515,6 +1677,7 @@ export class MyHomeCalibrationPanel extends LitElement {
             state.snack.undoToken ? () => void this._undo() : null,
           )
         : nothing}
+      </div>
     `;
   }
 

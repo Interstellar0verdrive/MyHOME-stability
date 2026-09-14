@@ -54,7 +54,7 @@ export const templateStyles = css`
 
   .outcome-icon.saved {
     background: var(--myhome-success-pastel);
-    color: var(--myhome-success);
+    color: var(--myhome-success-ink);
   }
 
   .outcome-icon.saved::before {
@@ -63,7 +63,7 @@ export const templateStyles = css`
 
   .outcome-icon.cancelled {
     background: var(--myhome-error-pastel);
-    color: var(--myhome-error);
+    color: var(--myhome-error-ink);
   }
 
   .outcome-icon.cancelled::before {
@@ -72,7 +72,7 @@ export const templateStyles = css`
 
   .outcome-icon.expired {
     background: var(--myhome-warning-pastel);
-    color: var(--myhome-warning);
+    color: var(--myhome-warning-ink);
   }
 
   .outcome-icon.expired::before {
@@ -81,7 +81,7 @@ export const templateStyles = css`
 
   .outcome-icon.problem {
     background: var(--myhome-error-pastel);
-    color: var(--myhome-error);
+    color: var(--myhome-error-ink);
   }
 
   .outcome-icon.problem::before {
@@ -164,12 +164,12 @@ export const templateStyles = css`
     min-height: 56px;
     cursor: pointer;
     color: inherit;
-    border: 1px solid var(--myhome-divider);
+    border: 1px solid var(--myhome-field-border);
     background: var(--myhome-card);
   }
 
   .option[aria-pressed="true"] {
-    border-color: var(--myhome-primary);
+    border-color: var(--myhome-primary-ink);
     box-shadow: inset 0 0 0 1px var(--myhome-primary);
     background: var(--myhome-primary-faint);
   }
@@ -222,7 +222,7 @@ export const templateStyles = css`
 
   /* A motor that is running says so in the warning colour, and keeps saying it. */
   .live-row .value.moving {
-    color: var(--myhome-warning);
+    color: var(--myhome-warning-ink);
     animation: myhome-pulse 1.2s ease-in-out infinite;
   }
 
@@ -326,7 +326,7 @@ export const templateStyles = css`
     min-width: 0;
     height: 56px;
     border-radius: 10px;
-    border: 1px solid var(--myhome-divider);
+    border: 1px solid var(--myhome-field-border);
     background: var(--myhome-card);
     color: inherit;
     padding: 0 14px;
@@ -359,7 +359,7 @@ export const templateStyles = css`
   .reading .error {
     margin: 8px 0 0;
     font-size: 12.5px;
-    color: var(--myhome-error);
+    color: var(--myhome-error-ink);
     line-height: 1.5;
   }
 

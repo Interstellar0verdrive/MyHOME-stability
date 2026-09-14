@@ -26,7 +26,7 @@ export const originChipStyles = css`
     align-items: center;
     gap: 5px;
     background: var(--myhome-background-soft);
-    color: var(--myhome-text-soft);
+    color: var(--myhome-text-soft-ink);
   }
 
   .chip.measured {

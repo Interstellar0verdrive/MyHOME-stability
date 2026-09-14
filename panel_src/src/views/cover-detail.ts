@@ -33,6 +33,7 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { focusWhenPainted } from "../engine/a11y";
 import { DECIMALS, ROLL_KEYS, TABLE_KEYS } from "../engine/assign";
 import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
+import { cardSkeleton, skeletonStyles } from "../components/skeleton";
 import { I18n } from "../engine/i18n";
 import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
@@ -94,6 +95,7 @@ export class MyHomeCoverDetail extends LitElement {
     fieldStyles,
     originChipStyles,
     cardPageStyles,
+    skeletonStyles,
   ];
 
   override connectedCallback(): void {
@@ -202,7 +204,7 @@ export class MyHomeCoverDetail extends LitElement {
   protected override render(): TemplateResult {
     const detail = this.state.detail;
     if (detail.loading) {
-      return html`<div class="card" role="status">${this.i18n.t("panel.common.loading")}</div>`;
+      return cardSkeleton(this.i18n);
     }
     if (!detail.answer) {
       return html`<div class="card">
@@ -486,7 +488,7 @@ export class MyHomeCoverDetail extends LitElement {
         ? html`<p class="field-error">${this._problem("height", item.problem)}</p>`
         : nothing}
       ${rows.length > 0
-        ? html`<table>
+        ? html`<table aria-busy=${this.state.detail.previewing ? "true" : "false"}>
             <thead>
               <tr>
                 <th class="what"></th>

@@ -14,6 +14,10 @@
     "useDefineForClassFields": false,
     "experimentalDecorators": true,
     "skipLibCheck": true,
+    // The panel runs in a browser and nowhere else. Without this, every @types/* package
+    // in node_modules is ambient - and once the tests brought in @types/node, the sources
+    // would have type-checked against globals they can never have.
+    "types": [],
     "isolatedModules": true,
     "noEmit": true,
     "forceConsistentCasingInFileNames": true

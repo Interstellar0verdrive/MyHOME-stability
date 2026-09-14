@@ -25,12 +25,19 @@
 //
 // A screen never acts. It renders a model and fires `myhome-screen-action` with the action
 // token the model gave it; what that token means belongs to whoever built the model.
+//
+// **No landmark is claimed here.** The two columns used to be a `<main>`, which reads as a
+// layout element and is not one: a custom panel is rendered inside Home Assistant's own
+// document, the shell owns whatever `main` and `banner` that document has, and a second
+// `main` inside a panel is a page with two of them. The one landmark the panel declares is
+// the named region in `main.ts` that holds everything it draws.
 
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { styleMap } from "lit/directives/style-map.js";
 
 import { I18n } from "./i18n";
 import { renderMarkdown } from "./markdown";
+import { drawingStyle, type ScreenImage } from "./safe-style";
 import { buttonStyles, cardStyles, fieldStyles, srOnly, themeStyles } from "./theme";
 import { renderLettura } from "../templates/lettura";
 import { renderScelta } from "../templates/scelta";
@@ -120,7 +127,7 @@ export interface ScreenModel {
   title: string;
   /** Markdown, with any leading illustration already lifted into `image`. */
   body?: string;
-  image?: { src: string; alt: string; size?: string; pos?: string };
+  image?: ScreenImage;
   /** The handoff's "testo nuovo - da tradurre" badge. */
   newText?: boolean;
   primary?: ScreenAction;
@@ -132,37 +139,6 @@ export interface ScreenModel {
   summary?: ScreenSummary;
   outcome?: "saved" | "cancelled" | "expired" | "problem";
 }
-
-// The drawing is the one place a step's model reaches CSS, and CSS built by joining
-// strings is CSS somebody else can add declarations to: a `src` carrying `");` would turn
-// the illustration slot into any rule it liked, including a full-screen overlay and a
-// request to a host nobody chose. So the three values are checked here, at the point of
-// use, rather than trusted from wherever the model was built - `splitLeadingImage` already
-// refuses an image from outside `/myhome_static/`, and this says the same thing again where
-// it cannot be skipped. They are then set through `styleMap`, which writes one property at
-// a time and cannot grow a second declaration.
-
-/** A path this integration serves, and nothing else: no scheme, no host, no quoting. */
-const SAFE_SRC = /^\/myhome_static\/[A-Za-z0-9._~\-/]+$/;
-/** ...and no climbing back out of it with dot segments. */
-const DOT_SEGMENT = /(^|\/)\.\.?(\/|$)/;
-/** `background-size` / `background-position`: lengths, percentages and the CSS keywords. */
-const SAFE_VALUE = /^[A-Za-z0-9 %.,\-]+$/;
-
-const drawingStyle = (
-  image: NonNullable<ScreenModel["image"]>,
-): Record<string, string> | null => {
-  if (!SAFE_SRC.test(image.src) || DOT_SEGMENT.test(image.src)) {
-    return null;
-  }
-  const size = image.size && SAFE_VALUE.test(image.size) ? image.size : "100% auto";
-  const position = image.pos && SAFE_VALUE.test(image.pos) ? image.pos : "50% 60%";
-  return {
-    backgroundImage: `url("${image.src}")`,
-    backgroundSize: size,
-    backgroundPosition: position,
-  };
-};
 
 /** What a template is handed besides its model. */
 export interface ScreenContext {
@@ -207,7 +183,7 @@ export class MyHomeScreen extends LitElement {
         position: relative;
       }
 
-      main {
+      .pane {
         flex: 1;
         padding: 16px 16px 230px;
       }
@@ -245,7 +221,7 @@ export class MyHomeScreen extends LitElement {
           max-width: 100%;
         }
 
-        main {
+        .pane {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 400px;
           gap: 0 44px;
@@ -263,7 +239,7 @@ export class MyHomeScreen extends LitElement {
         }
 
         /* The pos template has no operative column: one centred column at every width. */
-        main.single {
+        .pane.single {
           display: block;
           max-width: 560px;
         }
@@ -357,7 +333,7 @@ export class MyHomeScreen extends LitElement {
     const single = model.model === "pos";
     const drawing = model.image ? drawingStyle(model.image) : null;
     return html`<div class="screen">
-      <main class=${single ? "single" : ""}>
+      <div class="pane ${single ? "single" : ""}">
         <div class="text-column">
           ${model.phase
             ? html`<p class="phase">
@@ -388,7 +364,7 @@ export class MyHomeScreen extends LitElement {
         <div class="right">
           ${this._renderOperative(model, context)} ${this._renderFooter(model, context)}
         </div>
-      </main>
+      </div>
     </div>`;
   }
 }

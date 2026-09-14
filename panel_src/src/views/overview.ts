@@ -27,7 +27,13 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 
 import { FocusTrap } from "../engine/a11y";
-import { effectiveProfile, movedTo, orderedCovers, pendingFor } from "../engine/assign";
+import {
+  appendedToGroup,
+  effectiveProfile,
+  movedTo,
+  orderedCovers,
+  pendingFor,
+} from "../engine/assign";
 import { DragController, flipPlay, flipStart, type DropTarget } from "../engine/dnd";
 import { I18n } from "../engine/i18n";
 import { renderMarkdown } from "../engine/markdown";
@@ -274,6 +280,17 @@ export class MyHomeOverview extends LitElement {
         margin-bottom: 96px;
       }
 
+      /*
+       * While a shutter is armed every card is collapsed to a 48 px title and every title
+       * is a target, so the strip saying "tap the destination" must not be drawn on top of
+       * one. Ninety-six pixels is enough for every other strip and not for this one, which
+       * wraps to two lines on a phone. The list is being rebuilt at that moment anyway -
+       * seven cards becoming seven titles - so the extra room costs no jump anybody sees.
+       */
+      .groups.armed {
+        margin-bottom: 120px;
+      }
+
       /* The label that follows the pointer. Positioned by the drag, never by Lit. */
       .drag-ghost {
         position: fixed;
@@ -283,7 +300,7 @@ export class MyHomeOverview extends LitElement {
         pointer-events: none;
         background: var(--myhome-card);
         color: var(--myhome-text);
-        border: 1px solid var(--myhome-primary);
+        border: 1px solid var(--myhome-primary-ink);
         border-radius: 8px;
         box-shadow: var(--myhome-shadow);
         padding: 10px 14px;
@@ -299,11 +316,13 @@ export class MyHomeOverview extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener("keydown", this._onKey);
+    this._narrowQuery?.addEventListener("change", this._onWidth);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._onKey);
+    this._narrowQuery?.removeEventListener("change", this._onWidth);
     // A drag that outlived its view would go on hit-testing a shadow root nothing renders.
     this._drag.stop();
     this._trap.release();
@@ -340,6 +359,18 @@ export class MyHomeOverview extends LitElement {
    * are about pixels that exist, and they can only be measured after Lit has painted.
    */
   protected override updated(changed: PropertyValues): void {
+    // A measurement can start while a finger is still down. `main.ts` drops `state.drag`
+    // the moment the event arrives, but the controller is a different object and would go
+    // on moving its ghost until the finger came up - and nothing would have been said. The
+    // flight is given back here, where the lock is first *drawn*, and the same call kills a
+    // long press that would otherwise arm a shutter nobody may move.
+    if (this._locked) {
+      const flying = this._drag.dragging !== null;
+      this._drag.stop();
+      if (flying) {
+        this.actions.announce(this.i18n.t("panel.assign.announce.drag_cancelled"));
+      }
+    }
     if (changed.has("state")) {
       const before = changed.get("state") as PanelState | undefined;
       this._manageFocus(before);
@@ -385,8 +416,15 @@ export class MyHomeOverview extends LitElement {
       this._returnTo = null;
       this._returnToRow = null;
       requestAnimationFrame(() => {
+        // Walked rather than selected. A unique id is `00:03:50:aa:bb:cc-2-81`, which needs
+        // escaping before it can go inside an attribute selector - and `CSS.escape` is a
+        // global this file would then be depending on, inside a callback whose exception
+        // nobody catches and whose only symptom is focus quietly landing on the document.
+        // Comparing the attribute needs no global and cannot throw.
         const again = row
-          ? this.renderRoot.querySelector<HTMLElement>(`[data-row="${CSS.escape(row)}"] .handle`)
+          ? [...this.renderRoot.querySelectorAll<HTMLElement>("[data-row]")]
+              .find((element) => element.getAttribute("data-row") === row)
+              ?.querySelector<HTMLElement>(".handle")
           : null;
         const target = again ?? (back?.isConnected ? back : null);
         target?.focus();
@@ -416,9 +454,21 @@ export class MyHomeOverview extends LitElement {
     return this._overview?.measuring != null || this.state.applying;
   }
 
-  /** Below 600 px the gesture is press-and-tap: no drag, and the handles are not drawn. */
+  /**
+   * Below 600 px the gesture is press-and-tap: no drag, and the handles are not drawn.
+   *
+   * The query is kept and listened to rather than asked at render time. A window dragged
+   * across 600 px changes what the CSS draws immediately and what the gestures do only at
+   * the next state change, which left the two disagreeing - a handle back on the screen
+   * that still armed a long press, or gone from it while a drag was still the way in.
+   */
+  private _narrowQuery: MediaQueryList | null =
+    typeof matchMedia === "function" ? matchMedia("(max-width: 599px)") : null;
+
+  private _onWidth = (): void => this.requestUpdate();
+
   private get _narrow(): boolean {
-    return typeof matchMedia === "function" && matchMedia("(max-width: 599px)").matches;
+    return this._narrowQuery?.matches ?? false;
   }
 
   private _cover(uniqueId: string): CoverRow | undefined {
@@ -557,6 +607,32 @@ export class MyHomeOverview extends LitElement {
   private _onGrab = (cover: CoverRow, event: PointerEvent): void => {
     this._drag.press(cover.unique_id, event);
   };
+
+  /**
+   * A tap or a keyboard assignment lands at the end of the group it was sent to.
+   *
+   * While nothing has been dragged there is no local order and the batch carries none,
+   * which the server already reads as "append" (contract §9.1). Once a drag has set one,
+   * the batch carries the whole gateway's list and the shutter would otherwise keep the
+   * place it had in it - so the appending is written into the list instead. Called before
+   * the assignment, because the destination group is read out of the pending changes as
+   * they are now.
+   */
+  private _appendAtEnd(cover: CoverRow, to: string | null): void {
+    if (this.state.order === null || to === (cover.profile ?? null)) {
+      return;
+    }
+    const covers = this._covers;
+    this.actions.setOrder(
+      appendedToGroup(
+        covers.map((row) => row.unique_id),
+        cover.unique_id,
+        covers
+          .filter((row) => effectiveProfile(row, this.state.pending) === to)
+          .map((row) => row.unique_id),
+      ),
+    );
+  }
 
   /** A press on the row's body only ever arms the phone's long press. */
   private _onRowPress = (cover: CoverRow, event: PointerEvent): void => {
@@ -707,6 +783,7 @@ export class MyHomeOverview extends LitElement {
       current: effectiveProfile(cover, this.state.pending),
       onPick: (profile) => {
         this._beforeMove();
+        this._appendAtEnd(cover, profile);
         this.actions.assign(cover, profile);
       },
       onClose: () => this.actions.dialog(null),
@@ -724,6 +801,7 @@ export class MyHomeOverview extends LitElement {
       covers: new Map(overview.covers.map((cover) => [cover.unique_id, cover])),
       profiles: new Map(overview.profiles.map((profile) => [profile.name, profile])),
       preview: this.state.preview,
+      previewing: this.state.previewing,
       heights: this.state.heights,
       forced: this.state.heightsForced,
       showAll: this.state.showAll,
@@ -748,9 +826,18 @@ export class MyHomeOverview extends LitElement {
       return html`<p>${this.i18n.t("panel.common.loading")}</p>`;
     }
     if (overview.no_basic_covers) {
-      return html`<div class="card notice">
-        ${renderMarkdown(this.i18n.t("panel.overview.no_basic_covers"))}
-      </div>`;
+      // A gateway whose covers all report their own position has no travel model to
+      // calibrate, so this is not an empty list waiting to fill: it is the answer. It is
+      // drawn as the welcome is - a heading, the sentence, and the way to the dialog for
+      // everything else this integration does - rather than as a notice above a list that
+      // is never coming.
+      return html`<section class="card welcome">
+        <h2>${this.i18n.t("panel.overview.no_basic_covers_title")}</h2>
+        <div>${renderMarkdown(this.i18n.t("panel.overview.no_basic_covers"))}</div>
+        <a class="cta secondary" href=${FLOW_URL} title=${this.i18n.t("panel.common.opens_configure")}
+          >${this.i18n.t("panel.common.action.configure")}</a
+        >
+      </section>`;
     }
     // `profiles` carries every name defined *or* followed, so an empty list really is an
     // installation where nothing has ever been measured.
@@ -779,7 +866,7 @@ export class MyHomeOverview extends LitElement {
               </button>
             </div>
           </div>`
-        : html`<div class="groups">
+        : html`<div class="groups ${this.state.armed !== null ? "armed" : ""}">
             ${groups.map((group) => {
               const key = groupAttr(group.key);
               const insert = drag?.insert ?? null;
@@ -807,6 +894,7 @@ export class MyHomeOverview extends LitElement {
                   const armed = this.state.armed ? this._cover(this.state.armed) : undefined;
                   if (armed) {
                     this._beforeMove();
+                    this._appendAtEnd(armed, target);
                     this.actions.assign(armed, target);
                   }
                 },

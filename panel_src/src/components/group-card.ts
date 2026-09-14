@@ -85,7 +85,7 @@ export const groupCardStyles = css`
   .group-head h2 button {
     border: none;
     background: transparent;
-    color: var(--myhome-primary);
+    color: var(--myhome-primary-ink);
     font: inherit;
     cursor: pointer;
     padding: 0;
@@ -110,7 +110,7 @@ export const groupCardStyles = css`
   }
 
   .group-head .meta.warn {
-    color: var(--myhome-warning);
+    color: var(--myhome-warning-ink);
   }
 
   .group-body {
@@ -132,7 +132,7 @@ export const groupCardStyles = css`
     margin: 0 8px;
     height: 3px;
     border-radius: 2px;
-    background: var(--myhome-primary);
+    background: var(--myhome-primary-ink);
     pointer-events: none;
   }
 
@@ -150,11 +150,11 @@ export const groupCardStyles = css`
   }
 
   .group .over {
-    border: 2px solid var(--myhome-primary);
+    border: 2px solid var(--myhome-primary-ink);
   }
 
   .group .armed-target {
-    border: 2px dashed var(--myhome-primary);
+    border: 2px dashed var(--myhome-primary-ink);
   }
 
   /* Collapsed: the card is its own heading, and the heading is the target. */

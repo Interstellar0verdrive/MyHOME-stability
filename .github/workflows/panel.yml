@@ -37,6 +37,32 @@ jobs:
         working-directory: panel_src
         run: npm run check
 
+      - name: Test
+        working-directory: panel_src
+        # The pure half of the panel under `node --test`: the pending model, the
+        # sentences, the router, the Markdown renderer, the illustration check and
+        # the options-flow opener. No browser and no new dependency - the runner
+        # compiles each test with the esbuild the build already uses. The views are
+        # walked by a person in `panel_src/dev/harness.html`; that boundary is the
+        # handoff's open point and is stated there.
+        run: npm test
+
+      - name: Accessibility
+        working-directory: panel_src
+        # axe-core over the committed bundle in jsdom, in sixteen states; the flows
+        # walked with the keyboard; and the contrast of every coloured surface in
+        # both themes, worked out from the documented defaults of the theme
+        # variables. All three are dev-only and none of them needs a browser.
+        run: npm run a11y && npm run keyboard && npm run contrast
+
+      - name: Live updates
+        working-directory: panel_src
+        # The committed bundle against a socket that drops, comes back and flaps,
+        # counting how many subscriptions the panel is holding. A second one is
+        # invisible from the screen and permanent, so it is the one thing here that
+        # no screenshot and no person at a browser would ever catch.
+        run: npm run socket
+
       - name: Build
         working-directory: panel_src
         run: npm run build

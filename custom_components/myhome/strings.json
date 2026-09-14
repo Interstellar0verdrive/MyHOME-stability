@@ -70,7 +70,7 @@
     "step": {
       "init": {
         "title": "Configuring this gateway",
-        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\n**What you have to do**: choose an option. Nothing is written until something is saved, what is saved is applied when this dialog is closed, and no cover moves before a screen says it is about to.",
+        "description": "**Gateway**: {gateway}\n\nThis is where the gateway is configured and where “basic” covers are calibrated - the ones whose position Home Assistant has to estimate from their run times.\n\nProfiles and covers can also be managed from the [panel](/myhome-calibration).\n\n**What you have to do**: choose an option. Nothing is written until something is saved, what is saved is applied when this dialog is closed, and no cover moves before a screen says it is about to.",
         "menu_options": {
           "calibrate": "Calibrate a cover",
           "profiles_covers": "Profiles and covers",
@@ -715,6 +715,8 @@
       "all_rooms": "All rooms",
       "opens_configure": "This opens the Configure dialog. The panel refreshes on its own when it closes.",
       "not_loaded": "This gateway is not loaded, so there is nothing to read here yet.",
+      "required": "This field cannot be left empty.",
+      "reconnected": "Home Assistant is answering again: this page has just been read afresh.",
       "not_yet": "This screen arrives in a later version. Until then “Configure” does everything it will do.",
       "polling": "Live updates are not available on this version: the page refreshes on its own every 30 seconds.",
       "action": {
@@ -773,6 +775,7 @@
         "origin_adjusted": "Adjusted"
       },
       "no_basic_covers": "Every cover of this gateway reports its own position, so there is no travel model to calibrate and nothing for this panel to do.",
+      "no_basic_covers_title": "Nothing to calibrate on this gateway",
       "no_results": "No cover matches this search.",
       "action": {
         "clear_filters": "Clear the search and the filter"
@@ -1003,6 +1006,7 @@
       "not_in_this_version": "This step belongs to the guided calibration, which moves into the panel in a later version.",
       "motor": "Motor",
       "position": "Estimated position",
+      "progress": "Positioning progress",
       "completed": "Completed"
     },
     "error": {
