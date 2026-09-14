@@ -115,7 +115,19 @@ from .validate import derive_cover_from_profile
 
 # A profile name may look like a YAML key, because it is one: the user can move a
 # guided profile into `cover_profiles:` by hand and nothing else has to change.
-PROFILE_NAME_PATTERN = r"^[A-Za-z0-9_]+$"
+#
+# ...and it is no longer than this. The length is part of the pattern rather than a
+# second check beside it, so that the two readers of the pattern - the guided dialog
+# (`calibration_flow._NAME_RE`) and the panel (`panel_write._refuse_a_bad_name`) - cannot
+# come to disagree about what a usable name is: the panel must never refuse a name the
+# dialog accepts, and the one way to guarantee that is for there to be one rule.
+#
+# Sixty-four characters is longer than any name a person types and short enough that the
+# string is bounded everywhere it ends up: a key of the `.storage` file, a segment of the
+# panel's own hash route, a `{profile}` in a refusal, a heading on a card. Without it the
+# only bound was the WebSocket frame limit, which is not a bound anybody chose.
+PROFILE_NAME_MAX_LENGTH = 64
+PROFILE_NAME_PATTERN = rf"^[A-Za-z0-9_]{{1,{PROFILE_NAME_MAX_LENGTH}}}$"
 
 # One store per config entry, version 1. The entry id is in the key because a house
 # with two gateways has two sets of shutters and one set of files.
@@ -1180,6 +1192,7 @@ def describe_profile(name: str, data: Mapping[str, Any]) -> str:
 
 
 __all__ = [
+    "PROFILE_NAME_MAX_LENGTH",
     "PROFILE_NAME_PATTERN",
     "STORAGE_MINOR_VERSION",
     "STORAGE_VERSION",

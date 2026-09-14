@@ -687,7 +687,7 @@
       "not_a_number": "Schrijf een getal. Decimalen mogen met een komma of met een punt: 198,5 of 198.5.",
       "out_of_range": "Het getal ligt buiten het bereik dat dit veld aanvaardt.",
       "above_the_travel": "Dat is meer dan de volledige loopafstand van dit pantser. Meet vanaf het punt waar de onderrand rust wanneer het rolluik dicht is, niet vanaf de vloer.",
-      "invalid_name": "Een profielnaam mag alleen letters, cijfers en lage streepjes bevatten: geen spaties, geen accenten, geen koppeltekens."
+      "invalid_name": "Een profielnaam mag alleen letters, cijfers en lage streepjes bevatten, ten hoogste 64: geen spaties, geen accenten, geen koppeltekens."
     }
   },
   "selector": {
@@ -953,7 +953,7 @@
       "rename": {
         "title": "Het profiel hernoemen",
         "field": "Nieuwe naam van het profiel",
-        "rule": "Alleen letters, cijfers en lage streepjes: geen spaties, geen accenten — de naam is ook een sleutel in het configuratiebestand. De naamswijziging volgt elk rolluik dat het profiel gebruikt.",
+        "rule": "Alleen letters, cijfers en lage streepjes, ten hoogste 64: geen spaties, geen accenten — de naam is ook een sleutel in het configuratiebestand. De naamswijziging volgt elk rolluik dat het profiel gebruikt.",
         "action": "Hernoemen"
       },
       "delete": {
@@ -1144,7 +1144,7 @@
       "message": "Rolluiken waarvan de loopafstand van het pantser onbekend is ({count}): {covers}. Een profiel kan alleen worden omgerekend naar een rolluik waarvan de loopafstand bekend is."
     },
     "invalid_name": {
-      "message": "“{profile}” is geen bruikbare profielnaam: alleen letters, cijfers en lage streepjes, geen spaties en geen accenten."
+      "message": "“{profile}” is geen bruikbare profielnaam: alleen letters, cijfers en lage streepjes, ten hoogste 64, geen spaties en geen accenten."
     },
     "name_in_use": {
       "message": "Er bestaat al een profiel dat “{profile}” heet."

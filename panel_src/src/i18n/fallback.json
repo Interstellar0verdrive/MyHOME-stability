@@ -170,7 +170,7 @@
   "panel.profile.reference_travel": "Reference travel",
   "panel.profile.rename.action": "Rename",
   "panel.profile.rename.field": "New name of the profile",
-  "panel.profile.rename.rule": "Letters, digits and underscores only: no spaces, no accents — the name is also a key of the configuration file. The rename follows every cover that uses the profile.",
+  "panel.profile.rename.rule": "Letters, digits and underscores only, no more than 64 of them: no spaces, no accents — the name is also a key of the configuration file. The rename follows every cover that uses the profile.",
   "panel.profile.rename.title": "Rename the profile",
   "panel.profile.stored": "Stored profile",
   "panel.profile.title": "Profile card",

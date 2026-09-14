@@ -687,7 +687,7 @@
       "not_a_number": "Écrivez un nombre. Les décimales s'écrivent avec une virgule ou avec un point : 198,5 ou 198.5.",
       "out_of_range": "Le nombre est en dehors de l'intervalle que ce champ accepte.",
       "above_the_travel": "C'est plus que toute la course de ce tablier. Mesurez depuis le point où le bord inférieur repose quand le volet est fermé, pas depuis le sol.",
-      "invalid_name": "Le nom d'un profil ne peut contenir que des lettres, des chiffres et des traits de soulignement : pas d'espaces, pas d'accents, pas de tirets."
+      "invalid_name": "Le nom d'un profil ne peut contenir que des lettres, des chiffres et des traits de soulignement, 64 au maximum : pas d'espaces, pas d'accents, pas de tirets."
     }
   },
   "selector": {
@@ -953,7 +953,7 @@
       "rename": {
         "title": "Renommer le profil",
         "field": "Nouveau nom du profil",
-        "rule": "Uniquement des lettres, des chiffres et des tirets bas : pas d'espaces, pas d'accents — le nom est aussi une clé du fichier de configuration. Le renommage suit tous les volets qui utilisent le profil.",
+        "rule": "Uniquement des lettres, des chiffres et des tirets bas, 64 au maximum : pas d'espaces, pas d'accents — le nom est aussi une clé du fichier de configuration. Le renommage suit tous les volets qui utilisent le profil.",
         "action": "Renommer"
       },
       "delete": {
@@ -1144,7 +1144,7 @@
       "message": "Volets dont la course du tablier est inconnue ({count}) : {covers}. Un profil ne peut être ramené qu'à un volet dont la course est connue."
     },
     "invalid_name": {
-      "message": "« {profile} » n'est pas un nom de profil utilisable : uniquement des lettres, des chiffres et des tirets bas, pas d'espaces ni d'accents."
+      "message": "« {profile} » n'est pas un nom de profil utilisable : uniquement des lettres, des chiffres et des tirets bas, 64 au maximum, pas d'espaces ni d'accents."
     },
     "name_in_use": {
       "message": "Un profil appelé « {profile} » existe déjà."

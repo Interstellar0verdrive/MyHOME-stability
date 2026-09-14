@@ -687,7 +687,7 @@
       "not_a_number": "Escribe un número. Los decimales se escriben con coma o con punto: 198,5 o 198.5.",
       "out_of_range": "El número está fuera del intervalo que acepta este campo.",
       "above_the_travel": "Es más que todo el recorrido de este paño. Mide desde el punto donde el borde inferior apoya cuando la persiana está cerrada, no desde el suelo.",
-      "invalid_name": "El nombre de un perfil solo puede contener letras, cifras y guiones bajos: sin espacios, sin acentos, sin guiones."
+      "invalid_name": "El nombre de un perfil solo puede contener letras, cifras y guiones bajos, y no más de 64: sin espacios, sin acentos, sin guiones."
     }
   },
   "selector": {
@@ -953,7 +953,7 @@
       "rename": {
         "title": "Renombrar el perfil",
         "field": "Nuevo nombre del perfil",
-        "rule": "Solo letras, cifras y guiones bajos: sin espacios, sin acentos — el nombre es también una clave del archivo de configuración. El cambio de nombre sigue a todas las persianas que usan el perfil.",
+        "rule": "Solo letras, cifras y guiones bajos, no más de 64: sin espacios, sin acentos — el nombre es también una clave del archivo de configuración. El cambio de nombre sigue a todas las persianas que usan el perfil.",
         "action": "Renombrar"
       },
       "delete": {
@@ -1144,7 +1144,7 @@
       "message": "Persianas cuyo recorrido del paño se desconoce ({count}): {covers}. Un perfil solo se puede llevar a una persiana cuyo recorrido se conoce."
     },
     "invalid_name": {
-      "message": "«{profile}» no es un nombre de perfil utilizable: solo letras, cifras y guiones bajos, sin espacios y sin acentos."
+      "message": "«{profile}» no es un nombre de perfil utilizable: solo letras, cifras y guiones bajos, no más de 64, sin espacios y sin acentos."
     },
     "name_in_use": {
       "message": "Ya existe un perfil llamado «{profile}»."

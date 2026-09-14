@@ -687,7 +687,7 @@
       "not_a_number": "Write a number. Decimals may be written with a comma or with a point: 198,5 or 198.5.",
       "out_of_range": "The number is outside the range this field accepts.",
       "above_the_travel": "That is more than the whole travel of this curtain. Measure from the point where the bottom edge rests when the cover is closed, not from the floor.",
-      "invalid_name": "A profile name may only contain letters, digits and underscores: no spaces, no accents, no hyphens."
+      "invalid_name": "A profile name may only contain letters, digits and underscores, and no more than 64 of them: no spaces, no accents, no hyphens."
     }
   },
   "selector": {
@@ -976,7 +976,7 @@
       "rename": {
         "title": "Rename the profile",
         "field": "New name of the profile",
-        "rule": "Letters, digits and underscores only: no spaces, no accents — the name is also a key of the configuration file. The rename follows every cover that uses the profile.",
+        "rule": "Letters, digits and underscores only, no more than 64 of them: no spaces, no accents — the name is also a key of the configuration file. The rename follows every cover that uses the profile.",
         "action": "Rename"
       },
       "delete": {
@@ -1176,7 +1176,7 @@
       "message": "Covers with no curtain travel ({count}): {covers}. A profile can only be brought to a cover whose travel is known."
     },
     "invalid_name": {
-      "message": "“{profile}” is not a usable profile name: only letters, digits and underscores, no spaces and no accents."
+      "message": "“{profile}” is not a usable profile name: only letters, digits and underscores, no more than 64 of them, no spaces and no accents."
     },
     "name_in_use": {
       "message": "A profile called “{profile}” already exists."

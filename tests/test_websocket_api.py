@@ -37,6 +37,7 @@ from custom_components.myhome.calibration_flow import (
     ERROR_OUT_OF_RANGE,
 )
 from custom_components.myhome.calibration_store import (
+    PROFILE_NAME_MAX_LENGTH,
     async_forget_store,
     cover_calibration_data,
     cover_profile_data,
@@ -1883,8 +1884,16 @@ async def test_profile_rename_moves_every_follower_and_leaves_no_old_key(
 
 @pytest.mark.parametrize(
     ("new_name", "key"),
-    [("from_the_file", "name_in_use"), ("not a name", "invalid_name")],
-    ids=["taken", "not a name"],
+    [
+        ("from_the_file", "name_in_use"),
+        ("not a name", "invalid_name"),
+        # One character past the cap the pattern carries. A name has to be bounded
+        # somewhere - it becomes a key of `.storage`, a segment of the panel's hash
+        # route and a heading on a card - and before 0.6.0 the only bound was the
+        # WebSocket frame's.
+        ("x" * (PROFILE_NAME_MAX_LENGTH + 1), "invalid_name"),
+    ],
+    ids=["taken", "not a name", "too long"],
 )
 async def test_profile_rename_refuses_a_name_it_cannot_use(
     hass: HomeAssistant, tmp_path, hass_ws_client, new_name: str, key: str
