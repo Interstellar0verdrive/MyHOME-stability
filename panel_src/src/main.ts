@@ -959,7 +959,16 @@ export class MyHomeCalibrationPanel extends LitElement {
       // A travel that cannot be used takes its table with it *now* rather than in four
       // hundred milliseconds: a before/after worked out from the previous number, sitting
       // under a field that says the current one is out of range, reads as the answer.
+      //
+      // Clearing the table is only half of that. A preview asked for the *previous*
+      // number may still be in the air, and it would land on an empty table and fill it
+      // back in - under the sentence saying the number is out of range. So the sequence
+      // moves on here too: the answer to a question the screen has stopped asking is
+      // dropped when it arrives, exactly as one overtaken by a newer question is.
       const unusable = key === "height" && valueProblem("height", value) !== null;
+      if (unusable) {
+        this._previewSeq += 1;
+      }
       this._store.set({
         detail: {
           ...detail,
