@@ -77,13 +77,38 @@ describe("placeholders", () => {
   });
 
   it("does not let a substituted value start a second substitution", async () => {
-    // A shutter really can be called "{profile}". The substitution is a split and a join,
-    // so what goes in is text and stays text.
+    // A shutter really can be called "{profile}". The sentence is scanned once and what
+    // each placeholder is replaced with is never looked at again, so what goes in is text
+    // and stays text.
     const i18n = await load({ panel: { x: "{cover} follows {profile}" } });
     assert.equal(
       i18n.t("panel.x", { cover: "{profile}", profile: "tall" }),
       "{profile} follows tall",
     );
+  });
+
+  it("does not let a value spell a replacement pattern either", async () => {
+    // The other half of the same promise, and the one a refactor would break without
+    // noticing: `String.prototype.replace` reads `$&`, `$\`` and `$1` in a *string*
+    // replacement, so a name containing them would come out as the sentence around it
+    // rather than as itself. A function replacement does not, and that is why it is one.
+    const i18n = await load({ panel: { x: "Moving {cover} now" } });
+    for (const name of ["$&", "$'", "$`", "$1", "$$", "$&$&"]) {
+      assert.equal(i18n.t("panel.x", { cover: name }), `Moving ${name} now`, name);
+    }
+  });
+
+  it("is not fooled by a brace a translator typed round something else", async () => {
+    const i18n = await load({ panel: { x: "{{cover}} and { cover } and {co-ver}" } });
+    assert.equal(
+      i18n.t("panel.x", { cover: "Camera" }),
+      "{Camera} and { cover } and {co-ver}",
+    );
+  });
+
+  it("takes nothing off the prototype, whatever a sentence asks for", async () => {
+    const i18n = await load({ panel: { x: "{toString} {constructor} {__proto__}" } });
+    assert.equal(i18n.t("panel.x", {}), "{toString} {constructor} {__proto__}");
   });
 });
 

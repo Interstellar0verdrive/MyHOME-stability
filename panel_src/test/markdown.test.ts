@@ -91,6 +91,9 @@ describe("what it refuses", () => {
   it("refuses an image that climbs out of the served directory", () => {
     for (const src of [
       "/myhome_static/../../secret.png",
+      "/myhome_static/../secret.png",
+      "/myhome_static/%2e%2e/secret.png",
+      "/myhome_static/a.png?x=/../secret",
       "//evil.example/x.png",
       "data:image/svg+xml;base64,AAAA",
     ]) {

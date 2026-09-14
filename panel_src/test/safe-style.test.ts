@@ -45,6 +45,27 @@ describe("a drawing from anywhere else is not drawn", () => {
     }
   });
 
+  it("refuses every other spelling of climbing out, and of not being a path at all", () => {
+    for (const src of [
+      // The browser decodes before it resolves, so an encoded dot segment is a dot
+      // segment - and a prefix check would have let all six of these through.
+      "/myhome_static/%2e%2e/secret.png",
+      "/myhome_static/..%2fsecret.png",
+      "/myhome_static/a.png?x=/../secret",
+      "/myhome_static/a.png#/../secret",
+      "/myhome_static/./a.png",
+      "/myhome_static/..",
+      // ...and a path that is not one: no scheme, no host, no backslash, no newline.
+      "/myhome_static/\\..\\secret.png",
+      "HTTPS://evil.example/myhome_static/a.png",
+      "/myhome_static/a.png\n/x",
+      // The prefix alone, with no file after it, is not a drawing either.
+      "/myhome_static/",
+    ]) {
+      assert.equal(drawingStyle({ src, alt: "" }), null, src);
+    }
+  });
+
   it("refuses a src that tries to close the url and open a declaration", () => {
     assert.equal(
       drawingStyle({
