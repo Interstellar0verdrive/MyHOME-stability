@@ -15,6 +15,7 @@ there is one), and last what the validator already resolved.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from typing import Any
@@ -72,8 +73,14 @@ from custom_components.myhome.const import (
     LEGACY_SUBENTRY_COVER_PROFILE,
 )
 
-from .helpers_core import MAC
-from .helpers_platforms import device_config, entity_object, set_connected, setup_myhome
+from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
+from .helpers_platforms import (
+    device_config,
+    entity_object,
+    mock_commands,
+    set_connected,
+    setup_myhome,
+)
 
 # The guided conversation's own harness, so that "the flow writes it" is tested by
 # running the flow and not by reading the call site. `tests/test_calibration_flow.py`
@@ -1620,3 +1627,277 @@ def test_a_profiles_provenance_never_reaches_the_travel_model() -> None:
     # ...and what it is for is all there.
     assert shaped[CONF_OPENING_TIME] == 22.3
     assert shaped[CONF_REFERENCE_HEIGHT] == 195.0
+
+
+# --------------------------------------------------------------------------------------
+# The file itself: the two directions of the version bump, the order across a deletion,
+# and the two writes nothing else in this module makes
+# --------------------------------------------------------------------------------------
+# A schema change has to survive being rolled *back*, not only forward. The minor was
+# bumped and the major deliberately left alone for exactly that reason (0.6.0, lot 1),
+# and the whole argument rests on what Home Assistant's own `Store` does with a file
+# whose minor it does not recognise - which is a claim about somebody else's code and is
+# therefore tested against it rather than reasoned about.
+
+
+async def test_a_050_store_reads_a_file_this_version_wrote_and_loses_nothing(
+    hass: HomeAssistant, tmp_path, hass_storage
+) -> None:
+    """The rollback direction: 0.6.0 writes, the user goes back to 0.5.0, and reads.
+
+    `STORAGE_VERSION` stays 1 and only the minor moved, so a 0.5.0 install - a `Store`
+    built with no `minor_version` at all - opens this file, keeps the `order` key it has
+    never heard of, and rewrites it at minor 1. A *major* bump would have made the same
+    downgrade a data loss: `Store._async_load_data` re-raises the base migration's
+    `NotImplementedError` when the major differs, and the user's profiles would be gone.
+
+    The 0.5.0 store is built here the way 0.5.0 built it, so this is the real code path
+    and not a description of it.
+
+    Mutation caught: bumping the major instead of the minor.
+    """
+    async with setup_myhome(
+        hass,
+        tmp_path,
+        PLAIN_YAML,
+        calibration=stored(
+            profiles={"tall": dict(LEGACY_PROFILE)},
+            covers={UNIQUE_ID: calibration_record(profile="tall", height=195.0)},
+        ),
+    ) as (entry, _commands):
+        store = await load_store(hass, entry)
+        assert await store.async_set_order([SECOND_ID, UNIQUE_ID]) is True
+        on_disk = hass_storage[storage_key(entry.entry_id)]
+        assert on_disk["minor_version"] == 2
+
+        # ...and now a 0.5.0 Home Assistant opens it. The major is written out as the
+        # literal `1` that 0.5.0 shipped and not as `STORAGE_VERSION`, because the whole
+        # claim is about what happens when *this* version's major moves away from it.
+        old = Store(hass, 1, storage_key(entry.entry_id))
+        data = await old.async_load()
+        assert sorted(data[CONF_PROFILES]) == ["tall"]
+        assert data[CONF_COVERS][UNIQUE_ID][CONF_HEIGHT] == 195.0
+        # The key it does not understand is carried, not dropped.
+        assert data[CONF_ORDER] == [SECOND_ID, UNIQUE_ID]
+
+        # Writing through the old store rewrites the file at its own minor, and this
+        # version reads that back as a 0.5.0 file and migrates it again.
+        await old.async_save(data)
+        assert hass_storage[storage_key(entry.entry_id)]["minor_version"] == 1
+        again = CalibrationStore(hass, entry.entry_id)
+        await again.async_load()
+        assert again.raw_order == [SECOND_ID, UNIQUE_ID]
+        assert again.calibration(UNIQUE_ID).height == 195.0
+
+
+async def test_a_file_from_a_version_that_knows_more_than_this_one_is_still_read(
+    hass: HomeAssistant, tmp_path, hass_storage
+) -> None:
+    """A minor this version has never heard of is a file it can still open.
+
+    The forward half of the same argument. `_async_migrate_func` adds `order` only when
+    the minor it was handed is below 2 and otherwise hands the data back as it is, so a
+    file written by a later 0.6.x keeps whatever that version added: the shutters go on
+    working through the seconds between a downgrade and a restart, which is the one
+    moment a user is most likely to be downgrading *because* something is wrong.
+
+    Mutation caught: raising on a minor this version does not know; a migration that
+    rebuilds the payload from the keys it understands instead of adding to it.
+    """
+    key = storage_key("future")
+    hass_storage[key] = {
+        "version": STORAGE_VERSION,
+        "minor_version": STORAGE_MINOR_VERSION + 1,
+        "key": key,
+        "data": {
+            CONF_PROFILES: {"tall": dict(LEGACY_PROFILE)},
+            CONF_COVERS: {UNIQUE_ID: calibration_record(height=195.0)},
+            CONF_ORDER: [UNIQUE_ID],
+            "something_0_7_0_writes": {"whatever": True},
+        },
+    }
+    store = CalibrationStore(hass, "future")
+    await store.async_load()
+    assert store.raw_order == [UNIQUE_ID]
+    assert sorted(store.raw_profiles) == ["tall"]
+    assert store.calibration(UNIQUE_ID).height == 195.0
+    # ...and whatever that later version added is still in the file afterwards. The
+    # migration adds a key; it does not rebuild the payload out of the keys it happens
+    # to understand, which would quietly delete the newer version's own data on the
+    # first load after a downgrade.
+    assert hass_storage[key]["data"]["something_0_7_0_writes"] == {"whatever": True}
+
+
+async def test_the_order_is_not_touched_by_a_profile_being_deleted(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Deleting a profile moves shutters between groups; it does not move them in the list.
+
+    The order is one flat list and the groups are slices of it, which is what lets a
+    deletion be a change to the *assignments* alone: every follower lands in "Senza
+    profilo" in the order it already had, rather than at the end of it in whatever order
+    the store happened to iterate. A deletion that rewrote the order would reshuffle a
+    screen the user had arranged by hand, as a side effect of something else.
+
+    Mutation caught: `async_remove_profile` rewriting the order; the order being kept
+    inside the records it strips (which is the design the flat list was chosen over).
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        await store.async_set_profile("tall", PROFILE_DATA)
+        await store.async_set_assignments(
+            {UNIQUE_ID: ("tall", 195.0), SECOND_ID: ("tall", 150.0), THIRD_ID: (None, 140.0)}
+        )
+        await store.async_set_order([SECOND_ID, THIRD_ID, UNIQUE_ID])
+
+        assert sorted(await store.async_remove_profile("tall")) == sorted([UNIQUE_ID, SECOND_ID])
+        assert store.raw_order == [SECOND_ID, THIRD_ID, UNIQUE_ID]
+        # The records are still there - what a shutter measured is not about which kind
+        # of shutter it is - and so is every place in the list.
+        assert store.calibration(UNIQUE_ID).profile is None
+        assert store.calibration(UNIQUE_ID).height == 195.0
+        assert store.ordered([UNIQUE_ID, SECOND_ID, THIRD_ID]) == [
+            SECOND_ID,
+            THIRD_ID,
+            UNIQUE_ID,
+        ]
+
+
+async def test_a_shutter_taken_out_of_the_file_keeps_its_place_across_a_reload(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """`myhome.yaml` is the user's file and they edit it; the order is not their problem.
+
+    A cover commented out for an afternoon must not lose the place it was dragged to,
+    and the id must stay in the stored list - which is why `ordered()` drops unknown ids
+    from its *answer* and `normalised_order` keeps them in the *file*. The two are easy
+    to confuse, and confusing them is a screen that reshuffles itself the first time
+    somebody edits their configuration.
+
+    Mutation caught: `async_load` dropping ids that name no cover; `ordered` inventing
+    an id it was not handed.
+    """
+    both = PLAIN_YAML + """    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+"""
+    entry = make_entry(write_yaml(tmp_path, both))
+    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_save(
+        {CONF_PROFILES: {}, CONF_COVERS: {}, CONF_ORDER: [SECOND_ID, UNIQUE_ID]}
+    )
+    with mock_gateway(), mock_commands():
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert loaded_store(hass, entry).ordered([UNIQUE_ID, SECOND_ID]) == [
+            SECOND_ID,
+            UNIQUE_ID,
+        ]
+
+        # The second shutter leaves the file, and the entry is reloaded over it.
+        write_yaml(tmp_path, PLAIN_YAML)
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        store = loaded_store(hass, entry)
+        assert store.ordered([UNIQUE_ID]) == [UNIQUE_ID]
+        # ...and the file still remembers where it was.
+        assert store.raw_order == [SECOND_ID, UNIQUE_ID]
+
+        # It comes back to the place it had.
+        write_yaml(tmp_path, both)
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        assert loaded_store(hass, entry).ordered([UNIQUE_ID, SECOND_ID]) == [
+            SECOND_ID,
+            UNIQUE_ID,
+        ]
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_a_restore_is_one_save_and_never_half_of_one(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The undo's own primitive: many records, one write, and nothing when nothing moved.
+
+    `async_restore` is the only writer in this module with no opinion, which is what an
+    undo needs - every other one would make the undo a second write of its own. Two
+    things follow and neither is obvious from reading it: a restore that puts back five
+    records touches the disk once (a per-record save would leave a file that is half of
+    two states if the process died in the middle), and a restore that changes nothing
+    does not touch it at all.
+
+    Mutation caught: saving inside the loop; saving unconditionally (every undo of a
+    no-op would rewrite the file and fire the signal).
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        await store.async_set_profile("tall", PROFILE_DATA)
+        await store.async_set_calibration(UNIQUE_ID, calibration_record(height=195.0))
+
+        # Built once: `cover_calibration_data` stamps `measured_at` with the clock, so
+        # two calls are two different records and "the same restore again" would not be.
+        back = calibration_record(height=150.0)
+        saves = 0
+        real = Store.async_save
+
+        async def counted(self, data):  # noqa: ANN001, ANN202
+            nonlocal saves
+            saves += 1
+            await real(self, data)
+
+        with patch.object(Store, "async_save", counted):
+            assert await store.async_restore(
+                profiles={"tall": None, "short": dict(PROFILE_DATA)},
+                covers={UNIQUE_ID: None, SECOND_ID: back},
+                order=[SECOND_ID, UNIQUE_ID],
+            ) is True
+        assert saves == 1
+        assert sorted(store.raw_profiles) == ["short"]
+        assert list(store.raw_covers) == [SECOND_ID]
+        assert store.raw_order == [SECOND_ID, UNIQUE_ID]
+
+        # ...and the same restore again is not a change and is not a write.
+        with patch.object(Store, "async_save", counted):
+            assert await store.async_restore(
+                profiles={"tall": None, "short": dict(PROFILE_DATA)},
+                covers={UNIQUE_ID: None, SECOND_ID: back},
+                order=[SECOND_ID, UNIQUE_ID],
+            ) is False
+        assert saves == 1
+
+        # The file really holds what the memory says it does.
+        again = CalibrationStore(hass, entry.entry_id)
+        await again.async_load()
+        assert sorted(again.raw_profiles) == ["short"]
+        assert again.raw_order == [SECOND_ID, UNIQUE_ID]
+
+
+async def test_writes_that_arrive_together_all_reach_the_file(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Three store writes in one tick: none of them is lost, whatever order they land in.
+
+    The panel's own writes are serialised by the write lock, but the store is not the
+    panel's alone - the guided conversation writes to it through the same object, and a
+    session that saves a profile while the panel is being loaded is two callers in one
+    tick. Every writer mutates its own section of one dict and then saves the whole of
+    it, so the last save wins and carries everybody's work; a writer that built its
+    payload before awaiting would drop whatever landed in between.
+
+    Mutation caught: `_async_save` writing a snapshot taken at the top of the call; a
+    section replaced rather than updated.
+    """
+    async with setup_myhome(hass, tmp_path, PLAIN_YAML) as (entry, _commands):
+        store = await load_store(hass, entry)
+        await asyncio.gather(
+            store.async_set_profile("tall", PROFILE_DATA),
+            store.async_set_calibration(UNIQUE_ID, calibration_record(height=195.0)),
+            store.async_set_calibration(SECOND_ID, calibration_record(height=150.0)),
+            store.async_set_order([SECOND_ID, UNIQUE_ID]),
+        )
+        again = CalibrationStore(hass, entry.entry_id)
+        await again.async_load()
+        assert sorted(again.raw_profiles) == ["tall"]
+        assert sorted(again.raw_covers) == sorted([UNIQUE_ID, SECOND_ID])
+        assert again.raw_order == [SECOND_ID, UNIQUE_ID]
