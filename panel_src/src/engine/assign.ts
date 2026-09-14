@@ -136,20 +136,37 @@ export const appendedToGroup = (
  * A travel is only sent where the user typed it. A window that already has one is left
  * alone - resending the number it already carries would be a write that changed nothing
  * and an `undo_token` for it.
+ *
+ * **Filtered against the model, like every other read of `pending`.** A pending change is
+ * kept across a push from the server (`store.setOverview` replaces `overview` and leaves
+ * `pending` where it is), so a shutter taken out of `myhome.yaml` in another tab leaves a
+ * change behind it that names nothing. `orderedCovers` already drops such a row from the
+ * screen; without the same filter here it went on being *sent*, and `_refuse_the_batch`
+ * refuses the whole batch for one item - so the user was told that a shutter they cannot
+ * see, cannot withdraw and never touched had stopped the eleven changes they did make.
+ *
+ * `covers` is the current model's rows, so an empty batch is a possible and correct
+ * answer: the write still carries the order, the server applies nothing, and the reply
+ * clears the pending that had stopped meaning anything.
  */
 export const assignItems = (
   pending: readonly PendingChange[],
   heights: Readonly<Record<string, string>>,
-): AssignItem[] =>
-  pending.map((change) => {
-    const typed = heights[change.cover];
-    const height = typed === undefined ? undefined : parseTravel(typed);
-    return {
-      cover_unique_id: change.cover,
-      profile: change.to,
-      ...(height === null || height === undefined ? {} : { height }),
-    };
-  });
+  covers: readonly CoverRow[],
+): AssignItem[] => {
+  const known = new Set(covers.map((cover) => cover.unique_id));
+  return pending
+    .filter((change) => known.has(change.cover))
+    .map((change) => {
+      const typed = heights[change.cover];
+      const height = typed === undefined ? undefined : parseTravel(typed);
+      return {
+        cover_unique_id: change.cover,
+        profile: change.to,
+        ...(height === null || height === undefined ? {} : { height }),
+      };
+    });
+};
 
 /**
  * A number as a person writes it: a comma or a point, and nothing else.

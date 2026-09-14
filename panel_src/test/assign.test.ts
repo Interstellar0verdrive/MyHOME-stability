@@ -150,27 +150,51 @@ describe("the order", () => {
 
 describe("the batch, as the contract wants it", () => {
   it("sends the profile and nothing else where no travel was typed", () => {
-    assert.deepEqual(assignItems([{ cover: "a", to: "tall" }], {}), [
+    assert.deepEqual(assignItems([{ cover: "a", to: "tall" }], {}, [cover("a")]), [
       { cover_unique_id: "a", profile: "tall" },
     ]);
   });
 
   it("sends a travel only where the user typed one, and reads a comma as a point", () => {
-    assert.deepEqual(assignItems([{ cover: "a", to: "tall" }], { a: "145,5" }), [
+    assert.deepEqual(assignItems([{ cover: "a", to: "tall" }], { a: "145,5" }, [cover("a")]), [
       { cover_unique_id: "a", profile: "tall", height: 145.5 },
     ]);
   });
 
   it("omits an unusable travel rather than sending a null the server would refuse", () => {
-    assert.deepEqual(assignItems([{ cover: "a", to: "tall" }], { a: "  " }), [
+    assert.deepEqual(assignItems([{ cover: "a", to: "tall" }], { a: "  " }, [cover("a")]), [
       { cover_unique_id: "a", profile: "tall" },
     ]);
   });
 
   it("sends null for a shutter taken out of every profile", () => {
-    assert.deepEqual(assignItems([{ cover: "a", to: null }], {}), [
+    assert.deepEqual(assignItems([{ cover: "a", to: null }], {}, [cover("a")]), [
       { cover_unique_id: "a", profile: null },
     ]);
+  });
+
+  it("drops a pending change naming a shutter the model no longer has", () => {
+    // The row is not on the screen - `orderedCovers` filters it out - so it must not be
+    // in the batch either. One item the server cannot place refuses the whole batch
+    // (`_refuse_the_batch`), and the sentence would name a shutter the user cannot see
+    // and cannot withdraw.
+    assert.deepEqual(
+      assignItems(
+        [
+          { cover: "a", to: "tall" },
+          { cover: "gone", to: "tall" },
+        ],
+        {},
+        [cover("a")],
+      ),
+      [{ cover_unique_id: "a", profile: "tall" }],
+    );
+  });
+
+  it("is an empty batch when every pending change has stopped naming anything", () => {
+    // Sent as it is, rather than held back: the write still carries the order, the
+    // server applies nothing, and the reply is what clears the pending.
+    assert.deepEqual(assignItems([{ cover: "gone", to: "tall" }], {}, [cover("a")]), []);
   });
 
   it("leaves a shutter exactly as it is for an impact preview", () => {
