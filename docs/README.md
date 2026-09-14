@@ -15,6 +15,11 @@ minimal configuration example; the pages here go deeper.
   cover"* dialog: what it measures on a basic cover, the three paths and the two
   levels of precision, the screens that manage profiles and stored calibrations,
   where the values are kept and what beats what.
+- **[Profiles and covers panel](panel.md)** — the full-page screen of 0.6.0: how to
+  open it (the sidebar entry is hidden until you turn it on), the overview and its
+  origin chips, assigning covers by drag, long press or keyboard, the review with its
+  before/after and the undo that follows it, the cover and profile cards, and what
+  the panel never does.
 - **[Energy monitoring](energy.md)** — the instant-power keep-alive, the push
   filter, `sensor_defaults`, daily/monthly/total energy, and deriving kWh with
   `integration`/`utility_meter` when the gateway returns no totals.
