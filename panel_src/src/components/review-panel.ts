@@ -387,7 +387,21 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
     i18n.t(`options.step.calibration_edit.data.${key}`);
 
   return html`
-    <div class="sheet-backdrop" aria-hidden="true" @click=${context.onClose}></div>
+    <!--
+      While the batch is in the air every way out is inert, the backdrop and the ✕
+      included: Escape is already guarded, and a panel that could be dismissed by a stray
+      click on the dark half would take the refusal - and the pending changes it is about
+      to show again - off the screen with it.
+    -->
+    <div
+      class="sheet-backdrop"
+      aria-hidden="true"
+      @click=${() => {
+        if (!context.applying) {
+          context.onClose();
+        }
+      }}
+    ></div>
     <aside
       class="sheet"
       role="dialog"
@@ -400,6 +414,7 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
         <button
           type="button"
           aria-label=${i18n.t("panel.common.action.close")}
+          ?disabled=${context.applying}
           @click=${context.onClose}
         >
           ✕

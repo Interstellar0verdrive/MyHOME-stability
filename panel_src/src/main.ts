@@ -545,6 +545,14 @@ export class MyHomeCalibrationPanel extends LitElement {
           this._snack(this._i18n.t("panel.toast.order_saved"), result.undo_token);
           this._store.announce(this._i18n.t("panel.assign.announce.reordered"));
         },
+        // This one write is made without a review panel in front of it, so a refusal has
+        // nowhere to be read. The order goes back to the server's - a list the gateway
+        // refused is not a list this screen may go on drawing, and it would outlive every
+        // later push - and the sentence takes the strip the result would have had.
+        (sentence) => {
+          this._store.set({ order: null, writeError: null });
+          this._snack(sentence, null, false);
+        },
       );
     },
 
@@ -668,6 +676,7 @@ export class MyHomeCalibrationPanel extends LitElement {
   private async _write<T>(
     send: () => Promise<T>,
     onDone: (result: T) => void,
+    onRefused?: (sentence: string) => void,
   ): Promise<void> {
     this._store.set({ applying: true, writeError: null });
     try {
@@ -677,16 +686,23 @@ export class MyHomeCalibrationPanel extends LitElement {
     } catch (error) {
       const refusal = asWsError(error);
       this._store.set({ applying: false, writeError: refusal });
-      this._store.announce(
-        this._i18n.refusal(refusal.translation_key, refusal.translation_placeholders ?? {}),
+      const sentence = this._i18n.refusal(
+        refusal.translation_key,
+        refusal.translation_placeholders ?? {},
       );
+      this._store.announce(sentence);
+      // `writeError` is where the review panel shows a refusal, and a write made from
+      // anywhere else has to say so somewhere the user is actually looking.
+      onRefused?.(sentence);
     }
   }
 
-  private _snack(message: string, undoToken: string | null): void {
+  private _snack(message: string, undoToken: string | null, announce = true): void {
     this._clearSnack();
     this._store.set({ snack: { message, undoToken } });
-    this._store.announce(message);
+    if (announce) {
+      this._store.announce(message);
+    }
     this._snackTimer = setTimeout(() => {
       this._snackTimer = null;
       this._store.set({ snack: null });
