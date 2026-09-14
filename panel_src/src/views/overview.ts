@@ -34,6 +34,7 @@ import { renderMarkdown } from "../engine/markdown";
 import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
 import { type CoverRow, type Overview, type ProfileRow } from "../engine/ws";
+import { FLOW_URL } from "../engine/flow";
 import { coverRowStyles } from "../components/cover-row";
 import { dialogStyles, profileDialog } from "../components/profile-dialog";
 import {
@@ -54,8 +55,10 @@ import {
   stripStyles,
 } from "../components/strips";
 
-/** The integration page, which is the way to "Configura" and therefore to every measurement. */
-export const FLOW_URL = "/config/integrations/integration/myhome";
+// The integration page, which is the way to "Configura" and therefore to every
+// measurement. It lives in `engine/flow.ts` with the rest of the opener; it is re-exported
+// here because this is where it was first used and every caller already imports it.
+export { FLOW_URL } from "../engine/flow";
 
 /**
  * Everything this screen can ask for. Implemented once, in `main.ts`, beside the socket.
