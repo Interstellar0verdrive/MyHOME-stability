@@ -592,7 +592,7 @@ the bundle and the full licence text ships beside it.
 `build.mjs` also minifies the stylesheets, which `--minify` cannot: a Lit stylesheet is a
 tagged template literal, and a template literal's contents are part of the program. Each
 block is handed to esbuild's own CSS minifier on the way in, which is fourteen kilobytes
-of indentation in a file with a 150 kB ceiling.
+of indentation in a file with a ceiling on it.
 
 The built file is committed because HACS copies `custom_components/myhome/` as it is
 at the tag and `release.yml` zips the same directory: there is no build step at a

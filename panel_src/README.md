@@ -93,7 +93,7 @@ remember to rebuild it. Instead:
 Three, pinned exactly: **lit** (runtime, bundled), **typescript** and **esbuild** (build
 only). Nothing else goes in here. No framework, no router library, no CSS framework, no
 Markdown library, no icon font, no date library — `Intl` and the frontend's own
-`ha-markdown` cover the last two, and the bundle has a 150 kB ceiling asserted by
+`ha-markdown` cover the last two, and the bundle has a 250 kB ceiling asserted by
 `tests/test_panel_build.py`.
 
 Lit is bundled rather than borrowed from a frontend global: a global is not a contract.
