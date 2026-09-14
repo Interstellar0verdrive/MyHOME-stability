@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from contextlib import ExitStack
 from copy import deepcopy
 from datetime import timedelta
@@ -55,7 +56,7 @@ from custom_components.myhome.const import (
     CONF_SLAT_TIME,
     DOMAIN,
 )
-from custom_components.myhome.panel_data import PREVIEW_PROBLEMS
+from custom_components.myhome.panel_data import DEFAULT_LANGUAGE, PREVIEW_PROBLEMS
 from custom_components.myhome.panel_schemas import (
     ASSIGN_KEYS,
     COVER_DETAIL_FORGET_KEYS,
@@ -933,6 +934,85 @@ async def test_the_panels_own_block_arrives_under_the_name_the_frontend_uses(
         # ...and nested, not flattened: the frontend walks `panel.common.action.close`.
         assert panel["common"]["action"]["close"] == "Chiudi"
         assert panel["overview"]["title"] == "Profili e tapparelle"
+
+
+@pytest.mark.parametrize(
+    "language",
+    [
+        "../../../../etc/passwd",
+        "../en",
+        "..",
+        "translations/en",
+        "/etc/hosts",
+        "en\x00",
+        "en/../../../../../../etc/passwd",
+        "\\en",
+        "x" * 200,
+        "",
+    ],
+    ids=[
+        "traversal",
+        "one level up",
+        "dotdot",
+        "a subfolder",
+        "absolute",
+        "null byte",
+        "traversal after a real tag",
+        "a backslash",
+        "two hundred characters",
+        "nothing at all",
+    ],
+)
+async def test_a_language_that_is_not_a_language_reads_no_file_at_all(
+    hass: HomeAssistant, tmp_path, language: str
+) -> None:
+    """The panel sends the *user's* language, so a language is a string from a browser.
+
+    One keystroke later it is half of a path: `_TRANSLATIONS_DIR / f"{language}.json"`,
+    and `Path.__truediv__` resolves `..`. A language of `../../../../etc/something`
+    therefore named a file outside the integration, and any JSON found there was served
+    back - `_blocks` keeps whichever of `options` / `selector` / `config_panel` it
+    happened to carry, which is enough to read a file that was never meant to be read
+    through a shutter panel. It took an administrator to ask; an administrator has no
+    business doing this either.
+
+    The answer now is the answer the fallback chain already had for a language nobody
+    ships: English. Asserted at the file lookup and not only at the payload, because a
+    disk read that happened and was then discarded is still a disk read.
+
+    Mutation caught: dropping the `_A_LANGUAGE` check; widening it to allow a separator,
+    a dot or a null byte.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (_entry, _commands):
+        answer = await panel_data.async_texts(hass, language)
+        assert answer["language"] == DEFAULT_LANGUAGE
+        assert answer["texts"]["panel"]["overview"]["title"] == "Profiles and covers"
+
+
+async def test_a_json_file_outside_the_integration_is_not_a_language(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """The same refusal shown against a file that really is there to be read.
+
+    The parametrised test above says "not a language tag, so English"; this one puts a
+    readable JSON file with an `options` block on disk and walks a relative path to it,
+    which is exactly what the traversal did - and shows that nothing of it reaches the
+    answer. Without the check the served `options` block was this file's.
+
+    Mutation caught: checking the name anywhere but before the path is built (a
+    `resolve()`-and-compare after the read has already happened is a file that was read).
+    """
+    planted = tmp_path / "planted.json"
+    planted.write_text('{"options": {"leaked": "yes"}}', encoding="utf-8")
+    here = Path(panel_data.__file__).parent / "translations"
+    walk = os.path.relpath(planted.with_suffix(""), here)
+    assert ".." in walk
+
+    async with setup_myhome(hass, tmp_path, YAML) as (_entry, _commands):
+        assert panel_data._read_language(walk) is None  # noqa: SLF001
+        answer = await panel_data.async_texts(hass, walk)
+        assert answer["language"] == DEFAULT_LANGUAGE
+        assert "leaked" not in answer["texts"]["options"]
 
 
 # ------------------------------------------------------------------- permissions
