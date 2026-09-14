@@ -132,6 +132,55 @@ export interface CoverDetail {
   keys: CoverKeyRow[];
 }
 
+/**
+ * What a batch of assignments would come to, with none of them made (contract §11).
+ *
+ * The review panel's before/after table. The "after" is the profile brought to the
+ * window's own travel with whatever it measured for itself still on top, and it comes
+ * from the server for the same reason every other number on this screen does: the panel
+ * would otherwise need a second copy of `derive_cover_from_profile`, and two copies of a
+ * travel model are two answers. `items` are exactly `assign`'s `assignments`, so what is
+ * previewed is the batch itself and not a translation of it.
+ */
+export interface PreviewKeyRow {
+  key: string;
+  value: number;
+  origin: "own" | "profile" | "file" | "default";
+}
+
+export interface PreviewItem {
+  cover_unique_id: string;
+  profile: string | null;
+  height: number | null;
+  /**
+   * The one thing that stops this item, or `null`. Always a `translation_key` `assign`
+   * refuses with - `missing_travel`, `unknown_profile`, `out_of_range`, ... - so the row
+   * shows the same sentence whether the problem was found before the write or by it.
+   */
+  problem: string | null;
+  origin: string | null;
+  source: string | null;
+  values: Record<string, number>;
+  keys: PreviewKeyRow[];
+  has_own: string[];
+}
+
+export interface PreviewResult {
+  entry_id: string;
+  items: PreviewItem[];
+}
+
+export const preview = (
+  connection: HaConnection,
+  entryId: string,
+  items: AssignItem[],
+): Promise<PreviewResult> =>
+  connection.sendMessagePromise<PreviewResult>({
+    type: "myhome/calibration/preview",
+    entry_id: entryId,
+    items,
+  });
+
 // --- the subscription -----------------------------------------------------------------
 //
 // `myhome/calibration/subscribe` pushes the whole `overview` on subscribing and after

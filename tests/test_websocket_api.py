@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import ExitStack
+from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ from custom_components.myhome.calibration_store import (
 )
 from custom_components.myhome.const import (
     CALIBRATION_KEY_ORIGINS,
+    CONF_CLOSING_TIME,
     CONF_COVER_UNIQUE_ID,
     CONF_COVERS,
     CONF_OPENING_TIME,
@@ -50,6 +52,7 @@ from custom_components.myhome.const import (
     CONF_SLAT_TIME,
     DOMAIN,
 )
+from custom_components.myhome.panel_data import PREVIEW_PROBLEMS
 from custom_components.myhome.panel_schemas import (
     ASSIGN_KEYS,
     COVER_DETAIL_KEY_KEYS,
@@ -69,6 +72,8 @@ from custom_components.myhome.panel_schemas import (
     ERROR_WRITE_IN_PROGRESS,
     MEASURABLE_KEYS,
     OVERVIEW_KEYS,
+    PREVIEW_ITEM_KEYS,
+    PREVIEW_KEYS,
     PROFILE_DELETE_KEYS,
     PROFILE_EDIT_KEYS,
     PROFILE_KEYS,
@@ -85,6 +90,7 @@ from custom_components.myhome.panel_schemas import (
     WS_TYPE_COVER_EDIT,
     WS_TYPE_COVER_FORGET,
     WS_TYPE_OVERVIEW,
+    WS_TYPE_PREVIEW,
     WS_TYPE_PROFILE_DELETE,
     WS_TYPE_PROFILE_EDIT,
     WS_TYPE_PROFILE_RENAME,
@@ -2212,3 +2218,252 @@ async def test_two_gateways_are_two_subscriptions(
 
         await hass.config_entries.async_unload(second.entry_id)
         await hass.async_block_till_done()
+
+
+# ======================================================================= the preview
+# `myhome/calibration/preview` (CONTRACT §11): the review panel's before/after table,
+# answered by the same resolution the shutter runs on. It is a *read* - nothing is
+# written, no lock is taken, a measurement does not stop it - and its whole reason for
+# existing is that the panel must not scale a profile in JavaScript. So the test that
+# matters is the parity one: preview an assignment, make it, and ask the overview; the
+# two answers have to be the same numbers, the same tokens and the same source string.
+
+
+async def item_of(answer: dict[str, Any], unique_id: str) -> dict[str, Any]:
+    return next(item for item in answer["items"] if item["cover_unique_id"] == unique_id)
+
+
+async def test_the_preview_is_exactly_what_the_assignment_would_produce(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The one invariant this command has: ask first, do it, and get the same answer.
+
+    Not "close enough" and not "the same formula": the preview is the write's own input
+    run through the read path, so every number, the origin token and the `Calibration
+    source` string are compared whole. A frontend that scaled the profile itself is what
+    this command exists to make unnecessary, and this is what would catch the drift.
+
+    Mutation caught: previewing without `profile_wins` (the file's own run times would
+    beat the profile, and the panel would promise numbers the shutter never used);
+    ignoring the travel in the item (the profile would be previewed unscaled).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        items = [
+            {"cover_unique_id": THIRD, "profile": "tall", "height": 180},
+            {"cover_unique_id": FIRST, "profile": None},
+        ]
+        preview = await result(
+            client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=items
+        )
+        assert tuple(preview) == PREVIEW_KEYS
+        assert preview["entry_id"] == entry.entry_id
+        assert [item["cover_unique_id"] for item in preview["items"]] == [THIRD, FIRST]
+        assert all(tuple(item) == PREVIEW_ITEM_KEYS for item in preview["items"])
+        assert all(item["problem"] is None for item in preview["items"])
+
+        answer = await result(
+            client, type=WS_TYPE_ASSIGN, entry_id=entry.entry_id, assignments=items
+        )
+        for item in preview["items"]:
+            row = row_of(answer["overview"], item["cover_unique_id"])
+            assert item["values"] == row["values"]
+            assert item["origin"] == row["origin"]
+            assert item["source"] == row["source"]
+            assert item["has_own"] == row["has_own"]
+            assert item["height"] == row["height"]
+            assert item["profile"] == row["profile"]
+
+
+async def test_the_preview_writes_nothing_at_all(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """It is a question, and a question that changed the answer would be a write.
+
+    Mutation caught: implementing it as an assign-and-roll-back (the store would be
+    written twice and every subscriber told twice, for a table nobody confirmed).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        before = deepcopy(loaded_store(hass, entry).raw_covers)
+        await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[{"cover_unique_id": THIRD, "profile": "tall", "height": 180}],
+        )
+        assert loaded_store(hass, entry).raw_covers == before
+        assert row_of(
+            await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id), THIRD
+        )["profile"] is None
+
+
+async def test_the_preview_says_per_key_where_every_number_would_come_from(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A window with two numbers of its own keeps them, and the table has to say so.
+
+    The `keys` list is the same vocabulary `cover_detail` uses - own / profile / file /
+    default - so the review panel can mark the rows that will not move without asking a
+    second command what "own" means.
+
+    Mutation caught: dropping the overrides when the profile changes (the panel would
+    promise the profile's ascent time to a window that measured its own).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[{"cover_unique_id": FIRST, "profile": "from_the_file"}],
+        )
+        item = await item_of(preview, FIRST)
+        origins = {row["key"]: row["origin"] for row in item["keys"]}
+        assert origins[CONF_OPENING_TIME] == "own"
+        assert origins[CONF_SLAT_TIME] == "own"
+        assert origins[CONF_CLOSING_TIME] == "profile"
+        assert item["has_own"] == sorted([CONF_OPENING_TIME, CONF_SLAT_TIME])
+        # Its own measurements are untouched, and the profile answers for the rest.
+        assert item["values"][CONF_OPENING_TIME] == 25.0
+        assert item["origin"] == "adjusted"
+
+
+async def test_a_window_with_no_travel_is_named_rather_than_refusing_the_batch(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The state the review panel's form exists to fix, reported one row at a time.
+
+    `assign` refuses the whole batch for this, because a batch half written is a screen
+    that has to explain which half. A preview writes nothing, so refusing eleven answers
+    for the sake of the twelfth would only hide the table the user is reading while they
+    type the missing number.
+
+    Mutation caught: raising `_refuse_the_batch` from the preview (the review panel would
+    go blank the moment one shutter had no travel, which is most of the time).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client,
+            type=WS_TYPE_PREVIEW,
+            entry_id=entry.entry_id,
+            items=[
+                {"cover_unique_id": THIRD, "profile": "tall"},
+                {"cover_unique_id": SECOND, "profile": "from_the_file"},
+            ],
+        )
+        missing = await item_of(preview, THIRD)
+        assert missing["problem"] == ERROR_MISSING_TRAVEL
+        assert missing["values"] == {}
+        assert missing["keys"] == []
+        # ...and the row beside it is answered in full.
+        answered = await item_of(preview, SECOND)
+        assert answered["problem"] is None
+        assert answered["values"][CONF_OPENING_TIME] > 0
+
+
+@pytest.mark.parametrize(
+    ("item", "problem"),
+    [
+        ({"cover_unique_id": f"{MAC}-2-99", "profile": None}, ERROR_UNKNOWN_COVER),
+        ({"cover_unique_id": ADVANCED, "profile": None}, ERROR_ADVANCED_COVER),
+        ({"cover_unique_id": FIRST, "profile": "gone"}, ERROR_UNKNOWN_PROFILE),
+        ({"cover_unique_id": FIRST, "profile": "tall", "height": "abc"}, ERROR_NOT_A_NUMBER),
+        ({"cover_unique_id": FIRST, "profile": "tall", "height": 5000}, ERROR_OUT_OF_RANGE),
+    ],
+    ids=["unknown_cover", "advanced_cover", "unknown_profile", "not_a_number", "out_of_range"],
+)
+async def test_every_problem_the_preview_names_is_one_assign_refuses_with(
+    hass: HomeAssistant, tmp_path, hass_ws_client, item: dict[str, Any], problem: str
+) -> None:
+    """One vocabulary for the six problems, so one sentence explains each of them.
+
+    The panel renders `exceptions.<key>.message` for a `problem` exactly as it renders it
+    for a refusal, which is why the preview must not invent words of its own: a row that
+    said "no such profile" in the table and something else in the refusal would be two
+    facts about one mistake.
+
+    Mutation caught: a private token set in the preview; a preview that answered numbers
+    for a profile nobody defines (the row would read as though it were going to work).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        preview = await result(
+            client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=[item]
+        )
+        assert preview["items"][0]["problem"] == problem
+        assert preview["items"][0]["values"] == {}
+        assert problem in PREVIEW_PROBLEMS
+
+
+async def test_the_preview_is_a_read_and_a_measurement_does_not_stop_it(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The lock is on the writes. Reading what a change would come to is always allowed.
+
+    Mutation caught: putting the preview behind `async_write` (the review panel would go
+    dark for the whole of a guided calibration, which is precisely when a user is most
+    likely to be looking at what they measured).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        cover = entity_object(hass, "cover", "2-81")
+        client = await hass_ws_client(hass)
+        with cover.calibration_session():
+            preview = await result(
+                client,
+                type=WS_TYPE_PREVIEW,
+                entry_id=entry.entry_id,
+                items=[{"cover_unique_id": SECOND, "profile": None}],
+            )
+            assert preview["items"][0]["problem"] is None
+            # ...while a write to the same gateway is refused, which is the contrast.
+            error = await refused(
+                client,
+                type=WS_TYPE_ASSIGN,
+                entry_id=entry.entry_id,
+                assignments=[{"cover_unique_id": SECOND, "profile": None}],
+            )
+            assert error["translation_key"] == ERROR_BUSY_CALIBRATING
+
+
+async def test_the_preview_needs_a_gateway_and_a_household_member_may_not_ask(
+    hass: HomeAssistant, tmp_path, hass_ws_client, hass_admin_user
+) -> None:
+    """Required `entry_id` like a write's, and admin-only like every other read.
+
+    A preview is always about a batch composed on one gateway's screen, so there is no
+    "the gateway I have" version of the question; and it answers what a shutter would
+    run on, which is as much a setting as the write that would make it so.
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        error = await refused(client, type=WS_TYPE_PREVIEW, items=[])
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT
+
+        hass_admin_user.groups = []
+        error = await refused(
+            client, type=WS_TYPE_PREVIEW, entry_id=entry.entry_id, items=[]
+        )
+        assert error["code"] == ws_const.ERR_UNAUTHORIZED

@@ -1,13 +1,13 @@
-// A profile and the shutters that follow it, as one card.
+// A profile and the shutters that follow it, as one card - and, during a gesture, as one
+// drop target.
 //
 // The header is three lines and each of them answers a different question. The **title**
 // says which profile, and is a link into its card because the numbers behind the summary
 // are one click away. The **values line** is the summary itself - reference travel, ascent,
 // descent, slats - so that "which of my two profiles is the tall one?" does not need a
-// second screen. The **provenance line** says on which shutter and when it was measured,
-// which is what `measured_on` / `measured_at` were added to the store for; when nothing
-// recorded it, it says so, because a profile of unknown provenance is a fact about the
-// installation and not a blank.
+// second screen. The **provenance line** says on which shutter and when it was measured;
+// when nothing recorded it, it says so, because a profile of unknown provenance is a fact
+// about the installation and not a blank.
 //
 // "Senza profilo" is the same card with the same three lines: a group, not a leftover. Its
 // meta line is the one sentence that keeps a user from thinking it is a failure state.
@@ -15,10 +15,17 @@
 // Each heading is a real `<h2>`, so the page has an outline a screen reader can jump
 // through, and the section points at its own heading rather than repeating the name in an
 // `aria-label`.
+//
+// **Two things a gesture does to this card.** A pointer drag over it draws a solid primary
+// outline - the card is where the row will land. A shutter armed by a long press on the
+// phone collapses every card to its title, which then becomes a 48 px target with a dashed
+// outline: the design's "prendi e tocca la destinazione", and the reason it works is that
+// twelve shutters' worth of rows do not fit on a phone beside the thing being moved.
 
 import { css, html, nothing, type TemplateResult } from "lit";
 
 import { type I18n } from "../engine/i18n";
+import { type PendingChange } from "../engine/store";
 import { type CoverRow } from "../engine/ws";
 import { coverRow } from "./cover-row";
 
@@ -31,7 +38,8 @@ export const groupCardStyles = css`
 
   /*
    * From 600 px the groups stand side by side and the row of them scrolls sideways, which
-   * is what makes a drag between two profiles one gesture (lot 7). Below it they stack.
+   * is what makes a drag between two profiles one gesture. Below it they stack, and the
+   * gesture is press-and-tap instead.
    */
   @media (min-width: 600px) {
     .groups {
@@ -42,6 +50,8 @@ export const groupCardStyles = css`
       align-items: start;
       overflow-x: auto;
       padding-bottom: 8px;
+      /* A drag near the edge scrolls this; the browser must not fight it with inertia. */
+      overscroll-behavior-x: contain;
     }
   }
 
@@ -116,7 +126,60 @@ export const groupCardStyles = css`
     font-size: 13px;
     color: var(--myhome-text-soft);
   }
+
+  /* A drop at the end of the group: the insertion line under the last row. */
+  .group-body .insert-end {
+    margin: 0 8px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--myhome-primary);
+    pointer-events: none;
+  }
+
+  /*
+   * The two outlines. Solid means "let go and it lands here"; dashed means "this is a
+   * target you can tap". Both are overlays and not borders, so the card does not change
+   * size and the whole row of groups does not shift the moment a drag begins.
+   */
+  .group .over,
+  .group .armed-target {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--myhome-radius);
+    pointer-events: none;
+  }
+
+  .group .over {
+    border: 2px solid var(--myhome-primary);
+  }
+
+  .group .armed-target {
+    border: 2px dashed var(--myhome-primary);
+  }
+
+  /* Collapsed: the card is its own heading, and the heading is the target. */
+  .group.collapsed .group-head {
+    border-bottom: none;
+    min-height: 48px;
+    cursor: pointer;
+  }
 `;
+
+/**
+ * A group's `data-group`, which is what a drag hit-tests against.
+ *
+ * "Senza profilo" is `none`, and every profile is namespaced under `profile:` - because a
+ * profile is free to be *called* "none", and a bare name would then be indistinguishable
+ * from the group that has no profile at all and from the "Togli dal profilo" zone, which
+ * carries the same attribute. The drop would take the shutter out of its profile instead
+ * of putting it into that one, silently.
+ */
+export const groupAttr = (key: string | null): string =>
+  key === null ? "none" : `profile:${key}`;
+
+/** ...and back again: what a `data-group` read off the DOM means. */
+export const groupKeyOf = (attr: string): string | null =>
+  attr === "none" ? null : attr.slice("profile:".length);
 
 export interface PanelGroup {
   /** The profile name, or `null` for "Senza profilo". */
@@ -134,8 +197,29 @@ export interface PanelGroup {
 
 export interface GroupContext {
   i18n: I18n;
+  /** The changes the user has made and not confirmed. */
+  pending: readonly PendingChange[];
+  /** Where a shutter is heading, in the words the group headings use. */
+  route: (cover: CoverRow) => string;
+  /** True while nothing may be moved. */
+  locked: boolean;
+  /** True when a shutter is armed and every group is a title-sized target. */
+  collapsed: boolean;
+  /** True when the pointer is over this group. */
+  over: boolean;
+  /** The row a drop would land above, and whether it would land at the end. */
+  insertBefore: string | null;
+  insertEnd: boolean;
+  /** The row in flight. */
+  dragging: string | null;
   onOpenProfile: (name: string) => void;
   onOpenCover: (cover: CoverRow) => void;
+  onGrab: (cover: CoverRow, event: PointerEvent) => void;
+  onRowPress: (cover: CoverRow, event: PointerEvent) => void;
+  onPick: (cover: CoverRow) => void;
+  onWithdraw: (cover: CoverRow) => void;
+  /** A tap on the card while a shutter is armed: this group is the destination. */
+  onTarget: (group: string | null) => void;
 }
 
 export const groupCard = (group: PanelGroup, context: GroupContext): TemplateResult => {
@@ -144,41 +228,80 @@ export const groupCard = (group: PanelGroup, context: GroupContext): TemplateRes
     group.covers.length === 1
       ? i18n.t("panel.overview.group.count_one")
       : i18n.t("panel.overview.group.count", { count: group.covers.length });
-  return html`<section class="group" data-group=${group.key ?? "none"} aria-labelledby=${group.id}>
-    <div class="group-head">
+  const armed = context.collapsed;
+  return html`<section
+    class="group ${armed ? "collapsed" : ""}"
+    data-group=${groupAttr(group.key)}
+    aria-labelledby=${group.id}
+  >
+    <div
+      class="group-head"
+      @click=${() => {
+        if (armed) {
+          context.onTarget(group.key);
+        }
+      }}
+    >
       <div class="line">
         <h2 id=${group.id}>
           ${group.key === null
             ? group.title
             : html`<button
                 type="button"
-                title=${i18n.t("panel.overview.group.open")}
-                @click=${() => context.onOpenProfile(group.key as string)}
+                title=${armed
+                  ? i18n.t("panel.assign.armed", { cover: "" })
+                  : i18n.t("panel.overview.group.open")}
+                @click=${(event: Event) => {
+                  event.stopPropagation();
+                  if (armed) {
+                    context.onTarget(group.key);
+                    return;
+                  }
+                  context.onOpenProfile(group.key as string);
+                }}
               >
                 ${group.title}
               </button>`}
         </h2>
         <span class="count">${count}</span>
       </div>
-      ${group.values ? html`<p class="meta">${group.values}</p>` : nothing}
-      ${group.warning
-        ? html`<p class="meta second warn">${group.warning}</p>`
-        : group.provenance
-          ? html`<p class="meta second">${group.provenance}</p>`
-          : nothing}
+      ${group.values && !armed ? html`<p class="meta">${group.values}</p>` : nothing}
+      ${armed
+        ? nothing
+        : group.warning
+          ? html`<p class="meta second warn">${group.warning}</p>`
+          : group.provenance
+            ? html`<p class="meta second">${group.provenance}</p>`
+            : nothing}
     </div>
-    <div class="group-body">
-      ${group.covers.map((cover, index) =>
-        coverRow(cover, {
-          i18n,
-          short: cover.profile === group.key,
-          first: index === 0,
-          onOpen: context.onOpenCover,
-        }),
-      )}
-      ${group.covers.length === 0
-        ? html`<p class="empty">${i18n.t("panel.overview.group.empty")}</p>`
-        : nothing}
-    </div>
+    ${armed
+      ? nothing
+      : html`<div class="group-body">
+          ${group.covers.map((cover, index) =>
+            coverRow(cover, {
+              i18n,
+              short: cover.profile === group.key,
+              first: index === 0,
+              pending: context.pending.find((item) => item.cover === cover.unique_id),
+              route: context.route(cover),
+              locked: context.locked,
+              insertBefore: context.insertBefore === cover.unique_id,
+              dragging: context.dragging === cover.unique_id,
+              onOpen: context.onOpenCover,
+              onGrab: context.onGrab,
+              onRowPress: context.onRowPress,
+              onPick: context.onPick,
+              onWithdraw: context.onWithdraw,
+            }),
+          )}
+          ${context.insertEnd
+            ? html`<div class="insert-end" aria-hidden="true"></div>`
+            : nothing}
+          ${group.covers.length === 0
+            ? html`<p class="empty">${i18n.t("panel.overview.group.empty")}</p>`
+            : nothing}
+        </div>`}
+    ${context.over ? html`<div class="over" aria-hidden="true"></div>` : nothing}
+    ${armed ? html`<div class="armed-target" aria-hidden="true"></div>` : nothing}
   </section>`;
 };

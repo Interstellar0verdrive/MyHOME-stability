@@ -14,6 +14,12 @@ This module answers three questions and writes nothing at all:
   "Rimuovi la misura" has to name before it removes anything.
 * **`async_texts`** - the integration's own translations for one language, so that no
   sentence the panel shows is baked into the bundle.
+* **`async_preview`** - the same resolution again, for an assignment nobody has made
+  yet: "if this shutter followed that profile, at that travel, what would it run on?"
+  It is the before/after table of the review panel, and it is here rather than in the
+  browser for the reason the rest of this module is: the answer is
+  `resolve_cover`'s, and a second one worked out in JavaScript would be a second travel
+  model. It writes nothing, takes no lock and refuses nothing - see `async_preview`.
 
 **Where the answers come from, and why not from here.** Every number and every origin in
 the overview is `resolve_cover_config` - the very call `cover.py` makes in the entity's
@@ -35,7 +41,7 @@ everywhere: nothing groups, filters or sorts on it being present.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +51,7 @@ from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
+from .calibration_flow import MAX_HEIGHT_CM, MIN_HEIGHT_CM, parse_number
 from .calibration_store import (
     ResolvedCover,
     keys_written_by_the_file,
@@ -52,7 +59,9 @@ from .calibration_store import (
     merged_profiles,
     profile_overrides,
     profile_provenance,
+    resolve_cover,
     resolve_cover_config,
+    stored_calibration,
 )
 from .const import (
     CALIBRATION_KEY_ORIGIN_OWN,
@@ -60,11 +69,15 @@ from .const import (
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
     CONF_COVER_PROFILES,
+    CONF_COVER_UNIQUE_ID,
     CONF_COVERS_FROM_FILE,
     CONF_ENTITIES,
+    CONF_HEIGHT,
     CONF_OPENING_ROLL,
     CONF_OPENING_TIME,
     CONF_PLATFORMS,
+    CONF_PROFILE,
+    CONF_PROFILE_WINS,
     CONF_RAW,
     CONF_REFERENCE_HEIGHT,
     CONF_SLAT_TIME,
@@ -525,6 +538,153 @@ def async_cover_detail(
     return {"entry_id": entry.entry_id, "cover": row, "keys": keys}
 
 
+# ----------------------------------------------------------------------- preview
+# The tokens a previewed item can carry instead of an answer. They are the
+# `translation_key`s `assign` refuses with, deliberately: the review panel renders the
+# same `exceptions.<key>.message` sentence whether the problem was found before the
+# write was attempted or by the write itself, and a second vocabulary for the same six
+# problems would be two sentences for one fact.
+PREVIEW_PROBLEMS: tuple[str, ...] = (
+    "unknown_cover",
+    "advanced_cover",
+    "unknown_profile",
+    "missing_travel",
+    "not_a_number",
+    "out_of_range",
+)
+
+
+@callback
+def _previewed(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    item: Mapping[str, Any],
+    *,
+    covers: Mapping[str, Mapping[str, Any]],
+    profiles: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """One hypothetical assignment, resolved - or the one problem that stops it.
+
+    The record is rewritten exactly as `CalibrationStore.async_set_assignments` rewrites
+    it (profile in or out, `profile_wins` with it, the travel when one is given, and the
+    whole record gone when what is left says nothing), and the result is handed to
+    `resolve_cover`. So this is not a prediction of what the write would do: it is the
+    write's own input run through the read path, which is why
+    `tests/test_websocket_api.py` can assert the two agree key for key.
+    """
+    unique_id = str(item[CONF_COVER_UNIQUE_ID])
+    answer: dict[str, Any] = {
+        "cover_unique_id": unique_id,
+        "profile": None,
+        "height": None,
+        "problem": None,
+        "origin": None,
+        "source": None,
+        "values": {},
+        "keys": [],
+        "has_own": [],
+    }
+
+    cfg = covers.get(unique_id)
+    if cfg is None:
+        answer["problem"] = (
+            "advanced_cover" if is_advanced_cover(hass, entry, unique_id) else "unknown_cover"
+        )
+        return answer
+
+    name = item.get(CONF_PROFILE)
+    profile = None if name is None else str(name)
+    answer["profile"] = profile
+    if profile is not None and profile not in profiles:
+        answer["problem"] = "unknown_profile"
+        return answer
+
+    height: float | None = None
+    if item.get(CONF_HEIGHT) is not None:
+        height = parse_number(item[CONF_HEIGHT])
+        if height is None:
+            answer["problem"] = "not_a_number"
+            return answer
+        if not MIN_HEIGHT_CM <= height <= MAX_HEIGHT_CM:
+            answer["problem"] = "out_of_range"
+            return answer
+
+    store = loaded_store(hass, entry)
+    record = dict((store.raw_covers.get(unique_id) if store else None) or {})
+    if profile is None:
+        record.pop(CONF_PROFILE, None)
+        record.pop(CONF_PROFILE_WINS, None)
+    else:
+        record[CONF_PROFILE] = profile
+        record[CONF_PROFILE_WINS] = True
+    if height is not None:
+        record[CONF_HEIGHT] = height
+    calibration = stored_calibration({CONF_COVER_UNIQUE_ID: unique_id, **record})
+    # A record that has stopped saying anything is deleted by the write, and a deleted
+    # record is no record at all to the resolution. Saying it here is what keeps the two
+    # answers the same for a shutter taken out of its only profile.
+    resolved = resolve_cover(
+        cfg, profiles=profiles, calibration=calibration if calibration.says_anything else None
+    )
+
+    # A profile is the measurement of a window of a certain travel, so a window whose
+    # travel nobody knows cannot be given one. It is not an error to ask - it is the
+    # state the review panel's form exists to fix - so the row comes back named, with
+    # the problem on it and no numbers, and the panel shows the field instead of a table.
+    if profile is not None and resolved.height is None:
+        answer["problem"] = "missing_travel"
+        return answer
+
+    answer["height"] = resolved.height
+    answer["origin"] = resolved.origin
+    answer["source"] = resolved.source
+    answer["values"] = _values(resolved)
+    answer["keys"] = [
+        {"key": key, "value": resolved.keys[key].value, "origin": resolved.keys[key].origin}
+        for key in COVER_CALIBRATION_KEYS
+        if key in resolved.keys
+    ]
+    answer["has_own"] = sorted(calibration.overrides)
+    return answer
+
+
+@callback
+def async_preview(
+    hass: HomeAssistant, entry: ConfigEntry, items: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """What a batch of assignments would come to, without making any of them.
+
+    The review panel shows a before and an after for every shutter it is about to move,
+    and the after is what that shutter would really run on: the profile brought to its
+    own travel, with whatever it measured for itself still on top. Computing that in the
+    browser would mean a second copy of `derive_cover_from_profile` and of the
+    precedence, and two copies of a travel model are two answers - the one thing this
+    whole module exists to prevent. So the panel asks, and the server answers with the
+    same function the shutter runs on.
+
+    **It refuses nothing.** Every other command of this API answers a batch as a batch:
+    `assign` refuses the whole of one if a single item cannot be written, because a batch
+    half applied is a screen that has to explain which half. A preview writes nothing, so
+    there is no half of anything, and a review panel showing eleven answers and one "this
+    one still needs its travel" is exactly the screen the design asks for. Each item
+    therefore carries either an answer or the one `translation_key` that stops it, and
+    the panel renders that key's own sentence - the same sentence `assign` would send if
+    the user confirmed anyway.
+
+    No lock, no store write, no signal: this is a read, and a read during a measurement
+    is allowed like every other read.
+    """
+    store = loaded_store(hass, entry)
+    profiles = merged_profiles(yaml_profiles(hass, entry), store.profiles if store else {})
+    covers = basic_covers(hass, entry)
+    return {
+        "entry_id": entry.entry_id,
+        "items": [
+            _previewed(hass, entry, item, covers=covers, profiles=profiles) for item in items
+        ],
+    }
+
+
 # ------------------------------------------------------------------------- texts
 def _read_language(language: str) -> dict[str, Any] | None:
     """Read one translation file off disk. Runs in an executor, never in the loop."""
@@ -635,6 +795,7 @@ __all__ = [
     "CALIBRATION_LEVEL_BASIC",
     "CALIBRATION_LEVEL_PRECISE",
     "DEFAULT_LANGUAGE",
+    "PREVIEW_PROBLEMS",
     "PROFILE_SOURCE_STORE",
     "PROFILE_SOURCE_YAML",
     "PROFILE_VALUE_KEYS",
@@ -642,6 +803,7 @@ __all__ = [
     "async_cover_detail",
     "async_entries",
     "async_overview",
+    "async_preview",
     "async_texts",
     "basic_covers",
     "calibrating_now",
