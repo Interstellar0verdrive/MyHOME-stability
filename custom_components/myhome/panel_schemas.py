@@ -414,7 +414,15 @@ COVER_KEYS: tuple[str, ...] = (
     "order_index",
 )
 
-COVER_DETAIL_KEYS: tuple[str, ...] = ("entry_id", "cover", "keys")
+# `forget` (lot 8) is what "Rimuovi la misura" would leave: `falls_back_to`
+# (`"profile"` / `"file"` / `"defaults"`), the profile's name when there is one, and
+# whether the curtain travel survives the removal - `myhome.yaml`'s own `height:` does,
+# a travel somebody typed into the panel does not. It is the same three facts
+# `cover_forget` answers with *after* the write, read the same way (resolve the window
+# with the record gone), so the confirmation and the result cannot disagree.
+COVER_DETAIL_KEYS: tuple[str, ...] = ("entry_id", "cover", "keys", "forget")
+
+COVER_DETAIL_FORGET_KEYS: tuple[str, ...] = ("falls_back_to", "profile", "travel_stays")
 
 PREVIEW_KEYS: tuple[str, ...] = ("entry_id", "items")
 
@@ -530,6 +538,7 @@ __all__ = [
     "ASSIGNMENT_SCHEMA",
     "ASSIGN_KEYS",
     "ASSIGN_SCHEMA",
+    "COVER_DETAIL_FORGET_KEYS",
     "COVER_DETAIL_KEYS",
     "COVER_DETAIL_KEY_KEYS",
     "COVER_DETAIL_SCHEMA",

@@ -57,6 +57,7 @@ from custom_components.myhome.const import (
 from custom_components.myhome.panel_data import PREVIEW_PROBLEMS
 from custom_components.myhome.panel_schemas import (
     ASSIGN_KEYS,
+    COVER_DETAIL_FORGET_KEYS,
     COVER_DETAIL_KEY_KEYS,
     COVER_DETAIL_KEYS,
     COVER_EDIT_KEYS,
@@ -634,6 +635,148 @@ async def test_a_payload_that_is_not_one_is_refused_by_the_schema(
         message = await ask(client, type=WS_TYPE_COVER_DETAIL, entry_id=entry.entry_id)
         assert message["success"] is False
         assert message["error"]["code"] == ws_const.ERR_INVALID_FORMAT
+
+
+# A window the *file* assigns to a profile and whose travel the file states too: the one
+# shape in which "Rimuovi la misura" leaves the shutter still following something. The
+# assignment made in this panel lives in the record, and the record is what goes.
+FORGET_YAML = YAML.replace(
+    """    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+      height: 150
+""",
+    """    landing_shutter:
+      where: '82'
+      name: Landing Shutter
+      profile: from_the_file
+      height: 150
+""",
+)
+
+
+async def test_the_detail_says_what_removing_the_measurement_would_leave(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The confirmation has to name a destination, and name the one that is true.
+
+    `inherited_value` answers a narrower question - one key with this window's
+    *overrides* taken away - and it is the right answer for the empty field. It is the
+    wrong answer for "Rimuovi la misura", which takes the whole record: the assignment
+    goes with it, and so does a travel nobody else states. A window whose travel only
+    the record knew cannot be scaled a profile afterwards at all, so the keys would
+    promise a profile the shutter would never reach.
+
+    Two windows, the two cases. `Landing Shutter` is assigned by `myhome.yaml` and has
+    its travel there, so both survive the removal. `Hallway Shutter` writes its own run
+    times in the file and is assigned here, so what is left is the file.
+
+    Mutation caught: reading the destination off the keys' `inherited_origin`;
+    answering `travel_stays` from the record's own travel instead of from the
+    resolution.
+    """
+    async with setup_myhome(hass, tmp_path, FORGET_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+        )
+        assert tuple(detail["forget"]) == COVER_DETAIL_FORGET_KEYS
+        assert detail["forget"] == {
+            "falls_back_to": "profile",
+            "profile": "from_the_file",
+            "travel_stays": True,
+        }
+
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        # The assignment was made here, so it goes with the record; the file's own run
+        # times are what the shutter is left with.
+        assert detail["forget"] == {
+            "falls_back_to": "file",
+            "profile": None,
+            "travel_stays": True,
+        }
+
+
+async def test_a_travel_only_the_record_knows_does_not_survive_the_removal(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """"La corsa del telo resta" is true of a travel the file states, and only then.
+
+    Mutation caught: rendering that line unconditionally, which is a promise about a
+    number the write is in fact about to take away.
+    """
+    no_travel = YAML.replace(
+        """      name: Landing Shutter
+      height: 150
+""",
+        """      name: Landing Shutter
+""",
+    )
+    calibration = deepcopy(CALIBRATION)
+    calibration[CONF_COVERS][SECOND] = record(
+        SECOND, profile="tall", profile_wins=True, height=150.0
+    )
+    async with setup_myhome(hass, tmp_path, no_travel, calibration=calibration) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+        )
+        assert detail["forget"]["travel_stays"] is False
+        # ...and with no travel, no profile can be brought to this window at all.
+        assert detail["forget"]["falls_back_to"] != "profile"
+
+
+async def test_the_detail_and_the_forget_that_follows_it_are_one_answer(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Read it, remove it, and the write says exactly what the read said it would.
+
+    Both resolve the window with the record gone, and that is the whole guarantee: a
+    confirmation that named one destination and a result that named another would be the
+    screen teaching the user something false about their own shutters.
+
+    Mutation caught: the two computing the same thing by two rules (a change to one of
+    them would drift silently, which is the failure this asserts against).
+    """
+    async with setup_myhome(hass, tmp_path, WRITE_YAML, calibration=CALIBRATION) as (
+        entry,
+        _commands,
+    ):
+        client = await hass_ws_client(hass)
+        detail = await result(
+            client,
+            type=WS_TYPE_COVER_DETAIL,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        answer = await result(
+            client,
+            type=WS_TYPE_COVER_FORGET,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+        )
+        assert answer["falls_back_to"] == detail["forget"]["falls_back_to"]
+        assert answer["profile"] == detail["forget"]["profile"]
+        assert (row_of(answer["overview"], FIRST)["height"] is not None) == detail["forget"][
+            "travel_stays"
+        ]
 
 
 # ----------------------------------------------------------------------- texts

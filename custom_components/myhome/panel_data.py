@@ -66,6 +66,8 @@ from .calibration_store import (
 )
 from .const import (
     CALIBRATION_KEY_ORIGIN_OWN,
+    CALIBRATION_ORIGIN_FILE,
+    CALIBRATION_ORIGIN_INHERITED,
     CONF_ADVANCED_SHUTTER,
     CONF_CLOSING_ROLL,
     CONF_CLOSING_TIME,
@@ -536,7 +538,37 @@ def async_cover_detail(
             }
         )
 
-    return {"entry_id": entry.entry_id, "cover": row, "keys": keys}
+    # What "Rimuovi la misura" would leave, answered before it removes anything.
+    #
+    # `inherited_value` above answers a narrower question - what one key falls back to
+    # with this window's *overrides* taken away - and it is the right answer for the
+    # empty field and its "eredita N". It is the wrong answer for the confirmation,
+    # because `cover_forget` takes the whole record, the travel with it: a window whose
+    # travel only the record knew cannot be scaled a profile afterwards, so the
+    # destination the keys promise would be a profile the shutter would not in fact
+    # reach. This resolves the window once more with the record gone - which is exactly
+    # what `panel_write.async_cover_forget` does after the write - so the sentence the
+    # user reads before and the one they read after are one answer.
+    forgotten = resolve_cover(cfg, profiles=profiles, calibration=None)
+    falls_back_to = {
+        CALIBRATION_ORIGIN_INHERITED: "profile",
+        CALIBRATION_ORIGIN_FILE: "file",
+    }.get(forgotten.origin, "defaults")
+
+    return {
+        "entry_id": entry.entry_id,
+        "cover": row,
+        "keys": keys,
+        "forget": {
+            "falls_back_to": falls_back_to,
+            "profile": forgotten.profile,
+            # `myhome.yaml` may state the travel itself, and then it survives the
+            # removal; a travel somebody typed into this panel does not. The design's
+            # "la corsa del telo resta" is true in the first case and a promise in the
+            # second, so the screen is told which it is instead of assuming.
+            "travel_stays": forgotten.height is not None,
+        },
+    }
 
 
 # ----------------------------------------------------------------------- preview
