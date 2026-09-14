@@ -794,6 +794,13 @@ async def test_the_detail_and_the_forget_that_follows_it_are_one_answer(
         # ...and anything this integration has never been translated into is English,
         # because a panel with no words is worse than a panel in the wrong ones.
         ("zz", "en", True),
+        # A BCP 47 tag is case-insensitive and every file here is named in lower case,
+        # so the fold happens on this side of the disk: without it `IT` was Italian on
+        # macOS - whose filesystem matches `IT.json` to `it.json` - and English on
+        # Linux, from one request. It is not a fallback either: the language asked for
+        # is the language served.
+        ("IT", "it", False),
+        ("pt-BR", "pt", True),
     ],
 )
 async def test_the_panel_is_served_the_nearest_language_there_is(
