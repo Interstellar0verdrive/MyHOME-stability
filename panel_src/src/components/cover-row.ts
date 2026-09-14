@@ -106,9 +106,36 @@ export const coverRowStyles = css`
     color: var(--myhome-text-off);
   }
 
+  /*
+   * Below 600 px the design does not draw the handle: the gesture there is press-and-tap,
+   * and a control that looks draggable and is not would be a lie about what it does.
+   *
+   * It is hidden rather than removed, because "display: none" takes it out of the tab
+   * order too - and Enter on the handle is the *only* way to reach an assignment that
+   * does not need a pointer. A phone is not the only thing under 600 px: a desktop window
+   * dragged narrow is one, and it has a keyboard. So the handle is taken out of the flow
+   * and out of sight in the way a skip link is, and it comes back at its full 48 px the
+   * moment the keyboard reaches it.
+   */
   @media (max-width: 599px) {
     .row .handle {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .row .handle:focus-visible {
+      position: static;
+      width: 48px;
+      height: 48px;
+      margin: 0;
+      overflow: visible;
+      clip-path: none;
     }
   }
 
@@ -230,7 +257,7 @@ export interface CoverRowContext {
    * body of the row is the way into the detail view, and a press that both opened a screen
    * and picked the row up would do neither reliably.
    */
-  onRowPress: (cover: CoverRow) => void;
+  onRowPress: (cover: CoverRow, event: PointerEvent) => void;
   onPick: (cover: CoverRow) => void;
   onWithdraw: (cover: CoverRow) => void;
 }
@@ -309,7 +336,7 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
       type="button"
       title=${cover.name}
       @click=${() => context.onOpen(cover)}
-      @pointerdown=${() => context.onRowPress(cover)}
+      @pointerdown=${(event: PointerEvent) => context.onRowPress(cover, event)}
     >
       <span class="name">${cover.name}</span>
       <span class="sub">${subtitle(i18n, cover, needsTravel)}</span>

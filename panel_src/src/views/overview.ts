@@ -36,7 +36,13 @@ import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/th
 import { type CoverRow, type Overview, type ProfileRow } from "../engine/ws";
 import { coverRowStyles } from "../components/cover-row";
 import { dialogStyles, profileDialog } from "../components/profile-dialog";
-import { groupCard, groupCardStyles, type PanelGroup } from "../components/group-card";
+import {
+  groupAttr,
+  groupCard,
+  groupCardStyles,
+  groupKeyOf,
+  type PanelGroup,
+} from "../components/group-card";
 import { originChipStyles } from "../components/origin-chip";
 import { reviewPanel, reviewPanelStyles } from "../components/review-panel";
 import {
@@ -97,6 +103,7 @@ export class MyHomeOverview extends LitElement {
 
   private _trap = new FocusTrap();
   private _returnTo: HTMLElement | null = null;
+  private _returnToRow: string | null = null;
   private _drag: DragController;
 
   constructor() {
@@ -352,7 +359,14 @@ export class MyHomeOverview extends LitElement {
     const open = this.state.dialog !== null || this.state.review;
     const wasOpen = (before?.dialog ?? null) !== null || (before?.review ?? false);
     if (open && !wasOpen) {
-      this._returnTo = this._activeElement();
+      const from = this._activeElement();
+      this._returnTo = from;
+      // ...and *which row* it was on, because the node itself may not survive the dialog.
+      // Picking a profile moves the shutter into another group, and the row is rendered
+      // there as a new element while the old one is thrown away: a remembered node would
+      // be disconnected by the time focus was given back, and the keyboard user would be
+      // returned to the top of the document - the exact thing this remembers to prevent.
+      this._returnToRow = from?.closest("[data-row]")?.getAttribute("data-row") ?? null;
       requestAnimationFrame(() => {
         const root = this.renderRoot.querySelector<HTMLElement>("[data-focus-root]");
         if (root) {
@@ -364,10 +378,16 @@ export class MyHomeOverview extends LitElement {
     if (!open && wasOpen) {
       this._trap.release();
       const back = this._returnTo;
+      const row = this._returnToRow;
       this._returnTo = null;
-      if (back?.isConnected) {
-        requestAnimationFrame(() => back.focus());
-      }
+      this._returnToRow = null;
+      requestAnimationFrame(() => {
+        const again = row
+          ? this.renderRoot.querySelector<HTMLElement>(`[data-row="${CSS.escape(row)}"] .handle`)
+          : null;
+        const target = again ?? (back?.isConnected ? back : null);
+        target?.focus();
+      });
     }
   }
 
@@ -536,9 +556,11 @@ export class MyHomeOverview extends LitElement {
   };
 
   /** A press on the row's body only ever arms the phone's long press. */
-  private _onRowPress = (cover: CoverRow): void => {
+  private _onRowPress = (cover: CoverRow, event: PointerEvent): void => {
     if (this._narrow && !this._locked) {
-      this._drag.arm(cover.unique_id);
+      // The event travels with it so the long press can tell a resting finger - which is
+      // never perfectly still - from the start of a scroll.
+      this._drag.arm(cover.unique_id, event);
     }
   };
 
@@ -564,7 +586,7 @@ export class MyHomeOverview extends LitElement {
       }
       return;
     }
-    const to = over === "none" ? null : over;
+    const to = groupKeyOf(over);
     const order = this._covers.map((row) => row.unique_id);
     const moved = movedTo(
       order,
@@ -756,7 +778,7 @@ export class MyHomeOverview extends LitElement {
           </div>`
         : html`<div class="groups">
             ${groups.map((group) => {
-              const key = group.key ?? "none";
+              const key = groupAttr(group.key);
               const insert = drag?.insert ?? null;
               const here = insert !== null && insert.group === key;
               return groupCard(group, {

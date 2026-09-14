@@ -11,7 +11,7 @@
 //
 // **iOS Safari.** The handle sets `touch-action: none` and `pointerdown` is
 // `preventDefault`ed, which stops the page scrolling under the finger and suppresses the
-// long-press callout; the row carries `-webkit-touch-callout: none`. Below 900 px there is
+// long-press callout; the row carries `-webkit-touch-callout: none`. Below 600 px there is
 // no drag at all: a long press arms the shutter and a tap on a collapsed group title moves
 // it, which is the design's own pattern for the phone rather than a workaround for one.
 //
@@ -103,6 +103,15 @@ export interface DragCallbacks {
 const DRAG_THRESHOLD_PX = 6;
 /** How long a finger has to rest on the handle before the shutter is armed. */
 const LONG_PRESS_MS = 450;
+/**
+ * How far the finger may wander during those 450 ms and still be resting.
+ *
+ * A finger on glass is never still: a press held long enough to arm reports pointer moves
+ * of a pixel or two throughout, and cancelling on the first of them left the phone's only
+ * gesture almost impossible to perform. The number has to stay well under the distance a
+ * scroll travels in the same time, which is what it is here to tell apart.
+ */
+const LONG_PRESS_SLOP_PX = 12;
 /** How close to an edge the pointer scrolls the list, and by how much per frame. */
 const EDGE_PX = 64;
 const EDGE_STEP_PX = 14;
@@ -119,6 +128,7 @@ export class DragController {
   private _callbacks: DragCallbacks;
   private _start: { cover: string; x: number; y: number; live: boolean } | null = null;
   private _longPress: ReturnType<typeof setTimeout> | null = null;
+  private _pressedAt: { x: number; y: number } | null = null;
   private _ghost: HTMLElement | null = null;
   private _target: DropTarget | null = null;
   private _scroll: number | null = null;
@@ -144,7 +154,7 @@ export class DragController {
       return;
     }
     if (this._callbacks.narrow()) {
-      this._arm(cover);
+      this._arm(cover, event);
       return;
     }
     // Stops the page scrolling under the finger and the long-press callout on iOS.
@@ -153,6 +163,9 @@ export class DragController {
     window.addEventListener("pointermove", this._onMove);
     window.addEventListener("pointerup", this._onUp);
     window.addEventListener("pointercancel", this._onCancel);
+    // A window that loses focus mid-drag never sends the `pointerup` that would end it,
+    // and the row would stay in flight with its ghost on the screen until the next press.
+    window.addEventListener("blur", this._onCancel);
   }
 
   /**
@@ -162,11 +175,11 @@ export class DragController {
    * a `pointerdown` the row handler has already seen and must not `preventDefault` - a
    * press on the row is also the way into the detail view.
    */
-  arm(cover: string): void {
+  arm(cover: string, event?: PointerEvent): void {
     if (this._callbacks.blocked()) {
       return;
     }
-    this._arm(cover);
+    this._arm(cover, event);
   }
 
   /** Give up whatever is in flight - Escape, or the view going away. */
@@ -183,27 +196,45 @@ export class DragController {
     this._clearLongPress();
   }
 
-  private _arm(cover: string): void {
+  private _arm(cover: string, event?: PointerEvent): void {
     this._clearLongPress();
+    this._pressedAt = event ? { x: event.clientX, y: event.clientY } : null;
     this._longPress = setTimeout(() => {
       this._longPress = null;
       this._callbacks.onArm(cover);
     }, LONG_PRESS_MS);
     window.addEventListener("pointerup", this._clearLongPressOnce);
-    window.addEventListener("pointermove", this._clearLongPressOnce);
+    window.addEventListener("pointermove", this._onPressMove);
     window.addEventListener("pointercancel", this._clearLongPressOnce);
+    window.addEventListener("blur", this._clearLongPressOnce);
   }
 
   private _clearLongPressOnce = (): void => this._clearLongPress();
+
+  /**
+   * A move during the press: a scroll gives the shutter back, a tremor does not.
+   *
+   * Without an origin to measure from there is nothing to be tolerant about, so any move
+   * cancels - which is the old behaviour, kept for the one caller that has no event.
+   */
+  private _onPressMove = (event: PointerEvent): void => {
+    const from = this._pressedAt;
+    if (from && Math.hypot(event.clientX - from.x, event.clientY - from.y) < LONG_PRESS_SLOP_PX) {
+      return;
+    }
+    this._clearLongPress();
+  };
 
   private _clearLongPress(): void {
     if (this._longPress) {
       clearTimeout(this._longPress);
       this._longPress = null;
     }
+    this._pressedAt = null;
     window.removeEventListener("pointerup", this._clearLongPressOnce);
-    window.removeEventListener("pointermove", this._clearLongPressOnce);
+    window.removeEventListener("pointermove", this._onPressMove);
     window.removeEventListener("pointercancel", this._clearLongPressOnce);
+    window.removeEventListener("blur", this._clearLongPressOnce);
   }
 
   private _onMove = (event: PointerEvent): void => {
@@ -242,6 +273,7 @@ export class DragController {
     window.removeEventListener("pointermove", this._onMove);
     window.removeEventListener("pointerup", this._onUp);
     window.removeEventListener("pointercancel", this._onCancel);
+    window.removeEventListener("blur", this._onCancel);
     this._start = null;
     this._target = null;
     this._stopScrolling();

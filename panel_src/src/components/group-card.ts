@@ -165,6 +165,22 @@ export const groupCardStyles = css`
   }
 `;
 
+/**
+ * A group's `data-group`, which is what a drag hit-tests against.
+ *
+ * "Senza profilo" is `none`, and every profile is namespaced under `profile:` - because a
+ * profile is free to be *called* "none", and a bare name would then be indistinguishable
+ * from the group that has no profile at all and from the "Togli dal profilo" zone, which
+ * carries the same attribute. The drop would take the shutter out of its profile instead
+ * of putting it into that one, silently.
+ */
+export const groupAttr = (key: string | null): string =>
+  key === null ? "none" : `profile:${key}`;
+
+/** ...and back again: what a `data-group` read off the DOM means. */
+export const groupKeyOf = (attr: string): string | null =>
+  attr === "none" ? null : attr.slice("profile:".length);
+
 export interface PanelGroup {
   /** The profile name, or `null` for "Senza profilo". */
   key: string | null;
@@ -199,7 +215,7 @@ export interface GroupContext {
   onOpenProfile: (name: string) => void;
   onOpenCover: (cover: CoverRow) => void;
   onGrab: (cover: CoverRow, event: PointerEvent) => void;
-  onRowPress: (cover: CoverRow) => void;
+  onRowPress: (cover: CoverRow, event: PointerEvent) => void;
   onPick: (cover: CoverRow) => void;
   onWithdraw: (cover: CoverRow) => void;
   /** A tap on the card while a shutter is armed: this group is the destination. */
@@ -215,7 +231,7 @@ export const groupCard = (group: PanelGroup, context: GroupContext): TemplateRes
   const armed = context.collapsed;
   return html`<section
     class="group ${armed ? "collapsed" : ""}"
-    data-group=${group.key ?? "none"}
+    data-group=${groupAttr(group.key)}
     aria-labelledby=${group.id}
   >
     <div
