@@ -16,10 +16,11 @@ This module answers three questions and writes nothing at all:
   sentence the panel shows is baked into the bundle.
 * **`async_preview`** - the same resolution again, for an assignment nobody has made
   yet: "if this shutter followed that profile, at that travel, what would it run on?"
-  It is the before/after table of the review panel, and it is here rather than in the
-  browser for the reason the rest of this module is: the answer is
-  `resolve_cover`'s, and a second one worked out in JavaScript would be a second travel
-  model. It writes nothing, takes no lock and refuses nothing - see `async_preview`.
+  It is the before/after table of the review panel, and - with `profile_values` - the
+  profile card's impact preview as well. It is here rather than in the browser for the
+  reason the rest of this module is: the answer is `resolve_cover`'s, and a second one
+  worked out in JavaScript would be a second travel model. It writes nothing, takes no
+  lock and refuses nothing - see `async_preview`.
 
 **Where the answers come from, and why not from here.** Every number and every origin in
 the overview is `resolve_cover_config` - the very call `cover.py` makes in the entity's
@@ -51,7 +52,7 @@ from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
-from .calibration_flow import MAX_HEIGHT_CM, MIN_HEIGHT_CM, parse_number
+from .calibration_flow import MAX_HEIGHT_CM, MIN_HEIGHT_CM, PROFILE_FIELDS, parse_number
 from .calibration_store import (
     ResolvedCover,
     keys_written_by_the_file,
@@ -555,6 +556,55 @@ PREVIEW_PROBLEMS: tuple[str, ...] = (
 
 
 @callback
+def _hypothetical_profiles(
+    profiles: Mapping[str, Mapping[str, Any]],
+    profile_values: Mapping[str, Mapping[str, Any]] | None,
+) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
+    """The gateway's profiles with some of their numbers replaced, for one answer only.
+
+    The profile card's editor has a question no assignment can ask: "if this profile said
+    these numbers instead, what would each of its followers run on?" - which is the live
+    impact preview beside the fields. It is the same question the review panel asks, one
+    level up, and it has to be answered by the same function for the same reason: a
+    profile scaled in JavaScript is a second travel model.
+
+    Two rules, both deliberate.
+
+    * **A name nothing defines is not defined here.** The override replaces the numbers
+      of a profile the gateway already has; it never invents one. So an item that asks
+      for a name nobody defines still answers `unknown_profile`, and the preview cannot
+      be used to ask about a profile that does not exist.
+    * **A number that cannot be used does not silently become the stored one.** The
+      offending name is handed back in `broken`, and every item that would resolve
+      through it carries that problem instead of an answer - the same shape a bad
+      `height` already has, and the reason this read still refuses nothing.
+
+    Nothing is written: the mapping is a copy that lives for the length of the call.
+    """
+    merged = dict(profiles)
+    broken: dict[str, str] = {}
+    for name, values in (profile_values or {}).items():
+        if name not in merged:
+            continue
+        numbers: dict[str, float] = {}
+        problem: str | None = None
+        for key, low, high in PROFILE_FIELDS:
+            number = parse_number(values.get(key))
+            if number is None:
+                problem = "not_a_number"
+                break
+            if not low <= number <= high:
+                problem = "out_of_range"
+                break
+            numbers[key] = number
+        if problem is not None:
+            broken[name] = problem
+            continue
+        merged[name] = {**merged[name], **numbers}
+    return merged, broken
+
+
+@callback
 def _previewed(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -562,6 +612,7 @@ def _previewed(
     *,
     covers: Mapping[str, Mapping[str, Any]],
     profiles: Mapping[str, Mapping[str, Any]],
+    broken: Mapping[str, str],
 ) -> dict[str, Any]:
     """One hypothetical assignment, resolved - or the one problem that stops it.
 
@@ -635,6 +686,19 @@ def _previewed(
         answer["problem"] = "missing_travel"
         return answer
 
+    # A hypothetical profile whose numbers could not be read answers nothing for the
+    # windows that would run on it - and `resolved.profile`, not the one in the
+    # question, is which of them those are: a window whose `myhome.yaml` names a
+    # profile follows it whatever the item asked.
+    if resolved.profile is not None and resolved.profile in broken:
+        answer["problem"] = broken[resolved.profile]
+        return answer
+
+    # The profile the window would really follow afterwards, which is the one asked
+    # about unless the file's own `profile:` line answers instead. It is `overview`'s
+    # own field, read the same way, so the row before and the row after are comparable
+    # (REVIEW lot 7, open point 1).
+    answer["profile"] = resolved.profile
     answer["height"] = resolved.height
     answer["origin"] = resolved.origin
     answer["source"] = resolved.source
@@ -650,7 +714,10 @@ def _previewed(
 
 @callback
 def async_preview(
-    hass: HomeAssistant, entry: ConfigEntry, items: Sequence[Mapping[str, Any]]
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    items: Sequence[Mapping[str, Any]],
+    profile_values: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """What a batch of assignments would come to, without making any of them.
 
@@ -671,16 +738,28 @@ def async_preview(
     the panel renders that key's own sentence - the same sentence `assign` would send if
     the user confirmed anyway.
 
+    **`profile_values`** asks the same question one level up: "if this profile said
+    these numbers instead of the ones it has, what would each of these windows run on?"
+    That is the profile card's live impact preview, and it is here for the reason the
+    rest of this module is - the panel may not scale a profile itself. It changes
+    nothing: the override lives in a copy of the profile mapping for the length of the
+    call (`_hypothetical_profiles`), and the store is not touched by it any more than it
+    is by the assignment above.
+
     No lock, no store write, no signal: this is a read, and a read during a measurement
     is allowed like every other read.
     """
     store = loaded_store(hass, entry)
-    profiles = merged_profiles(yaml_profiles(hass, entry), store.profiles if store else {})
+    profiles, broken = _hypothetical_profiles(
+        merged_profiles(yaml_profiles(hass, entry), store.profiles if store else {}),
+        profile_values,
+    )
     covers = basic_covers(hass, entry)
     return {
         "entry_id": entry.entry_id,
         "items": [
-            _previewed(hass, entry, item, covers=covers, profiles=profiles) for item in items
+            _previewed(hass, entry, item, covers=covers, profiles=profiles, broken=broken)
+            for item in items
         ],
     }
 

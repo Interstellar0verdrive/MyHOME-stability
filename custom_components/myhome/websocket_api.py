@@ -248,11 +248,18 @@ async def websocket_preview(
     Each item carries either the answer or the one `translation_key` that stops it, so
     the whole command never refuses for one row's sake - see `panel_data.async_preview`
     for why that is the right shape for this one command and the wrong one for `assign`.
+
+    `profile_values` is the profile card's half of the same question - "if this profile
+    said these numbers instead, what would its followers run on?" - and is as read-only
+    as the rest: it replaces numbers in a copy of the profile mapping and reaches
+    nothing else.
     """
     entry = _entry(hass, connection, msg)
     if entry is None:
         return
-    connection.send_result(msg["id"], async_preview(hass, entry, msg["items"]))
+    connection.send_result(
+        msg["id"], async_preview(hass, entry, msg["items"], msg.get("profile_values"))
+    )
 
 
 # ----------------------------------------------------------------- the write commands
