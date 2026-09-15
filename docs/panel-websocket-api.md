@@ -181,7 +181,7 @@ Omitted, `language` is `hass.config.language` — the *server's*. The panel pass
 | `language` | string | the language actually served, after the fallback chain |
 | `requested` | string | what was asked for |
 | `fallback` | bool | the two differ |
-| `texts` | object | the `options`, `selector` and `panel` blocks of that language's file, **verbatim** |
+| `texts` | object | four blocks of that language's file: `options`, `selector`, `exceptions` and `panel` (the file's `config_panel` block, renamed). Each block is merged key by key over English, so a key the language lacks carries the English text |
 
 Fallback chain, resolved on the server because the browser cannot know which
 translation files exist: the exact tag, then its primary subtag (`it-CH` → `it`,
