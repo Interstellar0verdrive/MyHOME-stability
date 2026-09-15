@@ -312,6 +312,8 @@ The [`docs/`](docs/README.md) folder goes deeper than this README:
 - [Profiles and covers panel](docs/panel.md) — the full-page screen: opening it,
   the overview and its origin chips, assigning and reviewing, the two cards, and
   troubleshooting
+- [The panel's WebSocket API](docs/panel-websocket-api.md) — for contributors: the
+  `myhome/calibration/*` commands behind the panel
 - [Energy monitoring](docs/energy.md) — the instant-power keep-alive, the push
   filter, daily/monthly/total energy, and deriving kWh without gateway totals
 - [Discovery](docs/discovery.md) — what a discovery run writes and does not touch

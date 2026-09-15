@@ -20,6 +20,9 @@ minimal configuration example; the pages here go deeper.
   origin chips, assigning covers by drag, long press or keyboard, the review with its
   before/after and the undo that follows it, the cover and profile cards, and what
   the panel never does.
+- **[The panel's WebSocket API](panel-websocket-api.md)** — for contributors: every
+  `myhome/calibration/*` command behind the panel, its payload, its answer and its
+  refusals.
 - **[Energy monitoring](energy.md)** — the instant-power keep-alive, the push
   filter, `sensor_defaults`, daily/monthly/total energy, and deriving kWh with
   `integration`/`utility_meter` when the gateway returns no totals.

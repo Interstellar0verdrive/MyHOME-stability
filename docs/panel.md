@@ -12,7 +12,8 @@ measurement opens the *Configure* dialog, which stays the only place the guided
 calibration runs — and stays a complete alternative to the panel for everything the
 panel does.
 
-Available since **0.6.0**.
+Available since **0.6.0**. For the WebSocket commands behind it, see
+[The panel's WebSocket API](panel-websocket-api.md).
 
 ## Contents
 
@@ -451,4 +452,6 @@ drift apart:
   precedence between the file and what is stored, and the `Calibration source`
   attribute.
 - [Architecture → The panel](architecture.md#the-panel) — for contributors: how it is
-  registered and served, the WebSocket API behind it, and how to rebuild the bundle.
+  registered and served, and how to rebuild the bundle.
+- [The panel's WebSocket API](panel-websocket-api.md) — for contributors: every
+  command behind the panel, its payload, its answer and its refusals.
