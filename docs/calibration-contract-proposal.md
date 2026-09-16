@@ -254,6 +254,16 @@ asks the user to stand clear; from there the cover positions itself between read
 Their order is not fixed: each reading runs to its percentage from an end stop, and the
 one that starts where the cover already stands is taken first, which saves a full run.
 
+**Where the choice between the two levels happens.** After step 8 the basic
+calibration is complete and the summary shows what it found. That screen is a fork with
+three ways out: **save** (the cover is calibrated and usable, within about 4 cm), 
+**continue with the thorough calibration**, or cancel. Choosing to continue does not
+restart anything: the presses are not repeated, and the five extra readings are fitted
+over the times already measured. So the user decides *after* seeing a result, not before
+starting, and someone who only wants a working shutter never sees the longer path. The
+same fork appears at the end of a correction (path C, first two scopes), for the same
+reason and with the same effect.
+
 At the end it asks for a profile name and stores two things: the **profile** (reference
 travel, opening and closing time, slat time, one roll coefficient per direction) and the
 same numbers as **this cover's own values**, so the measured cover runs on them whatever
@@ -299,7 +309,7 @@ there is nothing left over to be an error and the summary reports no accuracy fi
 it says so rather than showing a dash. On the covers I have measured this lands within
 about 4 cm.
 
-**Thorough** adds about two minutes and five readings: a quarter and three quarters of
+**Thorough** is not a different procedure but the continuation of the basic one, chosen at its summary. It adds about two minutes and five readings: a quarter and three quarters of
 the travel in each direction, plus the check. With three points per direction the fit
 solves the roll **and** a scale factor on the run times at the same time, and that scale
 factor is what absorbs the reaction time of the presses: the tape corrects the finger.
