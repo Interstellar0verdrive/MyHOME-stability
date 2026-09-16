@@ -25,7 +25,7 @@ long the motor has run. Two things make that estimate non-linear:
 
 - **The slats.** On the way up, the first phase separates the slats while the bottom
   edge stays on its rest. Only after that does the curtain start to travel.
-- **The roll.** The fabric winds onto a tube, so the tube's effective diameter grows as
+- **The roll.** The curtain winds onto a tube, so the tube's effective diameter grows as
   the cover opens. The cover moves faster near the top than near the bottom, and faster
   going down than going up because gravity helps.
 
@@ -35,7 +35,7 @@ The correction is one coefficient per direction (the ratio between the roll's di
 full and empty, typically 1.5 to 2.5) plus the slat time.
 
 Those numbers are properties of a *kind* of shutter, not of one window: the same model
-of curtain on a taller window has the same physics with more fabric. That is what makes
+of curtain on a taller window has the same physics with more slats. That is what makes
 a profile worth having — measure one window, and every similar window inherits the
 result, scaled to its own travel. Without a reference travel, a profile only fits the
 window it was measured on, and sharing it is a coincidence.
@@ -103,7 +103,7 @@ closing  =        (closing_time_s)               * scale
 ```
 
 The curtain scale is taken from the **closing** roll and used for both directions on
-purpose: it measures how much fabric the tube has to unwind, which is one length of
+purpose: it measures how much curtain the tube has to unwind, which is one length of
 curtain whichever way the motor turns. The up/down difference the two rolls carry is
 the motor's load, not the geometry; scaling each direction by its own roll would make
 one profile predict two different curtain lengths. Without a travel on the cover there
