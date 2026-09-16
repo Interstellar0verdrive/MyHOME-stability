@@ -277,8 +277,15 @@ from then on the cover follows the profile, scaled to its travel, and a later co
 of the profile reaches it.
 
 It then offers a **check**: the cover is sent to half its travel and the user measures
-where it really stopped. One or two centimetres is normal; three or more mean this cover
-does not behave like the profile it was given, and the screen offers path C on the spot.
+where it really stopped. What the gap means depends on how the profile itself was
+measured, and this is a place where my own implementation states it too simply today:
+a profile measured at the basic level is worth about 4 cm to begin with, so a 3 cm gap
+on a cover following it says nothing about that cover; a profile measured thoroughly is
+worth about 1 cm, and there the same 3 cm is a real signal. So the contract should carry
+the accuracy of a profile alongside its values (the gap its own check reported, or the
+fact that it never had one), and the threshold offered here should be read against that
+figure rather than against a constant. When the gap does exceed it, the screen offers
+path C on the spot.
 
 #### Path C — a cover that has a profile but stops in the wrong place
 
