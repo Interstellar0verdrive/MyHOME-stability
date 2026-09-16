@@ -78,16 +78,23 @@ Notes that matter more than the names:
   "profile_assigned": true,      // somebody said so on this installation (see 1.5)
   "travel_cm": 154.0,            // this cover's own travel; what the profile scales to
   "overrides": {                 // this cover's own measured values, key by key
-    "closing_time_s": 19.80
-  },
-  "source": "guided",            // guided | assigned | manual
-  "measured_at": "2026-09-14T08:10:00Z"
+    "closing_time_s": {
+      "value": 19.80,
+      "source": "guided",        // guided | manual
+      "measured_at": "2026-09-14T08:10:00Z"
+    }
+  }
 }
 ```
 
 An override is per key, not per record: a cover can have its own closing time and
 inherit everything else. That is what makes "this one shutter drifts from its group"
 cheap to fix without creating a profile for it.
+
+**Provenance is per key too**, for the same reason. A correction that re-measured only
+the closing direction must not restamp the opening one, and a record-level
+`source` / `measured_at` pair cannot express that (this is xtimmy86x's point in #270,
+and he is right: my own path C produces exactly that case).
 
 ### 1.4 Scaling a profile to a cover
 
@@ -160,9 +167,22 @@ owner (the socket or the service call that started it), a lease that expires, an
 target cover. Opening a second one is refused, not queued: a shutter that two clients
 are driving is the one failure mode with a physical consequence.
 
-The backend is the timekeeper. Every duration is measured between bus events (the
-motion anchor when the frame is written or the actuator reports movement, and the write
-of the stop), never between browser clicks. On my plant, twelve covers commanded
+The backend is the timekeeper. Every duration starts at the motion anchor: the actuator's
+own moving status, or the moment the direction frame was written when no actuator status
+arrives. Where it *ends* has two cases, and the contract should name both, because mixing
+them adds a queue wait to a number that should not carry one:
+
+- **A press that causes the stop** — the lift-off run, where the press stops the cover a
+  few centimetres above its rest. The run ends when the **stop frame is written**, because
+  that write is the event that ended the movement.
+- **A press that observes a stop that already happened** — the cover arriving at an end
+  stop. The run ends when the **confirmation reaches the backend**: the motor stopped
+  before the user's finger moved and no stop frame is involved. A stop may still be
+  written afterwards to release the actuator's relay, but it is not the measurement.
+
+The user's reaction delay is inside both, deliberately: the thorough level's third point
+per direction is what later absorbs it as a scale factor on the times. What must never be
+inside either is a browser clock. On my plant, twelve covers commanded
 together put their direction frames 0.1 to 1.2 s apart, so the last of them leaves the
 socket up to 12 s after it was queued; on a 24 s shutter that is half the travel, and a
 clock started at the click would record it as movement.
@@ -275,10 +295,19 @@ starting, and someone who only wants a working shutter never sees the longer pat
 same fork appears at the end of a correction (path C, first two scopes), for the same
 reason and with the same effect.
 
-At the end it asks for a profile name and stores two things: the **profile** (reference
-travel, opening and closing time, slat time, one roll coefficient per direction) and the
-same numbers as **this cover's own values**, so the measured cover runs on them whatever
-the configuration file says.
+At the end it asks for a profile name and stores the **profile** (reference travel,
+opening and closing time, slat time, one roll coefficient per direction), and assigns it
+to the cover that was just measured, **with no overrides of its own**.
+
+That last part is a correction to how my implementation behaves today, and it comes from
+xtimmy86x's reading of this document in #270. My flow currently writes the same numbers
+twice, into the profile and into the cover, so that the measured cover would run on its
+own values whatever the configuration file said. The effect nobody wanted is that a later
+edit of the profile no longer reaches the very cover it was measured on. Since the profile
+is created from that cover, its reference travel *is* that cover's travel, so following
+the profile gives exactly the same numbers and later edits propagate. Keeping values for
+this cover alone stays available as an explicit choice (see 2.7), for a cover that must
+not move with its group.
 
 #### Path B — a cover similar to one already measured
 
