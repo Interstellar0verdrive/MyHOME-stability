@@ -196,7 +196,7 @@ nobody is watching any more.
   point and asks for a number. Moving while the user reads costs nothing and saves a
   step, so these can be chained with one warning at the start of the phase.
 
-### 2.4 Levels
+### 2.4 Levels, in one line each
 
 - **Basic** — the timed runs plus one reading per direction. About 4 cm on the shutters
   I have measured; usable, and the shortest path for someone with one shutter.
@@ -205,7 +205,141 @@ nobody is watching any more.
 - **Correction** — a short path for a cover that has drifted from its group: times only,
   times and rolls, or the readings alone, without redoing the whole measurement.
 
-### 2.5 Refusals the session needs
+### 2.5 The measurement plan, end to end
+
+The levels above describe the shape; this is the plan as it actually runs today, step
+by step, because a contract that says "a reading step" without saying what a reading is
+for leaves the important part unwritten. It is not meant to constrain a backend to this
+exact sequence: it is what one implementation does, what each step buys, and what it
+stores. A backend that offers less should say so through its capabilities rather than
+run a shorter plan under the same name.
+
+**The principle first: there is no stopwatch anywhere in it.** The integration already
+knows when a motor *starts*, because the actuator answers a direction command with its
+own moving status about half a second later, and the step waits for that (up to three
+seconds from the moment the gateway reports the frame written). What nothing on the bus
+reports precisely enough is when the motor *stops* at an end stop, and that is the one
+thing the user supplies, with a press. One human reaction per measurement instead of
+two, and nothing to hold but the tape measure.
+
+#### Path A — the first cover of its kind
+
+Eight movements, about four minutes, three presses and three tape readings.
+
+| # | Step | Movement | User action | What it measures | Stored |
+|---|---|---|---|---|---|
+| 1 | Close completely | run to the bottom end stop | none | nothing | nothing — it gives every later step a known starting point |
+| 2 | Ascent, first run ("lift-off") | starts on the user's "Start the cover" | **press 1**, at the instant the bottom edge leaves its rest; the press writes a stop at once | the slat time: the phase where the slats separate before the curtain travels | provisional |
+| 3 | Lift-off check | none | answers what they see | whether press 1 was early, good, or late | corrects step 2 |
+| 4 | Ascent, second run | closed again, then started by the user | **press 2**, at the instant the motor stops at the top | the full opening time | provisional |
+| 5 | Curtain travel | none (the cover is open) | tape reading: base to bottom edge | the cover's own travel in cm | `travel_cm` |
+| 6 | Descent | started by the user | **press 3**, when the motor stops at the bottom, slats closed | the full closing time | provisional |
+| 7 | Half an ascent | automatic, ends by itself | tape reading | the opening roll coefficient | provisional |
+| 8 | Half a descent | automatic, ends by itself | tape reading | the closing roll coefficient | provisional |
+
+Step 3 is the one that repays explaining. Pressing at lift-off sends a stop
+immediately, so the curtain comes to rest a few centimetres up and the screen asks what
+the user sees. *Still on its rest* means the press went in before the edge moved: that
+cannot be repaired and the run is repeated. *A few centimetres up* is a good press.
+*A hand's breadth or more* is a late press, and measuring that gap with the tape puts
+the instant back where it belongs: the curtain travelled that distance between the real
+lift-off and the motor stopping, so the correction is arithmetic rather than a guess
+(`t_lift = t_stop − gap / v0`, with `v0` the speed at the bottom derived from the run
+time and the roll). If the gateway held the stop back — a busy command queue — the
+screen says so, because then the gap is not the user's reaction.
+
+Steps 7 and 8 are the **tape phase**: runs that end by themselves, with nothing to press
+while they happen. One screen announces them together, says how many readings follow and
+asks the user to stand clear; from there the cover positions itself between readings.
+Their order is not fixed: each reading runs to its percentage from an end stop, and the
+one that starts where the cover already stands is taken first, which saves a full run.
+
+At the end it asks for a profile name and stores two things: the **profile** (reference
+travel, opening and closing time, slat time, one roll coefficient per direction) and the
+same numbers as **this cover's own values**, so the measured cover runs on them whatever
+the configuration file says.
+
+#### Path B — a cover similar to one already measured
+
+Three screens, one tape reading, two movements. Pick the profile, open the cover fully,
+measure the travel. It stores the assignment and the travel and **no numbers of its own**:
+from then on the cover follows the profile, scaled to its travel, and a later correction
+of the profile reaches it.
+
+It then offers a **check**: the cover is sent to half its travel and the user measures
+where it really stopped. One or two centimetres is normal; three or more mean this cover
+does not behave like the profile it was given, and the screen offers path C on the spot.
+
+#### Path C — a cover that has a profile but stops in the wrong place
+
+For a slower motor, a heavier curtain, a fatter tube. Three scopes:
+
+- **Times only** — three presses, about two minutes. For a motor that is simply faster
+  or slower than the one the profile was measured on.
+- **Times and rolls** — the same three presses plus three readings (travel, and one at
+  half the travel in each direction). Eight movements. This is what a cover needs when
+  it misses *at mid-travel*, which is the curtain winding differently rather than the
+  motor running differently.
+- **Thorough only** — no timed run at all: four readings, at a quarter and at three
+  quarters of the travel in each direction, plus the check. Ten movements. It keeps
+  whatever times the cover runs on today and fits the two roll coefficients over them,
+  and it stores **only those two**: nobody pressed anything, so the times are not
+  claimed as this cover's own measurement and go on coming from the profile, which means
+  a later correction of the profile still reaches this cover.
+
+Only the keys actually measured are stored, merged into whatever was already there. A
+correction also confirms which profile this cover starts from, so the profile keeps its
+place above the keys the configuration file writes for it.
+
+#### The two levels, concretely
+
+**Basic** is the path A table: three presses, three readings (the lift-off gap is an
+optional fourth). One reading per direction fixes that direction's roll exactly, so
+there is nothing left over to be an error and the summary reports no accuracy figure —
+it says so rather than showing a dash. On the covers I have measured this lands within
+about 4 cm.
+
+**Thorough** adds about two minutes and five readings: a quarter and three quarters of
+the travel in each direction, plus the check. With three points per direction the fit
+solves the roll **and** a scale factor on the run times at the same time, and that scale
+factor is what absorbs the reaction time of the presses: the tape corrects the finger.
+This is why the thorough level is not merely "more precision", it is what makes a
+button-press measurement trustworthy. It lands within about 1 cm.
+
+It closes with a **check at 40 % of the descent**, deliberately a position nothing was
+fitted to, so it is a question put to the model rather than a repetition of its inputs.
+The gap reported there is the accuracy the summary names: "within X cm", measured at the
+one position the fit never saw.
+
+#### Two details that carry the whole thing
+
+- **Every reading form prints the value the model expects** next to the field: "about
+  49 cm; anything within 3 cm is normal" during a thorough calibration, and a much
+  looser figure during a basic one, where the expectation comes from the geometry of an
+  ordinary shutter rather than from a model of this cover. A reading taken from the
+  wrong reference point shows up while the user is still standing at the window.
+- **Every measurement can be repeated on the spot.** The confirmation screen after a
+  press or a reading offers "Repeat the measurement", which redoes only that step: the
+  cover is taken back to the end stop that step starts from and the run is made again,
+  and nothing already collected is touched. After a reading it also offers "It did not
+  do what it should", for a cover that never moved or moved the wrong way: that stops
+  whatever is moving, throws the reading away and repeats the step's movements.
+
+#### What this asks of the API
+
+Nothing exotic, but four things a linear session does not need:
+
+1. a step type that says **"drive to fraction f of the travel from end stop E, then ask
+   for a reading in cm"**, with the expected value and its tolerance returned alongside
+   the prompt;
+2. a **fit** step that takes the readings and returns times, slat time and rolls, with
+   the residual at each point, so the client can show what it found rather than a number
+   out of nowhere;
+3. a **check** result that carries the predicted position, the measured one and the gap,
+   which is the accuracy figure a user is entitled to see before saving;
+4. **repeat this step** as a first-class transition, not a cancel-and-start-again.
+
+### 2.6 Refusals the session needs
 
 `already_calibrating`, `unknown_cover`, `cover_unavailable`, `advanced_cover` (an
 actuator that reports its own position has nothing to calibrate), `not_delivered` (the
@@ -216,7 +350,7 @@ true for this cover), `lease_expired`, `revision_conflict`.
 A refusal carries a stable machine code and never a partially written result: a session
 that fails stores nothing.
 
-### 2.6 Writes
+### 2.7 Writes
 
 Save is explicit and atomic: one user operation, one transaction. The client sends the
 revision it read; a write against a stale revision is refused rather than merged. The
