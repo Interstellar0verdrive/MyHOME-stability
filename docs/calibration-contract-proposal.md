@@ -325,8 +325,9 @@ there is nothing left over to be an error and the summary reports no accuracy fi
 it says so rather than showing a dash. On the covers I have measured this lands within
 about 4 cm.
 
-**Thorough** is not a different procedure but the continuation of the basic one, chosen at its summary. It adds about two minutes and five readings: a quarter and three quarters of
-the travel in each direction, plus the check. With three points per direction the fit
+**Thorough** is not a different procedure but the continuation of the basic one, chosen
+at its summary. It adds about two minutes and five readings: a quarter and three
+quarters of the travel in each direction, plus the check. With three points per direction the fit
 solves the roll **and** a scale factor on the run times at the same time, and that scale
 factor is what absorbs the reaction time of the presses: the tape corrects the finger.
 This is why the thorough level is not merely "more precision", it is what makes a
