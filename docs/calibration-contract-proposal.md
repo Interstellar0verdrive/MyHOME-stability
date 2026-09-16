@@ -207,10 +207,12 @@ nobody is watching any more.
 
 ### 2.4 Levels, in one line each
 
-- **Basic** — the timed runs plus one reading per direction. About 4 cm on the shutters
-  I have measured; usable, and the shortest path for someone with one shutter.
+- **Basic** — the timed runs plus one reading per direction. A few centimetres, around
+  4 cm on the shutters I have measured; usable, and the shortest path for someone with
+  one shutter.
 - **Thorough** — readings at roughly 25 % and 75 % per direction, which is what fits the
-  roll coefficients, plus one check at a position nothing was fitted to. About 1 cm.
+  roll coefficients, plus one check at a position nothing was fitted to. One to two
+  centimetres on mine.
 - **Correction** — a short path for a cover that has drifted from its group: times only,
   times and rolls, or the readings alone, without redoing the whole measurement.
 
@@ -288,9 +290,10 @@ of the profile reaches it.
 It then offers a **check**: the cover is sent to half its travel and the user measures
 where it really stopped. What the gap means depends on how the profile itself was
 measured, and this is a place where my own implementation states it too simply today:
-a profile measured at the basic level is worth about 4 cm to begin with, so a 3 cm gap
-on a cover following it says nothing about that cover; a profile measured thoroughly is
-worth about 1 cm, and there the same 3 cm is a real signal. So the contract should carry
+a profile measured only at the basic level is worth a few centimetres to begin with, so
+a 3 cm gap on a cover following it says nothing about that cover; a profile that went
+through the thorough level and its check is worth one to two centimetres, and there the
+same 3 cm is a real signal. So the contract should carry
 the accuracy of a profile alongside its values (the gap its own check reported, or the
 fact that it never had one), and the threshold offered here should be read against that
 figure rather than against a constant. When the gap does exceed it, the screen offers
@@ -323,7 +326,7 @@ place above the keys the configuration file writes for it.
 optional fourth). One reading per direction fixes that direction's roll exactly, so
 there is nothing left over to be an error and the summary reports no accuracy figure —
 it says so rather than showing a dash. On the covers I have measured this lands within
-about 4 cm.
+a few centimetres, around 4 cm.
 
 **Thorough** is not a different procedure but the continuation of the basic one, chosen
 at its summary. It adds about two minutes and five readings: a quarter and three
@@ -331,7 +334,10 @@ quarters of the travel in each direction, plus the check. With three points per 
 solves the roll **and** a scale factor on the run times at the same time, and that scale
 factor is what absorbs the reaction time of the presses: the tape corrects the finger.
 This is why the thorough level is not merely "more precision", it is what makes a
-button-press measurement trustworthy. It lands within about 1 cm.
+button-press measurement trustworthy. On mine it lands within one to two centimetres.
+Those figures are what twelve shutters of two kinds in one house showed; they are
+evidence, not a promise, and the check described below is what lets each installation
+find its own number rather than trust mine.
 
 It closes with a **check at 40 % of the descent**, deliberately a position nothing was
 fitted to, so it is a question put to the model rather than a repetition of its inputs.
