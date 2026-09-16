@@ -49,7 +49,7 @@ window it was measured on, and sharing it is a coincidence.
   "reference_travel_cm": 198.0,  // the travel of the cover this profile was measured on
   "opening_time_s": 24.10,       // full run, bottom end stop to top end stop
   "closing_time_s": 23.40,
-  "slat_time_s": 2.74,           // part of opening_time_s: slats separating before travel
+  "slat_time_s": 2.74,           // the slat phase, part of each full run (see 1.4)
   "opening_roll": 2.10,          // roll diameter ratio, per direction
   "closing_roll": 2.29,
   "stop_latency_s": 0.30,        // gateway answer time; a property of the plant
@@ -95,12 +95,19 @@ With `k_ref` the profile's closing roll, `H_ref` its reference travel and `H` th
 cover's travel:
 
 ```
-k        = sqrt(1 + (k_ref^2 - 1) * H / H_ref)       # each roll grows this way
-scale    = (k - 1) / (k_ref - 1)                      # H / H_ref for a linear profile
-slat     = slat_time_s * H / H_ref
+ratio    = H / H_ref
+k        = sqrt(1 + (k_ref^2 - 1) * ratio)            # each roll grows this way
+scale    = (k - 1) / (k_ref - 1)                      # the curtain-time scale
+slat     = slat_time_s * ratio
 opening  = slat + (opening_time_s - slat_time_s) * scale
-closing  =        (closing_time_s)               * scale
+closing  = slat + (closing_time_s - slat_time_s) * scale
 ```
+
+The slat phase is taken out of both run times before scaling and added back after,
+because it scales with the number of slats (`ratio`) while the curtain phase scales
+with the roll. A profile whose roll is 1 has no roll growth to be proportional to and
+the expression for `scale` divides by zero: in that case the scale is simply `ratio`,
+which is the linear model.
 
 The curtain scale is taken from the **closing** roll and used for both directions on
 purpose: it measures how much curtain the tube has to unwind, which is one length of
@@ -110,7 +117,7 @@ one profile predict two different curtain lengths. Without a travel on the cover
 is nothing to scale to and the profile is used as it stands.
 
 A backend that implements only linear timing ignores the rolls and the slat time and
-scales by `H / H_ref`, which is the same formula with `k_ref = 1`.
+scales both run times by `ratio`, which is the degenerate case above.
 
 ### 1.5 Precedence: which number does the shutter run on
 
@@ -155,8 +162,10 @@ are driving is the one failure mode with a physical consequence.
 
 The backend is the timekeeper. Every duration is measured between bus events (the
 motion anchor when the frame is written or the actuator reports movement, and the write
-of the stop), never between browser clicks: a queue of twelve covers puts frames 0.1 to
-12 s apart, which is 5 to 40 cm of curtain.
+of the stop), never between browser clicks. On my plant, twelve covers commanded
+together put their direction frames 0.1 to 1.2 s apart, so the last of them leaves the
+socket up to 12 s after it was queued; on a 24 s shutter that is half the travel, and a
+clock started at the click would record it as movement.
 
 ### 2.2 States
 
