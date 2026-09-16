@@ -45,3 +45,4 @@ minimal configuration example; the pages here go deeper.
   the validator contract and the test strategy.
 - **[Development](development.md)** — setting up a virtual environment, running
   the test suite, and linting.
+- [Cover calibration contract (proposal)](calibration-contract-proposal.md) — the storage schema and session states proposed for the shared v2 panel.
