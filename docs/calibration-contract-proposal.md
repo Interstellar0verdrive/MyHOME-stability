@@ -160,6 +160,28 @@ plus its origin**. Enough to answer, without a second request per cover:
 - why does this cover behave differently from its group;
 - what changes if I edit this profile (the before/after of every follower).
 
+### 1.6b What must not be optional
+
+Almost everything in this schema can be absent when a backend cannot produce it. Three
+things cannot, or the model quietly collapses back into a pair of numbers:
+
+1. **A profile produced by a measurement records the reference travel it was measured
+   at.** Absence is for imported and hand-written profiles only. A measurement knows the
+   travel, because it just measured it, and a profile that does not record it cannot be
+   given to a second cover without getting it wrong.
+2. **A profile without a reference travel is applied unscaled, and says so.** The API
+   marks it, and any screen offering to assign it to another cover says the values will
+   be used as they stand. Silently applying one cover's seconds to a cover 40 cm shorter
+   is the failure this whole document exists to prevent.
+3. **A backend states which model it runs, and its accuracy is reported honestly.** A
+   linear backend is a legitimate implementation; what it must not do is present its
+   result as equivalent. If a profile carries no roll coefficients, the screens that show
+   it say what that costs in centimetres at mid-travel, and the check at a position
+   nothing was fitted to is what turns that from a claim into a measurement.
+
+None of the three requires the nonlinear model to be implemented first. They are what
+keeps the door open, so that adding it later is an upgrade rather than a migration.
+
 ### 1.7 Migrating what already exists
 
 Two kinds of data are already out there: timings a backend keeps of its own (v2's
