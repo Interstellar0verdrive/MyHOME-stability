@@ -165,10 +165,12 @@ plus its origin**. Enough to answer, without a second request per cover:
 Almost everything in this schema can be absent when a backend cannot produce it. Three
 things cannot, or the model quietly collapses back into a pair of numbers:
 
-1. **A profile produced by a measurement records the reference travel it was measured
-   at.** Absence is for imported and hand-written profiles only. A measurement knows the
-   travel, because it just measured it, and a profile that does not record it cannot be
-   given to a second cover without getting it wrong.
+1. **A measurement that measures the travel records it.** A path that asks for the
+   travel must store it as the profile's reference; it knows the number, because it just
+   asked for it. A timing-only path that never measures a travel produces an explicitly
+   **unscaled** profile, which is a legitimate and useful result — it is the short
+   calibration — and is marked as such rather than given an invented reference. Scaling
+   requires both numbers: the profile's reference travel and the target cover's own.
 2. **A profile without a reference travel is applied unscaled, and says so.** The API
    marks it, and any screen offering to assign it to another cover says the values will
    be used as they stand. Silently applying one cover's seconds to a cover 40 cm shorter
@@ -216,12 +218,18 @@ owner (the socket or the service call that started it), a lease that expires, an
 target cover. Opening a second one is refused, not queued: a shutter that two clients
 are driving is the one failure mode with a physical consequence.
 
-Ownership is released when the session ends (saved or cancelled), when the client leaves
-and nothing provisional is left to protect, or when the lease expires. A new session may
-start once the target reports no movement in progress, or immediately after an explicit
-stop. A lease that expires, or the integration unloading, does write a stop: in those
-cases nobody is watching any more. A client reconnecting inside the lease resumes the
-session it owns rather than starting a second one.
+Ownership of the *client* is released when the session ends (saved or cancelled), when
+the client leaves and nothing provisional is left to protect, or when the lease expires.
+Reservation of the *gateway* is a separate thing and outlives it: writing a stop frame is
+not proof that a motor stopped, and discarding provisional values does not mean the
+shutter has come to rest. So the gateway stays reserved until the backend's own
+completion rules are satisfied — the actuator reports a stop, or a guard period elapses
+that is at least the movement still owed (the full travel time when nothing better is
+known) — and only then may another session start. A run the client left behind keeps its
+supervision: somebody has to notice that it ended, or that it never did. A lease that
+expires, or the integration unloading, does write a stop: in those cases nobody is
+watching any more. A client reconnecting inside the lease resumes the session it owns
+rather than starting a second one.
 
 The backend is the timekeeper. Every duration starts at the motion anchor: the actuator's
 own moving status, or the moment the direction frame was written when no actuator status
