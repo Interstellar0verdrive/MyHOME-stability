@@ -61,9 +61,13 @@ window it was measured on, and sharing it is a coincidence.
 
 Notes that matter more than the names:
 
-- **`reference_travel_cm` is mandatory for a profile that is to be shared.** A backend
-  running a linear model can store a profile without rolls and without a slat time; it
-  cannot share one across covers of different travel without this field.
+- **`reference_travel_cm` is what makes a profile shareable, and it may be absent.** A
+  backend running a linear model can store a profile without rolls and without a slat
+  time; a profile that has no reference travel is still valid and is applied **as it
+  stands**, unscaled, to whichever covers follow it. That is what existing profiles look
+  like, and they must keep working exactly as they do until someone measures a travel.
+  Scaling happens only when the profile has a reference travel **and** the cover has its
+  own; otherwise the numbers are used verbatim.
 - **`stop_latency_s` and `start_delay_s` are never scaled.** They are the gateway's
   answer time and the motor's brake: the same on a 90 cm skylight as on a 250 cm door.
 - **`measured_on` / `measured_at` are provenance, not configuration.** A profile that
@@ -156,6 +160,29 @@ plus its origin**. Enough to answer, without a second request per cover:
 - why does this cover behave differently from its group;
 - what changes if I edit this profile (the before/after of every follower).
 
+### 1.7 Migrating what already exists
+
+Two kinds of data are already out there: timings a backend keeps of its own (v2's
+`cover_travel_times` in the config entry options), and profiles a panel or a YAML file
+already defines. Three rules, and they are all one rule seen from three sides: **nothing
+may change how a cover runs today.**
+
+- **Existing timings are not overrides.** An override asserts "this cover was measured";
+  a timing inherited from an older store asserts no such thing. It comes in one tier
+  lower, as the value a cover uses when nothing above it applies, with its origin named
+  honestly (`from the file`, `defaults`, or an explicit `imported`). Importing it as an
+  override would put it above an assigned profile and silently reverse the precedence a
+  user already relies on.
+- **Existing profiles keep their behaviour.** No reference travel is invented for them;
+  see 1.2. They apply unscaled until someone measures a travel, and only then do they
+  start scaling.
+- **A migration that cannot preserve both the effective value and its fallback fails
+  loudly** rather than guessing. It is idempotent, it keeps the original data until it has
+  finished, and it can be run again after a rollback.
+
+A useful test for the whole migration: for every cover, the effective value of every key
+before and after must be identical, and only the *origin* of some of them may change.
+
 ---
 
 ## Part 2 — The measuring session
@@ -166,6 +193,13 @@ One session per gateway, owned by the backend, not by the browser. A session has
 owner (the socket or the service call that started it), a lease that expires, and a
 target cover. Opening a second one is refused, not queued: a shutter that two clients
 are driving is the one failure mode with a physical consequence.
+
+Ownership is released when the session ends (saved or cancelled), when the client leaves
+and nothing provisional is left to protect, or when the lease expires. A new session may
+start once the target reports no movement in progress, or immediately after an explicit
+stop. A lease that expires, or the integration unloading, does write a stop: in those
+cases nobody is watching any more. A client reconnecting inside the lease resumes the
+session it owns rather than starting a second one.
 
 The backend is the timekeeper. Every duration starts at the motion anchor: the actuator's
 own moving status, or the moment the direction frame was written when no actuator status
