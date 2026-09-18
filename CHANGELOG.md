@@ -123,7 +123,9 @@ everything the panel does.
   the page ended. It is a panel from the right again on a desktop and a sheet from the
   bottom on a phone, with a round ✕ and a fixed footer holding "Back to the overview"
   and the confirm button. On a phone, holding a cover to move it turns the groups into
-  full-width targets again, rather than narrow centred pills.
+  full-width targets again, rather than narrow centred pills, and the strip that asks
+  for the destination keeps the cover's name instead of stopping at "Tap the
+  destination group…".
 
 ## [0.5.0] - 2026-09-13
 

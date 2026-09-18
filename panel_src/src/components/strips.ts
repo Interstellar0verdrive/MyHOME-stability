@@ -80,18 +80,30 @@ export const stripStyles = css`
     display: flex;
     gap: 16px;
     align-items: center;
+    /*
+     * As wide as its sentence, up to the 92vw every strip allows. Shrink-to-fit alone never
+     * got there: with "left: 50%" the room a fixed box is offered is the half of the
+     * screen to the right of that edge, so on a phone this strip was 195 px wide, its
+     * sentence was clamped at "Toccare il gruppo di…", and the shutter's name - the one
+     * word in it that changes - was the part that was cut.
+     */
+    width: max-content;
   }
 
   /*
-   * Two lines at most. The sentence carries the shutter's name and a shutter can be called
-   * "Tapparella della camera da letto grande al primo piano", which on a 375 px screen is
-   * five lines and a strip 185 px tall sitting on the very targets it is telling somebody
-   * to tap. The name is on the row that is dimmed behind it; what this has to say is where
-   * to tap.
+   * Four lines at most. The sentence carries the shutter's name and a shutter can be
+   * called "Tapparella della camera da letto grande al primo piano": in a strip half the
+   * screen wide that was five lines and 185 px sitting on the very targets it is telling
+   * somebody to tap. At the strip's full width it is three lines at 390 px and four at
+   * 360, and the name is the part of the sentence that must survive - while a shutter is
+   * held every group is collapsed to its title, so the row with the name on it is not on
+   * the screen. Two lines cut it after "per «Tapparella della camera da…"; four hold it
+   * whole in a strip of 88 px at most, inside the 120 px the list keeps clear in this
+   * state. The limit is only there for a name longer than that.
    */
   .strip.armed .what {
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
     min-width: 0;
