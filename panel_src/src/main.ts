@@ -69,7 +69,6 @@ import {
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { drawer, drawerStyles } from "./components/drawer";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
-import { sheetStyles } from "./components/sheet";
 import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
@@ -159,7 +158,6 @@ export class MyHomeCalibrationPanel extends LitElement {
     measuringBannerStyles,
     skeletonStyles,
     stripStyles,
-    sheetStyles,
     drawerStyles,
     css`
       .toolbar {

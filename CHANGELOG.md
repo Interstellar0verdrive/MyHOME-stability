@@ -116,6 +116,13 @@ everything the panel does.
   from the gateway only reached the debug log. The integration now asks the gateway
   once at setup (`*#13**16##`, no polling) and writes the answer onto the device
   whenever a firmware reply arrives with a different version.
+- **"Profili e tapparelle" is drawn as designed again.** Found by comparing the panel
+  with the design, screen by screen. **"Review and confirm"** had lost its frame when
+  the cover and profile cards became panels over the list: it opened as a block at the
+  bottom of the page, with no dark backdrop, a bare ✕ and the confirm button wherever
+  the page ended. It is a panel from the right again on a desktop and a sheet from the
+  bottom on a phone, with a round ✕ and a fixed footer holding "Back to the overview"
+  and the confirm button.
 
 ## [0.5.0] - 2026-09-13
 

@@ -25,9 +25,15 @@
 
 // The box itself - the backdrop, the panel from the right, the sheet from the bottom,
 // the head and the scrolling body - is `components/sheet.ts`, which the routed cards'
-// drawer is drawn in too. What is below is what goes *inside* this one.
+// drawer is drawn in too. What is below is what goes *inside* this one, **and the frame
+// travels with it**: `reviewPanelStyles` carries `sheetStyles`, because the rules only
+// reach the shadow root that adopts them. When the frame moved to its own file, only the
+// shell (`main.ts`) adopted it, while this panel is drawn inside `myhome-overview`'s root:
+// the panel lost its backdrop, its fixed position and its round ✕, and landed at the
+// bottom of the page as a plain block. A component whose markup needs a frame now
+// brings it, whoever draws it.
 
-import { css, html, nothing, type TemplateResult } from "lit";
+import { css, html, nothing, type CSSResultGroup, type TemplateResult } from "lit";
 
 import {
   DECIMALS,
@@ -39,8 +45,9 @@ import {
 import { type I18n } from "../engine/i18n";
 import { type PendingChange } from "../engine/store";
 import { type CoverRow, type PreviewItem, type ProfileRow } from "../engine/ws";
+import { sheetStyles } from "./sheet";
 
-export const reviewPanelStyles = css`
+export const reviewPanelStyles: CSSResultGroup = [sheetStyles, css`
   .sheet .body[aria-busy="true"] table,
   .sheet .body[aria-busy="true"] .note {
     opacity: 0.55;
@@ -238,7 +245,7 @@ export const reviewPanelStyles = css`
     color: var(--myhome-text-off);
     cursor: default;
   }
-`;
+`];
 
 export interface ReviewContext {
   i18n: I18n;
