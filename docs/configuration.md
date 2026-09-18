@@ -628,8 +628,10 @@ and `H` the cover's `height`:
 - **Curtain time.** The curtain time follows the roll growth rather than the height,
   and it is the **closing** roll that sets the scale — one scale for both run times,
   and the descent is the direction the model is anchored on:
-  `scale = (closing_roll − 1) / (k_ref_close − 1)`, or plain `H / H_ref` when the
-  profile is linear coming down (`k_ref_close = 1`).
+  `scale = H / H_ref × (k_ref_close + 1) / (closing_roll + 1)`. That is the ratio of
+  the two roll growths, `(closing_roll − 1) / (k_ref_close − 1)`, written so that it
+  stays defined when the profile is linear coming down (`k_ref_close = 1`), where it
+  is plain `H / H_ref`.
 - **Run times.** The slat phase is added back to the scaled curtain phase:
   `opening_time = slat_time + (opening_time_ref − slat_time_ref) × scale`, and the
   same for `closing_time`.
@@ -641,7 +643,7 @@ both directions) applied to a cover declared `height: 120`:
 |---|---|---|
 | Height ratio | `120 / 195` | `0.615` |
 | `roll` (both directions) | `√(1 + (1.6² − 1) × 0.615)` = `√1.96` | **`1.40`** |
-| Curtain scale | `(1.40 − 1) / (1.6 − 1)` | `0.667` |
+| Curtain scale | `0.615 × (1.6 + 1) / (1.40 + 1)` | `0.667` |
 | `slat_time` | `4.7 × 0.615` | **`2.9 s`** |
 | `opening_time` | `2.9 + (22.3 − 4.7) × 0.667` | **`14.6 s`** |
 | `closing_time` | `2.9 + (21.7 − 4.7) × 0.667` | **`14.2 s`** |
@@ -650,7 +652,7 @@ Had that profile carried the measured pair `closing_roll: 1.69` /
 `opening_roll: 2.12` instead of the single `roll: 1.6`, the same 120 cm cover would
 get `closing_roll` `√(1 + (1.69² − 1) × 0.615)` = **`1.46`**, `opening_roll`
 `√(1 + (2.12² − 1) × 0.615)` = **`1.77`**, and a curtain scale of
-`(1.46 − 1) / (1.69 − 1)` = `0.672` — the run times barely move, the two estimates
+`0.615 × (1.69 + 1) / (1.46 + 1)` = `0.672` — the run times barely move, the two estimates
 in between do.
 
 (The integration keeps full precision internally and rounds only for display: times
