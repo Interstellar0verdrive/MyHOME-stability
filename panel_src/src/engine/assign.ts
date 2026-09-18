@@ -266,6 +266,14 @@ export const TABLE_KEYS: readonly string[] = ["opening_time", "closing_time", "s
 /** ...and the two "mostra tutto" adds. */
 export const ROLL_KEYS: readonly string[] = ["opening_roll", "closing_roll"];
 
+/**
+ * The parameters of the position model rather than of the stopwatch: the slat time and the
+ * two roll coefficients. A hand edit still offers them, and puts a note in front of the
+ * first one - never in front of the two run times, which are what a person corrects by
+ * hand and which a note at the top of the form would make look dangerous too.
+ */
+export const ADVANCED_KEYS: readonly string[] = ["slat_time", ...ROLL_KEYS];
+
 /** How many decimals each key deserves: a tenth of a second, a hundredth of a ratio. */
 export const DECIMALS: Readonly<Record<string, number>> = {
   opening_time: 1,

@@ -274,6 +274,13 @@ empty field is the number it would inherit, so the consequence is on screen befo
 the save. Emptying every field is the same as removing the measurement, and the page
 says so in those words.
 
+**The slat opening time and the two roll coefficients come after a note.** They are
+parameters of the position model rather than times read off a stopwatch, so the form
+puts an **Advanced parameters** box right in front of the first of them: change them
+only knowing what they mean, and when in doubt take them from the guided calibration,
+which measures them on the real cover. The two run times stay above it. The profile's
+editor below does the same, with the reference travel above the note too.
+
 **Set the curtain travel…** is its own control and its own write, because the travel
 is what a profile is scaled by rather than one of the measured values. Typing a
 travel shows, beside the field, what the cover would run on with it.

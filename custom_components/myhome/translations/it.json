@@ -730,6 +730,10 @@
         "show_all": "Mostra tutti i valori, compresi i coefficienti di rullo",
         "hide_all": "Nascondi i coefficienti di rullo"
       },
+      "advanced": {
+        "title": "Parametri avanzati",
+        "body": "Il tempo di apertura delle lamelle e i coefficienti di rullo sono parametri del modello di posizione: vanno modificati solo sapendo con precisione che cosa rappresentano e come influiscono sulla posizione. In caso di dubbio è fortemente consigliato ricavarli con la calibrazione guidata, che li misura sulla tapparella reale."
+      },
       "unit": {
         "seconds": "s",
         "centimetres": "cm"

@@ -169,6 +169,33 @@ export const cardPageStyles = css`
       margin-bottom: 4px;
     }
 
+    /*
+     * The note in front of the advanced group of a hand edit. Both forms already open on a
+     * .warn box - the intro of the same card - so this one has to be told apart at a
+     * glance: the same amber ground, a rule down its left edge in the warning ink, and a
+     * title in real bold rather than the intro's medium weight.
+     */
+    .caution {
+      background: var(--myhome-warning-pastel);
+      border-left: 4px solid var(--myhome-warning-ink);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 12px 12px 14px;
+      margin: 8px 0 2px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .caution strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .caution p {
+      margin: 0;
+    }
+
     .danger {
       background: var(--myhome-error-pastel);
       border-radius: 8px;
@@ -311,6 +338,41 @@ export const valueRow = (
   ${instead ? html`<span class="instead">${instead}</span>` : nothing}
   ${from ? html`<span class="from">${from}</span>` : nothing}
 </div>`;
+
+/**
+ * The note that opens the advanced group of a hand edit.
+ *
+ * `role="note"`, named by its own title, so a screen reader announces the title and the
+ * role when it walks into the box and then reads the sentence as its content. The id is
+ * unique because the note is drawn once per form and each form has its own shadow root.
+ */
+export const advancedNote = (title: string, body: string): TemplateResult => html`<div
+  class="caution"
+  role="note"
+  aria-labelledby="advanced-note-title"
+  data-advanced-note
+>
+  <strong id="advanced-note-title">${title}</strong>
+  <p>${body}</p>
+</div>`;
+
+/**
+ * The fields of a hand edit, with the advanced note in front of the first advanced one.
+ *
+ * Only in front of it: the keys above it (the two run times, and a profile's reference
+ * travel) are the ones a person corrects by hand, and a note over the whole form would make
+ * them look as dangerous as the rest.
+ */
+export const withAdvancedNote = <T>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  advanced: readonly string[],
+  note: () => TemplateResult,
+  field: (item: T) => TemplateResult,
+): TemplateResult[] => {
+  const first = items.find((item) => advanced.includes(keyOf(item)));
+  return items.map((item) => (item === first ? html`${note()}${field(item)}` : field(item)));
+};
 
 export interface NumberFieldOptions {
   label: string;

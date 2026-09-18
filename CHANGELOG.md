@@ -83,6 +83,15 @@ everything the panel does.
 - **The count of profiles and covers is a line and not a sentence**: *Profiles: N ·
   Basic covers: N*, on the dialog's own screen and on the panel, where the two now say
   it identically.
+- **The hand edits of the panel set the model's parameters apart from the times.** On
+  the cover card and in the profile's editor, the slat opening time and the two roll
+  coefficients now come after an **"Advanced parameters"** note: they are parameters
+  of the position model, to be changed only knowing what they mean, and when in doubt
+  taken from the guided calibration, which measures them on the real cover. The note
+  sits right in front of the slat time, so the two run times — and a profile's
+  reference travel — stay above it and are not made to look dangerous. Every field is
+  still editable. English and Italian; the other five languages show the English text
+  until the translation pass.
 - **A profile name is at most 64 characters**, on top of the letters, digits and
   underscores it already had to be. There was no limit at all before: a name of any
   length was accepted, became a key of the calibration store, and was printed wherever
@@ -101,6 +110,12 @@ everything the panel does.
   dropped at load with a warning that names it, a value that is not a number reads as a
   key nobody wrote, and the shutters go on running on what is left. Affects anyone who
   hand-edited the file under 0.5.0.
+- **The gateway's device page shows its firmware.** The device was registered at
+  setup with the firmware the config entry knew — the SSDP description, or nothing at
+  all for a gateway added by hand — and was never updated afterwards: a firmware reply
+  from the gateway only reached the debug log. The integration now asks the gateway
+  once at setup (`*#13**16##`, no polling) and writes the answer onto the device
+  whenever a firmware reply arrives with a different version.
 
 ## [0.5.0] - 2026-09-13
 

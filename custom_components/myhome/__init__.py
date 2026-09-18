@@ -721,6 +721,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         )
 
+    # Once, not on a timer: the answer updates the device's firmware (sw_version above
+    # is only what the config entry knew). Queued, so it goes out with the first session.
+    await handler.request_firmware()
+
     _async_prune_registries(hass, entry, mac, gateway_device.id)
     _async_register_services(hass)
 

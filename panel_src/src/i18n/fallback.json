@@ -38,6 +38,8 @@
   "panel.common.action.retry": "Try again",
   "panel.common.action.save": "Save",
   "panel.common.action.show_all": "Show every value, roll coefficients included",
+  "panel.common.advanced.body": "Slat opening time and roll coefficients are parameters of the position model and should only be changed with a precise understanding of what they mean and how they affect the position. When in doubt, obtaining them from the guided calibration is strongly recommended: it measures them on the real cover.",
+  "panel.common.advanced.title": "Advanced parameters",
   "panel.common.all_rooms": "All rooms",
   "panel.common.gateway": "Gateway {gateway}",
   "panel.common.loading": "Loading…",

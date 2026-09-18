@@ -156,10 +156,11 @@ async def test_config_entry_diagnostics(hass: HomeAssistant, hass_client, tmp_pa
     assert handler["session_parameters"]["command_timeout_sec"] == 10.0
     # The actual depth, not `isinstance(..., int)`: under mock_gateway() the sending
     # loop is idle, so the two status requests the light and the cover ask for at
-    # setup are still queued. "How long is the backlog" is the whole point of this
-    # field in a bug report, and a constant 0 - or a read of some other queue - was
-    # indistinguishable from the truth. Mutation caught: `"queue_size": 0`.
-    assert handler["queue_size"] == 2
+    # setup, and the gateway's firmware request, are still queued. "How long is the
+    # backlog" is the whole point of this field in a bug report, and a constant 0 - or
+    # a read of some other queue - was indistinguishable from the truth. Mutation
+    # caught: `"queue_size": 0`.
+    assert handler["queue_size"] == 3
 
     # Ring buffer: last 50, session frames replaced by a marker.
     frames = data["recent_frames"]

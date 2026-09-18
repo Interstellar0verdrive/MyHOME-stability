@@ -125,6 +125,7 @@ sequenceDiagram
     Init->>GW: initialize_discovery_service()
     Init->>GW: start listening_loop() as background task
     Init->>GW: start N sending_loop(worker_id) background tasks
+    Init->>GW: request_firmware() - queue *#13**16## once
     Init->>HA: prune stale registry entities/devices
     Init->>HA: register services (once per HA instance)
 ```
@@ -412,7 +413,10 @@ raises**. Its order is:
    `myhome_cen_event`, then hand the same press to the control's event entity
    through `_dispatch_scenario_event()` when the control is declared under
    `scenario_control:` (an undeclared control produces the bus event only).
-7. Gateway events/commands → DEBUG.
+7. Gateway events/commands → DEBUG. A firmware reply (`*#13**16*a*b*c##`, whoever
+   asked for it) is also kept on the handler and written to the gateway device's
+   `sw_version` when it differs: the device is registered at setup with only what
+   the config entry knew, which is the SSDP description or nothing.
 8. Anything else → DEBUG.
 
 Two isolation rules make a bug in one entity harmless to the session:

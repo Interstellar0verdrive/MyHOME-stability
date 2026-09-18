@@ -108,7 +108,7 @@ cover's travel:
 ```
 ratio    = H / H_ref
 k        = sqrt(1 + (k_ref^2 - 1) * ratio)            # each roll grows this way
-scale    = (k - 1) / (k_ref - 1)                      # the curtain-time scale
+scale    = ratio * (k_ref + 1) / (k + 1)              # the curtain-time scale
 slat     = slat_time_s * ratio
 opening  = slat + (opening_time_s - slat_time_s) * scale
 closing  = slat + (closing_time_s - slat_time_s) * scale
@@ -116,9 +116,10 @@ closing  = slat + (closing_time_s - slat_time_s) * scale
 
 The slat phase is taken out of both run times before scaling and added back after,
 because it scales with the number of slats (`ratio`) while the curtain phase scales
-with the roll. A profile whose roll is 1 has no roll growth to be proportional to and
-the expression for `scale` divides by zero: in that case the scale is simply `ratio`,
-which is the linear model.
+with the roll. The scale is the ratio of the two roll growths, `(k - 1) / (k_ref - 1)`,
+rewritten through `k^2 - 1 = (k_ref^2 - 1) * ratio` so that it stays defined for
+`k_ref = 1`: a profile whose roll is 1 has no roll growth to be proportional to, and
+there the scale is exactly `ratio`, which is the linear model.
 
 The curtain scale is taken from the **closing** roll and used for both directions on
 purpose: it measures how much curtain the tube has to unwind, which is one length of

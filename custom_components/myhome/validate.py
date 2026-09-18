@@ -140,7 +140,6 @@ from .const import (
     MAX_ROLL,
     MIN_ROLL,
     PROTOCOL_CEN_PLUS,
-    ROLL_LINEAR_TOLERANCE,
     SCENARIO_CONTROL_BUTTON_RANGE,
     SCENARIO_CONTROL_MODELS,
     SCENARIO_CONTROL_WHO,
@@ -972,7 +971,7 @@ def derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
     height (0.4.2 spec, section 3)::
 
         k       = sqrt(1 + (k_ref**2 - 1) * H / H_ref)
-        scale_c = (k_close - 1) / (k_ref_close - 1)   # (H / H_ref for a linear profile)
+        scale_c = H / H_ref * (k_ref_close + 1) / (k_close + 1)
         slat    = profile.slat_time * H / H_ref
         opening = slat + (profile.opening_time - profile.slat_time) * scale_c
 
@@ -982,6 +981,11 @@ def derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
     of fabric whichever way the motor turns, and the up/down difference the directional
     rolls carry is the motor's load, not the geometry.  Picking each direction's own
     scale would make a 195 cm profile predict two different curtain lengths.
+
+    ``scale_c`` is ``(k_close - 1) / (k_ref_close - 1)``, the ratio of the two roll
+    growths, rewritten through ``k**2 - 1 = (k_ref**2 - 1) * H / H_ref`` so that it
+    stays defined for a linear profile (``k_ref_close = 1``), where it is exactly
+    ``H / H_ref``, and loses no digits to the subtractions just above 1.
 
     Without a ``height:`` on the cover there is nothing to scale to and the profile is
     used as it stands.
@@ -1009,11 +1013,8 @@ def derive_cover_from_profile(profile: Mapping, height: float | None) -> dict:
         }
     ratio = height / reference
     closing_roll = _grown_roll(k_ref_close, ratio)
-    # A linear profile has no roll growth to be proportional to, so the curtain time
-    # simply follows the height (and the formula above would divide by zero).
-    curtain_scale = (
-        (closing_roll - 1) / (k_ref_close - 1) if k_ref_close - 1 > ROLL_LINEAR_TOLERANCE else ratio
-    )
+    # (k - 1) / (k_ref - 1) without the division by zero: a linear profile gets ratio.
+    curtain_scale = ratio * (k_ref_close + 1) / (closing_roll + 1)
     slat = slat_ref * ratio
     return {
         CONF_OPENING_TIME: slat + (profile[CONF_OPENING_TIME] - slat_ref) * curtain_scale,

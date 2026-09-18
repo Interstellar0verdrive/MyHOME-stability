@@ -11,7 +11,9 @@
 // **What is tested is what has no DOM in it**: the pending model, the sentences, the
 // router, the Markdown renderer, the illustration check and the options-flow opener. The
 // views are Lit elements and are walked in the development harness by a person, as they
-// have been since lot 5; that boundary is the handoff's open point, not an oversight.
+// have been since lot 5; that boundary is the handoff's open point, not an oversight. The
+// one exception reads a view's template without mounting it (`advanced-note.test.ts`),
+// which Lit's Node build allows and which still needs no DOM.
 
 import { spawn } from "node:child_process";
 import { mkdtemp, readdir, rm } from "node:fs/promises";

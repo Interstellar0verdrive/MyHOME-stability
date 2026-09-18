@@ -14,6 +14,8 @@ import subprocess
 import sys
 import textwrap
 import types
+from decimal import Decimal, localcontext
+from math import sqrt
 from pathlib import Path
 
 import pytest
@@ -500,6 +502,58 @@ def test_a_linear_closing_roll_scales_the_curtain_by_the_height():
     assert cover["slat_time"] == 2.0
     # 2 s of slats + half of the 16 s curtain run, exactly as for a linear profile.
     assert cover["opening_time"] == pytest.approx(10.0)
+
+
+def _exact_curtain_scale(k_ref: float, ratio: float) -> float:
+    """``(k - 1) / (k_ref - 1)`` in 60-digit decimals, where cancellation costs nothing."""
+    with localcontext() as ctx:
+        ctx.prec = 60
+        k_ref_d, ratio_d = Decimal(k_ref), Decimal(ratio)
+        if k_ref_d == 1:
+            return ratio
+        k = (1 + (k_ref_d * k_ref_d - 1) * ratio_d).sqrt()
+        return float((k - 1) / (k_ref_d - 1))
+
+
+@pytest.mark.parametrize("ratio", [0.3, 0.55, 1.0, 1.4, 3.0])
+@pytest.mark.parametrize("k_ref", [1.0, 1.0000001, 1.2, 1.65, 1.94, 2.38, 5.0])
+def test_the_curtain_scale_is_the_roll_growth_ratio_everywhere(k_ref, ratio):
+    """The curtain scale, read back from the derived run times, on a grid of profiles.
+
+    Away from 1 it is ``(k - 1) / (k_ref - 1)``, the form the scale was first written
+    in. At ``k_ref = 1`` that form divides by zero and the scale is the plain height
+    ratio. Just above 1 the form is still defined but loses about nine digits to the
+    two subtractions, so there the reference is the same quotient worked out in exact
+    decimals - which is also within ``(k_ref - 1) * |1 - ratio|`` of the plain ratio,
+    the linear model the profile is physically indistinguishable from.
+
+    Mutation caught: a scale that jumps between the linear and the rolled model near
+    ``k_ref = 1``, or one that stops following the roll growth.
+    """
+    profile = {
+        "reference_height": 1.0,
+        "opening_time": 30.0,
+        "closing_time": 28.0,
+        "slat_time": 4.0,
+        "roll": k_ref,
+        "opening_roll": k_ref,
+        "closing_roll": k_ref,
+        "stop_latency": 0.0,
+        "start_delay": 0.0,
+    }
+    derived = validate.derive_cover_from_profile(profile, ratio)
+    slat = derived["slat_time"]
+    scale = (derived["opening_time"] - slat) / (30.0 - 4.0)
+    assert (derived["closing_time"] - slat) / (28.0 - 4.0) == pytest.approx(scale, rel=1e-12)
+    if k_ref == 1.0:
+        assert scale == pytest.approx(ratio, rel=1e-9)
+    elif k_ref - 1 < 1e-6:
+        assert scale == pytest.approx(_exact_curtain_scale(k_ref, ratio), rel=1e-9)
+        assert scale == pytest.approx(ratio, rel=(k_ref - 1) * max(1.0, abs(1 - ratio)))
+    else:
+        k = sqrt(1 + (k_ref * k_ref - 1) * ratio)
+        assert scale == pytest.approx((k - 1) / (k_ref - 1), rel=1e-9)
+        assert scale == pytest.approx(_exact_curtain_scale(k_ref, ratio), rel=1e-9)
 
 
 def test_cover_profile_schema_errors():
