@@ -26,7 +26,14 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 
 import { focusWhenPainted } from "../engine/a11y";
 import { ADVANCED_KEYS, DECIMALS, MEASURABLE_KEYS } from "../engine/assign";
-import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
+import {
+  FIELDS,
+  UNIT_KEY,
+  bareLabel,
+  isEmpty,
+  valueProblem,
+  withUnit,
+} from "../engine/fields";
 import { I18n } from "../engine/i18n";
 import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
@@ -172,10 +179,19 @@ export class MyHomeProfileCard extends LitElement {
    * everywhere and are the words the user met while measuring. The travel is the panel's
    * own, because the form's says "(cm)" and this screen prints the unit itself.
    */
-  private _label(key: string): string {
+  private _fullLabel(key: string): string {
     return key === "reference_height"
       ? this.i18n.t("panel.profile.reference_travel")
       : this.i18n.t(`options.step.profile_edit.data.${key}`);
+  }
+
+  /**
+   * The label beside a number that carries its own unit: "Tempo di salita", not "Tempo
+   * di salita (s)" next to "21,8 s". The whole label is kept for the refusals, where no
+   * number says what the bounds are measured in (`engine/fields.ts`, `bareLabel`).
+   */
+  private _label(key: string): string {
+    return bareLabel(this._fullLabel(key));
   }
 
   private _unit(key: string): string {
@@ -189,7 +205,7 @@ export class MyHomeProfileCard extends LitElement {
 
   private _problem(key: string, problem: string): string {
     return this.i18n.refusal(problem, {
-      key: this._label(key),
+      key: this._fullLabel(key),
       min: FIELDS[key]?.min ?? 0,
       max: FIELDS[key]?.max ?? 0,
     });
@@ -198,7 +214,7 @@ export class MyHomeProfileCard extends LitElement {
   /** The keys a window measured for itself, as a list of words a sentence can carry. */
   private _ownKeys(cover: CoverRow): string {
     return cover.has_own
-      .map((key) => this.i18n.t(`options.step.calibration_edit.data.${key}`))
+      .map((key) => bareLabel(this.i18n.t(`options.step.calibration_edit.data.${key}`)))
       .join(", ");
   }
 
@@ -476,8 +492,9 @@ export class MyHomeProfileCard extends LitElement {
             item.values[key] !== undefined,
         ).map(
           (key) =>
-            `${this.i18n.t(`options.step.calibration_edit.data.${key}`)} ` +
-            `${this._number(key, cover.values[key])} → ${this._number(key, item.values[key])}`,
+            `${bareLabel(this.i18n.t(`options.step.calibration_edit.data.${key}`))} ` +
+            `${this._number(key, cover.values[key])} → ` +
+            withUnit(this._number(key, item.values[key]), this._unit(key)),
         );
         line = moved.join(" · ");
         if (cover.has_own.length > 0) {

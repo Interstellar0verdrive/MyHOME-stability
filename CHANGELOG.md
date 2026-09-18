@@ -129,7 +129,9 @@ everything the panel does.
   rather than a copy of the pending chip. A cover's card is headed by its name alone,
   not "Cover «Cover Living room 2»", and the profile's editor is titled "Edit the
   values", without the dots of the button that opens it. The introduction sets
-  "**profile**" in bold, as the design does.
+  "**profile**" in bold, as the design does. Units are said once: "Ascent time … 14.9 s"
+  rather than "Ascent time (s) … 14.9 s" on the cards, in the editors and in the impact
+  preview, and the review's before/after table gives its numbers their unit.
 
 ## [0.5.0] - 2026-09-13
 

@@ -42,6 +42,7 @@ import {
   TABLE_KEYS,
   travelProblem,
 } from "../engine/assign";
+import { UNIT_KEY, bareLabel, withUnit } from "../engine/fields";
 import { type I18n } from "../engine/i18n";
 import { type PendingChange } from "../engine/store";
 import { type CoverRow, type PreviewItem, type ProfileRow } from "../engine/ws";
@@ -345,8 +346,14 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
 
   const keys = context.showAll ? [...TABLE_KEYS, ...ROLL_KEYS] : TABLE_KEYS;
 
+  // The form's label without its "(s)", and the unit with the number instead: "Tempo di
+  // salita … 21,8 s", as the cover's card and the profile's say it (engine/fields.ts).
   const label = (key: string): string =>
-    i18n.t(`options.step.calibration_edit.data.${key}`);
+    bareLabel(i18n.t(`options.step.calibration_edit.data.${key}`));
+  const value = (key: string, number: number): string => {
+    const unit = UNIT_KEY[key];
+    return withUnit(i18n.number(number, DECIMALS[key] ?? 1), unit ? i18n.t(unit) : "");
+  };
 
   return html`
     <!--
@@ -451,10 +458,8 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
                     ${rows.map(
                       (key) => html`<tr>
                         <td class="what">${label(key)}</td>
-                        <td>${i18n.number(cover.values[key], DECIMALS[key] ?? 1)}</td>
-                        <td class="after">
-                          ${i18n.number((item as PreviewItem).values[key], DECIMALS[key] ?? 1)}
-                        </td>
+                        <td>${value(key, cover.values[key])}</td>
+                        <td class="after">${value(key, (item as PreviewItem).values[key])}</td>
                       </tr>`,
                     )}
                   </tbody>
