@@ -288,7 +288,7 @@ export class MyHomeOverview extends LitElement {
        * wraps to two lines on a phone. The list is being rebuilt at that moment anyway -
        * seven cards becoming seven titles - so the extra room costs no jump anybody sees.
        */
-      .groups.armed {
+      .groups.targeting {
         margin-bottom: 120px;
       }
 
@@ -880,7 +880,7 @@ export class MyHomeOverview extends LitElement {
               </button>
             </div>
           </div>`
-        : html`<div class="groups ${this.state.armed !== null ? "armed" : ""}">
+        : html`<div class="groups ${this.state.armed !== null ? "targeting" : ""}">
             ${groups.map((group) => {
               const key = groupAttr(group.key);
               const insert = drag?.insert ?? null;

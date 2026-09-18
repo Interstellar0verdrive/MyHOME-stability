@@ -122,7 +122,8 @@ everything the panel does.
   bottom of the page, with no dark backdrop, a bare ✕ and the confirm button wherever
   the page ended. It is a panel from the right again on a desktop and a sheet from the
   bottom on a phone, with a round ✕ and a fixed footer holding "Back to the overview"
-  and the confirm button.
+  and the confirm button. On a phone, holding a cover to move it turns the groups into
+  full-width targets again, rather than narrow centred pills.
 
 ## [0.5.0] - 2026-09-13
 

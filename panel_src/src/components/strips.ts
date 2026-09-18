@@ -22,6 +22,14 @@ import { css, html, nothing, type TemplateResult } from "lit";
 
 import { type I18n } from "../engine/i18n";
 
+// **Every state selector here is `.strip.<state>`, never `.<state>` alone.** These rules
+// are adopted by the overview's whole shadow root, and a bare `.armed` once reached the
+// groups' own container, which carried the same class while a shutter was held: on a
+// phone the groups became a centred row of pills 240 px wide instead of full-width
+// targets, with the strip's padding and z-index on top. The container's class is
+// `targeting` now (`views/overview.ts`), and the strip's rules cannot reach anything that
+// is not a strip.
+
 export const stripStyles = css`
   .strip {
     position: fixed;
@@ -33,7 +41,7 @@ export const stripStyles = css`
     box-shadow: var(--myhome-shadow);
   }
 
-  .drop-zone {
+  .strip.drop-zone {
     z-index: 45;
     padding: 14px 28px;
     min-height: 48px;
@@ -47,12 +55,12 @@ export const stripStyles = css`
     color: var(--myhome-text-soft);
   }
 
-  .drop-zone.over {
+  .strip.drop-zone.over {
     border: 2px solid var(--myhome-primary-ink);
     color: var(--myhome-primary-ink);
   }
 
-  .dark {
+  .strip.dark {
     background: var(--myhome-text);
     color: var(--myhome-background);
     border-radius: 8px;
@@ -66,7 +74,7 @@ export const stripStyles = css`
    * title, it landed on top of one of the targets the user is being asked to tap. It sits
    * where every other strip sits now, inside the 96 px the list already keeps clear.
    */
-  .armed {
+  .strip.armed {
     z-index: 40;
     padding: 10px 16px;
     display: flex;
@@ -81,7 +89,7 @@ export const stripStyles = css`
    * to tap. The name is on the row that is dimmed behind it; what this has to say is where
    * to tap.
    */
-  .armed .what {
+  .strip.armed .what {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -89,19 +97,19 @@ export const stripStyles = css`
     min-width: 0;
   }
 
-  .applying {
+  .strip.applying {
     z-index: 70;
     padding: 12px 20px;
   }
 
-  .applying .under {
+  .strip.applying .under {
     display: block;
     font-size: 12px;
     opacity: 0.75;
     margin-top: 2px;
   }
 
-  .snack {
+  .strip.snack {
     z-index: 70;
     padding: 8px 8px 8px 20px;
     display: flex;
@@ -109,7 +117,7 @@ export const stripStyles = css`
     gap: 8px;
   }
 
-  .dark button {
+  .strip.dark button {
     min-height: 44px;
     padding: 0 12px;
     border: none;
