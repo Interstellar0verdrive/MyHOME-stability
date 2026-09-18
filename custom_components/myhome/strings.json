@@ -741,7 +741,7 @@
     },
     "firstrun": {
       "title": "No profile yet",
-      "body": "A profile describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
+      "body": "A **profile** describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
       "how": "A profile is not written, it is measured. Pick one representative cover and measure it once, with the guided calibration: about three minutes. Similar covers can then follow it.",
       "action": {
         "measure": "Measure a cover"
@@ -751,7 +751,7 @@
     "overview": {
       "title": "Profiles and covers",
       "summary": "Profiles: {profiles} · Basic covers: {covers}",
-      "explanation": "A profile describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
+      "explanation": "A **profile** describes a type of cover: how long it takes to run, how long the slats take and how the curtain winds onto the roll. Each cover may follow one, and Home Assistant adapts it to that cover's own travel.",
       "group": {
         "profile": "Profile «{profile}»",
         "missing": "This profile is not defined any more: the covers below have quietly fallen back to their own configuration.",

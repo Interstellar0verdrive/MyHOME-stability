@@ -741,7 +741,7 @@
     },
     "firstrun": {
       "title": "Nessun profilo, per ora",
-      "body": "Un profilo descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
+      "body": "Un **profilo** descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
       "how": "Un profilo non si scrive: si misura. Si sceglie una tapparella rappresentativa e la si misura una volta sola, con la calibrazione guidata: circa tre minuti. Le tapparelle simili potranno poi seguirla.",
       "action": {
         "measure": "Misura una tapparella"
@@ -751,7 +751,7 @@
     "overview": {
       "title": "Profili e tapparelle",
       "summary": "Profili: {profiles} · Tapparelle semplici: {covers}",
-      "explanation": "Un profilo descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
+      "explanation": "Un **profilo** descrive un tipo di tapparella: quanto impiega a correre, quanto durano le lamelle e come il telo si avvolge sul rullo. Ogni tapparella può seguirne uno, e Home Assistant lo adatta alla sua corsa.",
       "group": {
         "profile": "Profilo «{profile}»",
         "missing": "Questo profilo non è più definito: le tapparelle qui sotto sono tornate in silenzio alla propria configurazione.",
