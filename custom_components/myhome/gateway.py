@@ -60,6 +60,7 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_PORT,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 from OWNd.connection import OWNGateway, OWNSession
@@ -170,6 +171,11 @@ PROBE_WINDOW_SEC = float(DEFAULT_PROBE_WINDOW_SEC)  # probe sent, still nothing 
 READ_POLL_SEC = 30.0  # wake-up cadence of the listening loop (watchdog granularity)
 INITIAL_BACKOFF_SEC = 1.0
 MAX_BACKOFF_SEC = 60.0
+# The gateway's firmware (WHO 13, dimension 16). The config entry only knows what
+# SSDP said, and nothing at all for a gateway added by hand, so the gateway is asked
+# once at setup and its device is updated from the answer, whoever asked for it.
+FIRMWARE_REQUEST = "*#13**16##"
+_FIRMWARE_REPLY = re.compile(r"^\*#13\*\*16\*(\d+)\*(\d+)\*(\d+)##$")
 # Logging.
 LOG_RATE_LIMIT_SEC = 60.0
 RECONNECT_LOG_RATE_LIMIT_SEC = 300.0
@@ -494,6 +500,12 @@ def _entity_key_candidates(entity_key: str) -> tuple[str, ...]:
     # dict.fromkeys keeps the order and drops the duplicate when the key is already
     # in one of the two canonical spellings.
     return tuple(dict.fromkeys((entity_key, f"{base}#4#{interface:02d}", f"{base}#4#{interface}")))
+
+
+def firmware_from_frame(frame: str) -> str | None:
+    """``1.2.3`` from a ``*#13**16*1*2*3##`` reply, ``None`` for any other frame."""
+    match = _FIRMWARE_REPLY.match(frame)
+    return ".".join(match.groups()) if match else None
 
 
 def _message_entity_key(message: OWNMessage) -> str:
@@ -1525,6 +1537,9 @@ class MyHOMEGatewayHandler:
 
             if isinstance(message, (OWNGatewayEvent, OWNGatewayCommand)):
                 LOGGER.debug("%s %s", self.log_id, message.human_readable_log)
+                firmware = firmware_from_frame(str(message))
+                if firmware is not None:
+                    self._note_firmware(firmware)
                 return
 
             LOGGER.debug("%s Unsupported message `%s`", self.log_id, message)
@@ -1532,6 +1547,27 @@ class MyHOMEGatewayHandler:
             self._log_limited(
                 logging.ERROR, "dispatch", "%s Error while dispatching `%s`", self.log_id, message, exc_info=True
             )
+
+    async def request_firmware(self) -> bool:
+        """Queue ``*#13**16##`` once; the answer reaches ``_note_firmware`` on its own."""
+        return await self.send_status_request(OWNGatewayCommand(FIRMWARE_REQUEST))
+
+    def _note_firmware(self, firmware: str) -> None:
+        """Keep the firmware the gateway reported and show it on the gateway's device.
+
+        The device is registered at setup with whatever the config entry knew, which is
+        the SSDP description or nothing; the answer to ``*#13**16##`` comes later, and
+        is the gateway's own word. The registry is written only when the value differs.
+        """
+        self.gateway.firmware = firmware
+        if self.device_id is None:
+            return
+        registry = dr.async_get(self.hass)
+        device = registry.async_get(self.device_id)
+        if device is None or device.sw_version == firmware:
+            return
+        LOGGER.info("%s Gateway firmware: %s", self.log_id, firmware)
+        registry.async_update_device(self.device_id, sw_version=firmware)
 
     async def _handle_lighting_scope(self, message: OWNLightingEvent) -> bool:
         """General / area / group lighting frames: fire the bus event and re-request

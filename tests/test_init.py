@@ -14,7 +14,7 @@ from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
-from OWNd.message import OWNGatewayCommand
+from OWNd.message import OWNGatewayCommand, OWNMessage
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 import custom_components.myhome as myhome
@@ -45,6 +45,7 @@ from custom_components.myhome.const import (
     ISSUE_YAML_INVALID,
     MAX_COMMAND_WORKERS,
 )
+from custom_components.myhome.gateway import firmware_from_frame
 
 from .helpers_core import (
     BASIC_YAML,
@@ -57,7 +58,7 @@ from .helpers_core import (
     write_yaml,
 )
 from .helpers_platforms import REAL_CONFIG_PATH
-from .test_gateway import FakeOWNServer, wait_until
+from .test_gateway import FakeOWNServer, queued, wait_until
 
 SERVICES = ("sync_time", "send_message", "start_discovery", "stop_discovery")
 
@@ -130,6 +131,49 @@ async def test_setup_and_unload(hass: HomeAssistant, tmp_path) -> None:
     assert all(task.done() for task in workers)
     for service in SERVICES:
         assert not hass.services.has_service(DOMAIN, service)
+
+
+async def test_the_gateway_device_shows_the_firmware_the_gateway_reports(hass: HomeAssistant, tmp_path) -> None:
+    """The device is registered before the gateway has said which firmware it runs.
+
+    The entry of a gateway added by hand has no firmware, so the device starts without
+    one; setup asks for it (`*#13**16##`, queued once) and the answer, which comes back
+    later through the dispatcher like any other frame, is written onto the device. A
+    later answer with another version replaces it.
+
+    Mutation caught: reading `handler.firmware` only at registration, or keeping the
+    answer on the handler without writing it to the device registry.
+    """
+    entry = make_entry(write_yaml(tmp_path))
+    with mock_gateway():
+        assert await _setup(hass, entry)
+        handler = hass.data[DOMAIN][MAC][CONF_ENTITY]
+        device_registry = dr.async_get(hass)
+        assert device_registry.async_get(handler.device_id).sw_version is None
+        assert queued(handler).count("*#13**16##") == 1
+
+        await handler._dispatch_message(OWNMessage.parse("*#13**16*1*2*3##"), from_monitor=False)
+        assert device_registry.async_get(handler.device_id).sw_version == "1.2.3"
+        assert handler.firmware == "1.2.3"
+
+        await handler._dispatch_message(OWNMessage.parse("*#13**16*1*2*4##"), from_monitor=True)
+        assert device_registry.async_get(handler.device_id).sw_version == "1.2.4"
+
+        # Any other gateway frame leaves it alone.
+        await handler._dispatch_message(OWNMessage.parse("*#13**15*2##"), from_monitor=True)
+        assert device_registry.async_get(handler.device_id).sw_version == "1.2.4"
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+def test_only_a_complete_firmware_reply_is_read_as_a_firmware() -> None:
+    assert firmware_from_frame("*#13**16*1*2*3##") == "1.2.3"
+    assert firmware_from_frame("*#13**16*10*0*25##") == "10.0.25"
+    assert firmware_from_frame("*#13**16##") is None  # the request itself
+    assert firmware_from_frame("*#13**16*1*2##") is None
+    assert firmware_from_frame("*#13**23*1*2*3##") is None  # kernel version
+    assert firmware_from_frame("*1*1*11##") is None
 
 
 async def test_reload_twice_keeps_services_working(hass: HomeAssistant, tmp_path) -> None:

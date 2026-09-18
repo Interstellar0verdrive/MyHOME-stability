@@ -101,6 +101,12 @@ everything the panel does.
   dropped at load with a warning that names it, a value that is not a number reads as a
   key nobody wrote, and the shutters go on running on what is left. Affects anyone who
   hand-edited the file under 0.5.0.
+- **The gateway's device page shows its firmware.** The device was registered at
+  setup with the firmware the config entry knew — the SSDP description, or nothing at
+  all for a gateway added by hand — and was never updated afterwards: a firmware reply
+  from the gateway only reached the debug log. The integration now asks the gateway
+  once at setup (`*#13**16##`, no polling) and writes the answer onto the device
+  whenever a firmware reply arrives with a different version.
 
 ## [0.5.0] - 2026-09-13
 
