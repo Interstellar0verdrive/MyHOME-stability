@@ -96,7 +96,12 @@ export const reviewPanelStyles: CSSResultGroup = [sheetStyles, css`
     min-width: 0;
   }
 
-  .sheet .item .route {
+  /*
+   * Plain grey text, as the design draws it. It is not called "route": that is the
+   * pending chip of the rows (cover-row.ts), whose dashed border and tinted ground are
+   * adopted by the same shadow root and used to be drawn here too.
+   */
+  .sheet .item .item-route {
     font-size: 13px;
     color: var(--myhome-text-soft);
   }
@@ -402,7 +407,7 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
           return html`<section class="item">
             <div class="line">
               <span class="name">${cover.name}</span>
-              <span class="route">${context.route(cover)}</span>
+              <span class="item-route">${context.route(cover)}</span>
             </div>
             ${needs
               ? html`<label class="travel">

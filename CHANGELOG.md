@@ -125,7 +125,8 @@ everything the panel does.
   and the confirm button. On a phone, holding a cover to move it turns the groups into
   full-width targets again, rather than narrow centred pills, and the strip that asks
   for the destination keeps the cover's name instead of stopping at "Tap the
-  destination group…".
+  destination group…". In the review, the route of each cover is plain grey text again
+  rather than a copy of the pending chip.
 
 ## [0.5.0] - 2026-09-13
 
