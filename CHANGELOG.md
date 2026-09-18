@@ -83,6 +83,15 @@ everything the panel does.
 - **The count of profiles and covers is a line and not a sentence**: *Profiles: N ·
   Basic covers: N*, on the dialog's own screen and on the panel, where the two now say
   it identically.
+- **The hand edits of the panel set the model's parameters apart from the times.** On
+  the cover card and in the profile's editor, the slat opening time and the two roll
+  coefficients now come after an **"Advanced parameters"** note: they are parameters
+  of the position model, to be changed only knowing what they mean, and when in doubt
+  taken from the guided calibration, which measures them on the real cover. The note
+  sits right in front of the slat time, so the two run times — and a profile's
+  reference travel — stay above it and are not made to look dangerous. Every field is
+  still editable. English and Italian; the other five languages show the English text
+  until the translation pass.
 - **A profile name is at most 64 characters**, on top of the letters, digits and
   underscores it already had to be. There was no limit at all before: a name of any
   length was accepted, became a key of the calibration store, and was printed wherever

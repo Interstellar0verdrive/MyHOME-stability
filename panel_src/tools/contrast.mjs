@@ -136,6 +136,7 @@ const pairs = (t) => [
   ["the applying / undo strip", t.background, t.text, 14],
   ["the word Annulla on that strip", snackAction(t), t.text, 14],
   ["the offline banner", t.text, mix(t.warning, t.card, 12), 14],
+  ["the advanced parameters note of a hand edit", t.text, mix(t.warning, t.card, 12), 13],
   ["the refusal card", t.text, mix(t.error, t.card, 12), 14],
   ["page text on the page background", t.text, t.background, 14],
 ];
@@ -164,6 +165,9 @@ const indicators = (t) => [
   ["the drop target's outline", ink(t, t.primary), t.card],
   ["a field's border", mix(t.soft, t.card, 80), t.card],
   ["a field's border when it is refused", ink(t, t.error), t.card],
+  // What sets the advanced note apart from the intro box above it, so it has to be seen.
+  ["the advanced note's left rule, on the card", ink(t, t.warning), t.card],
+  ["the advanced note's left rule, on its own ground", ink(t, t.warning), mix(t.warning, t.card, 12)],
 ];
 
 /** What the panel cannot fix from inside a theme, measured and reported all the same. */

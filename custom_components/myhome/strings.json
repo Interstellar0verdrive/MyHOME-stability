@@ -730,6 +730,10 @@
         "show_all": "Show every value, roll coefficients included",
         "hide_all": "Hide the roll coefficients"
       },
+      "advanced": {
+        "title": "Advanced parameters",
+        "body": "Slat opening time and roll coefficients are parameters of the position model and should only be changed with a precise understanding of what they mean and how they affect the position. When in doubt, obtaining them from the guided calibration is strongly recommended: it measures them on the real cover."
+      },
       "unit": {
         "seconds": "s",
         "centimetres": "cm"

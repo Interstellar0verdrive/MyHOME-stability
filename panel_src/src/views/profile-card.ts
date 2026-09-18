@@ -25,18 +25,20 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 
 import { focusWhenPainted } from "../engine/a11y";
-import { DECIMALS, MEASURABLE_KEYS } from "../engine/assign";
+import { ADVANCED_KEYS, DECIMALS, MEASURABLE_KEYS } from "../engine/assign";
 import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
 import { I18n } from "../engine/i18n";
 import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
 import { type CoverRow, type PreviewItem, type ProfileRow } from "../engine/ws";
 import {
+  advancedNote,
   cardFoot,
   cardPageStyles,
   numberField,
   valueRow,
   wideButton,
+  withAdvancedNote,
 } from "../components/card-page";
 
 /** The six a profile states: the travel it was measured at, then the five values. */
@@ -388,25 +390,34 @@ export class MyHomeProfileCard extends LitElement {
         ${this.i18n.t("panel.profile.edit.intro")}
       </div>
       <div class="fields">
-        ${PROFILE_KEYS.map((key) =>
-          numberField({
-            label: this._label(key),
-            value: form[key] ?? "",
-            unit: this._unit(key),
-            // An emptied field is a different sentence from a bad number, and it used
-             // to be no sentence at all: Save went grey, the impact line said "correct
-             // the fields", and nothing under the field said which one or why. On this
-             // card every one of the six is required - a profile with a blank in it is
-             // not a profile - unlike the detail card, where empty means "inherit".
-            error: isEmpty(form[key])
-              ? this.i18n.t("panel.common.required")
-              : (() => {
-                  const problem = valueProblem(key, form[key]);
-                  return problem ? this._problem(key, problem) : null;
-                })(),
-            disabled: this.state.applying,
-            onInput: (value) => this.actions.field(key, value),
-          }),
+        ${withAdvancedNote(
+          PROFILE_KEYS,
+          (key) => key,
+          ADVANCED_KEYS,
+          () =>
+            advancedNote(
+              this.i18n.t("panel.common.advanced.title"),
+              this.i18n.t("panel.common.advanced.body"),
+            ),
+          (key) =>
+            numberField({
+              label: this._label(key),
+              value: form[key] ?? "",
+              unit: this._unit(key),
+              // An emptied field is a different sentence from a bad number, and it used
+               // to be no sentence at all: Save went grey, the impact line said "correct
+               // the fields", and nothing under the field said which one or why. On this
+               // card every one of the six is required - a profile with a blank in it is
+               // not a profile - unlike the detail card, where empty means "inherit".
+              error: isEmpty(form[key])
+                ? this.i18n.t("panel.common.required")
+                : (() => {
+                    const problem = valueProblem(key, form[key]);
+                    return problem ? this._problem(key, problem) : null;
+                  })(),
+              disabled: this.state.applying,
+              onInput: (value) => this.actions.field(key, value),
+            }),
         )}
       </div>
       <h3>${this.i18n.t("panel.profile.impact.title")}</h3>

@@ -31,7 +31,7 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 
 import { focusWhenPainted } from "../engine/a11y";
-import { DECIMALS, ROLL_KEYS, TABLE_KEYS } from "../engine/assign";
+import { ADVANCED_KEYS, DECIMALS, ROLL_KEYS, TABLE_KEYS } from "../engine/assign";
 import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
 import { cardSkeleton, skeletonStyles } from "../components/skeleton";
 import { I18n } from "../engine/i18n";
@@ -39,11 +39,13 @@ import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
 import { type CoverKeyRow, type CoverRow, type PreviewItem } from "../engine/ws";
 import {
+  advancedNote,
   cardFoot,
   cardPageStyles,
   numberField,
   valueRow,
   wideButton,
+  withAdvancedNote,
 } from "../components/card-page";
 import { originChip, originChipStyles } from "../components/origin-chip";
 
@@ -411,7 +413,13 @@ export class MyHomeCoverDetail extends LitElement {
       <h2 data-heading tabindex="-1">${this.i18n.t("panel.detail.edit.title")}</h2>
       <div class="warn">${this.i18n.t("panel.detail.edit.intro")}</div>
       <div class="fields">
-        ${rows.map((row) => this._field(row))}
+        ${withAdvancedNote(
+          rows,
+          (row) => row.key,
+          ADVANCED_KEYS,
+          () => this._advancedNote(),
+          (row) => this._field(row),
+        )}
       </div>
       ${cardFoot(
         this.i18n.t("panel.common.action.cancel"),
@@ -423,6 +431,14 @@ export class MyHomeCoverDetail extends LitElement {
         this.state.applying,
       )}
     </section>`;
+  }
+
+  /** The note in front of the slat time: the rest of the form is model, not stopwatch. */
+  private _advancedNote(): TemplateResult {
+    return advancedNote(
+      this.i18n.t("panel.common.advanced.title"),
+      this.i18n.t("panel.common.advanced.body"),
+    );
   }
 
   /**

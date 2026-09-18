@@ -297,7 +297,9 @@ export const STATES = [
   // itself, because a hash that stopped opening one would otherwise audit the list twice
   // and pass.
   { name: "cover detail", state: "ready", hash: COVER, expect: "[data-drawer]" },
-  { name: "cover detail, first action", state: "ready", hash: COVER, drive: pressWide(0), expect: "[data-drawer]" },
+  // The first action of both cards is the hand edit, and the advanced note is what says
+  // the form is really open (and gives axe the note to look at).
+  { name: "cover detail, first action", state: "ready", hash: COVER, drive: pressWide(0), expect: "[data-advanced-note]" },
   { name: "cover detail, second action", state: "ready", hash: COVER, drive: pressWide(1), expect: "[data-drawer]" },
   { name: "cover detail, last action", state: "ready", hash: COVER, drive: pressWide(-1), expect: "[data-drawer]" },
   {
@@ -314,7 +316,7 @@ export const STATES = [
     expect: ".dialog",
   },
   { name: "profile card", state: "ready", hash: "#/profile/tall", expect: "[data-drawer]" },
-  { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-drawer]" },
+  { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-advanced-note]" },
   { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1), expect: "[data-drawer]" },
   { name: "profile card, last action", state: "ready", hash: "#/profile/tall", drive: pressWide(-1), expect: "[data-drawer]" },
 ];
