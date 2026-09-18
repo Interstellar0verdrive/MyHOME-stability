@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { I18n } from "../src/engine/i18n";
+import { I18n, lexiconQuotes } from "../src/engine/i18n";
 import { type HaConnection } from "../src/types/ha";
 
 const served = (texts: Record<string, unknown>, language = "it"): HaConnection =>
@@ -119,7 +119,7 @@ describe("the words the panel is forbidden to keep its own copy of", () => {
     });
     assert.equal(
       i18n.refusal("busy_calibrating", { cover: "Camera" }),
-      'Una calibrazione sta usando "Camera".',
+      "Una calibrazione sta usando «Camera».",
     );
   });
 
@@ -133,9 +133,40 @@ describe("the words the panel is forbidden to keep its own copy of", () => {
     const i18n = await load({
       selector: { calibration_origin: { options: { inherited: 'Ereditata dal profilo "{profile}"' } } },
     });
-    assert.equal(i18n.origin("inherited", "tall"), 'Ereditata dal profilo "tall"');
+    assert.equal(i18n.origin("inherited", "tall"), "Ereditata dal profilo «tall»");
     // A profile that is not there is an empty name and never the word "null".
-    assert.equal(i18n.origin("inherited", null), 'Ereditata dal profilo ""');
+    assert.equal(i18n.origin("inherited", null), "Ereditata dal profilo «»");
+  });
+});
+
+describe("the lexicon's quotation marks, on a sentence the panel borrows", () => {
+  // The origin phrases and the refusals still write “Alte” - they are the dialog's and
+  // Home Assistant's too, and move with them - while every sentence of the panel's own
+  // writes «Alte». Only the marks around a placeholder are swapped.
+  it("swaps the pair each language's files use for « »", () => {
+    assert.equal(lexiconQuotes("Ereditata dal profilo “{profile}”"), "Ereditata dal profilo «{profile}»");
+    assert.equal(lexiconQuotes("Vom Profil „{profile}“ geerbt"), "Vom Profil «{profile}» geerbt");
+    assert.equal(lexiconQuotes("Hérité du profil « {profile} »"), "Hérité du profil «{profile}»");
+    assert.equal(lexiconQuotes("Heredada del perfil «{profile}»"), "Heredada del perfil «{profile}»");
+  });
+
+  it("leaves an apostrophe, and a placeholder with no quotes, alone", () => {
+    assert.equal(lexiconQuotes("dell’{cover}’s"), "dell’{cover}’s");
+    assert.equal(lexiconQuotes("{cover} è occupata"), "{cover} è occupata");
+  });
+
+  it("does it for the origin chip and the refusals, and not inside a name", async () => {
+    const i18n = await load({
+      selector: { calibration_origin: { options: { adjusted: "Adattata dal profilo “{profile}”" } } },
+      exceptions: { name_in_use: { message: "Esiste già un profilo che si chiama “{profile}”." } },
+    });
+    assert.equal(i18n.origin("adjusted", "Basse"), "Adattata dal profilo «Basse»");
+    assert.equal(
+      i18n.refusal("name_in_use", { profile: "alte" }),
+      "Esiste già un profilo che si chiama «alte».",
+    );
+    // A name out of myhome.yaml can hold anything; what the user wrote is printed as is.
+    assert.equal(i18n.origin("adjusted", "“x”"), "Adattata dal profilo «“x”»");
   });
 });
 

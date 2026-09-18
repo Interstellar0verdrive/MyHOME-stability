@@ -131,7 +131,9 @@ everything the panel does.
   values", without the dots of the button that opens it. The introduction sets
   "**profile**" in bold, as the design does. Units are said once: "Ascent time … 14.9 s"
   rather than "Ascent time (s) … 14.9 s" on the cards, in the editors and in the impact
-  preview, and the review's before/after table gives its numbers their unit.
+  preview, and the review's before/after table gives its numbers their unit. The long
+  origin chips ("Inherited from profile «Tall»") and the refusals that name a profile use
+  « » like every other sentence of the panel; the guided dialog is unchanged.
 
 ## [0.5.0] - 2026-09-13
 

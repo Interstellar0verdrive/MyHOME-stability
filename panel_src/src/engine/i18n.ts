@@ -6,7 +6,8 @@
 // here: one source of truth, already policed by `tests/test_translations.py`, and a
 // language the *user* chose rather than the one the server runs in.
 //
-// Two things this class does beyond looking a key up.
+// Two things this class does beyond looking a key up (and a third, for the sentences it
+// borrows from the dialog's blocks: their names are quoted « », see `lexiconQuotes`).
 //
 // **Placeholders.** `t("panel.overview.group.measured_on", {cover: "…", date: "…"})`. They
 // are named, never positional, because a translator reorders a sentence and a number does
@@ -51,6 +52,33 @@ const fill = (sentence: string, placeholders?: Placeholders): string => {
       : whole,
   );
 };
+
+/**
+ * A placeholder between quotation marks, in any of the pairs the eight files use: “ ”,
+ * „ “, " ", ‹ ›, « », with or without the spaces French puts inside them. Single quotes
+ * are left out on purpose - ’ is also the apostrophe, and "dell’{cover}" is not a quote.
+ */
+const QUOTED_SLOT =
+  /[“”„"‹›«»][\s  ]*(\{[A-Za-z0-9_]+\})[\s  ]*[“”„"‹›«»]/gu;
+
+/**
+ * The lexicon's quotation marks around a name, in a sentence the panel borrows.
+ *
+ * The panel's own block writes a name as «Alte» in every language (lexicon; commit
+ * d491c1f for English). Two blocks it reads but does not own still write “Alte”: the
+ * origin phrases (`selector.calibration_origin.options.*`) and the refusals
+ * (`exceptions.*.message`). **Their source is not changed**, because they are not the
+ * panel's: the guided dialog prints the origin phrase in its own cover screen
+ * ("Da dove arrivano i valori in uso: {origin}", `calibration_flow._origin_in_words`)
+ * among sentences that all write “ ”, and Home Assistant shows the refusals from service
+ * calls and the dialog. Changing the files would put « » in one line of a dialog that
+ * says “ ” everywhere else, until the language round moves the dialog as a whole.
+ *
+ * So the pair is swapped here, on the sentence before the name goes in: only the marks
+ * around a placeholder, never anything inside a name the user typed.
+ */
+export const lexiconQuotes = (sentence: string): string =>
+  sentence.replace(QUOTED_SLOT, "«$1»");
 
 export class I18n {
   private _texts: Record<string, unknown> = {};
@@ -99,7 +127,7 @@ export class I18n {
   refusal(key: string | null | undefined, placeholders?: Placeholders): string {
     const served = key ? this._lookup(`exceptions.${key}.message`) : null;
     if (served !== null) {
-      return fill(served, placeholders);
+      return fill(lexiconQuotes(served), placeholders);
     }
     return this.t("panel.error.not_found");
   }
@@ -107,10 +135,12 @@ export class I18n {
   /**
    * The origin words, which are **not** duplicated under `panel.*`: they already exist as
    * `selector.calibration_origin.options.*` in all eight files, and they already carry the
-   * profile name. The panel renders the server's token, never its own idea of one.
+   * profile name. The panel renders the server's token, never its own idea of one, and
+   * the name in the lexicon's « » (`lexiconQuotes`).
    */
   origin(token: string, profile: string | null): string {
-    return this.t(`selector.calibration_origin.options.${token}`, { profile: profile ?? "" });
+    const key = `selector.calibration_origin.options.${token}`;
+    return fill(lexiconQuotes(this._lookup(key) ?? key), { profile: profile ?? "" });
   }
 
   /** A number, in the user's language, with the decimals the value deserves. */
