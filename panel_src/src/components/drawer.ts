@@ -15,11 +15,13 @@
 // *and* this, on first paint, which is the one thing the plan asks of these two addresses
 // (§3.3). The back stack is `engine/drawer.ts`, and is one level deep by construction.
 
-import { css, html, type TemplateResult } from "lit";
+import { css, html, type CSSResultGroup, type TemplateResult } from "lit";
 
 import { type I18n } from "../engine/i18n";
+import { sheetStyles } from "./sheet";
 
-export const drawerStyles = css`
+/** The drawer's own rules, with the frame they sit on (see `review-panel.ts` for why). */
+export const drawerStyles: CSSResultGroup = [sheetStyles, css`
   /*
    * The title is the profile's or the shutter's name, and it is painted the way the group
    * headings are painted since the first live pass: the theme's own primary colour, at
@@ -39,7 +41,7 @@ export const drawerStyles = css`
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     background: var(--myhome-background);
   }
-`;
+`];
 
 export interface DrawerContext {
   i18n: I18n;

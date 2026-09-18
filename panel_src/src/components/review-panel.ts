@@ -25,9 +25,15 @@
 
 // The box itself - the backdrop, the panel from the right, the sheet from the bottom,
 // the head and the scrolling body - is `components/sheet.ts`, which the routed cards'
-// drawer is drawn in too. What is below is what goes *inside* this one.
+// drawer is drawn in too. What is below is what goes *inside* this one, **and the frame
+// travels with it**: `reviewPanelStyles` carries `sheetStyles`, because the rules only
+// reach the shadow root that adopts them. When the frame moved to its own file, only the
+// shell (`main.ts`) adopted it, while this panel is drawn inside `myhome-overview`'s root:
+// the panel lost its backdrop, its fixed position and its round ✕, and landed at the
+// bottom of the page as a plain block. A component whose markup needs a frame now
+// brings it, whoever draws it.
 
-import { css, html, nothing, type TemplateResult } from "lit";
+import { css, html, nothing, type CSSResultGroup, type TemplateResult } from "lit";
 
 import {
   DECIMALS,
@@ -36,11 +42,13 @@ import {
   TABLE_KEYS,
   travelProblem,
 } from "../engine/assign";
+import { UNIT_KEY, bareLabel, withUnit } from "../engine/fields";
 import { type I18n } from "../engine/i18n";
 import { type PendingChange } from "../engine/store";
 import { type CoverRow, type PreviewItem, type ProfileRow } from "../engine/ws";
+import { sheetStyles } from "./sheet";
 
-export const reviewPanelStyles = css`
+export const reviewPanelStyles: CSSResultGroup = [sheetStyles, css`
   .sheet .body[aria-busy="true"] table,
   .sheet .body[aria-busy="true"] .note {
     opacity: 0.55;
@@ -89,7 +97,12 @@ export const reviewPanelStyles = css`
     min-width: 0;
   }
 
-  .sheet .item .route {
+  /*
+   * Plain grey text, as the design draws it. It is not called "route": that is the
+   * pending chip of the rows (cover-row.ts), whose dashed border and tinted ground are
+   * adopted by the same shadow root and used to be drawn here too.
+   */
+  .sheet .item .item-route {
     font-size: 13px;
     color: var(--myhome-text-soft);
   }
@@ -238,7 +251,7 @@ export const reviewPanelStyles = css`
     color: var(--myhome-text-off);
     cursor: default;
   }
-`;
+`];
 
 export interface ReviewContext {
   i18n: I18n;
@@ -333,8 +346,14 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
 
   const keys = context.showAll ? [...TABLE_KEYS, ...ROLL_KEYS] : TABLE_KEYS;
 
+  // The form's label without its "(s)", and the unit with the number instead: "Tempo di
+  // salita … 21,8 s", as the cover's card and the profile's say it (engine/fields.ts).
   const label = (key: string): string =>
-    i18n.t(`options.step.calibration_edit.data.${key}`);
+    bareLabel(i18n.t(`options.step.calibration_edit.data.${key}`));
+  const value = (key: string, number: number): string => {
+    const unit = UNIT_KEY[key];
+    return withUnit(i18n.number(number, DECIMALS[key] ?? 1), unit ? i18n.t(unit) : "");
+  };
 
   return html`
     <!--
@@ -395,7 +414,7 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
           return html`<section class="item">
             <div class="line">
               <span class="name">${cover.name}</span>
-              <span class="route">${context.route(cover)}</span>
+              <span class="item-route">${context.route(cover)}</span>
             </div>
             ${needs
               ? html`<label class="travel">
@@ -439,10 +458,8 @@ export const reviewPanel = (context: ReviewContext): TemplateResult => {
                     ${rows.map(
                       (key) => html`<tr>
                         <td class="what">${label(key)}</td>
-                        <td>${i18n.number(cover.values[key], DECIMALS[key] ?? 1)}</td>
-                        <td class="after">
-                          ${i18n.number((item as PreviewItem).values[key], DECIMALS[key] ?? 1)}
-                        </td>
+                        <td>${value(key, cover.values[key])}</td>
+                        <td class="after">${value(key, (item as PreviewItem).values[key])}</td>
                       </tr>`,
                     )}
                   </tbody>

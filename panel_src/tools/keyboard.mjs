@@ -60,6 +60,49 @@ const describe = (node) =>
 const press = (window, node, key) =>
   node?.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
 
+/**
+ * The CSS that really reaches an element: the rules of the shadow root it is drawn in.
+ *
+ * jsdom lays nothing out, so a panel with no frame at all - no backdrop, no fixed
+ * position, the confirm button at the bottom of the page - passes every check of markup
+ * and focus above. What can be asked without a layout engine is whether the rules that
+ * make the frame are in the root the element lives in: a rule adopted by another root
+ * does not reach it. Both routes Lit can take are read - adopted sheets, and the
+ * `<style>` elements it falls back to, whose text is read directly because jsdom does
+ * not parse a stylesheet inside a shadow root - and the whitespace is folded so that one
+ * pattern fits both the source and the minified bundle.
+ */
+const rulesReaching = (element) => {
+  const root = element?.getRootNode?.();
+  if (!root) {
+    return "";
+  }
+  const text = [];
+  const walk = (rules) => {
+    for (const rule of rules) {
+      text.push(rule.cssText);
+      if (rule.cssRules) {
+        walk(rule.cssRules);
+      }
+    }
+  };
+  for (const sheet of root.adoptedStyleSheets ?? []) {
+    walk(sheet.cssRules);
+  }
+  for (const style of root.querySelectorAll?.("style") ?? []) {
+    text.push(style.textContent ?? "");
+  }
+  return text.join("\n").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s+/g, " ");
+};
+
+/** True when the sheet's frame - backdrop and fixed box - is styled where it is drawn. */
+const framed = (sheet) => {
+  const rules = rulesReaching(sheet);
+  return /(^|[\s}])\.sheet-backdrop ?\{[^}]*position: ?fixed/.test(rules) &&
+    /(^|[\s}])\.sheet ?\{[^}]*position: ?fixed/.test(rules) &&
+    /(^|[\s}])\.sheet \.head button ?\{[^}]*border-radius: ?24px/.test(rules);
+};
+
 const checks = [];
 const check = (what, ok, detail = "") => {
   checks.push({ what, ok, detail });
@@ -117,6 +160,7 @@ const check = (what, ok, detail = "") => {
   await settle();
   const sheet = deep(panel.shadowRoot, ".sheet");
   check("the review sheet opens", sheet !== null);
+  check("and it is drawn in its frame: backdrop, fixed panel, round ✕", framed(sheet));
   check("focus is inside it", sheet?.contains(active(panel)) === true, describe(active(panel)));
   check(
     "the sheet holds the keyboard",
@@ -141,6 +185,7 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   check("the deep link opened the list and a drawer over it", sheet !== null &&
     deep(panel.shadowRoot, "myhome-overview") !== null);
   check("the drawer holds the keyboard", sheet?.getAttribute("aria-modal") === "true");
+  check("and it is drawn in its frame: backdrop, fixed panel, round ✕", framed(sheet));
   const stops = tabOrder(sheet ?? panel.shadowRoot);
   console.log(`  tab order (${stops.length}): ${stops.slice(0, 6).map(describe).join(" → ")} …`);
   check("its own control is the first stop inside it", describe(stops[0]).includes("button"));

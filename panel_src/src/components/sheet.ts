@@ -12,6 +12,12 @@
 // What is **not** here is anything either panel puts *inside* the body: the review's
 // tables and travel fields are in `review-panel.ts`, and the drawer's title and its two
 // routed cards are in `drawer.ts`. This file owns the box and nothing in it.
+//
+// **Nobody adopts this directly.** `reviewPanelStyles` and `drawerStyles` each carry it,
+// because a rule reaches only the shadow root that adopts it and the two panels are drawn
+// in different roots (the overview's and the shell's). Imported on its own by the shell
+// alone, it once left the review panel with no frame at all; `npm run keyboard` now checks
+// that every `.sheet` on the screen has these rules in its own root.
 
 import { css } from "lit";
 

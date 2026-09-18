@@ -51,6 +51,26 @@ export const UNIT_KEY: Readonly<Record<string, string | null>> = {
   reference_height: "panel.common.unit.centimetres",
 };
 
+/**
+ * A field's name as the panel prints it beside a number that carries its own unit.
+ *
+ * The labels are the guided form's (`options.step.calibration_edit.data.*` and
+ * `profile_edit.data.*`), which the panel may not copy, and the form puts the unit in
+ * brackets at the end - "Tempo di salita (s)" - because a form field has nowhere else to
+ * say it. Every place the panel prints one of these labels, the number beside it already
+ * says "14,9 s" or has "s" after the field, so the bracket is the unit a second time. The
+ * trailing bracket is dropped here and the unit is printed with the number
+ * (`withUnit`); a label with no bracket is returned as it is.
+ *
+ * Where the label is **not** beside a number - the refusal "{key} accetta un numero fra
+ * {min} e {max}" - the whole label is used, because there the bracket is the only thing
+ * that says what the two bounds are measured in.
+ */
+export const bareLabel = (label: string): string => label.replace(/\s*\([^()]*\)\s*$/u, "");
+
+/** A number already formatted for the user's language, followed by its field's unit. */
+export const withUnit = (text: string, unit: string): string => (unit ? `${text} ${unit}` : text);
+
 /** Which of the two `assign` refusals a typed value breaks, or `null` when it is usable. */
 export type ValueProblem = "not_a_number" | "out_of_range";
 

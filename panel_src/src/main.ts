@@ -69,7 +69,6 @@ import {
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { drawer, drawerStyles } from "./components/drawer";
 import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
-import { sheetStyles } from "./components/sheet";
 import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
@@ -159,7 +158,6 @@ export class MyHomeCalibrationPanel extends LitElement {
     measuringBannerStyles,
     skeletonStyles,
     stripStyles,
-    sheetStyles,
     drawerStyles,
     css`
       .toolbar {
@@ -1400,15 +1398,21 @@ export class MyHomeCalibrationPanel extends LitElement {
    * A panel with four screens and one title is a panel whose browser tab, whose back
    * button and whose screen reader all say the same thing about four different places.
    */
-  /** The drawer's own heading: which shutter, or which profile, is inside it. */
+  /**
+   * The drawer's own heading: which shutter, or which profile, is inside it.
+   *
+   * A shutter's is its name and nothing else, as the design draws it. It used to be put
+   * in a sentence - "Tapparella «{cover}»" - and a shutter's name nearly always starts
+   * with the word already, so the heading read "Tapparella «Tapparella Soggiorno 2»". A
+   * profile's keeps its sentence: a profile is called "Alte", and "Profilo «Alte»" is how
+   * every group heading names it.
+   */
   private _drawerTitle(): string {
     const state = this._store.state;
     const route = state.route;
     if (route.view === "cover") {
       const cover = this._detailCover;
-      return cover
-        ? this._i18n.t("panel.detail.named", { cover: cover.name })
-        : this._i18n.t("panel.detail.title");
+      return cover ? cover.name : this._i18n.t("panel.detail.title");
     }
     if (route.view === "profile") {
       const known = state.overview?.profiles.some(

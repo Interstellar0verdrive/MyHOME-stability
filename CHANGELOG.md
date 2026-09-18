@@ -116,6 +116,24 @@ everything the panel does.
   from the gateway only reached the debug log. The integration now asks the gateway
   once at setup (`*#13**16##`, no polling) and writes the answer onto the device
   whenever a firmware reply arrives with a different version.
+- **"Profili e tapparelle" is drawn as designed again.** Found by comparing the panel
+  with the design, screen by screen. **"Review and confirm"** had lost its frame when
+  the cover and profile cards became panels over the list: it opened as a block at the
+  bottom of the page, with no dark backdrop, a bare ✕ and the confirm button wherever
+  the page ended. It is a panel from the right again on a desktop and a sheet from the
+  bottom on a phone, with a round ✕ and a fixed footer holding "Back to the overview"
+  and the confirm button. On a phone, holding a cover to move it turns the groups into
+  full-width targets again, rather than narrow centred pills, and the strip that asks
+  for the destination keeps the cover's name instead of stopping at "Tap the
+  destination group…". In the review, the route of each cover is plain grey text again
+  rather than a copy of the pending chip. A cover's card is headed by its name alone,
+  not "Cover «Cover Living room 2»", and the profile's editor is titled "Edit the
+  values", without the dots of the button that opens it. The introduction sets
+  "**profile**" in bold, as the design does. Units are said once: "Ascent time … 14.9 s"
+  rather than "Ascent time (s) … 14.9 s" on the cards, in the editors and in the impact
+  preview, and the review's before/after table gives its numbers their unit. The long
+  origin chips ("Inherited from profile «Tall»") and the refusals that name a profile use
+  « » like every other sentence of the panel; the guided dialog is unchanged.
 
 ## [0.5.0] - 2026-09-13
 

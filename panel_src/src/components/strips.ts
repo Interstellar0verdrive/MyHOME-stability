@@ -22,6 +22,14 @@ import { css, html, nothing, type TemplateResult } from "lit";
 
 import { type I18n } from "../engine/i18n";
 
+// **Every state selector here is `.strip.<state>`, never `.<state>` alone.** These rules
+// are adopted by the overview's whole shadow root, and a bare `.armed` once reached the
+// groups' own container, which carried the same class while a shutter was held: on a
+// phone the groups became a centred row of pills 240 px wide instead of full-width
+// targets, with the strip's padding and z-index on top. The container's class is
+// `targeting` now (`views/overview.ts`), and the strip's rules cannot reach anything that
+// is not a strip.
+
 export const stripStyles = css`
   .strip {
     position: fixed;
@@ -33,7 +41,7 @@ export const stripStyles = css`
     box-shadow: var(--myhome-shadow);
   }
 
-  .drop-zone {
+  .strip.drop-zone {
     z-index: 45;
     padding: 14px 28px;
     min-height: 48px;
@@ -47,12 +55,12 @@ export const stripStyles = css`
     color: var(--myhome-text-soft);
   }
 
-  .drop-zone.over {
+  .strip.drop-zone.over {
     border: 2px solid var(--myhome-primary-ink);
     color: var(--myhome-primary-ink);
   }
 
-  .dark {
+  .strip.dark {
     background: var(--myhome-text);
     color: var(--myhome-background);
     border-radius: 8px;
@@ -66,42 +74,54 @@ export const stripStyles = css`
    * title, it landed on top of one of the targets the user is being asked to tap. It sits
    * where every other strip sits now, inside the 96 px the list already keeps clear.
    */
-  .armed {
+  .strip.armed {
     z-index: 40;
     padding: 10px 16px;
     display: flex;
     gap: 16px;
     align-items: center;
+    /*
+     * As wide as its sentence, up to the 92vw every strip allows. Shrink-to-fit alone never
+     * got there: with "left: 50%" the room a fixed box is offered is the half of the
+     * screen to the right of that edge, so on a phone this strip was 195 px wide, its
+     * sentence was clamped at "Toccare il gruppo di…", and the shutter's name - the one
+     * word in it that changes - was the part that was cut.
+     */
+    width: max-content;
   }
 
   /*
-   * Two lines at most. The sentence carries the shutter's name and a shutter can be called
-   * "Tapparella della camera da letto grande al primo piano", which on a 375 px screen is
-   * five lines and a strip 185 px tall sitting on the very targets it is telling somebody
-   * to tap. The name is on the row that is dimmed behind it; what this has to say is where
-   * to tap.
+   * Four lines at most. The sentence carries the shutter's name and a shutter can be
+   * called "Tapparella della camera da letto grande al primo piano": in a strip half the
+   * screen wide that was five lines and 185 px sitting on the very targets it is telling
+   * somebody to tap. At the strip's full width it is three lines at 390 px and four at
+   * 360, and the name is the part of the sentence that must survive - while a shutter is
+   * held every group is collapsed to its title, so the row with the name on it is not on
+   * the screen. Two lines cut it after "per «Tapparella della camera da…"; four hold it
+   * whole in a strip of 88 px at most, inside the 120 px the list keeps clear in this
+   * state. The limit is only there for a name longer than that.
    */
-  .armed .what {
+  .strip.armed .what {
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
     min-width: 0;
   }
 
-  .applying {
+  .strip.applying {
     z-index: 70;
     padding: 12px 20px;
   }
 
-  .applying .under {
+  .strip.applying .under {
     display: block;
     font-size: 12px;
     opacity: 0.75;
     margin-top: 2px;
   }
 
-  .snack {
+  .strip.snack {
     z-index: 70;
     padding: 8px 8px 8px 20px;
     display: flex;
@@ -109,7 +129,7 @@ export const stripStyles = css`
     gap: 8px;
   }
 
-  .dark button {
+  .strip.dark button {
     min-height: 44px;
     padding: 0 12px;
     border: none;

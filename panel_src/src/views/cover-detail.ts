@@ -32,7 +32,14 @@ import { LitElement, html, nothing, type TemplateResult } from "lit";
 
 import { focusWhenPainted } from "../engine/a11y";
 import { ADVANCED_KEYS, DECIMALS, ROLL_KEYS, TABLE_KEYS } from "../engine/assign";
-import { FIELDS, UNIT_KEY, isEmpty, valueProblem } from "../engine/fields";
+import {
+  FIELDS,
+  UNIT_KEY,
+  bareLabel,
+  isEmpty,
+  valueProblem,
+  withUnit,
+} from "../engine/fields";
 import { cardSkeleton, skeletonStyles } from "../components/skeleton";
 import { I18n } from "../engine/i18n";
 import { initialState, type PanelState } from "../engine/store";
@@ -169,8 +176,14 @@ export class MyHomeCoverDetail extends LitElement {
     return this.state.overview?.measuring != null || this.state.applying;
   }
 
-  private _label(key: string): string {
+  /** The guided form's label, whole: for a sentence where no number carries the unit. */
+  private _fullLabel(key: string): string {
     return this.i18n.t(`options.step.calibration_edit.data.${key}`);
+  }
+
+  /** The same label beside a number that carries its unit, without it in brackets. */
+  private _label(key: string): string {
+    return bareLabel(this._fullLabel(key));
   }
 
   private _unit(key: string): string {
@@ -185,7 +198,7 @@ export class MyHomeCoverDetail extends LitElement {
   /** The refusal sentence for one field, in the words the API itself would use. */
   private _problem(key: string, problem: string): string {
     return this.i18n.refusal(problem, {
-      key: this._label(key),
+      key: this._fullLabel(key),
       min: FIELDS[key]?.min ?? 0,
       max: FIELDS[key]?.max ?? 0,
       cover: this.state.detail.answer?.cover.name ?? "",
@@ -490,7 +503,7 @@ export class MyHomeCoverDetail extends LitElement {
         : [];
     return html`<section class="card">
       <h2 data-heading tabindex="-1">
-        ${this.i18n.t("options.step.calibration_edit.data.height")}
+        ${this._label("height")}
       </h2>
       <p class="intro">
         ${this.i18n.t("options.step.calibration_edit.data_description.height")}
@@ -521,9 +534,9 @@ export class MyHomeCoverDetail extends LitElement {
               ${rows.map(
                 (key) => html`<tr>
                   <td class="what">${this._label(key)}</td>
-                  <td>${this._number(key, cover.values[key])}</td>
+                  <td>${withUnit(this._number(key, cover.values[key]), this._unit(key))}</td>
                   <td class="after">
-                    ${this._number(key, (item as PreviewItem).values[key])}
+                    ${withUnit(this._number(key, (item as PreviewItem).values[key]), this._unit(key))}
                   </td>
                 </tr>`,
               )}
