@@ -384,7 +384,9 @@ export class MyHomeProfileCard extends LitElement {
         ? this.i18n.t("panel.profile.edit.reach_one")
         : this.i18n.t("panel.profile.edit.reach_all", { count: followers.length });
     return html`<section class="card">
-      <h2 data-heading tabindex="-1">${this.i18n.t("panel.profile.action.edit")}</h2>
+      <!-- The button that opens this says "Modifica i valori…": the dots are the button's
+           promise of a further step, and the heading is that step. -->
+      <h2 data-heading tabindex="-1">${this.i18n.t("panel.profile.edit.title")}</h2>
       <div class="warn">
         <strong>${this.i18n.t("panel.profile.edit.reach", { target })}</strong>
         ${this.i18n.t("panel.profile.edit.intro")}

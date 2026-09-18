@@ -127,7 +127,8 @@ everything the panel does.
   for the destination keeps the cover's name instead of stopping at "Tap the
   destination group…". In the review, the route of each cover is plain grey text again
   rather than a copy of the pending chip. A cover's card is headed by its name alone,
-  not "Cover «Cover Living room 2»".
+  not "Cover «Cover Living room 2»", and the profile's editor is titled "Edit the
+  values", without the dots of the button that opens it.
 
 ## [0.5.0] - 2026-09-13
 

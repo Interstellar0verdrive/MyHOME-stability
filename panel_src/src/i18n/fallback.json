@@ -148,6 +148,7 @@
   "panel.profile.edit.reach": "The change reaches {target}",
   "panel.profile.edit.reach_all": "every one of the {count} covers that follow the profile",
   "panel.profile.edit.reach_one": "1 cover",
+  "panel.profile.edit.title": "Edit the values",
   "panel.profile.followers.adjusted": "adjusted: own values for {keys}",
   "panel.profile.followers.count": "{count} covers follow it",
   "panel.profile.followers.count_one": "1 cover follows it",

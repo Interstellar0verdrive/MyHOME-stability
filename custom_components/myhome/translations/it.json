@@ -952,6 +952,7 @@
         "inherited": "ereditata"
       },
       "edit": {
+        "title": "Modifica i valori",
         "intro": "Una modifica al profilo cambia tutto alle tapparelle che ne ereditano i valori, e solo i valori ereditati a quelle adattate: i valori propri restano, chiave per chiave.",
         "reach": "La modifica raggiunge {target}",
         "reach_all": "tutte le {count} tapparelle che seguono il profilo",

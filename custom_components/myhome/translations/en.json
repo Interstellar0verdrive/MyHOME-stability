@@ -952,6 +952,7 @@
         "inherited": "inherited"
       },
       "edit": {
+        "title": "Edit the values",
         "intro": "A change to the profile changes everything for the covers that inherit its values, and only the inherited values for the adjusted ones: the values of their own stay, key by key.",
         "reach": "The change reaches {target}",
         "reach_all": "every one of the {count} covers that follow the profile",
