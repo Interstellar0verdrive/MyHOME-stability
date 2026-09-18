@@ -126,7 +126,8 @@ everything the panel does.
   full-width targets again, rather than narrow centred pills, and the strip that asks
   for the destination keeps the cover's name instead of stopping at "Tap the
   destination group…". In the review, the route of each cover is plain grey text again
-  rather than a copy of the pending chip.
+  rather than a copy of the pending chip. A cover's card is headed by its name alone,
+  not "Cover «Cover Living room 2»".
 
 ## [0.5.0] - 2026-09-13
 

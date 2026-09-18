@@ -874,7 +874,6 @@
     },
     "detail": {
       "title": "Cover detail",
-      "named": "Cover «{cover}»",
       "unknown": "This gateway has no cover with that identifier.",
       "measured_at": "Measured on {date}",
       "level_basic": "basic calibration",

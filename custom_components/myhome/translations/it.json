@@ -874,7 +874,6 @@
     },
     "detail": {
       "title": "Dettaglio della tapparella",
-      "named": "Tapparella «{cover}»",
       "unknown": "Questo gateway non ha nessuna tapparella con quell'identificatore.",
       "measured_at": "Misurata il {date}",
       "level_basic": "calibrazione base",

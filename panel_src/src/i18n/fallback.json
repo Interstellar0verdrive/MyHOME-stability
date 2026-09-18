@@ -80,7 +80,6 @@
   "panel.detail.level_basic": "basic calibration",
   "panel.detail.level_thorough": "thorough calibration",
   "panel.detail.measured_at": "Measured on {date}",
-  "panel.detail.named": "Cover «{cover}»",
   "panel.detail.remove.action": "Remove the measurement",
   "panel.detail.remove.body": "The measurements made on «{cover}» will be removed and cannot be recovered. The cover will go back to using {destination}.",
   "panel.detail.remove.title": "Remove the measurement?",
