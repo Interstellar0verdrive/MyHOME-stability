@@ -70,8 +70,11 @@ from custom_components.myhome.calibration_store import (
 from custom_components.myhome.config_flow import MyHomeOptionsFlowHandler
 from custom_components.myhome.const import (
     CONF_CLOSING_ROLL,
+    CONF_CLOSING_TIME,
     CONF_COVER_PROFILES,
+    CONF_COVERS_FROM_FILE,
     CONF_OPENING_ROLL,
+    CONF_OPENING_TIME,
     CONF_PROFILE,
     CONF_PROFILE_WINS,
     CONF_SLAT_TIME,
@@ -104,6 +107,17 @@ YAML_KEY = "front_hall_roller"
 
 # The reference window with its own run times in the file and a profile of the same
 # kind beside it, which is where paths B and C start from.
+#
+# `tall` is deliberately *not* the file's own numbers, and states the two rolls apart
+# rather than one `roll:`. A profile that repeats what the file writes for this cover
+# makes the two indistinguishable, and a profile whose rolls are equal makes the two
+# directions indistinguishable: either way a difference between the dialog and the port
+# would land on identical numbers and go unseen (review B1, R4a).
+TALL_OPENING = 23.1
+TALL_CLOSING = 22.4
+TALL_SLAT = 5.0
+TALL_ROLL_UP = 2.2
+TALL_ROLL_DOWN = 1.6
 YAML = f"""
 gateway:
   mac: {MAC}
@@ -119,14 +133,32 @@ gateway:
   cover_profiles:
     tall:
       reference_height: {HEIGHT}
-      opening_time: {OPENING}
-      closing_time: {CLOSING}
-      slat_time: {SLAT}
-      roll: {ROLL_DOWN}
+      opening_time: {TALL_OPENING}
+      closing_time: {TALL_CLOSING}
+      slat_time: {TALL_SLAT}
+      opening_roll: {TALL_ROLL_UP}
+      closing_roll: {TALL_ROLL_DOWN}
 """
 # ...and the same with no travel anywhere for the cover: the one case every function
 # has to answer without a height.
 NO_HEIGHT_YAML = YAML.replace(f"      height: {HEIGHT}\n", "")
+# ...and one where the *file* says this window follows a profile, while the record
+# assigns it another one. The two names differ, and so do the two reference heights, so
+# the order `known_height` reads them in is visible instead of being a coin landing the
+# same way twice (review B1, R4c).
+PROFILE_IN_FILE_YAML = NO_HEIGHT_YAML.replace(
+    f"      name: {COVER_NAME}\n",
+    f"      name: {COVER_NAME}\n      profile: short\n",
+).replace(
+    "  cover_profiles:\n",
+    "  cover_profiles:\n"
+    "    short:\n"
+    "      reference_height: 150.0\n"
+    "      opening_time: 18.0\n"
+    "      closing_time: 17.5\n"
+    "      slat_time: 3.8\n"
+    "      roll: 1.9\n",
+)
 
 # A profile of the integration's own store next to the file's, so that the namespaces
 # are merged the way a cover merges them before either side reads a profile.
@@ -342,6 +374,52 @@ def _cases() -> dict[str, Case]:
             measured_name="tall_new",
             report=_report(DIRECTION_CLOSE, VERIFY_RUN, 6.8),
         ),
+        "c_height_from_profile": Case(
+            # Nobody has ever measured this window and the file says nothing about its
+            # travel: the only thing left that knows one is the profile the record
+            # assigns it, which is the last step of `known_height` and the one no other
+            # conversation of the matrix reaches (review B1, R4b).
+            PATH_REFINE,
+            {
+                "opening": _press(SLAT, OPENING + 0.5),
+                "closing": _press(None, CLOSING + 0.4),
+                "slat_seconds": SLAT,
+            },
+            yaml=NO_HEIGHT_YAML,
+            profile="tall",
+            covers={
+                UNIQUE_ID: {CONF_PROFILE: "tall", CONF_PROFILE_WINS: True, "source": "guided"}
+            },
+        ),
+        "c_profile_in_file": Case(
+            # The file assigns "short" to this window and the record assigns "tall":
+            # the record is the one that decides, on every reader (review B1, R4c). And
+            # no key in the file with a profile name already chosen, so the summary's
+            # snippet has to fall back to the entity id rather than to that name
+            # (review B1, R4d).
+            PATH_REFINE,
+            {
+                "opening": _press(SLAT + 0.1, OPENING + 0.8),
+                "closing": _press(None, CLOSING + 0.5),
+                "slat_seconds": SLAT + 0.1,
+            },
+            yaml=PROFILE_IN_FILE_YAML,
+            covers={UNIQUE_ID: {CONF_PROFILE: "tall", "source": "guided"}},
+            measured_name="tall_new",
+            yaml_key="",
+        ),
+        "a_gap_without_run": Case(
+            # A gap taped with no lift-off run behind it, which is the guard of
+            # `slat_from_gap` rather than its formula (review B1, R4e).
+            PATH_FIRST,
+            {
+                **base,
+                "opening": _press(SLAT + 0.4, OPENING + 0.4),
+                "slat_seconds": SLAT + 0.4,
+                "lift_gap_cm": 6.0,
+            },
+            measured_name="tall_new",
+        ),
         "b_profile_gone": Case(
             PATH_PROFILE,
             {"height": 150.0, "height_measured": True, "verify_fraction": VERIFY_RUN_PROFILE},
@@ -387,6 +465,9 @@ class Conversation:
     case: Case
     measured: Measured
     device: dict[str, Any]
+    # ...and the same cover as `myhome.yaml` wrote it, which is a different dictionary:
+    # see `test_the_file_s_own_copy_of_the_cover_answers_the_same`.
+    device_from_file: Mapping[str, Any]
     profiles: dict[str, Mapping[str, Any]]
     record: Any
     entity_id: str
@@ -452,6 +533,7 @@ async def _converse(hass: HomeAssistant, entry: Any, case: Case) -> Conversation
         case=case,
         measured=Measured(**_copied(case.measured)),
         device=device_config(hass, COVER, DEVICE_KEY),
+        device_from_file=hass.data[DOMAIN][MAC][CONF_COVERS_FROM_FILE][DEVICE_KEY],
         profiles=merged_profiles(yaml_profiles, store.profiles),
         record=store.calibration(UNIQUE_ID),
         entity_id=cover.entity_id if cover is not None else "",
@@ -494,6 +576,17 @@ async def test_the_matrix_covers_every_conversation_the_plan_names() -> None:
     assert any(case.measured.get("lift_gap_cm") for case in CASES.values())
     assert any(not case.measured.get("height") for case in CASES.values())
     assert any(case.profile == "gone" for case in CASES.values())
+    # ...and the branches the first twelve conversations all happened to miss, each of
+    # which a wrong port could have taken without any of them noticing (review B1, R4).
+    assert any(case.yaml is PROFILE_IN_FILE_YAML for case in CASES.values())
+    assert any(
+        case.path != PATH_FIRST and not case.yaml_key and case.measured_name
+        for case in CASES.values()
+    )
+    assert any(
+        case.measured.get("lift_gap_cm") and not case.measured.get("lift_run_sec")
+        for case in CASES.values()
+    )
 
 
 async def test_the_model_in_use_and_the_known_travel(conversation: Conversation) -> None:
@@ -536,6 +629,85 @@ async def test_the_adopted_times_come_on_readings_of_their_own(
     assert (c.measured.descent, c.measured.ascent) == before
 
 
+async def test_the_file_s_own_copy_of_the_cover_answers_the_same(
+    conversation: Conversation,
+) -> None:
+    """The two shapes of a cover's configuration give one answer, over the whole matrix.
+
+    The dialog reads the validated dict out of `hass.data` (`_cover_config`), into which
+    `cover._merge_the_travel_model` has already written the resolved numbers - the
+    record's `height:` and `profile:` among them. A session must resolve against the
+    untouched copy taken of the cover block before the platforms were forwarded
+    (`CONF_COVERS_FROM_FILE`, `cover.py:878`). The two dictionaries are therefore not
+    interchangeable, and this holds the two functions that read one of them to the same
+    answer on both, whichever the controller ends up passing (review B1, R3).
+    """
+    c = conversation
+    assert known_height(
+        record=c.record, device=c.device_from_file, profiles=c.profiles
+    ) == c.height_known()
+    assert (
+        values_in_use(
+            unique_id=UNIQUE_ID,
+            device=c.device_from_file,
+            profiles=c.profiles,
+            record=c.record,
+            profile=c.case.profile,
+            height=c.measured.height,
+        )
+        == c.values()
+    )
+
+
+async def test_the_model_in_use_of_a_cover_the_file_no_longer_has(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A window that is not configured any more has no model, whatever the store holds.
+
+    `_values_in_use` looks the cover up in the file's own covers and answers `None` when
+    it is not among them, before the store is read at all. The port takes that same
+    dictionary as an argument, so the empty one has to mean the same thing - and the
+    record deliberately carries a complete set of numbers here, which is what a
+    resolution without the guard would hand back as a model (review B1, R4f).
+    """
+    gone = f"{MAC}-9-9"
+    covers = {
+        gone: {
+            "overrides": {
+                CONF_OPENING_TIME: 20.0,
+                CONF_CLOSING_TIME: 19.5,
+                CONF_SLAT_TIME: 4.0,
+                CONF_OPENING_ROLL: 2.0,
+                CONF_CLOSING_ROLL: 1.7,
+            },
+            "height": 200.0,
+            "source": "guided",
+        }
+    }
+    async with setup_myhome(hass, tmp_path, YAML, calibration=_store(covers)) as (entry, _):
+        store = await async_get_store(hass, entry)
+        flow = MyHomeOptionsFlowHandler()
+        flow.hass = hass
+        flow.handler = entry.entry_id
+        flow._store_ref = store
+        flow._cover_unique_id = gone
+        flow._measured = _Measured()
+        flow._profile = None
+        yaml_profiles = hass.data[DOMAIN][MAC].get(CONF_COVER_PROFILES) or {}
+        assert flow._values_in_use() is None
+        assert (
+            values_in_use(
+                unique_id=gone,
+                device={},
+                profiles=merged_profiles(yaml_profiles, store.profiles),
+                record=store.calibration(gone),
+                profile=None,
+                height=None,
+            )
+            is None
+        )
+
+
 async def test_the_fit(conversation: Conversation) -> None:
     """`_fits`, `_fit_both` and `_slat_from_gap`, and the model the check asks about."""
     c = conversation
@@ -574,9 +746,36 @@ async def test_the_tape(conversation: Conversation) -> None:
             )
         )
     flow._pending = c.case.pending
-    for typed in ("85,5", "85.5", 42, 0, "", "abc", "1.234,5", "-1", "150", "195", "400", None):
-        assert flow._accept_measurement({FIELD_MEASURED_CM: typed}) == accept_measurement(
-            typed, height=c.measured.height
+    for typed in (
+        # What the dialog's form hands over: text, as typed, in either notation.
+        "85,5",
+        "85.5",
+        42,
+        0,
+        "",
+        "abc",
+        "1.234,5",
+        "-1",
+        "150",
+        "195",
+        "400",
+        None,
+        # ...and what a WebSocket command will hand over: JSON numbers, which arrive as
+        # floats and never went through a keyboard. The two sides have to agree on them
+        # as well - including on the ones neither of them rejects today (review B1, A2
+        # and R1): `nan` and `inf` are accepted by both, which is why the session's own
+        # boundary has to refuse them before they ever get here.
+        85.5,
+        195.0,
+        195.0000001,
+        -0.5,
+        float("nan"),
+        float("inf"),
+    ):
+        # Compared as written rather than by value, because `nan` is equal to nothing,
+        # itself included, and "both sides answered nan" is exactly what is being said.
+        assert repr(flow._accept_measurement({FIELD_MEASURED_CM: typed})) == repr(
+            accept_measurement(typed, height=c.measured.height)
         )
     for reading in (0.0, 60.0, 101.5, HEIGHT):
         assert outcome(lambda reading=reading: flow._deviation(reading)) == outcome(
