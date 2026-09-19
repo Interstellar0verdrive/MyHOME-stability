@@ -377,6 +377,21 @@ def _other_end(direction: str) -> str:
     return DIRECTION_OPEN if direction == DIRECTION_CLOSE else DIRECTION_CLOSE
 
 
+def _as_position(direction: str | None) -> str | None:
+    """An end stop as the contract names it: a *position*, not a direction.
+
+    Inside the session an end stop is the direction that reaches it, because that is
+    what the primitives are given and what `order_the_readings` deals on. At the
+    boundary the contract asks for `SESSION_POSITIONS` - `closed` / `open` - so the two
+    words that differ are translated here, with the other boundary names
+    (`SESSION_BOUNDARY_NAMES`). `open` happens to coincide; `close` / `closed` does not,
+    which is exactly why this is a function and not a habit.
+    """
+    if direction is None:
+        return None
+    return "closed" if direction == DIRECTION_CLOSE else "open"
+
+
 def _finite(value: Any) -> float | None:
     """A number the maths can be handed, or None.
 
@@ -514,6 +529,16 @@ async def async_start(
             ERROR_ALREADY_CALIBRATING,
             f"{running.cover_name} is still finishing the run a cancelled session left it on",
             {"cover": running.cover_name, "by": "reserved"},
+        )
+    if path is not None and path not in IMPLEMENTED_PATHS:
+        # What this lot cannot carry out is not offered and not opened: a session born
+        # on a screen every one of whose buttons is refused would hold the shutter and
+        # do nothing (the only way out being `cancel`). Lot B4 widens the tuple.
+        raise _refuse(
+            ERR_NOT_ALLOWED,
+            ERROR_ACTION_NOT_OFFERED,
+            f"{path!r} is not a path this backend can walk yet",
+            {"action": path},
         )
     covers = basic_covers(hass, entry)
     measuring = calibrating_now(hass, entry)
@@ -833,6 +858,24 @@ class CalibrationSession:
         return bool(entity is not None and (entity.is_opening or entity.is_closing))
 
     @callback
+    def _check_owner(self, client_id: str, *, force: bool = False) -> None:
+        """Refuse a client that may not act, without changing anything at all.
+
+        Split from `_take` so that the guards can be asked in the right order: the
+        session is live, the client may act, the revision is the current one, the step
+        offers the action - and only *then* the session changes hands. Taking it and
+        then refusing the verb would mean a tab replaying an `act` after a reconnection
+        carries the session off a phone that is using it, on a message the revision
+        exists to throw away (SPEC §4.1: "niente eseguito").
+        """
+        if self._owner is not None and self._owner != client_id and self.present and not force:
+            raise _refuse(
+                ERR_NOT_ALLOWED,
+                ERROR_SESSION_OWNED,
+                "Another device is guiding this calibration",
+            )
+
+    @callback
     def _take(self, client_id: str, *, force: bool = False, publish: bool = False) -> None:
         """Make this client the owner, or refuse because somebody else is here.
 
@@ -841,12 +884,7 @@ class CalibrationSession:
         open would otherwise take a session away from a phone that went to sleep in the
         middle of a tape reading.
         """
-        if self._owner is not None and self._owner != client_id and self.present and not force:
-            raise _refuse(
-                ERR_NOT_ALLOWED,
-                ERROR_SESSION_OWNED,
-                "Another device is guiding this calibration",
-            )
+        self._check_owner(client_id, force=force)
         changed = self._owner != client_id
         self._owner = client_id
         self._owner_seen = dt_util.utcnow()
@@ -899,13 +937,14 @@ class CalibrationSession:
     ) -> dict[str, Any]:
         """One step of the conversation: a menu option, or a form being sent."""
         self._guard_live()
-        self._take(client_id)
+        self._check_owner(client_id)
         self._guard_revision(revision)
         if action == SESSION_SUBMIT:
             if self._form() is None:
                 raise self._not_offered(action)
         elif action not in self._actions():
             raise self._not_offered(action)
+        self._take(client_id)
         self._touch()
         await self._async_dispatch(action, value)
         self._pump()
@@ -921,19 +960,30 @@ class CalibrationSession:
         half way through its own `finally`.
         """
         self._guard_live()
+        self._check_owner(client_id)
         self._take(client_id)
         self._touch()
         interrupting = self._movement is not None
         if interrupting:
-            self._generation += 1
-        with contextlib.suppress(CalibrationError, HomeAssistantError):
+            self._overtake()
+        refused: str | None = None
+        try:
             await self._cover().async_calib_stop()
+        except CalibrationError as err:
+            LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
+            refused = err.reason if err.reason in PROBLEM_REASONS else REASON_UNKNOWN
+        except HomeAssistantError as err:
+            LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
+            refused = REASON_UNKNOWN
         if interrupting:
             self._movement = None
             self._press = None
             self._disarm_press()
             self._at = None
-            self._show_problem(REASON_INTERRUPTED)
+            # A stop the gateway would not take is not the same news as a step
+            # interrupted: the shutter is still running on to its end stop, and the
+            # dialog has a sentence for that in seven languages (`problem_not_stopped`).
+            self._show_problem(refused or REASON_INTERRUPTED)
         return self.snapshot()
 
     @callback
@@ -977,7 +1027,7 @@ class CalibrationSession:
     async def async_save(self, client_id: str, revision: int, target: str) -> dict[str, Any]:
         """Write the result, once, and only from the review."""
         self._guard_live()
-        self._take(client_id)
+        self._check_owner(client_id)
         if self._screen().state != "review" or self._review is None or self._result is None:
             raise _refuse(
                 ERR_NOT_ALLOWED,
@@ -995,6 +1045,7 @@ class CalibrationSession:
                 f"{name!r} cannot be used as a profile name",
                 {"profile": str(name or "")},
             )
+        self._take(client_id)
         self._touch()
         written = await async_write(
             self.hass,
@@ -1003,6 +1054,17 @@ class CalibrationSession:
             lambda entry, store: self._async_store_the_result(store, target),
             holder=self.cover_unique_id,
         )
+        if self.ended:
+            # A `cancel` arrived while the store was being written. The write happened
+            # and is not taken back - it is the measurement the user asked to keep -
+            # but the session has already ended and its outcome is not rewritten.
+            LOGGER.warning(
+                "Panel calibration of %s: the save completed after the session had "
+                "ended (%s); what was written stands",
+                self.cover_name,
+                self._outcome_reason(),
+            )
+            return {"session": self.snapshot(), "overview": written["overview"]}
         resolved = self._resolved()
         self._finish(
             "saved",
@@ -1116,6 +1178,7 @@ class CalibrationSession:
             direction=DIRECTION_OPEN,
             progress_action="stopping_lift",
             job=self._job_stop_lift,
+            settle=self._settle_stop_lift,
             done="lift_measured",
             anchor=self._motor_start,
             planned_s=self._full_run(DIRECTION_OPEN),
@@ -1309,7 +1372,9 @@ class CalibrationSession:
         self._show("profile_name")
 
     async def _async_stage_summary(self) -> None:
-        self._build_the_review()
+        if not self._build_the_review():
+            self._show_problem("bad_point")
+            return
         self._show(f"summary_{self._review['variant']}")  # type: ignore[index]
 
     async def _async_fraction_stage(self, step: str) -> None:
@@ -1322,6 +1387,11 @@ class CalibrationSession:
         direction, fraction, done = FRACTION_STAGES[step]
         self._pending = (direction, fraction)
         self._after_the_run = done
+        # ...and no reading of this stage has been sent yet. Without this,
+        # `repeat_tape` on a stage whose reading is still to come - which is what a
+        # stale reading offers (§11.5) - would take back the reading of the stage
+        # *before*, which was accepted two screens ago and is perfectly good.
+        self._tape_target = None
         self._begin_homing(step=step, direction=_other_end(direction), done="tape_run")
 
     @callback
@@ -1350,6 +1420,7 @@ class CalibrationSession:
             direction=direction,
             progress_action=HOMING_ACTION[direction],
             job=lambda: self._job_home(direction),
+            settle=self._settle_home,
             done=done,
             anchor=dt_util.utcnow(),
             planned_s=self._full_run(direction),
@@ -1371,6 +1442,7 @@ class CalibrationSession:
                 direction=from_end,
                 progress_action=HOMING_ACTION[from_end],
                 job=lambda: self._job_home(from_end),
+                settle=self._settle_home,
                 done=brief,
                 anchor=dt_util.utcnow(),
                 planned_s=self._full_run(from_end),
@@ -1384,6 +1456,7 @@ class CalibrationSession:
             direction=direction,
             progress_action=action,
             job=lambda: self._job_start(direction),
+            settle=self._settle_start,
             done=done,
             anchor=None,
             planned_s=self._full_run(direction),
@@ -1397,7 +1470,8 @@ class CalibrationSession:
         kind: str,
         direction: str,
         progress_action: str,
-        job: Callable[[], Awaitable[None]],
+        job: Callable[[], Awaitable[Any]],
+        settle: Callable[[Any], None],
         done: str,
         anchor: datetime | None,
         planned_s: float | None,
@@ -1409,6 +1483,12 @@ class CalibrationSession:
         only heard about a movement once it was over would show nothing at all while a
         shutter ran for twenty seconds. `_pump` is what runs the queue, once, in a task
         of its own.
+
+        The generation is taken **here**, when the work is queued, and not when the work
+        begins: between the two there is a turn of the loop, and a stop - or a wall
+        switch - that arrives in it has to be able to cancel a frame that has not gone
+        out yet. Reading the counter at the start of the job would read it after it had
+        already been raised, which is no check at all.
         """
         self._movement = _Movement(
             kind=kind, direction=direction, progress_action=progress_action,
@@ -1417,7 +1497,10 @@ class CalibrationSession:
         self._press = None
         self._external_move = False
         self._show(step)
-        self._queued = lambda: self._async_movement_job(job, done, notice_when_done)
+        generation = self._generation
+        self._queued = lambda: self._async_movement_job(
+            job, settle, done, notice_when_done, generation
+        )
 
     @callback
     def _pump(self) -> None:
@@ -1438,20 +1521,37 @@ class CalibrationSession:
             self._pumping = False
 
     async def _async_movement_job(
-        self, job: Callable[[], Awaitable[None]], done: str, notice: str | None
+        self,
+        job: Callable[[], Awaitable[Any]],
+        settle: Callable[[Any], None],
+        done: str,
+        notice: str | None,
+        generation: int,
     ) -> None:
-        """One stage's movements, turning every failure into a screen that says so."""
-        generation = self._generation
+        """One stage's movements, turning every failure into a screen that says so.
+
+        The generation is checked **again right before the frame goes out**, and not
+        only when this coroutine starts: a stop written in the turn of the loop between
+        the queueing and here must stop the movement from happening at all, not merely
+        from being published afterwards. Nothing this job measures is written into the
+        session until it has passed the check on the way out either (`settle`), so a
+        job that was overtaken leaves no trace of a shutter it no longer describes.
+        """
+        if generation != self._generation or self.ended:
+            return
         self._error = None
         # Nothing is known about where the shutter is while it is moving, and nothing
         # is known about where it ended up if the movement failed.
         self._at = None
+        outcome: Any = None
         try:
             if self._stop_first:
                 self._stop_first = False
                 with contextlib.suppress(CalibrationError):
                     await self._cover().async_calib_stop()
-            await job()
+                if generation != self._generation or self.ended:
+                    return
+            outcome = await job()
         except CalibrationError as err:
             LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
             self._error = (
@@ -1467,8 +1567,11 @@ class CalibrationSession:
             self._error = REASON_UNKNOWN
         if generation != self._generation or self.ended:
             # A stop, an external movement or a cancellation has overtaken this job:
-            # the screen it would have published is not the screen the user is on.
+            # the screen it would have published is not the screen the user is on, and
+            # what it measured is about a shutter that has since been moved.
             return
+        if self._error is None:
+            settle(outcome)
         if done not in PRESS_STEPS or self._error is not None:
             # A free run whose press is still to come goes on running: what has come
             # back is the *command*, not the shutter. Everything else is over.
@@ -1481,24 +1584,43 @@ class CalibrationSession:
             return
         await self._async_goto(done, notice=notice)
 
-    async def _job_home(self, direction: str) -> None:
+    # Each job answers what it found and writes nothing: `_async_movement_job` assigns
+    # it through the matching `_settle_*` once it knows the job was not overtaken.
+    async def _job_home(self, direction: str) -> str:
         await self._cover().async_calib_home(direction)
-        self._at = direction
+        return direction
 
-    async def _job_start(self, direction: str) -> None:
+    @callback
+    def _settle_home(self, direction: Any) -> None:
+        self._at = str(direction)
+
+    async def _job_start(self, direction: str) -> datetime:
         """Let it run free while we watch (it is already at the far end stop)."""
-        self._motor_start = await self._cover().async_calib_start(direction)
-        if self._movement is not None:
-            self._movement.started_at = self._motor_start
+        return await self._cover().async_calib_start(direction)
 
-    async def _job_stop_lift(self) -> None:
+    @callback
+    def _settle_start(self, started: Any) -> None:
+        self._motor_start = started
+        if self._movement is not None:
+            self._movement.started_at = started
+
+    async def _job_stop_lift(self) -> tuple[datetime, datetime]:
         """Stop the lift-off run, noting when the frame went out and the motor stopped."""
         cover = self._cover()
-        self._stop_delivered = await cover.async_calib_stop()
-        self._motor_stopped = await cover.async_calib_motor_stop()
+        delivered = await cover.async_calib_stop()
+        return delivered, await cover.async_calib_motor_stop()
 
-    async def _job_fraction(self, direction: str, fraction: float) -> None:
-        self._report = await self._cover().async_calib_run_fraction(direction, fraction)
+    @callback
+    def _settle_stop_lift(self, instants: Any) -> None:
+        self._stop_delivered, self._motor_stopped = instants
+
+    async def _job_fraction(self, direction: str, fraction: float) -> RunReport:
+        return await self._cover().async_calib_run_fraction(direction, fraction)
+
+    @callback
+    def _settle_fraction(self, report: Any) -> None:
+        self._report = report
+
 
     # ------------------------------------------------------------------ the router
     async def _async_goto(self, step: str, *, notice: str | None = None) -> None:
@@ -1511,6 +1633,7 @@ class CalibrationSession:
                 direction=direction,
                 progress_action=RUNNING_ACTION[direction],
                 job=lambda: self._job_fraction(direction, fraction),
+                settle=self._settle_fraction,
                 done=self._after_the_run,
                 anchor=dt_util.utcnow(),
                 planned_s=self._planned_fraction(direction, fraction),
@@ -1655,7 +1778,7 @@ class CalibrationSession:
         self._press_timer = None
         if self.ended or self._press is None:
             return
-        self._generation += 1
+        self._overtake()
         self._press = None
         self._movement = None
         self._show_problem(REASON_TIMEOUT)
@@ -1721,7 +1844,7 @@ class CalibrationSession:
     @callback
     def _interrupt(self) -> None:
         """The step was measuring something that has just stopped being true."""
-        self._generation += 1
+        self._overtake()
         self._movement = None
         self._press = None
         self._disarm_press()
@@ -1746,6 +1869,18 @@ class CalibrationSession:
             "myhome calibration session unloaded",
             eager_start=False,
         )
+
+    @callback
+    def _overtake(self) -> None:
+        """Nothing queued or in flight is about this session any more.
+
+        Raising the counter makes a job already awaiting a primitive publish nothing
+        when it comes back; emptying the queue makes one that has not started yet not
+        write its frame at all. Both are needed: the first alone would let the shutter
+        be sent off after the stop that was supposed to prevent it.
+        """
+        self._generation += 1
+        self._queued = None
 
     async def async_end(self, reason: str, *, stop: bool = False) -> None:
         """Finish the session, with or without a stop, and publish what became of it.
@@ -1786,7 +1921,14 @@ class CalibrationSession:
 
     @callback
     def _finish(self, reason: str, extra: Mapping[str, Any] | None = None) -> None:
-        """The terminal snapshot, and everything this session was holding, let go."""
+        """The terminal snapshot, and everything this session was holding, let go.
+
+        Idempotent: a session ends once. Two endings that raced - a `cancel` arriving
+        while a `save` was inside `async_write` - would otherwise leave the outcome of
+        whichever finished last on a session the other had already released.
+        """
+        if self.ended:
+            return
         self._disarm_lease()
         self._disarm_press()
         self._movement = None
@@ -1802,6 +1944,14 @@ class CalibrationSession:
             "source": None,
             **dict(extra or {}),
         }
+        # The session is over: what the *screen* was saying goes with it. A terminal
+        # snapshot has no step, so a problem code or a notice left on it would describe
+        # a screen that is not there any more (the fixture's endings say `null` for all
+        # three), and a position nobody is keeping up to date is worse than none.
+        self._at = None
+        self._problem = None
+        self._notice = None
+        self._form_error = None
         if reason != "saved":
             self._measured = measure.Measured()
             self._plan = []
@@ -1900,7 +2050,7 @@ class CalibrationSession:
 
     # -------------------------------------------------------------------- the review
     @callback
-    def _build_the_review(self) -> None:
+    def _build_the_review(self) -> bool:
         """What the shutter uses today, what it would use after Save, and who else moves.
 
         The "after" is not a prediction: the record and the profile the write would
@@ -1909,18 +2059,32 @@ class CalibrationSession:
         will move on cannot come from two different rules.
         """
         path = self._path or PATH_FIRST
-        self._result = measure.result(
-            path=path,
-            measured=self._measured,
-            measured_name=self._measured_name,
-            profile=self._profile,
-            profiles=self.profiles,
-            entity_id=self.entity_id,
-            yaml_key=self._yaml_key,
-            height_known=measure.known_height(
-                record=self._record(), device=self._device(), profiles=self.profiles
-            ),
-        )
+        try:
+            self._result = measure.result(
+                path=path,
+                measured=self._measured,
+                measured_name=self._measured_name,
+                profile=self._profile,
+                profiles=self.profiles,
+                entity_id=self.entity_id,
+                yaml_key=self._yaml_key,
+                height_known=measure.known_height(
+                    record=self._record(), device=self._device(), profiles=self.profiles
+                ),
+            )
+        except CalibrationError as err:
+            # The same guard as `_fits`, one level up: the summary cannot be built, so
+            # it is not shown. `bad_point` is the dialog's own screen for a measurement
+            # that cannot be made into a model, it offers "Ripeti questo passo", and
+            # the way out of it is the ✕ like everywhere else.
+            LOGGER.warning(
+                "Panel calibration of %s: the summary cannot be computed (%s)",
+                self.cover_name,
+                err,
+            )
+            self._result = None
+            self._review = None
+            return False
         result = self._result
         variant = self._variant()
         targets = self._targets()
@@ -1966,6 +2130,7 @@ class CalibrationSession:
             "keeping": _in_contract_names(kept),
             "yaml": result.yaml,
         }
+        return True
 
     @callback
     def _variant(self) -> str:
@@ -2105,12 +2270,12 @@ class CalibrationSession:
             "press": None if self._press is None else self._press.as_json(),
             "reading": None if terminal else self._reading(),
             "measured": self._measured_json(),
-            "fit": _fit_json(measure.fits(measured), measured),
+            "fit": _fit_json(self._fits(), measured),
             "check": None,
             "review": dict(self._review) if self._review is not None else None,
             "problem": None if self._problem is None else {"code": self._problem},
             "notice": self._notice,
-            "position_known": self._at,
+            "position_known": _as_position(self._at),
             "external_move": self._external_move,
             "owner": None
             if self._owner is None
@@ -2151,6 +2316,28 @@ class CalibrationSession:
             "ascent": [list(point) for point in measured.ascent],
             "times_adopted": measured.times_adopted,
         }
+
+    @callback
+    def _fits(self) -> tuple[DirectionFit, DirectionFit] | None:
+        """The fit of both directions, or None because it could not be made.
+
+        The guard lot B1 asked for (handoff §6, R1(b)). `fit_from_run` raises
+        `CalibrationError` for a reading the model cannot place - a fraction outside
+        `(0, 1]`, a travel of nothing, a bar measured above the curtain - and this is
+        called from `snapshot()`, which **every verb runs to answer**, `cancel`
+        included. Letting it out would leave a session that can neither be read nor
+        cancelled, holding a shutter until the lease ran out: the exact opposite of
+        lesson 2. The screen then shows what it has, which is no fit.
+        """
+        try:
+            return measure.fits(self._measured)
+        except CalibrationError as err:
+            LOGGER.warning(
+                "Panel calibration of %s: the measurements do not make a model (%s)",
+                self.cover_name,
+                err,
+            )
+            return None
 
     @callback
     def _outcome_reason(self) -> str:
@@ -2212,7 +2399,7 @@ class CalibrationSession:
         return {
             "direction": direction,
             "fraction": fraction,
-            "from_end_stop": _other_end(direction),
+            "from_end_stop": _as_position(_other_end(direction)),
             "expected_cm": expected,
             "tolerance_cm": tolerance,
         }
@@ -2230,12 +2417,18 @@ class CalibrationSession:
         height = self._measured.height
         if not height:
             return None, ROUGH_TOLERANCE_CM
-        model = measure.model_values(
-            path=self._path or PATH_FIRST,
-            measured=self._measured,
-            profiles=self.profiles,
-            profile=self._profile,
-        )
+        try:
+            model = measure.model_values(
+                path=self._path or PATH_FIRST,
+                measured=self._measured,
+                profiles=self.profiles,
+                profile=self._profile,
+            )
+        except CalibrationError as err:
+            # Same guard again: the expectation under a field is a courtesy, and a
+            # model that cannot be built simply means the wider tolerance.
+            LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
+            model = None
         if model is not None:
             roll = model[CONF_CLOSING_ROLL if direction == DIRECTION_CLOSE else CONF_OPENING_ROLL]
             tolerance = EXPECTED_TOLERANCE_CM

@@ -31,8 +31,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-from custom_components.myhome import calibration_session
-from custom_components.myhome.calibration import REASON_NO_ECHO, CalibrationError
+from custom_components.myhome import calibration_measure, calibration_session
+from custom_components.myhome.calibration import (
+    REASON_NO_ECHO,
+    REASON_NOT_STOPPED,
+    CalibrationError,
+)
 from custom_components.myhome.calibration_flow import (
     IDLE_TIMEOUT_SEC,
     MOVED_IDLE_TIMEOUT_SEC,
@@ -65,6 +69,51 @@ from custom_components.myhome.const import (
     DIRECTION_OPEN,
 )
 from custom_components.myhome.panel_data import async_overview, basic_covers, yaml_profiles
+from custom_components.myhome.panel_schemas import (
+    SESSION_ACTIONS,
+    SESSION_CHECK_KEYS,
+    SESSION_COVER_KEYS,
+    SESSION_DIRECTIONS,
+    SESSION_FIT_DIRECTION_KEYS,
+    SESSION_FIT_KEYS,
+    SESSION_FIT_POINT_KEYS,
+    SESSION_FORM_ERRORS,
+    SESSION_FORM_FIELDS,
+    SESSION_FORM_KEYS,
+    SESSION_FORM_KINDS,
+    SESSION_FORM_UNITS,
+    SESSION_INTENT_KEYS,
+    SESSION_KEYS,
+    SESSION_LEVELS,
+    SESSION_LIFT_KEYS,
+    SESSION_MEASURED_KEYS,
+    SESSION_MOVEMENT_KEYS,
+    SESSION_MOVEMENT_KINDS,
+    SESSION_NOTICES,
+    SESSION_OUTCOME_KEYS,
+    SESSION_OUTCOMES,
+    SESSION_OWNER_KEYS,
+    SESSION_PATHS,
+    SESSION_PLAN_STAGES,
+    SESSION_POSITIONS,
+    SESSION_PRESS_KEYS,
+    SESSION_PRESS_KINDS,
+    SESSION_PROBLEM_KEYS,
+    SESSION_PROBLEMS,
+    SESSION_PROGRESS_ACTIONS,
+    SESSION_READING_KEYS,
+    SESSION_REVIEW_AFFECTED_KEYS,
+    SESSION_REVIEW_KEYS,
+    SESSION_REVIEW_ROW_FIELDS,
+    SESSION_REVIEW_ROW_KEYS,
+    SESSION_REVIEW_VARIANTS,
+    SESSION_SAVE_TARGETS,
+    SESSION_SCOPES,
+    SESSION_STATES,
+    SESSION_STEPS,
+    SESSION_SUBSTATES,
+    SESSION_VALUE_KEYS,
+)
 from custom_components.myhome.panel_write import PanelError
 
 from .helpers_calibration import (
@@ -274,6 +323,146 @@ def the_record(hass: HomeAssistant, entry, unique_id: str = UNIQUE_ID) -> dict[s
     return record
 
 
+def check_the_snapshot(snapshot: dict[str, Any]) -> None:
+    """Every key and every token of one snapshot, against the frozen contract.
+
+    Not only the keys of the top level: the sub-objects and the **values**. Lot L0
+    froze twenty vocabularies in `panel_schemas`, the TypeScript restates them as
+    unions and the frontend switches on them, so a token the session invents is a
+    screen the panel cannot draw - and is, for lot B3, a diff on a frozen artefact the
+    moment the fixture is regenerated from the real controller.
+
+    Written as a function rather than as one test so that lot B4 can call it on the
+    walks of paths B and C without writing it again.
+    """
+
+    def keys(value: Any, expected: tuple[str, ...], what: str) -> None:
+        assert isinstance(value, dict), f"{what}: {value!r}"
+        assert tuple(value) == expected, f"{what}: {tuple(value)} != {expected}"
+
+    def token(value: Any, allowed: tuple[str, ...], what: str, *, optional: bool = True) -> None:
+        if value is None and optional:
+            return
+        assert value in allowed, f"{what}: {value!r} not in {allowed}"
+
+    def instant(value: Any, what: str) -> None:
+        if value is None:
+            return
+        assert dt_util.parse_datetime(str(value)) is not None, f"{what}: {value!r}"
+
+    keys(snapshot, SESSION_KEYS, "snapshot")
+    keys(snapshot["cover"], SESSION_COVER_KEYS, "cover")
+    instant(snapshot["server_time"], "server_time")
+    assert isinstance(snapshot["revision"], int) and snapshot["revision"] >= 1
+
+    token(snapshot["state"], SESSION_STATES, "state", optional=False)
+    token(snapshot["substate"], SESSION_SUBSTATES, "substate")
+    token(snapshot["step"], SESSION_STEPS, "step")
+    token(snapshot["path"], SESSION_PATHS, "path")
+    token(snapshot["scope"], SESSION_SCOPES, "scope")
+    token(snapshot["level"], SESSION_LEVELS, "level", optional=False)
+    token(snapshot["notice"], SESSION_NOTICES, "notice")
+    token(snapshot["position_known"], SESSION_POSITIONS, "position_known")
+    assert isinstance(snapshot["external_move"], bool)
+
+    for stage in snapshot["plan"]:
+        token(stage, SESSION_PLAN_STAGES, "plan")
+    for action in snapshot["actions"]:
+        token(action, SESSION_ACTIONS, "actions", optional=False)
+
+    if snapshot["intent"] is not None:
+        keys(snapshot["intent"], SESSION_INTENT_KEYS, "intent")
+        token(snapshot["intent"]["scope"], SESSION_SCOPES, "intent.scope")
+
+    if (form := snapshot["form"]) is not None:
+        keys(form, SESSION_FORM_KEYS, "form")
+        token(form["field"], SESSION_FORM_FIELDS, "form.field", optional=False)
+        token(form["kind"], SESSION_FORM_KINDS, "form.kind", optional=False)
+        token(form["unit"], SESSION_FORM_UNITS, "form.unit")
+        token(form["error"], SESSION_FORM_ERRORS, "form.error")
+        assert isinstance(form["optional"], bool)
+
+    if (movement := snapshot["movement"]) is not None:
+        keys(movement, SESSION_MOVEMENT_KEYS, "movement")
+        token(movement["kind"], SESSION_MOVEMENT_KINDS, "movement.kind", optional=False)
+        token(movement["direction"], SESSION_DIRECTIONS, "movement.direction", optional=False)
+        token(
+            movement["progress_action"],
+            SESSION_PROGRESS_ACTIONS,
+            "movement.progress_action",
+            optional=False,
+        )
+        instant(movement["started_at"], "movement.started_at")
+
+    if (press := snapshot["press"]) is not None:
+        keys(press, SESSION_PRESS_KEYS, "press")
+        token(press["kind"], SESSION_PRESS_KINDS, "press.kind", optional=False)
+        instant(press["expires_at"], "press.expires_at")
+
+    if (reading := snapshot["reading"]) is not None:
+        keys(reading, SESSION_READING_KEYS, "reading")
+        token(reading["direction"], SESSION_DIRECTIONS, "reading.direction", optional=False)
+        token(
+            reading["from_end_stop"], SESSION_POSITIONS, "reading.from_end_stop", optional=False
+        )
+
+    keys(snapshot["measured"], SESSION_MEASURED_KEYS, "measured")
+    if (lift := snapshot["measured"]["lift"]) is not None:
+        keys(lift, SESSION_LIFT_KEYS, "measured.lift")
+        instant(lift["pressed_at"], "measured.lift.pressed_at")
+        instant(lift["stop_written_at"], "measured.lift.stop_written_at")
+
+    if (fit := snapshot["fit"]) is not None:
+        keys(fit, SESSION_FIT_KEYS, "fit")
+        for name, direction in fit.items():
+            keys(direction, SESSION_FIT_DIRECTION_KEYS, f"fit.{name}")
+            for point in direction["points"]:
+                keys(point, SESSION_FIT_POINT_KEYS, f"fit.{name}.points[]")
+
+    if (check := snapshot["check"]) is not None:
+        keys(check, SESSION_CHECK_KEYS, "check")
+
+    if (review := snapshot["review"]) is not None:
+        keys(review, SESSION_REVIEW_KEYS, "review")
+        token(review["variant"], SESSION_REVIEW_VARIANTS, "review.variant", optional=False)
+        for target in review["targets"]:
+            token(target, SESSION_SAVE_TARGETS, "review.targets", optional=False)
+        for row in review["rows"]:
+            keys(row, SESSION_REVIEW_ROW_FIELDS, "review.rows[]")
+            token(row["key"], SESSION_REVIEW_ROW_KEYS, "review.rows[].key", optional=False)
+        for row in review["side_effects"]:
+            keys(row, SESSION_REVIEW_ROW_FIELDS, "review.side_effects[]")
+            token(row["key"], SESSION_VALUE_KEYS, "review.side_effects[].key", optional=False)
+        for follower in review["affected"]:
+            keys(follower, SESSION_REVIEW_AFFECTED_KEYS, "review.affected[]")
+            for row in follower["rows"]:
+                keys(row, SESSION_REVIEW_ROW_FIELDS, "review.affected[].rows[]")
+                token(
+                    row["key"],
+                    SESSION_REVIEW_ROW_KEYS,
+                    "review.affected[].rows[].key",
+                    optional=False,
+                )
+        for key in (*review["replacing"], *review["keeping"]):
+            token(key, SESSION_VALUE_KEYS, "review.replacing/keeping", optional=False)
+
+    if (problem := snapshot["problem"]) is not None:
+        keys(problem, SESSION_PROBLEM_KEYS, "problem")
+        token(problem["code"], SESSION_PROBLEMS, "problem.code", optional=False)
+        assert snapshot["step"] == f"problem_{problem['code']}"
+
+    if (owner := snapshot["owner"]) is not None:
+        keys(owner, SESSION_OWNER_KEYS, "owner")
+        instant(owner["present_until"], "owner.present_until")
+
+    if (outcome := snapshot["outcome"]) is not None:
+        keys(outcome, SESSION_OUTCOME_KEYS, "outcome")
+        token(outcome["reason"], SESSION_OUTCOMES, "outcome.reason", optional=False)
+
+    instant(snapshot["idle_expires_at"], "idle_expires_at")
+    assert snapshot["placeholders"]["cover"] == snapshot["cover"]["name"]
+
+
 def running(entity, direction: str = DIRECTION_OPEN):
     """Make the entity report that its motor is turning, whatever the fake runner did.
 
@@ -391,12 +580,45 @@ async def test_a_start_on_a_cover_that_is_not_there_says_which_kind_of_nothing(
         assert current(hass, entry) is None
 
 
-async def test_a_start_naming_a_profile_nobody_defines_is_refused(
+async def test_a_path_this_lot_cannot_walk_is_refused_before_the_shutter_is_taken(
     hass: HomeAssistant, tmp_path
 ) -> None:
-    """A profile that is not there cannot be the one this window is like."""
+    """Paths B and C belong to the next lot, so a start naming one opens nothing.
+
+    A session born on a screen every one of whose buttons is refused would hold the
+    shutter - `Calibrating` on, the rest of the panel read-only over it - and do
+    nothing at all, with `cancel` as its only exit. Refused at the door instead.
+    """
+    async with setup_myhome(hass, tmp_path, FOLLOWER_YAML) as (entry, _commands):
+        entity = entity_object(hass, COVER, DEVICE_KEY)
+        runner = FakeRunner(entity)
+
+        for path in ("path_b", "path_c"):
+            with pytest.raises(PanelError) as refused:
+                await async_start(
+                    hass, entry, cover_unique_id=UNIQUE_ID, client_id=CLIENT, path=path
+                )
+            assert refused.value.translation_key == "action_not_offered", path
+            assert refused.value.placeholders["action"] == path
+            assert current(hass, entry) is None, path
+            assert entity.calibrating is False, path
+        assert runner.log == []
+
+
+async def test_a_start_naming_a_profile_nobody_defines_is_refused(
+    hass: HomeAssistant, tmp_path, monkeypatch
+) -> None:
+    """A profile that is not there cannot be the one this window is like.
+
+    Reached through the one knob lot B4 turns, because a profile can only be named
+    with path B or C and this lot does not walk them: widening `IMPLEMENTED_PATHS` is
+    exactly what B4 does, and this keeps the refusal behind it honest meanwhile.
+    """
     async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        monkeypatch.setattr(
+            calibration_session, "IMPLEMENTED_PATHS", ("path_a", "path_b", "path_c")
+        )
         with pytest.raises(PanelError) as refused:
             await async_start(
                 hass,
@@ -624,7 +846,7 @@ async def test_the_tape_phase_is_dealt_from_the_end_stop_the_shutter_is_at(
         snapshot = await walk(hass, session, PATH_A_BASIC[:15], freezer=freezer)
 
         assert snapshot["step"] == "tape_brief"
-        assert snapshot["position_known"] == DIRECTION_CLOSE
+        assert snapshot["position_known"] == "closed"
         assert snapshot["plan"] == [
             "home_closed",
             "open_timed",
@@ -757,7 +979,24 @@ async def test_the_review_names_every_other_shutter_the_profile_reaches(
         # A 150 cm window following a 195 cm profile: scaled, and moved by the write.
         assert rows["opening_time_s"]["before"] != rows["opening_time_s"]["after"]
         assert rows["travel_cm"]["before"] == 150.0
-        await session.async_cancel(CLIENT)
+
+        # ...and this is what makes showing the list worth the bytes: saving really
+        # does move them, to exactly the numbers the preview promised.
+        await session.async_save(CLIENT, snapshot["revision"], "profile")
+        after = resolve_cover(
+            basic_covers(hass, entry)[SECOND_UNIQUE_ID],
+            profiles=merged_profiles(
+                yaml_profiles(hass, entry), the_store(hass, entry).profiles
+            ),
+            calibration=the_store(hass, entry).calibration(SECOND_UNIQUE_ID),
+        )
+        for row in follower["rows"]:
+            key = {"travel_cm": CONF_HEIGHT}.get(row["key"])
+            if key is None:
+                key = row["key"].removesuffix("_s")
+            assert after.values[key] == pytest.approx(row["after"]), row["key"]
+        # The profile of that name was updated, not duplicated.
+        assert set(the_store(hass, entry).raw_profiles) == {"tall"}
 
 
 async def test_the_review_says_when_the_write_moves_a_key_nobody_measured(
@@ -972,6 +1211,94 @@ async def test_abandoning_the_conversation_at_any_screen_writes_nothing(
         assert the_store(hass, entry).raw_covers == {}
 
 
+async def test_arithmetic_that_refuses_the_measurements_leaves_a_way_out(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A `CalibrationError` must never make a session unreadable and uncancellable.
+
+    `fits` is called by `snapshot()`, which **every verb runs to answer** - `cancel`
+    included - so an exception out of it would leave the shutter held until the lease
+    ran out, with no screen and no way to end it. That is the exact opposite of lesson
+    2, and it is the guard lot B1 asked for in writing (handoff §6, R1(b)). Reached
+    here by making the arithmetic raise, because path A at the basic level cannot: the
+    guard is for lot B4's paths, where a travel can be inherited rather than measured.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:20], freezer=freezer)
+        assert session.snapshot()["step"] == "profile_name"
+
+        def refuse(*_args, **_kwargs):
+            raise CalibrationError("bad_point", "these readings make no model")
+
+        with patch.object(calibration_measure, "fits", refuse):
+            snapshot = session.snapshot()
+            assert snapshot["fit"] is None
+            check_the_snapshot(snapshot)
+            # ...and the way out still works, which is the whole point.
+            answer = await session.async_cancel(CLIENT)
+        assert answer["session"]["outcome"]["reason"] == "cancelled"
+
+
+async def test_a_summary_that_cannot_be_computed_is_a_problem_and_not_a_crash(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same guard one level up: no summary, so no summary is shown."""
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:20], freezer=freezer)
+
+        def refuse(*_args, **_kwargs):
+            raise CalibrationError("bad_point", "these readings make no model")
+
+        with patch.object(calibration_measure, "result", refuse):
+            snapshot = await act(hass, session, Act("submit", "tall"), freezer=freezer)
+
+        assert snapshot["step"] == "problem_bad_point"
+        assert snapshot["review"] is None
+        check_the_snapshot(snapshot)
+        # Nothing was written, and the session can still be ended.
+        assert the_store(hass, entry).raw_covers == {}
+        with pytest.raises(PanelError) as refused:
+            await session.async_save(CLIENT, session.revision, "profile")
+        assert refused.value.translation_key == "not_in_review"
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_cancel_that_lands_while_the_store_is_being_written(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A session ends once, and the ending that came first is the one that stands.
+
+    `save` awaits the write; a `cancel` arriving during that await used to release the
+    shutter and publish `cancelled`, and then have `saved` written over the top of it -
+    an outcome that says the opposite of what happened, on a session whose grip had
+    already been let go. The write itself is not taken back: it is the measurement the
+    user asked to keep.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        snapshot = await walk(hass, session, PATH_A_BASIC, freezer=freezer)
+        real_write = calibration_session.async_write
+
+        async def cancel_halfway(*args, **kwargs):
+            written = await real_write(*args, **kwargs)
+            await session.async_cancel(CLIENT)
+            return written
+
+        with patch.object(calibration_session, "async_write", cancel_halfway):
+            answer = await session.async_save(CLIENT, snapshot["revision"], "profile")
+
+        assert answer["session"]["outcome"]["reason"] == "cancelled"
+        assert session.snapshot()["outcome"]["reason"] == "cancelled"
+        # ...and what was written stands.
+        assert the_profile(hass, entry)[CONF_NAME] == "tall"
+        assert entity_object(hass, COVER, DEVICE_KEY).calibrating is False
+
+
 # --------------------------------------------------------------------------------------
 # Repeating, and the ways a step can be made again
 # --------------------------------------------------------------------------------------
@@ -1053,6 +1380,36 @@ async def test_repeat_tape_throws_the_reading_away_and_runs_the_stage_again(
         assert snapshot["step"] == "measure_ascent"
         assert snapshot["measured"]["ascent"] == []
         assert len(runner.runs) == runs + 1
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_stale_reading_does_not_take_back_the_reading_before_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`repeat_tape` on a stage that has sent nothing has nothing of its own to undo.
+
+    A movement from outside while the second reading is being asked for offers
+    `repeat_tape` as the only way on (§11.5). It used to take back the reading of the
+    stage *before* - accepted two screens earlier, perfectly good - because the pointer
+    at the last reading sent was never cleared when a new stage began. A measurement
+    lost without the user doing anything to lose it is lesson 1 by another road.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        snapshot = await walk(hass, session, PATH_A_BASIC[:18], freezer=freezer)
+        assert snapshot["step"] == "measure_descent"
+        assert len(snapshot["measured"]["ascent"]) == 1
+
+        hass.states.async_set(ENTITY, STATE_CLOSING)
+        await hass.async_block_till_done()
+        assert session.snapshot()["notice"] == "reading_stale"
+
+        snapshot = await act(hass, session, Act("repeat_tape"), freezer=freezer)
+
+        assert snapshot["step"] == "measure_descent"
+        assert len(snapshot["measured"]["ascent"]) == 1
+        assert snapshot["measured"]["descent"] == []
         await session.async_cancel(CLIENT)
 
 
@@ -1359,6 +1716,43 @@ async def test_a_stale_revision_is_refused_with_nothing_done(
         await session.async_cancel(CLIENT)
 
 
+async def test_a_refused_verb_does_not_change_who_owns_the_session(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Niente eseguito" includes taking the session over (SPEC §4.1).
+
+    The revision is what makes a retry after a reconnection harmless; a read-only tab
+    replaying an `act` would otherwise carry the session off the phone that is using
+    it - on the very message the revision exists to throw away.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:2], freezer=freezer)
+        freezer.tick(timedelta(seconds=PRESENCE_SEC + 5))
+
+        with pytest.raises(PanelError) as refused:
+            await session.async_act(OTHER_CLIENT, session.revision - 1, "confirm_closed")
+        assert refused.value.translation_key == "revision_conflict"
+        assert session.owner == CLIENT
+
+        with pytest.raises(PanelError) as refused:
+            await session.async_act(OTHER_CLIENT, session.revision, "nowhere")
+        assert refused.value.translation_key == "action_not_offered"
+        assert session.owner == CLIENT
+
+        with pytest.raises(PanelError) as refused:
+            await session.async_save(OTHER_CLIENT, session.revision, "profile")
+        assert refused.value.translation_key == "not_in_review"
+        assert session.owner == CLIENT
+
+        # ...and a verb that is *not* refused does take it.
+        await session.async_act(OTHER_CLIENT, session.revision, "confirm_closed")
+        await hass.async_block_till_done()
+        assert session.owner == OTHER_CLIENT
+        await session.async_cancel(OTHER_CLIENT)
+
+
 async def test_an_action_the_step_does_not_offer_is_refused(
     hass: HomeAssistant, tmp_path
 ) -> None:
@@ -1528,6 +1922,101 @@ async def test_stop_writes_a_stop_and_makes_the_step_it_interrupted_void(
         await session.async_cancel(CLIENT)
 
 
+async def test_a_movement_asked_for_does_not_go_out_after_the_stop_that_cancelled_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The window between "Avvia" and the frame leaving is a window, and it is closed.
+
+    The screen goes out first and the primitive is awaited in a task of its own, so
+    there is a turn of the loop between the two. A stop arriving in it used to show
+    `problem_interrupted` and then **send the shutter off anyway**, one frame after the
+    stop, with the screen sliding back to the press as if the run were the timed one.
+    No `async_block_till_done` between the two verbs here: that is the point.
+    """
+    async with setup_myhome(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:3], freezer=freezer)
+        assert session.snapshot()["step"] == "open_brief"
+        runner.log.clear()
+
+        await session.async_act(CLIENT, session.revision, "open_start")
+        snapshot = await session.async_stop(CLIENT)
+        assert snapshot["step"] == "problem_interrupted"
+
+        await hass.async_block_till_done()
+
+        assert runner.log == [("stop", "")]
+        assert runner.started == []
+        assert session.snapshot()["step"] == "problem_interrupted"
+
+
+async def test_a_movement_asked_for_does_not_go_out_after_a_wall_switch(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same window, entered by the shutter rather than by the user.
+
+    A timed run must never start from a point somebody has just moved (SPEC §3.7), and
+    a movement already queued is exactly such a start.
+    """
+    async with setup_myhome(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:3], freezer=freezer)
+        runner.log.clear()
+
+        await session.async_act(CLIENT, session.revision, "open_start")
+        hass.states.async_set(ENTITY, STATE_CLOSING)
+        await hass.async_block_till_done()
+
+        assert runner.log == []
+        assert session.snapshot()["step"] == "problem_interrupted"
+
+
+async def test_cancelling_in_the_same_window_sends_no_frame_either(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The third way the queue can be overtaken. `cancel` does not stop a shutter -
+    but it must not *start* one after the user has said the calibration is over."""
+    async with setup_myhome(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:3], freezer=freezer)
+        runner.log.clear()
+
+        await session.async_act(CLIENT, session.revision, "open_start")
+        await session.async_cancel(CLIENT)
+        await hass.async_block_till_done()
+
+        assert runner.log == []
+        assert session.snapshot()["outcome"]["reason"] == "cancelled"
+
+
+async def test_a_stop_the_gateway_would_not_take_says_so(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """"The step was interrupted" and "the shutter did not stop" are two things.
+
+    `async_calib_stop` raises `not_stopped` exactly when the frame was not written,
+    which is to say when the shutter is still running on to its end stop. The dialog
+    has a sentence for that in seven languages; saying "ripeti il passo" instead would
+    send somebody back to a screen while the curtain is still travelling.
+    """
+    async with setup_myhome(hass, tmp_path, SLOW_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:4], freezer=freezer)
+        runner.fail = CalibrationError(REASON_NOT_STOPPED, "the gateway would not take it")
+        runner.fail_on = "stop"
+
+        snapshot = await session.async_stop(CLIENT)
+
+        assert snapshot["step"] == "problem_not_stopped"
+        assert snapshot["problem"] == {"code": "not_stopped"}
+        assert session.ended is False
+        await session.async_cancel(CLIENT)
+
+
 async def test_stop_outside_a_movement_is_a_plain_stop(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -1560,7 +2049,7 @@ async def test_a_movement_outside_a_measurement_is_not_an_interruption(
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
         await walk(hass, session, PATH_A_BASIC[:2], freezer=freezer)
-        assert session.snapshot()["position_known"] == DIRECTION_CLOSE
+        assert session.snapshot()["position_known"] == "closed"
 
         hass.states.async_set(ENTITY, STATE_OPENING)
         await hass.async_block_till_done()
@@ -1592,7 +2081,7 @@ async def test_a_timed_run_never_starts_from_a_point_nobody_knows(
 
         assert snapshot["step"] == "open_brief"
         assert snapshot["notice"] == "rehomed"
-        assert snapshot["position_known"] == DIRECTION_CLOSE
+        assert snapshot["position_known"] == "closed"
         assert snapshot["external_move"] is False
         assert len(runner.homed) == homings + 1
         assert runner.started == []
@@ -1879,7 +2368,7 @@ async def test_the_expected_reading_is_the_dialog_s_own(
         reading = snapshot["reading"]
         assert reading["direction"] == DIRECTION_OPEN
         assert reading["fraction"] == 0.5
-        assert reading["from_end_stop"] == DIRECTION_CLOSE
+        assert reading["from_end_stop"] == "closed"
         expected, tolerance = expected_cm(
             pending=(DIRECTION_OPEN, 0.5), height=HEIGHT, model=None
         )
@@ -1887,34 +2376,77 @@ async def test_the_expected_reading_is_the_dialog_s_own(
         assert f"{reading['tolerance_cm']:.0f}" == tolerance
         assert snapshot["placeholders"]["expected"] == reading["expected_cm"]
         assert snapshot["placeholders"]["percent"] == 50
+
+        # ...and a model the arithmetic refuses to build is the wider tolerance, not an
+        # exception out of a read (the third call the guard of B1's R1(b) covers).
+        def refuse(*_args, **_kwargs):
+            raise CalibrationError("bad_point", "these readings make no model")
+
+        with patch.object(calibration_measure, "model_values", refuse):
+            snapshot = session.snapshot()
+        assert snapshot["reading"]["tolerance_cm"] == float(tolerance)
+        check_the_snapshot(snapshot)
         await session.async_cancel(CLIENT)
 
 
-async def test_the_snapshot_always_carries_every_key_of_the_contract(
+async def test_every_snapshot_published_is_the_contract_s_own_keys_and_tokens(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Every key is always there; what does not apply is null (docs §12).
+    """Every key, every sub-object and every **token**, against `panel_schemas`.
 
-    Checked at every screen of the walk, because a key that appears only on some of
-    them is a key the panel has to guard against instead of drawing.
+    The shallower version of this - the keys of the top level and three invariants -
+    let `position_known: "close"` through for a whole lot: `SESSION_POSITIONS` is
+    `("closed", "open")`, the TypeScript restates it as a union and any `switch` on it
+    falls through, and the moment lot B3 regenerates the fixture from the real server
+    it is a diff on a frozen artefact. So the check is now the whole contract, on
+    **every snapshot the session publishes**, from the subscription rather than from
+    the answers - which is what a second screen following along really receives.
     """
-    from custom_components.myhome.panel_schemas import SESSION_KEYS
-
-    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+    async with setup_myhome(hass, tmp_path, FOLLOWER_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
-        snapshots = [session.snapshot()]
-        for one in PATH_A_BASIC:
-            snapshots.append(await act(hass, session, one, freezer=freezer))
-        await session.async_save(CLIENT, session.revision, "profile")
-        snapshots.append(session.snapshot())
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
 
-        for snapshot in snapshots:
-            assert tuple(snapshot) == SESSION_KEYS, snapshot["step"]
-            assert snapshot["placeholders"]["cover"] == snapshot["cover"]["name"]
+        for one in PATH_A_BASIC:
+            await act(hass, session, one, freezer=freezer)
+        await session.async_save(CLIENT, session.revision, "profile")
+
+        # ...every screen of the walk, the review, the save, and the first snapshot,
+        # which nobody was subscribed for.
+        assert len(published) >= len(PATH_A_BASIC)
+        for snapshot in (session.snapshot(), *published):
+            check_the_snapshot(snapshot)
             if snapshot["substate"] is not None:
                 assert snapshot["state"] == "running"
             if snapshot["press"] is not None:
                 assert snapshot["substate"] == "awaiting_endpoint"
-            if snapshot["problem"] is not None:
-                assert snapshot["step"] == f"problem_{snapshot['problem']['code']}"
+
+
+async def test_the_screens_that_end_badly_are_the_contract_s_own_too(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The problems, the notices and the four endings the walk above never reaches."""
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await walk(hass, session, PATH_A_BASIC[:2], freezer=freezer)
+        runner.fail = CalibrationError(REASON_NO_ECHO, "no echo")
+        await act(hass, session, Act("confirm_closed"), freezer=freezer)
+        assert session.snapshot()["step"] == "problem_no_echo"
+        await act(hass, session, Act("repeat_step"), freezer=freezer)
+        await act(hass, session, Act("open_start"), freezer=freezer)
+        await session.async_stop(CLIENT)
+        assert session.snapshot()["step"] == "problem_interrupted"
+        await session.async_cancel(CLIENT)
+
+        for snapshot in published:
+            check_the_snapshot(snapshot)
+        # ...and a session that ended keeps nothing it can no longer keep up to date.
+        ended = session.snapshot()
+        assert ended["position_known"] is None
+        assert ended["actions"] == []
+        assert ended["owner"] is None
