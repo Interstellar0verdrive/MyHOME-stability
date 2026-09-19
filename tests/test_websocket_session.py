@@ -198,7 +198,7 @@ async def test_the_ten_commands_are_registered_under_the_one_flag(
 
 
 async def test_get_answers_nothing_and_what_this_backend_can_do(
-    hass: HomeAssistant, tmp_path, hass_ws_client
+    hass: HomeAssistant, tmp_path, hass_ws_client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A gateway with no session answers `null` - and still says what it offers.
 
@@ -214,10 +214,25 @@ async def test_get_answers_nothing_and_what_this_backend_can_do(
         answer = await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id)
         assert tuple(answer) == SESSION_GET_KEYS
         assert answer["session"] is None
+        # The paths and the levels are what the conversation can really walk, read off
+        # the controller's own tables: `actions` is narrowed by them and a `start` is
+        # refused against them, so a declaration copied from the contract would be the
+        # backend contradicting itself the moment the two differ. Everything else is
+        # the contract's, because everything else is what this backend does.
+        assert answer["capabilities"] == {
+            **SESSION_CAPABILITIES,
+            "paths": list(calibration_session.IMPLEMENTED_PATHS),
+            "levels": list(calibration_session.IMPLEMENTED_LEVELS),
+        }
+        assert set(answer["capabilities"]["paths"]) <= set(SESSION_PATHS)
+        assert set(answer["capabilities"]["levels"]) <= set(SESSION_LEVELS)
+
+        # ...and it says less as long as the backend does less: with every path walked
+        # it is the contract's own list, whole.
+        monkeypatch.setattr(calibration_session, "IMPLEMENTED_PATHS", SESSION_PATHS)
+        monkeypatch.setattr(calibration_session, "IMPLEMENTED_LEVELS", SESSION_LEVELS)
+        answer = await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id)
         assert answer["capabilities"] == SESSION_CAPABILITIES
-        # ...and the capabilities are what the frozen vocabularies say, not a copy.
-        assert answer["capabilities"]["paths"] == list(SESSION_PATHS)
-        assert answer["capabilities"]["levels"] == list(SESSION_LEVELS)
 
 
 async def test_start_opens_a_session_that_get_then_answers(
@@ -306,6 +321,47 @@ async def test_every_verb_comes_back_through_the_socket(
         )
         assert tuple(cancelled) == SESSION_CANCEL_KEYS
         assert cancelled["already_ended"] is True
+
+
+async def test_cancel_ends_the_session_it_names_and_never_the_one_that_replaced_it(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Named, it is one session; unnamed, it is whichever one the gateway has.
+
+    Both are wanted, and they are different messages. "End it" from the overview's
+    banner carries no `session_id`, because the banner is about a gateway; the wizard
+    carries the one it is showing. A tab left open across a cancellation and a fresh
+    start sends the id of a calibration that is over, and ending the one that took its
+    place - somebody else's, on another shutter - is exactly what the id is there to
+    prevent.
+
+    Mutation caught: cancelling the gateway's session whatever `session_id` says.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        session = await open_session(hass, entry)
+
+        error = await refused(
+            client,
+            type=WS_TYPE_SESSION_CANCEL,
+            entry_id=entry.entry_id,
+            client_id=CLIENT,
+            session_id=EXAMPLE_SESSION_ID,
+        )
+        assert (error["code"], error["translation_key"]) == (
+            ws_const.ERR_NOT_FOUND,
+            "unknown_session",
+        )
+        assert session.ended is False
+
+        # ...and with no id at all it is the gateway's, whichever it is.
+        answer = await result(
+            client, type=WS_TYPE_SESSION_CANCEL, entry_id=entry.entry_id, client_id=CLIENT
+        )
+        assert answer["already_ended"] is False
+        assert answer["session"]["outcome"]["reason"] == "cancelled"
+        assert session.ended is True
 
 
 async def test_a_value_that_cannot_be_a_reading_is_a_form_error_and_not_a_refusal(
@@ -559,6 +615,9 @@ async def test_every_refusal_of_the_session_comes_back_with_its_key(
             ws_const.ERR_NOT_FOUND,
             "unknown_session",
         )
+        # Every one of them carries the domain beside the key: without it Home
+        # Assistant resolves nothing and the panel is handed the token itself.
+        assert error["translation_domain"] == "myhome"
 
         # ...and then one does.
         session = await open_session(hass, entry)
@@ -570,6 +629,30 @@ async def test_every_refusal_of_the_session_comes_back_with_its_key(
         assert error["translation_placeholders"] == {"cover": "Hallway Shutter", "by": "panel"}
         assert "Hallway Shutter" in error["message"]
 
+        # ...and an id that names another session is `unknown_session` too, which is
+        # the case that matters: a tab left open across a cancellation and a fresh
+        # start must not act on the session that took its place.
+        for command in (WS_TYPE_SESSION_ATTACH, WS_TYPE_SESSION_HEARTBEAT, WS_TYPE_SESSION_STOP):
+            error = await refused(
+                client,
+                type=command,
+                entry_id=entry.entry_id,
+                session_id=EXAMPLE_SESSION_ID,
+                client_id=CLIENT,
+            )
+            assert error["translation_key"] == "unknown_session", command
+        error = await refused(
+            client,
+            type=WS_TYPE_SESSION_ACT,
+            entry_id=entry.entry_id,
+            session_id=EXAMPLE_SESSION_ID,
+            client_id=CLIENT,
+            revision=session.revision,
+            action="path_a",
+        )
+        assert error["translation_key"] == "unknown_session"
+        assert session.snapshot()["path"] is None
+
         common = {
             "entry_id": entry.entry_id,
             "session_id": session.session_id,
@@ -579,6 +662,7 @@ async def test_every_refusal_of_the_session_comes_back_with_its_key(
             client, type=WS_TYPE_SESSION_ACT, **common, revision=99, action="path_a"
         )
         assert error["translation_key"] == "revision_conflict"
+        assert error["translation_domain"] == "myhome"
         error = await refused(
             client, type=WS_TYPE_SESSION_ACT, **common, revision=session.revision, action="begin"
         )

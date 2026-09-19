@@ -39,6 +39,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
+from . import calibration_session
 from .calibration_session import CalibrationSession, async_start, current
 from .const import DOMAIN
 from .panel_data import (
@@ -753,6 +754,15 @@ async def websocket_session_get(
     conversation to say so, rather than running a shorter plan under the same name -
     and the event does not carry it, so a client that only subscribed would have to
     guess.
+
+    The two keys that can be less than the contract's whole are **read off the
+    controller** and not copied: `IMPLEMENTED_PATHS` and `IMPLEMENTED_LEVELS` are the
+    tables the conversation itself narrows `actions` by and refuses a `start` against,
+    so answering the contract's full lists beside them would be the declaration
+    contradicting the thing it declares. Through the module rather than by name, so that
+    what is answered is what those tables say *now* and not what they said when this
+    module was imported. The rest of the answer is the contract's, because the rest is
+    what this backend does.
     """
     entry = _entry(hass, connection, msg)
     if entry is None:
@@ -762,7 +772,11 @@ async def websocket_session_get(
         msg["id"],
         {
             "session": None if session is None else session.snapshot(),
-            "capabilities": dict(SESSION_CAPABILITIES),
+            "capabilities": {
+                **SESSION_CAPABILITIES,
+                "paths": list(calibration_session.IMPLEMENTED_PATHS),
+                "levels": list(calibration_session.IMPLEMENTED_LEVELS),
+            },
         },
     )
 
