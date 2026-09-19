@@ -130,7 +130,12 @@ async def sent(client, payload: dict[str, Any]) -> int:
     return int(payload["id"])
 
 
-async def answered(client, msg_id: int, seen: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+async def answered(
+    client,
+    msg_id: int,
+    seen: list[dict[str, Any]] | None = None,
+    overviews: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """The answer to one command, reading past the events that overtake it.
 
     A subscription and a command share one socket, and the events a command causes go
@@ -143,13 +148,17 @@ async def answered(client, msg_id: int, seen: list[dict[str, Any]] | None = None
         if message.get("type") == "event":
             if seen is not None and message["event"]["type"] == WS_EVENT_SESSION:
                 seen.append(message["event"]["session"])
+            if overviews is not None and message["event"]["type"] == WS_EVENT_OVERVIEW:
+                overviews.append(message["event"]["overview"])
             continue
         assert message["id"] == msg_id, message
         assert message["success"], message
         return message["result"]
 
 
-async def started_over_the_socket(client, hass, entry, seen=None, **fields) -> CalibrationSession:
+async def started_over_the_socket(
+    client, hass, entry, seen=None, overviews=None, **fields
+) -> CalibrationSession:
     """Open the session the way the panel opens one, and hand back the controller's.
 
     Through the socket on purpose wherever a subscription is watching: the ten commands
@@ -167,14 +176,20 @@ async def started_over_the_socket(client, hass, entry, seen=None, **fields) -> C
             **fields,
         },
     )
-    answer = await answered(client, msg_id, seen)
+    answer = await answered(client, msg_id, seen, overviews)
     await hass.async_block_till_done()
     session = current(hass, entry)
     assert session is not None and session.session_id == answer["session"]["session_id"]
     return session
 
 
-async def session_events(client, sub_id: int, seen: list[dict[str, Any]], upto: int) -> None:
+async def session_events(
+    client,
+    sub_id: int,
+    seen: list[dict[str, Any]],
+    upto: int,
+    overviews: list[dict[str, Any]] | None = None,
+) -> None:
     """Read until the subscription has carried the snapshot of revision `upto`.
 
     A session holds its shutter, so `measuring` travels down the same subscription and
@@ -186,6 +201,8 @@ async def session_events(client, sub_id: int, seen: list[dict[str, Any]], upto: 
         assert message["id"] == sub_id, message
         if message["event"]["type"] == WS_EVENT_SESSION:
             seen.append(message["event"]["session"])
+        elif overviews is not None and message["event"]["type"] == WS_EVENT_OVERVIEW:
+            overviews.append(message["event"]["overview"])
 
 
 # ======================================================================= the commands
@@ -783,6 +800,78 @@ async def test_a_panel_that_opens_on_a_session_already_running_is_told_about_it(
         assert event["session"]["session_id"] == session.session_id
         assert event["session"]["step"] == "path_a"
         await session.async_cancel(CLIENT)
+
+
+async def test_a_panel_already_open_is_told_who_is_holding_the_shutter_at_every_turn(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """`overview.session` is pushed when a session appears and when it goes.
+
+    A calibration writes nothing until it is saved, so nothing in `panel_write`
+    publishes an overview for it - and a panel that was already subscribed when the
+    session began would read `session: null` for the whole of it. The document says what
+    that means: `measuring` set beside `session: null` is *the guided dialog or the
+    0.4.2 action*, and the screen offers to close a dialog rather than to join a
+    calibration. The second screen in the house would offer a button that aborts no flow
+    and answers `still_calibrating: true`.
+
+    The invariant asserted on **every** overview this tab is given is the one that
+    sentence rests on: a shutter of this gateway being measured by the panel is never
+    reported with no session beside it.
+
+    Mutation caught: publishing the overview only from the writes (a second panel never
+    sees the calibration begin); publishing it at the start and not at the end (the
+    banner names a calibration that is over until the next write of any kind).
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        sub_id = await subscribed(client, entry.entry_id)
+        overviews: list[dict[str, Any]] = []
+        seen: list[dict[str, Any]] = []
+
+        session = await started_over_the_socket(
+            client, hass, entry, seen=seen, overviews=overviews
+        )
+        assert overviews, "the tab that was already open was never told the session began"
+        assert overviews[-1]["session"] == {
+            "session_id": session.session_id,
+            "cover_unique_id": FIRST,
+            "name": "Hallway Shutter",
+            "state": "armed",
+            "owner": CLIENT,
+        }
+        assert overviews[-1]["measuring"]["cover_unique_id"] == FIRST
+
+        # A step of the conversation is not a change of hands: no overview goes out.
+        so_far = len(overviews)
+        await act(hass, session, Act("path_a"), freezer=freezer)
+        await session_events(client, sub_id, seen, session.revision, overviews=overviews)
+        assert len(overviews) == so_far
+
+        # ...and the ending is, whichever ending it is.
+        msg_id = await sent(
+            client,
+            {
+                "type": WS_TYPE_SESSION_CANCEL,
+                "entry_id": entry.entry_id,
+                "client_id": CLIENT,
+                "session_id": session.session_id,
+            },
+        )
+        await answered(client, msg_id, overviews=overviews)
+        assert overviews[-1]["session"]["state"] == "ended"
+        assert overviews[-1]["measuring"] is None
+
+        # The invariant that sentence rests on, on every overview this tab was given:
+        # `measuring` set with `session` at `null` would mean "the dialog". The converse
+        # is not an invariant - a terminal session stays readable for ten minutes after
+        # the shutter has been given back, which is how the outcome screen survives a
+        # reload.
+        for overview in overviews:
+            if overview["measuring"] is not None:
+                assert overview["session"] is not None, overview["measuring"]
+                assert overview["session"]["state"] not in ("saved", "ended"), overview["session"]
 
 
 async def test_the_socket_closing_takes_the_subscriber_away_and_leaves_the_session(

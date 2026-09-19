@@ -95,7 +95,6 @@ from .panel_write import (
     async_profile_delete,
     async_profile_edit,
     async_profile_rename,
-    async_publish,
     async_reorder,
     async_set_travel,
     async_subscribers,
@@ -970,13 +969,12 @@ async def websocket_session_save(
     session earns: it is not refused by the calibration it belongs to, and it leaves no
     undo token.
 
-    The overview that write publishes is built **while the session is still holding the
-    shutter**, because the store is written inside it and the session only ends when it
-    comes back. So the one thing this handler does beyond calling and answering is to
-    rebuild the overview once the session has ended and publish that instead: otherwise
-    the answer would carry a `session` line saying `review` beside a snapshot saying
-    `saved`, and every open panel's banner would go on naming a calibration that is
-    over until the next write of any kind.
+    The answer's `overview` is the one the session publishes when it ends and not the
+    one the write built - the write's was built while the session still held the shutter
+    - and the session publishes it to every open panel itself, at this transition and at
+    the five others. All of that is `CalibrationSession._publish_the_overview`, where it
+    belongs: a client that calls `async_save` without a socket in front of it gets the
+    same answer.
     """
     entry = _entry(hass, connection, msg)
     if entry is None:
@@ -989,10 +987,6 @@ async def websocket_session_save(
     except PanelError as err:
         _refuse(connection, msg, err)
         return
-    if session.ended:
-        overview = async_overview(hass, entry)
-        async_publish(hass, entry, overview)
-        answer = {**answer, "overview": overview}
     connection.send_result(msg["id"], answer)
 
 

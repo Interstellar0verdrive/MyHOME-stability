@@ -158,6 +158,7 @@ from .cover import CALIBRATION_SETTLE_SEC, calibration_run_seconds
 from .panel_data import (
     CALIBRATION_LEVEL_PRECISE,
     _level_and_note,
+    async_overview,
     basic_covers,
     calibrating_now,
     is_advanced_cover,
@@ -179,7 +180,7 @@ from .panel_schemas import (
     SESSION_SUBMIT,
     SESSION_VALUE_KEYS,
 )
-from .panel_write import PanelError, async_write
+from .panel_write import PanelError, async_publish, async_write
 
 # Where the sessions live: one slot per config entry, holding the live session or the
 # terminal snapshot of the last one. In `hass.data` and not in a module global for the
@@ -868,6 +869,28 @@ class CalibrationSession:
         else:
             self._step = "path"
         self._publish()
+        self._publish_the_overview()
+
+    @callback
+    def _publish_the_overview(self) -> dict[str, Any]:
+        """Push a fresh overview to every open panel of this gateway, and answer with it.
+
+        A session is not a write: it takes hold of a shutter and gives it back without
+        touching the store, so nothing in `panel_write` publishes an overview for it.
+        But `overview.session` **is** part of the overview, and a panel that was already
+        subscribed when this session began would otherwise read `null` there for the
+        whole of it - which the document says means "the guided dialog or the 0.4.2
+        action", so the second screen in the house would offer to close a dialog that
+        does not exist rather than to join the calibration that does.
+
+        Called at the two moments the answer changes: when the session appears
+        (`begin`) and when it goes (`_finish`, whatever ended it). `measuring` moves
+        with it, and the two are built from the same read, so no panel ever sees one
+        without the other.
+        """
+        overview = async_overview(self.hass, self.entry)
+        async_publish(self.hass, self.entry, overview)
+        return overview
 
     @callback
     def _watch_the_cover(self) -> None:
@@ -1140,6 +1163,10 @@ class CalibrationSession:
             )
             return {"session": self.snapshot(), "overview": written["overview"]}
         resolved = self._resolved()
+        # The overview `async_write` built is the gateway as it was **while this session
+        # still held the shutter**: the store is written inside the write and the session
+        # only ends when it comes back. So the answer carries the one `_finish` publishes
+        # instead, or it would say `review` beside a snapshot that says `saved`.
         self._finish(
             "saved",
             extra={
@@ -1153,7 +1180,7 @@ class CalibrationSession:
             self.cover_name,
             self._measured_name or self._profile or "overrides",
         )
-        return {"session": self.snapshot(), "overview": written["overview"]}
+        return {"session": self.snapshot(), "overview": async_overview(self.hass, self.entry)}
 
     # ---------------------------------------------------------------- the conversation
     @callback
@@ -2324,6 +2351,10 @@ class CalibrationSession:
             self._claim.close()
             self._claim = None
         self._publish()
+        # ...and the gateway's picture, because the shutter has just been given back:
+        # `overview.measuring` and `overview.session` both change here, and a panel that
+        # is not on the wizard learns it from nowhere else.
+        self._publish_the_overview()
 
     # -------------------------------------------------------------------- the writing
     async def _async_store_the_result(self, store: CalibrationStore, target: str) -> dict[str, Any]:
