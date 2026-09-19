@@ -25,6 +25,22 @@ const fixture = JSON.parse(
 const strings = JSON.parse(
   await readFile(join(root, "custom_components", "myhome", "strings.json"), "utf8"),
 );
+/**
+ * The frozen session examples (lot L0), which is where every snapshot in this file comes
+ * from: a stub that made its own would be a stub agreeing with nothing.
+ */
+const sessions = JSON.parse(
+  await readFile(join(root, "tests", "fixtures", "panel_session_examples.json"), "utf8"),
+);
+
+/** One scenario of the fixture, with the gateway of the overview this host serves. */
+export const sessionFixture = (name, entryId) => {
+  const scenario = sessions.scenarios[name];
+  if (!scenario) {
+    throw new Error(`no session scenario called '${name}' in the fixture`);
+  }
+  return { ...structuredClone(scenario), entry_id: entryId };
+};
 
 /** The rules jsdom cannot honestly answer: they need layout, and it has none. */
 export const NEEDS_LAYOUT = [
@@ -73,6 +89,30 @@ const overviewFor = (state) => {
     answer.profiles = [];
   }
   return answer;
+};
+
+/**
+ * The session commands, answered from the fixture.
+ *
+ * Enough for the states this host audits and no more: the wizard's conversation is lot
+ * F2's, and a stub that pretended to run one would be a second implementation of the
+ * server. `heartbeat` answers as the owner because these states are all "this tab is
+ * driving"; `cancel` ends it.
+ */
+const session = (state, message) => {
+  const entryId = overviewFor(state).entry_id;
+  const scenario = state === "calibrating" ? "running_open_lift" : null;
+  const snapshot = scenario ? sessionFixture(scenario, entryId) : null;
+  if (message.type.endsWith("/get")) {
+    return Promise.resolve({ session: snapshot, capabilities: sessions._contract.capabilities });
+  }
+  if (message.type.endsWith("/heartbeat")) {
+    return Promise.resolve({ owner: true, present_until: null });
+  }
+  if (message.type.endsWith("/cancel")) {
+    return Promise.resolve({ session: null, already_ended: snapshot === null });
+  }
+  return Promise.resolve({ session: snapshot });
 };
 
 const connection = (state) => ({
@@ -127,6 +167,9 @@ const connection = (state) => ({
     if (message.type === "myhome/calibration/preview") {
       return Promise.resolve({ entry_id: "01ENTRY", items: [] });
     }
+    if (message.type.startsWith("myhome/calibration/session/")) {
+      return session(state, message);
+    }
     return Promise.reject({ code: "unknown_command", message: "unknown command" });
   },
   subscribeMessage(callback, message) {
@@ -139,6 +182,44 @@ const connection = (state) => ({
   addEventListener() {},
   removeEventListener() {},
 });
+
+/**
+ * The document, made as unhelpful as the one the panel really runs in.
+ *
+ * Home Assistant's frontend registers custom elements through a **scoped registry**
+ * polyfill, and that polyfill does not implement the form parts of the DOM. In the v2
+ * panel an ordinary read of a form's elements collection threw "Method not implemented"
+ * and took a screen down, in production, on a document no check here had - jsdom
+ * implements all of it, so the panel passed every check and failed in the one place it
+ * mattered.
+ *
+ * So the properties SPEC §5.9 strikes out are replaced by accessors that throw the
+ * frontend's own sentence, before the bundle is evaluated. `npm run a11y`,
+ * `npm run keyboard` and `npm run session` therefore fail if the shipped code reaches for
+ * one of them - on the screen, the way a user meets it - while
+ * `test/scoped-registry.test.ts` fails earlier and says which line.
+ *
+ * It is deliberately narrow: only the five properties on the list, and nothing about how
+ * an `<input>` or a shadow root behaves, which is what the panel actually uses.
+ */
+export const forbidFormApis = (window) => {
+  const refuse = (name) => ({
+    configurable: true,
+    get() {
+      throw new Error(`Method not implemented. (${name})`);
+    },
+  });
+  Object.defineProperty(window.HTMLFormElement.prototype, "elements", refuse("form.elements"));
+  Object.defineProperty(
+    window.HTMLFieldSetElement.prototype,
+    "elements",
+    refuse("fieldset.elements"),
+  );
+  Object.defineProperty(window.Document.prototype, "forms", refuse("document.forms"));
+  for (const name of ["requestSubmit", "reset", "namedItem"]) {
+    Object.defineProperty(window.HTMLFormElement.prototype, name, refuse(`form.${name}`));
+  }
+};
 
 export const settle = (window, ms = 60) =>
   new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -187,6 +268,9 @@ export const mount = async ({ name, state, hash, drive, expect }) => {
   // jsdom has no `matchMedia`, and the panel already guards every use of it - which is
   // what makes it safe to leave absent rather than faked into one width.
   window.eval(await readFile(axeSource, "utf8"));
+  // …and, before the bundle is loaded, the document is made to behave the way Home
+  // Assistant's really does. See `forbidFormApis`.
+  forbidFormApis(window);
   // The bundle is an ES module and jsdom will not load one out of a string, so it runs as
   // a classic script. esbuild leaves no `import` in it (everything is bundled) and exactly
   // one `export {…}`, which a classic script may not carry: it names the element class,
@@ -319,5 +403,10 @@ export const STATES = [
   { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-advanced-note]" },
   { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1), expect: "[data-drawer]" },
   { name: "profile card, last action", state: "ready", hash: "#/profile/tall", drive: pressWide(-1), expect: "[data-drawer]" },
+  // The wizard's address, with a session of the gateway's and without one. Lot F1 draws a
+  // stub there; the eight live models and the states SPEC §7.2 lists for them arrive with
+  // lot F2, which extends this list rather than replacing it.
+  { name: "the wizard, a session running", state: "calibrating", hash: "#/calibrate", expect: "[data-wizard]" },
+  { name: "the wizard, no session", state: "ready", hash: "#/calibrate", expect: "myhome-wizard" },
 ];
 

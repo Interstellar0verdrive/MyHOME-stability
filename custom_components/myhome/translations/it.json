@@ -1004,6 +1004,25 @@
         "body": "Le tapparelle non sono disponibili per qualche secondo"
       }
     },
+    "wizard": {
+      "title": "Calibrazione guidata",
+      "none": "Nessuna calibrazione \u00e8 in corso su questo gateway.",
+      "action": {
+        "end": "Termina la calibrazione",
+        "claim": "Prendi il controllo",
+        "claim_cancel": "Prendi il controllo e termina",
+        "force": "Termina comunque"
+      },
+      "trouble": {
+        "title": "La calibrazione non \u00e8 stata chiusa",
+        "freed": "Se non riesce nulla, il gateway libera la tapparella da solo alle {time}.",
+        "freed_later": "Se non riesce nulla, il gateway libera la tapparella da solo alla scadenza della calibrazione."
+      },
+      "render_error": {
+        "title": "Questa schermata non \u00e8 stata disegnata",
+        "body": "La calibrazione \u00e8 ancora in corso sul gateway e non \u00e8 andato perso niente. Riprovare, oppure terminarla."
+      }
+    },
     "screen": {
       "phase": "{phase} · {index} di {count}",
       "new_text": "testo nuovo — non ancora tradotto",

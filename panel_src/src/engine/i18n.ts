@@ -84,6 +84,7 @@ export class I18n {
   private _texts: Record<string, unknown> = {};
   private _numbers = new Map<number, Intl.NumberFormat>();
   private _dates: Intl.DateTimeFormat | null = null;
+  private _times: Intl.DateTimeFormat | null = null;
 
   /** The language actually served, after the fallback chain. */
   language = "en";
@@ -98,6 +99,7 @@ export class I18n {
     this.loaded = true;
     this._numbers.clear();
     this._dates = null;
+    this._times = null;
   }
 
   /** `t("panel.overview.title")` - the sentence, the English stand-in, or the key. */
@@ -166,6 +168,24 @@ export class I18n {
       this._dates = new Intl.DateTimeFormat(this.language, { dateStyle: "long" });
     }
     return this._dates.format(when);
+  }
+
+  /**
+   * The same instant as a time of day, which is the one place the panel needs one.
+   *
+   * A session's lease runs out at a moment this afternoon, and "on 19 September" is not
+   * an answer to "when is the shutter free again". Everywhere else the date is the point
+   * and the time is noise, which is why `date()` leaves it out.
+   */
+  time(iso: string): string {
+    const when = new Date(iso);
+    if (Number.isNaN(when.getTime())) {
+      return iso;
+    }
+    if (!this._times) {
+      this._times = new Intl.DateTimeFormat(this.language, { timeStyle: "short" });
+    }
+    return this._times.format(when);
   }
 
   private _lookup(key: string): string | null {

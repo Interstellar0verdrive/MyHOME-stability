@@ -38,6 +38,7 @@ import {
 import { DragController, flipPlay, flipStart, type DropTarget } from "../engine/dnd";
 import { I18n } from "../engine/i18n";
 import { renderMarkdown } from "../engine/markdown";
+import { type WizardIntent } from "../engine/session";
 import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
 import { type CoverRow, type Overview, type ProfileRow } from "../engine/ws";
@@ -98,6 +99,16 @@ export interface AssignActions {
   confirm: () => void;
   undo: () => void;
   announce: (message: string) => void;
+  /**
+   * Measure a shutter: the guided calibration, in the panel (0.6.0 wizard).
+   *
+   * Nothing on this screen calls it yet - lot F3 moves "Misura una tapparella" and the
+   * first run's own button onto it, and until then the two of them still open
+   * *Configure*. It is declared here rather than there so that the shell has one place
+   * that knows how a session is opened, and so that the intention travels as an object
+   * and never as an address (SPEC §5.1).
+   */
+  calibrate: (intent: WizardIntent) => void;
 }
 
 export class MyHomeOverview extends LitElement {

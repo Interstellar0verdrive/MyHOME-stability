@@ -121,6 +121,8 @@ src/engine/theme.ts     Home Assistant's CSS variables, each with a fallback
 src/engine/a11y.ts      the live region, focus return and the focus trap
 src/engine/ha.ts        customElements.get() guards for every ha-* element used
 src/engine/ws.ts        typed wrappers over every command; mirrors panel_schemas.py
+src/engine/session-contract.ts  the calibration session on the wire: types, frozen
+src/engine/session.ts   the session as this tab holds it: heartbeat, verbs, cancelling
 src/engine/assign.ts    the pending-change model: pure functions, and no arithmetic
 src/engine/fields.ts    the numeric fields of the two cards, and the bounds they obey
 src/engine/flow.ts      opening the options flow: the probe, the watchdog, the page
@@ -134,6 +136,7 @@ src/components/*.ts     origin chip, cover row, group card, measuring banner,
 src/views/overview.ts   <myhome-overview>, the management screen
 src/views/cover-detail.ts   <myhome-cover-detail>, one shutter key by key
 src/views/profile-card.ts   <myhome-profile-card>, one profile and its followers
+src/views/wizard.ts     <myhome-wizard>, the guided calibration (a stub until lot F2)
 src/types/ha.ts         the four properties Home Assistant sets, and the connection
 ```
 
@@ -208,6 +211,79 @@ the event never works, and the acceptance criteria ask for the fallback rather t
 Neither path can preselect the shutter or the scope: the flow's `init` step is a menu that
 takes no argument. The buttons name the path so the user knows which entry to pick, and an
 entry point that carries one is a 0.7.0 item.
+
+## The guided calibration
+
+The measuring itself is moving into the panel in 0.6.0. The session it runs in lives
+**on the server**, one per gateway: closing the tab, locking the phone or losing the
+socket does not end it, and the panel's side of it is `src/engine/session.ts` - a class
+with no Lit and no DOM in it, which `src/main.ts` makes when the first answer names a
+gateway and which the screens talk to instead of talking to the socket. The ten commands
+are wrapped in `engine/ws.ts` against the frozen contract
+(`src/engine/session-contract.ts`, `docs/panel-websocket-api.md` §11-§14), and
+`tests/fixtures/panel_session_examples.json` is where every snapshot in the checks and in
+the harness comes from.
+
+Five rules, each one a failure the v2 panel shipped on 18 September 2026. They are the
+reason this part of the panel is built the way it is, and a reviewer should hold it to
+them:
+
+1. **The presence signal does not depend on the drawing.** The heartbeat is a
+   `setInterval` of the client's own, started by `start` or `attach` and stopped only by
+   the end of the session, by `leave` or by `dispose`. Nothing in `render()`, `updated()`
+   or any other paint-time callback is on that path, and a listener that throws is caught.
+   In v2 the heartbeat was sent from the render path: the first drawing error stopped it,
+   and forty-five seconds later the server took the session away from somebody standing at
+   the window with a tape measure.
+2. **Cancelling never fails in silence.** `cancel()` answers on four branches - it worked
+   or had already ended; another client owns it, so the screen offers "take control and
+   end it" and "end it anyway"; the session is gone, which is what was asked for; or the
+   gateway did not answer, and the offer is "try again" and "end it anyway", and when that
+   is what failed, the time at which the lease frees the shutter by itself. No branch
+   answers nothing, and no card ever comes out with a refusal on it and nothing underneath:
+   the one recovery token that is not a button (`wait`) is always drawn as the sentence
+   saying what happens anyway, with the hour when there is one to give.
+   **"Take control" and "take control and end it" are two different offers**, with two
+   tokens and two labels: only a refused "Cancel" ever offers the second, because only
+   there is ending the thing that was asked for. A step refused because a second tab owns
+   the session offers the first, and throws nothing away.
+3. **No form APIs, anywhere.** Home Assistant loads custom elements through a scoped
+   registry polyfill that does not implement them: `form.elements` threw "Method not
+   implemented" in production. `test/scoped-registry.test.ts` scans `src/` for the eight
+   of them and names the line; `tools/panel-host.mjs` makes those properties throw before
+   it loads the bundle, so `a11y`, `keyboard` and `session` fail if the shipped code uses
+   one. A guard like that only bites on a screen a check actually mounts, which is why each
+   of the three opens `#/calibrate` in at least one of its states.
+4. **Reloading `#/calibrate` never starts a session.** The address carries nothing -
+   `/calibrate/<anything>` is the same route with what it names dropped - and the shutter,
+   the path, the profile and the scope travel in the store as an *intention*. Arriving
+   reads (`get`, then `attach`, both of which the contract defines as reads); only a
+   button opens a session.
+5. **Ownership is per browser tab, and taking it is deliberate.** The `client_id` lives in
+   `sessionStorage`, so reloading the page is the same owner and a second tab is a second
+   client. A heartbeat never takes ownership, however long the owner has been away, and the
+   `attach` that arriving on the address sends goes **without `claim`**: opening a page can
+   never take a measurement away from somebody who is in the middle of one. Taking control
+   is a press, and both checks assert that the frame carried no claim.
+
+```sh
+npm run session   # the committed bundle in jsdom, against a session that misbehaves
+```
+
+It walks the eight states none of the other checks can reach: a snapshot the wizard cannot
+draw (the error card appears, the panel goes on repainting when Home Assistant hands it a
+new state, **and** the heartbeats go on arriving - the console line it prints is the panel
+reporting that drawing error once, and is part of what is being checked), a "Cancel"
+refused twice over and again with no hour to give, the address opened with no session and
+opened on one somebody else is driving, a `start` refused while the gateway is busy with
+another shutter, a session picked up again in the middle of a positioning run, and presence
+lost and taken back. The one thing it fakes beyond the gateway is the length of fifteen
+seconds, so that it takes a second rather than a minute - and it counts the intervals it
+compressed and fails if that count is zero, because a period that stopped matching would
+otherwise leave half the scenarios passing while exercising no heartbeat at all.
+
+`dev/harness.html` has the same thing to click at: the *a calibration session* checkbox
+opens one on the fixture's snapshots and `#/calibrate` walks it.
 
 ## The screen engine
 

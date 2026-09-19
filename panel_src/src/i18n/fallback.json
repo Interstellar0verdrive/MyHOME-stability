@@ -216,5 +216,16 @@
   "panel.toast.profile_saved_one": "Profile «{profile}» updated: 1 cover reached.",
   "panel.toast.travel_saved": "The travel of «{cover}» is saved: the profile is brought to this measurement.",
   "panel.toast.undone": "Changes undone: everything as it was.",
-  "panel.toast.values_saved": "The values of «{cover}» are saved: they beat the profile and the file."
+  "panel.toast.values_saved": "The values of «{cover}» are saved: they beat the profile and the file.",
+  "panel.wizard.action.claim": "Take control",
+  "panel.wizard.action.claim_cancel": "Take control and end it",
+  "panel.wizard.action.end": "End the calibration",
+  "panel.wizard.action.force": "End it anyway",
+  "panel.wizard.none": "No calibration is running on this gateway.",
+  "panel.wizard.render_error.body": "The calibration is still running on the gateway and nothing has been lost. Try again, or end it.",
+  "panel.wizard.render_error.title": "This screen could not be drawn",
+  "panel.wizard.title": "Guided calibration",
+  "panel.wizard.trouble.freed": "If nothing works, the gateway releases the shutter by itself at {time}.",
+  "panel.wizard.trouble.freed_later": "If nothing works, the gateway releases the shutter by itself when the calibration's time runs out.",
+  "panel.wizard.trouble.title": "The calibration was not closed"
 }

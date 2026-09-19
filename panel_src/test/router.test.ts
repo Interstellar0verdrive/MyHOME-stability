@@ -16,7 +16,7 @@ describe("reading an address", () => {
     }
   });
 
-  it("reads a shutter, a profile and a reserved session", () => {
+  it("reads a shutter and a profile", () => {
     assert.deepEqual(parsePath("/cover/aa:bb-2-81"), {
       view: "cover",
       params: { id: "aa:bb-2-81" },
@@ -24,8 +24,21 @@ describe("reading an address", () => {
     });
     assert.equal(parsePath("/profile/tall").view, "profile");
     assert.equal(parsePath("/profile/tall").params.name, "tall");
-    assert.equal(parsePath("/calibrate/42").view, "calibrate");
-    assert.equal(parsePath("/calibrate/42").params.session, "42");
+  });
+
+  it("reads the wizard out of the address, and nothing else out of it", () => {
+    // The one rule this route has (SPEC §5.1, decision 24): **reloading `#/calibrate`
+    // can never start a session**, because the address says nothing about which shutter
+    // or which path. What the user asked for is in the store. A link written against an
+    // older spelling still opens the wizard, and what it names is dropped.
+    for (const raw of ["/calibrate", "#/calibrate", "/calibrate/", "/calibrate/42",
+                       "/calibrate/00:03:50:aa:bb:cc-2-81", "/calibrate/path_a/tall"]) {
+      assert.deepEqual(
+        parsePath(raw),
+        { view: "calibrate", params: {}, path: "/calibrate" },
+        raw,
+      );
+    }
   });
 
   it("unescapes the identifier, because a profile may be called 'Tall shutters'", () => {
@@ -59,6 +72,18 @@ describe("writing an address", () => {
   it("is the overview for the overview, and for a screen with nothing to name", () => {
     assert.equal(buildPath("overview"), "/");
     assert.equal(buildPath("cover", ""), "/");
+  });
+
+  it("writes the wizard's address with nothing after it, whatever it is handed", () => {
+    assert.equal(buildPath("calibrate"), "/calibrate");
+    assert.equal(buildPath("calibrate", "00:03:50:aa:bb:cc-2-81"), "/calibrate");
+  });
+
+  it("writes the list for a view with no address of its own", () => {
+    // Never another screen's address: a wrong one that leads somewhere real is worse than
+    // a wrong one that leads nowhere.
+    assert.equal(buildPath("unknown", "tall"), "/");
+    assert.equal(buildPath("unknown"), "/");
   });
 
   it("survives a round trip", () => {
