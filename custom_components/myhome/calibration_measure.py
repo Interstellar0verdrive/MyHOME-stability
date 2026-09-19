@@ -141,6 +141,42 @@ def suggested_name(entity_id: str) -> str:
 
 
 # ------------------------------------------------------------------ the model in use
+def own_height(
+    *, record: StoredCalibration | None, device: Mapping[str, Any]
+) -> float | None:
+    """The travel *this* window is known to have: its record's, else the file's.
+
+    Ported from `CalibrationContextMixin._own_height`. Never a profile's
+    `reference_height`, which is another window's travel and would silently scale a
+    newly assigned profile by the old one's reference - which is why it is a function
+    of its own and not the first two lines of `known_height`: a correction starts the
+    conversation from this number, and starting it from a profile's would carry the
+    profile's own window into the record of this one.
+    """
+    if record is not None and record.height:
+        return float(record.height)
+    if device.get(CONF_HEIGHT):
+        return float(device[CONF_HEIGHT])
+    return None
+
+
+def assigned_profile(
+    *, record: StoredCalibration | None, device: Mapping[str, Any]
+) -> str | None:
+    """The profile this window follows today, from wherever it is said.
+
+    Ported from `CalibrationContextMixin._assigned_profile`: the stored assignment
+    first, then the `profile:` written in the file - which is what a form offering the
+    profiles has to open on, because opening on the first name in the list for a cover
+    the file already assigns tells the user something untrue about their own
+    installation (0.5.0 v2 review, RISK-1).
+    """
+    if record is not None and record.profile:
+        return str(record.profile)
+    name = device.get(CONF_PROFILE)
+    return str(name) if name else None
+
+
 def known_height(
     *,
     record: StoredCalibration | None,
@@ -149,22 +185,17 @@ def known_height(
 ) -> float | None:
     """The travel this window is already said to have, from wherever it is said.
 
-    Ported from `CalibrationContextMixin._known_height` (with `_own_height` and
-    `_assigned_profile` folded in), because `result` needs it on the path that times
-    only: the record's height, else the file's, else the reference height of the
-    profile the cover follows (the stored assignment first, then the file's
-    `profile:`). `record` is the cover's stored record, `device` its validated
-    configuration, `profiles` both namespaces merged (`merged_profiles`).
+    Ported from `CalibrationContextMixin._known_height`, which is `own_height` (the
+    record's height, else the file's) and then the reference height of the profile the
+    cover follows (`assigned_profile`) - the same two functions this one is built out
+    of, for the same reason the dialog builds it out of its two methods. `record` is
+    the cover's stored record, `device` its validated configuration, `profiles` both
+    namespaces merged (`merged_profiles`).
     """
-    if record is not None and record.height:
-        return float(record.height)
-    if device.get(CONF_HEIGHT):
-        return float(device[CONF_HEIGHT])
-    if record is not None and record.profile:
-        name: str | None = str(record.profile)
-    else:
-        assigned = device.get(CONF_PROFILE)
-        name = str(assigned) if assigned else None
+    own = own_height(record=record, device=device)
+    if own is not None:
+        return own
+    name = assigned_profile(record=record, device=device)
     profile = profiles.get(name or "")
     if profile and profile.get(CONF_REFERENCE_HEIGHT):
         return float(profile[CONF_REFERENCE_HEIGHT])
@@ -581,6 +612,7 @@ __all__ = [
     "Result",
     "accept_measurement",
     "adopted_timings",
+    "assigned_profile",
     "deviation",
     "expected_cm",
     "fit_both",
@@ -588,6 +620,7 @@ __all__ = [
     "known_height",
     "merged_with",
     "model_values",
+    "own_height",
     "profile_still_wins",
     "raw",
     "replaced_and_kept",

@@ -47,6 +47,7 @@ from custom_components.myhome.calibration_measure import (
     Result,
     accept_measurement,
     adopted_timings,
+    assigned_profile,
     deviation,
     expected_cm,
     fit_both,
@@ -54,6 +55,7 @@ from custom_components.myhome.calibration_measure import (
     known_height,
     merged_with,
     model_values,
+    own_height,
     profile_still_wins,
     raw,
     replaced_and_kept,
@@ -627,6 +629,30 @@ async def test_the_adopted_times_come_on_readings_of_their_own(
     adopted.descent.append((1.0, 2.0))
     adopted.ascent.append((3.0, 4.0))
     assert (c.measured.descent, c.measured.ascent) == before
+
+
+async def test_the_travel_and_the_profile_this_window_is_told_it_has(
+    conversation: Conversation,
+) -> None:
+    """`_own_height` and `_assigned_profile`, which a correction starts from.
+
+    They are the two steps `_known_height` is built out of, and a correction uses each
+    of them alone: the travel it opens the conversation on must be **this** window's
+    and not the reference height of the profile it follows (`async_step_path_c`,
+    :1826), and the profile its form opens on is the one the window is assigned
+    today. Folding them into `known_height` alone would leave the session to write
+    either rule out again.
+    """
+    c = conversation
+    flow = c.flow
+    assert own_height(record=c.record, device=c.device) == flow._own_height(UNIQUE_ID)
+    assert assigned_profile(record=c.record, device=c.device) == flow._assigned_profile(UNIQUE_ID)
+    # ...and on the file's own copy of the cover as well, which is the dictionary the
+    # session passes (review B1, R3).
+    assert own_height(record=c.record, device=c.device_from_file) == flow._own_height(UNIQUE_ID)
+    assert assigned_profile(
+        record=c.record, device=c.device_from_file
+    ) == flow._assigned_profile(UNIQUE_ID)
 
 
 async def test_the_file_s_own_copy_of_the_cover_answers_the_same(
