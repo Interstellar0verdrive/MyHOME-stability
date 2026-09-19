@@ -195,6 +195,21 @@ the panel when it is in the way.
   length was accepted, became a key of the calibration store, and was printed wherever
   a profile is named. One rule for the dialog and the panel alike, and the refusal says
   so in all seven languages.
+- **The panel's check of a profile is half the curtain travel, measured going up.**
+  Route (B) ends with an optional check, and it used to send the shutter down from the
+  top for half its closing time and compare the tape with what the profile predicted
+  for that run — a number the user could neither guess nor verify, on a screen that
+  said "half the travel" and meant something else. The panel now closes the shutter
+  completely and sends it back up to **half the curtain travel**, which is the very
+  movement `set_cover_position: 50` will make once the profile is saved, so what the
+  tape should read is half the travel: 99 cm of 198, and the screen says the gap
+  against that. It is also the more searching of the two checks. Measured on a 198 cm
+  shutter that had been given a 110 cm shutter's profile: the descending check reported
+  3.5 cm and passed it, while the position people actually use was eight centimetres
+  out; the new one reports about nine and offers to measure that shutter on its own.
+  *Configure → "Calibrate a cover"* is unchanged and still checks the way it always
+  has; the difference is deliberate and is written up in
+  [docs/guided-calibration.md](docs/guided-calibration.md).
 
 ### Fixed
 

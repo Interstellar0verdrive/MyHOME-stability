@@ -153,11 +153,22 @@ from the top;
 that opening is announced by the same warning screen the tape phase of path A opens
 with, and then happens by itself.
 
-It then offers a **check**: the shutter is sent to half its travel and you measure
-where it really stopped. The screen reports the gap between that and where the
-estimate put it. One or two centimetres is normal and already a good
-approximation; three or more mean this shutter does not behave like the profile it
-was given, and the screen offers path C on the spot.
+It then offers a **check**: the shutter is closed completely, sent back up to half its
+travel and you measure where the bottom edge really is. On a 198 cm shutter it should
+read about 99 cm, and the screen says how far off it was. Up to four centimetres is
+normal and the profile suits this shutter; more than that means this shutter does not
+behave like the profile it was given, and the screen offers path C on the spot.
+
+In the panel the check is exactly the movement `set_cover_position: 50` will make once
+the profile is saved, so the number to expect is half the curtain travel — a number you
+can check yourself. In the *Configure* dialog the same check runs the shutter down for
+half its closing time instead and compares the tape with what the profile predicts for
+that run; the two agree about a shutter that really does suit the profile, and the
+panel's is the more searching of the two about one that does not. The difference is
+deliberate (20 September 2026): the ascent is where an inherited profile is most wrong —
+the slats and the roll near the sill — and the descent, which starts in the fast part of
+the travel, can pass a shutter that is eight centimetres out at the position people
+actually use.
 
 What it stores: the profile name and the curtain travel — no numbers of its own. From
 that moment the shutter **follows** the profile, run times included, scaled to its own
@@ -391,7 +402,7 @@ the phone does not end it and does not lose a reading, a second device can be to
 take it over, and the panel can close a *Configure* dialog that is holding a shutter it
 wants. A dialog cannot do any of that, because a dialog is a flow inside one browser.
 
-Two differences worth knowing, both of them deliberate:
+Three differences worth knowing, all of them deliberate:
 
 - **What route (A) saves.** The dialog stores the profile **and** the same values on
   the shutter itself, so the shutter's origin reads *Measured*. The panel stores the
@@ -404,6 +415,9 @@ Two differences worth knowing, both of them deliberate:
   seconds; a calibration does not, on either side. Three minutes of measuring are not a
   gesture to take back by accident, and the way back is *Remove the measurement…* on the
   shutter's card.
+- **Route (B)'s check.** The panel takes the shutter up to half its travel and expects
+  the tape to read half the travel; the dialog runs it down for half its closing time
+  and expects what the profile predicts for that run. See route (B) above for why.
 
 Everything else is one store seen twice: a change made in either is visible in the
 other as soon as the screen is drawn again, and the dialog goes on working unchanged on
@@ -582,8 +596,9 @@ it. Finish or close that one first — the panel says which of the three it is, 
 close a dialog for you.
 
 **The verification is more than 4 cm out.** On path B that means this shutter does
-not behave like the profile it was given; measure it on its own with path C, which
-the verification screen offers directly. On a shutter measured with path A it means
+not behave like the profile it was given — in the panel, that the bottom edge is not
+within four centimetres of half the curtain travel after being sent there; measure it
+on its own with path C, which the verification screen offers directly. On a shutter measured with path A it means
 one of the readings was taken from a different reference point — measure every
 centimetre from where the bottom edge rests when the shutter is closed, not from
 the floor or a sill when those differ — or that the shutter needs the thorough

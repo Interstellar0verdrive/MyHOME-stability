@@ -1012,10 +1012,10 @@ and `check.gap_cm` (the number the threshold decides on, to 0.1 cm).
 | `placeholders` | object | the values the step's texts substitute, under the **dialog's placeholder names** (`cover`, `percent`, `expected`, `run`, `deviation`, …), as raw numbers and strings: the panel formats them in the user's language |
 | `movement` | object \| null | what the session is moving: `{kind, direction, progress_action, started_at, planned_s}`. `kind` is `homing` (to an end stop), `free` (a timed run the user ends, the lift-off run while its stop goes out included) or `fraction` (a run to a fraction of the travel); `progress_action` is the dialog's `options.progress.<action>` key for it; `started_at` is the motion anchor — the actuator's echo, or the frame written plus its start delay for an actuator that sends none — and `null` while the motor is starting; `planned_s` is the modelled duration, for a progress bar only. `null` when nothing of the session's is moving |
 | `press` | object \| null | in `awaiting_endpoint`: `{kind, expires_at}`, `kind` being `lift_off` or `end_stop`. Past `expires_at` (90 s after the motor echoed) the backend moves to `problem_timeout` by itself |
-| `reading` | object \| null | in `awaiting_reading` after a run to a fraction: `{direction, fraction, from_end_stop, expected_cm, tolerance_cm}` — where the model expects the bar and how far off is still normal (4 cm with a fitted model, 15 cm without). `null` for the travel and the lift-off gap |
+| `reading` | object \| null | in `awaiting_reading` after a run to a fraction: `{direction, fraction, from_end_stop, expected_cm, tolerance_cm}` — where the bar is expected and how far off is still normal (4 cm with a fitted model, 15 cm without). `fraction` is the fraction of the **configured** run the motor was given; `expected_cm` is what the model predicts for it, except on path B's check, where it is half the curtain travel (§12.2b). `null` for the travel and the lift-off gap |
 | `measured` | object | what has been measured so far (§12.4). Emptied once the session has ended without saving: provisional values are discarded |
 | `fit` | object \| null | `{opening, closing}`, each `{run_time_s, slat_time_s, roll, time_scale, points: [{motor_s, measured_cm, residual_cm}]}`, once both directions have a reading. `residual_cm` is model minus tape, and `null` for a direction fitted through a single point, which reproduces itself exactly and has nothing left over to be a residual |
-| `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. In path B, `threshold_cm` is the fixed 4 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check |
+| `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. `predicted_cm` is where the bottom edge was expected and `gap_cm` is `\|measured − predicted\|` to 0.1 cm; **the two checks expect it from different places** (§12.2b). In path B, `threshold_cm` is the fixed 4 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check |
 | `review` | object \| null | in `review` (and kept in `saved`): §12.5 |
 | `problem` | object \| null | `{code}` on a `problem_<code>` step: `no_echo`, `not_delivered`, `not_stopped`, `busy`, `bad_point`, `timeout`, `unknown` — the dialog's — and `interrupted` |
 | `notice` | token \| null | `rehomed` or `reading_stale` (§11.5): something to say about what happened around the step that is not a problem |
@@ -1056,7 +1056,8 @@ into seven languages. `problem_interrupted` is the one step the panel adds.
 | `height` | awaiting_reading | form `height` (20-500 cm) |
 | `height_result` | briefing | `accept_step`, `repeat_measure`, `not_right` |
 | `tape_brief` | briefing | `tape_start` |
-| `half_down`, `half_up`, `quarter_down`, `three_quarter_down`, `quarter_up`, `three_quarter_up`, `verify`, `verify_b` | positioning | — (the homing before a reading) |
+| `half_down`, `half_up`, `quarter_down`, `three_quarter_down`, `quarter_up`, `three_quarter_up`, `verify` | positioning | — (the homing before a reading) |
+| `verify_b` | positioning | — (the homing to the **closed** end stop, §12.2b) |
 | `tape_run` | positioning | — (the run to the fraction) |
 | `measure_descent`, `measure_ascent`, `measure_verify` | awaiting_reading | form `measured_cm` |
 | `tape_result` | briefing | `accept_step`, `repeat_tape`, `tape_not_right` |
@@ -1080,7 +1081,49 @@ fails does not end the session: it lands on `problem_<code>` with `repeat_step`.
 The panel reuses the dialog's texts (`options.step.<step>`) for every step that has
 them **except the four summaries**, which speak of closing the dialog and of *Configure →
 Calibrations*; the list is `SESSION_REUSED_STEPS`. Positioning steps have no step text:
-their screen is `options.progress.<movement.progress_action>`.
+their screen is `options.progress.<movement.progress_action>`. Path B's three check
+screens are the one further exception, for the reason §12.2b gives.
+
+### 12.2b The two verifications, and what each of them expects
+
+There are two checks in the flow, they ask different questions, and `path` is what tells
+them apart. **Contract amendment of 20 September (lot W3).** Nothing was added to the
+snapshot and no key was removed; `predicted_cm`, `reading.expected_cm` and the direction
+of `verify_b` changed what they are computed from, and this section is where that is
+written down.
+
+| | the thorough calibration's check (`verify`) | **path B's check (`verify_b`)** |
+|---|---|---|
+| when | at the end of a thorough calibration, on any path | offered after the curtain travel on path B |
+| the run | down from the **open** end stop, 40 % of the configured closing curtain time | up from the **closed** end stop, to **half the curtain travel** |
+| `reading.fraction` / `check.fraction` | 0.40 | whatever fraction of the configured run the model needed to get there — around 0.55–0.62 on a real shutter, and **never** the 0.5 the screens name |
+| `predicted_cm`, `reading.expected_cm` | what the fit just made predicts for the seconds the motor really ran | `travel_cm / 2` |
+| `gap_cm` | tape minus that prediction | tape minus half the travel |
+| `threshold_cm`, `profile_level`, `profile_check_cm` | `null` | 4 cm, and how the profile was itself measured |
+
+Path B's check reproduces, before anything is saved, the movement the cover will make
+once it follows the profile: it is the same arithmetic a `set_cover_position: 50` uses,
+so the seconds come from the profile scaled to this window and are turned back into a
+fraction of the run the cover is **configured** with today, which is what the run
+primitive counts in. Two consequences the panel depends on:
+
+* **the expectation is a fact about the window, not an output of the model in doubt.**
+  On a 198 cm shutter it is 99 cm, which the person holding the tape can check without
+  believing anything. The check it replaced compared two outputs of the same model, so
+  a wrong model moved the expectation *and* the stopping point together and part of the
+  error cancelled itself out;
+* **it is made going up, from the closed end stop.** That is where an inherited profile
+  is most wrong — the slat phase and the opening roll — and a check made only on the way
+  down does not touch either. Measured on 20 September: descending, 3.5 cm and a pass;
+  ascending to half the travel, about 9 cm on the same window, twice the threshold.
+
+`percent` in `placeholders` is therefore the percentage **of the travel** (50) and not
+`fraction × 100`, so that `options.progress.running_up` — "run up to about {percent}% of
+its travel" — says something true. The panel does not reuse the dialog's texts on
+`verify_offer`, `measure_verify` and `verify_result` when `path` is `path_b`: those
+sentences describe the dialog's own check, which still runs half the closing time
+downwards and is unchanged. The divergence is deliberate and is written up in
+`docs/guided-calibration.md`.
 
 ### 12.3 `form`
 
@@ -1392,6 +1435,11 @@ reordering of the tape readings. "Repeat this step" is a first-class transition
 tolerance (`reading`); the fit returns the residual at each point (`fit`); the check
 returns the predicted position, the measured one and the gap (`check`).
 
+**The one place the session is not the dialog's conversation** is path B's check
+(§12.2b): the dialog runs half the closing curtain time down from the top, the session
+takes the shutter up to half its travel and expects the tape to read half the travel.
+The dialog is unchanged, and `calibration_flow.py` is not touched by it.
+
 **Writes (§2.7).** Save is explicit, atomic and refused against a stale revision. Of
 the three exits, *save as a new profile and assign* and *keep these values for this
 cover only* are the two `target`s of path A; *update the profile this cover follows* is
@@ -1415,6 +1463,11 @@ its meaning exactly.
 * **Per-key provenance** in the store (`overrides.<key>.source`): a migration of the
   store, not of the session; the record keeps its record-level `source` and
   `measured_at`.
+* **A second check on the way down** after path B's: the check is made going up, where
+  an inherited profile is most wrong, and a descending one on top of it would add a
+  minute and a screen to a route the maintainer has already called too long (live
+  finding 28) to catch strictly less. Backlog, with a step id, a plan stage and an
+  action of its own, which is a contract amendment on all four artefacts.
 * **Path B's threshold read against the profile's own accuracy**: the threshold stays a
   fixed number, **4 cm** since 20 September — what the panel's own screens promise a
   basic calibration ends up within, so that the check cannot contradict the sentence

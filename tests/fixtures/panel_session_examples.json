@@ -2643,10 +2643,10 @@
       },
       "movement": {
         "kind": "homing",
-        "direction": "open",
-        "progress_action": "homing_open",
+        "direction": "close",
+        "progress_action": "homing_closed",
         "started_at": "2026-09-18T10:00:25+00:00",
-        "planned_s": 17.851745131422387
+        "planned_s": 17.366414659284736
       },
       "press": null,
       "reading": null,
@@ -2678,7 +2678,7 @@
     "awaiting_reading_measure_verify": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 8,
+      "revision": 9,
       "server_time": "2026-09-18T10:00:25+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2716,17 +2716,17 @@
       "placeholders": {
         "cover": "Landing Shutter",
         "percent": 50,
-        "direction": "close",
-        "expected": 67.22858238297131,
+        "direction": "open",
+        "expected": 75.5,
         "tolerance": 4.0
       },
       "movement": null,
       "press": null,
       "reading": {
-        "direction": "close",
-        "fraction": 0.5,
-        "from_end_stop": "open",
-        "expected_cm": 67.22858238297131,
+        "direction": "open",
+        "fraction": 0.5820290651319239,
+        "from_end_stop": "closed",
+        "expected_cm": 75.5,
         "tolerance_cm": 4.0
       },
       "measured": {
@@ -2757,7 +2757,7 @@
     "checking_verify_result_within": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 9,
+      "revision": 10,
       "server_time": "2026-09-18T10:00:27.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2805,9 +2805,9 @@
       },
       "fit": null,
       "check": {
-        "fraction": 0.5,
-        "predicted_cm": 50.3334968319457,
-        "measured_cm": 50.3,
+        "fraction": 0.5820290651319239,
+        "predicted_cm": 75.5,
+        "measured_cm": 75.5,
         "gap_cm": 0.0,
         "threshold_cm": 4.0,
         "profile_level": null,
@@ -2828,7 +2828,7 @@
     "checking_verify_result_offers_c": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 9,
+      "revision": 10,
       "server_time": "2026-09-18T10:00:42.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2877,9 +2877,9 @@
       },
       "fit": null,
       "check": {
-        "fraction": 0.5,
-        "predicted_cm": 50.3334968319457,
-        "measured_cm": 54.6,
+        "fraction": 0.5820290651319239,
+        "predicted_cm": 75.5,
+        "measured_cm": 79.8,
         "gap_cm": 4.3,
         "threshold_cm": 4.0,
         "profile_level": null,

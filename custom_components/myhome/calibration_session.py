@@ -77,6 +77,7 @@ from .calibration import (
     DirectionFit,
     RunReport,
     predict_cm,
+    roll_tau,
     slat_time_from_press,
     timing_from_presses,
     timing_with_slat,
@@ -120,7 +121,6 @@ from .calibration_flow import (
     THREE_QUARTER_RUN,
     TOUCHING_CM,
     VERIFY_RUN,
-    VERIFY_RUN_PROFILE,
     order_the_readings,
     parse_number,
 )
@@ -374,7 +374,10 @@ PRESS_STEPS: dict[str, str] = {
 
 # The readings of the tape phase, as (direction, fraction, the step that asks for the
 # tape). `half_down` and `half_up` are path A's; the other four are the thorough
-# calibration's and the two verifications ask a model rather than feed one.
+# calibration's and the verification of the thorough level asks a model rather than
+# feeds one. `verify_b` is **not** here: its run is not a fixed fraction of a time but
+# whatever the model being checked says half the travel is, so it is worked out when the
+# stage is entered (`_async_stage_verify_b`, and the divergence of lot W3 below).
 FRACTION_STAGES: dict[str, tuple[str, float, str]] = {
     "half_down": (DIRECTION_CLOSE, HALF_RUN, "measure_descent"),
     "half_up": (DIRECTION_OPEN, HALF_RUN, "measure_ascent"),
@@ -383,8 +386,75 @@ FRACTION_STAGES: dict[str, tuple[str, float, str]] = {
     "quarter_up": (DIRECTION_OPEN, QUARTER_RUN, "measure_ascent"),
     "three_quarter_up": (DIRECTION_OPEN, THREE_QUARTER_RUN, "measure_ascent"),
     "verify": (DIRECTION_CLOSE, VERIFY_RUN, "measure_verify"),
-    "verify_b": (DIRECTION_CLOSE, VERIFY_RUN_PROFILE, "measure_verify"),
 }
+
+# ------------------------------------------------- path B's check (lot W3, 20 September)
+# **The panel's check of a profile is half the TRAVEL, and the dialog's is half a time.**
+# The two conversations part company here on purpose, and this is the whole of it.
+#
+# The dialog sends the shutter down for `VERIFY_RUN_PROFILE` - half of the *closing time*
+# - and compares the tape against what the profile predicts for the seconds the motor
+# really ran. That number is right and unreadable: on a 198 cm window it expects 76,5 cm,
+# a figure the user can neither guess nor check, while the screen said "50 % of the
+# travel" and meant something else (live finding 33).
+#
+# Here the shutter is sent where a `set_cover_position: 50` would send it once the profile
+# is saved, and the expectation is **half the curtain travel** - 99 cm on 198 - which is
+# the one number a person standing at the window can verify in their head. `x` is the
+# fraction of the travel measured from the top, so half the travel is `x = 0.5`, exactly
+# what `MyHOMECover._curtain_tau` computes for position 50 (`cover.py`:1385).
+HALF_TRAVEL_X = 0.5
+# ...and **upwards, from the closed end stop**. The live test of 20 September measured a
+# 198 cm window that had inherited a 110 cm window's profile: the descending check came
+# out 3,5 cm out and said "fine", while `set_cover_position: 50` from closed put the
+# bottom edge at 107 cm instead of 99 - eight centimetres. The slat phase and the opening
+# roll are where an inherited profile is most wrong, and a check made only on the way down
+# does not touch either of them.
+VERIFY_DIRECTION = DIRECTION_OPEN
+
+
+def half_travel_seconds(direction: str, model: Mapping[str, float]) -> float:
+    """Motor seconds a `set_cover_position: 50` spends on `model`, from the far end stop.
+
+    The inverse of `calibration_descent_cm` / `calibration_ascent_cm` at half the travel,
+    which is `roll_tau` (`calibration.py`) read with the direction's own roll: descending,
+    every second is curtain time; ascending, the first `slat_time` seconds only turn the
+    slats and the curtain rises for the rest, so the run is the slat phase plus the
+    complement of the descent to the same point.
+    """
+    slat = model[CONF_SLAT_TIME]
+    if direction == DIRECTION_OPEN:
+        curtain = max(0.0, model[CONF_OPENING_TIME] - slat)
+        return slat + curtain * (1.0 - roll_tau(model[CONF_OPENING_ROLL], HALF_TRAVEL_X))
+    curtain = max(0.0, model[CONF_CLOSING_TIME] - slat)
+    return curtain * roll_tau(model[CONF_CLOSING_ROLL], HALF_TRAVEL_X)
+
+
+def fraction_of_the_run(
+    direction: str, values: Mapping[str, float], seconds: float
+) -> float | None:
+    """The `fraction` `async_calib_run_fraction` needs to spend `seconds` of motor.
+
+    The primitive is parameterised by a fraction of the CURTAIN time the *entity* is
+    configured with (`calibration_run_seconds`, `cover.py`:576) - and on path B the model
+    being checked is a profile the cover does not follow yet, whose seconds are not the
+    entity's. So the seconds are worked out on the model and turned back into a fraction
+    of the run here, which is the only way the check can reproduce the movement the cover
+    will make once the profile is saved.
+
+    `None` when this cover cannot make that run at all: a curtain time of nothing to run
+    in, or a model that wants more time than a whole run of this cover has. Inventing a
+    clamped run would be answering a different question with the same screen.
+    """
+    slat = values[CONF_SLAT_TIME]
+    full = values[CONF_OPENING_TIME] if direction == DIRECTION_OPEN else values[CONF_CLOSING_TIME]
+    curtain = full - slat
+    if curtain <= 0.0:
+        return None
+    fraction = (seconds - slat) / curtain if direction == DIRECTION_OPEN else seconds / curtain
+    if not 0.0 < fraction <= 1.0:
+        return None
+    return fraction
 
 # The plans, by the path (and scope) that installs them. Imported from the dialog and
 # never rewritten: a stage added there is a stage here.
@@ -738,6 +808,10 @@ class CalibrationSession:
         self._external_move = False
         self._tape_target: str | None = None
         self._pending: tuple[str, float] | None = None
+        # True while the run on the screen is path B's check (lot W3): the shutter was
+        # sent to half the TRAVEL rather than through a fraction of a run time, so the
+        # expectation is half the travel and the sentences name 50 % of the travel.
+        self._half_travel = False
         self._after_the_run = "measure_descent"
         self._report: RunReport | None = None
         self._motor_start: datetime | None = None
@@ -1631,9 +1705,7 @@ class CalibrationSession:
             LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
             self._show_problem("bad_point")
             return
-        gap = measure.deviation(
-            measured_cm, report=self._report, height=self._measured.height, model=model
-        )
+        gap = self._gap_of_the_check(measured_cm, model)
         _direction, fraction = self._pending or (DIRECTION_CLOSE, VERIFY_RUN)
         self._measured.deviation = gap
         self._measured.verify_fraction = fraction
@@ -1642,17 +1714,51 @@ class CalibrationSession:
         self._show("verify_result")
 
     @callback
+    def _gap_of_the_check(
+        self, measured_cm: float, model: Mapping[str, float] | None
+    ) -> float | None:
+        """How far the tape is from where the bottom edge was supposed to be.
+
+        Path B's check expects **half the curtain travel** (lot W3): that is where the
+        run was aimed, and it is a number the user can verify in their head, so the gap
+        is the tape minus half the travel and the model is asked nothing further. The
+        thorough calibration's own check is the dialog's: one question put to the fit it
+        has just made, at a fraction nothing was fitted to (`measure.deviation`).
+
+        Either way, a model that went away under the conversation leaves no gap at all
+        rather than a gap of zero: the run was made on a model that is no longer there,
+        and the screen says so instead of reporting a shutter that is perfect.
+        """
+        height = self._measured.height
+        if model is None or not height:
+            return None
+        if self._half_travel:
+            return measured_cm - height * HALF_TRAVEL_X
+        return measure.deviation(
+            measured_cm, report=self._report, height=height, model=model
+        )
+
+    @callback
     def _the_check(
         self, measured_cm: float, fraction: float, gap: float | None
     ) -> dict[str, Any]:
         """The verification as the contract publishes it (§12, `check`).
 
-        Where the model said the bar would be, where it really was, how far apart the
-        two are - and, when it is a profile that is being questioned, the threshold
-        above which the correction is offered together with how well that profile was
-        itself measured. The last two are what makes 4 cm readable: the same gap means
-        nothing on a profile measured at the basic level and something on one that went
-        through its own check (contract §2.5, SPEC decision 20, amended 20 September).
+        Where the bottom edge was expected, where it really was, how far apart the two
+        are - and, when it is a profile that is being questioned, the threshold above
+        which the correction is offered together with how well that profile was itself
+        measured. The last two are what makes 4 cm readable: the same gap means nothing
+        on a profile measured at the basic level and something on one that went through
+        its own check (contract §2.5, SPEC decision 20, amended 20 September).
+
+        `predicted_cm` is the expectation, and where it comes from depends on which
+        check this is: on path B it is **half the curtain travel**, because that is
+        where the run was aimed (lot W3); on the thorough calibration's own check it is
+        what the fit predicts for the seconds the motor really ran. It stays
+        `measured_cm - gap` in both, because that is how the gap was made and two
+        subtractions for one number are one too many. `fraction` is the fraction of the
+        configured run the motor was given, which on path B is what the model worked out
+        for half the travel and is not the 50 % the sentences name.
         """
         level: str | None = None
         checked: float | None = None
@@ -1798,14 +1904,72 @@ class CalibrationSession:
             return
         self._show(f"summary_{self._review['variant']}")  # type: ignore[index]
 
-    async def _async_fraction_stage(self, step: str) -> None:
+    async def _async_stage_verify_b(self) -> None:
+        """Path B's check: half the travel, going up from the closed end stop (lot W3).
+
+        Not one of `FRACTION_STAGES` because the run is not a fixed fraction of a time:
+        it is however long the model being checked needs to put the bottom edge at half
+        the curtain travel, which depends on that model's roll and slat phase. Worked
+        out here, when the stage is entered, so that the shutter goes where a
+        `set_cover_position: 50` will send it once the profile is saved - and so the
+        expectation the user checks with the tape is half the travel.
+
+        A model that cannot be built, or a run this cover cannot make, is
+        `problem_bad_point`: the dialog's own screen for a measurement that cannot be
+        made, with the step on offer again.
+        """
+        fraction = self._half_travel_fraction()
+        if fraction is None:
+            self._show_problem("bad_point")
+            return
+        await self._async_fraction_stage(
+            "verify_b", run=(VERIFY_DIRECTION, fraction, "measure_verify")
+        )
+
+    @callback
+    def _half_travel_fraction(self) -> float | None:
+        """The run that puts the bottom edge at half the travel, on the model being checked.
+
+        Two models, and they are not the same one: `model_values` is what the check is
+        *about* (path B's profile, scaled to this window - and what the cover will move
+        on once path B's save supersedes its own keys), while `_model_now` is what the
+        cover is configured with **today**, which is what the primitive counts its
+        fraction against. The seconds come from the first and the fraction from the
+        second, or the run would only be right on a cover that already followed the
+        profile it is being asked about.
+        """
+        try:
+            model = measure.model_values(
+                path=self._path or PATH_FIRST,
+                measured=self._measured,
+                profiles=self.profiles,
+                profile=self._profile,
+            )
+        except CalibrationError as err:  # pragma: no cover - path B derives, it does not fit
+            LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
+            return None
+        if model is None or not self._measured.height:
+            return None
+        return fraction_of_the_run(
+            VERIFY_DIRECTION, self._model_now(), half_travel_seconds(VERIFY_DIRECTION, model)
+        )
+
+    async def _async_fraction_stage(
+        self, step: str, *, run: tuple[str, float, str] | None = None
+    ) -> None:
         """One reading's two movements: to an end stop, then to the percentage.
 
         Two screens rather than one because they are two different things to watch,
         and because that is what the dialog does (`_async_fraction_stage`): the run to
         the percentage is `tape_run`, entered when the homing is over.
+
+        `run` is the (direction, fraction, reading) of a stage whose run is not in the
+        table because it is computed: path B's check, and only it.
         """
-        direction, fraction, done = FRACTION_STAGES[step]
+        direction, fraction, done = run or FRACTION_STAGES[step]
+        # ...and whether the number the sentences name is a fraction of the travel or a
+        # fraction of a run time. Only `verify_b` is the former (lot W3).
+        self._half_travel = step == "verify_b"
         self._pending = (direction, fraction)
         self._after_the_run = done
         # ...and no reading of this stage has been sent yet. Without this,
@@ -2944,6 +3108,11 @@ class CalibrationSession:
         height = self._measured.height
         if not height:
             return None, ROUGH_TOLERANCE_CM
+        if self._half_travel:
+            # The run was aimed at half the travel, so that is what is expected there -
+            # and it is the one expectation on any of these screens that the person
+            # holding the tape can check without believing anything (lot W3).
+            return height * HALF_TRAVEL_X, EXPECTED_TOLERANCE_CM
         try:
             model = measure.model_values(
                 path=self._path or PATH_FIRST,
@@ -2993,7 +3162,7 @@ class CalibrationSession:
             direction, fraction = self._pending or (DIRECTION_CLOSE, HALF_RUN)
             expected, tolerance = self._expected()
             values.update(
-                percent=round(fraction * 100),
+                percent=self._percent_shown(fraction),
                 direction=direction,
                 expected=expected,
                 tolerance=tolerance,
@@ -3015,8 +3184,20 @@ class CalibrationSession:
             values["replaced"] = "yes" if self._measured_name in self.profiles else ""
         if self._movement is not None and self._movement.kind == "fraction":
             _direction, fraction = self._pending or (DIRECTION_CLOSE, HALF_RUN)
-            values["percent"] = round(fraction * 100)
+            values["percent"] = self._percent_shown(fraction)
         return values
+
+    @callback
+    def _percent_shown(self, fraction: float) -> int:
+        """The percentage the sentences name: of the TRAVEL, not of the run's time.
+
+        The two coincide on every reading of the tape phase, where the run is a fraction
+        of the curtain time and the sentence says so. They do not on path B's check,
+        which is aimed at half the travel and gets there in whatever fraction of the run
+        the model needs: "run up to about 59 % of its travel" would be the fraction of
+        the *time*, and the one sentence the user could catch us out on (lot W3).
+        """
+        return round((HALF_TRAVEL_X if self._half_travel else fraction) * 100)
 
 
 # ------------------------------------------------------------------- small helpers
