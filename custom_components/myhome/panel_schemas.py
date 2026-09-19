@@ -10,7 +10,9 @@ in prose with a worked example beside it. A change to either is a change to both
 shutter, the sentences, and what an assignment nobody has made yet would come to - and
 its first three are **frozen**: lot 3 added to this file and changed nothing in it. The
 write half is the nine commands below it plus `subscribe`, and every one of them answers
-with an `overview` of exactly the shape the read half declares.
+with an `overview` of exactly the shape the read half declares. The third part is the
+guided calibration's session (0.6.0 wizard, lot L0): ten commands, one event and the
+snapshot they all carry, declared at the bottom of this file before any of them exists.
 
 **Two names resolved against the plan.**
 
@@ -31,6 +33,8 @@ backend, because the language is the *user's* and a WebSocket answer has no user
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.helpers.typing import VolDictType
@@ -518,7 +522,14 @@ UNDO_KEYS: tuple[str, ...] = (*WRITE_KEYS, "undone")
 # (decision 4). There is no window to be honest about.
 WS_EVENT_OVERVIEW = "overview"
 WS_EVENT_MEASURING = "measuring"
-WS_EVENT_TYPES: tuple[str, ...] = (WS_EVENT_OVERVIEW, WS_EVENT_MEASURING)
+# ...and, from the calibration session on (0.6.0 wizard), `session`: the whole snapshot of
+# the gateway's session, or `null`, on subscribing and after every transition. It is on
+# the same subscription rather than a second one because the panel already has one
+# subscription that survives reconnections, and two would be two things to keep alive.
+# Declared here with the rest of the session contract (lot L0); the server sends it from
+# lot B3.
+WS_EVENT_SESSION = "session"
+WS_EVENT_TYPES: tuple[str, ...] = (WS_EVENT_OVERVIEW, WS_EVENT_MEASURING, WS_EVENT_SESSION)
 
 
 TEXTS_KEYS: tuple[str, ...] = (
@@ -534,10 +545,733 @@ TEXTS_KEYS: tuple[str, ...] = (
 )
 
 
+# ============================================================ the calibration session
+# 0.6.0 wizard, lot L0: the guided calibration moves into the panel, and this block is
+# the whole of what the panel and the backend say to each other about it - frozen before
+# either half is written, like the blocks above. `docs/panel-websocket-api.md` §11-§14
+# says the same in prose, `panel_src/src/engine/session-contract.ts` restates it as
+# TypeScript types, and `tests/fixtures/panel_session_examples.json` shows it: a change
+# to one is a change to all four, in one commit that says it is a contract amendment.
+#
+# Two vocabularies meet here, on purpose (SPEC-0.6.0-wizard §3.4, §3.11):
+#
+# * **At the boundary** - `state`, the verbs, the names of measured values - the words
+#   are the published contract's (`docs/calibration-contract-proposal.md` Part 2):
+#   `awaiting_endpoint`, `travel_cm`, `opening_time_s`, `stop`/`leave`/`cancel`.
+# * **Screen identity and text** - `step`, `actions`, `form.field`, `placeholders`,
+#   `movement.progress_action` - are the guided dialog's own ids, because they are the
+#   keys of `options.step.<step>` / `options.progress.<action>`, sentences already
+#   translated into seven languages that the panel reuses instead of rewriting.
+#
+# None of the commands below is registered yet (lot B3 registers them), so they are in
+# a tuple of their own and not in `WS_READ_COMMANDS` / `WS_WRITE_COMMANDS`, which the
+# door tests compare with the commands really on the socket.
+WS_TYPE_SESSION_GET = "myhome/calibration/session/get"
+WS_TYPE_SESSION_START = "myhome/calibration/session/start"
+WS_TYPE_SESSION_ATTACH = "myhome/calibration/session/attach"
+WS_TYPE_SESSION_HEARTBEAT = "myhome/calibration/session/heartbeat"
+WS_TYPE_SESSION_ACT = "myhome/calibration/session/act"
+WS_TYPE_SESSION_STOP = "myhome/calibration/session/stop"
+WS_TYPE_SESSION_LEAVE = "myhome/calibration/session/leave"
+WS_TYPE_SESSION_CANCEL = "myhome/calibration/session/cancel"
+WS_TYPE_SESSION_SAVE = "myhome/calibration/session/save"
+WS_TYPE_SESSION_END_OTHER = "myhome/calibration/session/end_other"
+
+WS_SESSION_COMMANDS: tuple[str, ...] = (
+    WS_TYPE_SESSION_GET,
+    WS_TYPE_SESSION_START,
+    WS_TYPE_SESSION_ATTACH,
+    WS_TYPE_SESSION_HEARTBEAT,
+    WS_TYPE_SESSION_ACT,
+    WS_TYPE_SESSION_STOP,
+    WS_TYPE_SESSION_LEAVE,
+    WS_TYPE_SESSION_CANCEL,
+    WS_TYPE_SESSION_SAVE,
+    WS_TYPE_SESSION_END_OTHER,
+)
+
+# --------------------------------------------------------------- the vocabularies
+# The contract's states (§2.2), plus the terminal `ended` it leaves implicit. `idle` is
+# not one of them: no session is `session: null`, not a snapshot saying "nothing". Nor
+# is `fitting`: the fit runs synchronously between two transitions, and the contract
+# asks that what a backend does not produce be absent rather than empty.
+SESSION_STATES: tuple[str, ...] = (
+    "armed",
+    "briefing",
+    "running",
+    "positioning",
+    "awaiting_reading",
+    "checking",
+    "review",
+    "saved",
+    "ended",
+)
+# Only `running` has one, and always one of these once the motor has echoed; before the
+# echo (`open_start`, `open_full_start`, `close_start`) it is `null`.
+SESSION_SUBSTATES: tuple[str, ...] = ("awaiting_endpoint", "awaiting_stop")
+
+# Why a session is over: `outcome.reason`. `saved` goes with `state: "saved"`, every
+# other one with `state: "ended"`.
+SESSION_OUTCOMES: tuple[str, ...] = (
+    "saved",
+    "cancelled",
+    "expired",
+    "unloaded",
+    "left",
+    "cover_gone",
+)
+
+# `problem.code`: the dialog's `PROBLEM_REASONS`, in its order, plus the one the panel
+# adds - a step whose measurement was spoiled by a stop or by a movement nobody in the
+# session commanded (SPEC §3.5, §3.7). The step is `problem_<code>` for every one.
+SESSION_PROBLEMS: tuple[str, ...] = (
+    "no_echo",
+    "not_delivered",
+    "not_stopped",
+    "busy",
+    "bad_point",
+    "timeout",
+    "unknown",
+    "interrupted",
+)
+
+# The dialog's own values, spelled as the dialog spells them (`calibration_flow.PATH_*`,
+# the `refine_scope` menu).
+SESSION_PATHS: tuple[str, ...] = ("path_a", "path_b", "path_c")
+SESSION_SCOPES: tuple[str, ...] = ("times_only", "times_and_rolls", "points_only")
+# The contract's two levels (§2.4). The dialog's texts and the stored `raw` block say
+# "precise" for the second; the boundary says what the contract says.
+SESSION_LEVELS: tuple[str, ...] = ("basic", "thorough")
+SESSION_SAVE_TARGETS: tuple[str, ...] = ("profile", "cover_only")
+# `review.variant`, which is the `summary_<variant>` step the review stands on.
+SESSION_REVIEW_VARIANTS: tuple[str, ...] = ("basic", "short", "correction", "precise")
+# `position_known`: the end stop the session last saw the shutter reach, `null` when it
+# is anywhere else or when something outside the session has moved it since.
+SESSION_POSITIONS: tuple[str, ...] = ("closed", "open")
+# `movement.direction`, `reading.direction`: `const.DIRECTION_OPEN` / `DIRECTION_CLOSE`.
+SESSION_DIRECTIONS: tuple[str, ...] = ("open", "close")
+# `movement.kind`: to an end stop, a free run the user ends with a press (the lift-off
+# run while its stop goes out included), and a run to a fraction of the travel.
+SESSION_MOVEMENT_KINDS: tuple[str, ...] = ("homing", "free", "fraction")
+# `movement.progress_action`: the key of the sentence the screen shows while that
+# movement runs (`options.progress.<action>`), which is the dialog's own. Frozen as a
+# vocabulary and not merely as "a string", so that the panel can map every one of them
+# onto a screen and know the list is complete.
+SESSION_PROGRESS_ACTIONS: tuple[str, ...] = (
+    "homing_closed",
+    "homing_open",
+    "starting_open",
+    "starting_close",
+    "running_down",
+    "running_up",
+    "stopping_lift",
+    "starting_open_full",
+)
+# `press.kind`: the instant the bottom edge leaves its rest, or the motor at an end stop.
+SESSION_PRESS_KINDS: tuple[str, ...] = ("lift_off", "end_stop")
+# `form.field` (the dialog's field names), `form.kind`, and `form.error` (the dialog's
+# `options.error.*` keys, which are the contract's `bad_reading` in detail).
+SESSION_FORM_FIELDS: tuple[str, ...] = ("profile", "height", "measured_cm", "gap_cm", "name")
+SESSION_FORM_KINDS: tuple[str, ...] = ("number", "choice", "text")
+# `form.unit`: the one unit any field of this conversation carries, or `null` for a name.
+SESSION_FORM_UNITS: tuple[str, ...] = ("cm",)
+SESSION_FORM_ERRORS: tuple[str, ...] = (
+    "not_a_number",
+    "out_of_range",
+    "above_the_travel",
+    "invalid_name",
+)
+# `notice`: something the screen has to say about what happened *around* the step,
+# which is not a problem - nothing was lost. `rehomed`: the shutter had been moved from
+# outside and the session brought it back to its end stop before timing anything.
+# `reading_stale`: it was moved after it was positioned, so the reading on the screen
+# would not be the reading of this step (SPEC §3.7).
+SESSION_NOTICES: tuple[str, ...] = ("rehomed", "reading_stale")
+# `already_calibrating`'s `{by}`: a live session of the panel's, anything else that holds
+# the shutter (the dialog, the 0.4.2 service), or the gateway still reserved by a session
+# that has already ended while its shutter ran on (§11.6 of the document). The third is
+# not a session anybody can go back to, and the screen may not offer to resume it.
+SESSION_HOLDERS: tuple[str, ...] = ("panel", "other", "reserved")
+
+# Every step a snapshot can stand on (SPEC §3.4), under the dialog's own ids - the name
+# of its `async_step_<id>` method, and of its `options.step.<id>` texts where it has
+# any. `problem_interrupted` is the one step the dialog does not have. `saved` and
+# `ended` have no step (`step: null`): their screens are the panel's own.
+SESSION_STEPS: tuple[str, ...] = (
+    # choosing
+    "path",
+    "path_a",
+    "path_b",
+    "path_c",
+    "refine_scope",
+    # the first homing
+    "home_closed",
+    "home_closed_done",
+    # the ascent: two runs, two presses
+    "open_timed",
+    "open_brief",
+    "open_start",
+    "open_lift",
+    "lift_stop",
+    "lift_check",
+    "lift_check_late",
+    "lift_gap",
+    "lift_early",
+    "open_home_again",
+    "closed_again",
+    "open_full_brief",
+    "open_full_start",
+    "open_top",
+    "open_result",
+    "open_result_gap",
+    # the curtain travel
+    "height_read",
+    "height",
+    "height_result",
+    # the descent
+    "close_timed",
+    "close_brief",
+    "close_start",
+    "close_bottom",
+    "close_result",
+    # the tape phase
+    "tape_brief",
+    "half_down",
+    "half_up",
+    "quarter_down",
+    "three_quarter_down",
+    "quarter_up",
+    "three_quarter_up",
+    "verify",
+    "verify_b",
+    "tape_run",
+    "measure_descent",
+    "measure_ascent",
+    "tape_result",
+    "measure_verify",
+    "verify_result",
+    "verify_offer",
+    # the end
+    "profile_name",
+    "summary_basic",
+    "summary_short",
+    "summary_correction",
+    "summary_precise",
+    # what went wrong
+    "problem_no_echo",
+    "problem_not_delivered",
+    "problem_not_stopped",
+    "problem_busy",
+    "problem_bad_point",
+    "problem_timeout",
+    "problem_unknown",
+    "problem_interrupted",
+)
+
+# The steps whose `options.step.<step>` texts the panel shows as they are, in every
+# language they are translated into (SPEC §5.5): every step above that has texts of its
+# own, except the four summaries - which speak of closing the dialog and of
+# "Configura -> Calibrazioni" - and `problem_interrupted`, which has none. The positioning
+# stages are absent because they have no step text: their screen is
+# `options.progress.<movement.progress_action>`. A test holds every step here to having
+# its texts and to naming no dialog.
+SESSION_REUSED_STEPS: tuple[str, ...] = (
+    "path",
+    "path_a",
+    "path_b",
+    "path_c",
+    "refine_scope",
+    "home_closed_done",
+    "open_brief",
+    "open_lift",
+    "lift_check",
+    "lift_check_late",
+    "lift_gap",
+    "lift_early",
+    "closed_again",
+    "open_full_brief",
+    "open_top",
+    "open_result",
+    "open_result_gap",
+    "height",
+    "height_result",
+    "close_brief",
+    "close_bottom",
+    "close_result",
+    "tape_brief",
+    "measure_descent",
+    "measure_ascent",
+    "tape_result",
+    "measure_verify",
+    "verify_result",
+    "verify_offer",
+    "profile_name",
+    "problem_no_echo",
+    "problem_not_delivered",
+    "problem_not_stopped",
+    "problem_busy",
+    "problem_bad_point",
+    "problem_timeout",
+    "problem_unknown",
+)
+
+# What `plan` may contain: the dialog's plan stages (`calibration_flow.PLAN_*`), which
+# are step ids plus `summary`, the stage the dialog resolves to one of the four
+# `summary_<variant>` steps when it gets there.
+SESSION_PLAN_STAGES: tuple[str, ...] = (
+    "home_closed",
+    "open_timed",
+    "height_read",
+    "close_timed",
+    "tape_brief",
+    "half_down",
+    "half_up",
+    "quarter_down",
+    "three_quarter_down",
+    "quarter_up",
+    "three_quarter_up",
+    "verify",
+    "verify_b",
+    "verify_offer",
+    "profile_name",
+    "summary",
+)
+
+# Every value `actions` can carry: the dialog's `menu_options` ids, each one a key of
+# `options.step.<step>.menu_options` - which is where its label comes from. `actions` is
+# a list of ways *forward* only: the dialog's two ways out are commands of their own, and
+# neither is ever in it.
+#
+# * `save` is the `save` command, and the exits it offers are `review.targets`;
+# * `cancel_flow` is the `cancel` verb. It is deliberately not an `act`, because `act`
+#   carries a `revision` and is refused against a stale one - and a transition the user
+#   did not cause (a press timing out, a rehoming) would then be able to refuse the
+#   button that says "Cancel". Cancelling is never refused for concurrency (SPEC §5.2,
+#   "Annulla mai silenzioso"), so it does not travel on a command that could be.
+#
+# `submit` is the one `act` value that is not a menu option: it sends `form`'s value.
+SESSION_ACTIONS: tuple[str, ...] = (
+    "path_a",
+    "path_b",
+    "path_c",
+    "begin",
+    "times_only",
+    "times_and_rolls",
+    "points_only",
+    "confirm_closed",
+    "open_start",
+    "lifted_off",
+    "lift_too_early",
+    "lift_accept",
+    "lift_gap",
+    "confirm_closed_again",
+    "open_full_start",
+    "stopped_open",
+    "accept_step",
+    "repeat_measure",
+    "close_start",
+    "stopped_closed",
+    "tape_start",
+    "repeat_tape",
+    "tape_not_right",
+    "verify_now",
+    "skip_verify",
+    "refine",
+    "repeat_step",
+    "not_right",
+)
+SESSION_SUBMIT = "submit"
+
+# The names of measured values at the boundary (SPEC §3.11), against the names the
+# store, `myhome.yaml` and the fourteen existing commands use for the same thing. Only
+# the new session commands speak the contract's names; renaming the old ones would
+# break the panel already written, and is backlog for the upstream port.
+SESSION_BOUNDARY_NAMES: dict[str, str] = {
+    "height": "travel_cm",
+    "reference_height": "reference_travel_cm",
+    "opening_time": "opening_time_s",
+    "closing_time": "closing_time_s",
+    "slat_time": "slat_time_s",
+    "opening_roll": "opening_roll",
+    "closing_roll": "closing_roll",
+    "stop_latency": "stop_latency_s",
+    "start_delay": "start_delay_s",
+}
+# `review.rows[].key`, in the order the review lists them: the travel, then the five a
+# window can have measured on it. `review.side_effects[].key` is any of the eight.
+SESSION_REVIEW_ROW_KEYS: tuple[str, ...] = (
+    "travel_cm",
+    "opening_time_s",
+    "closing_time_s",
+    "slat_time_s",
+    "opening_roll",
+    "closing_roll",
+)
+SESSION_VALUE_KEYS: tuple[str, ...] = (
+    *SESSION_REVIEW_ROW_KEYS,
+    "stop_latency_s",
+    "start_delay_s",
+)
+
+# What this backend offers (contract §2.5: "a backend that offers less should say so
+# through its capabilities"). Answered by `get`, the same every time.
+SESSION_CAPABILITIES: dict[str, Any] = {
+    "model": "roll_nonlinear",
+    "paths": list(SESSION_PATHS),
+    "levels": list(SESSION_LEVELS),
+    "scopes": list(SESSION_SCOPES),
+    "check": True,
+    "fit_residuals": True,
+    "repeat_step": True,
+    "save_targets": list(SESSION_SAVE_TARGETS),
+    "bulk": False,
+}
+
+# ------------------------------------------------------------------ the payloads
+# `client_id` is made by the panel, one per browser tab (`sessionStorage`), and is what
+# ownership is held by. A UUID fits; so does anything else of that alphabet, which is
+# the point of saying the alphabet rather than "a UUID".
+CLIENT_ID = vol.All(str, vol.Match(r"^[A-Za-z0-9-]{8,64}$"))
+
+
+def _not_a_bool(value: Any) -> Any:
+    """Refuse `true`/`false` where a number is meant: Python counts a bool as an int."""
+    if isinstance(value, bool):
+        raise vol.Invalid("expected a number, not a boolean")
+    return value
+
+
+# The revision the client last read. A number that cannot be one is a malformed frame;
+# a well-formed one that is not the current one is `revision_conflict`.
+REVISION = vol.All(_not_a_bool, int, vol.Range(min=0))
+# `act`'s value: the text typed in a field (a number stays a string, so a decimal comma
+# survives to `parse_number`), the profile chosen, or nothing. A JSON number is taken
+# too, for a client that has one.
+SESSION_VALUE = vol.Any(None, str, vol.All(_not_a_bool, vol.Any(int, float)))
+
+SESSION_GET_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_GET,
+    vol.Required("entry_id"): str,
+}
+
+
+def _start_combination(data: dict[str, Any]) -> dict[str, Any]:
+    """`profile` belongs to paths B and C, `scope` to path C: anything else is malformed.
+
+    Refused at the schema (`invalid_format`) rather than ignored, because a `start` that
+    silently dropped half of what the panel asked for would open a screen other than the
+    one the user pressed a button for.
+    """
+    path = data.get("path")
+    if "profile" in data and path not in ("path_b", "path_c"):
+        raise vol.Invalid("profile is only meaningful with path_b or path_c", path=["profile"])
+    if "scope" in data and path != "path_c":
+        raise vol.Invalid("scope is only meaningful with path_c", path=["scope"])
+    return data
+
+
+# `start` never moves anything and never skips a screen that comes before a movement:
+# with no `path` the session is born on `path`, with `path_a` on `path_a` (the warning
+# before the first movement), with `path_b` on `path_b` (the profile preselected when
+# one is named), with `path_c` on `path_c`, or on `refine_scope` when the profile is
+# named too - `scope` then only highlights that scope (`intent`), it does not choose it.
+SESSION_START_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Required("type"): WS_TYPE_SESSION_START,
+            vol.Required("entry_id"): str,
+            vol.Required("cover_unique_id"): str,
+            vol.Required("client_id"): CLIENT_ID,
+            vol.Optional("path"): vol.In(SESSION_PATHS),
+            vol.Optional("profile"): str,
+            vol.Optional("scope"): vol.In(SESSION_SCOPES),
+        }
+    ),
+    _start_combination,
+)
+
+# `claim: true` takes the session from a present owner, after the screen asked. Without
+# it an attach from another client is read-only while the owner is present, and makes
+# the attaching client the owner when the owner is not.
+SESSION_ATTACH_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_ATTACH,
+    vol.Required("entry_id"): str,
+    vol.Required("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+    vol.Optional("claim"): bool,
+}
+
+SESSION_HEARTBEAT_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_HEARTBEAT,
+    vol.Required("entry_id"): str,
+    vol.Required("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+}
+
+# `action` is one of the snapshot's `actions`, or `submit` when it has a `form`; which
+# ones are on offer is a question about the session, so an action that is not is a
+# refusal (`action_not_offered`) and not a malformed frame.
+SESSION_ACT_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_ACT,
+    vol.Required("entry_id"): str,
+    vol.Required("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+    vol.Required("revision"): REVISION,
+    vol.Required("action"): str,
+    vol.Optional("value"): SESSION_VALUE,
+}
+
+SESSION_STOP_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_STOP,
+    vol.Required("entry_id"): str,
+    vol.Required("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+}
+
+SESSION_LEAVE_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_LEAVE,
+    vol.Required("entry_id"): str,
+    vol.Required("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+}
+
+# `session_id` may be left out, and then the gateway's session is meant, whichever it
+# is; with `force: true` it is ended whoever owns it. That pair is the way out that
+# always works (SPEC §5.2), and the banner's "Termina".
+SESSION_CANCEL_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_CANCEL,
+    vol.Required("entry_id"): str,
+    vol.Optional("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+    vol.Optional("force"): bool,
+}
+
+SESSION_SAVE_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_SAVE,
+    vol.Required("entry_id"): str,
+    vol.Required("session_id"): str,
+    vol.Required("client_id"): CLIENT_ID,
+    vol.Required("revision"): REVISION,
+    vol.Required("target"): vol.In(SESSION_SAVE_TARGETS),
+}
+
+SESSION_END_OTHER_SCHEMA: VolDictType = {
+    vol.Required("type"): WS_TYPE_SESSION_END_OTHER,
+    vol.Required("entry_id"): str,
+}
+
+# --------------------------------------------------------------------- the answers
+SESSION_GET_KEYS: tuple[str, ...] = ("session", "capabilities")
+# `start`, `attach`, `act`, `stop` and `leave`. `leave` is the one that may answer
+# `session: null`: it is sent as a page goes away, so a session that no longer exists is
+# not worth a refusal there - it answers "nothing to leave" instead of `unknown_session`.
+SESSION_ANSWER_KEYS: tuple[str, ...] = ("session",)
+SESSION_HEARTBEAT_KEYS: tuple[str, ...] = ("owner", "present_until")
+SESSION_CANCEL_KEYS: tuple[str, ...] = ("session", "already_ended")
+SESSION_SAVE_KEYS: tuple[str, ...] = ("session", "overview")
+SESSION_END_OTHER_KEYS: tuple[str, ...] = ("flows_aborted", "still_calibrating", "overview")
+
+# The snapshot: a whole object at every transition, never a delta. Every key is always
+# present; what does not apply is `null` (or `[]`, `{}` where the key is a collection).
+SESSION_KEYS: tuple[str, ...] = (
+    "session_id",
+    "entry_id",
+    # Grows by one at every transition and at nothing else (never at a heartbeat).
+    "revision",
+    # When this snapshot was built, by the one clock that measures anything.
+    "server_time",
+    "cover",
+    "state",
+    "substate",
+    # The dialog step id, `null` in `saved` and `ended`.
+    "step",
+    "path",
+    # The correction's scope, once chosen.
+    "scope",
+    # The profile chosen on `path_b` / `path_c` (or named by `start`), `null` otherwise.
+    "profile",
+    "level",
+    # The dialog's plan, as stage names (`SESSION_PLAN_STAGES`), and where on it the
+    # session stands. `[]` / `null` before a path is chosen and after a cancellation.
+    "plan",
+    "plan_index",
+    # `{scope}` when `start` named a scope, for the screen to highlight.
+    "intent",
+    "actions",
+    "form",
+    # The raw values the step's texts substitute - numbers as numbers, formatted by the
+    # panel - under the dialog's own placeholder names.
+    "placeholders",
+    "movement",
+    "press",
+    "reading",
+    "measured",
+    "fit",
+    "check",
+    "review",
+    "problem",
+    "notice",
+    "position_known",
+    "external_move",
+    "owner",
+    "idle_expires_at",
+    "outcome",
+)
+
+SESSION_COVER_KEYS: tuple[str, ...] = ("unique_id", "entity_id", "name")
+SESSION_INTENT_KEYS: tuple[str, ...] = ("scope",)
+SESSION_FORM_KEYS: tuple[str, ...] = (
+    "field",
+    "kind",
+    "optional",
+    "unit",
+    # What the field opens on: a number, a name, or the profile preselected.
+    "suggested",
+    "min",
+    "max",
+    # The profiles to choose from, sorted, for `kind: "choice"`; `null` otherwise.
+    "choices",
+    "error",
+)
+SESSION_MOVEMENT_KEYS: tuple[str, ...] = (
+    "kind",
+    "direction",
+    "progress_action",
+    # The motion anchor: the actuator's echo, or the frame written plus its start delay
+    # when it has none. `null` while the motor is starting.
+    "started_at",
+    # How long the model expects the movement to take, for a progress bar and nothing
+    # else: a measurement never reads it.
+    "planned_s",
+)
+SESSION_PRESS_KEYS: tuple[str, ...] = ("kind", "expires_at")
+SESSION_READING_KEYS: tuple[str, ...] = (
+    "direction",
+    "fraction",
+    "from_end_stop",
+    "expected_cm",
+    "tolerance_cm",
+)
+SESSION_MEASURED_KEYS: tuple[str, ...] = (
+    "travel_cm",
+    # True when this session read the travel with a tape; false for one it only knows.
+    "travel_measured",
+    "opening_time_s",
+    "closing_time_s",
+    "slat_time_s",
+    "lift",
+    # `[[motor_s, measured_cm], ...]`, in the order they were read.
+    "descent",
+    "ascent",
+    # True for `points_only`, whose run times are the ones the cover already moves on.
+    "times_adopted",
+)
+# The lift-off press: when it reached the backend, when the stop it asked for was
+# written, the gap the tape found (if one was read) and whether the gateway held the
+# stop back. `measured.lift` is `null` until the press has arrived.
+SESSION_LIFT_KEYS: tuple[str, ...] = ("pressed_at", "stop_written_at", "gap_cm", "late")
+SESSION_FIT_KEYS: tuple[str, ...] = ("opening", "closing")
+SESSION_FIT_DIRECTION_KEYS: tuple[str, ...] = (
+    "run_time_s",
+    "slat_time_s",
+    "roll",
+    "time_scale",
+    "points",
+)
+SESSION_FIT_POINT_KEYS: tuple[str, ...] = ("motor_s", "measured_cm", "residual_cm")
+SESSION_CHECK_KEYS: tuple[str, ...] = (
+    "fraction",
+    "predicted_cm",
+    "measured_cm",
+    "gap_cm",
+    "threshold_cm",
+    # How the profile being checked was itself measured - a level and the gap of its own
+    # check - shown beside the gap so that 3 cm can be read against it (SPEC §2.2).
+    "profile_level",
+    "profile_check_cm",
+)
+SESSION_REVIEW_KEYS: tuple[str, ...] = (
+    "variant",
+    # The exits offered, the first being the main one (`SESSION_SAVE_TARGETS`).
+    "targets",
+    "profile_name",
+    "profile_exists",
+    # `"file"` when `cover_profiles:` defines the same name, `null` otherwise.
+    "name_clash",
+    "rows",
+    "side_effects",
+    "affected",
+    "accuracy_cm",
+    "check_fraction",
+    "replacing",
+    "keeping",
+    "yaml",
+)
+SESSION_REVIEW_ROW_FIELDS: tuple[str, ...] = ("key", "before", "after")
+SESSION_REVIEW_AFFECTED_KEYS: tuple[str, ...] = ("cover_unique_id", "name", "rows")
+SESSION_PROBLEM_KEYS: tuple[str, ...] = ("code",)
+SESSION_OWNER_KEYS: tuple[str, ...] = ("client_id", "present_until")
+SESSION_OUTCOME_KEYS: tuple[str, ...] = ("reason", "profile", "origin", "source")
+
+# ------------------------------------------------------- the session in the overview
+# What `overview.session` will carry: the one line the panel's banner and its
+# first-run screen need about the session running on this gateway, or `null`.
+#
+# It is declared here and **not** added to `OVERVIEW_KEYS` yet, on purpose: the key is
+# part of the overview the moment the server sends it, and the server sends it from the
+# lot that builds the session (B3), whose test regenerates `panel_overview_example.json`
+# with it. Declaring the shape now is what stops that from being a change to the frozen
+# contract: B3 adds `"session"` to `OVERVIEW_KEYS` and produces exactly these five keys.
+#
+# `measuring` (already there) says *that* a shutter of this gateway is being measured,
+# whoever is measuring it; `session` says *who*: `measuring` set with `session` at `null`
+# is the guided dialog or the 0.4.2 action, and the panel offers to close the dialog
+# rather than to resume a session it does not have.
+SESSION_OVERVIEW_KEYS: tuple[str, ...] = (
+    "session_id",
+    "cover_unique_id",
+    "name",
+    # One of `SESSION_STATES`.
+    "state",
+    # The owner's `client_id`, or `null` when the session has no owner: a panel comparing
+    # it with its own tells "my session" from "somebody else's" without asking.
+    "owner",
+)
+
+
+# ---------------------------------------------------------------------- refusals
+# The refusals the session adds (SPEC §4.6), kept **out of** `WS_ERROR_KEYS`: that tuple
+# is what `tests/test_translations.py` holds to having a sentence in every language, and
+# these have none until lot B3 writes them. B3 moves them in when it does.
+# The session also answers with keys that already exist: `unknown_entry`,
+# `entry_not_loaded`, `unknown_cover`, `advanced_cover`, `unknown_profile`,
+# `invalid_name` and `write_in_progress`.
+ERROR_ALREADY_CALIBRATING = "already_calibrating"
+ERROR_COVER_UNAVAILABLE = "cover_unavailable"
+ERROR_UNKNOWN_SESSION = "unknown_session"
+ERROR_SESSION_ENDED = "session_ended"
+ERROR_SESSION_OWNED = "session_owned"
+ERROR_REVISION_CONFLICT = "revision_conflict"
+ERROR_ACTION_NOT_OFFERED = "action_not_offered"
+ERROR_NOT_IN_REVIEW = "not_in_review"
+
+SESSION_ERROR_KEYS: tuple[str, ...] = (
+    ERROR_ALREADY_CALIBRATING,
+    ERROR_COVER_UNAVAILABLE,
+    ERROR_UNKNOWN_SESSION,
+    ERROR_SESSION_ENDED,
+    ERROR_SESSION_OWNED,
+    ERROR_REVISION_CONFLICT,
+    ERROR_ACTION_NOT_OFFERED,
+    ERROR_NOT_IN_REVIEW,
+)
+
+
 __all__ = [
     "ASSIGNMENT_SCHEMA",
     "ASSIGN_KEYS",
     "ASSIGN_SCHEMA",
+    "CLIENT_ID",
     "COVER_DETAIL_FORGET_KEYS",
     "COVER_DETAIL_KEYS",
     "COVER_DETAIL_KEY_KEYS",
@@ -547,16 +1281,24 @@ __all__ = [
     "COVER_FORGET_KEYS",
     "COVER_FORGET_SCHEMA",
     "COVER_KEYS",
+    "ERROR_ACTION_NOT_OFFERED",
     "ERROR_ADVANCED_COVER",
+    "ERROR_ALREADY_CALIBRATING",
     "ERROR_BUSY_CALIBRATING",
+    "ERROR_COVER_UNAVAILABLE",
     "ERROR_ENTRY_NOT_LOADED",
     "ERROR_MISSING_TRAVEL",
     "ERROR_NAME_IN_USE",
+    "ERROR_NOT_IN_REVIEW",
     "ERROR_PROFILE_NOT_EDITABLE",
+    "ERROR_REVISION_CONFLICT",
+    "ERROR_SESSION_ENDED",
+    "ERROR_SESSION_OWNED",
     "ERROR_UNDO_EXPIRED",
     "ERROR_UNKNOWN_COVER",
     "ERROR_UNKNOWN_ENTRY",
     "ERROR_UNKNOWN_PROFILE",
+    "ERROR_UNKNOWN_SESSION",
     "ERROR_WRITE_IN_PROGRESS",
     "MEASURABLE_KEYS",
     "NUMBER",
@@ -576,6 +1318,74 @@ __all__ = [
     "PROFILE_VALUES_SCHEMA",
     "REORDER_KEYS",
     "REORDER_SCHEMA",
+    "REVISION",
+    "SESSION_ACTIONS",
+    "SESSION_ACT_SCHEMA",
+    "SESSION_ANSWER_KEYS",
+    "SESSION_ATTACH_SCHEMA",
+    "SESSION_BOUNDARY_NAMES",
+    "SESSION_CANCEL_KEYS",
+    "SESSION_CANCEL_SCHEMA",
+    "SESSION_CAPABILITIES",
+    "SESSION_CHECK_KEYS",
+    "SESSION_COVER_KEYS",
+    "SESSION_DIRECTIONS",
+    "SESSION_END_OTHER_KEYS",
+    "SESSION_END_OTHER_SCHEMA",
+    "SESSION_ERROR_KEYS",
+    "SESSION_FIT_DIRECTION_KEYS",
+    "SESSION_FIT_KEYS",
+    "SESSION_FIT_POINT_KEYS",
+    "SESSION_FORM_ERRORS",
+    "SESSION_FORM_FIELDS",
+    "SESSION_FORM_KEYS",
+    "SESSION_FORM_KINDS",
+    "SESSION_FORM_UNITS",
+    "SESSION_GET_KEYS",
+    "SESSION_GET_SCHEMA",
+    "SESSION_HEARTBEAT_KEYS",
+    "SESSION_HEARTBEAT_SCHEMA",
+    "SESSION_HOLDERS",
+    "SESSION_INTENT_KEYS",
+    "SESSION_KEYS",
+    "SESSION_LEAVE_SCHEMA",
+    "SESSION_LEVELS",
+    "SESSION_LIFT_KEYS",
+    "SESSION_MEASURED_KEYS",
+    "SESSION_MOVEMENT_KEYS",
+    "SESSION_MOVEMENT_KINDS",
+    "SESSION_NOTICES",
+    "SESSION_OUTCOMES",
+    "SESSION_OUTCOME_KEYS",
+    "SESSION_OVERVIEW_KEYS",
+    "SESSION_OWNER_KEYS",
+    "SESSION_PATHS",
+    "SESSION_PLAN_STAGES",
+    "SESSION_POSITIONS",
+    "SESSION_PRESS_KEYS",
+    "SESSION_PRESS_KINDS",
+    "SESSION_PROBLEMS",
+    "SESSION_PROBLEM_KEYS",
+    "SESSION_PROGRESS_ACTIONS",
+    "SESSION_READING_KEYS",
+    "SESSION_REUSED_STEPS",
+    "SESSION_REVIEW_AFFECTED_KEYS",
+    "SESSION_REVIEW_KEYS",
+    "SESSION_REVIEW_ROW_FIELDS",
+    "SESSION_REVIEW_ROW_KEYS",
+    "SESSION_REVIEW_VARIANTS",
+    "SESSION_SAVE_KEYS",
+    "SESSION_SAVE_SCHEMA",
+    "SESSION_SAVE_TARGETS",
+    "SESSION_SCOPES",
+    "SESSION_START_SCHEMA",
+    "SESSION_STATES",
+    "SESSION_STEPS",
+    "SESSION_STOP_SCHEMA",
+    "SESSION_SUBMIT",
+    "SESSION_SUBSTATES",
+    "SESSION_VALUE",
+    "SESSION_VALUE_KEYS",
     "SET_TRAVEL_KEYS",
     "SET_TRAVEL_SCHEMA",
     "SUBSCRIBE_SCHEMA",
@@ -587,8 +1397,10 @@ __all__ = [
     "WS_ERROR_KEYS",
     "WS_EVENT_MEASURING",
     "WS_EVENT_OVERVIEW",
+    "WS_EVENT_SESSION",
     "WS_EVENT_TYPES",
     "WS_READ_COMMANDS",
+    "WS_SESSION_COMMANDS",
     "WS_TYPE_ASSIGN",
     "WS_TYPE_COVER_DETAIL",
     "WS_TYPE_COVER_EDIT",
@@ -599,6 +1411,16 @@ __all__ = [
     "WS_TYPE_PROFILE_EDIT",
     "WS_TYPE_PROFILE_RENAME",
     "WS_TYPE_REORDER",
+    "WS_TYPE_SESSION_ACT",
+    "WS_TYPE_SESSION_ATTACH",
+    "WS_TYPE_SESSION_CANCEL",
+    "WS_TYPE_SESSION_END_OTHER",
+    "WS_TYPE_SESSION_GET",
+    "WS_TYPE_SESSION_HEARTBEAT",
+    "WS_TYPE_SESSION_LEAVE",
+    "WS_TYPE_SESSION_SAVE",
+    "WS_TYPE_SESSION_START",
+    "WS_TYPE_SESSION_STOP",
     "WS_TYPE_SET_TRAVEL",
     "WS_TYPE_SUBSCRIBE",
     "WS_TYPE_TEXTS",

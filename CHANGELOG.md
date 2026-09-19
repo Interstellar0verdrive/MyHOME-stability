@@ -56,6 +56,15 @@ everything the panel does.
   whole picture to every open tab after every write. It is documented for contributors
   in [docs/architecture.md](docs/architecture.md#the-websocket-api); it is internal to
   the panel and carries no compatibility promise.
+- **The contract of the guided calibration's session in the panel**, written down
+  before any of it is built: ten WebSocket commands, a third event on the existing
+  subscription and the snapshot they all carry — states and verbs in the words of the
+  published calibration contract, screens and texts under the dialog's own step ids so
+  that its seven languages of instructions are reused as they are. It is
+  [docs/panel-websocket-api.md](docs/panel-websocket-api.md#11-the-calibration-session)
+  §11-§14, with one example snapshot per screen and a test that holds the Python
+  schemas, the TypeScript types, the document and the examples to saying the same
+  thing. Nothing is registered yet and nothing a user sees changes.
 
 ### Changed
 

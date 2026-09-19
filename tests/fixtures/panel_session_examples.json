@@ -1,0 +1,3365 @@
+{
+  "_about": "Hand-written examples of the calibration session's snapshot (docs/panel-websocket-api.md §12), one per screen the panel has to draw. Frozen with panel_schemas.py and panel_src/src/engine/session-contract.ts (lot L0); regenerated from the real controller from lot B3 on.",
+  "_example": {
+    "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+    "this_client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+    "other_client_id": "8d41f6b2-7c3e-4f95-a0d8-2b6e9c1f7e33"
+  },
+  "_contract": {
+    "steps": [
+      "path",
+      "path_a",
+      "path_b",
+      "path_c",
+      "refine_scope",
+      "home_closed",
+      "home_closed_done",
+      "open_timed",
+      "open_brief",
+      "open_start",
+      "open_lift",
+      "lift_stop",
+      "lift_check",
+      "lift_check_late",
+      "lift_gap",
+      "lift_early",
+      "open_home_again",
+      "closed_again",
+      "open_full_brief",
+      "open_full_start",
+      "open_top",
+      "open_result",
+      "open_result_gap",
+      "height_read",
+      "height",
+      "height_result",
+      "close_timed",
+      "close_brief",
+      "close_start",
+      "close_bottom",
+      "close_result",
+      "tape_brief",
+      "half_down",
+      "half_up",
+      "quarter_down",
+      "three_quarter_down",
+      "quarter_up",
+      "three_quarter_up",
+      "verify",
+      "verify_b",
+      "tape_run",
+      "measure_descent",
+      "measure_ascent",
+      "tape_result",
+      "measure_verify",
+      "verify_result",
+      "verify_offer",
+      "profile_name",
+      "summary_basic",
+      "summary_short",
+      "summary_correction",
+      "summary_precise",
+      "problem_no_echo",
+      "problem_not_delivered",
+      "problem_not_stopped",
+      "problem_busy",
+      "problem_bad_point",
+      "problem_timeout",
+      "problem_unknown",
+      "problem_interrupted"
+    ],
+    "reused_steps": [
+      "path",
+      "path_a",
+      "path_b",
+      "path_c",
+      "refine_scope",
+      "home_closed_done",
+      "open_brief",
+      "open_lift",
+      "lift_check",
+      "lift_check_late",
+      "lift_gap",
+      "lift_early",
+      "closed_again",
+      "open_full_brief",
+      "open_top",
+      "open_result",
+      "open_result_gap",
+      "height",
+      "height_result",
+      "close_brief",
+      "close_bottom",
+      "close_result",
+      "tape_brief",
+      "measure_descent",
+      "measure_ascent",
+      "tape_result",
+      "measure_verify",
+      "verify_result",
+      "verify_offer",
+      "profile_name",
+      "problem_no_echo",
+      "problem_not_delivered",
+      "problem_not_stopped",
+      "problem_busy",
+      "problem_bad_point",
+      "problem_timeout",
+      "problem_unknown"
+    ],
+    "states": [
+      "armed",
+      "briefing",
+      "running",
+      "positioning",
+      "awaiting_reading",
+      "checking",
+      "review",
+      "saved",
+      "ended"
+    ],
+    "error_keys": [
+      "already_calibrating",
+      "cover_unavailable",
+      "unknown_session",
+      "session_ended",
+      "session_owned",
+      "revision_conflict",
+      "action_not_offered",
+      "not_in_review"
+    ],
+    "problems": [
+      "no_echo",
+      "not_delivered",
+      "not_stopped",
+      "busy",
+      "bad_point",
+      "timeout",
+      "unknown",
+      "interrupted"
+    ],
+    "outcomes": [
+      "saved",
+      "cancelled",
+      "expired",
+      "unloaded",
+      "left",
+      "cover_gone"
+    ],
+    "plan_stages": [
+      "home_closed",
+      "open_timed",
+      "height_read",
+      "close_timed",
+      "tape_brief",
+      "half_down",
+      "half_up",
+      "quarter_down",
+      "three_quarter_down",
+      "quarter_up",
+      "three_quarter_up",
+      "verify",
+      "verify_b",
+      "verify_offer",
+      "profile_name",
+      "summary"
+    ],
+    "actions": [
+      "path_a",
+      "path_b",
+      "path_c",
+      "begin",
+      "times_only",
+      "times_and_rolls",
+      "points_only",
+      "confirm_closed",
+      "open_start",
+      "lifted_off",
+      "lift_too_early",
+      "lift_accept",
+      "lift_gap",
+      "confirm_closed_again",
+      "open_full_start",
+      "stopped_open",
+      "accept_step",
+      "repeat_measure",
+      "close_start",
+      "stopped_closed",
+      "tape_start",
+      "repeat_tape",
+      "tape_not_right",
+      "verify_now",
+      "skip_verify",
+      "refine",
+      "repeat_step",
+      "not_right"
+    ],
+    "save_targets": [
+      "profile",
+      "cover_only"
+    ],
+    "notices": [
+      "rehomed",
+      "reading_stale"
+    ],
+    "progress_actions": [
+      "homing_closed",
+      "homing_open",
+      "starting_open",
+      "starting_close",
+      "running_down",
+      "running_up",
+      "stopping_lift",
+      "starting_open_full"
+    ],
+    "holders": [
+      "panel",
+      "other",
+      "reserved"
+    ],
+    "capabilities": {
+      "model": "roll_nonlinear",
+      "paths": [
+        "path_a",
+        "path_b",
+        "path_c"
+      ],
+      "levels": [
+        "basic",
+        "thorough"
+      ],
+      "scopes": [
+        "times_only",
+        "times_and_rolls",
+        "points_only"
+      ],
+      "check": true,
+      "fit_residuals": true,
+      "repeat_step": true,
+      "save_targets": [
+        "profile",
+        "cover_only"
+      ],
+      "bulk": false
+    }
+  },
+  "frames": {
+    "myhome/calibration/session/get": {
+      "type": "myhome/calibration/session/get",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA"
+    },
+    "myhome/calibration/session/start": {
+      "type": "myhome/calibration/session/start",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "cover_unique_id": "00:03:50:aa:bb:cc-2-82",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+      "path": "path_c",
+      "profile": "tall",
+      "scope": "points_only"
+    },
+    "myhome/calibration/session/attach": {
+      "type": "myhome/calibration/session/attach",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+      "claim": true
+    },
+    "myhome/calibration/session/heartbeat": {
+      "type": "myhome/calibration/session/heartbeat",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10"
+    },
+    "myhome/calibration/session/act": {
+      "type": "myhome/calibration/session/act",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+      "revision": 35,
+      "action": "submit",
+      "value": "96,5"
+    },
+    "myhome/calibration/session/stop": {
+      "type": "myhome/calibration/session/stop",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10"
+    },
+    "myhome/calibration/session/leave": {
+      "type": "myhome/calibration/session/leave",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10"
+    },
+    "myhome/calibration/session/cancel": {
+      "type": "myhome/calibration/session/cancel",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+      "force": true
+    },
+    "myhome/calibration/session/save": {
+      "type": "myhome/calibration/session/save",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+      "revision": 40,
+      "target": "profile"
+    },
+    "myhome/calibration/session/end_other": {
+      "type": "myhome/calibration/session/end_other",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA"
+    }
+  },
+  "scenarios": {
+    "armed_path": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 1,
+      "server_time": "2026-09-18T10:00:02.000+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "armed",
+      "substate": null,
+      "step": "path",
+      "path": null,
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [
+        "path_a",
+        "path_b",
+        "path_c"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:00:47.000+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:30:02.000+00:00",
+      "outcome": null
+    },
+    "armed_path_b_profile_choice": {
+      "session_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 1,
+      "server_time": "2026-09-18T10:00:04.000+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-82",
+        "entity_id": "cover.landing_shutter",
+        "name": "Landing Shutter"
+      },
+      "state": "armed",
+      "substate": null,
+      "step": "path_b",
+      "path": "path_b",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [],
+      "form": {
+        "field": "profile",
+        "kind": "choice",
+        "optional": false,
+        "unit": null,
+        "suggested": "tall",
+        "min": null,
+        "max": null,
+        "choices": [
+          "from_the_file",
+          "tall"
+        ],
+        "error": null
+      },
+      "placeholders": {
+        "cover": "Landing Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:00:49.000+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:30:04.000+00:00",
+      "outcome": null
+    },
+    "armed_refine_scope_intent": {
+      "session_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 1,
+      "server_time": "2026-09-18T10:00:03.000+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-82",
+        "entity_id": "cover.landing_shutter",
+        "name": "Landing Shutter"
+      },
+      "state": "armed",
+      "substate": null,
+      "step": "refine_scope",
+      "path": "path_c",
+      "scope": null,
+      "profile": "tall",
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": {
+        "scope": "points_only"
+      },
+      "actions": [
+        "times_only",
+        "times_and_rolls",
+        "points_only"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Landing Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 150.0,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:00:48.000+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:30:03.000+00:00",
+      "outcome": null
+    },
+    "briefing_open_brief": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 6,
+      "server_time": "2026-09-18T10:00:54.200+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "open_brief",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "open_start",
+        "repeat_step"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": "closed",
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:01:39.200+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:10:54.200+00:00",
+      "outcome": null
+    },
+    "briefing_open_brief_rehomed": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 9,
+      "server_time": "2026-09-18T10:02:11.600+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "open_brief",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "open_start",
+        "repeat_step"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": "rehomed",
+      "position_known": "closed",
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:56.600+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:12:11.600+00:00",
+      "outcome": null
+    },
+    "running_open_start": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 7,
+      "server_time": "2026-09-18T10:01:10.100+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "running",
+      "substate": null,
+      "step": "open_start",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": {
+        "kind": "free",
+        "direction": "open",
+        "progress_action": "starting_open",
+        "started_at": null,
+        "planned_s": 25.0
+      },
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:01:55.100+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:10.100+00:00",
+      "outcome": null
+    },
+    "running_open_lift": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 8,
+      "server_time": "2026-09-18T10:01:10.620+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "running",
+      "substate": "awaiting_endpoint",
+      "step": "open_lift",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "lifted_off",
+        "repeat_step",
+        "not_right"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": {
+        "kind": "free",
+        "direction": "open",
+        "progress_action": "starting_open",
+        "started_at": "2026-09-18T10:01:10.600+00:00",
+        "planned_s": 25.0
+      },
+      "press": {
+        "kind": "lift_off",
+        "expires_at": "2026-09-18T10:02:40.620+00:00"
+      },
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:01:55.620+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:10.620+00:00",
+      "outcome": null
+    },
+    "running_lift_stop": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 9,
+      "server_time": "2026-09-18T10:01:15.420+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "running",
+      "substate": "awaiting_stop",
+      "step": "lift_stop",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": {
+        "kind": "free",
+        "direction": "open",
+        "progress_action": "stopping_lift",
+        "started_at": "2026-09-18T10:01:10.600+00:00",
+        "planned_s": 25.0
+      },
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": null,
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:00.420+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:15.420+00:00",
+      "outcome": null
+    },
+    "briefing_lift_check": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 10,
+      "server_time": "2026-09-18T10:01:16.100+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "lift_check",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "lift_too_early",
+        "lift_accept",
+        "lift_gap",
+        "not_right"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:01.100+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:16.100+00:00",
+      "outcome": null
+    },
+    "briefing_lift_check_external": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 11,
+      "server_time": "2026-09-18T10:01:30.700+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "lift_check",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "lift_too_early",
+        "lift_accept",
+        "lift_gap",
+        "not_right"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": true,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:15.700+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:30.700+00:00",
+      "outcome": null
+    },
+    "awaiting_reading_lift_gap": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 11,
+      "server_time": "2026-09-18T10:01:21.300+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "awaiting_reading",
+      "substate": null,
+      "step": "lift_gap",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [],
+      "form": {
+        "field": "gap_cm",
+        "kind": "number",
+        "optional": true,
+        "unit": "cm",
+        "suggested": null,
+        "min": 0.0,
+        "max": 50.0,
+        "choices": null,
+        "error": null
+      },
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:06.300+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:21.300+00:00",
+      "outcome": null
+    },
+    "positioning_home_closed": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 3,
+      "server_time": "2026-09-18T10:00:20.400+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "positioning",
+      "substate": null,
+      "step": "home_closed",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 0,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": {
+        "kind": "homing",
+        "direction": "close",
+        "progress_action": "homing_closed",
+        "started_at": "2026-09-18T10:00:20.950+00:00",
+        "planned_s": 21.7
+      },
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:01:05.400+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:10:20.400+00:00",
+      "outcome": null
+    },
+    "positioning_tape_run": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 34,
+      "server_time": "2026-09-18T10:04:22.300+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "positioning",
+      "substate": null,
+      "step": "tape_run",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 6,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter",
+        "percent": 50
+      },
+      "movement": {
+        "kind": "fraction",
+        "direction": "close",
+        "progress_action": "running_down",
+        "started_at": "2026-09-18T10:04:22.900+00:00",
+        "planned_s": 8.55
+      },
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:05:07.300+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:14:22.300+00:00",
+      "outcome": null
+    },
+    "awaiting_reading_measure_descent": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 35,
+      "server_time": "2026-09-18T10:04:32.100+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "awaiting_reading",
+      "substate": null,
+      "step": "measure_descent",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 6,
+      "intent": null,
+      "actions": [],
+      "form": {
+        "field": "measured_cm",
+        "kind": "number",
+        "optional": false,
+        "unit": "cm",
+        "suggested": null,
+        "min": 0.0,
+        "max": 195.0,
+        "choices": null,
+        "error": null
+      },
+      "placeholders": {
+        "cover": "Hallway Shutter",
+        "expected": 86.25,
+        "percent": 50,
+        "tolerance": 15
+      },
+      "movement": null,
+      "press": null,
+      "reading": {
+        "direction": "close",
+        "fraction": 0.5,
+        "from_end_stop": "open",
+        "expected_cm": 86.25,
+        "tolerance_cm": 15.0
+      },
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:05:17.100+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:14:32.100+00:00",
+      "outcome": null
+    },
+    "awaiting_reading_measure_descent_error": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 36,
+      "server_time": "2026-09-18T10:05:01.800+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "awaiting_reading",
+      "substate": null,
+      "step": "measure_descent",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 6,
+      "intent": null,
+      "actions": [],
+      "form": {
+        "field": "measured_cm",
+        "kind": "number",
+        "optional": false,
+        "unit": "cm",
+        "suggested": null,
+        "min": 0.0,
+        "max": 195.0,
+        "choices": null,
+        "error": "above_the_travel"
+      },
+      "placeholders": {
+        "cover": "Hallway Shutter",
+        "expected": 86.25,
+        "percent": 50,
+        "tolerance": 15
+      },
+      "movement": null,
+      "press": null,
+      "reading": {
+        "direction": "close",
+        "fraction": 0.5,
+        "from_end_stop": "open",
+        "expected_cm": 86.25,
+        "tolerance_cm": 15.0
+      },
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:05:46.800+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:15:01.800+00:00",
+      "outcome": null
+    },
+    "awaiting_reading_measure_descent_stale": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 37,
+      "server_time": "2026-09-18T10:05:05.400+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "awaiting_reading",
+      "substate": null,
+      "step": "measure_descent",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 6,
+      "intent": null,
+      "actions": [
+        "repeat_tape"
+      ],
+      "form": {
+        "field": "measured_cm",
+        "kind": "number",
+        "optional": false,
+        "unit": "cm",
+        "suggested": null,
+        "min": 0.0,
+        "max": 195.0,
+        "choices": null,
+        "error": null
+      },
+      "placeholders": {
+        "cover": "Hallway Shutter",
+        "expected": 86.25,
+        "percent": 50,
+        "tolerance": 15
+      },
+      "movement": null,
+      "press": null,
+      "reading": {
+        "direction": "close",
+        "fraction": 0.5,
+        "from_end_stop": "open",
+        "expected_cm": 86.25,
+        "tolerance_cm": 15.0
+      },
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": "reading_stale",
+      "position_known": null,
+      "external_move": true,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:05:50.400+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:15:05.400+00:00",
+      "outcome": null
+    },
+    "awaiting_reading_height": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 19,
+      "server_time": "2026-09-18T10:02:08.000+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "awaiting_reading",
+      "substate": null,
+      "step": "height",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 2,
+      "intent": null,
+      "actions": [],
+      "form": {
+        "field": "height",
+        "kind": "number",
+        "optional": false,
+        "unit": "cm",
+        "suggested": 195.0,
+        "min": 20.0,
+        "max": 500.0,
+        "choices": null,
+        "error": null
+      },
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": 22.6,
+        "closing_time_s": null,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": "open",
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:53.000+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:12:08.000+00:00",
+      "outcome": null
+    },
+    "briefing_profile_name": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 39,
+      "server_time": "2026-09-18T10:05:18.400+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "profile_name",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 7,
+      "intent": null,
+      "actions": [],
+      "form": {
+        "field": "name",
+        "kind": "text",
+        "optional": false,
+        "unit": null,
+        "suggested": "hallway_shutter",
+        "min": null,
+        "max": null,
+        "choices": null,
+        "error": null
+      },
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [
+          [
+            8.55,
+            84.5
+          ]
+        ],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": {
+        "opening": {
+          "run_time_s": 22.6,
+          "slat_time_s": 4.8,
+          "roll": 2.0232558139534857,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 13.7,
+              "measured_cm": 81.0,
+              "residual_cm": null
+            }
+          ]
+        },
+        "closing": {
+          "run_time_s": 21.9,
+          "slat_time_s": 4.8,
+          "roll": 1.7272727272727253,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 8.55,
+              "measured_cm": 84.5,
+              "residual_cm": null
+            }
+          ]
+        }
+      },
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:06:03.400+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:15:18.400+00:00",
+      "outcome": null
+    },
+    "review_basic": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 40,
+      "server_time": "2026-09-18T10:05:31.000+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "review",
+      "substate": null,
+      "step": "summary_basic",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 8,
+      "intent": null,
+      "actions": [
+        "refine"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [
+          [
+            8.55,
+            84.5
+          ]
+        ],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": {
+        "opening": {
+          "run_time_s": 22.6,
+          "slat_time_s": 4.8,
+          "roll": 2.0232558139534857,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 13.7,
+              "measured_cm": 81.0,
+              "residual_cm": null
+            }
+          ]
+        },
+        "closing": {
+          "run_time_s": 21.9,
+          "slat_time_s": 4.8,
+          "roll": 1.7272727272727253,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 8.55,
+              "measured_cm": 84.5,
+              "residual_cm": null
+            }
+          ]
+        }
+      },
+      "check": null,
+      "review": {
+        "variant": "basic",
+        "targets": [
+          "profile",
+          "cover_only"
+        ],
+        "profile_name": "hallway_shutter",
+        "profile_exists": false,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 195.0,
+            "after": 195.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 25.0,
+            "after": 22.6
+          },
+          {
+            "key": "closing_time_s",
+            "before": 21.7,
+            "after": 21.9
+          },
+          {
+            "key": "slat_time_s",
+            "before": 4.0,
+            "after": 4.8
+          },
+          {
+            "key": "opening_roll",
+            "before": 2.12,
+            "after": 2.02
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.69,
+            "after": 1.73
+          }
+        ],
+        "side_effects": [],
+        "affected": [],
+        "accuracy_cm": null,
+        "check_fraction": null,
+        "replacing": [
+          "travel_cm",
+          "opening_time_s",
+          "closing_time_s",
+          "slat_time_s",
+          "opening_roll",
+          "closing_roll"
+        ],
+        "keeping": [],
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:06:16.000+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:15:31.000+00:00",
+      "outcome": null
+    },
+    "review_basic_profile_exists": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 42,
+      "server_time": "2026-09-18T10:05:33.500+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "review",
+      "substate": null,
+      "step": "summary_basic",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 8,
+      "intent": null,
+      "actions": [
+        "refine"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [
+          [
+            8.55,
+            84.5
+          ]
+        ],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": {
+        "opening": {
+          "run_time_s": 22.6,
+          "slat_time_s": 4.8,
+          "roll": 2.0232558139534857,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 13.7,
+              "measured_cm": 81.0,
+              "residual_cm": null
+            }
+          ]
+        },
+        "closing": {
+          "run_time_s": 21.9,
+          "slat_time_s": 4.8,
+          "roll": 1.7272727272727253,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 8.55,
+              "measured_cm": 84.5,
+              "residual_cm": null
+            }
+          ]
+        }
+      },
+      "check": null,
+      "review": {
+        "variant": "basic",
+        "targets": [
+          "profile",
+          "cover_only"
+        ],
+        "profile_name": "tall",
+        "profile_exists": true,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 195.0,
+            "after": 195.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 25.0,
+            "after": 22.6
+          },
+          {
+            "key": "closing_time_s",
+            "before": 21.7,
+            "after": 21.9
+          },
+          {
+            "key": "slat_time_s",
+            "before": 4.0,
+            "after": 4.8
+          },
+          {
+            "key": "opening_roll",
+            "before": 2.12,
+            "after": 2.02
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.69,
+            "after": 1.73
+          }
+        ],
+        "side_effects": [],
+        "affected": [
+          {
+            "cover_unique_id": "00:03:50:aa:bb:cc-2-82",
+            "name": "Landing Shutter",
+            "rows": [
+              {
+                "key": "travel_cm",
+                "before": 150.0,
+                "after": 150.0
+              },
+              {
+                "key": "opening_time_s",
+                "before": 17.851745131422387,
+                "after": 18.116163028803385
+              },
+              {
+                "key": "closing_time_s",
+                "before": 17.366414659284736,
+                "after": 17.548932762761417
+              },
+              {
+                "key": "slat_time_s",
+                "before": 3.615384615384616,
+                "after": 3.6923076923076925
+              },
+              {
+                "key": "opening_roll",
+                "before": 1.9204166214652487,
+                "after": 1.8356302627540388
+              },
+              {
+                "key": "closing_roll",
+                "before": 1.5581300429582992,
+                "after": 1.5915401345866211
+              }
+            ]
+          }
+        ],
+        "accuracy_cm": null,
+        "check_fraction": null,
+        "replacing": [
+          "travel_cm",
+          "opening_time_s",
+          "closing_time_s",
+          "slat_time_s",
+          "opening_roll",
+          "closing_roll"
+        ],
+        "keeping": [],
+        "yaml": "cover_profiles:\n  tall:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: tall\n    height: 195.0\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:06:18.500+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:15:33.500+00:00",
+      "outcome": null
+    },
+    "review_precise": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 71,
+      "server_time": "2026-09-18T10:08:32.700+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "review",
+      "substate": null,
+      "step": "summary_precise",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "thorough",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "tape_brief",
+        "quarter_down",
+        "three_quarter_down",
+        "quarter_up",
+        "three_quarter_up",
+        "verify",
+        "summary"
+      ],
+      "plan_index": 14,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [
+          [
+            8.55,
+            84.5
+          ],
+          [
+            4.27,
+            137.0
+          ],
+          [
+            12.82,
+            38.0
+          ]
+        ],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ],
+          [
+            9.25,
+            35.5
+          ],
+          [
+            18.15,
+            136.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": {
+        "opening": {
+          "run_time_s": 22.221591209455124,
+          "slat_time_s": 4.8,
+          "roll": 2.24511316872428,
+          "time_scale": 1.0217206790123456,
+          "points": [
+            {
+              "motor_s": 13.7,
+              "measured_cm": 81.0,
+              "residual_cm": -0.07823194530956812
+            },
+            {
+              "motor_s": 9.25,
+              "measured_cm": 35.5,
+              "residual_cm": 0.07933140893297974
+            },
+            {
+              "motor_s": 18.15,
+              "measured_cm": 136.0,
+              "residual_cm": 0.02730993727240616
+            }
+          ]
+        },
+        "closing": {
+          "run_time_s": 21.573207190160833,
+          "slat_time_s": 4.8,
+          "roll": 1.5871913580246912,
+          "time_scale": 1.019483024691358,
+          "points": [
+            {
+              "motor_s": 8.55,
+              "measured_cm": 84.5,
+              "residual_cm": 0.0402596257364678
+            },
+            {
+              "motor_s": 4.27,
+              "measured_cm": 137.0,
+              "residual_cm": -0.04018968641864262
+            },
+            {
+              "motor_s": 12.82,
+              "measured_cm": 38.0,
+              "residual_cm": -0.013700892096210282
+            }
+          ]
+        }
+      },
+      "check": {
+        "fraction": 0.4,
+        "predicted_cm": 104.7922590468859,
+        "measured_cm": 105.5,
+        "gap_cm": 0.7,
+        "threshold_cm": null,
+        "profile_level": null,
+        "profile_check_cm": null
+      },
+      "review": {
+        "variant": "precise",
+        "targets": [
+          "profile",
+          "cover_only"
+        ],
+        "profile_name": "hallway_shutter",
+        "profile_exists": false,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 195.0,
+            "after": 195.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 25.0,
+            "after": 22.2
+          },
+          {
+            "key": "closing_time_s",
+            "before": 21.7,
+            "after": 21.6
+          },
+          {
+            "key": "slat_time_s",
+            "before": 4.0,
+            "after": 4.8
+          },
+          {
+            "key": "opening_roll",
+            "before": 2.12,
+            "after": 2.25
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.69,
+            "after": 1.59
+          }
+        ],
+        "side_effects": [],
+        "affected": [],
+        "accuracy_cm": 0.7,
+        "check_fraction": 0.4,
+        "replacing": [
+          "travel_cm",
+          "opening_time_s",
+          "closing_time_s",
+          "slat_time_s",
+          "opening_roll",
+          "closing_roll"
+        ],
+        "keeping": [],
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.2\n    closing_time: 21.6\n    slat_time: 4.8\n    opening_roll: 2.25\n    closing_roll: 1.59\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:09:17.700+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:18:32.700+00:00",
+      "outcome": null
+    },
+    "review_short": {
+      "session_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 11,
+      "server_time": "2026-09-18T10:02:21.200+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-82",
+        "entity_id": "cover.landing_shutter",
+        "name": "Landing Shutter"
+      },
+      "state": "review",
+      "substate": null,
+      "step": "summary_short",
+      "path": "path_b",
+      "scope": null,
+      "profile": "tall",
+      "level": "basic",
+      "plan": [
+        "tape_brief",
+        "height_read",
+        "verify_offer",
+        "summary"
+      ],
+      "plan_index": 3,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Landing Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 151.0,
+        "travel_measured": true,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": {
+        "variant": "short",
+        "targets": [
+          "profile"
+        ],
+        "profile_name": "tall",
+        "profile_exists": true,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 150.0,
+            "after": 151.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 17.851745131422387,
+            "after": 17.95368209578865
+          },
+          {
+            "key": "closing_time_s",
+            "before": 17.366414659284736,
+            "after": 17.465698178187463
+          },
+          {
+            "key": "slat_time_s",
+            "before": 3.615384615384616,
+            "after": 3.6394871794871797
+          },
+          {
+            "key": "opening_roll",
+            "before": 1.9204166214652487,
+            "after": 1.9250766218517124
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.5581300429582992,
+            "after": 1.5611815052413642
+          }
+        ],
+        "side_effects": [],
+        "affected": [],
+        "accuracy_cm": null,
+        "check_fraction": null,
+        "replacing": [
+          "travel_cm"
+        ],
+        "keeping": [],
+        "yaml": "cover:\n  landing_shutter:\n    profile: tall\n    height: 151.0\n    opening_time: 17.95\n    closing_time: 17.47\n    slat_time: 3.64\n    opening_roll: 1.93\n    closing_roll: 1.56\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": "open",
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:03:06.200+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:12:21.200+00:00",
+      "outcome": null
+    },
+    "review_correction": {
+      "session_id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 29,
+      "server_time": "2026-09-18T10:03:56.400+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-82",
+        "entity_id": "cover.landing_shutter",
+        "name": "Landing Shutter"
+      },
+      "state": "review",
+      "substate": null,
+      "step": "summary_correction",
+      "path": "path_c",
+      "scope": "times_only",
+      "profile": "tall",
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "close_timed",
+        "summary"
+      ],
+      "plan_index": 3,
+      "intent": null,
+      "actions": [
+        "refine"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Landing Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 150.0,
+        "travel_measured": false,
+        "opening_time_s": 18.4,
+        "closing_time_s": 17.9,
+        "slat_time_s": 3.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:01.040+00:00",
+          "stop_written_at": "2026-09-18T10:01:01.090+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": {
+        "variant": "correction",
+        "targets": [
+          "cover_only"
+        ],
+        "profile_name": "tall",
+        "profile_exists": true,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 150.0,
+            "after": 150.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 17.851745131422387,
+            "after": 18.4
+          },
+          {
+            "key": "closing_time_s",
+            "before": 17.366414659284736,
+            "after": 17.9
+          },
+          {
+            "key": "slat_time_s",
+            "before": 3.615384615384616,
+            "after": 3.8
+          },
+          {
+            "key": "opening_roll",
+            "before": 1.9204166214652487,
+            "after": 1.9204166214652487
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.5581300429582992,
+            "after": 1.5581300429582992
+          }
+        ],
+        "side_effects": [],
+        "affected": [],
+        "accuracy_cm": null,
+        "check_fraction": null,
+        "replacing": [
+          "opening_time_s",
+          "closing_time_s",
+          "slat_time_s"
+        ],
+        "keeping": [
+          "travel_cm"
+        ],
+        "yaml": "cover:\n  landing_shutter:\n    opening_time: 18.4\n    closing_time: 17.9\n    slat_time: 3.8\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": "closed",
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:04:41.400+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:13:56.400+00:00",
+      "outcome": null
+    },
+    "checking_verify_result_offers_c": {
+      "session_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 14,
+      "server_time": "2026-09-18T10:03:08.900+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-82",
+        "entity_id": "cover.landing_shutter",
+        "name": "Landing Shutter"
+      },
+      "state": "checking",
+      "substate": null,
+      "step": "verify_result",
+      "path": "path_b",
+      "scope": null,
+      "profile": "tall",
+      "level": "basic",
+      "plan": [
+        "tape_brief",
+        "height_read",
+        "verify_offer",
+        "verify_b",
+        "summary"
+      ],
+      "plan_index": 3,
+      "intent": null,
+      "actions": [
+        "path_c",
+        "accept_step",
+        "repeat_tape"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Landing Shutter",
+        "deviation": 4.2
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 151.0,
+        "travel_measured": true,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": {
+        "fraction": 0.5,
+        "predicted_cm": 67.22858238297131,
+        "measured_cm": 71.5,
+        "gap_cm": 4.2,
+        "threshold_cm": 3.0,
+        "profile_level": "thorough",
+        "profile_check_cm": 1.5
+      },
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:03:53.900+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:13:08.900+00:00",
+      "outcome": null
+    },
+    "problem_no_echo": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 4,
+      "server_time": "2026-09-18T10:00:22.900+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "problem_no_echo",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 0,
+      "intent": null,
+      "actions": [
+        "repeat_step"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": {
+        "code": "no_echo"
+      },
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:01:07.900+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:10:22.900+00:00",
+      "outcome": null
+    },
+    "problem_interrupted": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 10,
+      "server_time": "2026-09-18T10:01:19.800+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "problem_interrupted",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "repeat_step"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": {
+        "code": "interrupted"
+      },
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": {
+        "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+        "present_until": "2026-09-18T10:02:04.800+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:19.800+00:00",
+      "outcome": null
+    },
+    "saved_profile": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 41,
+      "server_time": "2026-09-18T10:05:40.200+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "saved",
+      "substate": null,
+      "step": null,
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 8,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [
+          [
+            8.55,
+            84.5
+          ]
+        ],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": {
+        "opening": {
+          "run_time_s": 22.6,
+          "slat_time_s": 4.8,
+          "roll": 2.0232558139534857,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 13.7,
+              "measured_cm": 81.0,
+              "residual_cm": null
+            }
+          ]
+        },
+        "closing": {
+          "run_time_s": 21.9,
+          "slat_time_s": 4.8,
+          "roll": 1.7272727272727253,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 8.55,
+              "measured_cm": 84.5,
+              "residual_cm": null
+            }
+          ]
+        }
+      },
+      "check": null,
+      "review": {
+        "variant": "basic",
+        "targets": [
+          "profile",
+          "cover_only"
+        ],
+        "profile_name": "hallway_shutter",
+        "profile_exists": false,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 195.0,
+            "after": 195.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 25.0,
+            "after": 22.6
+          },
+          {
+            "key": "closing_time_s",
+            "before": 21.7,
+            "after": 21.9
+          },
+          {
+            "key": "slat_time_s",
+            "before": 4.0,
+            "after": 4.8
+          },
+          {
+            "key": "opening_roll",
+            "before": 2.12,
+            "after": 2.02
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.69,
+            "after": 1.73
+          }
+        ],
+        "side_effects": [],
+        "affected": [],
+        "accuracy_cm": null,
+        "check_fraction": null,
+        "replacing": [
+          "travel_cm",
+          "opening_time_s",
+          "closing_time_s",
+          "slat_time_s",
+          "opening_roll",
+          "closing_roll"
+        ],
+        "keeping": [],
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "saved",
+        "profile": "hallway_shutter",
+        "origin": "inherited",
+        "source": "profile hallway_shutter"
+      }
+    },
+    "saved_cover_only": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 41,
+      "server_time": "2026-09-18T10:05:40.200+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "saved",
+      "substate": null,
+      "step": null,
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_up",
+        "half_down",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 8,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": 195.0,
+        "travel_measured": true,
+        "opening_time_s": 22.6,
+        "closing_time_s": 21.9,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [
+          [
+            8.55,
+            84.5
+          ]
+        ],
+        "ascent": [
+          [
+            13.7,
+            81.0
+          ]
+        ],
+        "times_adopted": false
+      },
+      "fit": {
+        "opening": {
+          "run_time_s": 22.6,
+          "slat_time_s": 4.8,
+          "roll": 2.0232558139534857,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 13.7,
+              "measured_cm": 81.0,
+              "residual_cm": null
+            }
+          ]
+        },
+        "closing": {
+          "run_time_s": 21.9,
+          "slat_time_s": 4.8,
+          "roll": 1.7272727272727253,
+          "time_scale": 1.0,
+          "points": [
+            {
+              "motor_s": 8.55,
+              "measured_cm": 84.5,
+              "residual_cm": null
+            }
+          ]
+        }
+      },
+      "check": null,
+      "review": {
+        "variant": "basic",
+        "targets": [
+          "profile",
+          "cover_only"
+        ],
+        "profile_name": "hallway_shutter",
+        "profile_exists": false,
+        "name_clash": null,
+        "rows": [
+          {
+            "key": "travel_cm",
+            "before": 195.0,
+            "after": 195.0
+          },
+          {
+            "key": "opening_time_s",
+            "before": 25.0,
+            "after": 22.6
+          },
+          {
+            "key": "closing_time_s",
+            "before": 21.7,
+            "after": 21.9
+          },
+          {
+            "key": "slat_time_s",
+            "before": 4.0,
+            "after": 4.8
+          },
+          {
+            "key": "opening_roll",
+            "before": 2.12,
+            "after": 2.02
+          },
+          {
+            "key": "closing_roll",
+            "before": 1.69,
+            "after": 1.73
+          }
+        ],
+        "side_effects": [],
+        "affected": [],
+        "accuracy_cm": null,
+        "check_fraction": null,
+        "replacing": [
+          "travel_cm",
+          "opening_time_s",
+          "closing_time_s",
+          "slat_time_s",
+          "opening_roll",
+          "closing_roll"
+        ],
+        "keeping": [],
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+      },
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "saved",
+        "profile": "tall",
+        "origin": "measured",
+        "source": "guided"
+      }
+    },
+    "ended_cancelled": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 12,
+      "server_time": "2026-09-18T10:01:36.500+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "ended",
+      "substate": null,
+      "step": null,
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "cancelled",
+        "profile": null,
+        "origin": null,
+        "source": null
+      }
+    },
+    "ended_expired": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 12,
+      "server_time": "2026-09-18T10:11:36.500+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "ended",
+      "substate": null,
+      "step": null,
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "expired",
+        "profile": null,
+        "origin": null,
+        "source": null
+      }
+    },
+    "ended_unloaded": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 20,
+      "server_time": "2026-09-18T10:02:30.300+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "ended",
+      "substate": null,
+      "step": null,
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "unloaded",
+        "profile": null,
+        "origin": null,
+        "source": null
+      }
+    },
+    "ended_left": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 2,
+      "server_time": "2026-09-18T10:00:35.800+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "ended",
+      "substate": null,
+      "step": null,
+      "path": null,
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "left",
+        "profile": null,
+        "origin": null,
+        "source": null
+      }
+    },
+    "ended_cover_gone": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 27,
+      "server_time": "2026-09-18T10:03:34.700+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "ended",
+      "substate": null,
+      "step": null,
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [],
+      "plan_index": null,
+      "intent": null,
+      "actions": [],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": null,
+        "lift": null,
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": null,
+      "external_move": false,
+      "owner": null,
+      "idle_expires_at": null,
+      "outcome": {
+        "reason": "cover_gone",
+        "profile": null,
+        "origin": null,
+        "source": null
+      }
+    },
+    "owned_by_other": {
+      "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
+      "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
+      "revision": 11,
+      "server_time": "2026-09-18T10:01:37.000+00:00",
+      "cover": {
+        "unique_id": "00:03:50:aa:bb:cc-2-81",
+        "entity_id": "cover.hallway_shutter",
+        "name": "Hallway Shutter"
+      },
+      "state": "briefing",
+      "substate": null,
+      "step": "closed_again",
+      "path": "path_a",
+      "scope": null,
+      "profile": null,
+      "level": "basic",
+      "plan": [
+        "home_closed",
+        "open_timed",
+        "height_read",
+        "close_timed",
+        "tape_brief",
+        "half_down",
+        "half_up",
+        "profile_name",
+        "summary"
+      ],
+      "plan_index": 1,
+      "intent": null,
+      "actions": [
+        "confirm_closed_again",
+        "repeat_step",
+        "not_right"
+      ],
+      "form": null,
+      "placeholders": {
+        "cover": "Hallway Shutter"
+      },
+      "movement": null,
+      "press": null,
+      "reading": null,
+      "measured": {
+        "travel_cm": null,
+        "travel_measured": false,
+        "opening_time_s": null,
+        "closing_time_s": null,
+        "slat_time_s": 4.8,
+        "lift": {
+          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "gap_cm": null,
+          "late": false
+        },
+        "descent": [],
+        "ascent": [],
+        "times_adopted": false
+      },
+      "fit": null,
+      "check": null,
+      "review": null,
+      "problem": null,
+      "notice": null,
+      "position_known": "closed",
+      "external_move": false,
+      "owner": {
+        "client_id": "8d41f6b2-7c3e-4f95-a0d8-2b6e9c1f7e33",
+        "present_until": "2026-09-18T10:02:22.000+00:00"
+      },
+      "idle_expires_at": "2026-09-18T10:11:37.000+00:00",
+      "outcome": null
+    }
+  }
+}
