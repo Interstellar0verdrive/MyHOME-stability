@@ -1660,7 +1660,7 @@ async def test_the_precise_tape_screens_say_what_is_expected(
         )
         assert result["step_id"] == "measure_descent"
         precise = result["description_placeholders"]
-        assert precise["tolerance"] == "3"
+        assert precise["tolerance"] == "4"
         assert float(precise["expected"]) == pytest.approx(descent_cm(0.25), abs=1.0)
 
 
@@ -2098,7 +2098,7 @@ async def test_the_snippet_of_path_b_carries_the_numbers_the_two_lines_come_to(
 async def test_path_b_offers_the_refinement_when_the_check_is_far_out(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Over three centimetres the profile is not describing this window."""
+    """Over four centimetres the profile is not describing this window."""
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
@@ -3747,13 +3747,13 @@ async def test_a_verification_whose_profile_vanished_reports_no_gap(
         assert result["description_placeholders"]["deviation"] == "0.0"
 
 
-@pytest.mark.parametrize(("reading", "offered"), [(3.04, False), (3.1, True)])
+@pytest.mark.parametrize(("reading", "offered"), [(4.04, False), (4.1, True)])
 async def test_the_deviation_shown_is_the_deviation_compared(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, reading: float, offered: bool
 ) -> None:
-    """"3.0 cm" never offers the refinement and "3.1 cm" always does.
+    """"4.0 cm" never offers the refinement and "4.1 cm" always does.
 
-    Mutation caught: comparing the unrounded value, which showed "3 cm" both with and
+    Mutation caught: comparing the unrounded value, which showed "4 cm" both with and
     without the refinement on offer, on a digit the user cannot see.
     """
     async with calibrating(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
@@ -3761,7 +3761,7 @@ async def test_the_deviation_shown_is_the_deviation_compared(
         result = await drive(hass, freezer, await open_dialog(hass, entry), PATH_B[:-2])
         result = await choose(hass, result, "verify_now")
         result = await submit(hass, result, {"measured_cm": str(descent_cm(0.5) - reading)})
-        assert result["description_placeholders"]["deviation"] == ("3.1" if offered else "3.0")
+        assert result["description_placeholders"]["deviation"] == ("4.1" if offered else "4.0")
         assert ("path_c" in result["menu_options"]) is offered
 
 

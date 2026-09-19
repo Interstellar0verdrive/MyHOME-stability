@@ -1012,7 +1012,7 @@ and `check.gap_cm` (the number the threshold decides on, to 0.1 cm).
 | `placeholders` | object | the values the step's texts substitute, under the **dialog's placeholder names** (`cover`, `percent`, `expected`, `run`, `deviation`, …), as raw numbers and strings: the panel formats them in the user's language |
 | `movement` | object \| null | what the session is moving: `{kind, direction, progress_action, started_at, planned_s}`. `kind` is `homing` (to an end stop), `free` (a timed run the user ends, the lift-off run while its stop goes out included) or `fraction` (a run to a fraction of the travel); `progress_action` is the dialog's `options.progress.<action>` key for it; `started_at` is the motion anchor — the actuator's echo, or the frame written plus its start delay for an actuator that sends none — and `null` while the motor is starting; `planned_s` is the modelled duration, for a progress bar only. `null` when nothing of the session's is moving |
 | `press` | object \| null | in `awaiting_endpoint`: `{kind, expires_at}`, `kind` being `lift_off` or `end_stop`. Past `expires_at` (90 s after the motor echoed) the backend moves to `problem_timeout` by itself |
-| `reading` | object \| null | in `awaiting_reading` after a run to a fraction: `{direction, fraction, from_end_stop, expected_cm, tolerance_cm}` — where the model expects the bar and how far off is still normal (3 cm with a fitted model, 15 cm without). `null` for the travel and the lift-off gap |
+| `reading` | object \| null | in `awaiting_reading` after a run to a fraction: `{direction, fraction, from_end_stop, expected_cm, tolerance_cm}` — where the model expects the bar and how far off is still normal (4 cm with a fitted model, 15 cm without). `null` for the travel and the lift-off gap |
 | `measured` | object | what has been measured so far (§12.4). Emptied once the session has ended without saving: provisional values are discarded |
 | `fit` | object \| null | `{opening, closing}`, each `{run_time_s, slat_time_s, roll, time_scale, points: [{motor_s, measured_cm, residual_cm}]}`, once both directions have a reading. `residual_cm` is model minus tape, and `null` for a direction fitted through a single point, which reproduces itself exactly and has nothing left over to be a residual |
 | `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. In path B, `threshold_cm` is the fixed 4 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check |
@@ -1418,8 +1418,8 @@ its meaning exactly.
 * **Path B's threshold read against the profile's own accuracy**: the threshold stays a
   fixed number, **4 cm** since 20 September — what the panel's own screens promise a
   basic calibration ends up within, so that the check cannot contradict the sentence
-  the same route has just shown. The dialog's own `REFINE_THRESHOLD_CM` is still 3 and
-  will meet it the next time `calibration_flow.py` is opened. The snapshot shows the
+  the same route has just shown. The dialog's own `REFINE_THRESHOLD_CM` is the same
+  four: the two were reunited on 20 September. The snapshot shows the
   profile's level and the gap of its own check beside the gap
   (`check.profile_level`, `check.profile_check_cm`), so the number can be read against
   it by the person looking at it.
