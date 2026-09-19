@@ -154,6 +154,22 @@ the panel when it is in the way.
   reloading the page is the same device and a second tab is a second one. A screen that
   fails to draw shows what happened with "Try again" and "End the calibration" on it
   instead of an empty page, and the measurement behind it is untouched.
+- **Where the calibration has got to, beside every step of it.** The guided calibration
+  is four minutes long and, until now, said only which of six phases it was in. It now
+  shows the whole of them — **Route · Preparation · Ascent · Descent · Tape readings ·
+  Review** — with the ones behind ticked and carrying what they produced ("Ascent ·
+  Curtain travel · 195 cm"), the one in hand opened on its own stages with the reader's
+  place picked out, and the ones ahead waiting. A route that does not do a phase says so
+  rather than hiding it, so a correction of the times shows "Tape readings · not part of
+  this route" and the reader still counts to six. On a wide screen it is a column of its
+  own to the left, and the column the buttons are in does not move; below about 1150 px
+  it is one row above the step that says where the reader is, opens on a tap and is
+  remembered open for the rest of the calibration. It is a view and not a way back: the
+  only row that can be pressed is the tape reading the flow is already offering to
+  repeat, and pressing it sends that same offer. The phase the header names is now read
+  off the plan of the route being walked, so it no longer counts 2, 3, **5**, 4, 5, 6 on
+  the full measurement — the travel of the curtain is read at the top of the ascent, and
+  is now named as part of it.
 
 ### Changed
 

@@ -580,12 +580,306 @@ export const templateStyles = css`
     color: var(--myhome-text-soft);
   }
 
+  /*
+   * Where the calibration has got to (live finding 29, and PoC Stepper Lettura.dc.html).
+   *
+   * One nav with two appearances: below ~1150 px the list is shut behind the row that
+   * says where the reader is, and above it the row is gone and the list is the left column.
+   * The switch is the media query in engine/screen.ts; nothing here measures a width.
+   *
+   * **Every colour is a mixed ink, not the raw theme colour.** The states are told apart by
+   * shape as well as by colour - a tick, a filled dot, an empty ring, a dashed ring, an
+   * exclamation - because a state told only by colour is a state a reader with a colour
+   * deficiency cannot read (WCAG 1.4.1). The inks are the ones tools/contrast.mjs
+   * measures, which is why they are the inks and not --myhome-success itself.
+   */
+  .stepper {
+    background: var(--myhome-card);
+    border-bottom: 1px solid var(--myhome-divider);
+    margin: -16px -16px 16px;
+  }
+
+  .stepper-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 16px;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+  .stepper-toggle .here {
+    flex: 1;
+    min-width: 0;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+
+  .dots {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    box-sizing: border-box;
+    background: var(--myhome-success-ink);
+  }
+
+  .dot.current,
+  .dot.error {
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+  }
+
+  .dot.current {
+    background: var(--myhome-primary-ink);
+  }
+
+  .dot.error {
+    background: var(--myhome-error-ink);
+  }
+
+  .dot.future {
+    background: none;
+    border: 2px solid var(--myhome-field-border);
+  }
+
+  .dot.skipped {
+    background: none;
+    border: 2px dashed var(--myhome-text-soft);
+  }
+
+  /* The chevron, drawn rather than written: a glyph here would be read out as a word. */
+  .chevron {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    position: relative;
+  }
+
+  .chevron::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 8px;
+    width: 9px;
+    height: 9px;
+    border-right: 2px solid var(--myhome-text);
+    border-bottom: 2px solid var(--myhome-text);
+    transform: rotate(45deg);
+  }
+
+  .chevron.open::before {
+    top: 12px;
+    transform: rotate(225deg);
+  }
+
+  .stepper-list {
+    display: none;
+    list-style: none;
+    margin: 0;
+    padding: 4px 16px 12px;
+  }
+
+  .stepper-list.open {
+    display: block;
+  }
+
+  .step {
+    margin: 0;
+    padding: 0;
+  }
+
+  /*
+   * The row itself, pressable or not, drawn the same way: the two differ in what they are,
+   * never in what they look like, so a rail does not jump when a verb is offered.
+   */
+  .step-press,
+  .step-still {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .step-press {
+    min-height: 48px;
+    align-items: center;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 5px 8px;
+    margin: 0 -8px;
+  }
+
+  .step-press:hover {
+    background: var(--myhome-primary-faint);
+  }
+
+  /*
+   * The mark: 24 px for a phase, 18 px for a stage inside it, both centred in a 24 px
+   * column so the names line up whatever the row is. The connector the design draws between
+   * marks is the left rule on the words, which costs no element per row.
+   */
+  .mark {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 12px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 1px;
+  }
+
+  .step.sub .mark {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    border-radius: 9px;
+    margin-left: 3px;
+    margin-right: 3px;
+    font-size: 10px;
+  }
+
+  .mark.done {
+    background: var(--myhome-success-pastel);
+    color: var(--myhome-success-ink);
+  }
+
+  .mark.done::before {
+    content: "✓";
+  }
+
+  .mark.current {
+    background: var(--myhome-primary-ink);
+  }
+
+  .mark.future {
+    border: 2px solid var(--myhome-field-border);
+  }
+
+  .mark.skipped {
+    border: 2px dashed var(--myhome-text-soft);
+    color: var(--myhome-text-soft);
+  }
+
+  .mark.skipped::before {
+    content: "–";
+  }
+
+  .mark.error {
+    background: var(--myhome-error-pastel);
+    color: var(--myhome-error-ink);
+  }
+
+  .mark.error::before {
+    content: "!";
+  }
+
+  .step .words {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 6px;
+  }
+
+  .step .name {
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--myhome-text);
+  }
+
+  .step.sub .name {
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .step.current .name,
+  .step.error .name {
+    font-weight: 600;
+  }
+
+  .step.future .name,
+  .step.skipped .name {
+    color: var(--myhome-text-soft);
+  }
+
+  .step .meta {
+    flex-basis: 100%;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--myhome-text-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .step.error .meta {
+    color: var(--myhome-error-ink);
+  }
+
+  /* The one mark that says "this can be done again", beside the name it belongs to. */
+  .step .redo {
+    color: var(--myhome-primary-ink);
+    font-size: 14px;
+    line-height: 1;
+  }
+
   @media (min-width: 900px) {
     /* The strip spans the two columns, so it lines up with them and not with the page. */
     .read-only {
       margin: 0 auto;
       max-width: 1080px;
       width: calc(100% - 64px);
+    }
+
+    /* Inside the pane's own padding, so the row lines up with the columns under it. */
+    .stepper {
+      margin: -24px -32px 20px;
+    }
+
+    .stepper-toggle {
+      padding: 0 32px;
+    }
+
+    .stepper-list {
+      padding: 4px 32px 16px;
+    }
+  }
+
+  @media (min-width: 1150px) {
+    /* The column: no card, no rule under it, and the rows back to their own size. */
+    .stepper-list {
+      padding: 0;
+    }
+
+    .step-press {
+      min-height: 44px;
     }
   }
 `;

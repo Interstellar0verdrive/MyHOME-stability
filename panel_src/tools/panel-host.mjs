@@ -522,6 +522,21 @@ export const WIZARD_SCREENS = [
     drive: pressInWizard("[data-wizard-exit]"),
     expect: "[data-exit-dialog]",
   }),
+  // The stepper, in the states that are not the ordinary one (live finding 29, lot W2). The
+  // ordinary one is already every wizard screen above, because the stepper is on all of
+  // them: what is added here is a route that skips three of the six phases, a route that
+  // takes no readings at all, a stage that has to be done again - which is the one row that
+  // can be pressed - and the collapsible row opened, which is the phone's whole stepper.
+  wizard("a route that skips three phases", "briefing_verify_offer", { expect: "[data-stepper]" }),
+  wizard("a correction, which takes no readings", "review_correction", { expect: "[data-stepper]" }),
+  wizard("a reading that has to be done again", "awaiting_reading_measure_descent_stale", {
+    expect: "[data-stepper] button.step-press",
+  }),
+  wizard("the stepper opened on a phone", "awaiting_reading_measure_descent", {
+    name: "the wizard, the stepper opened",
+    drive: pressInWizard("[data-stepper-toggle]"),
+    expect: '[data-stepper-toggle][aria-expanded="true"]',
+  }),
   // The card of SPEC §5.8. `npm run session` asserts that it appears and that the presence
   // signal goes on arriving; this asks whether it is a card anybody can use - it is the
   // one screen whose whole job is to offer a way on.

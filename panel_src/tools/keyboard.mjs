@@ -564,6 +564,81 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+// --- where the calibration has got to (live finding 29, lot W2) -------------------------
+//
+// The stepper's own rule is that it is orientation and not a road back, and that rule is a
+// keyboard rule before it is anything else: a rail of nine rows that all took focus would
+// put nine stops between the heading and the field a reading is typed into. So what is
+// walked here is exactly that - how many of its rows are in the tab order, which one, and
+// what pressing it sends.
+{
+  console.log("\nthe guided calibration, the stepper on an ordinary step");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, the stepper",
+    state: "session:awaiting_reading_measure_descent",
+    hash: "#/calibrate",
+    expect: "[data-stepper]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const rows = deepAll(panel.shadowRoot, "[data-stepper] li.step");
+  const toggle = deep(panel.shadowRoot, "[data-stepper-toggle]");
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  check(`the stepper draws ${rows.length} rows`, rows.length >= 6, String(rows.length));
+  check("and not one of them is in the tab order",
+    deepAll(panel.shadowRoot, "[data-stepper] button.step-press").length === 0);
+  check("the collapsible row is a button, so Enter and Space open it",
+    toggle?.tagName === "BUTTON", describe(toggle));
+  check("it is in the tab order", stops.includes(toggle));
+  check("and it says whether the list is open", toggle?.getAttribute("aria-expanded") === "false");
+  check("the list it opens is the one it names",
+    toggle?.getAttribute("aria-controls") === deep(panel.shadowRoot, "[data-stepper] ol")?.id);
+  check("the one row in hand is the one marked as the step",
+    deepAll(panel.shadowRoot, '[data-stepper] [aria-current="step"]').length === 1);
+  check("the stepper comes before the step it is about",
+    (deep(panel.shadowRoot, "[data-stepper]")?.compareDocumentPosition(
+      deep(panel.shadowRoot, "h1.screen-title"),
+    ) ?? 0) & 4,
+    "the nav precedes the heading");
+  toggle?.click();
+  await settle();
+  check("opening it says so", 
+    deep(panel.shadowRoot, "[data-stepper-toggle]")?.getAttribute("aria-expanded") === "true");
+  check("and sends nothing at all to the session",
+    !calls.includes("act") && !calls.includes("stop"), calls.join(", "));
+  dom.window.close();
+}
+
+{
+  console.log("\n…and on a reading that has to be done again");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, the stepper with a way back",
+    state: "session:awaiting_reading_measure_descent_stale",
+    hash: "#/calibrate",
+    expect: "[data-stepper] button.step-press",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const pressable = deepAll(panel.shadowRoot, "[data-stepper] button.step-press");
+  check("exactly one row can be pressed", pressable.length === 1, String(pressable.length));
+  check("and it is the only one of them in the tab order",
+    stops.filter((one) => one.classList?.contains("step-press")).length === 1);
+  check("it says which verb it sends", (pressable[0]?.getAttribute("aria-label") ?? "").length > 0,
+    pressable[0]?.getAttribute("aria-label") ?? "");
+  // Every row that is not that one: a div with nothing focusable in it, which is the whole
+  // of "the stepper does not act".
+  const still = deepAll(panel.shadowRoot, "[data-stepper] .step-still");
+  still.forEach((row) => row.click?.());
+  await settle();
+  check(`pressing all ${still.length} of the other rows sends nothing`,
+    !calls.includes("act"), calls.join(", "));
+  pressable[0]?.click();
+  await settle();
+  check("and pressing the one that can be sends exactly one act",
+    calls.filter((one) => one === "act").length === 1, calls.join(", "));
+  dom.window.close();
+}
+
 const failed = checks.filter((one) => !one.ok);
 console.log(`\n${checks.length} checks, ${failed.length} failed`);
 process.exit(failed.length === 0 ? 0 : 1);

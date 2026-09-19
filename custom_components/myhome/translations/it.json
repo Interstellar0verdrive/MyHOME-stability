@@ -1180,6 +1180,37 @@
         "end_other_confirm": "Chiudere il dialogo Configura aperto su questo gateway? Le misure non salvate di quel dialogo vanno perse, e se aveva salvato qualcosa l'integrazione viene ricaricata.",
         "service": "Una corsa di calibrazione avviata da un'azione è ancora in corso: attendere che finisca.",
         "here": "Questa scheda sta già misurando «{cover}»: su un gateway si misura una tapparella alla volta. Conviene tornarci, o terminarla, prima di misurarne un'altra."
+      },
+      "stepper": {
+        "label": "Avanzamento della calibrazione",
+        "route": {
+          "path_a": "percorso (A)",
+          "path_b": "percorso (B)",
+          "path_c": "percorso (C)"
+        },
+        "within": "passo {index} di {count}",
+        "not_on_route": "non serve su questo percorso",
+        "value": "{key} · {value}",
+        "reading_down": "Al {percent}% della discesa",
+        "reading_up": "Al {percent}% della salita",
+        "stage": {
+          "home_closed": "Chiusura completa",
+          "open_timed": "Salita cronometrata",
+          "height_read": "Corsa del telo",
+          "close_timed": "Discesa cronometrata",
+          "tape_brief": "Istruzioni",
+          "verify": "Verifica",
+          "verify_offer": "Scelta sulla verifica",
+          "profile_name": "Nome del profilo",
+          "summary": "Cosa è stato misurato"
+        },
+        "state": {
+          "done": "fatto",
+          "current": "in corso",
+          "future": "da fare",
+          "skipped": "saltato",
+          "error": "da rifare"
+        }
       }
     },
     "screen": {

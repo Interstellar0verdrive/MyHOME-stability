@@ -1180,6 +1180,37 @@
         "end_other_confirm": "Close the Configure dialog open on this gateway? The unsaved measurements of that dialog are lost, and if it had saved something the integration is reloaded.",
         "service": "A calibration run started by an action is still under way: wait for it to finish.",
         "here": "This tab is already measuring «{cover}»: one shutter at a time on a gateway. Go back to it, or end it, before measuring another one."
+      },
+      "stepper": {
+        "label": "Progress of the calibration",
+        "route": {
+          "path_a": "route (A)",
+          "path_b": "route (B)",
+          "path_c": "route (C)"
+        },
+        "within": "step {index} of {count}",
+        "not_on_route": "not part of this route",
+        "value": "{key} · {value}",
+        "reading_down": "At {percent}% of the descent",
+        "reading_up": "At {percent}% of the ascent",
+        "stage": {
+          "home_closed": "Fully closed",
+          "open_timed": "Timed ascent",
+          "height_read": "Curtain travel",
+          "close_timed": "Timed descent",
+          "tape_brief": "Instructions",
+          "verify": "Check",
+          "verify_offer": "Whether to check",
+          "profile_name": "Name of the profile",
+          "summary": "What was measured"
+        },
+        "state": {
+          "done": "done",
+          "current": "in hand",
+          "future": "to come",
+          "skipped": "skipped",
+          "error": "to be done again"
+        }
       }
     },
     "screen": {

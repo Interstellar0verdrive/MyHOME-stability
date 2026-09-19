@@ -176,11 +176,69 @@ export interface ScreenSummary {
   disclose?: ScreenDisclosure[];
 }
 
+/** What one row of the stepper is: behind, in hand, ahead, not on this route, or wrong. */
+export type ScreenStepState = "done" | "current" | "future" | "skipped" | "error";
+
+/** One phase of the calibration, or one stage inside the phase being stood on. */
+export interface ScreenStepperStep {
+  /** The phase or the stage it stands for; never a sentence. */
+  id: string;
+  label: string;
+  /** What it produced, why it is not on this route, or what went wrong with it. */
+  meta?: string;
+  state: ScreenStepState;
+  /**
+   * The token pressing the row fires, on the **one** row the session offers a verb for.
+   *
+   * Absent everywhere else, and absent everywhere when somebody else is driving: a row with
+   * no action is drawn as a label with nothing focusable in it, so the keyboard walks past
+   * the stepper and lands on the step.
+   */
+  action?: string;
+  /** The words of that verb, which is what pressing the row is announced as. */
+  actionLabel?: string;
+  /** A stage of the phase in hand rather than a phase: smaller, lighter, same column. */
+  sub?: boolean;
+  /**
+   * The one row that is aria-current="step", and there is exactly one.
+   *
+   * Not the same as state === "current": a phase and the stage inside it are both in hand,
+   * and a screen reader told about two current steps has been told about none. It is the
+   * innermost - the stage, when the phase in hand has stages, and the phase otherwise.
+   */
+  inHand?: boolean;
+  /** The state as a word, said inside the row's own name. */
+  stateLabel: string;
+}
+
+/**
+ * Where the calibration has got to (live finding 29).
+ *
+ * One element with two appearances and no duplicated markup: a column of rows on a wide
+ * screen, and below ~1150 px the same rows behind one button that says where the reader is.
+ * The switch is a media query - see the note on the responsive law above - so there is one
+ * nav, one list, and nothing for a screen reader to meet twice.
+ */
+export interface ScreenStepper {
+  /** What the region is called. */
+  label: string;
+  /** The one line the collapsed row shows: "Tape readings · 5 of 6". */
+  here: string;
+  rows: ScreenStepperStep[];
+  /** One dot per phase, in order, for the collapsed row. Decorative: here says it too. */
+  dots: ScreenStepState[];
+  open: boolean;
+  /** The token that opens and shuts it. */
+  toggle: string;
+}
+
 export interface ScreenModel {
   /** The translation key of the step, never a sentence. */
   id: string;
   model: ScreenTemplate;
   phase?: { label: string; index: number; count: number };
+  /** Where the calibration has got to; absent on every screen that is not a step of one. */
+  stepper?: ScreenStepper;
   title: string;
   /** Markdown, with any leading illustration already lifted into `image`. */
   body?: string;
@@ -350,6 +408,88 @@ export class MyHomeScreen extends LitElement {
           background: none;
           margin-top: 20px;
         }
+
+        /*
+         * Between 900 and the stepper's own breakpoint the pane is still two columns, so
+         * the collapsible row goes across both of them and above the step - never into a
+         * cell of the grid, which would put it under the text and beside nothing.
+         */
+        .stepper {
+          grid-column: 1 / -1;
+          margin: 0 0 20px;
+        }
+      }
+
+      /*
+       * The third column (live finding 29).
+       *
+       * 250 px of stepper beside the two columns that were already there, and the operative
+       * column untouched at 400 px - the design's condition: the way forward must not move
+       * from one step to the next because a rail appeared beside it. The maximum grows by
+       * exactly the column and its gap (1080 + 250 + 44), so at 1374 px and wider the text
+       * column is the same 572 px it has always been and only the empty margins are eaten.
+       *
+       * 1150 px is where the three columns stop being cramped: below it the text column
+       * would be under 350 px, which is narrower than a phone, so the stepper folds into the
+       * one row instead. The number is here and in tools/session.mjs, which reads it.
+       */
+      @media (min-width: 1150px) {
+        .pane {
+          grid-template-columns: 250px minmax(0, 1fr) 400px;
+          max-width: 1374px;
+        }
+
+        .pane.no-stepper {
+          grid-template-columns: minmax(0, 1fr) 400px;
+          max-width: 1080px;
+        }
+
+        /*
+         * The positioning screen keeps its one column, with the rail beside it: a run that
+         * hid the stepper for the eight seconds it lasts would be the one moment the reader
+         * most wants to know how much is left.
+         */
+        .pane.single {
+          display: grid;
+          grid-template-columns: 250px minmax(0, 1fr);
+          max-width: 854px;
+        }
+
+        /*
+         * Both halves of that one column are the second column, one under the other, and
+         * the rail spans the two rows they make - otherwise the row the heading is in is as
+         * tall as the whole rail, and the progress bar starts level with the bottom of it.
+         */
+        .pane.single .text-column,
+        .pane.single .right {
+          grid-column: 2;
+        }
+
+        .pane.single .stepper {
+          grid-row: 1 / -1;
+        }
+
+        .pane.single.no-stepper {
+          display: block;
+          max-width: 560px;
+        }
+
+        .stepper {
+          grid-column: auto;
+          margin: 0;
+          border-right: 1px solid var(--myhome-divider);
+          padding: 4px 24px 0 0;
+          background: none;
+          border-bottom: none;
+        }
+
+        .stepper-toggle {
+          display: none;
+        }
+
+        .stepper-list {
+          display: block;
+        }
       }
     `,
   ];
@@ -413,6 +553,65 @@ export class MyHomeScreen extends LitElement {
     }
   }
 
+  /**
+   * The stepper, once, with the collapsible row and the list in the same nav.
+   *
+   * Drawn once and never twice: the button is hidden by the media query above ~1150 px and
+   * the list is hidden below it unless the button has been pressed, which is one region for
+   * a screen reader at any width. A row that carries no action is a <div> with nothing
+   * focusable in it - the design's rule that the stepper is orientation, not a road back -
+   * and the one that does is a real <button> whose name says which verb it sends.
+   */
+  private _renderStepper(stepper: ScreenStepper): TemplateResult {
+    const row = (step: ScreenStepperStep): TemplateResult => {
+      const inside = html`<span class="mark ${step.state}" aria-hidden="true"></span>
+        <span class="words">
+          <span class="name">${step.label}</span>
+          ${step.action ? html`<span class="redo" aria-hidden="true">↺</span>` : nothing}
+          ${step.meta ? html`<span class="meta">${step.meta}</span>` : nothing}
+        </span>
+        ${step.meta === step.stateLabel
+          ? nothing
+          : html`<span class="sr-only">${step.stateLabel}</span>`}`;
+      return html`<li
+        class="step ${step.state} ${step.sub ? "sub" : "phase"}"
+        aria-current=${step.inHand ? "step" : nothing}
+      >
+        ${step.action
+          ? html`<button
+              class="step-press"
+              type="button"
+              data-step=${step.id}
+              aria-label=${`${step.label} — ${step.stateLabel} — ${step.actionLabel ?? ""}`}
+              @click=${() => this._fire(step.action!)}
+            >
+              ${inside}
+            </button>`
+          : html`<div class="step-still">${inside}</div>`}
+      </li>`;
+    };
+    return html`<nav class="stepper" aria-label=${stepper.label} data-stepper>
+      <button
+        class="stepper-toggle"
+        type="button"
+        data-stepper-toggle
+        aria-expanded=${stepper.open ? "true" : "false"}
+        aria-controls="stepper-list"
+        @click=${() => this._fire(stepper.toggle)}
+      >
+        <span class="dots" aria-hidden="true">
+          ${stepper.dots.map((state) => html`<span class="dot ${state}"></span>`)}
+        </span>
+        <span class="here">${stepper.here}</span>
+        <span class="sr-only">${stepper.label}</span>
+        <span class="chevron ${stepper.open ? "open" : ""}" aria-hidden="true"></span>
+      </button>
+      <ol id="stepper-list" class="stepper-list ${stepper.open ? "open" : ""}">
+        ${stepper.rows.map(row)}
+      </ol>
+    </nav>`;
+  }
+
   private _renderFooter(model: ScreenModel, context: ScreenContext): TemplateResult | typeof nothing {
     const secondary = model.secondary ?? [];
     if (!model.primary && secondary.length === 0) {
@@ -471,7 +670,8 @@ export class MyHomeScreen extends LitElement {
             </button>
           </div>`
         : nothing}
-      <div class="pane ${single ? "single" : ""}">
+      <div class="pane ${single ? "single" : ""} ${model.stepper ? "" : "no-stepper"}">
+        ${model.stepper ? this._renderStepper(model.stepper) : nothing}
         <div class="text-column">
           ${model.phase
             ? html`<p class="phase">
