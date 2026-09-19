@@ -10,10 +10,9 @@ The controller is `tests/test_calibration_session.py`'s subject; this file is ab
   `revision` order, and closing the socket takes the subscriber away and **leaves the
   session running** - which is the whole reason the session lives on the server;
 * `tests/fixtures/panel_session_examples.json`, regenerated from the controller instead
-  of written by hand (below, from the lot that makes the file real). It is the
-  frontend's stand-in server (`npm run session`, `test/wizard-model.test.ts`, the
-  harness), and a hand-written likeness of a payload is the one kind of fixture that can
-  be wrong in every direction at once.
+  of written by hand. It is the frontend's stand-in server (`npm run session`,
+  `test/wizard-model.test.ts`, the harness), and a hand-written likeness of a payload is
+  the one kind of fixture that can be wrong in every direction at once.
 
 The bench is `panel_overview_example.json`'s: the same two shutters, the same profile
 and the same numbers, so that a review's `before` column really is what the panel's
@@ -23,7 +22,7 @@ overview shows for that window on the same page.
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -34,11 +33,17 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components import websocket_api
 from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.components.websocket_api import const as ws_const
+from homeassistant.const import CONF_MAC, STATE_CLOSING, STATE_OPENING
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.myhome import calibration_session
+from custom_components.myhome.calibration import REASON_NO_ECHO, CalibrationError
+from custom_components.myhome.calibration_flow import MOVED_IDLE_TIMEOUT_SEC
 from custom_components.myhome.calibration_session import CalibrationSession, async_start, current
 from custom_components.myhome.calibration_store import loaded_store
+from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
 from custom_components.myhome.panel_schemas import (
     SESSION_ACT_SCHEMA,
     SESSION_ANSWER_KEYS,
@@ -70,7 +75,7 @@ from custom_components.myhome.panel_schemas import (
 )
 from custom_components.myhome.websocket_api import SESSION_WATCHERS_DATA_KEY
 
-from .helpers_calibration import HEIGHT, FakeRunner
+from .helpers_calibration import HEIGHT, FakeRunner, ascent_cm, descent_cm
 from .helpers_platforms import entity_object, setup_myhome
 from .test_calibration_session import PATH_A_BASIC, Act, act, check_the_snapshot, walk
 from .test_websocket_api import (
@@ -750,7 +755,7 @@ async def test_save_writes_once_publishes_the_overview_and_reloads_nothing(
         client = await hass_ws_client(hass)
         sub_id = await subscribed(client, entry.entry_id)
         session = await started_over_the_socket(client, hass, entry)
-        await walk(hass, session, [*PATH_A_BASIC[:-1], Act("submit", "hallway_shutter")], freezer=freezer)
+        await walk(hass, session, A_NAMED_AFTER_THE_WINDOW, freezer=freezer)
         assert session.snapshot()["state"] == "review"
 
         seen: list[dict[str, Any]] = []
@@ -924,3 +929,452 @@ async def test_the_overview_says_which_client_is_holding_the_shutter(
         freezer.tick(calibration_session.TERMINAL_TTL + timedelta(seconds=1))
         overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
         assert overview["session"] is None
+
+
+# A tape does not read the model back. The shared walk of `test_calibration_session.py`
+# hands the session exactly what the reference window would do if its curtain obeyed the
+# arithmetic to the millimetre, which is the right input for a test that checks the
+# rediscovered numbers - and the wrong one for this fixture: the fake window *is* the
+# `tall` profile of `panel_overview_example.json`, so a perfect reading rediscovers that
+# profile and every review comes out with its "before" and "after" columns carrying the
+# same six numbers. The panel's review screen cannot be built against a table where
+# nothing changes, and neither can the list of the windows the profile reaches.
+#
+# So the two tape readings are a centimetre and a half off the model, which is what a
+# person with a tape really writes down. They are inputs and not outputs: everything
+# downstream - the fit, the two roll coefficients, the profile written, the row of every
+# follower - is what the server computes from them.
+TAPE_ASCENT = round(ascent_cm(0.5) + 1.5, 1)
+TAPE_DESCENT = round(descent_cm(0.5) - 1.5, 1)
+
+
+def with_a_real_tape(acts: tuple[Act, ...]) -> tuple[Act, ...]:
+    """The shared walk with its two readings replaced by the ones above."""
+    instead = {str(ascent_cm(0.5)): str(TAPE_ASCENT), str(descent_cm(0.5)): str(TAPE_DESCENT)}
+    return tuple(
+        Act(one.action, instead.get(str(one.value), one.value), one.tick) for one in acts
+    )
+
+
+def at_human_speed(acts: tuple[Act, ...]) -> tuple[Act, ...]:
+    """Two and a half seconds in front of every screen that measures nothing.
+
+    The shared walk presses instantly wherever the press is not itself a measurement,
+    which is right for a test about numbers and wrong for a fixture about *screens*: a
+    dozen snapshots carrying the same `server_time` to the millisecond would let a panel
+    be built that quietly assumes instants never move. The ticks that **are** the
+    measurement - the slat phase, the two timed runs - are left exactly as they are.
+    """
+    return tuple(one if one.tick else Act(one.action, one.value, 2.5) for one in acts)
+
+
+A_TAPED = at_human_speed(with_a_real_tape(PATH_A_BASIC))
+# ...and with the profile named after the window itself rather than after the profile
+# that already exists, which is what makes `review_basic` a review that **creates** a
+# profile and `review_basic_profile_exists` one that updates one.
+A_NAMED_AFTER_THE_WINDOW = (*A_TAPED[:-1], Act("submit", "hallway_shutter"))
+
+
+# ============================================================= the committed examples
+# `tests/fixtures/panel_session_examples.json` is the frontend's stand-in server: the
+# harness draws from it, `npm run session` drives the built bundle against it, and
+# `test/wizard-model.test.ts` builds a screen model out of every one of its scenarios.
+# Lot L0 wrote it by hand, before there was a controller; from here on it is **what the
+# controller really publishes**, walk by walk, so that a screen the panel cannot draw is
+# a failing test and a visible diff instead of a surprise in a browser three lots later.
+#
+# Run `python -m pytest tests/test_websocket_session.py -k committed_session_examples`
+# after any deliberate change, read the diff, and update the file.
+#
+# **Two things are normalised and nothing else.** The session id is a fresh `uuid4` and
+# the entry id a fresh ULID on every run; the committed file carries a stable stand-in
+# for each. Everything else, the instants included, is real: the walks run under a
+# frozen clock that starts at `FIXTURE_START`, so the same walk produces the same
+# seconds every time, and the fixture keeps hours a panel can subtract.
+FIXTURE_START = datetime(2026, 9, 18, 10, 0, tzinfo=UTC)
+
+# The scenarios lot B4 fills in: paths B and C, the thorough level and the verifications
+# are not in this backend yet, so the six snapshots that stand on them are still lot L0's
+# hand-written ones. B4 adds a walk for each, here, and the list empties.
+STILL_BY_HAND: frozenset[str] = frozenset(
+    {
+        "armed_path_b_profile_choice",
+        "armed_refine_scope_intent",
+        "review_short",
+        "review_correction",
+        "review_precise",
+        "checking_verify_result_offers_c",
+    }
+)
+
+
+class Recorder:
+    """Every snapshot one session published, in the order it published them.
+
+    The screens inside a movement - the frame going out before the actuator has echoed,
+    a homing under way, the run to a fraction - are never what a verb *answers*: by the
+    time `act` comes back the movement is over. They are events, so they are collected
+    as events.
+    """
+
+    def __init__(self, session: CalibrationSession) -> None:
+        self.seen: list[dict[str, Any]] = [session.snapshot()]
+        self.drop = session.subscribe(self.seen.append)
+
+    def on(self, step: str, **fields: Any) -> dict[str, Any]:
+        """The first snapshot published on that step, with those fields."""
+        for snapshot in self.seen:
+            if snapshot["step"] == step and all(
+                snapshot[key] == value for key, value in fields.items()
+            ):
+                return snapshot
+        raise AssertionError(f"no snapshot on {step} with {fields} among {self.steps()}")
+
+    def steps(self) -> list[str]:
+        return [snapshot["step"] for snapshot in self.seen]
+
+
+@pytest.fixture
+def every_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let the controller offer the paths and the level lot B4 has yet to walk.
+
+    The sequencing decision of the B2 handoff (§4, RISCHIO-6 of its review), taken here
+    rather than discovered halfway through: `armed_path` and the reviews list `path_b`,
+    `path_c` and `refine` among their `actions`, and this backend does not offer them
+    yet - it refuses them at `start` and leaves them out of `actions`, on purpose, so
+    that nothing published is a promise it cannot keep.
+
+    Regenerating those three scenarios against the narrow tuples would rewrite them to
+    `["path_a"]` and `[]`, and lot B4 would rewrite them straight back - with the
+    frontend lot building screens against the shorter list in between. So the generator
+    widens the two tables, which is exactly the one-line change B4 makes for real, and
+    the scenarios stay what the panel has to be able to draw. **It is not an amendment**:
+    nothing in the contract changes, and no other screen of path A reads either tuple.
+    """
+    monkeypatch.setattr(calibration_session, "IMPLEMENTED_PATHS", SESSION_PATHS)
+    monkeypatch.setattr(calibration_session, "IMPLEMENTED_LEVELS", SESSION_LEVELS)
+
+
+def normalised(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """One snapshot with the two identifiers nobody can predict put back."""
+    text = json.dumps(snapshot)
+    return json.loads(
+        text.replace(snapshot["session_id"], EXAMPLE_SESSION_ID).replace(
+            snapshot["entry_id"], EXAMPLE_ENTRY_ID
+        )
+    )
+
+
+def they_are_the_committed_examples(produced: dict[str, dict[str, Any]]) -> None:
+    """Compare what the controller published with what is in the file, scenario by one."""
+    committed = the_fixture()["scenarios"]
+    wrong: list[str] = []
+    for name, snapshot in produced.items():
+        assert name in committed, f"{name} is not a scenario of the fixture"
+        check_the_snapshot(snapshot)
+        mine = normalised(snapshot)
+        if mine != committed[name]:
+            wrong.append(
+                f"--- {name} ---\nthe server sends:\n"
+                f"{json.dumps(mine, indent=2, ensure_ascii=False)}\n"
+                f"the fixture says:\n{json.dumps(committed[name], indent=2, ensure_ascii=False)}"
+            )
+    assert not wrong, "\n".join(wrong)
+
+
+def test_the_fixture_names_every_scenario_the_walks_below_produce() -> None:
+    """The list of what is regenerated and the list of what is not, together and whole.
+
+    Without this, a scenario dropped from a walk would simply stop being compared with
+    anything and the hand-written snapshot beside it would go stale in silence.
+
+    Mutation caught: taking a name out of `REGENERATED` and leaving the file's scenario
+    behind; lot B4 walking a scenario without taking it out of `STILL_BY_HAND`.
+    """
+    committed = set(the_fixture()["scenarios"])
+    assert committed == REGENERATED | STILL_BY_HAND
+    assert not REGENERATED & STILL_BY_HAND
+
+
+PATH_A_SCREENS = (
+    "armed_path",
+    "briefing_open_brief",
+    "running_open_start",
+    "running_open_lift",
+    "running_lift_stop",
+    "briefing_lift_check",
+    "positioning_home_closed",
+    "positioning_tape_run",
+    "awaiting_reading_height",
+    "awaiting_reading_measure_descent",
+    "briefing_profile_name",
+    "review_basic",
+)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_on_path_a(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, every_path: None
+) -> None:
+    """Twelve screens of one walk, from the shutter's first movement to its summary."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        seen = Recorder(session)
+        review = await walk(hass, session, A_NAMED_AFTER_THE_WINDOW, freezer=freezer)
+
+        they_are_the_committed_examples(
+            {
+                "armed_path": seen.seen[0],
+                "briefing_open_brief": seen.on("open_brief"),
+                "running_open_start": seen.on("open_start"),
+                "running_open_lift": seen.on("open_lift"),
+                "running_lift_stop": seen.on("lift_stop"),
+                "briefing_lift_check": seen.on("lift_check"),
+                "positioning_home_closed": seen.on("home_closed"),
+                "positioning_tape_run": seen.on("tape_run"),
+                "awaiting_reading_height": seen.on("height"),
+                "awaiting_reading_measure_descent": seen.on("measure_descent"),
+                "briefing_profile_name": seen.on("profile_name"),
+                "review_basic": review,
+            }
+        )
+        await session.async_cancel(CLIENT)
+
+
+@pytest.mark.parametrize(
+    ("name", "target"), [("saved_profile", "profile"), ("saved_cover_only", "cover_only")]
+)
+async def test_the_committed_session_examples_are_what_the_server_sends_when_it_saves(
+    hass: HomeAssistant,
+    tmp_path,
+    freezer: FrozenDateTimeFactory,
+    every_path: None,
+    name: str,
+    target: str,
+) -> None:
+    """The two exits of path A, each with the outcome the shutter really ended on."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_NAMED_AFTER_THE_WINDOW, freezer=freezer)
+        answer = await session.async_save(CLIENT, session.revision, target)
+        they_are_the_committed_examples({name: answer["session"]})
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_over_a_profile(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, every_path: None
+) -> None:
+    """The review that updates a profile, with every other window it reaches named."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        review = await walk(hass, session, A_TAPED, freezer=freezer)
+        they_are_the_committed_examples({"review_basic_profile_exists": review})
+        await session.async_cancel(CLIENT)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_off_the_straight_road(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The gap form, a reading that cannot be one, and the three ways out of a step.
+
+    Each of them is a branch of the same walk taken at one screen, so each gets its own
+    session: a fixture built by walking on from a screen already perturbed would show
+    states no user ever reaches.
+    """
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        produced: dict[str, dict[str, Any]] = {}
+
+        # The bottom edge did not leave its rest where it was expected to: the tape
+        # measures the gap, and the session asks for it.
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:5], freezer=freezer)
+        produced["awaiting_reading_lift_gap"] = await act(
+            hass, session, Act("lift_gap"), freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        # A reading longer than the whole curtain: the user's mistake, so the field
+        # comes back with an error on it and not a refusal.
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:18], freezer=freezer)
+        assert session.snapshot()["step"] == "measure_descent"
+        produced["awaiting_reading_measure_descent_error"] = await act(
+            hass, session, Act("submit", "500"), freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        they_are_the_committed_examples(produced)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_when_something_else_moves_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The wall switch, at the three moments it means three different things (§11.5)."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        produced: dict[str, dict[str, Any]] = {}
+
+        # Before a timed run: the session takes the shutter back to its end stop first.
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:3], freezer=freezer)
+        hass.states.async_set(ENTITY, STATE_OPENING)
+        await hass.async_block_till_done()
+        produced["briefing_open_brief_rehomed"] = await act(
+            hass, session, Act("open_start"), freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        # Outside a measurement: not an interruption, and nothing is repeated.
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:5], freezer=freezer)
+        hass.states.async_set(ENTITY, STATE_OPENING)
+        await hass.async_block_till_done()
+        produced["briefing_lift_check_external"] = session.snapshot()
+        await session.async_cancel(CLIENT)
+
+        # While a reading is awaited: the field stays, and the way forward is the step.
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:18], freezer=freezer)
+        hass.states.async_set(ENTITY, STATE_CLOSING)
+        await hass.async_block_till_done()
+        produced["awaiting_reading_measure_descent_stale"] = session.snapshot()
+        await session.async_cancel(CLIENT)
+
+        they_are_the_committed_examples(produced)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_when_it_goes_wrong(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The gateway that did not answer, and the step a stop made meaningless."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        produced: dict[str, dict[str, Any]] = {}
+
+        session = await open_session(hass, entry)
+        runner.fail = CalibrationError(REASON_NO_ECHO, "the actuator never answered")
+        runner.fail_on = "home"
+        produced["problem_no_echo"] = await walk(
+            hass, session, A_TAPED[:2], freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:4], freezer=freezer)
+        assert session.snapshot()["step"] == "open_lift"
+        produced["problem_interrupted"] = await session.async_stop(CLIENT)
+        await session.async_cancel(CLIENT)
+
+        they_are_the_committed_examples(produced)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_at_the_end(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The five ways a calibration finishes without being saved (§11.6).
+
+    Each of them is a whole session of its own, because a terminal snapshot is the last
+    thing a session ever says.
+    """
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        produced: dict[str, dict[str, Any]] = {}
+
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:5], freezer=freezer)
+        await session.async_cancel(CLIENT)
+        produced["ended_cancelled"] = session.snapshot()
+
+        session = await open_session(hass, entry)
+        produced["ended_left"] = session.leave(CLIENT)
+
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:5], freezer=freezer)
+        freezer.tick(timedelta(seconds=MOVED_IDLE_TIMEOUT_SEC + 1))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        produced["ended_expired"] = session.snapshot()
+
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:5], freezer=freezer)
+        await calibration_session.async_end_all(hass, entry, "unloaded")
+        produced["ended_unloaded"] = session.snapshot()
+
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:2], freezer=freezer)
+        # The shutter is taken out of the gateway under the session: the next movement
+        # finds no entity at all, which is the one ending nobody asked for.
+        mac = str(entry.data[CONF_MAC])
+        hass.data[DOMAIN][mac][CONF_PLATFORMS][COVER].pop(DEVICE_KEY)
+        await act(hass, session, Act("confirm_closed"), freezer=freezer)
+        produced["ended_cover_gone"] = session.snapshot()
+
+        they_are_the_committed_examples(produced)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_to_the_other_tab(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The one snapshot in the file whose owner is the second browser tab."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_TAPED[:6], freezer=freezer)
+        assert session.snapshot()["step"] == "closed_again"
+        # "Take control" on the other device: the only way the session changes hands
+        # while the client holding it is still there.
+        taken = session.attach(OTHER_CLIENT, claim=True)
+        they_are_the_committed_examples({"owned_by_other": taken})
+        await session.async_cancel(OTHER_CLIENT)
+
+
+REGENERATED: frozenset[str] = frozenset(
+    {
+        *PATH_A_SCREENS,
+        "review_basic_profile_exists",
+        "saved_profile",
+        "saved_cover_only",
+        "awaiting_reading_lift_gap",
+        "awaiting_reading_measure_descent_error",
+        "briefing_open_brief_rehomed",
+        "briefing_lift_check_external",
+        "awaiting_reading_measure_descent_stale",
+        "problem_no_echo",
+        "problem_interrupted",
+        "ended_cancelled",
+        "ended_left",
+        "ended_expired",
+        "ended_unloaded",
+        "ended_cover_gone",
+        "owned_by_other",
+    }
+)
+
+
+def test_the_documents_worked_example_is_one_of_the_fixtures_own() -> None:
+    """§12.6 is a copy of a scenario, so it is compared with the scenario it copies.
+
+    Lot L0 left this as a thing to remember: the document's complete example was copied
+    from `awaiting_reading_measure_descent` by hand, and a regeneration that moved its
+    numbers would leave the only worked example in the API document describing a payload
+    the server no longer sends. It is one `json.loads` away from being checked, so it is
+    checked.
+
+    Mutation caught: regenerating the fixture and not recopying the example.
+    """
+    document = (
+        Path(__file__).resolve().parents[1] / "docs" / "panel-websocket-api.md"
+    ).read_text(encoding="utf-8")
+    body = document.split("### 12.6 A complete example", 1)[1]
+    written = body.split("```json", 1)[1].split("```", 1)[0]
+    assert json.loads(written) == the_fixture()["scenarios"]["awaiting_reading_measure_descent"]

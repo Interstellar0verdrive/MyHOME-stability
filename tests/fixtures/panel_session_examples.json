@@ -1,5 +1,5 @@
 {
-  "_about": "Hand-written examples of the calibration session's snapshot (docs/panel-websocket-api.md §12), one per screen the panel has to draw. Frozen with panel_schemas.py and panel_src/src/engine/session-contract.ts (lot L0); regenerated from the real controller from lot B3 on.",
+  "_about": "Examples of the calibration session's snapshot (docs/panel-websocket-api.md §12), one per screen the panel has to draw. Frozen with panel_schemas.py and panel_src/src/engine/session-contract.ts (lot L0); regenerated from the real controller by tests/test_websocket_session.py, which is where the walk behind each scenario is written. The scenarios of paths B and C, of the thorough level and of the verifications are still lot L0's hand-written ones until lot B4 walks them.",
   "_example": {
     "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
     "this_client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
@@ -315,7 +315,7 @@
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 1,
-      "server_time": "2026-09-18T10:00:02.000+00:00",
+      "server_time": "2026-09-18T10:00:00+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -363,9 +363,9 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:00:47.000+00:00"
+        "present_until": "2026-09-18T10:00:45+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:30:02.000+00:00",
+      "idle_expires_at": "2026-09-18T10:30:00+00:00",
       "outcome": null
     },
     "armed_path_b_profile_choice": {
@@ -497,7 +497,7 @@
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 6,
-      "server_time": "2026-09-18T10:00:54.200+00:00",
+      "server_time": "2026-09-18T10:00:07.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -554,16 +554,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:01:39.200+00:00"
+        "present_until": "2026-09-18T10:00:52.500000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:10:54.200+00:00",
+      "idle_expires_at": "2026-09-18T10:30:07.500000+00:00",
       "outcome": null
     },
     "briefing_open_brief_rehomed": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 9,
-      "server_time": "2026-09-18T10:02:11.600+00:00",
+      "server_time": "2026-09-18T10:00:07.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -620,16 +620,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:56.600+00:00"
+        "present_until": "2026-09-18T10:00:52.500000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:12:11.600+00:00",
+      "idle_expires_at": "2026-09-18T10:30:07.500000+00:00",
       "outcome": null
     },
     "running_open_start": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 7,
-      "server_time": "2026-09-18T10:01:10.100+00:00",
+      "server_time": "2026-09-18T10:00:10+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -685,20 +685,20 @@
       "review": null,
       "problem": null,
       "notice": null,
-      "position_known": null,
+      "position_known": "closed",
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:01:55.100+00:00"
+        "present_until": "2026-09-18T10:00:55+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:10.100+00:00",
+      "idle_expires_at": "2026-09-18T10:10:10+00:00",
       "outcome": null
     },
     "running_open_lift": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 8,
-      "server_time": "2026-09-18T10:01:10.620+00:00",
+      "server_time": "2026-09-18T10:00:10+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -737,12 +737,12 @@
         "kind": "free",
         "direction": "open",
         "progress_action": "starting_open",
-        "started_at": "2026-09-18T10:01:10.600+00:00",
+        "started_at": "2026-09-18T10:00:10+00:00",
         "planned_s": 25.0
       },
       "press": {
         "kind": "lift_off",
-        "expires_at": "2026-09-18T10:02:40.620+00:00"
+        "expires_at": "2026-09-18T10:01:40+00:00"
       },
       "reading": null,
       "measured": {
@@ -765,16 +765,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:01:55.620+00:00"
+        "present_until": "2026-09-18T10:00:55+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:10.620+00:00",
+      "idle_expires_at": "2026-09-18T10:10:10+00:00",
       "outcome": null
     },
     "running_lift_stop": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 9,
-      "server_time": "2026-09-18T10:01:15.420+00:00",
+      "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -809,7 +809,7 @@
         "kind": "free",
         "direction": "open",
         "progress_action": "stopping_lift",
-        "started_at": "2026-09-18T10:01:10.600+00:00",
+        "started_at": "2026-09-18T10:00:10+00:00",
         "planned_s": 25.0
       },
       "press": null,
@@ -819,9 +819,9 @@
         "travel_measured": false,
         "opening_time_s": null,
         "closing_time_s": null,
-        "slat_time_s": 4.8,
+        "slat_time_s": null,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
           "stop_written_at": null,
           "gap_cm": null,
           "late": false
@@ -839,16 +839,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:00.420+00:00"
+        "present_until": "2026-09-18T10:00:59.700000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:15.420+00:00",
+      "idle_expires_at": "2026-09-18T10:10:14.700000+00:00",
       "outcome": null
     },
     "briefing_lift_check": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 10,
-      "server_time": "2026-09-18T10:01:16.100+00:00",
+      "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -892,10 +892,10 @@
         "travel_measured": false,
         "opening_time_s": null,
         "closing_time_s": null,
-        "slat_time_s": 4.8,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
@@ -912,16 +912,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:01.100+00:00"
+        "present_until": "2026-09-18T10:00:59.700000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:16.100+00:00",
+      "idle_expires_at": "2026-09-18T10:10:14.700000+00:00",
       "outcome": null
     },
     "briefing_lift_check_external": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 11,
-      "server_time": "2026-09-18T10:01:30.700+00:00",
+      "server_time": "2026-09-18T10:00:22.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -965,10 +965,10 @@
         "travel_measured": false,
         "opening_time_s": null,
         "closing_time_s": null,
-        "slat_time_s": 4.8,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:22.200000+00:00",
+          "stop_written_at": "2026-09-18T10:00:22.200000+00:00",
           "gap_cm": null,
           "late": false
         },
@@ -985,16 +985,16 @@
       "external_move": true,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:15.700+00:00"
+        "present_until": "2026-09-18T10:01:07.200000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:30.700+00:00",
+      "idle_expires_at": "2026-09-18T10:10:22.200000+00:00",
       "outcome": null
     },
     "awaiting_reading_lift_gap": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 11,
-      "server_time": "2026-09-18T10:01:21.300+00:00",
+      "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1043,10 +1043,10 @@
         "travel_measured": false,
         "opening_time_s": null,
         "closing_time_s": null,
-        "slat_time_s": 4.8,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
@@ -1063,16 +1063,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:06.300+00:00"
+        "present_until": "2026-09-18T10:00:59.700000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:21.300+00:00",
+      "idle_expires_at": "2026-09-18T10:10:14.700000+00:00",
       "outcome": null
     },
     "positioning_home_closed": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 3,
-      "server_time": "2026-09-18T10:00:20.400+00:00",
+      "server_time": "2026-09-18T10:00:05+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1107,7 +1107,7 @@
         "kind": "homing",
         "direction": "close",
         "progress_action": "homing_closed",
-        "started_at": "2026-09-18T10:00:20.950+00:00",
+        "started_at": "2026-09-18T10:00:05+00:00",
         "planned_s": 21.7
       },
       "press": null,
@@ -1132,16 +1132,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:01:05.400+00:00"
+        "present_until": "2026-09-18T10:00:50+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:10:20.400+00:00",
+      "idle_expires_at": "2026-09-18T10:10:05+00:00",
       "outcome": null
     },
     "positioning_tape_run": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 34,
-      "server_time": "2026-09-18T10:04:22.300+00:00",
+      "revision": 27,
+      "server_time": "2026-09-18T10:01:21.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1165,7 +1165,7 @@
         "profile_name",
         "summary"
       ],
-      "plan_index": 6,
+      "plan_index": 5,
       "intent": null,
       "actions": [],
       "form": null,
@@ -1175,32 +1175,27 @@
       },
       "movement": {
         "kind": "fraction",
-        "direction": "close",
-        "progress_action": "running_down",
-        "started_at": "2026-09-18T10:04:22.900+00:00",
-        "planned_s": 8.55
+        "direction": "open",
+        "progress_action": "running_up",
+        "started_at": "2026-09-18T10:01:21.200000+00:00",
+        "planned_s": 14.5
       },
       "press": null,
       "reading": null,
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [],
-        "ascent": [
-          [
-            13.7,
-            81.0
-          ]
-        ],
+        "ascent": [],
         "times_adopted": false
       },
       "fit": null,
@@ -1208,20 +1203,20 @@
       "review": null,
       "problem": null,
       "notice": null,
-      "position_known": null,
+      "position_known": "closed",
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:05:07.300+00:00"
+        "present_until": "2026-09-18T10:02:06.200000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:14:22.300+00:00",
+      "idle_expires_at": "2026-09-18T10:11:21.200000+00:00",
       "outcome": null
     },
     "awaiting_reading_measure_descent": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 35,
-      "server_time": "2026-09-18T10:04:32.100+00:00",
+      "revision": 32,
+      "server_time": "2026-09-18T10:01:26.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1261,9 +1256,10 @@
       },
       "placeholders": {
         "cover": "Hallway Shutter",
-        "expected": 86.25,
         "percent": 50,
-        "tolerance": 15
+        "direction": "close",
+        "expected": 86.25,
+        "tolerance": 15.0
       },
       "movement": null,
       "press": null,
@@ -1277,20 +1273,20 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
@@ -1304,16 +1300,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:05:17.100+00:00"
+        "present_until": "2026-09-18T10:02:11.200000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:14:32.100+00:00",
+      "idle_expires_at": "2026-09-18T10:11:26.200000+00:00",
       "outcome": null
     },
     "awaiting_reading_measure_descent_error": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 36,
-      "server_time": "2026-09-18T10:05:01.800+00:00",
+      "revision": 33,
+      "server_time": "2026-09-18T10:01:40.900000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1353,9 +1349,10 @@
       },
       "placeholders": {
         "cover": "Hallway Shutter",
-        "expected": 86.25,
         "percent": 50,
-        "tolerance": 15
+        "direction": "close",
+        "expected": 86.25,
+        "tolerance": 15.0
       },
       "movement": null,
       "press": null,
@@ -1369,20 +1366,20 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:29.400000+00:00",
+          "stop_written_at": "2026-09-18T10:00:29.400000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
@@ -1396,16 +1393,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:05:46.800+00:00"
+        "present_until": "2026-09-18T10:02:25.900000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:15:01.800+00:00",
+      "idle_expires_at": "2026-09-18T10:11:40.900000+00:00",
       "outcome": null
     },
     "awaiting_reading_measure_descent_stale": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 37,
-      "server_time": "2026-09-18T10:05:05.400+00:00",
+      "revision": 33,
+      "server_time": "2026-09-18T10:01:48.400000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1447,9 +1444,10 @@
       },
       "placeholders": {
         "cover": "Hallway Shutter",
-        "expected": 86.25,
         "percent": 50,
-        "tolerance": 15
+        "direction": "close",
+        "expected": 86.25,
+        "tolerance": 15.0
       },
       "movement": null,
       "press": null,
@@ -1463,20 +1461,20 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:36.900000+00:00",
+          "stop_written_at": "2026-09-18T10:00:36.900000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
@@ -1490,16 +1488,16 @@
       "external_move": true,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:05:50.400+00:00"
+        "present_until": "2026-09-18T10:02:33.400000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:15:05.400+00:00",
+      "idle_expires_at": "2026-09-18T10:11:48.400000+00:00",
       "outcome": null
     },
     "awaiting_reading_height": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 19,
-      "server_time": "2026-09-18T10:02:08.000+00:00",
+      "revision": 18,
+      "server_time": "2026-09-18T10:00:47+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1546,12 +1544,12 @@
       "measured": {
         "travel_cm": null,
         "travel_measured": false,
-        "opening_time_s": 22.6,
+        "opening_time_s": 22.299999952316284,
         "closing_time_s": null,
-        "slat_time_s": 4.8,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
@@ -1568,16 +1566,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:53.000+00:00"
+        "present_until": "2026-09-18T10:01:32+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:12:08.000+00:00",
+      "idle_expires_at": "2026-09-18T10:30:47+00:00",
       "outcome": null
     },
     "briefing_profile_name": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 39,
-      "server_time": "2026-09-18T10:05:18.400+00:00",
+      "revision": 34,
+      "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1616,7 +1614,8 @@
         "error": null
       },
       "placeholders": {
-        "cover": "Hallway Shutter"
+        "cover": "Hallway Shutter",
+        "replaced": ""
       },
       "movement": null,
       "press": null,
@@ -1624,52 +1623,52 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [
           [
-            8.55,
-            84.5
+            8.5,
+            83.5
           ]
         ],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
       },
       "fit": {
         "opening": {
-          "run_time_s": 22.6,
-          "slat_time_s": 4.8,
-          "roll": 2.0232558139534857,
+          "run_time_s": 22.299999952316284,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.9770992366412203,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 13.7,
-              "measured_cm": 81.0,
+              "motor_s": 13.5,
+              "measured_cm": 81.5,
               "residual_cm": null
             }
           ]
         },
         "closing": {
-          "run_time_s": 21.9,
-          "slat_time_s": 4.8,
-          "roll": 1.7272727272727253,
+          "run_time_s": 21.700000047683716,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.8057553956834518,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 8.55,
-              "measured_cm": 84.5,
+              "motor_s": 8.5,
+              "measured_cm": 83.5,
               "residual_cm": null
             }
           ]
@@ -1683,16 +1682,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:06:03.400+00:00"
+        "present_until": "2026-09-18T10:02:16.200000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:15:18.400+00:00",
+      "idle_expires_at": "2026-09-18T10:31:31.200000+00:00",
       "outcome": null
     },
     "review_basic": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 40,
-      "server_time": "2026-09-18T10:05:31.000+00:00",
+      "revision": 35,
+      "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1731,52 +1730,52 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [
           [
-            8.55,
-            84.5
+            8.5,
+            83.5
           ]
         ],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
       },
       "fit": {
         "opening": {
-          "run_time_s": 22.6,
-          "slat_time_s": 4.8,
-          "roll": 2.0232558139534857,
+          "run_time_s": 22.299999952316284,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.9770992366412203,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 13.7,
-              "measured_cm": 81.0,
+              "motor_s": 13.5,
+              "measured_cm": 81.5,
               "residual_cm": null
             }
           ]
         },
         "closing": {
-          "run_time_s": 21.9,
-          "slat_time_s": 4.8,
-          "roll": 1.7272727272727253,
+          "run_time_s": 21.700000047683716,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.8057553956834518,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 8.55,
-              "measured_cm": 84.5,
+              "motor_s": 8.5,
+              "measured_cm": 83.5,
               "residual_cm": null
             }
           ]
@@ -1801,27 +1800,27 @@
           {
             "key": "opening_time_s",
             "before": 25.0,
-            "after": 22.6
+            "after": 22.3
           },
           {
             "key": "closing_time_s",
             "before": 21.7,
-            "after": 21.9
+            "after": 21.7
           },
           {
             "key": "slat_time_s",
             "before": 4.0,
-            "after": 4.8
+            "after": 4.7
           },
           {
             "key": "opening_roll",
             "before": 2.12,
-            "after": 2.02
+            "after": 1.98
           },
           {
             "key": "closing_roll",
             "before": 1.69,
-            "after": 1.73
+            "after": 1.81
           }
         ],
         "side_effects": [],
@@ -1837,7 +1836,7 @@
           "closing_roll"
         ],
         "keeping": [],
-        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.3\n    closing_time: 21.7\n    slat_time: 4.7\n    opening_roll: 1.98\n    closing_roll: 1.81\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
       },
       "problem": null,
       "notice": null,
@@ -1845,16 +1844,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:06:16.000+00:00"
+        "present_until": "2026-09-18T10:02:16.200000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:15:31.000+00:00",
+      "idle_expires_at": "2026-09-18T10:31:31.200000+00:00",
       "outcome": null
     },
     "review_basic_profile_exists": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 42,
-      "server_time": "2026-09-18T10:05:33.500+00:00",
+      "revision": 35,
+      "server_time": "2026-09-18T10:01:33.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -1893,52 +1892,52 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [
           [
-            8.55,
-            84.5
+            8.5,
+            83.5
           ]
         ],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
       },
       "fit": {
         "opening": {
-          "run_time_s": 22.6,
-          "slat_time_s": 4.8,
-          "roll": 2.0232558139534857,
+          "run_time_s": 22.299999952316284,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.9770992366412203,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 13.7,
-              "measured_cm": 81.0,
+              "motor_s": 13.5,
+              "measured_cm": 81.5,
               "residual_cm": null
             }
           ]
         },
         "closing": {
-          "run_time_s": 21.9,
-          "slat_time_s": 4.8,
-          "roll": 1.7272727272727253,
+          "run_time_s": 21.700000047683716,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.8057553956834518,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 8.55,
-              "measured_cm": 84.5,
+              "motor_s": 8.5,
+              "measured_cm": 83.5,
               "residual_cm": null
             }
           ]
@@ -1963,27 +1962,27 @@
           {
             "key": "opening_time_s",
             "before": 25.0,
-            "after": 22.6
+            "after": 22.3
           },
           {
             "key": "closing_time_s",
             "before": 21.7,
-            "after": 21.9
+            "after": 21.7
           },
           {
             "key": "slat_time_s",
             "before": 4.0,
-            "after": 4.8
+            "after": 4.7
           },
           {
             "key": "opening_roll",
             "before": 2.12,
-            "after": 2.02
+            "after": 1.98
           },
           {
             "key": "closing_roll",
             "before": 1.69,
-            "after": 1.73
+            "after": 1.81
           }
         ],
         "side_effects": [],
@@ -2000,27 +1999,27 @@
               {
                 "key": "opening_time_s",
                 "before": 17.851745131422387,
-                "after": 18.116163028803385
+                "after": 17.92499944192393
               },
               {
                 "key": "closing_time_s",
                 "before": 17.366414659284736,
-                "after": 17.548932762761417
+                "after": 17.437171663746454
               },
               {
                 "key": "slat_time_s",
                 "before": 3.615384615384616,
-                "after": 3.6923076923076925
+                "after": 3.615384615384616
               },
               {
                 "key": "opening_roll",
                 "before": 1.9204166214652487,
-                "after": 1.8356302627540388
+                "after": 1.8017939778069907
               },
               {
                 "key": "closing_roll",
                 "before": 1.5581300429582992,
-                "after": 1.5915401345866211
+                "after": 1.6585675005395932
               }
             ]
           }
@@ -2036,7 +2035,7 @@
           "closing_roll"
         ],
         "keeping": [],
-        "yaml": "cover_profiles:\n  tall:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: tall\n    height: 195.0\n"
+        "yaml": "cover_profiles:\n  tall:\n    reference_height: 195.0\n    opening_time: 22.3\n    closing_time: 21.7\n    slat_time: 4.7\n    opening_roll: 1.98\n    closing_roll: 1.81\n\n# on the cover itself:\n    profile: tall\n    height: 195.0\n"
       },
       "problem": null,
       "notice": null,
@@ -2044,9 +2043,9 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:06:18.500+00:00"
+        "present_until": "2026-09-18T10:02:18.700000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:15:33.500+00:00",
+      "idle_expires_at": "2026-09-18T10:31:33.700000+00:00",
       "outcome": null
     },
     "review_precise": {
@@ -2560,7 +2559,7 @@
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 4,
-      "server_time": "2026-09-18T10:00:22.900+00:00",
+      "server_time": "2026-09-18T10:00:05+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -2618,16 +2617,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:01:07.900+00:00"
+        "present_until": "2026-09-18T10:00:50+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:10:22.900+00:00",
+      "idle_expires_at": "2026-09-18T10:30:05+00:00",
       "outcome": null
     },
     "problem_interrupted": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 10,
-      "server_time": "2026-09-18T10:01:19.800+00:00",
+      "revision": 9,
+      "server_time": "2026-09-18T10:00:15+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -2685,16 +2684,16 @@
       "external_move": false,
       "owner": {
         "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-        "present_until": "2026-09-18T10:02:04.800+00:00"
+        "present_until": "2026-09-18T10:01:00+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:19.800+00:00",
+      "idle_expires_at": "2026-09-18T10:30:15+00:00",
       "outcome": null
     },
     "saved_profile": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 41,
-      "server_time": "2026-09-18T10:05:40.200+00:00",
+      "revision": 36,
+      "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -2731,52 +2730,52 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [
           [
-            8.55,
-            84.5
+            8.5,
+            83.5
           ]
         ],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
       },
       "fit": {
         "opening": {
-          "run_time_s": 22.6,
-          "slat_time_s": 4.8,
-          "roll": 2.0232558139534857,
+          "run_time_s": 22.299999952316284,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.9770992366412203,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 13.7,
-              "measured_cm": 81.0,
+              "motor_s": 13.5,
+              "measured_cm": 81.5,
               "residual_cm": null
             }
           ]
         },
         "closing": {
-          "run_time_s": 21.9,
-          "slat_time_s": 4.8,
-          "roll": 1.7272727272727253,
+          "run_time_s": 21.700000047683716,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.8057553956834518,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 8.55,
-              "measured_cm": 84.5,
+              "motor_s": 8.5,
+              "measured_cm": 83.5,
               "residual_cm": null
             }
           ]
@@ -2801,27 +2800,27 @@
           {
             "key": "opening_time_s",
             "before": 25.0,
-            "after": 22.6
+            "after": 22.3
           },
           {
             "key": "closing_time_s",
             "before": 21.7,
-            "after": 21.9
+            "after": 21.7
           },
           {
             "key": "slat_time_s",
             "before": 4.0,
-            "after": 4.8
+            "after": 4.7
           },
           {
             "key": "opening_roll",
             "before": 2.12,
-            "after": 2.02
+            "after": 1.98
           },
           {
             "key": "closing_roll",
             "before": 1.69,
-            "after": 1.73
+            "after": 1.81
           }
         ],
         "side_effects": [],
@@ -2837,7 +2836,7 @@
           "closing_roll"
         ],
         "keeping": [],
-        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.3\n    closing_time: 21.7\n    slat_time: 4.7\n    opening_roll: 1.98\n    closing_roll: 1.81\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
       },
       "problem": null,
       "notice": null,
@@ -2855,8 +2854,8 @@
     "saved_cover_only": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 41,
-      "server_time": "2026-09-18T10:05:40.200+00:00",
+      "revision": 36,
+      "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -2893,52 +2892,52 @@
       "measured": {
         "travel_cm": 195.0,
         "travel_measured": true,
-        "opening_time_s": 22.6,
-        "closing_time_s": 21.9,
-        "slat_time_s": 4.8,
+        "opening_time_s": 22.299999952316284,
+        "closing_time_s": 21.700000047683716,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
         "descent": [
           [
-            8.55,
-            84.5
+            8.5,
+            83.5
           ]
         ],
         "ascent": [
           [
-            13.7,
-            81.0
+            13.5,
+            81.5
           ]
         ],
         "times_adopted": false
       },
       "fit": {
         "opening": {
-          "run_time_s": 22.6,
-          "slat_time_s": 4.8,
-          "roll": 2.0232558139534857,
+          "run_time_s": 22.299999952316284,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.9770992366412203,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 13.7,
-              "measured_cm": 81.0,
+              "motor_s": 13.5,
+              "measured_cm": 81.5,
               "residual_cm": null
             }
           ]
         },
         "closing": {
-          "run_time_s": 21.9,
-          "slat_time_s": 4.8,
-          "roll": 1.7272727272727253,
+          "run_time_s": 21.700000047683716,
+          "slat_time_s": 4.700000047683716,
+          "roll": 1.8057553956834518,
           "time_scale": 1.0,
           "points": [
             {
-              "motor_s": 8.55,
-              "measured_cm": 84.5,
+              "motor_s": 8.5,
+              "measured_cm": 83.5,
               "residual_cm": null
             }
           ]
@@ -2963,27 +2962,27 @@
           {
             "key": "opening_time_s",
             "before": 25.0,
-            "after": 22.6
+            "after": 22.3
           },
           {
             "key": "closing_time_s",
             "before": 21.7,
-            "after": 21.9
+            "after": 21.7
           },
           {
             "key": "slat_time_s",
             "before": 4.0,
-            "after": 4.8
+            "after": 4.7
           },
           {
             "key": "opening_roll",
             "before": 2.12,
-            "after": 2.02
+            "after": 1.98
           },
           {
             "key": "closing_roll",
             "before": 1.69,
-            "after": 1.73
+            "after": 1.81
           }
         ],
         "side_effects": [],
@@ -2999,7 +2998,7 @@
           "closing_roll"
         ],
         "keeping": [],
-        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.6\n    closing_time: 21.9\n    slat_time: 4.8\n    opening_roll: 2.02\n    closing_roll: 1.73\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
+        "yaml": "cover_profiles:\n  hallway_shutter:\n    reference_height: 195.0\n    opening_time: 22.3\n    closing_time: 21.7\n    slat_time: 4.7\n    opening_roll: 1.98\n    closing_roll: 1.81\n\n# on the cover itself:\n    profile: hallway_shutter\n    height: 195.0\n"
       },
       "problem": null,
       "notice": null,
@@ -3017,8 +3016,8 @@
     "ended_cancelled": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 12,
-      "server_time": "2026-09-18T10:01:36.500+00:00",
+      "revision": 11,
+      "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3048,7 +3047,12 @@
         "opening_time_s": null,
         "closing_time_s": null,
         "slat_time_s": null,
-        "lift": null,
+        "lift": {
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
+          "gap_cm": null,
+          "late": false
+        },
         "descent": [],
         "ascent": [],
         "times_adopted": false
@@ -3072,8 +3076,8 @@
     "ended_expired": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 12,
-      "server_time": "2026-09-18T10:11:36.500+00:00",
+      "revision": 11,
+      "server_time": "2026-09-18T10:10:30.400000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3103,7 +3107,12 @@
         "opening_time_s": null,
         "closing_time_s": null,
         "slat_time_s": null,
-        "lift": null,
+        "lift": {
+          "pressed_at": "2026-09-18T10:00:29.400000+00:00",
+          "stop_written_at": "2026-09-18T10:00:29.400000+00:00",
+          "gap_cm": null,
+          "late": false
+        },
         "descent": [],
         "ascent": [],
         "times_adopted": false
@@ -3127,8 +3136,8 @@
     "ended_unloaded": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 20,
-      "server_time": "2026-09-18T10:02:30.300+00:00",
+      "revision": 11,
+      "server_time": "2026-09-18T10:10:45.100000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3158,7 +3167,12 @@
         "opening_time_s": null,
         "closing_time_s": null,
         "slat_time_s": null,
-        "lift": null,
+        "lift": {
+          "pressed_at": "2026-09-18T10:10:45.100000+00:00",
+          "stop_written_at": "2026-09-18T10:10:45.100000+00:00",
+          "gap_cm": null,
+          "late": false
+        },
         "descent": [],
         "ascent": [],
         "times_adopted": false
@@ -3183,7 +3197,7 @@
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
       "revision": 2,
-      "server_time": "2026-09-18T10:00:35.800+00:00",
+      "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3237,8 +3251,8 @@
     "ended_cover_gone": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 27,
-      "server_time": "2026-09-18T10:03:34.700+00:00",
+      "revision": 6,
+      "server_time": "2026-09-18T10:10:50.100000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3292,8 +3306,8 @@
     "owned_by_other": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 11,
-      "server_time": "2026-09-18T10:01:37.000+00:00",
+      "revision": 13,
+      "server_time": "2026-09-18T10:00:17.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3336,10 +3350,10 @@
         "travel_measured": false,
         "opening_time_s": null,
         "closing_time_s": null,
-        "slat_time_s": 4.8,
+        "slat_time_s": 4.700000047683716,
         "lift": {
-          "pressed_at": "2026-09-18T10:01:15.420+00:00",
-          "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
           "gap_cm": null,
           "late": false
         },
@@ -3356,9 +3370,9 @@
       "external_move": false,
       "owner": {
         "client_id": "8d41f6b2-7c3e-4f95-a0d8-2b6e9c1f7e33",
-        "present_until": "2026-09-18T10:02:22.000+00:00"
+        "present_until": "2026-09-18T10:01:02.200000+00:00"
       },
-      "idle_expires_at": "2026-09-18T10:11:37.000+00:00",
+      "idle_expires_at": "2026-09-18T10:10:17.200000+00:00",
       "outcome": null
     }
   }

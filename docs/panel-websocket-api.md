@@ -1154,8 +1154,8 @@ and the screen asks for the tape.
 {
   "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
   "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-  "revision": 35,
-  "server_time": "2026-09-18T10:04:32.100+00:00",
+  "revision": 32,
+  "server_time": "2026-09-18T10:01:26.200000+00:00",
   "cover": {"unique_id": "00:03:50:aa:bb:cc-2-81", "entity_id": "cover.hallway_shutter",
             "name": "Hallway Shutter"},
   "state": "awaiting_reading",
@@ -1172,18 +1172,19 @@ and the screen asks for the tape.
   "actions": [],
   "form": {"field": "measured_cm", "kind": "number", "optional": false, "unit": "cm",
            "suggested": null, "min": 0.0, "max": 195.0, "choices": null, "error": null},
-  "placeholders": {"cover": "Hallway Shutter", "expected": 86.25, "percent": 50,
-                   "tolerance": 15},
+  "placeholders": {"cover": "Hallway Shutter", "percent": 50, "direction": "close",
+                   "expected": 86.25, "tolerance": 15.0},
   "movement": null,
   "press": null,
   "reading": {"direction": "close", "fraction": 0.5, "from_end_stop": "open",
               "expected_cm": 86.25, "tolerance_cm": 15.0},
-  "measured": {"travel_cm": 195.0, "travel_measured": true, "opening_time_s": 22.6,
-               "closing_time_s": 21.9, "slat_time_s": 4.8,
-               "lift": {"pressed_at": "2026-09-18T10:01:15.420+00:00",
-                        "stop_written_at": "2026-09-18T10:01:15.470+00:00",
+  "measured": {"travel_cm": 195.0, "travel_measured": true,
+               "opening_time_s": 22.299999952316284,
+               "closing_time_s": 21.700000047683716, "slat_time_s": 4.700000047683716,
+               "lift": {"pressed_at": "2026-09-18T10:00:14.700000+00:00",
+                        "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
                         "gap_cm": null, "late": false},
-               "descent": [], "ascent": [[13.7, 81.0]], "times_adopted": false},
+               "descent": [], "ascent": [[13.5, 81.5]], "times_adopted": false},
   "fit": null,
   "check": null,
   "review": null,
@@ -1192,23 +1193,30 @@ and the screen asks for the tape.
   "position_known": null,
   "external_move": false,
   "owner": {"client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-            "present_until": "2026-09-18T10:05:17.100+00:00"},
-  "idle_expires_at": "2026-09-18T10:14:32.100+00:00",
+            "present_until": "2026-09-18T10:02:11.200000+00:00"},
+  "idle_expires_at": "2026-09-18T10:11:26.200000+00:00",
   "outcome": null
 }
 ```
+
+The three run times are **raw**: they are clock differences and nothing rounds them
+before they are saved, which is what "numbers as numbers, formatted by the panel"
+(§1) means when the number is a measurement rather than a stored setting.
 
 The panel answers it with:
 
 ```jsonc
 {"type": "myhome/calibration/session/act", "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
  "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8", "client_id": "3b0c7e1a-…",
- "revision": 35, "action": "submit", "value": "84,5"}
+ "revision": 32, "action": "submit", "value": "83,5"}
 ```
 
 `tests/fixtures/panel_session_examples.json` has one such snapshot for every screen the
 panel draws — the first press, the lift-off check, a positioning, a field error, each
-review, each problem and each ending — plus an example frame of every command.
+review, each problem and each ending — plus an example frame of every command. From the
+release that registers these commands the file is **regenerated from the server** by
+`tests/test_websocket_session.py`, walk by walk, rather than written by hand; the
+snapshot above is its `awaiting_reading_measure_descent`, copied.
 
 ---
 
