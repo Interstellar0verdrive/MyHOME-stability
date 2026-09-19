@@ -595,6 +595,50 @@ async def async_start(
     return session
 
 
+# The entries whose unload is already being watched. `ConfigEntry.async_on_unload`
+# hands back no way to unregister, so a callback registered per *session* would pile up
+# one per calibration for the life of the entry (all of them inert after the first).
+# One per entry instead, registered by the first session and taken off this set by the
+# unload that runs it - which is also what drains the entry's own list.
+WATCHED_DATA_KEY = f"{DOMAIN}_calibration_sessions_watched"
+
+
+@callback
+def _watch_for_unload(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """End whatever session this gateway has if the entry is unloaded under it.
+
+    `async_unload_entry` already calls `async_end_all` as its first instruction, which
+    is the ordinary way round and the one that can still write a stop. This is for
+    every other way an entry goes away; by the time it runs the session is usually
+    already ended, and its first question is whether there is one left to end.
+    """
+    watched: set[str] = hass.data.setdefault(WATCHED_DATA_KEY, set())
+    if entry.entry_id in watched:
+        return
+    watched.add(entry.entry_id)
+
+    @callback
+    def unloaded() -> None:
+        hass.data.setdefault(WATCHED_DATA_KEY, set()).discard(entry.entry_id)
+        session = current(hass, entry)
+        if session is None or session.ended:
+            return
+        LOGGER.info(
+            "Panel calibration of %s: the gateway was reloaded, so the session was "
+            "ended. Nothing was saved; start again to measure it",
+            session.cover_name,
+        )
+        # `async_on_unload` callbacks are synchronous, and a session that ends with the
+        # shutter moving must have *tried* to stop it (0.5.0 final review, RISK-C).
+        hass.async_create_task(
+            session.async_end("unloaded", stop=True),
+            "myhome calibration session unloaded",
+            eager_start=False,
+        )
+
+    entry.async_on_unload(unloaded)
+
+
 async def async_end_all(hass: HomeAssistant, entry: ConfigEntry, reason: str) -> None:
     """Close this gateway's session, stopping the shutter if it is running.
 
@@ -679,7 +723,6 @@ class CalibrationSession:
         # the owner, and the two clocks
         self._owner: str | None = client_id
         self._owner_seen: datetime = dt_util.utcnow()
-        self._idle_timeout = IDLE_TIMEOUT_SEC
         self._lease: Callable[[], None] | None = None
         self._lease_at: datetime | None = None
         self._press_timer: Callable[[], None] | None = None
@@ -776,7 +819,7 @@ class CalibrationSession:
         entity = self._cover()
         self._claim = contextlib.ExitStack()
         self._claim.enter_context(entity.calibration_session())
-        self.entry.async_on_unload(self._entry_unloaded)
+        _watch_for_unload(self.hass, self.entry)
         self._watch_the_cover()
         if scope is not None:
             self._intent = {"scope": scope}
@@ -1730,10 +1773,22 @@ class CalibrationSession:
     # ---------------------------------------------------------------------- the clocks
     @callback
     def _touch(self) -> None:
-        """Restart the lease: somebody is still having this conversation."""
+        """Restart the lease: somebody is still having this conversation.
+
+        How long it is worth waiting is a property of the screen the session is on, and
+        is read off it rather than carried in a variable each step has to remember to
+        set: a screen with nothing moving is waiting for somebody to read it (half an
+        hour is an ordinary length of interruption), and one that follows a movement is
+        waiting for somebody standing in front of a shutter with a tape (ten minutes of
+        that means they walked away). It is the dialog's `_idle_timeout`, asked of the
+        step instead of assigned before it, so a verb that touches the lease without
+        changing the screen cannot silently make it half an hour.
+        """
         if self.ended:
             return
-        timeout, self._idle_timeout = self._idle_timeout, IDLE_TIMEOUT_SEC
+        timeout = (
+            MOVED_IDLE_TIMEOUT_SEC if self._screen().after_a_movement else IDLE_TIMEOUT_SEC
+        )
         self._disarm_lease()
         self._lease_at = dt_util.utcnow() + timedelta(seconds=timeout)
         self._lease = async_call_later(self.hass, timeout, self._async_lease_expired)
@@ -1852,24 +1907,6 @@ class CalibrationSession:
         self._show_problem(REASON_INTERRUPTED)
 
     # ------------------------------------------------------------------- the ending
-    @callback
-    def _entry_unloaded(self) -> None:
-        """The gateway went away under the session (a reload, a removal, a restart)."""
-        if self.ended:
-            return
-        LOGGER.info(
-            "Panel calibration of %s: the gateway was reloaded, so the session was "
-            "ended. Nothing was saved; start again to measure it",
-            self.cover_name,
-        )
-        # `async_on_unload` callbacks are synchronous, and a session that ends with the
-        # shutter moving must have *tried* to stop it (0.5.0 final review, RISK-C).
-        self.hass.async_create_task(
-            self.async_end("unloaded", stop=True),
-            "myhome calibration session unloaded",
-            eager_start=False,
-        )
-
     @callback
     def _overtake(self) -> None:
         """Nothing queued or in flight is about this session any more.
@@ -2204,8 +2241,6 @@ class CalibrationSession:
         self._problem = None
         self._form_error = error
         self._notice = notice
-        if self._screen(step).after_a_movement:
-            self._idle_timeout = MOVED_IDLE_TIMEOUT_SEC
         self._publish()
 
     @callback
