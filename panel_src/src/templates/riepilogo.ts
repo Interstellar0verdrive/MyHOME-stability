@@ -40,8 +40,13 @@ const row = (one: ScreenSummaryRow, context: ScreenContext): TemplateResult => h
         >`
       : nothing}
     <span class="after"
-      ><span class="sr-only">${context.i18n.t("panel.review.after")} </span>${one.after}</span
+      >${one.unchanged
+        ? nothing
+        : html`<span class="sr-only">${context.i18n.t("panel.review.after")} </span>`}${one.after}</span
     >
+    ${one.unchanged
+      ? html`<span class="same">${context.i18n.t("panel.review.unchanged")}</span>`
+      : nothing}
   </div>
 `;
 
@@ -77,15 +82,18 @@ export const renderRiepilogo = (
     ${(summary.disclose ?? []).length > 0
       ? html`<div class="disclose">
           ${(summary.disclose ?? []).map(
-            (one) => html`<button
-              class="cta text"
-              type="button"
-              aria-expanded=${one.open ? "true" : "false"}
-              data-disclose=${one.action}
-              @click=${() => context.fire(one.action)}
-            >
-              ${one.label}
-            </button>`,
+            (one) => html`<div class="disclose-one">
+              <button
+                class="cta text"
+                type="button"
+                aria-expanded=${one.open ? "true" : "false"}
+                data-disclose=${one.action}
+                @click=${() => context.fire(one.action)}
+              >
+                ${one.label}
+              </button>
+              ${one.note ? html`<p class="disclose-note">${one.note}</p>` : nothing}
+            </div>`,
           )}
         </div>`
       : nothing}

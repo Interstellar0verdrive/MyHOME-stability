@@ -255,6 +255,35 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+// --- ...and the dark half, which is not the arrow -----------------------------------------
+{
+  console.log("\ndetail → profile → a click outside");
+  // Live finding 27: a click outside answered like the arrow, so from a profile card
+  // opened out of a shutter's card it went back to the shutter and a second click outside
+  // was needed to leave. A click outside is "I am done with this", from however deep.
+  const { window, panel, dom, settle } = await mount({
+    name: "the drawer, dismissed from two levels down",
+    state: "ready",
+    hash: COVER,
+    expect: "[data-drawer]",
+  });
+  const toProfile = deepAll(deep(panel.shadowRoot, "[data-drawer]"), "button.wide").find(
+    (button) => (button.textContent ?? "").includes("Open the profile card"),
+  );
+  toProfile?.click();
+  await settle();
+  check("the profile is in the drawer, two screens deep",
+    window.location.hash.startsWith("#/profile/"));
+  deep(panel.shadowRoot, ".sheet-backdrop")?.click();
+  await settle();
+  check("one click outside lands on the list, not on the shutter it came from",
+    window.location.hash === "#/" || window.location.hash === "" || window.location.hash === "#",
+    window.location.hash);
+  check("and the drawer is gone", deep(panel.shadowRoot, "[data-drawer]") === null &&
+    deep(panel.shadowRoot, "button.handle") !== null);
+  dom.window.close();
+}
+
 // --- the measuring lock ------------------------------------------------------------------
 {
   console.log("\na measurement is running");
@@ -393,6 +422,14 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   check("and the screen says out loud which one it is", spoken.length === 1, spoken.join(" | "));
   options[0]?.click();
   await settle();
+  // A row selects; "Continue" is what opens a session (live finding 3, and the design's
+  // own `Continua`). Both are buttons, so Enter and Space reach the whole gesture.
+  check("pressing a row still starts nothing", !calls.includes("start"), calls.join(", ") || "nothing sent");
+  const going_on = deepAll(panel.shadowRoot, "button.big")[0];
+  check("and the way on is a button of the footer", going_on?.tagName === "BUTTON",
+    describe(going_on));
+  going_on?.click();
+  await settle();
   check("choosing one opens exactly one session", calls.filter((one) => one === "start").length === 1,
     calls.join(", "));
   // The intention travels in the store, so the address stays the wizard's own and carries
@@ -498,6 +535,8 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
     hash: "#/calibrate",
     drive: async (context) => {
       context.deep(context.panel.shadowRoot, ".options button.option")?.click();
+      await context.settle();
+      context.deepAll(context.panel.shadowRoot, "button.big")[0]?.click();
       await context.settle();
     },
     expect: "[data-session-busy]",

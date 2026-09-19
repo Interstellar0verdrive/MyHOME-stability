@@ -17,6 +17,7 @@
 // `Intl.NumberFormat` through `engine/i18n.ts`, in the language the user was served, so a
 // German reading a French installation still reads "86,3" the way they write it.
 
+import { bareLabel, withUnit } from "../engine/fields";
 import { type I18n } from "../engine/i18n";
 import { type SessionValueKey } from "../engine/session-contract";
 
@@ -84,7 +85,12 @@ const EDIT_LABEL: Readonly<Partial<Record<SessionValueKey, string>>> = {
 export const valueLabel = (key: SessionValueKey, i18n: I18n): string => {
   const borrowed = EDIT_LABEL[key];
   if (borrowed) {
-    return i18n.t(`options.step.calibration_edit.data.${borrowed}`);
+    // Without the bracket: the form's labels end in the unit because a form field has
+    // nowhere else to say it, and `valueLine` puts the unit beside the number. The review
+    // of the wizard printed both - "Corsa del telo (cm) ... 110 cm" - which is the drift
+    // the cards were corrected for on 18 September and the same functions correct here
+    // (live finding 24).
+    return bareLabel(i18n.t(`options.step.calibration_edit.data.${borrowed}`));
   }
   // Written out rather than built, because `tests/test_translations.py` reads the keys
   // this bundle asks for out of its double-quoted literals: a key assembled at run time
@@ -108,7 +114,7 @@ export const valueLine = (key: SessionValueKey, value: number | null, i18n: I18n
   }
   const written_unit =
     unit === "cm" ? i18n.t("panel.common.unit.centimetres") : i18n.t("panel.common.unit.seconds");
-  return `${written} ${written_unit}`;
+  return withUnit(written, written_unit);
 };
 
 /**

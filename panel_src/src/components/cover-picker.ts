@@ -26,7 +26,7 @@
 import { type I18n } from "../engine/i18n";
 import { type ScreenModel, type ScreenOption } from "../engine/screen";
 import { type CoverRow } from "../engine/ws";
-import { CLOSE } from "../wizard/model";
+import { CHOOSE, CLOSE } from "../wizard/model";
 import { coverSubtitle } from "./cover-row";
 
 /** The prefix an option of this screen fires with, the way `act:` and `pick:` do. */
@@ -62,13 +62,23 @@ const originTone = (cover: CoverRow): "neutral" | "measured" | "adjusted" =>
  * user's own arrangement put them in: this screen does not re-sort a list somebody has
  * already arranged.
  */
-export const coverPickerModel = (i18n: I18n, covers: readonly CoverRow[]): ScreenModel => {
+export const coverPickerModel = (
+  i18n: I18n,
+  covers: readonly CoverRow[],
+  /** The `cover:<unique id>` of the row that is selected, or `null` for none. */
+  chosen: string | null = null,
+): ScreenModel => {
   const options: ScreenOption[] = covers.map((cover) => ({
     title: cover.name,
     meta: coverSubtitle(i18n, cover, false),
     chip: originLabel(i18n, cover),
     chipTone: originTone(cover),
-    action: `${COVER}${cover.unique_id}`,
+    // Pressing a row selects it and nothing else; "Continue" is what opens a session on
+    // it. The design says so (`big: 'Continua'`, dead until a shutter is picked) and the
+    // live walk said why: one gesture for two decisions, on a list long enough to scroll
+    // under the finger, is a calibration started on the wrong window (live finding 3).
+    action: `${CHOOSE}${COVER}${cover.unique_id}`,
+    current: chosen === `${COVER}${cover.unique_id}`,
   }));
   return {
     // Not a `panel.…` key: the id names the screen for the event it fires, and the two
@@ -78,6 +88,12 @@ export const coverPickerModel = (i18n: I18n, covers: readonly CoverRow[]): Scree
     title: i18n.t("panel.wizard.pick.title"),
     body: i18n.t("panel.wizard.pick.body"),
     options,
+    primary: {
+      label: i18n.t("panel.common.action.continue"),
+      action: chosen ?? "",
+      disabled: chosen === null,
+      kind: "primary",
+    },
     // The way out of a screen nobody has to be on. The wizard's ✕ belongs to a running
     // session and there is none here, so the footer carries the panel's own "Back".
     secondary: [{ label: i18n.t("panel.common.action.back"), action: CLOSE, kind: "text" }],

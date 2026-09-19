@@ -40,11 +40,14 @@ from custom_components.myhome.calibration_flow import (
     PLAN_PROFILE,
     PLAN_TIMES,
     PLAN_TIMES_AND_ROLLS,
-    REFINE_THRESHOLD_CM,
     VERIFY_RUN,
     VERIFY_RUN_PROFILE,
 )
-from custom_components.myhome.calibration_session import CalibrationSession, current
+from custom_components.myhome.calibration_session import (
+    REFINE_THRESHOLD_CM,
+    CalibrationSession,
+    current,
+)
 from custom_components.myhome.calibration_store import (
     loaded_store,
     merged_profiles,
@@ -563,7 +566,10 @@ async def test_path_b_checks_the_profile_against_the_shutter(
         assert check["measured_cm"] == pytest.approx(descent_cm(0.5))
         assert check["predicted_cm"] == pytest.approx(descent_cm(0.5))
         assert check["gap_cm"] == 0.0
-        assert check["threshold_cm"] == REFINE_THRESHOLD_CM
+        # The panel's own threshold, four centimetres since 20 September: the dialog's
+        # is still three, and this is the one the panel's screens are written against
+        # ("a basic calibration usually ends up within about 4 cm").
+        assert check["threshold_cm"] == REFINE_THRESHOLD_CM == 4.0
         # The profile lives in `cover_profiles:` and was never measured here, so how
         # well it was measured is not known and is not guessed at.
         assert check["profile_level"] is None
@@ -583,7 +589,11 @@ async def test_path_b_checks_the_profile_against_the_shutter(
 async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Beyond 3 cm the profile is the thing in doubt, and path C is offered on the spot.
+    """Beyond 4 cm the profile is the thing in doubt, and path C is offered on the spot.
+
+    Four and not three since 20 September: the panel's own screens say a basic
+    calibration ends up within about 4 cm, and a check that offered a correction at
+    3,1 cm would be contradicting the sentence the same route had just shown.
 
     And the travel just read with a tape survives the jump: it is the same window and
     the same tape, so a correction that asked for it again would be asking the user to
@@ -597,21 +607,21 @@ async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel
 
         await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
         await act(hass, session, Act("verify_now"))
-        # Four centimetres lower than the model said, which is more than the threshold.
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 4.0)))
-        assert snapshot["check"]["gap_cm"] == 4.0
+        # Five centimetres lower than the model said, which is more than the threshold.
+        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 5.0)))
+        assert snapshot["check"]["gap_cm"] == 5.0
         assert snapshot["actions"] == ["path_c", "accept_step", "repeat_tape"]
 
         # ...and the threshold is applied to the number the screen shows, not to the
-        # one behind it: 3.04 cm reads "3,0 cm", and a screen that offered a correction
+        # one behind it: 4.04 cm reads "4,0 cm", and a screen that offered a correction
         # beside that sentence would be arguing with itself over a digit nobody can see.
         await act(hass, session, Act("repeat_tape"))
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 3.04)))
-        assert snapshot["placeholders"]["deviation"] == 3.0
+        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 4.04)))
+        assert snapshot["placeholders"]["deviation"] == 4.0
         assert snapshot["actions"] == ["accept_step", "repeat_tape"]
 
         await act(hass, session, Act("repeat_tape"))
-        await act(hass, session, Act("submit", str(descent_cm(0.5) + 4.0)))
+        await act(hass, session, Act("submit", str(descent_cm(0.5) + 5.0)))
 
         snapshot = await act(hass, session, Act("path_c"))
         assert snapshot["step"] == "path_c"

@@ -36,11 +36,14 @@ average of every shutter. Covers declared `advanced: true` report their real
 position and have nothing to calibrate: they are not listed, and on a gateway with
 no basic cover at all the menu item is not shown.
 
-It does not make the estimate exact. What to expect afterwards:
+It does not make the estimate exact. What to expect afterwards, on an ordinary
+shutter — a promise this document keeps deliberately modest, because it has to hold
+on installations nobody here has seen:
 
-- **1–2 cm** on runs that start or end at an end stop;
-- **2–4 cm** between two intermediate positions, where neither end of the run
-  re-synchronises anything.
+- **about 4 cm** after the basic calibration;
+- **about 2 cm** after the thorough one;
+- **less than either** on runs that start or end at an end stop, which
+  re-synchronise the estimate by themselves.
 
 Nothing drifts across runs: a basic actuator reaches `0` and `100` by running into
 the physical end stop, not by a timer, and every full open or close puts the

@@ -88,13 +88,31 @@ export const templateStyles = css`
     content: "!";
   }
 
+  /*
+   * The drawing is shown whole, at its own proportions, whatever the width of the column.
+   *
+   * It used to be a 230 px box with the picture as its background, which is a box that
+   * decides the shape of what is inside it: every drawing taller than 230 px at the
+   * column's width lost its top and its bottom, and three of them are (live findings 10,
+   * 14 and 19 - the full ascent, the curtain travel and the reading at half way). An
+   * image element with height auto takes its height from the picture instead of the other
+   * way round, so there is nothing left to crop; max-height is a guard against a drawing
+   * nobody has drawn yet filling the screen, and object-fit contain means that even then
+   * the whole picture is inside the box. "npm run session" checks the five drawings that
+   * exist against both widths: none of them reaches the guard, so each is drawn at
+   * exactly its own proportions.
+   */
   .drawing {
-    height: 230px;
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 520px;
+    object-fit: contain;
+    object-position: center;
     border-radius: var(--myhome-radius);
     box-shadow: var(--myhome-shadow);
     margin: 0 0 16px;
     background-color: var(--myhome-drawing-paper);
-    background-repeat: no-repeat;
   }
 
   .prose p {
@@ -441,6 +459,16 @@ export const templateStyles = css`
     font-weight: 500;
   }
 
+  /*
+   * A value the calibration did not move: the number once, and the word for it beside.
+   * The word is what carries the meaning - a struck-through number repeated is not a
+   * difference, it is two numbers in a row (live finding 23).
+   */
+  .summary-row .same {
+    font-size: 12.5px;
+    color: var(--myhome-text-soft);
+  }
+
   .summary .note-line {
     margin: 10px 0;
     font-size: 12.5px;
@@ -536,6 +564,14 @@ export const templateStyles = css`
     flex-direction: column;
     gap: 6px;
     margin: 12px 0 0;
+  }
+
+  /* What is behind a disclosure, said under its button rather than inside its label. */
+  .disclose-note {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--myhome-text-soft);
   }
 
   .code-label {

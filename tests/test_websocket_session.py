@@ -1331,7 +1331,19 @@ FIXTURE_START = datetime(2026, 9, 18, 10, 0, tzinfo=UTC)
 # Nothing is written by hand any more. The six snapshots that stood on paths B and C, on
 # the thorough level and on the verifications were lot L0's until the backend could walk
 # them; they are walked here now, and five more went with them.
-STILL_BY_HAND: frozenset[str] = frozenset()
+STILL_BY_HAND: frozenset[str] = frozenset(
+    {
+        # The run that takes the shutter to the end stop a verification starts from.
+        # It was walked until the session stopped making a movement it does not need:
+        # on path B the check follows the reading of the curtain travel, which is taken
+        # with the shutter completely open, so the run to the top has nothing to do
+        # (live findings 6 and 16). The screen is still one the server can send - any
+        # command from outside makes the session forget where the shutter is, and then
+        # the homing happens - so the snapshot stays here, checked for its shape like
+        # the others and no longer produced by a walk.
+        "positioning_verify",
+    }
+)
 
 
 class Recorder:
@@ -1614,12 +1626,15 @@ async def test_the_committed_session_examples_are_what_the_server_sends_at_the_e
         produced["ended_unloaded"] = session.snapshot()
 
         session = await open_session(hass, entry)
-        await walk(hass, session, A_TAPED[:2], freezer=freezer)
+        await walk(hass, session, A_TAPED[:3], freezer=freezer)
         # The shutter is taken out of the gateway under the session: the next movement
-        # finds no entity at all, which is the one ending nobody asked for.
+        # finds no entity at all, which is the one ending nobody asked for. It is the
+        # ascent's own run and no longer the homing that used to follow "it is
+        # completely closed": that one is not made any more, because the session closed
+        # the shutter itself one screen earlier (live findings 6 and 16).
         mac = str(entry.data[CONF_MAC])
         hass.data[DOMAIN][mac][CONF_PLATFORMS][COVER].pop(DEVICE_KEY)
-        await act(hass, session, Act("confirm_closed"), freezer=freezer)
+        await act(hass, session, Act("open_start"), freezer=freezer)
         produced["ended_cover_gone"] = session.snapshot()
 
         they_are_the_committed_examples(produced)
@@ -1726,7 +1741,9 @@ async def test_the_committed_session_examples_are_what_the_server_sends_when_it_
         await walk(hass, session, PATH_B_TO_THE_OFFER, freezer=freezer)
         seen = Recorder(session)
         await act(hass, session, Act("verify_now", None, 2.5), freezer=freezer)
-        produced["positioning_verify"] = seen.on("verify_b")
+        # No `verify_b` screen: the curtain travel was read with the shutter completely
+        # open, so the run to the end stop the check starts from is not made at all.
+        assert "verify_b" not in seen.steps()
         produced["awaiting_reading_measure_verify"] = seen.on("measure_verify")
         produced["checking_verify_result_within"] = await act(
             hass, session, Act("submit", str(A_READING_ON_THE_MARK), 2.5), freezer=freezer
@@ -1819,7 +1836,6 @@ REGENERATED: frozenset[str] = frozenset(
         "armed_path_c_profile_choice",
         "armed_refine_scope_intent",
         "briefing_verify_offer",
-        "positioning_verify",
         "awaiting_reading_measure_verify",
         "checking_verify_result_within",
         "checking_verify_result_offers_c",

@@ -917,17 +917,34 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   /**
-   * The drawer's one way out: one screen back where there is one, the list otherwise.
+   * The drawer's way back: one screen back where there is one, the list otherwise.
    *
-   * Every road leads here - the head's control, Escape inside the card, a click on the
-   * dark half - so there is one answer to "what does going back mean" and the address bar
-   * is always told, which is what keeps the browser's own back button in step.
+   * The head's control and Escape inside the card lead here, so there is one answer to
+   * "what does going back mean" and the address bar is always told, which is what keeps
+   * the browser's own back button in step.
    */
   private _closeDrawer = (): void => {
     if (this._store.state.applying) {
       return;
     }
     this._navigate(backPath(this._drawerBack));
+  };
+
+  /**
+   * The drawer's way out: the list, in one gesture, from however deep it is.
+   *
+   * A press on the dark half is not a press on the arrow. It used to be the same handler,
+   * so a profile card opened from a shutter's card answered a click outside by going back
+   * to the shutter - a second click outside was needed to leave, and the panel looked
+   * stuck to somebody who had already said they were done (live finding 27). The history
+   * belongs to the arrow; this forgets it and goes to the overview.
+   */
+  private _dismissDrawer = (): void => {
+    if (this._store.state.applying) {
+      return;
+    }
+    this._drawerBack = null;
+    this._navigate("/");
   };
 
   private _renderMenuButton(): TemplateResult | typeof nothing {
@@ -2329,6 +2346,7 @@ export class MyHomeCalibrationPanel extends LitElement {
       hasBack: this._drawerBack !== null,
       applying: state.applying,
       onClose: this._closeDrawer,
+      onDismiss: this._dismissDrawer,
       content,
     });
   }

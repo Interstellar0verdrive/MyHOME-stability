@@ -241,6 +241,92 @@ the panel when it is in the way.
   preview, and the review's before/after table gives its numbers their unit. The long
   origin chips ("Inherited from profile «Tall»") and the refusals that name a profile use
   « » like every other sentence of the panel; the guided dialog is unchanged.
+- **The guided calibration stops sending the shutter where it has just put it.** Three
+  stages of the full measurement opened with a run towards an end stop the session had
+  itself brought the shutter to one screen earlier — the ascent after "it is completely
+  closed", the curtain travel after the full ascent, the descent after the curtain
+  travel — and the check of route (B) did the same after the travel reading. Each one
+  cost half a second of motor and put a positioning screen that had already been read
+  back on the screen. The run is now made only when the session does not already know
+  the shutter is there, and any command from outside makes it necessary again;
+  "Repeat this step" and "It did not do what it should" always make it, because they
+  are the user saying they do not believe what the session believes.
+- **The bar of a positioning run says how long it will really take.** Between two tape
+  readings the shutter is part way up its travel, and the run back to an end stop was
+  planned for the *whole* run time of the model in use: seven seconds announced for a
+  movement that took three. It is now planned for the distance that is really left —
+  the fraction the shutter was last sent to, with the slat phase counted only on the
+  run that goes through it. Nothing is measured from it: it is a progress bar, and the
+  step still ends when the shutter stops and never when the bar fills.
+- **The illustrations of the calibration are shown whole.** Three of the five — the full
+  ascent, the curtain travel and the reading taken half way along it — lost their top and
+  their bottom on every screen that carried them, on a desktop and on a phone alike. The
+  slot they go through was a box of a fixed height with the picture as its background,
+  which is a box that decides the shape of whatever is put in it; it is an image now,
+  taking its height from the drawing rather than the other way round, so nothing is cut
+  at any width. A check walks every screen of the calibration at 1280 and at 390 px and
+  says, drawing by drawing, that the whole of it fits.
+- **A choice in the guided calibration takes two gestures.** Pressing a shutter in the
+  list, or one of the three routes, sent the calibration on at once: one gesture for two
+  decisions, on a list long enough to scroll under a finger. A row is now selected and
+  **"Continue"** is what acts, as the design draws it — and on a desktop a long list
+  scrolls inside its own column instead of stretching the page until the button is off the
+  bottom of it. The three routes start on **(A)**, which is the one to take when in doubt.
+- **The screens of the calibration say each thing once.** The shutter's name was under the
+  title of nearly every screen although the header above it already said it; the summary
+  printed "Curtain travel (cm) … 110 cm" and struck a 14.3 s through to replace it with
+  14.3 s; and the one control that opens the technical details called itself "Show every
+  value, roll coefficients included" and then "Hide the roll coefficients", although what
+  it hides includes the snippet for the configuration file. The name is said once, by the
+  header; a unit is said once, beside its number; a value that did not move is one number
+  and the word "unchanged"; the details open and shut with the same words, under a line
+  saying what is behind them. "Continue with the thorough calibration" is a bordered
+  button beside "Save for this shutter only", because it is a way forward and not a way
+  out, and the screen that starts a run keeps the step's own instruction instead of
+  blanking it — on the descent, which has no drawing, it left a title and two buttons.
+- **"Calibration saved" says what was saved and what was made of it.** It used to read
+  "«Shutter» is saved and already in use: it follows the profile «name» (Inherited from
+  profile «name»)", which names the profile three times and explains none of them. Three
+  sentences in the order they are asked: the calibration is saved, the profile was created
+  (or updated), the shutter uses it from now on — with how a shutter like it is calibrated
+  on a line of its own. A calibration saved for one shutter alone says so instead of
+  naming a profile it does not follow.
+- **The button under a tape reading says "Done, go on".** "That is right, go on" is the
+  answer to a proposal, and what is being confirmed there is a number the user has just
+  written down.
+- **A click outside a side panel closes it, whatever is in it.** From a shutter's card the
+  panel can be replaced by the card of the profile it follows; a click outside then went
+  *back* to the shutter and a second click outside was needed to leave, which looks stuck
+  to somebody who has already said they are done. A click outside now returns to the
+  overview in one gesture, from however deep the panel has gone. The arrow in the head is
+  what walks back one screen, and Escape still does what the arrow does.
+- **The screens of the calibration stop explaining themselves and stop pointing.** Three
+  of them told the reader why the screen during a movement carries a single line, which is
+  a reason somebody had for drawing it that way and of no use to anybody holding a tape
+  measure. A dozen others said "press the button below" or "write the centimetres below",
+  which is true on a phone and false on a desktop, where the same button is the right-hand
+  column. Both are gone, in all seven languages, and a check holds them out.
+- **A timed run is briefed in two moments.** "One press only, at the instant the motor
+  stops at the top" is not what happens: the run is started first and pressed afterwards,
+  and the briefings now say so in that order. "A few centimetres above the base" — the
+  answer that says a press went well — carries the two or three centimetres it means.
+- **The briefing before the tape readings is written again from nothing.** It was one
+  sentence that tried to describe two movements, a fraction and a reading at once. It is
+  now four short ones: what the shutter does by itself, what to measure and where from,
+  when to write, and what to clear before starting. English and Italian; the other five
+  languages keep the old text until the Italian has been read on the wall.
+- **The three routes say which one is yours.** Each of them opens with the case it is for,
+  and the screen ends with "if in doubt, choose (A)" — the one that needs nothing measured
+  beforehand, and the one the choice starts on.
+- **What the calibration promises is what it can keep.** The figures were "1–2 cm near the
+  end stops, 2–4 cm at intermediate positions", read off one installation. They are now
+  **about 4 cm** after the basic calibration and **about 2 cm** after the thorough one,
+  less than either near the end stops — on the route screen, in the summaries, in the
+  panel's own review and in the documentation.
+- **The check of route (B) offers the correction beyond 4 cm**, not beyond 3. It is the
+  number the same route has just promised a basic calibration ends up within, and a
+  check that contradicted the screen before it is a check nobody believes. The guided
+  dialog keeps its own 3 cm for now; the two meet the next time it is touched.
 
 ## [0.5.0] - 2026-09-13
 

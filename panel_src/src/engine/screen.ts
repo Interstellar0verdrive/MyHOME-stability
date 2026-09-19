@@ -33,11 +33,10 @@
 // the named region in `main.ts` that holds everything it draws.
 
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
-import { styleMap } from "lit/directives/style-map.js";
 
 import { I18n } from "./i18n";
 import { renderMarkdown } from "./markdown";
-import { drawingStyle, type ScreenImage } from "./safe-style";
+import { drawingSrc, type ScreenImage } from "./safe-style";
 import { buttonStyles, cardStyles, fieldStyles, srOnly, themeStyles } from "./theme";
 import { renderLettura } from "../templates/lettura";
 import { renderScelta } from "../templates/scelta";
@@ -126,6 +125,15 @@ export interface ScreenSummaryRow {
   label: string;
   before?: string;
   after: string;
+  /**
+   * The value the calibration did not move: one number, said once.
+   *
+   * A row whose before and after are the same number used to print both of them and
+   * strike the first one through, which says "14,3 s becomes 14,3 s" and makes the reader
+   * hunt for a difference there is not (live finding 23). The struck-through number is
+   * kept for the rows that really change, which is the only place it means anything.
+   */
+  unchanged?: boolean;
 }
 
 /** A named block of rows: the side effects, or one shutter that follows the profile. */
@@ -139,6 +147,8 @@ export interface ScreenDisclosure {
   label: string;
   action: string;
   open: boolean;
+  /** One line saying what is behind it, so the label does not have to list it. */
+  note?: string;
 }
 
 export interface ScreenSummary {
@@ -291,6 +301,18 @@ export class MyHomeScreen extends LitElement {
           max-width: 100%;
         }
 
+        /*
+         * A choice of twelve shutters is as tall as twelve shutters, and the column it
+         * sits in is the column the way forward is at the bottom of: the page grew to the
+         * length of the list and "Continue" went off the screen with it (live finding 2).
+         * The list scrolls inside its own column instead; three paths never reach the cap,
+         * and the buttons inside it keep the keyboard's way through it.
+         */
+        .right .options {
+          max-height: calc(100vh - 260px);
+          overflow-y: auto;
+        }
+
         .pane {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 400px;
@@ -428,12 +450,12 @@ export class MyHomeScreen extends LitElement {
     }
     const context: ScreenContext = { i18n: this.i18n, fire: this._fire };
     const single = model.model === "pos";
-    const drawing = model.image ? drawingStyle(model.image) : null;
+    const drawing = model.image ? drawingSrc(model.image) : null;
     // The illustrations the steps carry come out of the translation files, where their alt
     // text is empty - the dialog draws them inline, under prose that already describes
-    // what they show. So they are decorative here rather than an image with no name on it:
-    // `role="img"` with an empty label is a thing a screen reader stops at and says
-    // nothing about.
+    // what they show. So they are decorative here: `alt=""` is what a screen reader skips,
+    // and `aria-hidden` says the same thing again for the readers that announce a
+    // decorative image anyway. An illustration that does carry a description keeps it.
     const labelled = (model.image?.alt ?? "") !== "";
     return html`<div class="screen">
       ${model.readOnly
@@ -468,13 +490,13 @@ export class MyHomeScreen extends LitElement {
             <span>${model.title}</span>
           </h1>
           ${drawing
-            ? html`<div
+            ? html`<img
                 class="drawing"
-                role=${labelled ? "img" : nothing}
-                aria-label=${labelled ? (model.image?.alt ?? "") : nothing}
+                src=${drawing}
+                alt=${model.image?.alt ?? ""}
                 aria-hidden=${labelled ? nothing : "true"}
-                style=${styleMap(drawing)}
-              ></div>`
+                decoding="async"
+              />`
             : nothing}
           ${model.body ? html`<div class="prose">${renderMarkdown(model.body)}</div>` : nothing}
           ${(model.lines ?? []).map((line) => html`<p class="aside">${line}</p>`)}

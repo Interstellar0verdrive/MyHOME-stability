@@ -452,9 +452,14 @@ const pressBanner = (mark) => async ({ panel, deep, settle }) => {
   await settle();
 };
 
-/** The first shutter of the choice, which is how a session is asked for (lot F3). */
-const pressPickedShutter = async ({ panel, deep, settle }) => {
+/**
+ * The first shutter of the choice, and then "Continue", which is how a session is asked
+ * for (lot F3, and the two gestures of live finding 3).
+ */
+const pressPickedShutter = async ({ panel, deep, deepAll, settle }) => {
   deep(panel.shadowRoot, ".options button.option")?.click();
+  await settle();
+  deepAll(panel.shadowRoot, "button.big")[0]?.click();
   await settle();
 };
 

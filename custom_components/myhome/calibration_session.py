@@ -114,7 +114,6 @@ from .calibration_flow import (
     REASON_TIMEOUT,
     REASON_UNKNOWN,
     REASON_UNKNOWN_COVER,
-    REFINE_THRESHOLD_CM,
     ROUGH_TOLERANCE_CM,
     RUNNING_ACTION,
     THREE_QUARTER_RUN,
@@ -365,6 +364,19 @@ PRESS_STEPS: dict[str, str] = {
     "open_top": "end_stop",
     "close_bottom": "end_stop",
 }
+
+# Above this the profile is not describing this shutter, and path B offers the
+# correction instead of pretending the check passed.
+#
+# **Four centimetres, and the dialog's own is still three.** The maintainer's rule of
+# 20 September is that nothing may promise a precision it cannot keep on an
+# installation nobody here has seen: the basic calibration is stated as "about 4 cm",
+# the thorough one as "about 2 cm", and a check that offered a correction at 3,1 cm
+# would be contradicting the sentence the same route had just shown. The dialog's
+# `REFINE_THRESHOLD_CM` stays at 3 because `calibration_flow.py` is not opened in this
+# lot; the two are meant to meet at 4 the next time it is (SPEC decision 20, amended
+# 20 September).
+REFINE_THRESHOLD_CM = 4.0
 
 # The readings of the tape phase, as (direction, fraction, the step that asks for the
 # tape). `half_down` and `half_up` are path A's; the other four are the thorough
@@ -719,6 +731,16 @@ class CalibrationSession:
         self._form_error: str | None = None
         self._stop_first = False
         self._at: str | None = None
+        # Where the shutter stands between two end stops, as `(direction of the run
+        # that put it there, fraction of the curtain travel that run covered)`. It is
+        # what makes the run *back* to an end stop a fraction of a run rather than a
+        # whole one (live finding 22), and it is forgotten by everything that forgets
+        # `_at` - a shutter somebody else has moved is at no known fraction either.
+        self._left_at: tuple[str, float] | None = None
+        # The next homing happens even if the session believes the shutter is already
+        # at that end stop: set by "Repeat this step" and "It did not do what it
+        # should", which are the two ways the user says they do not believe it.
+        self._home_anyway = False
         self._external_move = False
         self._tape_target: str | None = None
         self._pending: tuple[str, float] | None = None
@@ -1076,7 +1098,7 @@ class CalibrationSession:
             self._movement = None
             self._press = None
             self._disarm_press()
-            self._at = None
+            self._forget_where_it_is()
             # A stop the gateway would not take is not the same news as a step
             # interrupted: the shutter is still running on to its end stop, and the
             # dialog has a sentence for that in seven languages (`problem_not_stopped`).
@@ -1229,8 +1251,9 @@ class CalibrationSession:
         (`async_step_verify_result`, :3014): the number on the screen is the number
         that decided, and a gap of 3.04 cm that read "3,0 cm" and offered a correction
         was a screen arguing with itself over a digit nobody can see. The threshold is
-        the dialog's fixed 3 cm (SPEC decision 20); how well the profile itself was
-        measured is shown beside it (`check.profile_level`) rather than folded into it.
+        this module's own fixed 4 cm (SPEC decision 20, amended 20 September); how well
+        the profile itself was measured is shown beside it (`check.profile_level`)
+        rather than folded into it.
         """
         if self._path != PATH_PROFILE or PATH_REFINE not in IMPLEMENTED_PATHS:
             return False
@@ -1357,10 +1380,15 @@ class CalibrationSession:
         await self._async_advance()
 
     async def _async_do_repeat_step(self) -> None:
+        # The user is asking for the stage's movement again, so the homing that opens
+        # it happens even where the session believes the shutter is already there:
+        # "Send it back down first" that moves nothing is a button that does nothing.
+        self._home_anyway = True
         await self._async_enter()
 
     async def _async_do_not_right(self) -> None:
         self._stop_first = True
+        self._home_anyway = True
         await self._async_enter()
 
     async def _async_do_tape_start(self) -> None:
@@ -1422,6 +1450,7 @@ class CalibrationSession:
             return
         # The run was free: whatever the press measured, the shutter is at the top.
         self._at = DIRECTION_OPEN
+        self._left_at = None
         self._movement = None
         self._show("open_result_gap" if self._measured.lift_gap_cm is not None else "open_result")
 
@@ -1438,6 +1467,7 @@ class CalibrationSession:
             self._show_problem("bad_point")
             return
         self._at = DIRECTION_CLOSE
+        self._left_at = None
         self._movement = None
         self._show("close_result")
 
@@ -1454,6 +1484,7 @@ class CalibrationSession:
     async def _async_do_tape_not_right(self) -> None:
         self._forget_the_reading()
         self._stop_first = True
+        self._home_anyway = True
         await self._async_enter()
 
     # ---- the forms
@@ -1625,9 +1656,9 @@ class CalibrationSession:
         Where the model said the bar would be, where it really was, how far apart the
         two are - and, when it is a profile that is being questioned, the threshold
         above which the correction is offered together with how well that profile was
-        itself measured. The last two are what makes 3 cm readable: the same gap means
+        itself measured. The last two are what makes 4 cm readable: the same gap means
         nothing on a profile measured at the basic level and something on one that went
-        through its own check (contract §2.5, SPEC decision 20).
+        through its own check (contract §2.5, SPEC decision 20, amended 20 September).
         """
         level: str | None = None
         checked: float | None = None
@@ -1729,22 +1760,32 @@ class CalibrationSession:
 
     # ---- stages
     async def _async_stage_home_closed(self) -> None:
-        self._begin_homing(step="home_closed", direction=DIRECTION_CLOSE, done="home_closed_done")
+        await self._async_begin_homing(
+            step="home_closed", direction=DIRECTION_CLOSE, done="home_closed_done"
+        )
 
     async def _async_stage_open_timed(self) -> None:
         self._forget_the_ascent()
-        self._begin_homing(step="open_timed", direction=DIRECTION_CLOSE, done="open_brief")
+        await self._async_begin_homing(
+            step="open_timed", direction=DIRECTION_CLOSE, done="open_brief"
+        )
 
     async def _async_stage_open_home_again(self) -> None:  # pragma: no cover - not a plan stage
-        self._begin_homing(step="open_home_again", direction=DIRECTION_CLOSE, done="closed_again")
+        await self._async_begin_homing(
+            step="open_home_again", direction=DIRECTION_CLOSE, done="closed_again"
+        )
 
     async def _async_stage_height_read(self) -> None:
         if self._stop_first:
             self._forget_the_travel()
-        self._begin_homing(step="height_read", direction=DIRECTION_OPEN, done="height")
+        await self._async_begin_homing(
+            step="height_read", direction=DIRECTION_OPEN, done="height"
+        )
 
     async def _async_stage_close_timed(self) -> None:
-        self._begin_homing(step="close_timed", direction=DIRECTION_OPEN, done="close_brief")
+        await self._async_begin_homing(
+            step="close_timed", direction=DIRECTION_OPEN, done="close_brief"
+        )
 
     async def _async_stage_tape_brief(self) -> None:
         self._order_the_tape_phase()
@@ -1781,7 +1822,9 @@ class CalibrationSession:
         # ...and the answer of a verification that is being made again is not an answer
         # yet: the shutter is on its way to the end stop the run starts from.
         self._check = None
-        self._begin_homing(step=step, direction=_other_end(direction), done="tape_run")
+        await self._async_begin_homing(
+            step=step, direction=_other_end(direction), done="tape_run"
+        )
 
     @callback
     def _tape_phase(self) -> list[str]:
@@ -1802,7 +1845,40 @@ class CalibrationSession:
 
     # ------------------------------------------------------------------- the movements
     @callback
-    def _begin_homing(self, *, step: str, direction: str, done: str) -> None:
+    def _forget_where_it_is(self) -> None:
+        """Neither the end stop nor the fraction is known any more."""
+        self._at = None
+        self._left_at = None
+
+    async def _async_begin_homing(self, *, step: str, direction: str, done: str) -> None:
+        """Take the shutter to an end stop - unless this session has just put it there.
+
+        The stages that open with a homing do so because a stopwatch never starts from
+        a point nobody knows (SPEC §3.7), and they were written as if nothing before
+        them had ever moved the shutter. On path A three of them follow a movement of
+        this session's own that ended at exactly that end stop - the ascent's homing
+        after "it is completely closed", the curtain travel's after the full ascent,
+        the descent's after the curtain travel - and each one sent the shutter a
+        command it was already obeying: half a second of motor, and the same
+        positioning screen a second time (live findings 6 and 16).
+
+        `_at` is the end stop **this session** put the shutter at, and it is forgotten
+        by every movement, by a stop and by any command from outside (`_external`), so
+        it is never a belief about a shutter somebody else has touched. When it already
+        names the end stop asked for, the movement is not made at all and the stage goes
+        straight on to the screen it was going to hand over to.
+
+        "Repeat this step" and "It did not do what it should" say the opposite - the
+        user is telling the session that what it believes is wrong - so they set
+        `_home_anyway` and the run happens whatever `_at` says.
+        """
+        if self._at == direction and not self._home_anyway:
+            self._movement = None
+            self._press = None
+            self._external_move = False
+            await self._async_goto(done)
+            return
+        self._home_anyway = False
         self._begin_movement(
             step=step,
             kind="homing",
@@ -1812,8 +1888,41 @@ class CalibrationSession:
             settle=self._settle_home,
             done=done,
             anchor=dt_util.utcnow(),
-            planned_s=self._full_run(direction),
+            planned_s=self._planned_home(direction),
         )
+
+    @callback
+    def _planned_home(self, direction: str) -> float:
+        """How long the run back to an end stop should take, from where the shutter is.
+
+        The bar used to be the **whole** run time every time, which is right only when
+        the shutter is at the other end stop. Between two tape readings it never is: the
+        run back down from a quarter of the way up covers a quarter of the curtain, and
+        a bar that announced the full descent for it promised seven seconds of a
+        movement that took three (live finding 22).
+
+        The model is the one in use - the same `_model_now` the other estimates read -
+        and the distance is the fraction this session last sent the shutter to. The slat
+        phase is counted where the shutter really goes through it: closing, the slats
+        shut at the bottom at the end of the run; opening, they are already open,
+        because the shutter is hanging part-way up rather than resting closed.
+        """
+        model = self._model_now()
+        full = model[CONF_OPENING_TIME if direction == DIRECTION_OPEN else CONF_CLOSING_TIME]
+        left = self._left_at
+        if left is None:
+            return full
+        ran, fraction = left
+        # Where the bottom edge stands, as a fraction of the curtain travel above the
+        # base: a run that went up by `fraction` left it there, one that came down by
+        # `fraction` left it that much below the top.
+        here = fraction if ran == DIRECTION_OPEN else 1.0 - fraction
+        here = min(1.0, max(0.0, here))
+        slat = model[CONF_SLAT_TIME]
+        curtain = max(0.0, full - slat)
+        if direction == DIRECTION_OPEN:
+            return curtain * (1.0 - here)
+        return curtain * here + slat
 
     async def _async_timed_run(self, brief: str, step: str, action: str, done: str) -> None:
         """Start a timed run - after bringing the shutter back to its end stop if need be.
@@ -1931,7 +2040,7 @@ class CalibrationSession:
         self._error = None
         # Nothing is known about where the shutter is while it is moving, and nothing
         # is known about where it ended up if the movement failed.
-        self._at = None
+        self._forget_where_it_is()
         outcome: Any = None
         try:
             if self._stop_first:
@@ -2009,6 +2118,9 @@ class CalibrationSession:
     @callback
     def _settle_fraction(self, report: Any) -> None:
         self._report = report
+        # The shutter is no longer at an end stop but at a known fraction of its
+        # travel, which is what the run back is planned against (`_planned_home`).
+        self._left_at = self._pending
 
 
     # ------------------------------------------------------------------ the router
@@ -2036,7 +2148,7 @@ class CalibrationSession:
             self._lift_measured()
             return
         if step == "open_home_again":
-            self._begin_homing(
+            await self._async_begin_homing(
                 step="open_home_again", direction=DIRECTION_CLOSE, done="closed_again"
             )
             return
@@ -2224,7 +2336,7 @@ class CalibrationSession:
         """A movement of somebody else's, answered by where the session stands."""
         state = self._screen().state
         self._external_move = True
-        self._at = None
+        self._forget_where_it_is()
         if state in ("running", "positioning"):
             self._interrupt()
             return
@@ -2249,7 +2361,7 @@ class CalibrationSession:
         self._movement = None
         self._press = None
         self._disarm_press()
-        self._at = None
+        self._forget_where_it_is()
         self._show_problem(REASON_INTERRUPTED)
 
     # ------------------------------------------------------------------- the ending
@@ -2331,7 +2443,7 @@ class CalibrationSession:
         # snapshot has no step, so a problem code or a notice left on it would describe
         # a screen that is not there any more (the fixture's endings say `null` for all
         # three), and a position nobody is keeping up to date is worse than none.
-        self._at = None
+        self._forget_where_it_is()
         self._problem = None
         self._notice = None
         self._form_error = None

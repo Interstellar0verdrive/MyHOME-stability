@@ -52,6 +52,7 @@ import { exitDialog, exitDialogStyles } from "../components/exit-dialog";
 import {
   ACT,
   AGAIN,
+  CHOOSE,
   CLAIM,
   CLOSE,
   CUE,
@@ -170,6 +171,15 @@ export class MyHomeWizard extends LitElement {
   /** What the one field on the screen holds, and which step it was typed on. */
   private _typed: string | null = null;
   private _typedFor = "";
+  /**
+   * What the choice on the screen has selected, or `null` before anybody pressed a row.
+   *
+   * It belongs here for the same reason the field does: it is this tab's, it is thrown
+   * away when the step changes, and the session never hears about it. A choice takes two
+   * gestures - the row selects and "Continue" acts (live finding 3) - and this is the one
+   * of the two that is not a verb.
+   */
+  private _chosen: string | null = null;
   /** The review's two disclosures. Shut on arrival: the model stays behind the flow. */
   private _showAll = false;
   private _showAffected = false;
@@ -285,6 +295,9 @@ export class MyHomeWizard extends LitElement {
       // document, which is the top of the page for whoever is using the keyboard.
       if (this._focusedFor !== PICK_PAINT) {
         this._focusedFor = PICK_PAINT;
+        // A fresh arrival on the list: nothing is selected, whatever the screen before it
+        // had chosen.
+        this._chosen = null;
         const screen = this.shadowRoot?.querySelector("myhome-screen") as MyHomeScreen | null;
         void screen?.updateComplete.then(() => screen.focusEntry("title"));
       }
@@ -330,6 +343,7 @@ export class MyHomeWizard extends LitElement {
       showAll: this._showAll,
       showAffected: this._showAffected,
       cue: this._cue,
+      selected: this._chosen,
       profiles: this.state.overview?.profiles ?? [],
     });
     return html`<div data-wizard>
@@ -365,7 +379,7 @@ export class MyHomeWizard extends LitElement {
         </div>
       </div>`;
     }
-    const model = coverPickerModel(this.i18n, covers);
+    const model = coverPickerModel(this.i18n, covers, this._chosen);
     // **The banner is not drawn on this route**, and this is the one screen of it where
     // that costs something: offering twelve shutters of a gateway that is already holding
     // one is offering a refusal. So the same card the refusal would leave is drawn
@@ -436,6 +450,7 @@ export class MyHomeWizard extends LitElement {
       return;
     }
     this._typedFor = here;
+    this._chosen = null;
     this._showAll = false;
     this._showAffected = false;
     const suggested = form && form.kind !== "choice" ? form.suggested : null;
@@ -561,6 +576,13 @@ export class MyHomeWizard extends LitElement {
     const detail = (event as CustomEvent<{ action: string; value?: string }>).detail;
     const action = detail?.action ?? "";
     const value = detail?.value;
+    if (action.startsWith(CHOOSE)) {
+      // A row of a choice: selected, and nothing more. The screen repaints so that the
+      // chosen one is marked and "Continue" comes alive; nothing is sent.
+      this._chosen = action.slice(CHOOSE.length);
+      this.requestUpdate();
+      return;
+    }
     if (action === "field") {
       // Recorded and **not** repainted: the characters are already in the field, and
       // writing them back into it on every keystroke is how a caret ends up at the end of

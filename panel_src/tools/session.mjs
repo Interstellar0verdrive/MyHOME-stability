@@ -787,6 +787,13 @@ console.log("\nthe overview, 'Misura una tapparella', a shutter chosen, a sessio
   bench.state.session = scenario("armed_path");
   all(".options button.option")[0]?.click();
   await settle(240);
+  // Pressing a row selects it and sends nothing: the choice is made with "Continue" (live
+  // finding 3), which is the design's own `Continua` and the reason a list long enough to
+  // scroll under a finger cannot start a calibration on the wrong window.
+  check("pressing a row starts nothing", bench.sessions("start"), 0);
+  checkThat("it marks the row instead", all(".options button.option")[0]?.getAttribute("aria-pressed") === "true");
+  find("button.big")?.click();
+  await settle(240);
   check("choosing one opens one session", bench.sessions("start"), 1);
   check(
     "on the shutter that was pressed",
@@ -1093,6 +1100,120 @@ console.log("\n…and the same strip when it was an action of 0.4.2 all along");
     "and says to wait instead",
     !find('[data-banner="end-other"]') && !find('[data-banner="configure"]'),
   );
+}
+
+console.log("\nthe drawings, whole, at both widths");
+{
+  // Live findings 10, 14 and 19: three of the five illustrations arrived cropped, top and
+  // bottom, on the desktop and on the phone alike. The cause was not one screen but the
+  // slot they all go through - a 230 px box with the picture as its background, which
+  // decides the shape of whatever is put in it - so what is asserted here is the slot, and
+  // then every screen of the fixture that carries a drawing against it.
+  //
+  // jsdom lays nothing out, so the width of the column is not measured but computed, out
+  // of the very numbers the stylesheet declares (`.screen`'s maximum, `.pane`'s padding,
+  // the operative column and the gap between the two). That is the point: a layout change
+  // that would crop a drawing again changes one of those numbers, and this arithmetic
+  // moves with it.
+  const IMAGES = join(root, "custom_components", "myhome", "images");
+
+  /** The width and height a lossy WebP declares, out of its own VP8 frame header. */
+  const webpSize = async (file) => {
+    const bytes = await readFile(file);
+    if (bytes.toString("ascii", 0, 4) !== "RIFF" || bytes.toString("ascii", 8, 12) !== "WEBP") {
+      return null;
+    }
+    if (bytes.toString("ascii", 12, 16) !== "VP8 ") {
+      // VP8L and VP8X pack their dimensions differently; no drawing of ours is one, and a
+      // size this cannot read is reported rather than guessed at.
+      return null;
+    }
+    return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+  };
+
+  /**
+   * One declaration of one rule, out of the stylesheet's own text.
+   *
+   * `at` picks which of the rules with that selector is meant: the phone's is the first
+   * (the base rules) and the desktop's is the last (the `min-width: 900px` overrides),
+   * because that is the order a stylesheet resolves them in.
+   */
+  const declared = (css, selector, property, at = "last") => {
+    const rules = splitRules(css).filter((one) => one.selectorText === selector);
+    const rule = at === "first" ? rules[0] : rules[rules.length - 1];
+    if (!rule) {
+      return null;
+    }
+    const found = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;}]+)`).exec(rule.cssText);
+    return found ? found[1].trim() : null;
+  };
+
+  const bench = gateway({ session: scenario("briefing_open_brief") });
+  const { window } = await mount(bench.connection);
+  const css = [window.customElements.get("myhome-screen")?.styles ?? []]
+    .flat(Infinity)
+    .map((sheet) => sheet?.cssText ?? "")
+    .join("\n");
+
+  // The slot itself: nothing in it may decide the shape of the picture.
+  check("the drawing takes its width from the column", declared(css, ".drawing", "width"), "100%");
+  check("and its height from the picture", declared(css, ".drawing", "height"), "auto");
+  check("and is never cut to fit", declared(css, ".drawing", "object-fit"), "contain");
+  checkThat(
+    "and is no longer a background nothing can measure",
+    declared(css, ".drawing", "background-image") === null &&
+      declared(css, ".drawing", "background-size") === null,
+  );
+
+  // ...and the two widths the screens are laid out at, from the same stylesheet.
+  const px = (value) => (value === null ? null : Number.parseFloat(value));
+  const guard = px(declared(css, ".drawing", "max-height"));
+  const narrowMax = px(declared(css, ".screen", "max-width", "first"));
+  const narrowPad = px((declared(css, ".pane", "padding", "first") ?? "").split(/\s+/)[1]);
+  const wideMax = px(declared(css, ".pane", "max-width"));
+  const widePad = px((declared(css, ".pane", "padding") ?? "").split(/\s+/)[1]);
+  const operative = px((declared(css, ".pane", "grid-template-columns") ?? "").split(/\s+/).pop());
+  const gap = px((declared(css, ".pane", "gap") ?? "").split(/\s+/).pop());
+  const column = (viewport) =>
+    viewport < 900
+      ? Math.min(viewport, narrowMax) - 2 * narrowPad
+      : Math.min(viewport, wideMax) - 2 * widePad - operative - gap;
+  checkThat(
+    `the two column widths are read off the stylesheet (${column(1280)} and ${column(390)})`,
+    Number.isFinite(column(1280)) && Number.isFinite(column(390)) && Number.isFinite(guard),
+  );
+
+  // Every screen of the fixture, and the drawing it carries.
+  const drawn = new Map();
+  for (const name of Object.keys(sessions.scenarios)) {
+    const one = gateway({ session: scenario(name) });
+    const mounted = await mount(one.connection);
+    const image = mounted.find("img.drawing");
+    if (!image) {
+      continue;
+    }
+    drawn.set(name, image.getAttribute("src"));
+    checkThat(`${name}: the drawing is an element and not a background`, image.tagName === "IMG");
+  }
+  checkThat(`${drawn.size} screens of the fixture carry a drawing`, drawn.size > 0);
+  for (const [name, src] of drawn) {
+    const file = join(IMAGES, (src ?? "").replace("/myhome_static/", ""));
+    const size = await webpSize(file).catch(() => null);
+    if (!size) {
+      check(`${name}: ${src} is a drawing this integration ships`, false, true);
+      continue;
+    }
+    for (const viewport of [1280, 390]) {
+      const wide = column(viewport);
+      const tall = (wide * size.height) / size.width;
+      check(
+        `${name}: ${src} is whole at ${viewport} px ` +
+          `(${Math.round(wide)}×${Math.round(tall)} of ${size.width}×${size.height})`,
+        tall <= guard,
+        true,
+      );
+    }
+  }
 }
 
 console.log("\nthe stylesheets the bundle ships");

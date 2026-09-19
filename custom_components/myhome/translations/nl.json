@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Begeleide kalibratie van rolluiken",
-        "description": "Dit hulpmiddel kalibreert “eenvoudige” rolluiken: die waarvan de aandrijving haar stand niet meldt. Voor die rolluiken is het percentage dat u in Home Assistant ziet een schatting uit de looptijden; de kalibratie meet die tijden en de vorm van de as, om een nauwkeurigere schatting te krijgen.\n\nPerfect wordt het niet. Reken op een paar centimeter afwijking: 1-2 cm bij de eindstanden, 2-4 cm op de standen daartussen. Elke volledige opening of sluiting zet de schatting weer gelijk, dus de fout stapelt zich niet op.\n\n“Geavanceerde” rolluiken melden hun stand zelf en hebben dit alles niet nodig: daarom staan ze in de volgende stappen niet in de lijst.\n\n**Wat er gaat gebeuren**: u kiest een rolluik en een van de drie manieren om het te meten. Het rolluik zal meermaals naar zijn eindstanden lopen.\n\n**Wat u moet doen**: houd een rolmaat bij de hand, zorg dat niets het rolluik in de weg staat en blijf waar u het kunt zien. Er wordt niets opgeslagen tot het laatste scherm: u kunt dit dialoogvenster sluiten wanneer u wilt en er zal niets veranderd zijn, en een rit die al loopt gaat vanzelf door tot de eindstand.",
+        "description": "Dit hulpmiddel kalibreert “eenvoudige” rolluiken: die waarvan de aandrijving haar stand niet meldt. Voor die rolluiken is het percentage dat u in Home Assistant ziet een schatting uit de looptijden; de kalibratie meet die tijden en de vorm van de as, om een nauwkeurigere schatting te krijgen.\n\nPerfect wordt het niet. Reken op een paar centimeter afwijking: ongeveer 4 cm na de basiskalibratie en ongeveer 2 cm na de uitgebreide, bij de eindstanden minder. Elke volledige opening of sluiting zet de schatting weer gelijk, dus de fout stapelt zich niet op.\n\n“Geavanceerde” rolluiken melden hun stand zelf en hebben dit alles niet nodig: daarom staan ze in de volgende stappen niet in de lijst.\n\n**Wat er gaat gebeuren**: u kiest een rolluik en een van de drie manieren om het te meten. Het rolluik zal meermaals naar zijn eindstanden lopen.\n\n**Wat u moet doen**: houd een rolmaat bij de hand, zorg dat niets het rolluik in de weg staat en blijf waar u het kunt zien. Er wordt niets opgeslagen tot het laatste scherm: u kunt dit dialoogvenster sluiten wanneer u wilt en er zal niets veranderd zijn, en een rit die al loopt gaat vanzelf door tot de eindstand.",
         "menu_options": {
           "cover": "Beginnen",
           "init": "Terug naar het menu"
@@ -259,7 +259,7 @@
       },
       "path": {
         "title": "Hoe wilt u dit rolluik meten?",
-        "description": "**Rolluik**: {cover}\n\nEr zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is de lange, ongeveer vier minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is juist bedoeld voor rolluiken die lijken op een al gekalibreerd rolluik: u kiest het profiel, meet de loopafstand van het pantser, klaar.\n\nDe derde (C) is voor een rolluik waaraan een profiel is toegewezen maar dat op de verkeerde plek stopt: in dat geval moet de kalibratie van dit rolluik worden gecorrigeerd.\n\n**Wat u moet doen**: kies een van de manieren hieronder. Tot het volgende scherm beweegt er niets.",
+        "description": "**Rolluik**: {cover}\n\nEr zijn drie manieren, en welke de juiste is hangt af van wat u al gemeten hebt. Het zijn geen opeenvolgende stappen: u kiest er één.\n\nDe eerste (A) is voor het eerste rolluik van zijn soort, en voor wie niet weet welke van de drie de zijne is. Het is de lange, ongeveer vier minuten: drie keer op een knop drukken en drie keer meten met de rolmaat. Aan het eind ontstaat een **profiel**, de beschrijving van dit soort rolluik, die alle vergelijkbare rolluiken (zelfde model, zelfde maat, ...) opnieuw kunnen gebruiken.\n\nDe tweede (B) is voor een rolluik van hetzelfde model en dezelfde maat als een al gemeten rolluik: u kiest het profiel, meet de loopafstand van het pantser, klaar.\n\nDe derde (C) is voor een rolluik waaraan een profiel is toegewezen maar dat op de verkeerde plek stopt: in dat geval moet de kalibratie van dit rolluik worden gecorrigeerd.\n\n**Wat u moet doen**: kies een van de drie manieren. **Bij twijfel (A)**: die is het langst en de enige die niets vooraf gemetens nodig heeft. Tot het volgende scherm beweegt er niets.",
         "menu_options": {
           "path_a": "(A) Het is het eerste rolluik van deze soort (volledige meting, ~4 minuten)",
           "path_b": "(B) Het lijkt op een al gemeten rolluik (alleen de loopafstand van het pantser)",
@@ -291,7 +291,7 @@
       },
       "refine_scope": {
         "title": "Hoe ver wilt u de kalibratie corrigeren?",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: een van drie dingen. Drie gemeten ritten (twee omhoog en één omlaag); die plus drie metingen met de rolmaat — de loopafstand van het pantser, en één halverwege in elke richting; of helemaal geen gemeten rit, vier metingen met de rolmaat op een kwart en op driekwart van de loopafstand in elke richting en daarna een controle. Elke keuze hieronder zegt hoeveel bewegingen ze kost.\n\nAlleen de tijden volstaan voor een rolluik waarvan de motor eenvoudig langzamer of sneller is dan die waarop het profiel is gemeten. Voeg de factoren toe wanneer het ook *halverwege* misgaat: daar draait niet de motor anders, daar wikkelt het pantser zich anders.\n\nDe laatste is de uitgebreide kalibratie op zichzelf, voor een rolluik dat al gemeten is: hij houdt elke tijd waarmee dit rolluik vandaag rijdt en leest alleen de rolmaat. Is de loopafstand van het pantser nooit gemeten, dan komt die meting eerst en kost ze geen extra beweging: het rolluik moet er toch voor naar boven.\n\n**Wat u moet doen**: kies hoe ver u wilt gaan. U kunt altijd terugkomen voor de rest.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: een van drie dingen. Drie gemeten ritten (twee omhoog en één omlaag); die plus drie metingen met de rolmaat — de loopafstand van het pantser, en één halverwege in elke richting; of helemaal geen gemeten rit, vier metingen met de rolmaat op een kwart en op driekwart van de loopafstand in elke richting en daarna een controle. Elke keuze zegt hoeveel bewegingen ze kost.\n\nAlleen de tijden volstaan voor een rolluik waarvan de motor eenvoudig langzamer of sneller is dan die waarop het profiel is gemeten. Voeg de factoren toe wanneer het ook *halverwege* misgaat: daar draait niet de motor anders, daar wikkelt het pantser zich anders.\n\nDe laatste is de uitgebreide kalibratie op zichzelf, voor een rolluik dat al gemeten is: hij houdt elke tijd waarmee dit rolluik vandaag rijdt en leest alleen de rolmaat. Is de loopafstand van het pantser nooit gemeten, dan komt die meting eerst en kost ze geen extra beweging: het rolluik moet er toch voor naar boven.\n\n**Wat u moet doen**: kies hoe ver u wilt gaan. U kunt altijd terugkomen voor de rest.",
         "menu_options": {
           "times_only": "Alleen de eigen looptijden (3 keer drukken, 5 bewegingen)",
           "times_and_rolls": "De eigen tijden en de eigen factoren (3 keer drukken, 3 metingen, 8 bewegingen)",
@@ -301,7 +301,7 @@
       },
       "home_closed_done": {
         "title": "Is het rolluik helemaal dicht?",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is helemaal gesloten: zo vertrekt alles wat hierna gemeten wordt van een bekend punt.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is helemaal gesloten: zo vertrekt alles wat hierna gemeten wordt van een bekend punt.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan met een van de antwoorden.",
         "menu_options": {
           "confirm_closed": "Het is helemaal dicht",
           "repeat_step": "Herhaal deze stap",
@@ -310,7 +310,7 @@
       },
       "open_brief": {
         "title": "We gaan de beweging omhoog meten",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de stijging wordt met twee ritten gemeten, één druk per rit, en dit is de eerste. Als u op de knop hieronder drukt, vertrekt het rolluik vanaf de basis omhoog: de eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten, en daarna begint het hele pantser te stijgen. Het rolluik wordt gestopt op het moment dat u drukt, een paar centimeter hoger, en het volgende scherm vraagt u te kijken waar het gestopt is.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Eén druk, op het moment dat de onderrand van de basis loskomt. U klokt niets: het moment van drukken ís de meting.\n\nDe tweede rit komt daarna, weer vanaf de basis, en vraagt de andere druk: het moment dat het rolluik de eindstand bovenaan bereikt en de motor stopt, wat u herkent doordat het geluid ophoudt. De tekening laat beide zien.\n\nDe schermen die volgen hebben maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: de stijging wordt met twee ritten gemeten, één druk per rit, en dit is de eerste. Zodra de rit wordt gestart, vertrekt het rolluik vanaf de basis omhoog: de eerste seconde of twee gaan alleen de lamellen open, terwijl de onderrand blijft rusten, en daarna begint het hele pantser te stijgen. Het rolluik wordt gestopt op het moment dat u drukt, een paar centimeter hoger, en het volgende scherm vraagt u te kijken waar het gestopt is.\n\n**Wat u moet doen**: hier moet u snel en nauwkeurig zijn. Start eerst de rit; druk dan één keer, op het moment dat de onderrand van de basis loskomt. U klokt niets: het moment van drukken ís de meting.\n\nDe tweede rit komt daarna, weer vanaf de basis, en vraagt de andere druk: het moment dat het rolluik de eindstand bovenaan bereikt en de motor stopt, wat u herkent doordat het geluid ophoudt. De tekening laat beide zien.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
         "menu_options": {
           "open_start": "Start het rolluik",
           "repeat_step": "Stuur het eerst weer omlaag",
@@ -328,10 +328,10 @@
       },
       "lift_check": {
         "title": "Waar is de onderrand nu?",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is gestopt op het moment dat u drukte. Tussen een druk en het stilstaan van de motor zit altijd een moment — uw eigen reactie, het commando dat de gateway bereikt, de motor die remt — en al die tijd blijft het pantser stijgen.\n\n**Wat u moet doen**: kijk naar de onderrand en zeg welk van de drie het is. Een paar centimeter boven de basis is hoe een geslaagde druk eruitziet. Nog op de basis rustend betekent dat de druk kwam vóórdat de rand loskwam: die meting is niet te herstellen, alleen over te doen. Een handbreedte of meer betekent dat de druk te laat was, en een late druk is het enige geval dat een rolmaat kan rechtzetten.\n\nBij twijfel: meten. Die aflezing is het nauwkeurigste van de drie antwoorden, want ze zet het moment waarop de rand van de basis loskwam terug op zijn plaats in plaats van op de druk te vertrouwen.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is gestopt op het moment dat u drukte. Tussen een druk en het stilstaan van de motor zit altijd een moment — uw eigen reactie, het commando dat de gateway bereikt, de motor die remt — en al die tijd blijft het pantser stijgen.\n\n**Wat u moet doen**: kijk naar de onderrand en zeg welk van de drie het is. Twee of drie centimeter boven de basis is hoe een geslaagde druk eruitziet. Nog op de basis rustend betekent dat de druk kwam vóórdat de rand loskwam: die meting is niet te herstellen, alleen over te doen. Een handbreedte of meer betekent dat de druk te laat was, en een late druk is het enige geval dat een rolmaat kan rechtzetten.\n\nBij twijfel: meten. Die aflezing is het nauwkeurigste van de drie antwoorden, want ze zet het moment waarop de rand van de basis loskwam terug op zijn plaats in plaats van op de druk te vertrouwen.",
         "menu_options": {
           "lift_too_early": "Hij raakt de basis nog",
-          "lift_accept": "Hij staat een paar centimeter hoger, verder",
+          "lift_accept": "Hij staat twee of drie centimeter hoger, verder",
           "lift_gap": "Ik wil de afstand meten voor meer precisie",
           "not_right": "Het deed niet wat het moest doen"
         }
@@ -341,14 +341,14 @@
         "description": "![](/myhome_static/lift_off.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is gestopt op het moment dat u drukte — maar de gateway had nog andere commando's in de wachtrij en deed er meer dan een seconde over om het onze naar de bus te schrijven. Al die tijd bleef het pantser stijgen, dus de afstand die u zo ziet is groter dan gewoonlijk en dat ligt niet aan u.\n\n**Wat u moet doen**: kijk naar de onderrand en zeg welk van de drie het is. Nog op de basis rustend betekent dat de druk kwam vóórdat de rand loskwam: die meting is niet te herstellen, alleen over te doen. In alle andere gevallen loont meten hier, want bij deze rit kan alleen de rolmaat zeggen wanneer de rand echt loskwam.",
         "menu_options": {
           "lift_too_early": "Hij raakt de basis nog",
-          "lift_accept": "Hij staat een paar centimeter hoger, verder",
+          "lift_accept": "Hij staat twee of drie centimeter hoger, verder",
           "lift_gap": "Ik wil de afstand meten voor meer precisie",
           "not_right": "Het deed niet wat het moest doen"
         }
       },
       "lift_gap": {
         "title": "De afstand meten — {cover}",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Wat u moet doen**: meet vanaf de basis — het punt waar de onderrand rust wanneer het rolluik dicht is — tot aan de onderrand waar die nu staat, en schrijf de centimeters hieronder. Die afstand zegt precies wanneer de rand echt van de basis loskwam, zodat de openingstijd van de lamellen niet meer afhangt van hoe snel uw vinger was.\n\nLaat u het veld leeg, dan gaat het verder zonder meting en blijft de druk zoals hij gemaakt is.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Wat u moet doen**: meet vanaf de basis — het punt waar de onderrand rust wanneer het rolluik dicht is — tot aan de onderrand waar die nu staat, en schrijf de centimeters in het veld. Die afstand zegt precies wanneer de rand echt van de basis loskwam, zodat de openingstijd van de lamellen niet meer afhangt van hoe snel uw vinger was.\n\nLaat u het veld leeg, dan gaat het verder zonder meting en blijft de druk zoals hij gemaakt is.",
         "data": {
           "gap_cm": "Afstand tussen de onderrand en de basis (cm)"
         },
@@ -367,7 +367,7 @@
       },
       "closed_again": {
         "title": "Is het rolluik weer helemaal dicht?",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is terug omlaag naar de basis gestuurd, omdat de volledige stijging daar moet beginnen, net als de eerste rit.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan hieronder.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gebeurd is**: het rolluik is terug omlaag naar de basis gestuurd, omdat de volledige stijging daar moet beginnen, net als de eerste rit.\n\n**Wat u moet doen**: kijk ernaar. Is het helemaal dicht, met gesloten lamellen en de onderrand rustend, ga dan verder. Beweegt het nog, wacht dan en ga daarna verder. Bewoog het helemaal niet, of de verkeerde kant op, zeg dat dan met een van de antwoorden.",
         "menu_options": {
           "confirm_closed_again": "Het is helemaal dicht",
           "repeat_step": "Herhaal deze stap",
@@ -376,7 +376,7 @@
       },
       "open_full_brief": {
         "title": "Nu de volledige stijging",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik weer vanaf de basis omhoog, en deze keer laten we het lopen — de lamellen gaan open, het hele pantser stijgt, en bovenaan stopt het rolluik vanzelf in zijn eindstand.\n\n**Wat u moet doen**: maar één druk, op het moment dat de motor bovenaan stopt. U herkent het doordat het geluid ophoudt. Bij de basis wordt u deze keer niets gevraagd: die meting is al gedaan.\n\nHet scherm tijdens de beweging heeft maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: zodra de rit wordt gestart, vertrekt het rolluik weer vanaf de basis omhoog, en deze keer laten we het lopen — de lamellen gaan open, het hele pantser stijgt, en bovenaan stopt het rolluik vanzelf in zijn eindstand.\n\n**Wat u moet doen**: start de rit en druk dan één keer, op het moment dat de motor bovenaan stopt. U herkent het doordat het geluid ophoudt. Bij de basis wordt u deze keer niets gevraagd: die meting is al gedaan.\n\nLees rustig, ga op uw plaats staan, en start de beweging zelf wanneer u klaar bent.",
         "menu_options": {
           "open_full_start": "Start het rolluik",
           "repeat_step": "De stijging helemaal opnieuw meten",
@@ -402,7 +402,7 @@
       },
       "open_result_gap": {
         "title": "De beweging omhoog is gemeten",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gemeten is**: lamellen {slat} s, volledige stijging {run} s, en een afstand van {gap} cm boven de basis.\n\nDe openingstijd van de lamellen hierboven is die van de druk. De afstand die u gemeten hebt vervangt hem bij het berekenen van de waarden, dus wat opgeslagen wordt kan er een paar tienden van een seconde van afwijken — juist daarvoor is hij gemeten.\n\n**Wat u moet doen**: leken de druk bovenaan en de meting goed, ga dan verder. De meting herhalen doet beide ritten van de stijging opnieuw vanaf de basis.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gemeten is**: lamellen {slat} s, volledige stijging {run} s, en een afstand van {gap} cm boven de basis.\n\nDe zojuist genoemde openingstijd van de lamellen is die van de druk. De afstand die u gemeten hebt vervangt hem bij het berekenen van de waarden, dus wat opgeslagen wordt kan er een paar tienden van een seconde van afwijken — juist daarvoor is hij gemeten.\n\n**Wat u moet doen**: leken de druk bovenaan en de meting goed, ga dan verder. De meting herhalen doet beide ritten van de stijging opnieuw vanaf de basis.",
         "menu_options": {
           "accept_step": "Goed zo, verder",
           "repeat_step": "Herhaal de meting"
@@ -410,7 +410,7 @@
       },
       "close_brief": {
         "title": "We gaan de beweging omlaag meten",
-        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: als u op de knop hieronder drukt, vertrekt het rolluik van boven omlaag en stopt vanzelf zodra het pantser beneden is en de lamellen gesloten zijn.\n\n**Wat u moet doen**: ook hier moet u snel en nauwkeurig zijn, maar dit keer is er maar één druk, op het moment dat de motor beneden stopt.\n\n**Let op**: druk niet wanneer de onderrand de basis raakt. Vanaf dat punt beweegt het rolluik nog even door, om de lamellen te sluiten. Druk pas wanneer het helemaal ophoudt met bewegen, lamellen inbegrepen, dus wanneer de motor stopt: dat herkent u doordat het geluid ophoudt.\n\nEen rolluik daalt iets sneller dan het stijgt, en daarom wordt dit apart gemeten. Het scherm tijdens de beweging heeft maar één regel, want er is geen tijd om te lezen terwijl u naar het rolluik kijkt.\n\nLees dit rustig door, ga voor het rolluik staan en start de beweging wanneer u klaar bent.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er gaat gebeuren**: zodra de rit wordt gestart, vertrekt het rolluik van boven omlaag en stopt vanzelf zodra het pantser beneden is en de lamellen gesloten zijn.\n\n**Wat u moet doen**: ook hier moet u snel en nauwkeurig zijn, maar dit keer is er, zodra de rit gestart is, maar één druk, op het moment dat de motor beneden stopt.\n\n**Let op**: druk niet wanneer de onderrand de basis raakt. Vanaf dat punt beweegt het rolluik nog even door, om de lamellen te sluiten. Druk pas wanneer het helemaal ophoudt met bewegen, lamellen inbegrepen, dus wanneer de motor stopt: dat herkent u doordat het geluid ophoudt.\n\nEen rolluik daalt iets sneller dan het stijgt, en daarom wordt dit apart gemeten.\n\nLees dit rustig door, ga voor het rolluik staan en start de beweging wanneer u klaar bent.",
         "menu_options": {
           "close_start": "Start het rolluik",
           "repeat_step": "Stuur het eerst weer omhoog",
@@ -436,7 +436,7 @@
       },
       "height": {
         "title": "Wat is de loopafstand van het pantser van {cover}?",
-        "description": "![](/myhome_static/height.webp)\n\n**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand van het rolluik rust als het dicht is (de basis) tot de onderrand van het rolluik in de huidige stand (helemaal open). Met andere woorden: meet de afstand die het rolluik aflegt van helemaal open naar helemaal dicht (of omgekeerd), en schrijf de centimeters hieronder.\n\nDie afstand is de loopafstand van het pantser, en dat is de maat waarmee elke andere meting wordt vergeleken. Meet het pantser, niet de dagopening: rust de onderrand op een vensterbank en niet op de vloer, meet dan vanaf de vensterbank.",
+        "description": "![](/myhome_static/height.webp)\n\n**Wat u moet doen**: meet, met het rolluik helemaal open, van het punt waar de onderrand van het rolluik rust als het dicht is (de basis) tot de onderrand van het rolluik in de huidige stand (helemaal open). Met andere woorden: meet de afstand die het rolluik aflegt van helemaal open naar helemaal dicht (of omgekeerd), en schrijf de centimeters in het veld.\n\nDie afstand is de loopafstand van het pantser, en dat is de maat waarmee elke andere meting wordt vergeleken. Meet het pantser, niet de dagopening: rust de onderrand op een vensterbank en niet op de vloer, meet dan vanaf de vensterbank.",
         "data": {
           "height": "Loopafstand van het pantser (cm)"
         },
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "De loopafstand van het pantser is genoteerd",
-        "description": "**Rolluik**: {cover}\n\n**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Controleer de waarde: de metingen met de rolmaat in de volgende stappen worden met deze loopafstand vergeleken. Is het rolluik niet helemaal open, en is dit dus niet de hele loopafstand, zeg dat dan hieronder: het wordt opnieuw geopend en de meting wordt overgedaan.",
+        "description": "**Rolluik**: {cover}\n\n**Wat er genoteerd is**: {height} cm van de basis tot de onderrand, met het rolluik helemaal open.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Controleer de waarde: de metingen met de rolmaat in de volgende stappen worden met deze loopafstand vergeleken. Is het rolluik niet helemaal open, en is dit dus niet de hele loopafstand, zeg dat dan met een van de antwoorden: het wordt opnieuw geopend en de meting wordt overgedaan.",
         "menu_options": {
           "accept_step": "Dit klopt, verder",
           "repeat_measure": "Herhaal de meting",
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Meet {cover} - op {percent}% van de daling",
-        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna ongeveer {percent}% van zijn loopafstand omlaag gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Gebruik hetzelfde referentiepunt als bij de loopafstand van het pantser, zodat de twee metingen vergelijkbaar zijn.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal geopend en daarna ongeveer {percent}% van zijn loopafstand omlaag gestuurd.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters in het veld. Gebruik hetzelfde referentiepunt als bij de loopafstand van het pantser, zodat de twee metingen vergelijkbaar zijn.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },
@@ -473,7 +473,7 @@
       },
       "measure_ascent": {
         "title": "Meet {cover} - op {percent}% van de stijging",
-        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal gesloten en daarna omhoog gestuurd: eerst gingen de lamellen open, daarna legde het pantser ongeveer {percent}% van zijn loopafstand af.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters hieronder. Een rolluik wordt omhoog en omlaag niet gelijk belast: daarom wordt dezelfde fractie twee keer gemeten.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is helemaal gesloten en daarna omhoog gestuurd: eerst gingen de lamellen open, daarna legde het pantser ongeveer {percent}% van zijn loopafstand af.\n\n**Wat u moet doen**: meet van de basis tot de onderrand in de huidige stand, en schrijf de centimeters in het veld. Een rolluik wordt omhoog en omlaag niet gelijk belast: daarom wordt dezelfde fractie twee keer gemeten.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },
@@ -483,7 +483,7 @@
       },
       "measure_verify": {
         "title": "Controleer {cover} - op {percent}% van de daling",
-        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is naar een stand gebracht waar niets gemeten is, dus dit is een echte controle en geen herhaling.\n\n**Wat u moet doen**: meet een laatste keer de hoogte van de onderrand, vanaf hetzelfde referentiepunt als eerder, en schrijf de centimeters hieronder. Het volgende scherm toont het verschil tussen de gemeten stand en de door Home Assistant geschatte stand.",
+        "description": "![](/myhome_static/reading.webp)\n\n**Wat er gebeurd is**: het rolluik is naar een stand gebracht waar niets gemeten is, dus dit is een echte controle en geen herhaling.\n\n**Wat u moet doen**: meet een laatste keer de hoogte van de onderrand, vanaf hetzelfde referentiepunt als eerder, en schrijf de centimeters in het veld. Het volgende scherm toont het verschil tussen de gemeten stand en de door Home Assistant geschatte stand.",
         "data": {
           "measured_cm": "Hoogte van de onderrand (cm)"
         },
@@ -493,7 +493,7 @@
       },
       "tape_result": {
         "title": "De meting is genoteerd",
-        "description": "**Rolluik**: {cover} — afgelezen op {percent}% van de loopafstand\n\n**Wat er genoteerd is**: {measured} cm van de basis tot de onderrand.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Twijfelt u of u vanaf het juiste punt gemeten hebt, herhaal dan de meting: het rolluik gaat terug naar de eindstand en legt dezelfde weg opnieuw af, zodat de meting onder dezelfde omstandigheden kan worden overgedaan. Deed het rolluik niet wat het moest doen (het bewoog helemaal niet, of de verkeerde kant op), zeg dat dan hieronder: het wordt gestopt en de bewegingen van deze stap worden opnieuw gedaan.",
+        "description": "**Rolluik**: {cover} — afgelezen op {percent}% van de loopafstand\n\n**Wat er genoteerd is**: {measured} cm van de basis tot de onderrand.\n\n**Wat u moet doen**: is dat het getal dat u op de rolmaat las, ga dan verder. Twijfelt u of u vanaf het juiste punt gemeten hebt, herhaal dan de meting: het rolluik gaat terug naar de eindstand en legt dezelfde weg opnieuw af, zodat de meting onder dezelfde omstandigheden kan worden overgedaan. Deed het rolluik niet wat het moest doen (het bewoog helemaal niet, of de verkeerde kant op), zeg dat dan met een van de antwoorden: het wordt gestopt en de bewegingen van deze stap worden opnieuw gedaan.",
         "menu_options": {
           "accept_step": "Dit klopt, verder",
           "repeat_tape": "Herhaal de meting",
@@ -526,7 +526,7 @@
       },
       "summary_basic": {
         "title": "Wat er gemeten is",
-        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hieronder: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\nDe nauwkeurigheid is nog niet gecontroleerd. Met “Ga verder met de uitgebreide kalibratie” worden vier punten extra gemeten, op een kwart en op driekwart van de loopafstand in elke richting, en daarna wordt het model getoetst aan een vijfde meting op een stand waarop niets berekend is.\n\n**Wat u moet doen**: sla op, of ga verder met vijf extra metingen met de rolmaat. Dat duurt ongeveer twee minuten.",
+        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hier: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\nDe nauwkeurigheid is nog niet gecontroleerd: een basiskalibratie blijft meestal binnen ongeveer 4 cm. Met “Ga verder met de uitgebreide kalibratie” worden vier punten extra gemeten, op een kwart en op driekwart van de loopafstand in elke richting, en daarna wordt het model getoetst aan een vijfde meting op een stand waarop niets berekend is; die blijft meestal binnen ongeveer 2 cm.\n\n**Wat u moet doen**: sla op, of ga verder met vijf extra metingen met de rolmaat. Dat duurt ongeveer twee minuten.",
         "menu_options": {
           "save": "Opslaan",
           "refine": "Ga verder met de uitgebreide kalibratie (~2 minuten, 5 metingen extra)",
@@ -535,7 +535,7 @@
       },
       "summary_short": {
         "title": "Wat er gemeten is",
-        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hieronder: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat wordt vervangen en wat blijft**: opslaan schrijft {replacing} en laat al het andere dat al voor dit rolluik is opgeslagen precies zoals het is: {keeping}.\n\n**Wat u moet doen**: sla op, of verlaat het scherm zonder iets op te slaan.",
+        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hier: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat wordt vervangen en wat blijft**: opslaan schrijft {replacing} en laat al het andere dat al voor dit rolluik is opgeslagen precies zoals het is: {keeping}.\n\n**Wat u moet doen**: sla op, of verlaat het scherm zonder iets op te slaan.",
         "menu_options": {
           "save": "Opslaan",
           "cancel_flow": "Annuleren zonder iets op te slaan"
@@ -543,7 +543,7 @@
       },
       "summary_correction": {
         "title": "Wat er gemeten is",
-        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hieronder: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat wordt vervangen en wat blijft**: opslaan schrijft {replacing} en laat al het andere dat al voor dit rolluik is opgeslagen precies zoals het is: {keeping}.\n\nDe nauwkeurigheid is nog niet gecontroleerd. Met “Ga verder met de uitgebreide kalibratie” worden vier punten extra gemeten, op een kwart en op driekwart van de loopafstand in elke richting, en daarna wordt het model getoetst aan een vijfde meting op een stand waarop niets berekend is.\n\n**Wat u moet doen**: sla op, of ga verder met vijf extra metingen met de rolmaat. Dat duurt ongeveer twee minuten.",
+        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hier: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat wordt vervangen en wat blijft**: opslaan schrijft {replacing} en laat al het andere dat al voor dit rolluik is opgeslagen precies zoals het is: {keeping}.\n\nDe nauwkeurigheid is nog niet gecontroleerd: een basiskalibratie blijft meestal binnen ongeveer 4 cm. Met “Ga verder met de uitgebreide kalibratie” worden vier punten extra gemeten, op een kwart en op driekwart van de loopafstand in elke richting, en daarna wordt het model getoetst aan een vijfde meting op een stand waarop niets berekend is; die blijft meestal binnen ongeveer 2 cm.\n\n**Wat u moet doen**: sla op, of ga verder met vijf extra metingen met de rolmaat. Dat duurt ongeveer twee minuten.",
         "menu_options": {
           "save": "Opslaan",
           "refine": "Ga verder met de uitgebreide kalibratie (~2 minuten, 5 metingen extra)",
@@ -552,7 +552,7 @@
       },
       "summary_precise": {
         "title": "Wat er gemeten is",
-        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n**Nauwkeurigheid**: binnen {accuracy}\n\nDat is de controle waarmee de uitgebreide kalibratie afsluit: op {percent}% van de daling — een stand waarop niets berekend is — stopte het rolluik binnen {accuracy} van waar het model hem verwachtte. Het is een vraag aan het model, geen herhaling van een meting waarop het berekend is.\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hieronder: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat wordt vervangen en wat blijft**: opslaan schrijft {replacing} en laat al het andere dat al voor dit rolluik is opgeslagen precies zoals het is: {keeping}.\n\n**Wat u moet doen**: sla op.",
+        "description": "**Rolluik**: {cover}\n\n**Loopafstand van het pantser**: {height}\n**Nauwkeurigheid**: binnen {accuracy}\n\nDat is de controle waarmee de uitgebreide kalibratie afsluit: op {percent}% van de daling — een stand waarop niets berekend is — stopte het rolluik binnen {accuracy} van waar het model hem verwachtte. Het is een vraag aan het model, geen herhaling van een meting waarop het berekend is.\n\n**Waar deze waarden terechtkomen**: als u opslaat, blijven ze binnen Home Assistant, hier onder Configureren → Kalibraties. Ze worden bij het opslaan weggeschreven en het rolluik gaat ze gebruiken zodra dit dialoogvenster gesloten wordt, in plaats van die uit het configuratiebestand, als u dat gebruikt. Vanaf datzelfde scherm kunt u ze altijd terugzien, met de hand verbeteren of verwijderen.\n\nSchrijft u ze liever zelf in het bestand, dan staat het gelijkwaardige fragment hier: kopieer het voordat u sluit, want zonder opslaan wordt er niets bewaard.\n\n{yaml}\n**Wat wordt vervangen en wat blijft**: opslaan schrijft {replacing} en laat al het andere dat al voor dit rolluik is opgeslagen precies zoals het is: {keeping}.\n\n**Wat u moet doen**: sla op.",
         "menu_options": {
           "save": "Opslaan",
           "cancel_flow": "Annuleren zonder iets op te slaan"

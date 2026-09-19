@@ -1015,7 +1015,7 @@ and `check.gap_cm` (the number the threshold decides on, to 0.1 cm).
 | `reading` | object \| null | in `awaiting_reading` after a run to a fraction: `{direction, fraction, from_end_stop, expected_cm, tolerance_cm}` — where the model expects the bar and how far off is still normal (3 cm with a fitted model, 15 cm without). `null` for the travel and the lift-off gap |
 | `measured` | object | what has been measured so far (§12.4). Emptied once the session has ended without saving: provisional values are discarded |
 | `fit` | object \| null | `{opening, closing}`, each `{run_time_s, slat_time_s, roll, time_scale, points: [{motor_s, measured_cm, residual_cm}]}`, once both directions have a reading. `residual_cm` is model minus tape, and `null` for a direction fitted through a single point, which reproduces itself exactly and has nothing left over to be a residual |
-| `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. In path B, `threshold_cm` is the fixed 3 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check |
+| `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. In path B, `threshold_cm` is the fixed 4 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check |
 | `review` | object \| null | in `review` (and kept in `saved`): §12.5 |
 | `problem` | object \| null | `{code}` on a `problem_<code>` step: `no_echo`, `not_delivered`, `not_stopped`, `busy`, `bad_point`, `timeout`, `unknown` — the dialog's — and `interrupted` |
 | `notice` | token \| null | `rehomed` or `reading_stale` (§11.5): something to say about what happened around the step that is not a problem |
@@ -1060,7 +1060,7 @@ into seven languages. `problem_interrupted` is the one step the panel adds.
 | `tape_run` | positioning | — (the run to the fraction) |
 | `measure_descent`, `measure_ascent`, `measure_verify` | awaiting_reading | form `measured_cm` |
 | `tape_result` | briefing | `accept_step`, `repeat_tape`, `tape_not_right` |
-| `verify_result` | checking | `path_c` (path B, gap above 3 cm), `accept_step`, `repeat_tape` |
+| `verify_result` | checking | `path_c` (path B, gap above 4 cm), `accept_step`, `repeat_tape` |
 | `verify_offer` | briefing | `verify_now`, `skip_verify` |
 | `profile_name` | briefing | form `name` (text) |
 | `summary_basic`, `summary_correction` | review | `refine`; the exits are `review.targets` |
@@ -1168,7 +1168,7 @@ and the screen asks for the tape.
 {
   "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
   "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-  "revision": 32,
+  "revision": 28,
   "server_time": "2026-09-18T10:01:26.200000+00:00",
   "cover": {
     "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1415,9 +1415,13 @@ its meaning exactly.
 * **Per-key provenance** in the store (`overrides.<key>.source`): a migration of the
   store, not of the session; the record keeps its record-level `source` and
   `measured_at`.
-* **Path B's threshold read against the profile's own accuracy**: the threshold stays
-  the dialog's fixed 3 cm. The snapshot shows the profile's level and the gap of its
-  own check beside the gap (`check.profile_level`, `check.profile_check_cm`), so the
-  number can be read against it by the person looking at it.
+* **Path B's threshold read against the profile's own accuracy**: the threshold stays a
+  fixed number, **4 cm** since 20 September — what the panel's own screens promise a
+  basic calibration ends up within, so that the check cannot contradict the sentence
+  the same route has just shown. The dialog's own `REFINE_THRESHOLD_CM` is still 3 and
+  will meet it the next time `calibration_flow.py` is opened. The snapshot shows the
+  profile's level and the gap of its own check beside the gap
+  (`check.profile_level`, `check.profile_check_cm`), so the number can be read against
+  it by the person looking at it.
 * **The type of shutter** at the start of path A (a curtain on a rail, a shutter with no
   slats): it changes the model, and is outside this version.

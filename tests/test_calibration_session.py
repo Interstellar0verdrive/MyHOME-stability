@@ -1346,12 +1346,119 @@ async def test_repeat_step_makes_the_stage_s_own_movements_again(
         snapshot = await act(hass, session, Act("repeat_step"), freezer=freezer)
 
         # Back at the start of the ascent, with its homing made again...
+        #
+        # Two closings and not three: the stage's own homing is skipped on the way in,
+        # because the shutter was closed by `home_closed` one screen earlier and nothing
+        # has moved it since (live findings 6 and 16). "Repeat this step" is the user
+        # saying they do not believe that, so this one is made whatever the session
+        # believes - which is what leaves exactly two.
         assert snapshot["step"] == "open_brief"
-        assert runner.homed == [DIRECTION_CLOSE, DIRECTION_CLOSE, DIRECTION_CLOSE]
+        assert runner.homed == [DIRECTION_CLOSE, DIRECTION_CLOSE]
         # ...and everything the two runs had collected thrown away, so that a repeat
         # cannot pair a slat phase with the wrong ascent.
         assert snapshot["measured"]["slat_time_s"] is None
         assert snapshot["measured"]["lift"] is None
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_stage_does_not_send_the_shutter_where_it_has_just_put_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Live findings 6 and 16: half a second of motor, and the same screen twice.
+
+    Three stages of path A open with a homing towards an end stop the session itself
+    has just brought the shutter to - the ascent after "it is completely closed", the
+    curtain travel after the full ascent, the descent after the curtain travel - and
+    each one used to send the command anyway. The shutter jerked, a positioning screen
+    the user had already read came back for a fraction of a second, and nothing was
+    measured by any of it.
+
+    What is left is the three homings that really move something: the first closing,
+    the one that takes the shutter back down after the lift-off press stopped it part
+    way up, and the one that takes it back to the top between the two tape readings.
+
+    Mutation caught: homing unconditionally again, or skipping a homing whose end stop
+    the session does not actually know the shutter is at.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+
+        await walk(hass, session, PATH_A_BASIC, freezer=freezer)
+
+        assert runner.homed == [DIRECTION_CLOSE, DIRECTION_CLOSE, DIRECTION_OPEN]
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_movement_from_outside_makes_the_stage_s_homing_necessary_again(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The skip above is about what *this session* did, and nothing else.
+
+    `_at` is forgotten by every command from outside, so a wall switch pressed while
+    the user is reading "it is completely closed" leaves the ascent's own homing to be
+    made - which is the whole reason the session tracks an end stop rather than
+    assuming one.
+
+    Mutation caught: remembering the end stop across a movement nobody in this session
+    ordered.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:2], freezer=freezer)
+        assert session.snapshot()["step"] == "home_closed_done"
+        assert runner.homed == [DIRECTION_CLOSE]
+        # Somebody opens it from the wall while the screen is asking about it.
+        hass.states.async_set(ENTITY, STATE_OPENING)
+        await hass.async_block_till_done()
+
+        await act(hass, session, Act("confirm_closed"), freezer=freezer)
+
+        assert runner.homed == [DIRECTION_CLOSE, DIRECTION_CLOSE]
+        await session.async_cancel(CLIENT)
+
+
+async def test_the_run_back_from_a_reading_is_planned_for_the_distance_that_is_left(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Live finding 22: seven seconds announced for a movement that took three.
+
+    Between two tape readings the shutter is not at an end stop but at a fraction of
+    its travel, and the run back used to be planned for the **whole** run time of the
+    model in use. Now it is planned for the distance that is really left: half the
+    curtain, plus nothing, because coming from half way up the slats are already open.
+
+    The bar says nothing about what is measured (`planned_s` is a modelled duration and
+    the contract says so); it says how long to expect to stand there, and that is the
+    number that was wrong.
+
+    Mutation caught: going back to the full run time, or counting the slat phase on a
+    run that does not go through it.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        # ...up to the screen that accepts the reading taken half way up the ascent.
+        snapshot = await walk(hass, session, PATH_A_BASIC[:17], freezer=freezer)
+        assert snapshot["step"] == "tape_result"
+        # The fake shutter answers at once, so the screen the bar was on is read off
+        # what was published and not off the snapshot the action came back with.
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await act(hass, session, Act("accept_step"), freezer=freezer)
+
+        # The shutter is half way up and is being taken to the top for the descent's
+        # reading: half the curtain of the file's own opening time, and not all of it.
+        homings = [
+            one["movement"]
+            for one in published
+            if one["movement"] and one["movement"]["kind"] == "homing"
+        ]
+        assert homings, [one["step"] for one in published]
+        assert homings[0]["direction"] == DIRECTION_OPEN
+        assert homings[0]["planned_s"] == pytest.approx((FILE_OPENING - FILE_SLAT) * 0.5)
         await session.async_cancel(CLIENT)
 
 
@@ -2483,9 +2590,12 @@ async def test_the_screens_that_end_badly_are_the_contract_s_own_too(
         published: list[dict[str, Any]] = []
         session.subscribe(published.append)
 
-        await walk(hass, session, PATH_A_BASIC[:2], freezer=freezer)
+        # The failure is injected on the ascent's own run and not on the homing that
+        # used to follow "it is completely closed": that homing is not made any more
+        # when the session has just closed the shutter itself (live finding 6).
+        await walk(hass, session, PATH_A_BASIC[:3], freezer=freezer)
         runner.fail = CalibrationError(REASON_NO_ECHO, "no echo")
-        await act(hass, session, Act("confirm_closed"), freezer=freezer)
+        await act(hass, session, Act("open_start"), freezer=freezer)
         assert session.snapshot()["step"] == "problem_no_echo"
         await act(hass, session, Act("repeat_step"), freezer=freezer)
         await act(hass, session, Act("open_start"), freezer=freezer)

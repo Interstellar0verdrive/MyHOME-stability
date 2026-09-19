@@ -85,6 +85,7 @@ const context = (i18n: I18n, over: Partial<WizardContext> = {}): WizardContext =
   showAll: false,
   showAffected: false,
   cue: true,
+  selected: null,
   profiles: [],
   ...over,
 });
@@ -237,6 +238,58 @@ describe("every example the contract froze", () => {
         }
       }
     }
+  });
+});
+
+describe("the words of every screen", () => {
+  it("never says the shutter's name under a header that already says it", () => {
+    // Live finding 4: the dialog opens nearly every screen with "**Tapparella**: <name>",
+    // because it has nowhere else to say which shutter is being measured. The panel's
+    // header says it above every screen, so the line is the name twice.
+    for (const [name, snapshot] of Object.entries(scenarios)) {
+      for (const i18n of [it_it, en_gb]) {
+        const model = screenModel(snapshot, context(i18n));
+        const cover = snapshot.cover?.name ?? "";
+        const first = (model.body ?? "").split(/\n{2,}/)[0]?.trim() ?? "";
+        assert.notEqual(first, `**Tapparella**: ${cover}`, name);
+        assert.notEqual(first, `**Cover**: ${cover}`, name);
+      }
+    }
+  });
+
+  it("keeps the line where it says something the header does not", () => {
+    // "**Tapparella**: {cover} - lettura al {percent}% della corsa" is not the name twice.
+    const model = screenModel(scenarios.checking_verify_result_offers_c, context(it_it));
+    assert.match(model.body ?? "", /^\*\*Tapparella\*\*:/);
+  });
+
+  it("gives every step of the measurement something to read, not a title and buttons", () => {
+    // Live finding 17: the descent's "the motor is starting" screen had no drawing and no
+    // prose at all - the instruction was blanked on the way through and the descent is the
+    // one run with no illustration. A step is a screen somebody has to act on: it always
+    // says what to do.
+    for (const [name, snapshot] of Object.entries(scenarios)) {
+      const model = screenModel(snapshot, context(en_gb));
+      const said = [
+        model.body ?? "",
+        model.press?.instruction ?? "",
+        model.progress?.text ?? "",
+        model.field?.label ?? "",
+        ...(model.options ?? []).map((one) => one.title),
+        ...(model.lines ?? []),
+        ...(model.summary?.lines ?? []),
+      ]
+        .join(" ")
+        .trim();
+      assert.notEqual(said, "", `${name} is a title and some buttons`);
+    }
+  });
+
+  it("says what the press is for while the motor is still starting", () => {
+    const model = screenModel(scenarios.running_open_start, context(en_gb));
+    assert.match(model.body ?? "", /bottom edge leaves the base/);
+    // ...and the operative column says what the motor is doing, which is the other half.
+    assert.match(model.press?.instruction ?? "", /starting upwards/);
   });
 });
 
@@ -407,6 +460,56 @@ describe("the review", () => {
     assert.equal(screenModel(snapshot, context(en_gb)).summary?.sideEffects, undefined);
   });
 
+  it("gives the offer to go on a border, because it is a way forward", () => {
+    // Live finding 20: one primary and two secondaries. "Continue with the thorough
+    // calibration" was drawn as a third kind of button, which reads as a way out.
+    const model = screenModel(scenarios.review_basic, context(en_gb));
+    assert.equal(model.primary?.kind, "primary");
+    const going_on = (model.secondary ?? []).find((one) => one.action === "act:refine");
+    assert.equal(going_on?.kind, "secondary");
+    assert.ok((model.secondary ?? []).every((one) => one.kind === "secondary"));
+  });
+
+  it("says a value that did not move once, and strikes nothing through", () => {
+    // Live finding 23: an ascent measured again at the same 14,3 s was printed twice with
+    // a line through the first, which is a difference the reader goes looking for.
+    // The fixture is the real thing: this calibration moved the ascent and left the travel
+    // and the descent exactly where they were.
+    const model = screenModel(scenarios.review_basic, context(en_gb));
+    const rows = model.summary?.rows ?? [];
+    const same = rows.filter((one) => one.unchanged === true);
+    assert.equal(same.length, 2);
+    assert.ok(same.every((one) => one.before === undefined));
+    const moved = rows.filter((one) => one.unchanged !== true);
+    assert.equal(moved.length, 1);
+    assert.equal(moved[0]?.before, valueLine("opening_time_s", 25, en_gb));
+  });
+
+  it("says each unit once, beside the number", () => {
+    // Live finding 24: "Curtain travel (cm) … 110 cm". The label's bracket is there for a
+    // form field, which has nowhere else to say the unit; here the number does.
+    const model = screenModel(scenarios.review_basic, context(en_gb));
+    for (const row of model.summary?.rows ?? []) {
+      assert.doesNotMatch(row.label, /\((cm|s)\)$/, row.label);
+    }
+    const travel = model.summary?.rows.find((one) => /cm$/.test(one.after));
+    assert.ok(travel, "a row in centimetres");
+  });
+
+  it("opens and shuts the technical details with the same words", () => {
+    // Live finding 25: "Show every value, roll coefficients included" became "Hide the
+    // roll coefficients", which reads as two controls - and what it hides was never only
+    // the coefficients, because the snippet for the file goes with them.
+    const shut = screenModel(scenarios.review_basic, context(en_gb));
+    const open = screenModel(scenarios.review_basic, context(en_gb, { showAll: true }));
+    const one = shut.summary?.disclose?.[0];
+    const other = open.summary?.disclose?.[0];
+    assert.equal(one?.label, en_gb.t("panel.wizard.review.details_show"));
+    assert.equal(other?.label, en_gb.t("panel.wizard.review.details_hide"));
+    assert.equal(one?.label.replace(/^Show/, ""), other?.label.replace(/^Hide/, ""));
+    assert.equal(one?.note, en_gb.t("panel.wizard.review.details_note"));
+  });
+
   it("says whether the accuracy was checked, and where", () => {
     const checked = screenModel(scenarios.review_precise, context(en_gb));
     assert.ok((checked.summary?.lines ?? []).some((line) => line.includes("40%")));
@@ -434,11 +537,29 @@ describe("the outcomes", () => {
     }
   });
 
-  it("names the profile and where the values came from, when it was saved", () => {
+  it("says what was saved, what was made of it, and that it is already in use", () => {
+    // Live finding 26: the sentence used to be "«nome» is saved and already in use: it
+    // follows the profile «nome» (Inherited from profile «nome»)", which names the profile
+    // three times and answers nothing. Three things in the order somebody asks them, and
+    // no origin phrase inside a sentence that is not about where values come from.
     const model = screenModel(scenarios.saved_profile, context(en_gb));
     assert.match(model.body ?? "", /hallway_shutter/);
-    assert.match(model.body ?? "", /Inherited/);
+    assert.doesNotMatch(model.body ?? "", /Inherited/);
+    assert.match(model.body ?? "", /created/);
     assert.equal(model.summary?.rows.length, 3);
+    // ...and how a shutter like it is calibrated, under the sentence rather than in it.
+    assert.deepEqual(model.lines, [en_gb.t("panel.wizard.outcome.saved.reuse")]);
+  });
+
+  it("says the values are the shutter's own when they were saved for it alone", () => {
+    // `outcome.profile` is the profile the shutter follows and not the profile that was
+    // written: a save for this shutter only, made on a shutter that has a profile
+    // assigned, carries one. What tells the two apart is the origin - "measured" is the
+    // shutter having values of its own - which is what the sentence is chosen on.
+    const model = screenModel(scenarios.saved_cover_only, context(en_gb));
+    assert.match(model.body ?? "", /Hallway Shutter/);
+    assert.doesNotMatch(model.body ?? "", /tall/);
+    assert.equal(model.lines, undefined);
   });
 });
 
@@ -604,30 +725,66 @@ describe("the errors of a form", () => {
         ],
       }),
     );
-    // One option per choice, in the order the form gives them.
+    // One option per choice, in the order the form gives them - each of them a selection
+    // and not a verb, because a choice is made with "Continue" (live finding 3).
     assert.equal(model.options?.length, choices.length);
     assert.deepEqual(
       (model.options ?? []).map((one) => one.action),
-      choices.map((one) => `pick:${one}`),
+      choices.map((one) => `choose:pick:${one}`),
     );
     const marked = (model.options ?? []).filter((one) => one.current);
     assert.equal(marked.length, 1);
-    assert.equal(marked[0]?.action, `pick:${String(snapshot.form?.suggested)}`);
+    assert.equal(marked[0]?.action, `choose:pick:${String(snapshot.form?.suggested)}`);
+    // ...and the big button is what would send it.
+    assert.equal(model.primary?.action, `pick:${String(snapshot.form?.suggested)}`);
+    assert.equal(model.primary?.label, en_gb.t("panel.common.action.continue"));
     // The file is named by one of the origin phrases, which exist in all eight languages;
     // a profile is named by itself and carries its reference travel beside it.
-    const file = (model.options ?? []).find((one) => one.action === "pick:from_the_file");
+    const file = (model.options ?? []).find((one) => one.action === "choose:pick:from_the_file");
     assert.equal(file?.title, en_gb.origin("from_the_file", null));
-    const profile = (model.options ?? []).find((one) => one.action === `pick:${named}`);
+    const profile = (model.options ?? []).find((one) => one.action === `choose:pick:${named}`);
     assert.equal(profile?.title, named);
     assert.match(profile?.meta ?? "", new RegExp(en_gb.number(195, 0)));
     assert.match(profile?.meta ?? "", /Hallway Shutter/);
   });
 
-  it("highlights the scope the panel's own button meant, without choosing it", () => {
+  it("highlights the scope the panel's own button meant, and waits to be told to go", () => {
     const model = screenModel(scenarios.armed_refine_scope_intent, context(en_gb));
     const chosen = (model.options ?? []).filter((one) => one.current);
     assert.equal(chosen.length, 1);
-    assert.equal(chosen[0]?.action, "act:points_only");
+    assert.equal(chosen[0]?.action, "choose:act:points_only");
+    // Selected, not chosen: it is the big button that sends it, and until it is pressed
+    // nothing has been decided.
+    assert.equal(model.primary?.action, "act:points_only");
+  });
+
+  it("starts the three routes on (A), which is the one the text says to take in doubt", () => {
+    // The design pre-selects the first, and live finding 5 asks the text to say so: a
+    // reader who does not know which route is theirs presses Continue and gets (A).
+    const model = screenModel(scenarios.armed_path, context(en_gb));
+    const chosen = (model.options ?? []).filter((one) => one.current);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0]?.action, "choose:act:path_a");
+    assert.equal(model.primary?.action, "act:path_a");
+    assert.equal(model.primary?.disabled, false);
+  });
+
+  it("makes a choice with two gestures and never with one", () => {
+    // Every option of a `scelta` selects and nothing more. A `controllo` - "what does the
+    // shutter look like?" - is the other thing, and answers at the tap.
+    for (const [name, snapshot] of Object.entries(scenarios)) {
+      const model = screenModel(snapshot, context(en_gb));
+      const step = snapshot.step;
+      const template = step ? STEPS[step]?.template : undefined;
+      if (template !== "scelta") {
+        continue;
+      }
+      assert.ok(
+        (model.options ?? []).every((one) => one.action.startsWith("choose:")),
+        `${name}: an option that acts`,
+      );
+      assert.equal(model.primary?.label, en_gb.t("panel.common.action.continue"), name);
+    }
   });
 });
 

@@ -23,6 +23,7 @@ import { type I18n } from "../engine/i18n";
 import { splitLeadingImage } from "../engine/markdown";
 import {
   type ScreenAction,
+  type ScreenDisclosure,
   type ScreenModel,
   type ScreenOption,
   type ScreenSummaryRow,
@@ -64,6 +65,15 @@ export interface WizardContext {
   showAffected: boolean;
   /** The signal at the start, as this browser remembers it. */
   cue: boolean;
+  /**
+   * What the choice on the screen currently has selected, or `null` before it was touched.
+   *
+   * A `scelta` is chosen with two gestures and not one (live finding 3, and the design's
+   * own `Continua`): pressing a row selects it, and the big button is what acts. It is
+   * held by the view, like the one field, because it belongs to this tab and not to the
+   * session - and it is the token of the option, so the button has nothing to work out.
+   */
+  selected: string | null;
   /** The gateway's profiles, for the second line of a profile choice. */
   profiles: ProfileRow[];
 }
@@ -76,6 +86,7 @@ export const SUBMIT = "submit";
 export const STOP = "stop";
 export const CLAIM = "claim";
 export const CUE = "cue";
+export const CHOOSE = "choose:";
 export const SHOW_ALL = "show:all";
 export const SHOW_AFFECTED = "show:affected";
 export const AGAIN = "again";
@@ -104,6 +115,32 @@ const BORROWED: Readonly<Partial<Record<SessionAction, SessionStep>>> = {
   repeat_measure: "height_result",
   path_c: "verify_result",
   refine: "summary_basic",
+};
+
+/**
+ * The dialog's "**Tapparella**: <name>" line, taken out of a step's prose.
+ *
+ * The dialog has nowhere else to say which shutter is being measured, so nearly every one
+ * of its screens opens with that line. The panel's own header says it above every screen
+ * of the session, in bigger type, and a line under the title repeating it is the name
+ * twice on one screen (live finding 4). It is dropped here and not in the files, because
+ * the files are the dialog's too and the dialog still needs it.
+ *
+ * Only the first paragraph, and only when it says the name and nothing else: the screens
+ * that write "**Tapparella**: {cover} - lettura al {percent}% della corsa" are saying
+ * something the header does not, and they keep it. The label is whatever the language
+ * calls a shutter, so it is matched by shape rather than by word.
+ */
+const COVER_LINE = /^\*\*[^*\n]+\*\*:\s*(.+)$/;
+
+const withoutTheCoverLine = (body: string, cover: string): string => {
+  const paragraphs = body.split(/\n{2,}/);
+  const first = (paragraphs[0] ?? "").trim();
+  const said = COVER_LINE.exec(first);
+  if (!said || said[1].trim() !== cover.trim()) {
+    return body;
+  }
+  return paragraphs.slice(1).join("\n\n").replace(/^\n+/, "");
 };
 
 /** A sentence out of the files, or `null` when nobody wrote one. `I18n.t` answers the key. */
@@ -160,10 +197,30 @@ const summaryRow = (
   if (!row) {
     return null;
   }
+  return valueRow(row, i18n);
+};
+
+/**
+ * One value of the model, as the review prints it: the name, what it is, what it becomes.
+ *
+ * The "before" is struck through only where it means something. Where the calibration
+ * moved nothing - an ascent of 14,3 s measured again at 14,3 s - the row carries the
+ * number once and says in a word that it did not move, because two identical numbers with
+ * a line through the first are a difference the reader has to go looking for and will not
+ * find (live finding 23).
+ */
+const valueRow = (
+  row: { key: SessionValueKey; before: number | null; after: number | null },
+  i18n: I18n,
+): ScreenSummaryRow => {
+  const before = row.before === null ? undefined : valueLine(row.key, row.before, i18n);
+  const after = valueLine(row.key, row.after, i18n);
+  const unchanged = before !== undefined && before === after;
   return {
-    label: valueLabel(key, i18n),
-    before: row.before === null ? undefined : valueLine(key, row.before, i18n),
-    after: valueLine(key, row.after, i18n),
+    label: valueLabel(row.key, i18n),
+    before: unchanged ? undefined : before,
+    after,
+    unchanged,
   };
 };
 
@@ -217,7 +274,8 @@ const stepScreen = (
   const source = row.display ?? step;
   const title = text(i18n, `options.step.${source}.title`, ph) ?? "";
   const described = text(i18n, `options.step.${source}.description`, ph) ?? "";
-  const { image, body } = splitLeadingImage(described);
+  const { image, body: written } = splitLeadingImage(described);
+  const body = withoutTheCoverLine(written, session.cover.name);
   const model: ScreenModel = {
     id: step,
     model: row.template,
@@ -232,6 +290,12 @@ const stepScreen = (
   }
   if (row.template === "scelta" || row.template === "controllo") {
     model.options = optionsFor(session, context, step, ph);
+  }
+  if (row.template === "scelta") {
+    // A choice is made in two gestures: the row selects, "Continue" acts. A `controllo` is
+    // not one of these - "what does the shutter look like?" is answered and gone, which is
+    // what the design draws and what the dialog's own three answers are.
+    chooseAndContinue(model, context, defaultChoice(session, model.options ?? []));
   }
   if (session.check) {
     checkParts(model, session, context);
@@ -290,7 +354,12 @@ const clickParts = (
   if (row.press === "moving" || row.press === "registered") {
     model.body = lines.slice(0, -1).join("\n\n");
   } else {
-    model.body = "";
+    // The motor is starting and the shutter has not moved yet, so this is the last moment
+    // at which anything can be read: the step's own instruction stays in the text column,
+    // beside the drawing, while the operative column says what the motor is doing. The
+    // screen used to blank it, which on the descent - the one run with no drawing - left a
+    // title and two buttons and nothing else at all (live finding 17).
+    model.body = lines[lines.length - 1] ?? "";
   }
   // Through the files like every other number, and with the per cent sign written the way
   // the rest of the block writes it: the same route used to read "12 %" on one screen and
@@ -485,6 +554,58 @@ const fieldParts = (
   };
 };
 
+/**
+ * Turn a list of choices into "pick one, then press Continue".
+ *
+ * Pressing a row used to send the step on, which is one gesture for two decisions: the
+ * shutter list scrolled under the finger and a brush against a row started a calibration
+ * on the wrong window (live finding 3). Every option now fires `choose:` and nothing else;
+ * the big button carries the token of the one that is selected, and is dead until there
+ * is one.
+ */
+const chooseAndContinue = (
+  model: ScreenModel,
+  context: WizardContext,
+  fallback: string | null,
+): void => {
+  const options = model.options ?? [];
+  const known = new Set(options.map((one) => one.action));
+  const chosen = context.selected !== null && known.has(context.selected)
+    ? context.selected
+    : fallback;
+  model.options = options.map((one) => ({
+    ...one,
+    current: one.action === chosen,
+    action: `${CHOOSE}${one.action}`,
+  }));
+  model.primary = {
+    label: context.i18n.t("panel.common.action.continue"),
+    action: chosen ?? "",
+    disabled: chosen === null,
+    kind: "primary",
+  };
+};
+
+/**
+ * Which option is selected when the screen arrives, before anybody has pressed anything.
+ *
+ * The three routes and the three scopes of a correction are a question with a right answer
+ * for most people, and the design pre-selects the first of them - which is (A), the one
+ * the text tells a reader in doubt to take. A list of shutters and a list of profiles have
+ * no such answer: nothing is selected, and `Continue` waits. What `start` was told to
+ * highlight wins over both.
+ */
+const defaultChoice = (session: SessionSnapshot, options: readonly ScreenOption[]): string | null => {
+  const highlighted = options.find((one) => one.current);
+  if (highlighted) {
+    return highlighted.action;
+  }
+  if (session.form?.kind === "choice") {
+    return null;
+  }
+  return options[0]?.action ?? null;
+};
+
 /** The options of a choice: the step's actions, or the profiles the form offers. */
 const optionsFor = (
   session: SessionSnapshot,
@@ -672,11 +793,7 @@ const reviewScreen = (
         context.showAll && review.side_effects.length > 0
           ? {
               title: i18n.t("panel.wizard.review.side_effects"),
-              rows: review.side_effects.map((one) => ({
-                label: valueLabel(one.key, i18n),
-                before: one.before === null ? undefined : valueLine(one.key, one.before, i18n),
-                after: valueLine(one.key, one.after, i18n),
-              })),
+              rows: review.side_effects.map((one) => valueRow(one, i18n)),
             }
           : undefined,
       affected:
@@ -703,10 +820,13 @@ const reviewScreen = (
       ...saveAction(target, review.profile_name, i18n),
       kind: "secondary" as const,
     })),
+    // "Continue with the thorough calibration" is a way forward and not a way out: one
+    // primary and two secondaries, which is the hierarchy the design draws and which a
+    // borderless button broke (live finding 20).
     ...session.actions.map((action) => ({
       label: actionLabel(i18n, "summary_basic", action, ph),
       action: `${ACT}${action}`,
-      kind: "text" as const,
+      kind: "secondary" as const,
     })),
   ];
   return model;
@@ -731,14 +851,21 @@ const discloseButtons = (
   hasAffected: boolean,
   context: WizardContext,
   i18n: I18n,
-): { label: string; action: string; open: boolean }[] => {
-  const buttons = [
+): ScreenDisclosure[] => {
+  const buttons: ScreenDisclosure[] = [
     {
+      // The same words in both states, with only "show" and "hide" between them: the two
+      // used to be "Show every value, roll coefficients included" and "Hide the roll
+      // coefficients", which read as two different controls - and the one that was
+      // hidden was never only the coefficients, because the equivalent for the
+      // configuration file goes with them. The line under the button is what says so,
+      // rather than a label trying to list it (live finding 25).
       label: context.showAll
-        ? i18n.t("panel.common.action.hide_all")
-        : i18n.t("panel.common.action.show_all"),
+        ? i18n.t("panel.wizard.review.details_hide")
+        : i18n.t("panel.wizard.review.details_show"),
       action: SHOW_ALL,
       open: context.showAll,
+      note: i18n.t("panel.wizard.review.details_note"),
     },
   ];
   if (hasAffected) {
@@ -770,7 +897,8 @@ const problemScreen = (
   const described = row.own
     ? i18n.t("panel.wizard.problem.interrupted.body")
     : (text(i18n, `options.step.${step}.description`, ph) ?? "");
-  const { image, body } = splitLeadingImage(described);
+  const { image, body: written } = splitLeadingImage(described);
+  const body = withoutTheCoverLine(written, session.cover.name);
   const model: ScreenModel = {
     id: step,
     model: "esito",
@@ -801,17 +929,28 @@ const outcomeScreen = (
     outcome: "cancelled",
   };
   if (reason === "saved") {
-    const origin = i18n.origin(outcome?.origin ?? "measured", outcome?.profile ?? null);
     model.outcome = "saved";
     model.title = i18n.t("panel.wizard.outcome.saved.title");
-    model.body = outcome?.profile
-      ? i18n.t("panel.wizard.outcome.saved.profile", {
-          cover,
-          profile: outcome.profile,
-          origin,
-        })
-      : i18n.t("panel.wizard.outcome.saved.cover", { cover, origin });
     const review = session.review;
+    // What was written, in the order somebody would ask it: it is saved, this is what was
+    // made of it, and the shutter is already running on it. The sentence used to hang the
+    // origin phrase off the end of itself - "«nome» (Ereditata dal profilo «nome»)" - which
+    // names the profile twice and explains neither (live finding 26). Whether the values
+    // are the shutter's own is the origin's to say and the only thing it is read for here;
+    // whether the profile is a new one is the review's.
+    const profile = outcome?.profile ?? null;
+    const ownValues = (outcome?.origin ?? "measured") === "measured" || profile === null;
+    model.body = ownValues
+      ? i18n.t("panel.wizard.outcome.saved.cover", { cover })
+      : i18n.t(
+          review?.profile_exists
+            ? "panel.wizard.outcome.saved.profile_updated"
+            : "panel.wizard.outcome.saved.profile_new",
+          { cover, profile: profile ?? "" },
+        );
+    if (!ownValues) {
+      model.lines = [i18n.t("panel.wizard.outcome.saved.reuse")];
+    }
     if (review) {
       model.summary = {
         rows: HEADLINE_ROWS.map((key) => summaryRow(review.rows, key, i18n)).filter(
