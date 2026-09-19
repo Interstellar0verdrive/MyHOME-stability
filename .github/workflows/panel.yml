@@ -63,6 +63,18 @@ jobs:
         # no screenshot and no person at a browser would ever catch.
         run: npm run socket
 
+      - name: The calibration session
+        working-directory: panel_src
+        # The same bundle against a session that misbehaves: a snapshot the wizard
+        # cannot draw (the error card appears and the presence signal goes on
+        # arriving), a "Cancel" refused by another client and then by a socket that
+        # is down (there is always a card with a way out on it), the address
+        # opened with no session on the gateway (nothing is started) and a session
+        # picked up again in the middle of a run (nothing is acted). These are the
+        # failures the v2 panel shipped, and none of them is visible from a
+        # screenshot.
+        run: npm run session
+
       - name: Build
         working-directory: panel_src
         run: npm run build

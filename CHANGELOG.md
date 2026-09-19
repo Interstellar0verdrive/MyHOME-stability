@@ -65,6 +65,20 @@ everything the panel does.
   §11-§14, with one example snapshot per screen and a test that holds the Python
   schemas, the TypeScript types, the document and the examples to saying the same
   thing. Nothing is registered yet and nothing a user sees changes.
+- **The panel's side of that session**, and the guards that go with it. The browser tab
+  holds the session in one class with no rendering in it: it keeps its own fifteen-second
+  presence signal, which no drawing can stop and which never takes ownership away from a
+  phone whose screen has gone dark; it answers "Cancel" on every branch, so that a
+  cancellation another device refuses, or one the gateway never answers, arrives on the
+  screen with a way out on it — take control, try again, end it anyway, or the time at
+  which the shutter is freed by itself; and it identifies the tab through a name kept
+  across reloads, so that reloading the page is the same device and a second tab is a
+  second one. The address `#/calibrate` shows the gateway's session and **cannot start
+  one**: what to measure travels inside the page, never in the link, so a reload or a
+  pasted address never sets a shutter moving. A screen that fails to draw shows what
+  happened with "Try again" and "End the calibration" on it instead of an empty page, and
+  the measurement behind it is untouched. Nothing a user sees changes yet: every button
+  that reaches the guided calibration still opens *Configure*.
 
 ### Changed
 

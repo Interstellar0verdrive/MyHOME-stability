@@ -42,7 +42,7 @@ import { isEmpty, valueProblem } from "./engine/fields";
 import { openOptionsFlow } from "./engine/flow";
 import { backPath, isDrawerRoute, nextBack } from "./engine/drawer";
 import { Router, type Route } from "./engine/router";
-import { SessionClient, type WizardIntent } from "./engine/session";
+import { SessionClient, isOver, type WizardIntent } from "./engine/session";
 import { type SessionSnapshot } from "./engine/session-contract";
 import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
@@ -1533,8 +1533,11 @@ export class MyHomeCalibrationPanel extends LitElement {
     if (state.route.view === "calibrate") {
       // The shutter's own name, which is what the wizard is about. The phase line and the
       // control that closes it, which the design puts beside it, arrive with lot F2.
+      // `?.` on the cover as well, although the contract says it is always there: the
+      // toolbar is drawn outside the wizard's own `try`, and a snapshot that surprises the
+      // panel must cost the wizard its screen and never the panel its page.
       return (
-        state.session?.cover.name ??
+        state.session?.cover?.name ??
         state.wizardIntent?.name ??
         this._i18n.t("panel.wizard.title")
       );
@@ -1818,14 +1821,35 @@ export class MyHomeCalibrationPanel extends LitElement {
     return client;
   }
 
-  /** Read the gateway's session. Arriving at `#/calibrate` does this and nothing else. */
+  /**
+   * Read the gateway's session, and take part in it. Both of them are reads.
+   *
+   * `get` says what there is; `attach` says that this tab is looking at it, and is what
+   * starts the presence signal (SPEC §5.2). Neither moves anything - the contract is
+   * explicit that a session picked up again shows where it stands and does not re-enter
+   * its step (§11.1), and `tools/session.mjs` holds this to it with a snapshot taken in
+   * the middle of a positioning run.
+   *
+   * Attaching while somebody else is present and owns it is read-only, and the server
+   * says so; taking control from them is a button on the screen, never something that
+   * happens by opening a page.
+   */
   private async _readSession(): Promise<void> {
     const client = this._ensureSession();
     if (!client) {
       return;
     }
-    const result = await client.get();
-    this._store.set({ sessionError: result.ok ? null : result });
+    const seen = await client.get();
+    if (!seen.ok) {
+      this._store.set({ sessionError: seen });
+      return;
+    }
+    if (!seen.session || isOver(seen.session)) {
+      this._store.set({ sessionError: null });
+      return;
+    }
+    const joined = await client.attach(seen.session.session_id);
+    this._store.set({ sessionError: joined.ok ? null : joined });
   }
 
   /**

@@ -11,7 +11,8 @@
     "a11y": "node tools/a11y.mjs",
     "keyboard": "node tools/keyboard.mjs",
     "contrast": "node tools/contrast.mjs",
-    "socket": "node tools/socket.mjs"
+    "socket": "node tools/socket.mjs",
+    "session": "node tools/session.mjs"
   },
   "dependencies": {
     "lit": "3.3.3"
