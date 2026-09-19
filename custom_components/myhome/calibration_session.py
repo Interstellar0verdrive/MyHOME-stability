@@ -39,11 +39,12 @@ up in place, every subscriber gets the new overview - with the two differences t
 session needs: it is not refused by the calibration it is itself holding, and it
 leaves no undo token.
 
-Lot B2 builds the core and path A at the basic level. Paths B and C, the thorough
-calibration and the verification screens are lot B4: their stages and their steps are
-tables here, and `IMPLEMENTED_PATHS` / `IMPLEMENTED_LEVELS` say what the session is
-willing to offer, so an action it could not carry out is never advertised and is
-refused by the ordinary rule (`action_not_offered`).
+Lot B2 built the core and path A at the basic level; lot B4 added the other two
+paths, the thorough calibration and the two verifications, so the conversation now
+covers the whole of SPEC §3.4. `IMPLEMENTED_PATHS` / `IMPLEMENTED_LEVELS` stay as the
+one place that says what this backend is willing to offer: an action it could not
+carry out is never advertised and is refused by the ordinary rule
+(`action_not_offered`).
 """
 
 from __future__ import annotations
@@ -102,15 +103,19 @@ from .calibration_flow import (
     PATH_PROFILE,
     PATH_REFINE,
     PLAN_FULL,
+    PLAN_PRECISE,
+    PLAN_PRECISE_TRAVEL,
     PLAN_PROFILE,
     PLAN_TIMES,
     PLAN_TIMES_AND_ROLLS,
+    PLAN_VERIFY_B,
     PRESS_TIMEOUT_SEC,
     PROBLEM_REASONS,
     QUARTER_RUN,
     REASON_TIMEOUT,
     REASON_UNKNOWN,
     REASON_UNKNOWN_COVER,
+    REFINE_THRESHOLD_CM,
     ROUGH_TOLERANCE_CM,
     RUNNING_ACTION,
     THREE_QUARTER_RUN,
@@ -151,7 +156,14 @@ from .const import (
     LOGGER,
 )
 from .cover import CALIBRATION_SETTLE_SEC, calibration_run_seconds
-from .panel_data import basic_covers, calibrating_now, is_advanced_cover, yaml_profiles
+from .panel_data import (
+    CALIBRATION_LEVEL_PRECISE,
+    _level_and_note,
+    basic_covers,
+    calibrating_now,
+    is_advanced_cover,
+    yaml_profiles,
+)
 from .panel_schemas import (
     ERROR_ACTION_NOT_OFFERED,
     ERROR_ADVANCED_COVER,
@@ -194,12 +206,13 @@ PRESENCE_SEC = 45.0
 # again - which is what its screen says.
 REASON_INTERRUPTED = "interrupted"
 
-# What this lot can carry out. Paths B and C and the thorough calibration are lot B4:
-# until they exist the session does not offer them, so pressing one is refused by the
-# ordinary rule (`action_not_offered`) rather than advertised and then failing. B4
-# widens these two tuples and deletes this comment.
-IMPLEMENTED_PATHS: tuple[str, ...] = (PATH_FIRST,)
-IMPLEMENTED_LEVELS: tuple[str, ...] = ("basic",)
+# What this backend can carry out, which is now the whole of SPEC §3.4. They are kept
+# as tuples rather than folded away because they are the one place a backend says what
+# it offers: `capabilities` answers them to the panel, and anything not in them is not
+# put in `actions` and is refused before a shutter is taken hold of, rather than
+# advertised and then failed on.
+IMPLEMENTED_PATHS: tuple[str, ...] = (PATH_FIRST, PATH_PROFILE, PATH_REFINE)
+IMPLEMENTED_LEVELS: tuple[str, ...] = ("basic", "thorough")
 
 _NAME_RE = re.compile(PROFILE_NAME_PATTERN)
 
@@ -370,6 +383,11 @@ PLANS: dict[str, tuple[str, ...]] = {
     "times_only": PLAN_TIMES,
     "times_and_rolls": PLAN_TIMES_AND_ROLLS,
 }
+# The thorough calibration is not in that table because it is not chosen by a name: it
+# is `PLAN_PRECISE`, or the same with the curtain travel in front of it for a window
+# nobody has ever measured one for, and which of the two it is depends on what the
+# conversation knows by then (`_thorough_plan`). `PLAN_VERIFY_B` is path B's optional
+# check, grafted onto the plan at the screen that offers it.
 
 
 def _other_end(direction: str) -> str:
@@ -709,6 +727,7 @@ class CalibrationSession:
         self._error: str | None = None
         self._result: measure.Result | None = None
         self._review: dict[str, Any] | None = None
+        self._check: dict[str, Any] | None = None
 
         # what is moving, and what the screen is waiting for
         self._movement: _Movement | None = None
@@ -830,7 +849,15 @@ class CalibrationSession:
         elif path == PATH_REFINE:
             self._path = PATH_REFINE
             self._profile = profile
-            self._step = "refine_scope" if profile is not None else "path_c"
+            if profile is None:
+                self._step = "path_c"
+            else:
+                # Named up front, the profile is *chosen*, and the screen after the
+                # choice is `refine_scope` - so the conversation has to start from
+                # where choosing it leaves it, travel and all, and not merely display
+                # a later screen (`async_step_path_c`, :1811-1828).
+                self._correct_this_profile(profile)
+                self._step = "refine_scope"
         elif path == PATH_FIRST:
             self._path = PATH_FIRST
             self._step = "path_a"
@@ -1139,12 +1166,38 @@ class CalibrationSession:
             actions = [action for action in actions if action in IMPLEMENTED_PATHS]
         if "refine" in actions and "thorough" not in IMPLEMENTED_LEVELS:
             actions.remove("refine")
+        if self._step == "verify_result" and self._offers_the_correction():
+            # The one screen that can put a *path* in front of the two ordinary ways
+            # on: the profile this window was given does not describe it, and the
+            # correction is the answer to that rather than another reading.
+            actions = [PATH_REFINE, *actions]
         if self._notice == "reading_stale":
             # The reading no longer corresponds to where the shutter is; the field
             # stays on the screen (the user may have measured before it was touched)
             # but the way forward is the step again.
             return ["repeat_tape"]
         return actions
+
+    @callback
+    def _deviation_shown(self) -> float:
+        """How far out the verification was, as the screen says it: rounded, unsigned."""
+        deviation = self._measured.deviation
+        return 0.0 if deviation is None else round(abs(deviation), 1)
+
+    @callback
+    def _offers_the_correction(self) -> bool:
+        """Path B's verification, far enough out to be worth correcting the window.
+
+        Rounded *before* the threshold is applied, as the dialog rounds it
+        (`async_step_verify_result`, :3014): the number on the screen is the number
+        that decided, and a gap of 3.04 cm that read "3,0 cm" and offered a correction
+        was a screen arguing with itself over a digit nobody can see. The threshold is
+        the dialog's fixed 3 cm (SPEC decision 20); how well the profile itself was
+        measured is shown beside it (`check.profile_level`) rather than folded into it.
+        """
+        if self._path != PATH_PROFILE or PATH_REFINE not in IMPLEMENTED_PATHS:
+            return False
+        return self._deviation_shown() > REFINE_THRESHOLD_CM
 
     @callback
     def _not_offered(self, action: str) -> PanelError:
@@ -1173,7 +1226,83 @@ class CalibrationSession:
     async def _async_do_begin(self) -> None:
         self._path = PATH_FIRST
         self._measured = measure.Measured()
-        await self._async_start_plan(PLAN_FULL)
+        await self._async_start_plan(PLANS[PATH_FIRST])
+
+    async def _async_do_path_b(self) -> None:
+        """"Ne ho gia' misurata una uguale": the profile form, and nothing else yet."""
+        self._path = PATH_PROFILE
+        self._show("path_b")
+
+    async def _async_do_path_c(self) -> None:
+        """"Segue un profilo ma sbaglia": the profile form again, from two screens.
+
+        From the menu of paths, and from the verification of path B when the shutter
+        stopped further from where the profile said than the threshold allows. In the
+        second case the travel this conversation has just read with a tape is kept,
+        which is what makes the jump worth offering at all: it is the same window and
+        the same tape (`async_step_path_c`, :1823-1828, and `_correct_this_profile`).
+        """
+        self._path = PATH_REFINE
+        self._show("path_c")
+
+    # ---- the three scopes of a correction
+    async def _async_do_times_only(self) -> None:
+        self._scope = "times_only"
+        await self._async_start_plan(PLANS["times_only"])
+
+    async def _async_do_times_and_rolls(self) -> None:
+        self._scope = "times_and_rolls"
+        await self._async_start_plan(PLANS["times_and_rolls"])
+
+    async def _async_do_points_only(self) -> None:
+        """The thorough calibration alone: nothing is pressed for, so nothing is timed.
+
+        The run times and the slat phase the readings correct are the ones the cover
+        moves on **today**, taken as if they had been measured
+        (`_adopt_the_model_in_use`, :1929). The one way they cannot be put together is
+        a window the gateway's configuration no longer has - the entry was reloaded off
+        an edited `myhome.yaml` under the session - and that is not a step that can be
+        repeated, so the session ends the way it ends when the shutter goes away.
+        """
+        self._scope = "points_only"
+        adopted = measure.adopted_timings(
+            self._measured,
+            measure.values_in_use(
+                unique_id=self.cover_unique_id,
+                device=self._device(),
+                profiles=self.profiles,
+                record=self._record(),
+                profile=self._profile,
+                height=self._measured.height,
+            ),
+        )
+        if adopted is None:
+            LOGGER.warning(
+                "Panel calibration of %s: the model this shutter moves on cannot be "
+                "read any more, so the thorough calibration has nothing to correct",
+                self.cover_name,
+            )
+            await self.async_end("cover_gone", stop=True)
+            return
+        # Replaced, not merged: `adopted_timings` answers a copy, and the copy is the
+        # measurement from here on (B1 handoff, R2).
+        self._measured = adopted
+        await self._async_start_thorough(from_here=False)
+
+    # ---- the thorough calibration, and path B's check
+    async def _async_do_refine(self) -> None:
+        """"Continua con la calibrazione approfondita", from a summary (:3386)."""
+        await self._async_start_thorough(from_here=True)
+
+    async def _async_do_verify_now(self) -> None:
+        """Graft the check - and the homing it starts from - onto the plan here."""
+        index = (self._index or 0) + 1
+        self._plan[index:index] = list(PLAN_VERIFY_B)
+        await self._async_advance()
+
+    async def _async_do_skip_verify(self) -> None:
+        """Take the profile at its word."""
+        await self._async_advance()
 
     # ---- the confirmations and the briefs
     async def _async_do_confirm_closed(self) -> None:
@@ -1296,8 +1425,8 @@ class CalibrationSession:
             await self._async_submit_reading(value)
         elif field == CONF_NAME:
             await self._async_submit_name(value)
-        else:  # pragma: no cover - lot B4 adds the profile choice
-            raise self._not_offered(SESSION_SUBMIT)
+        else:
+            await self._async_submit_profile(value)
 
     async def _async_submit_height(self, value: Any) -> None:
         number = _finite(value)
@@ -1352,6 +1481,54 @@ class CalibrationSession:
             self._tape_target = "ascent"
         self._show("tape_result")
 
+    async def _async_submit_profile(self, value: Any) -> None:
+        """The kind of shutter this window is one of, chosen on `path_b` or `path_c`.
+
+        A name nobody defines is `unknown_profile` and not a `form.error`: the field is
+        a choice out of a list the snapshot carries, so a value outside it is a client
+        sending something it was not offered, which is the protocol's business and not
+        the user's. Every field where the user *types* answers with `form.error`.
+        """
+        name = str(value or "").strip()
+        if name not in self.profiles:
+            raise _refuse(
+                ERR_NOT_FOUND,
+                ERROR_UNKNOWN_PROFILE,
+                f"No profile called {name!r} on {self.entry.title}",
+                {"profile": name},
+            )
+        if self._path == PATH_REFINE:
+            self._correct_this_profile(name)
+            self._show("refine_scope")
+            return
+        self._profile = name
+        self._measured = measure.Measured()
+        await self._async_start_plan(PLANS[PATH_PROFILE])
+
+    @callback
+    def _correct_this_profile(self, name: str) -> None:
+        """Start a correction of one profile, from what this window is known to be.
+
+        The dialog's `async_step_path_c` on submit (:1811-1828). A travel this
+        conversation measured is kept - path B's check sends the user here with the
+        tape reading already done, and it is the same window and the same tape - and
+        otherwise the conversation starts from the travel this window is *known* to
+        have, so that the summary does not show "-" for it and Save does not write a
+        record that has forgotten it. Never a profile's reference height: that is
+        another window's travel (`own_height`).
+        """
+        measured_here = self._measured.height is not None and self._measured.height_measured
+        self._profile = name
+        self._measured = measure.Measured(
+            height=self._measured.height
+            or measure.own_height(record=self._record(), device=self._device()),
+            height_measured=measured_here,
+        )
+        self._scope = None
+        self._check = None
+        self._result = None
+        self._review = None
+
     async def _async_submit_name(self, value: Any) -> None:
         name = str(value or "").strip()
         if not _a_name(name):
@@ -1360,11 +1537,119 @@ class CalibrationSession:
         self._measured_name = name
         await self._async_advance()
 
-    async def _async_verified(self, measured_cm: float) -> None:  # pragma: no cover - lot B4
-        """The reading the model is compared against; the screens are lot B4's."""
-        raise self._not_offered(SESSION_SUBMIT)
+    async def _async_verified(self, measured_cm: float) -> None:
+        """The reading the model is asked about, rather than fitted to.
+
+        One question put to the model as it stands, at a fraction nothing was fitted
+        to: path B asks it of the profile scaled to this window, the thorough
+        calibration of the fit it has just made (`_deviation` and `_model_values`,
+        :2965-3013). The answer is a distance in centimetres, and the screen that
+        follows is where it is read.
+        """
+        try:
+            model = measure.model_values(
+                path=self._path or PATH_FIRST,
+                measured=self._measured,
+                profiles=self.profiles,
+                profile=self._profile,
+            )
+        except CalibrationError as err:
+            # The same guard as everywhere the ported arithmetic is called (B1 handoff,
+            # R1(b)): a reading the model cannot place is `bad_point`, which is the
+            # dialog's own screen for it and offers the step again.
+            LOGGER.warning("Panel calibration of %s: %s", self.cover_name, err)
+            self._show_problem("bad_point")
+            return
+        gap = measure.deviation(
+            measured_cm, report=self._report, height=self._measured.height, model=model
+        )
+        _direction, fraction = self._pending or (DIRECTION_CLOSE, VERIFY_RUN)
+        self._measured.deviation = gap
+        self._measured.verify_fraction = fraction
+        self._tape_target = None
+        self._check = self._the_check(measured_cm, fraction, gap)
+        self._show("verify_result")
+
+    @callback
+    def _the_check(
+        self, measured_cm: float, fraction: float, gap: float | None
+    ) -> dict[str, Any]:
+        """The verification as the contract publishes it (§12, `check`).
+
+        Where the model said the bar would be, where it really was, how far apart the
+        two are - and, when it is a profile that is being questioned, the threshold
+        above which the correction is offered together with how well that profile was
+        itself measured. The last two are what makes 3 cm readable: the same gap means
+        nothing on a profile measured at the basic level and something on one that went
+        through its own check (contract §2.5, SPEC decision 20).
+        """
+        level: str | None = None
+        checked: float | None = None
+        threshold: float | None = None
+        if self._path == PATH_PROFILE:
+            threshold = REFINE_THRESHOLD_CM
+            level, checked = self._how_the_profile_was_measured()
+        return {
+            "fraction": fraction,
+            "predicted_cm": None if gap is None else measured_cm - gap,
+            "measured_cm": measured_cm,
+            "gap_cm": None if gap is None else round(abs(gap), 1),
+            "threshold_cm": threshold,
+            "profile_level": level,
+            "profile_check_cm": checked,
+        }
+
+    @callback
+    def _how_the_profile_was_measured(self) -> tuple[str | None, float | None]:
+        """The level of the profile being checked, and the gap its own check reported.
+
+        Off the `raw` block the guided calibration keeps beside its conclusions, read
+        with the panel's own `_level_and_note` so that the overview row and this screen
+        cannot disagree about what "thorough" means. A profile written by hand, or one
+        that lives in `cover_profiles:` and was never measured here, has no `raw`: both
+        are then `null` and the screen leaves the comparison out rather than inventing
+        a level for it.
+        """
+        store = self._store()
+        stored = None if store is None else store.profile(self._profile or "")
+        level, gap = _level_and_note(stored)
+        if level is not None:
+            # `precise` is what the store and the overview have called the level since
+            # 0.5.0; `thorough` is what the contract calls it (SPEC §3.11).
+            level = "thorough" if level == CALIBRATION_LEVEL_PRECISE else "basic"
+        return level, None if gap is None else round(abs(gap), 1)
 
     # -------------------------------------------------------------------- the plan
+    @callback
+    def _thorough_plan(self) -> tuple[str, ...]:
+        """The thorough calibration, with the curtain travel first when nobody knows it.
+
+        The dialog's `_thorough_plan` (:1946). Every reading of the phase is a number
+        of centimetres out of the travel, so the plan cannot start without one; a
+        travel already known is not asked for again, because the user is standing in
+        front of the shutter with a tape and that is the one reading that does not
+        change.
+        """
+        return PLAN_PRECISE if self._measured.height else PLAN_PRECISE_TRAVEL
+
+    async def _async_start_thorough(self, *, from_here: bool) -> None:
+        """Install the thorough plan, after what has been walked or instead of it.
+
+        The dialog's `_async_start_thorough` (:1951). `from_here` tells the two ways in
+        apart: pressed on a summary, the plan replaces the tail of the one that got
+        there - the pointer is on `summary` and everything before it has already
+        happened, so the presses are **not** repeated and the readings are fitted over
+        the times already measured; chosen as the third scope of a correction, it is
+        the whole plan and the conversation starts on its first stage.
+        """
+        self._measured.precise = True
+        plan = list(self._thorough_plan())
+        if not from_here:
+            await self._async_start_plan(plan)
+            return
+        self._plan = self._plan[: self._index or 0] + plan
+        await self._async_enter()
+
     async def _async_start_plan(self, plan: Sequence[str]) -> None:
         self._plan = list(plan)
         self._index = 0
@@ -1378,6 +1663,13 @@ class CalibrationSession:
         """(Re-)enter the stage the pointer is on, with its own state cleared."""
         self._error = None
         self._report = None
+        # A summary describes a conversation that has finished; entering a stage means
+        # this one has not. Without this, "Continua con la calibrazione approfondita"
+        # would leave the review of the *basic* result in the snapshot for the whole of
+        # the four readings that are about to replace it, and `save` reads the same two
+        # fields the screen does.
+        self._result = None
+        self._review = None
         stage = self._plan[self._index or 0]
         if stage in FRACTION_STAGES:
             await self._async_fraction_stage(stage)
@@ -1411,6 +1703,10 @@ class CalibrationSession:
         self._order_the_tape_phase()
         self._show("tape_brief")
 
+    async def _async_stage_verify_offer(self) -> None:
+        """Path B: the travel is enough, but the shutter can be asked all the same."""
+        self._show("verify_offer")
+
     async def _async_stage_profile_name(self) -> None:
         self._show("profile_name")
 
@@ -1435,6 +1731,9 @@ class CalibrationSession:
         # stale reading offers (§11.5) - would take back the reading of the stage
         # *before*, which was accepted two screens ago and is perfectly good.
         self._tape_target = None
+        # ...and the answer of a verification that is being made again is not an answer
+        # yet: the shutter is on its way to the end stop the run starts from.
+        self._check = None
         self._begin_homing(step=step, direction=_other_end(direction), done="tape_run")
 
     @callback
@@ -1995,6 +2294,7 @@ class CalibrationSession:
             self._index = None
             self._result = None
             self._review = None
+            self._check = None
         if self._watching is not None:
             self._watching()
             self._watching = None
@@ -2126,8 +2426,16 @@ class CalibrationSession:
         variant = self._variant()
         targets = self._targets()
         name = self._measured_name if path == PATH_FIRST else self._profile
+        # Only path A's main exit writes a profile, so only it changes what the windows
+        # that follow that profile will do. Path B names a profile too and changes
+        # nothing about it: taking this to mean "a profile is in play" would put a page
+        # of followers on that screen whose "before" and "after" are the same number,
+        # which reads as a warning about a change nobody is making.
+        writing_profile = bool(
+            targets[0] == "profile" and path == PATH_FIRST and result.profile is not None and name
+        )
         profiles_after = dict(self.profiles)
-        if targets[0] == "profile" and path == PATH_FIRST and result.profile is not None and name:
+        if writing_profile:
             shaped = profile_as_config(
                 name,
                 cover_profile_data(
@@ -2160,7 +2468,7 @@ class CalibrationSession:
                 tuple(key for key in SESSION_VALUE_KEYS if key not in SESSION_REVIEW_ROW_KEYS),
                 only_changes=True,
             ),
-            "affected": self._affected(profiles_after, name if targets[0] == "profile" else None),
+            "affected": self._affected(profiles_after, name if writing_profile else None),
             "accuracy_cm": None if deviation is None else round(abs(deviation), 1),
             "check_fraction": self._measured.verify_fraction,
             "replacing": _in_contract_names(replaced),
@@ -2306,7 +2614,7 @@ class CalibrationSession:
             "reading": None if terminal else self._reading(),
             "measured": self._measured_json(),
             "fit": _fit_json(self._fits(), measured),
-            "check": None,
+            "check": dict(self._check) if self._check is not None else None,
             "review": dict(self._review) if self._review is not None else None,
             "problem": None if self._problem is None else {"code": self._problem},
             "notice": self._notice,
@@ -2415,10 +2723,29 @@ class CalibrationSession:
                 suggested=self._measured_name or measure.suggested_name(self.entity_id),
                 error=self._form_error,
             )
-        return _form(  # pragma: no cover - the profile choice is lot B4's
-            field, "choice", suggested=self._profile, choices=sorted(self.profiles),
+        choices = sorted(self.profiles)
+        return _form(
+            field, "choice", suggested=self._preselected_profile(choices), choices=choices,
             error=self._form_error,
         )
+
+    @callback
+    def _preselected_profile(self, choices: Sequence[str]) -> str | None:
+        """The profile the choice opens on, as the dialog's two forms default it.
+
+        Path B has nothing to go on and opens on the first name (`async_step_path_b`,
+        :1800); a correction opens on the one already chosen in this conversation, else
+        the one this window follows today, else the first - because a form that opened
+        on somebody else's profile for a window the file assigns would be telling the
+        user something untrue about their own installation (`async_step_path_c`,
+        :1833-1841).
+        """
+        chosen = self._profile
+        if chosen is None and self._step == "path_c":
+            chosen = measure.assigned_profile(record=self._record(), device=self._device())
+        if chosen is not None and chosen in choices:
+            return chosen
+        return choices[0] if choices else None
 
     @callback
     def _reading(self) -> dict[str, Any] | None:
@@ -2512,9 +2839,13 @@ class CalibrationSession:
             values["percent"] = round(fraction * 100)
             values["measured"] = points[-1][1] if points else None
         elif step == "verify_result":
-            values["deviation"] = (
-                None if measured.deviation is None else round(abs(measured.deviation), 1)
-            )
+            # The number the sentence substitutes is the number that *decided* whether
+            # the correction is offered - rounded first, and zero when the model this
+            # window follows went away under the conversation and there was nothing to
+            # compare against. It is the dialog's own arithmetic for its own sentence
+            # (:3018-3022); a check with nothing behind it says so in `check`, whose
+            # three numbers are then `null`.
+            values["deviation"] = self._deviation_shown()
         elif step == "profile_name":
             values["replaced"] = "yes" if self._measured_name in self.profiles else ""
         if self._movement is not None and self._movement.kind == "fraction":

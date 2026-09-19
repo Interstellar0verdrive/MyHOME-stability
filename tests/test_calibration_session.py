@@ -580,18 +580,20 @@ async def test_a_start_on_a_cover_that_is_not_there_says_which_kind_of_nothing(
         assert current(hass, entry) is None
 
 
-async def test_a_path_this_lot_cannot_walk_is_refused_before_the_shutter_is_taken(
-    hass: HomeAssistant, tmp_path
+async def test_a_path_this_backend_cannot_walk_is_refused_before_the_shutter_is_taken(
+    hass: HomeAssistant, tmp_path, monkeypatch
 ) -> None:
-    """Paths B and C belong to the next lot, so a start naming one opens nothing.
+    """A path outside `IMPLEMENTED_PATHS` opens nothing at all.
 
-    A session born on a screen every one of whose buttons is refused would hold the
-    shutter - `Calibrating` on, the rest of the panel read-only over it - and do
-    nothing at all, with `cancel` as its only exit. Refused at the door instead.
+    All three are walked now, so the tuple is narrowed here to ask the question it
+    exists to answer: a session born on a screen every one of whose buttons is refused
+    would hold the shutter - `Calibrating` on, the rest of the panel read-only over it -
+    and do nothing at all, with `cancel` as its only exit. Refused at the door instead.
     """
     async with setup_myhome(hass, tmp_path, FOLLOWER_YAML) as (entry, _commands):
         entity = entity_object(hass, COVER, DEVICE_KEY)
         runner = FakeRunner(entity)
+        monkeypatch.setattr(calibration_session, "IMPLEMENTED_PATHS", ("path_a",))
 
         for path in ("path_b", "path_c"):
             with pytest.raises(PanelError) as refused:
@@ -606,19 +608,11 @@ async def test_a_path_this_lot_cannot_walk_is_refused_before_the_shutter_is_take
 
 
 async def test_a_start_naming_a_profile_nobody_defines_is_refused(
-    hass: HomeAssistant, tmp_path, monkeypatch
+    hass: HomeAssistant, tmp_path
 ) -> None:
-    """A profile that is not there cannot be the one this window is like.
-
-    Reached through the one knob lot B4 turns, because a profile can only be named
-    with path B or C and this lot does not walk them: widening `IMPLEMENTED_PATHS` is
-    exactly what B4 does, and this keeps the refusal behind it honest meanwhile.
-    """
+    """A profile that is not there cannot be the one this window is like."""
     async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        monkeypatch.setattr(
-            calibration_session, "IMPLEMENTED_PATHS", ("path_a", "path_b", "path_c")
-        )
         with pytest.raises(PanelError) as refused:
             await async_start(
                 hass,
