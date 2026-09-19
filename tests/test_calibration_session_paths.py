@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.cover import DOMAIN as COVER
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_NAME, STATE_OPENING
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -81,6 +81,7 @@ from .test_calibration_session import (
     CLIENT,
     COVER_NAME,
     DEVICE_KEY,
+    ENTITY,
     PATH_A_BASIC,
     UNIQUE_ID,
     YAML_KEY,
@@ -142,6 +143,14 @@ IN_USE_YAML = PROFILE_YAML.replace(
 # ...and with nobody anywhere knowing this window's own travel, which is what puts the
 # tape reading in front of the thorough calibration (`PLAN_PRECISE_TRAVEL`).
 NO_TRAVEL_YAML = IN_USE_YAML.replace(f"      height: {HEIGHT}\n", "")
+
+# ...and the same window told to follow the profile. Nobody has measured *this*
+# window's travel and the profile's reference height is another window's, so the two
+# questions "what is this window's travel" and "what travel is it resolved with" have
+# different answers here, which is the one arrangement that tells them apart.
+ASSIGNED_YAML = NO_TRAVEL_YAML.replace(
+    f"      roll: {FILE_ROLL}\n", f"      roll: {FILE_ROLL}\n      profile: tall\n"
+)
 
 # A second window that follows the same profile: what `review.affected` is about.
 FOLLOWER_YAML = PROFILE_YAML.replace(
@@ -567,6 +576,17 @@ async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel
         assert snapshot["check"]["gap_cm"] == 4.0
         assert snapshot["actions"] == ["path_c", "accept_step", "repeat_tape"]
 
+        # ...and the threshold is applied to the number the screen shows, not to the
+        # one behind it: 3.04 cm reads "3,0 cm", and a screen that offered a correction
+        # beside that sentence would be arguing with itself over a digit nobody can see.
+        await act(hass, session, Act("repeat_tape"))
+        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 3.04)))
+        assert snapshot["placeholders"]["deviation"] == 3.0
+        assert snapshot["actions"] == ["accept_step", "repeat_tape"]
+
+        await act(hass, session, Act("repeat_tape"))
+        await act(hass, session, Act("submit", str(descent_cm(0.5) + 4.0)))
+
         snapshot = await act(hass, session, Act("path_c"))
         assert snapshot["step"] == "path_c"
         assert snapshot["path"] == "path_c"
@@ -704,6 +724,37 @@ async def test_a_verification_the_arithmetic_refuses_is_a_problem_and_not_a_cras
         check_the_snapshot(snapshot)
 
 
+async def test_a_verification_read_where_the_shutter_no_longer_is_says_so(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The wall switch while the tape is being held against the check's own position.
+
+    The reading is about a place the shutter has left, so the answer it would give is
+    about nothing. The field stays on the screen - the user may well have measured
+    before anybody touched it, and they are the one who knows - but the way forward is
+    the run again, and it is the only way forward offered.
+    """
+    async with setup_myhome(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
+        await act(hass, session, Act("verify_now"))
+        assert session.snapshot()["step"] == "measure_verify"
+
+        hass.states.async_set(ENTITY, STATE_OPENING)
+        await hass.async_block_till_done()
+
+        snapshot = session.snapshot()
+        assert snapshot["step"] == "measure_verify"
+        assert snapshot["notice"] == "reading_stale"
+        assert snapshot["external_move"] is True
+        assert snapshot["form"]["field"] == "measured_cm"
+        assert snapshot["actions"] == ["repeat_tape"]
+        assert snapshot["check"] is None
+        check_the_snapshot(snapshot)
+        await session.async_cancel(CLIENT)
+
+
 async def test_the_check_says_how_well_the_profile_it_questions_was_measured(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -771,6 +822,33 @@ async def test_a_correction_starts_from_the_profile_and_the_travel_this_window_h
         assert snapshot["scope"] is None
         assert snapshot["measured"]["travel_cm"] == HEIGHT
         assert snapshot["measured"]["travel_measured"] is False
+        check_the_snapshot(snapshot)
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_correction_never_starts_from_another_window_s_travel(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A window with no travel of its own starts the correction without one.
+
+    It follows a profile, so a travel *can* be resolved for it - the profile's
+    reference height, which is the window the profile was measured on. Carrying that
+    into this conversation would scale every reading by somebody else's window and
+    write it into this one's record as if it had been measured here. The screen says
+    "-" instead, and the thorough calibration reads the tape first.
+    """
+    async with setup_myhome(hass, tmp_path, ASSIGNED_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await act(hass, session, Act("path_c"))
+        snapshot = await act(hass, session, Act("submit", "tall"))
+
+        assert snapshot["step"] == "refine_scope"
+        assert snapshot["measured"]["travel_cm"] is None
+        assert snapshot["measured"]["travel_measured"] is False
+
+        snapshot = await act(hass, session, Act("points_only"))
+        assert snapshot["plan"] == list(PLAN_PRECISE_TRAVEL)
         check_the_snapshot(snapshot)
         await session.async_cancel(CLIENT)
 
@@ -915,6 +993,9 @@ async def test_the_thorough_calibration_grafted_onto_a_summary(
         assert snapshot["review"]["variant"] == "precise"
         assert snapshot["review"]["targets"] == ["profile", "cover_only"]
         assert snapshot["check"]["fraction"] == VERIFY_RUN
+        # ...which is a position nothing was fitted to. That is what makes it a
+        # question put to the model rather than a repetition of one of its inputs.
+        assert snapshot["check"]["fraction"] not in (0.25, 0.5, 0.75)
         # The check questions a fit, not a profile, so there is no threshold to read
         # it against and nothing to compare it with.
         assert snapshot["check"]["threshold_cm"] is None
@@ -957,6 +1038,36 @@ async def test_a_correction_can_go_on_to_the_thorough_calibration_too(
         assert thorough[2] == "quarter_up"
         assert snapshot["step"] == "tape_brief"
         assert snapshot["placeholders"]["readings"] == len(PLAN_PRECISE_TRAVEL) - 2
+        check_the_snapshot(snapshot)
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_correction_s_stopwatch_starts_from_a_known_end_stop_too(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The wall switch during a correction's briefing, answered as path A answers it.
+
+    A correction is the one path whose whole point is that the model is wrong, so the
+    homing before its first timed run is bounded by a run time nobody trusts; a
+    stopwatch started from a point nobody knows would measure something else entirely.
+    The session takes the shutter back to the end stop by itself and says it did.
+    """
+    async with setup_myhome(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, for_the_session(PATH_C_TIMES[:4]), freezer=freezer)
+        assert session.snapshot()["step"] == "open_brief"
+
+        hass.states.async_set(ENTITY, STATE_OPENING)
+        await hass.async_block_till_done()
+        homings = len(runner.homed)
+
+        snapshot = await act(hass, session, Act("open_start"), freezer=freezer)
+        assert snapshot["step"] == "open_brief"
+        assert snapshot["notice"] == "rehomed"
+        assert snapshot["position_known"] == "closed"
+        assert len(runner.homed) == homings + 1
+        assert runner.started == []
         check_the_snapshot(snapshot)
         await session.async_cancel(CLIENT)
 
