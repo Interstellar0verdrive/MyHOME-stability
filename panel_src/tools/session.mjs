@@ -599,7 +599,7 @@ console.log("\nevery state the contract can produce, drawn");
   const { settle, find } = await mount(bench.connection, "#/calibrate", said);
   await settle(160);
   const names = Object.keys(sessions.scenarios);
-  check("the fixture still carries every example", names.length, 34);
+  check("the fixture still carries every example", names.length, 39);
   let drawn = 0;
   let broken = [];
   for (const name of names) {

@@ -65,6 +65,16 @@ const contract = fixture._contract as unknown as {
   reused_steps: SessionStep[];
 };
 
+/**
+ * A moment `seconds` after a snapshot's movement began, on this tab's clock.
+ *
+ * Never an instant written down here: the fixture is regenerated from the real controller
+ * (lot B3) and every `started_at` in it moves. What a test about the motor line is about
+ * is the *interval*, so the interval is what it says.
+ */
+const secondsInto = (snapshot: SessionSnapshot, seconds: number, skewMs = 0): number =>
+  Date.parse(snapshot.movement?.started_at ?? snapshot.server_time) + seconds * 1000 + skewMs;
+
 const context = (i18n: I18n, over: Partial<WizardContext> = {}): WizardContext => ({
   i18n,
   now: Date.parse("2026-09-18T10:01:16.000+00:00"),
@@ -205,7 +215,7 @@ describe("every example the contract froze", () => {
         assert.ok(model.model, name);
       }
     }
-    assert.equal(Object.keys(scenarios).length, 34);
+    assert.equal(Object.keys(scenarios).length, 39);
   });
 
   it("leaves no placeholder unfilled anywhere on it", () => {
@@ -293,19 +303,32 @@ describe("the screen of a press", () => {
     const snapshot = scenarios.running_open_lift;
     // Five and a half seconds after `movement.started_at`, with this tab's clock two
     // minutes fast: the line has to read 5,5 and not 125,5.
-    const fast = Date.parse("2026-09-18T10:01:16.100+00:00") + 120_000;
+    const skewMs = 120_000;
     const model = screenModel(
       snapshot,
-      context(it_it, { now: fast, skewMs: 120_000 }),
+      context(it_it, { now: secondsInto(snapshot, 5.5, skewMs), skewMs }),
     );
-    assert.match(model.press?.motor ?? "", /5,5/);
+    assert.equal(
+      model.press?.motor,
+      it_it.t("panel.wizard.motor.moving", { seconds: it_it.number(5.5, 1) }),
+    );
   });
 
   it("shows the press it registered, and the shutter's own estimate beside it", () => {
-    const model = screenModel(scenarios.running_lift_stop, context(it_it, { position: 3 }));
+    const snapshot = scenarios.running_lift_stop;
+    const model = screenModel(snapshot, context(it_it, { position: 3 }));
     assert.equal(model.press?.state, "registered");
     assert.equal(model.primary?.disabled, true);
-    assert.match(model.press?.note ?? "", /4,8/);
+    // The instant of the press against the instant the run began: both of them the
+    // server's, both of them read out of this snapshot.
+    const at =
+      (Date.parse(snapshot.measured.lift?.pressed_at ?? "") -
+        Date.parse(snapshot.movement?.started_at ?? "")) /
+      1000;
+    assert.equal(
+      model.press?.note,
+      it_it.t("panel.wizard.press.registered_note", { seconds: it_it.number(at, 1) }),
+    );
     assert.equal(
       model.press?.position,
       it_it.t("panel.wizard.motor.position", { percent: it_it.number(3, 0) }),
@@ -320,13 +343,19 @@ describe("the screen of a press", () => {
 
 describe("the screen of a positioning run", () => {
   it("is a bar, a sentence and a way to stop the shutter", () => {
-    const model = screenModel(
-      scenarios.positioning_home_closed,
-      context(it_it, { now: Date.parse("2026-09-18T10:00:31.850+00:00") }),
-    );
+    const snapshot = scenarios.positioning_home_closed;
+    // Half way through whatever the movement was planned to take, so the bar is half full
+    // however long the regenerated fixture says that is.
+    const halfway = (snapshot.movement?.planned_s ?? 0) / 2;
+    const model = screenModel(snapshot, context(it_it, { now: secondsInto(snapshot, halfway) }));
     assert.equal(model.model, "pos");
-    assert.equal(model.progress?.text, it_it.t("options.progress.homing_closed", { cover: "Hallway Shutter" }));
-    assert.ok((model.progress?.fraction ?? 0) > 0.4 && (model.progress?.fraction ?? 0) < 0.6);
+    assert.equal(
+      model.progress?.text,
+      it_it.t("options.progress.homing_closed", {
+        cover: String(snapshot.placeholders.cover ?? ""),
+      }),
+    );
+    assert.ok((model.progress?.fraction ?? 0) > 0.45 && (model.progress?.fraction ?? 0) < 0.55);
     assert.equal(model.secondary?.[0]?.label, it_it.t("panel.wizard.action.stop"));
     // Nothing to press: the step advances when the movement ends, never when the bar fills.
     assert.equal(model.primary, undefined);

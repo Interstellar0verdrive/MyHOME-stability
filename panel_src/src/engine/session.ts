@@ -24,9 +24,11 @@
 // `client_id` is kept in `sessionStorage`, so reloading the page stays the same owner and
 // a second tab is a second client. A heartbeat never takes ownership (contract §11.1,
 // amended 19 September 2026): a tab left open on the wizard must not become the owner by
-// doing nothing while the phone in the user's hand is asleep. Ownership moves on a verb
-// that does something, or on an `attach` - implicitly while the owner is away, and with
-// `claim` after the screen has asked.
+// doing nothing while the phone in the user's hand is asleep. **Nor does `leave`**
+// (contract §11.2, amended by lot B3): a page going away never acquires a calibration, and
+// from a client that is not the owner it is a no-op that answers the snapshot. Ownership
+// moves on `act`, `stop`, `save` or `cancel`, or on an `attach` - implicitly while the
+// owner is away, and with `claim` after the screen has asked.
 //
 // A session picked up again shows where it stands and re-enters nothing: no method here
 // sends an `act` on its own, and `get()` and `attach()` are reads (contract §11.1).

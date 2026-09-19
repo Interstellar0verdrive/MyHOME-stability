@@ -442,6 +442,14 @@ export const WIZARD_SCREENS = [
   wizard("a tape reading", "awaiting_reading_measure_descent"),
   wizard("a tape reading the flow refused", "awaiting_reading_measure_descent_error"),
   wizard("a profile to name", "briefing_profile_name"),
+  // The five the regenerated fixture added (lot B3): the second route's profile choice,
+  // and the whole of a verification - the offer, the run that sets it up, the reading and
+  // the two answers it can come to, inside the threshold and over it.
+  wizard("a choice of profiles to correct", "armed_path_c_profile_choice"),
+  wizard("the offer of a verification", "briefing_verify_offer"),
+  wizard("a run on the way to a verification", "positioning_verify"),
+  wizard("the reading of a verification", "awaiting_reading_measure_verify"),
+  wizard("a verification that came out inside the threshold", "checking_verify_result_within"),
   wizard("the review", "review_basic_profile_exists"),
   wizard("the review, every value shown", "review_basic_profile_exists", {
     name: "the wizard, the review with every value shown",
