@@ -140,6 +140,44 @@ const connection = (state) => ({
   removeEventListener() {},
 });
 
+/**
+ * The document, made as unhelpful as the one the panel really runs in.
+ *
+ * Home Assistant's frontend registers custom elements through a **scoped registry**
+ * polyfill, and that polyfill does not implement the form parts of the DOM. In the v2
+ * panel an ordinary read of a form's elements collection threw "Method not implemented"
+ * and took a screen down, in production, on a document no check here had - jsdom
+ * implements all of it, so the panel passed every check and failed in the one place it
+ * mattered.
+ *
+ * So the properties SPEC §5.9 strikes out are replaced by accessors that throw the
+ * frontend's own sentence, before the bundle is evaluated. `npm run a11y`,
+ * `npm run keyboard` and `npm run session` therefore fail if the shipped code reaches for
+ * one of them - on the screen, the way a user meets it - while
+ * `test/scoped-registry.test.ts` fails earlier and says which line.
+ *
+ * It is deliberately narrow: only the five properties on the list, and nothing about how
+ * an `<input>` or a shadow root behaves, which is what the panel actually uses.
+ */
+export const forbidFormApis = (window) => {
+  const refuse = (name) => ({
+    configurable: true,
+    get() {
+      throw new Error(`Method not implemented. (${name})`);
+    },
+  });
+  Object.defineProperty(window.HTMLFormElement.prototype, "elements", refuse("form.elements"));
+  Object.defineProperty(
+    window.HTMLFieldSetElement.prototype,
+    "elements",
+    refuse("fieldset.elements"),
+  );
+  Object.defineProperty(window.Document.prototype, "forms", refuse("document.forms"));
+  for (const name of ["requestSubmit", "reset", "namedItem"]) {
+    Object.defineProperty(window.HTMLFormElement.prototype, name, refuse(`form.${name}`));
+  }
+};
+
 export const settle = (window, ms = 60) =>
   new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -187,6 +225,9 @@ export const mount = async ({ name, state, hash, drive, expect }) => {
   // jsdom has no `matchMedia`, and the panel already guards every use of it - which is
   // what makes it safe to leave absent rather than faked into one width.
   window.eval(await readFile(axeSource, "utf8"));
+  // …and, before the bundle is loaded, the document is made to behave the way Home
+  // Assistant's really does. See `forbidFormApis`.
+  forbidFormApis(window);
   // The bundle is an ES module and jsdom will not load one out of a string, so it runs as
   // a classic script. esbuild leaves no `import` in it (everything is bundled) and exactly
   // one `export {…}`, which a classic script may not carry: it names the element class,
