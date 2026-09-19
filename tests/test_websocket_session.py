@@ -1,0 +1,926 @@
+"""The session on the socket: ten commands, one event, and the fixture made real.
+
+The controller is `tests/test_calibration_session.py`'s subject; this file is about the
+**door** it is reached through. Three things, in order:
+
+* every command answered - the successes, the malformed frames, the refusals of SPEC
+  §4.6 - through a real `hass_ws_client`, because a schema applied by hand is not the
+  schema Home Assistant applies;
+* the subscription: `session` arrives on subscribing and after every transition, in
+  `revision` order, and closing the socket takes the subscriber away and **leaves the
+  session running** - which is the whole reason the session lives on the server;
+* `tests/fixtures/panel_session_examples.json`, regenerated from the controller instead
+  of written by hand (below, from the lot that makes the file real). It is the
+  frontend's stand-in server (`npm run session`, `test/wizard-model.test.ts`, the
+  harness), and a hand-written likeness of a payload is the one kind of fixture that can
+  be wrong in every direction at once.
+
+The bench is `panel_overview_example.json`'s: the same two shutters, the same profile
+and the same numbers, so that a review's `before` column really is what the panel's
+overview shows for that window on the same page.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import timedelta
+from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+import pytest
+import voluptuous as vol
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.components import websocket_api
+from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.websocket_api import const as ws_const
+from homeassistant.core import HomeAssistant
+
+from custom_components.myhome import calibration_session
+from custom_components.myhome.calibration_session import CalibrationSession, async_start, current
+from custom_components.myhome.calibration_store import loaded_store
+from custom_components.myhome.panel_schemas import (
+    SESSION_ACT_SCHEMA,
+    SESSION_ANSWER_KEYS,
+    SESSION_CANCEL_KEYS,
+    SESSION_CAPABILITIES,
+    SESSION_END_OTHER_KEYS,
+    SESSION_GET_KEYS,
+    SESSION_HEARTBEAT_KEYS,
+    SESSION_KEYS,
+    SESSION_LEVELS,
+    SESSION_OVERVIEW_KEYS,
+    SESSION_PATHS,
+    SESSION_SAVE_KEYS,
+    WS_EVENT_OVERVIEW,
+    WS_EVENT_SESSION,
+    WS_SESSION_COMMANDS,
+    WS_TYPE_OVERVIEW,
+    WS_TYPE_SESSION_ACT,
+    WS_TYPE_SESSION_ATTACH,
+    WS_TYPE_SESSION_CANCEL,
+    WS_TYPE_SESSION_END_OTHER,
+    WS_TYPE_SESSION_GET,
+    WS_TYPE_SESSION_HEARTBEAT,
+    WS_TYPE_SESSION_LEAVE,
+    WS_TYPE_SESSION_SAVE,
+    WS_TYPE_SESSION_START,
+    WS_TYPE_SESSION_STOP,
+    WS_TYPE_SUBSCRIBE,
+)
+from custom_components.myhome.websocket_api import SESSION_WATCHERS_DATA_KEY
+
+from .helpers_calibration import HEIGHT, FakeRunner
+from .helpers_platforms import entity_object, setup_myhome
+from .test_calibration_session import PATH_A_BASIC, Act, act, check_the_snapshot, walk
+from .test_websocket_api import (
+    ADVANCED,
+    CALIBRATION,
+    EXAMPLE_ENTRY_ID,
+    FIRST,
+    SECOND,
+    YAML,
+    refused,
+    result,
+)
+
+# The two browser tabs of the fixture, and the identifiers it normalises the volatile
+# ones to. `_example` in the committed file carries all three.
+CLIENT = "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10"
+OTHER_CLIENT = "8d41f6b2-7c3e-4f95-a0d8-2b6e9c1f7e33"
+EXAMPLE_SESSION_ID = "6f1d2c3b4a5e4f708192a3b4c5d6e7f8"
+
+DEVICE_KEY = "2-81"
+ENTITY = "cover.hallway_shutter"
+EXAMPLES = Path(__file__).resolve().parent / "fixtures" / "panel_session_examples.json"
+
+
+def the_fixture() -> dict[str, Any]:
+    return json.loads(EXAMPLES.read_text(encoding="utf-8"))
+
+
+async def open_session(hass: HomeAssistant, entry, **kwargs) -> CalibrationSession:
+    """Start the gateway's session on the first shutter and let its screen settle."""
+    session = await async_start(hass, entry, cover_unique_id=FIRST, client_id=CLIENT, **kwargs)
+    await hass.async_block_till_done()
+    return session
+
+
+async def subscribed(client, entry_id: str) -> int:
+    """Subscribe, swallow the two events that always open one, and answer with the id."""
+    await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry_id})
+    answer = await client.receive_json()
+    assert answer["success"], answer
+    assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+    assert (await client.receive_json())["event"]["type"] == WS_EVENT_SESSION
+    return answer["id"]
+
+
+async def sent(client, payload: dict[str, Any]) -> int:
+    """Send one frame and hand back the id the client gave it."""
+    await client.send_json_auto_id(payload)
+    return int(payload["id"])
+
+
+async def answered(client, msg_id: int, seen: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The answer to one command, reading past the events that overtake it.
+
+    A subscription and a command share one socket, and the events a command causes go
+    out **before** its own answer: `send_result` is the last thing a handler does. So a
+    test that has both open reads until it finds its id, keeping the session snapshots
+    it stepped over when it was asked to.
+    """
+    while True:
+        message = await client.receive_json()
+        if message.get("type") == "event":
+            if seen is not None and message["event"]["type"] == WS_EVENT_SESSION:
+                seen.append(message["event"]["session"])
+            continue
+        assert message["id"] == msg_id, message
+        assert message["success"], message
+        return message["result"]
+
+
+async def started_over_the_socket(client, hass, entry, seen=None, **fields) -> CalibrationSession:
+    """Open the session the way the panel opens one, and hand back the controller's.
+
+    Through the socket on purpose wherever a subscription is watching: the ten commands
+    are what hooks an open panel onto a session that did not exist when it subscribed,
+    so a test that called `async_start` directly would be testing a path no browser
+    takes.
+    """
+    msg_id = await sent(
+        client,
+        {
+            "type": WS_TYPE_SESSION_START,
+            "entry_id": entry.entry_id,
+            "cover_unique_id": FIRST,
+            "client_id": CLIENT,
+            **fields,
+        },
+    )
+    answer = await answered(client, msg_id, seen)
+    await hass.async_block_till_done()
+    session = current(hass, entry)
+    assert session is not None and session.session_id == answer["session"]["session_id"]
+    return session
+
+
+async def session_events(client, sub_id: int, seen: list[dict[str, Any]], upto: int) -> None:
+    """Read until the subscription has carried the snapshot of revision `upto`.
+
+    A session holds its shutter, so `measuring` travels down the same subscription and
+    is stepped over here: what this file is about is the `session` events and their
+    order.
+    """
+    while len(seen) < upto:
+        message = await client.receive_json()
+        assert message["id"] == sub_id, message
+        if message["event"]["type"] == WS_EVENT_SESSION:
+            seen.append(message["event"]["session"])
+
+
+# ======================================================================= the commands
+async def test_the_ten_commands_are_registered_under_the_one_flag(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A command name is global, so the session's ten go up with the other fourteen."""
+    async with setup_myhome(hass, tmp_path, YAML) as (_entry, _commands):
+        registered = hass.data["websocket_api"]
+        for command in WS_SESSION_COMMANDS:
+            assert command in registered
+
+
+async def test_get_answers_nothing_and_what_this_backend_can_do(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A gateway with no session answers `null` - and still says what it offers.
+
+    `capabilities` is the contract's §2.5 question, and it is answered by `get` and by
+    nothing else: a client that only subscribed would have to assume, and assuming is
+    how a panel offers a path the backend cannot walk.
+
+    Mutation caught: answering `capabilities` only when there is a session; leaving it
+    out of the answer.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        client = await hass_ws_client(hass)
+        answer = await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id)
+        assert tuple(answer) == SESSION_GET_KEYS
+        assert answer["session"] is None
+        assert answer["capabilities"] == SESSION_CAPABILITIES
+        # ...and the capabilities are what the frozen vocabularies say, not a copy.
+        assert answer["capabilities"]["paths"] == list(SESSION_PATHS)
+        assert answer["capabilities"]["levels"] == list(SESSION_LEVELS)
+
+
+async def test_start_opens_a_session_that_get_then_answers(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The first screen, over the socket, with nothing moved and nothing written."""
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        answer = await result(
+            client,
+            type=WS_TYPE_SESSION_START,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            client_id=CLIENT,
+            path="path_a",
+        )
+        assert tuple(answer) == SESSION_ANSWER_KEYS
+        snapshot = answer["session"]
+        assert tuple(snapshot) == SESSION_KEYS
+        assert snapshot["step"] == "path_a"
+        assert snapshot["owner"]["client_id"] == CLIENT
+        assert runner.log == []
+
+        again = await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id)
+        assert again["session"]["session_id"] == snapshot["session_id"]
+        assert runner.log == []
+        await current(hass, entry).async_cancel(CLIENT)
+
+
+async def test_every_verb_comes_back_through_the_socket(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """`attach`, `heartbeat`, `act`, `stop`, `leave` and `cancel`, each answering its shape.
+
+    One session walked over the wire rather than six tests of one frame each: what is
+    being held is that the handlers are thin - the answer is the controller's, whole and
+    unrewrapped - and that every answer is exactly the tuple of keys the contract
+    declares for it.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        started = await result(
+            client,
+            type=WS_TYPE_SESSION_START,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            client_id=CLIENT,
+        )
+        session_id = started["session"]["session_id"]
+        common = {"entry_id": entry.entry_id, "session_id": session_id, "client_id": CLIENT}
+
+        attached = await result(client, type=WS_TYPE_SESSION_ATTACH, **common)
+        assert tuple(attached) == SESSION_ANSWER_KEYS
+        assert attached["session"]["owner"]["client_id"] == CLIENT
+
+        beat = await result(client, type=WS_TYPE_SESSION_HEARTBEAT, **common)
+        assert tuple(beat) == SESSION_HEARTBEAT_KEYS
+        assert beat["owner"] is True
+        assert beat["present_until"] is not None
+        # A heartbeat is not a transition: the revision has not moved.
+        assert (await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id))[
+            "session"
+        ]["revision"] == attached["session"]["revision"]
+
+        acted = await result(
+            client,
+            type=WS_TYPE_SESSION_ACT,
+            **common,
+            revision=attached["session"]["revision"],
+            action="path_a",
+        )
+        assert acted["session"]["step"] == "path_a"
+
+        stopped = await result(client, type=WS_TYPE_SESSION_STOP, **common)
+        assert tuple(stopped) == SESSION_ANSWER_KEYS
+        assert runner.stops == 1
+
+        left = await result(client, type=WS_TYPE_SESSION_LEAVE, **common)
+        # Nothing has been measured, so leaving ends it - and answers how it ended.
+        assert left["session"]["outcome"]["reason"] == "left"
+
+        cancelled = await result(
+            client, type=WS_TYPE_SESSION_CANCEL, entry_id=entry.entry_id, client_id=CLIENT
+        )
+        assert tuple(cancelled) == SESSION_CANCEL_KEYS
+        assert cancelled["already_ended"] is True
+
+
+async def test_a_value_that_cannot_be_a_reading_is_a_form_error_and_not_a_refusal(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """The user's mistake is the user's to correct, and the socket says so with a screen.
+
+    Mutation caught: refusing a bad reading (the panel would show a red banner and lose
+    the field), or accepting `nan` (every number three screens later becomes `nan`).
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, PATH_A_BASIC[:10], freezer=freezer)
+        assert session.snapshot()["step"] == "height"
+
+        client = await hass_ws_client(hass)
+        common = {
+            "entry_id": entry.entry_id,
+            "session_id": session.session_id,
+            "client_id": CLIENT,
+        }
+        for written in ("nan", "-inf", "not a number"):
+            answer = await result(
+                client,
+                type=WS_TYPE_SESSION_ACT,
+                **common,
+                revision=session.revision,
+                action="submit",
+                value=written,
+            )
+            assert answer["session"]["step"] == "height", written
+            assert answer["session"]["form"]["error"] == "not_a_number", written
+
+        # ...and a decimal comma survives the wire, which is why a number travels as text.
+        answer = await result(
+            client,
+            type=WS_TYPE_SESSION_ACT,
+            **common,
+            revision=session.revision,
+            action="submit",
+            value="195,0",
+        )
+        assert answer["session"]["step"] == "height_result"
+        assert answer["session"]["measured"]["travel_cm"] == HEIGHT
+        await session.async_cancel(CLIENT)
+
+
+
+# ======================================================================= the refusals
+async def test_a_command_about_a_gateway_that_is_not_there_is_refused(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`entry_id` names a MyHOME gateway or it names nothing: the rule of §1, on all ten.
+
+    Mutation caught: a session command that looks the entry up without checking what
+    integration it belongs to.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        client = await hass_ws_client(hass)
+        payloads: dict[str, dict[str, Any]] = {
+            WS_TYPE_SESSION_GET: {},
+            WS_TYPE_SESSION_START: {"cover_unique_id": FIRST, "client_id": CLIENT},
+            WS_TYPE_SESSION_ATTACH: {"session_id": EXAMPLE_SESSION_ID, "client_id": CLIENT},
+            WS_TYPE_SESSION_HEARTBEAT: {"session_id": EXAMPLE_SESSION_ID, "client_id": CLIENT},
+            WS_TYPE_SESSION_ACT: {
+                "session_id": EXAMPLE_SESSION_ID,
+                "client_id": CLIENT,
+                "revision": 1,
+                "action": "path_a",
+            },
+            WS_TYPE_SESSION_STOP: {"session_id": EXAMPLE_SESSION_ID, "client_id": CLIENT},
+            WS_TYPE_SESSION_LEAVE: {"session_id": EXAMPLE_SESSION_ID, "client_id": CLIENT},
+            WS_TYPE_SESSION_CANCEL: {"client_id": CLIENT},
+            WS_TYPE_SESSION_SAVE: {
+                "session_id": EXAMPLE_SESSION_ID,
+                "client_id": CLIENT,
+                "revision": 1,
+                "target": "profile",
+            },
+            WS_TYPE_SESSION_END_OTHER: {},
+        }
+        assert set(payloads) == set(WS_SESSION_COMMANDS)
+        for command, payload in payloads.items():
+            error = await refused(client, type=command, entry_id="01NOTAGATEWAY", **payload)
+            assert error["code"] == ws_const.ERR_NOT_FOUND, command
+            assert error["translation_key"] == "unknown_entry", command
+        # ...and the gateway that is this one still answers every one of them.
+        assert (await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id))[
+            "session"
+        ] is None
+
+
+BAD_FRAMES: list[tuple[str, dict[str, Any]]] = [
+    # `client_id` is an alphabet and a length, and both halves are the schema's.
+    ("a client id with a slash in it", {"client_id": "../../etc"}),
+    ("a client id of four characters", {"client_id": "abcd"}),
+    # `profile` belongs to paths B and C, `scope` to path C.
+    ("a profile on path A", {"path": "path_a", "profile": "tall"}),
+    ("a scope on path B", {"path": "path_b", "scope": "times_only"}),
+    ("a path nobody walks", {"path": "path_z"}),
+    ("a scope nobody narrows to", {"path": "path_c", "scope": "the_lot"}),
+    # `revision` is a number, and `True` is not one however Python counts it.
+    ("a revision that is a boolean", {"type": WS_TYPE_SESSION_ACT, "revision": True}),
+    ("a revision that is a word", {"type": WS_TYPE_SESSION_ACT, "revision": "1"}),
+    ("a negative revision", {"type": WS_TYPE_SESSION_ACT, "revision": -1}),
+    # A value is a string, a number or nothing: never a list, never a boolean.
+    ("a value that is a list", {"type": WS_TYPE_SESSION_ACT, "value": [195]}),
+    ("a value that is a boolean", {"type": WS_TYPE_SESSION_ACT, "value": True}),
+    ("a save target nobody offers", {"type": WS_TYPE_SESSION_SAVE, "target": "everything"}),
+    ("a key beside the ones that belong", {"type": WS_TYPE_SESSION_GET, "and_also": True}),
+    ("no session id where one is required", {"type": WS_TYPE_SESSION_STOP, "session_id": None}),
+]
+
+# The well-formed frame each of the cases above spoils one key of. A `start` unless the
+# case names another command, because most of the schema's rules are `start`'s.
+WELL_FORMED: dict[str, dict[str, Any]] = {
+    WS_TYPE_SESSION_START: {"cover_unique_id": FIRST, "client_id": CLIENT},
+    WS_TYPE_SESSION_ACT: {
+        "session_id": EXAMPLE_SESSION_ID,
+        "client_id": CLIENT,
+        "revision": 1,
+        "action": "submit",
+    },
+    WS_TYPE_SESSION_SAVE: {
+        "session_id": EXAMPLE_SESSION_ID,
+        "client_id": CLIENT,
+        "revision": 1,
+        "target": "profile",
+    },
+    WS_TYPE_SESSION_STOP: {"session_id": EXAMPLE_SESSION_ID, "client_id": CLIENT},
+    WS_TYPE_SESSION_GET: {},
+}
+
+
+def spoiled(payload: dict[str, Any]) -> dict[str, Any]:
+    """One well-formed frame with the case's key put wrong (or taken out, for `None`)."""
+    command = payload.get("type", WS_TYPE_SESSION_START)
+    frame = {"type": command, **WELL_FORMED[command], **payload}
+    return {key: value for key, value in frame.items() if value is not None}
+
+
+@pytest.mark.parametrize(
+    ("case", "payload"), BAD_FRAMES, ids=[case for case, _payload in BAD_FRAMES]
+)
+async def test_a_session_frame_nobody_meant_to_send_is_answered_and_never_raised(
+    hass: HomeAssistant, tmp_path, hass_ws_client, case: str, payload: dict[str, Any]
+) -> None:
+    """Fourteen frames a browser can send, and fourteen `invalid_format`s back.
+
+    All of them stop at the schema, which is where a malformed frame belongs: there is
+    nothing for the user to do about any of them, and the distinction from
+    `service_validation_error` is the one the panel renders. The socket is still usable
+    afterwards, which is what tells a refusal from a crash.
+
+    Mutation caught: `vol.Coerce(float)` in place of the finite-number check (`NaN`
+    would reach the arithmetic); dropping the combination rule from `start`; widening
+    `client_id` to any string.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        error = await refused(client, entry_id=entry.entry_id, **spoiled(payload))
+        assert error["code"] == ws_const.ERR_INVALID_FORMAT, case
+        assert loaded_store(hass, entry).raw_profiles == CALIBRATION["profiles"], case
+        assert (await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id))[
+            "session"
+        ] is None, case
+
+
+def test_a_number_that_is_not_one_never_reaches_the_arithmetic() -> None:
+    """`NaN` and the two infinities, refused by the schema Home Assistant applies.
+
+    Not a socket test, and it cannot be one: Home Assistant's own parser refuses a frame
+    carrying a JSON `NaN` and closes the connection, which is a second door in front of
+    this one. What can reach `act` is an *embedder* whose `json.loads` reads the three
+    non-numbers (the default one does), so the validator is held here through the real
+    decorator - the schema as the socket would apply it, `id` and all.
+
+    The string forms - `"nan"`, `"-inf"` - go straight through `parse_number`, which is
+    `float()` underneath: those are caught one layer down and are the subject of
+    `test_a_value_that_cannot_be_a_reading_is_a_form_error_and_not_a_refusal`, because
+    they are something a person could have typed and are therefore a field error.
+
+    Mutation caught: `vol.Any(int, float)` with no finiteness check - `float("nan")`
+    passes it, and every fitted number after such a reading becomes `nan`.
+    """
+
+    def handler(hass, connection, msg) -> None:  # pragma: no cover - never called
+        """A command body nobody runs: only the schema the decorator attaches is read."""
+
+    schema = websocket_api.websocket_command(SESSION_ACT_SCHEMA)(handler)._ws_schema
+    frame = {
+        "id": 1,
+        "type": WS_TYPE_SESSION_ACT,
+        "entry_id": EXAMPLE_ENTRY_ID,
+        "session_id": EXAMPLE_SESSION_ID,
+        "client_id": CLIENT,
+        "revision": 1,
+        "action": "submit",
+    }
+    # A number is a number, and a number written as text still is.
+    assert schema({**frame, "value": 86.25})["value"] == 86.25
+    assert schema({**frame, "value": "86,25"})["value"] == "86,25"
+    for value in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(vol.Invalid):
+            schema({**frame, "value": value})
+
+
+async def test_every_refusal_of_the_session_comes_back_with_its_key(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """The eight of SPEC §4.6, each from the state that really produces it.
+
+    Every one of them carries `translation_domain="myhome"`, the key and an English
+    sentence: a client is never left with a bare token, and the panel has a screen for
+    each. `unknown_profile`, `unknown_cover`, `advanced_cover` and `cover_unavailable`
+    come from the same door, before anything is taken hold of.
+
+    Mutation caught: a refusal sent without its domain (the frontend would render the
+    key); `session_owned` answered where `revision_conflict` belongs.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        start = {
+            "type": WS_TYPE_SESSION_START,
+            "entry_id": entry.entry_id,
+            "client_id": CLIENT,
+        }
+
+        # ...before any session exists.
+        error = await refused(client, **start, cover_unique_id=f"{FIRST}-nope")
+        assert (error["code"], error["translation_key"]) == (
+            ws_const.ERR_NOT_FOUND,
+            "unknown_cover",
+        )
+        error = await refused(client, **start, cover_unique_id=ADVANCED)
+        assert (error["code"], error["translation_key"]) == (
+            ws_const.ERR_NOT_SUPPORTED,
+            "advanced_cover",
+        )
+        error = await refused(
+            client,
+            type=WS_TYPE_SESSION_ATTACH,
+            entry_id=entry.entry_id,
+            session_id=EXAMPLE_SESSION_ID,
+            client_id=CLIENT,
+        )
+        assert (error["code"], error["translation_key"]) == (
+            ws_const.ERR_NOT_FOUND,
+            "unknown_session",
+        )
+
+        # ...and then one does.
+        session = await open_session(hass, entry)
+        error = await refused(client, **start, cover_unique_id=SECOND)
+        assert (error["code"], error["translation_key"]) == (
+            ws_const.ERR_NOT_ALLOWED,
+            "already_calibrating",
+        )
+        assert error["translation_placeholders"] == {"cover": "Hallway Shutter", "by": "panel"}
+        assert "Hallway Shutter" in error["message"]
+
+        common = {
+            "entry_id": entry.entry_id,
+            "session_id": session.session_id,
+            "client_id": CLIENT,
+        }
+        error = await refused(
+            client, type=WS_TYPE_SESSION_ACT, **common, revision=99, action="path_a"
+        )
+        assert error["translation_key"] == "revision_conflict"
+        error = await refused(
+            client, type=WS_TYPE_SESSION_ACT, **common, revision=session.revision, action="begin"
+        )
+        assert error["translation_key"] == "action_not_offered"
+        assert error["translation_placeholders"] == {"action": "begin"}
+        error = await refused(
+            client, type=WS_TYPE_SESSION_SAVE, **common, revision=session.revision, target="profile"
+        )
+        assert error["translation_key"] == "not_in_review"
+
+        # ...owned by somebody else, and present.
+        error = await refused(
+            client,
+            type=WS_TYPE_SESSION_ACT,
+            entry_id=entry.entry_id,
+            session_id=session.session_id,
+            client_id=OTHER_CLIENT,
+            revision=session.revision,
+            action="path_a",
+        )
+        assert error["translation_key"] == "session_owned"
+
+        # ...and ended.
+        await session.async_cancel(CLIENT)
+        error = await refused(
+            client, type=WS_TYPE_SESSION_ACT, **common, revision=session.revision, action="path_a"
+        )
+        assert error["translation_key"] == "session_ended"
+        assert error["translation_placeholders"] == {"reason": "cancelled"}
+
+
+async def test_a_shutter_whose_entity_is_unavailable_is_not_calibrated(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """`cover_unavailable`: the gateway is loaded and the window is not answering.
+
+    Mutation caught: starting a session on an unavailable cover (every primitive would
+    refuse, one screen at a time, with the shutter held).
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        hass.states.async_set(ENTITY, "unavailable")
+        client = await hass_ws_client(hass)
+        error = await refused(
+            client,
+            type=WS_TYPE_SESSION_START,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            client_id=CLIENT,
+        )
+        assert (error["code"], error["translation_key"]) == (
+            ws_const.ERR_NOT_FOUND,
+            "cover_unavailable",
+        )
+        assert error["translation_placeholders"] == {"cover": "Hallway Shutter"}
+        assert current(hass, entry) is None
+
+
+# ==================================================================== the subscription
+async def test_the_subscription_carries_the_session_now_and_at_every_transition(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """`session` on subscribing, then one event per transition, in `revision` order.
+
+    The order is the assertion that matters: the panel replaces its model with whatever
+    arrives, so two events out of order would leave it showing the screen before last -
+    and a session publishes from timers and from state changes as well as from verbs,
+    which is precisely where an ordering could be lost.
+
+    Mutation caught: pushing the snapshot from the handler instead of from the session's
+    own publication (a transition nobody asked for - a press timing out - would reach
+    nobody); a subscription that hears about a session made after it subscribed only
+    when the next write happens.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        sub_id = await subscribed(client, entry.entry_id)
+
+        seen: list[dict[str, Any]] = []
+        session = await started_over_the_socket(client, hass, entry, seen=seen)
+        await session_events(client, sub_id, seen, session.revision)
+        assert [snapshot["revision"] for snapshot in seen] == list(range(1, session.revision + 1))
+        assert seen[0]["step"] == "path"
+
+        await act(hass, session, Act("path_a"), freezer=freezer)
+        await session_events(client, sub_id, seen, session.revision)
+        assert [snapshot["revision"] for snapshot in seen] == list(range(1, session.revision + 1))
+        assert seen[-1]["step"] == "path_a"
+        for snapshot in seen:
+            check_the_snapshot(snapshot)
+
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_panel_that_opens_on_a_session_already_running_is_told_about_it(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The first event of a subscription is the session there is, not an empty one.
+
+    Mutation caught: sending `session: null` on subscribing and waiting for the next
+    transition (a phone picking the wizard up again would show nothing until somebody
+    pressed something on the other device).
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry, path="path_a")
+
+        client = await hass_ws_client(hass)
+        await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id})
+        assert (await client.receive_json())["success"] is True
+        overview = (await client.receive_json())["event"]
+        assert overview["overview"]["session"]["session_id"] == session.session_id
+        event = (await client.receive_json())["event"]
+        assert event["type"] == WS_EVENT_SESSION
+        assert event["session"]["session_id"] == session.session_id
+        assert event["session"]["step"] == "path_a"
+        await session.async_cancel(CLIENT)
+
+
+async def test_the_socket_closing_takes_the_subscriber_away_and_leaves_the_session(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """The whole reason the session is on the server: a tab closing does not end it.
+
+    What goes is the subscriber; what stays is the measurement, its owner and everything
+    measured so far - and the next socket reads it with `get`.
+
+    Mutation caught: ending the session in the unsubscribe; leaving the callback hooked
+    onto the session after the connection is gone (the next transition would push into
+    a closed connection).
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        sub_id = await subscribed(client, entry.entry_id)
+        seen: list[dict[str, Any]] = []
+        session = await started_over_the_socket(client, hass, entry, seen=seen)
+        await act(hass, session, Act("path_a"), freezer=freezer)
+        await session_events(client, sub_id, seen, session.revision)
+
+        await client.send_json_auto_id({"type": "unsubscribe_events", "subscription": sub_id})
+        assert (await client.receive_json())["success"] is True
+        await hass.async_block_till_done()
+        assert hass.data[SESSION_WATCHERS_DATA_KEY][entry.entry_id] == []
+
+        # The session did not notice, and the transitions it makes reach nobody.
+        await act(hass, session, Act("begin"), freezer=freezer)
+        assert current(hass, entry) is session
+        assert session.ended is False
+        answer = await result(client, type=WS_TYPE_SESSION_GET, entry_id=entry.entry_id)
+        assert answer["session"]["session_id"] == session.session_id
+        assert answer["session"]["path"] == "path_a"
+        await session.async_cancel(CLIENT)
+
+
+# ========================================================================== the save
+async def test_save_writes_once_publishes_the_overview_and_reloads_nothing(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """Three minutes of measuring, written in place and without a reload.
+
+    A reload is what the guided dialog does when it closes after saving, and it is a
+    disconnect and a reconnect on a real gateway - very likely while the shutter is
+    still moving. The panel's write reaches the covers in place instead (plan decision
+    4), and the session's save goes through that same door: one write, the fresh
+    overview to every open panel, the signal to the shutters, and no
+    `async_schedule_reload`.
+
+    Mutation caught: saving twice (the second would find the store it had just written);
+    scheduling a reload; answering without the overview.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        sub_id = await subscribed(client, entry.entry_id)
+        session = await started_over_the_socket(client, hass, entry)
+        await walk(hass, session, [*PATH_A_BASIC[:-1], Act("submit", "hallway_shutter")], freezer=freezer)
+        assert session.snapshot()["state"] == "review"
+
+        seen: list[dict[str, Any]] = []
+        with (
+            patch.object(hass.config_entries, "async_schedule_reload", autospec=True) as scheduled,
+            patch.object(hass.config_entries, "async_reload", autospec=True) as reloaded,
+        ):
+            msg_id = await sent(
+                client,
+                {
+                    "type": WS_TYPE_SESSION_SAVE,
+                    "entry_id": entry.entry_id,
+                    "session_id": session.session_id,
+                    "client_id": CLIENT,
+                    "revision": session.revision,
+                    "target": "profile",
+                },
+            )
+            answer = await answered(client, msg_id, seen)
+        assert scheduled.call_count == 0
+        assert reloaded.call_count == 0
+        assert tuple(answer) == SESSION_SAVE_KEYS
+        assert answer["session"]["state"] == "saved"
+        assert answer["session"]["outcome"]["reason"] == "saved"
+        # Written once: the profile is there, the cover follows it, and the shutter is
+        # running on it without anything having been reloaded.
+        store = loaded_store(hass, entry)
+        assert store.raw_profiles["hallway_shutter"]["opening_time"] == pytest.approx(22.3, abs=0.2)
+        assert store.raw_covers[FIRST]["profile"] == "hallway_shutter"
+        assert hass.states.get(ENTITY).attributes["Profile"] == "hallway_shutter"
+        # ...and it left no undo token, because three minutes of measuring are not a
+        # gesture to take back by accident.
+        assert "undo_token" not in answer
+
+        # Every open panel was given the session's last transition on the way, and the
+        # overview that the write published with it says the same thing.
+        assert seen[-1]["state"] == "saved"
+        assert answer["overview"]["session"]["state"] == "saved"
+        assert sub_id
+
+
+# ======================================================================= `end_other`
+async def test_end_other_closes_the_dialogs_of_this_gateway_and_frees_the_shutter(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """The *Configure* dialog is measuring: the panel closes it rather than fighting it.
+
+    Driven through the real options flow, because what has to be released is the
+    `calibrating` flag the dialog's own `_claim` sets - and what aborts it is the pair
+    of methods Home Assistant gives for it, not a private one.
+
+    Mutation caught: aborting the flows of every gateway; answering `still_calibrating`
+    before the abort has taken effect; counting a flow that was not aborted.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        manager = hass.config_entries.options
+        opened = await manager.async_init(entry.entry_id)
+        opened = await manager.async_configure(opened["flow_id"], {"next_step_id": "calibrate"})
+        opened = await manager.async_configure(opened["flow_id"], {"next_step_id": "cover"})
+        opened = await manager.async_configure(opened["flow_id"], {"cover": FIRST})
+        assert opened["step_id"] == "path"
+        assert cover.calibrating is True
+
+        client = await hass_ws_client(hass)
+        # ...and while it holds the shutter, the panel cannot start a session at all.
+        error = await refused(
+            client,
+            type=WS_TYPE_SESSION_START,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            client_id=CLIENT,
+        )
+        assert error["translation_placeholders"]["by"] == "other"
+
+        answer = await result(
+            client, type=WS_TYPE_SESSION_END_OTHER, entry_id=entry.entry_id
+        )
+        assert tuple(answer) == SESSION_END_OTHER_KEYS
+        assert answer["flows_aborted"] == 1
+        assert answer["still_calibrating"] is False
+        assert answer["overview"]["measuring"] is None
+        assert cover.calibrating is False
+        assert list(manager.async_progress_by_handler(entry.entry_id)) == []
+
+        # ...and now the panel can measure it.
+        started = await result(
+            client,
+            type=WS_TYPE_SESSION_START,
+            entry_id=entry.entry_id,
+            cover_unique_id=FIRST,
+            client_id=CLIENT,
+        )
+        assert started["session"]["step"] == "path"
+        await current(hass, entry).async_cancel(CLIENT)
+
+
+async def test_end_other_says_when_what_is_holding_the_shutter_is_not_a_dialog(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """Nothing to abort and the shutter still in calibration: it is the 0.4.2 action.
+
+    Its run is nothing this command may cut short - it is a real shutter travelling -
+    so the answer says so and the screen asks the user to wait.
+
+    Mutation caught: reporting `still_calibrating: false` because no dialog was open.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        cover = entity_object(hass, COVER, DEVICE_KEY)
+        FakeRunner(cover)
+        client = await hass_ws_client(hass)
+        with cover.calibration_session():
+            await hass.async_block_till_done()
+            answer = await result(
+                client, type=WS_TYPE_SESSION_END_OTHER, entry_id=entry.entry_id
+            )
+        assert answer["flows_aborted"] == 0
+        assert answer["still_calibrating"] is True
+        assert answer["overview"]["measuring"]["cover_unique_id"] == FIRST
+
+
+# ================================================================== `overview.session`
+async def test_the_overview_says_which_client_is_holding_the_shutter(
+    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+) -> None:
+    """`measuring` says *that*; `session` says *who*, which is what the banner needs.
+
+    `measuring` set with `session` at `null` is the guided dialog or the 0.4.2 action,
+    and the panel then offers to close the dialog rather than to resume a session it
+    does not have.
+
+    Mutation caught: building the line from the session's attributes instead of from its
+    snapshot (a terminal session would answer the screen it stopped on rather than
+    `saved`); leaving `session` set after the session has been forgotten.
+    """
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        client = await hass_ws_client(hass)
+        assert (await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id))[
+            "session"
+        ] is None
+
+        session = await open_session(hass, entry, path="path_a")
+        overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert tuple(overview["session"]) == SESSION_OVERVIEW_KEYS
+        assert overview["session"] == {
+            "session_id": session.session_id,
+            "cover_unique_id": FIRST,
+            "name": "Hallway Shutter",
+            "state": "armed",
+            "owner": CLIENT,
+        }
+        # The shutter is held, so the read-only lock is up as well.
+        assert overview["measuring"] == {"cover_unique_id": FIRST, "name": "Hallway Shutter"}
+
+        # A session with no owner is a session anybody may pick up, and the banner says
+        # so by finding `owner: null` rather than by guessing.
+        await walk(hass, session, PATH_A_BASIC[1:5], freezer=freezer)
+        session.leave(CLIENT)
+        overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert overview["session"]["owner"] is None
+        assert overview["session"]["state"] == "briefing"
+
+        # ...and a terminal one reads as terminal until it is forgotten.
+        await session.async_cancel(CLIENT)
+        overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert overview["session"]["state"] == "ended"
+        assert overview["measuring"] is None
+
+        freezer.tick(calibration_session.TERMINAL_TTL + timedelta(seconds=1))
+        overview = await result(client, type=WS_TYPE_OVERVIEW, entry_id=entry.entry_id)
+        assert overview["session"] is None

@@ -1236,8 +1236,15 @@ nobody defines). Malformed frames are `invalid_format`, from the schema.
 
 No refusal leaves anything half written, and none is used for what is the user's to
 correct: a value that cannot be a reading is a `form.error`, and a movement that fails
-is a `problem` step. The first eight keys are new with the session; their sentences
-arrive with the commands.
+is a `problem` step.
+
+The first eight keys are new with the session, and their sentences are written in
+**English and Italian only** — the decision of 14 September, which is how the panel's own
+block is written and which reaches these eight because they are the panel's sentences
+even though `exceptions` is where Home Assistant resolves them. The other five languages
+fall back to English key by key until the translation lot before the release;
+`tests/test_translations.py` holds the tolerance to exactly these eight and to no other
+refusal.
 
 ---
 

@@ -38,6 +38,7 @@ from custom_components.myhome.panel_schemas import (
     ERROR_WRITE_IN_PROGRESS,
     WS_EVENT_MEASURING,
     WS_EVENT_OVERVIEW,
+    WS_EVENT_SESSION,
     WS_TYPE_OVERVIEW,
     WS_TYPE_SET_TRAVEL,
     WS_TYPE_SUBSCRIBE,
@@ -428,6 +429,10 @@ async def test_nothing_is_pushed_into_a_subscription_that_was_cancelled(
         subscription = await client.receive_json()
         assert subscription["success"] is True
         assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+        # ...and the session event that follows it (0.6.0 wizard, lot B3), read here so
+        # that what is left on the socket after the unsubscribe is only what a bug put
+        # there.
+        assert (await client.receive_json())["event"]["type"] == WS_EVENT_SESSION
 
         await client.send_json_auto_id(
             {"type": "unsubscribe_events", "subscription": subscription["id"]}
@@ -478,6 +483,7 @@ async def test_a_subscription_survives_the_gateway_being_reloaded_under_it(
         await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id})
         assert (await client.receive_json())["success"] is True
         assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+        assert (await client.receive_json())["event"]["type"] == WS_EVENT_SESSION
 
         await hass.config_entries.async_reload(entry.entry_id)
         await hass.async_block_till_done()
