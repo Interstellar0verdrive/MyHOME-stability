@@ -78,6 +78,7 @@ from custom_components.myhome.websocket_api import SESSION_WATCHERS_DATA_KEY
 from .helpers_calibration import HEIGHT, FakeRunner, ascent_cm, descent_cm
 from .helpers_platforms import entity_object, setup_myhome
 from .test_calibration_session import PATH_A_BASIC, Act, act, check_the_snapshot, walk
+from .test_panel_two_gateways import two_gateways
 from .test_websocket_api import (
     ADVANCED,
     CALIBRATION,
@@ -876,6 +877,35 @@ async def test_end_other_says_when_what_is_holding_the_shutter_is_not_a_dialog(
         assert answer["flows_aborted"] == 0
         assert answer["still_calibrating"] is True
         assert answer["overview"]["measuring"]["cover_unique_id"] == FIRST
+
+
+async def test_end_other_closes_the_dialogs_of_this_gateway_and_not_of_another(
+    hass: HomeAssistant, tmp_path, hass_ws_client
+) -> None:
+    """A dialog open on each of two gateways, and only one of them is closed.
+
+    An options flow's handler is the entry id, which is what makes "every Configure
+    dialog of this gateway" a question Home Assistant can answer. Asked without it, the
+    same call answers *every* flow in progress - config flows of other integrations
+    included - and a panel closing one dialog would close somebody else's.
+
+    Mutation caught: `async_progress()` in place of
+    `async_progress_by_handler(entry.entry_id)`.
+    """
+    async with two_gateways(hass, tmp_path) as (first, second):
+        manager = hass.config_entries.options
+        opened = []
+        for entry in (first, second):
+            flow = await manager.async_init(entry.entry_id)
+            opened.append(flow["flow_id"])
+        assert len(list(manager.async_progress())) == 2
+
+        client = await hass_ws_client(hass)
+        answer = await result(client, type=WS_TYPE_SESSION_END_OTHER, entry_id=first.entry_id)
+        assert answer["flows_aborted"] == 1
+        left = [flow["flow_id"] for flow in manager.async_progress()]
+        assert left == [opened[1]]
+        manager.async_abort(opened[1])
 
 
 # ================================================================== `overview.session`
