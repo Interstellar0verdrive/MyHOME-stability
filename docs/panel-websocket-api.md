@@ -1168,7 +1168,7 @@ and the screen asks for the tape.
 {
   "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
   "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-  "revision": 32,
+  "revision": 28,
   "server_time": "2026-09-18T10:01:26.200000+00:00",
   "cover": {
     "unique_id": "00:03:50:aa:bb:cc-2-81",

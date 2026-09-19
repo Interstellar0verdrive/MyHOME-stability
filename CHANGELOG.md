@@ -241,6 +241,23 @@ the panel when it is in the way.
   preview, and the review's before/after table gives its numbers their unit. The long
   origin chips ("Inherited from profile «Tall»") and the refusals that name a profile use
   « » like every other sentence of the panel; the guided dialog is unchanged.
+- **The guided calibration stops sending the shutter where it has just put it.** Three
+  stages of the full measurement opened with a run towards an end stop the session had
+  itself brought the shutter to one screen earlier — the ascent after "it is completely
+  closed", the curtain travel after the full ascent, the descent after the curtain
+  travel — and the check of route (B) did the same after the travel reading. Each one
+  cost half a second of motor and put a positioning screen that had already been read
+  back on the screen. The run is now made only when the session does not already know
+  the shutter is there, and any command from outside makes it necessary again;
+  "Repeat this step" and "It did not do what it should" always make it, because they
+  are the user saying they do not believe what the session believes.
+- **The bar of a positioning run says how long it will really take.** Between two tape
+  readings the shutter is part way up its travel, and the run back to an end stop was
+  planned for the *whole* run time of the model in use: seven seconds announced for a
+  movement that took three. It is now planned for the distance that is really left —
+  the fraction the shutter was last sent to, with the slat phase counted only on the
+  run that goes through it. Nothing is measured from it: it is a progress bar, and the
+  step still ends when the shutter stops and never when the bar fills.
 
 ## [0.5.0] - 2026-09-13
 

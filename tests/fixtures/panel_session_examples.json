@@ -562,7 +562,7 @@
     "briefing_open_brief": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 6,
+      "revision": 5,
       "server_time": "2026-09-18T10:00:07.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -628,7 +628,7 @@
     "briefing_open_brief_rehomed": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 9,
+      "revision": 8,
       "server_time": "2026-09-18T10:00:07.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -694,7 +694,7 @@
     "running_open_start": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 7,
+      "revision": 6,
       "server_time": "2026-09-18T10:00:10+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -763,7 +763,7 @@
     "running_open_lift": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 8,
+      "revision": 7,
       "server_time": "2026-09-18T10:00:10+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -839,7 +839,7 @@
     "running_lift_stop": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 9,
+      "revision": 8,
       "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -913,7 +913,7 @@
     "briefing_lift_check": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 10,
+      "revision": 9,
       "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -986,7 +986,7 @@
     "briefing_lift_check_external": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 11,
+      "revision": 10,
       "server_time": "2026-09-18T10:00:22.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1059,7 +1059,7 @@
     "awaiting_reading_lift_gap": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 11,
+      "revision": 10,
       "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1206,7 +1206,7 @@
     "positioning_tape_run": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 27,
+      "revision": 23,
       "server_time": "2026-09-18T10:01:21.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1281,7 +1281,7 @@
     "awaiting_reading_measure_descent": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 32,
+      "revision": 28,
       "server_time": "2026-09-18T10:01:26.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1374,7 +1374,7 @@
     "awaiting_reading_measure_descent_error": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 33,
+      "revision": 29,
       "server_time": "2026-09-18T10:01:40.900000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1467,7 +1467,7 @@
     "awaiting_reading_measure_descent_stale": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 33,
+      "revision": 29,
       "server_time": "2026-09-18T10:01:48.400000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1562,7 +1562,7 @@
     "awaiting_reading_height": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 18,
+      "revision": 16,
       "server_time": "2026-09-18T10:00:47+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1640,7 +1640,7 @@
     "briefing_profile_name": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 34,
+      "revision": 30,
       "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1756,7 +1756,7 @@
     "review_basic": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 35,
+      "revision": 31,
       "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -1918,7 +1918,7 @@
     "review_basic_profile_exists": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 35,
+      "revision": 31,
       "server_time": "2026-09-18T10:01:33.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -2117,7 +2117,7 @@
     "review_precise": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 57,
+      "revision": 53,
       "server_time": "2026-09-18T10:02:01.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -2434,7 +2434,7 @@
     "review_correction": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 22,
+      "revision": 20,
       "server_time": "2026-09-18T10:01:13.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2678,7 +2678,7 @@
     "awaiting_reading_measure_verify": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 9,
+      "revision": 8,
       "server_time": "2026-09-18T10:00:25+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2757,7 +2757,7 @@
     "checking_verify_result_within": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 10,
+      "revision": 9,
       "server_time": "2026-09-18T10:00:27.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2828,7 +2828,7 @@
     "checking_verify_result_offers_c": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 10,
+      "revision": 9,
       "server_time": "2026-09-18T10:00:42.500000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-82",
@@ -2967,7 +2967,7 @@
     "problem_interrupted": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 9,
+      "revision": 8,
       "server_time": "2026-09-18T10:00:15+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -3034,7 +3034,7 @@
     "saved_profile": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 36,
+      "revision": 32,
       "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -3196,7 +3196,7 @@
     "saved_cover_only": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 36,
+      "revision": 32,
       "server_time": "2026-09-18T10:01:31.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -3358,7 +3358,7 @@
     "ended_cancelled": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 11,
+      "revision": 10,
       "server_time": "2026-09-18T10:00:14.700000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -3413,7 +3413,7 @@
     "ended_expired": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 11,
+      "revision": 10,
       "server_time": "2026-09-18T10:10:30.400000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -3468,7 +3468,7 @@
     "ended_unloaded": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 11,
+      "revision": 10,
       "server_time": "2026-09-18T10:10:45.100000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
@@ -3578,8 +3578,8 @@
     "ended_cover_gone": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 6,
-      "server_time": "2026-09-18T10:10:50.100000+00:00",
+      "revision": 7,
+      "server_time": "2026-09-18T10:10:52.600000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
         "entity_id": "cover.hallway_shutter",
@@ -3633,7 +3633,7 @@
     "owned_by_other": {
       "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
       "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-      "revision": 13,
+      "revision": 12,
       "server_time": "2026-09-18T10:00:17.200000+00:00",
       "cover": {
         "unique_id": "00:03:50:aa:bb:cc-2-81",
