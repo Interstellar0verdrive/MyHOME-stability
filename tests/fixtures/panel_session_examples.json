@@ -3389,12 +3389,7 @@
         "opening_time_s": null,
         "closing_time_s": null,
         "slat_time_s": null,
-        "lift": {
-          "pressed_at": "2026-09-18T10:00:14.700000+00:00",
-          "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
-          "gap_cm": null,
-          "late": false
-        },
+        "lift": null,
         "descent": [],
         "ascent": [],
         "times_adopted": false
@@ -3449,12 +3444,7 @@
         "opening_time_s": null,
         "closing_time_s": null,
         "slat_time_s": null,
-        "lift": {
-          "pressed_at": "2026-09-18T10:00:29.400000+00:00",
-          "stop_written_at": "2026-09-18T10:00:29.400000+00:00",
-          "gap_cm": null,
-          "late": false
-        },
+        "lift": null,
         "descent": [],
         "ascent": [],
         "times_adopted": false
@@ -3509,12 +3499,7 @@
         "opening_time_s": null,
         "closing_time_s": null,
         "slat_time_s": null,
-        "lift": {
-          "pressed_at": "2026-09-18T10:10:45.100000+00:00",
-          "stop_written_at": "2026-09-18T10:10:45.100000+00:00",
-          "gap_cm": null,
-          "late": false
-        },
+        "lift": null,
         "descent": [],
         "ascent": [],
         "times_adopted": false

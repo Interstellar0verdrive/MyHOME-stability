@@ -2304,6 +2304,14 @@ class CalibrationSession:
         self._form_error = None
         if reason != "saved":
             self._measured = measure.Measured()
+            # ...and the two instants of the lift-off press, which live beside the
+            # measurements rather than in them: `measured.lift` is built from them, so a
+            # session emptied without them would answer a terminal snapshot carrying the
+            # one provisional value it had kept - against `docs/panel-websocket-api.md`
+            # §12.1, which says that `measured` is emptied once a session has ended
+            # without saving.
+            self._lift_off = None
+            self._stop_delivered = None
             self._plan = []
             self._index = None
             self._result = None

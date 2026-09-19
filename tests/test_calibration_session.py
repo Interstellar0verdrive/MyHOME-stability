@@ -2481,3 +2481,41 @@ async def test_the_screens_that_end_badly_are_the_contract_s_own_too(
         assert ended["position_known"] is None
         assert ended["actions"] == []
         assert ended["owner"] is None
+
+
+async def test_an_ending_that_saved_nothing_keeps_none_of_what_it_had_measured(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`measured` is emptied - **all** of it, the lift-off press included.
+
+    The press is held in two instants beside the measurements rather than inside them,
+    and `measured.lift` is built from those two: a session that emptied `Measured` and
+    left them behind would answer a terminal snapshot carrying the one provisional value
+    it had kept, which is what `docs/panel-websocket-api.md` §12.1 says it does not do.
+    Found by regenerating the committed examples from the server (lot B3).
+
+    Mutation caught: clearing `Measured` and not the two instants.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        # As far as the lift-off press, which is the first thing this walk measures.
+        await walk(hass, session, PATH_A_BASIC[:5], freezer=freezer)
+        assert session.snapshot()["measured"]["lift"] is not None
+
+        await session.async_cancel(CLIENT)
+        measured = session.snapshot()["measured"]
+        assert measured == {
+            "travel_cm": None,
+            "travel_measured": False,
+            "opening_time_s": None,
+            "closing_time_s": None,
+            "slat_time_s": None,
+            "lift": None,
+            "descent": [],
+            "ascent": [],
+            "times_adopted": False,
+        }
+        # ...while a session that *saved* keeps everything, so that the outcome screen
+        # can say what was written.
+        assert session.snapshot()["outcome"]["reason"] == "cancelled"
