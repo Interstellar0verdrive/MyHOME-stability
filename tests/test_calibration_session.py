@@ -421,6 +421,19 @@ def check_the_snapshot(snapshot: dict[str, Any]) -> None:
 
     if (check := snapshot["check"]) is not None:
         keys(check, SESSION_CHECK_KEYS, "check")
+        # How the profile being questioned was itself measured is a level of the
+        # contract's own vocabulary and not the store's word for it (`precise`).
+        token(check["profile_level"], SESSION_LEVELS, "check.profile_level")
+        # A verification either has an answer or has none: where the model put the bar
+        # and how far from it the tape found it are one fact said twice.
+        assert (check["predicted_cm"] is None) == (check["gap_cm"] is None), check
+        if snapshot["path"] != "path_b":
+            # Only a profile is questioned against a threshold, and only a profile has
+            # a level of its own to be read against. The thorough calibration's check
+            # asks a fit it has just made, and has all three `null`.
+            assert check["threshold_cm"] is None, check
+            assert check["profile_level"] is None, check
+            assert check["profile_check_cm"] is None, check
 
     if (review := snapshot["review"]) is not None:
         keys(review, SESSION_REVIEW_KEYS, "review")
@@ -580,18 +593,20 @@ async def test_a_start_on_a_cover_that_is_not_there_says_which_kind_of_nothing(
         assert current(hass, entry) is None
 
 
-async def test_a_path_this_lot_cannot_walk_is_refused_before_the_shutter_is_taken(
-    hass: HomeAssistant, tmp_path
+async def test_a_path_this_backend_cannot_walk_is_refused_before_the_shutter_is_taken(
+    hass: HomeAssistant, tmp_path, monkeypatch
 ) -> None:
-    """Paths B and C belong to the next lot, so a start naming one opens nothing.
+    """A path outside `IMPLEMENTED_PATHS` opens nothing at all.
 
-    A session born on a screen every one of whose buttons is refused would hold the
-    shutter - `Calibrating` on, the rest of the panel read-only over it - and do
-    nothing at all, with `cancel` as its only exit. Refused at the door instead.
+    All three are walked now, so the tuple is narrowed here to ask the question it
+    exists to answer: a session born on a screen every one of whose buttons is refused
+    would hold the shutter - `Calibrating` on, the rest of the panel read-only over it -
+    and do nothing at all, with `cancel` as its only exit. Refused at the door instead.
     """
     async with setup_myhome(hass, tmp_path, FOLLOWER_YAML) as (entry, _commands):
         entity = entity_object(hass, COVER, DEVICE_KEY)
         runner = FakeRunner(entity)
+        monkeypatch.setattr(calibration_session, "IMPLEMENTED_PATHS", ("path_a",))
 
         for path in ("path_b", "path_c"):
             with pytest.raises(PanelError) as refused:
@@ -605,20 +620,36 @@ async def test_a_path_this_lot_cannot_walk_is_refused_before_the_shutter_is_take
         assert runner.log == []
 
 
-async def test_a_start_naming_a_profile_nobody_defines_is_refused(
-    hass: HomeAssistant, tmp_path, monkeypatch
+async def test_a_level_this_backend_cannot_reach_is_not_offered_on_a_summary(
+    hass: HomeAssistant, tmp_path, monkeypatch, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A profile that is not there cannot be the one this window is like.
+    """The second knob, turned: a backend that stops at the basic level says so.
 
-    Reached through the one knob lot B4 turns, because a profile can only be named
-    with path B or C and this lot does not walk them: widening `IMPLEMENTED_PATHS` is
-    exactly what B4 does, and this keeps the refusal behind it honest meanwhile.
+    The summary of path A is where the thorough calibration is offered from, so a
+    backend whose `IMPLEMENTED_LEVELS` leaves it out must reach that screen with
+    nothing but the ways out on it - never with a button that would be refused.
     """
     async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
-        monkeypatch.setattr(
-            calibration_session, "IMPLEMENTED_PATHS", ("path_a", "path_b", "path_c")
-        )
+        session = await open_session(hass, entry)
+        snapshot = await walk(hass, session, PATH_A_BASIC, freezer=freezer)
+        assert snapshot["step"] == "summary_basic"
+        assert snapshot["actions"] == ["refine"]
+
+        monkeypatch.setattr(calibration_session, "IMPLEMENTED_LEVELS", ("basic",))
+        assert session.snapshot()["actions"] == []
+        with pytest.raises(PanelError) as refused:
+            await session.async_act(CLIENT, session.revision, "refine")
+        assert refused.value.translation_key == "action_not_offered"
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_start_naming_a_profile_nobody_defines_is_refused(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """A profile that is not there cannot be the one this window is like."""
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         with pytest.raises(PanelError) as refused:
             await async_start(
                 hass,

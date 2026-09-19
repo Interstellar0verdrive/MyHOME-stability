@@ -94,6 +94,22 @@ everything the panel does.
   has measured before — and saving it writes the profile and assigns it, or, if
   preferred, keeps the numbers for that window alone. Nothing is registered on the
   WebSocket yet and nothing a user sees changes.
+- **The other two paths of that session, and the thorough calibration.** The session
+  now holds the whole of the measuring conversation, not only the first path: a window
+  that is one of a kind already measured (pick the profile, read the travel, and
+  optionally send the shutter half way down and hold a tape against what the profile
+  predicted), a window that follows a profile and stops in the wrong place (its times
+  alone, its times and its coefficients, or the readings alone over the times it
+  already runs on), and the thorough calibration that both of them and the first path
+  can end with — four more readings and a check at a position nothing was fitted to,
+  which is the accuracy figure the summary names. The check the panel shows carries
+  what the model predicted, what the tape found, the gap between them and, when it is a
+  profile being questioned, how thoroughly that profile was itself measured, so that
+  three centimetres can be read against something rather than on its own; beyond that
+  threshold the correction is offered on the spot, and the travel just measured goes
+  with it. What each path saves is what *Configure* saves in the same case, key for
+  key, and a test walks both conversations over the same shutter to say so. Still
+  nothing registered on the WebSocket, and still nothing a user sees changes.
 
 ### Changed
 
