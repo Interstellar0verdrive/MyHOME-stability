@@ -56,6 +56,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 from OWNd.message import OWNCommand, OWNGatewayCommand
 
+from . import calibration_session
 from .calibration_store import (
     async_forget_store,
     async_get_store,
@@ -732,7 +733,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry: discovery -> gateway sessions -> platforms -> data."""
+    """Unload a config entry: calibration -> discovery -> gateway sessions -> platforms -> data."""
+    # First of all, because it is the only step that may still need to *write*: a panel
+    # calibration holding a shutter has to be told the gateway is going, and a shutter
+    # still running has to be stopped while the cover entities and the gateway's own
+    # sessions are both still there (0.6.0 wizard, SPEC §3.8). The session also
+    # registers an `async_on_unload` callback of its own, which is what catches every
+    # other way an entry goes away; by the time that one runs, this has already ended it.
+    await calibration_session.async_end_all(hass, entry, "unloaded")
+
     mac: str = entry.data[CONF_MAC]
     gateway_data: dict[str, Any] = hass.data.get(DOMAIN, {}).get(mac, {})
     handler: MyHOMEGatewayHandler | None = gateway_data.get(CONF_ENTITY)
