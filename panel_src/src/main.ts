@@ -50,7 +50,13 @@ import {
   type SessionSubmit,
 } from "./engine/session-contract";
 import { phaseLine } from "./wizard/model";
-import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
+import {
+  NOTHING_PENDING,
+  NO_DETAIL,
+  NO_PROFILE_CARD,
+  Store,
+  type BusyAsk,
+} from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
 import { FocusTrap, deepActiveElement, focusWhenPainted, liveRegion } from "./engine/a11y";
 import {
@@ -76,7 +82,11 @@ import {
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { drawer, drawerStyles } from "./components/drawer";
-import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
+import {
+  measuringBanner,
+  measuringBannerStyles,
+  type BannerActions,
+} from "./components/measuring-banner";
 import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
@@ -2063,11 +2073,66 @@ export class MyHomeCalibrationPanel extends LitElement {
     });
   }
 
+  /**
+   * Close every *Configure* dialog of this gateway, and say what that left behind.
+   *
+   * The one command of the session API that is not about this panel's session at all: it
+   * acts on the **other** thing that can hold a shutter (SPEC §3.10). Three outcomes, and
+   * the screen shows each of them:
+   *
+   * * the shutter is free - the gateway that comes back is kept, because a dialog that had
+   *   saved something has just changed the origin and the values of a shutter on the list
+   *   behind this banner;
+   * * the shutter is still held - every dialog was closed and something is still running,
+   *   so it was the 0.4.2 action, and `busy.service` turns the offer into the sentence
+   *   that says to wait;
+   * * the command was refused - it lands where every refusal of this panel lands.
+   */
+  private async _endOther(): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    this._store.set({ busy: { ...this._store.state.busy, ask: null } });
+    const result = await client.endOther();
+    if (!result.ok) {
+      this._store.set({ sessionError: result });
+      return;
+    }
+    if (result.overview) {
+      this._store.setOverview(result.overview);
+    }
+    this._store.set({
+      busy: { ask: null, service: result.stillCalibrating },
+      // The shutter is free: the refusal that put the waiting screen on the wizard has
+      // stopped being true, and the screen behind it is the choice of shutter again.
+      ...(result.stillCalibrating ? {} : { sessionError: null }),
+    });
+  }
+
+  /** The banner's half of the same two questions, over the list instead of on the wizard. */
+  private _bannerActions: BannerActions = {
+    // The wizard's own address, which reads the session and shows whatever screen it is
+    // on. It never starts one - that is the whole of lesson 4 - so "resume" is a
+    // navigation and nothing more.
+    resume: () => this._navigate("/calibrate"),
+    ask: (question: BusyAsk) => this._store.set({ busy: { ...this._store.state.busy, ask: question } }),
+    endPanel: () => {
+      this._store.set({ busy: { ...this._store.state.busy, ask: null } });
+      void this._cancelSession("force");
+    },
+    endOther: () => void this._endOther(),
+    openFlow: (source: HTMLElement) => this._openFlow(source),
+  };
+
   private _wizardActions: WizardActions = {
     refresh: () => void this._readSession(),
     // The choice of shutter is a screen of the wizard, so opening a session from it is the
     // shell's one road in - the same `_calibrate` every button of lot F3 goes through.
     start: (intent) => void this._calibrate(intent),
+    endOther: () => void this._endOther(),
+    ask: (question) => this._store.set({ busy: { ...this._store.state.busy, ask: question } }),
+    openFlow: (source) => this._openFlow(source),
     act: (action, value) => void this._actSession(action, value),
     stop: () => void this._stopSession(),
     save: (target) => void this._saveSession(target),
@@ -2217,7 +2282,6 @@ export class MyHomeCalibrationPanel extends LitElement {
   protected override render(): TemplateResult {
     const state = this._store.state;
     const title = this._title();
-    const measuring = state.overview?.measuring ?? null;
     const routed = state.route.view !== "overview";
     return html`
       <!--
@@ -2237,7 +2301,14 @@ export class MyHomeCalibrationPanel extends LitElement {
             ${this._i18n.t("panel.error.no_connection")}
           </div>`
         : nothing}
-      ${measuring ? measuringBanner(this._i18n, measuring.name, FLOW_URL) : nothing}
+      <!--
+        Not over the wizard: the banner's three offers are "go to the wizard", "end what is
+        running" and "close the dialog", and on that route all three of them are already on
+        the screen, with more to say about each than one strip can.
+      -->
+      ${state.overview && state.route.view !== "calibrate"
+        ? measuringBanner(this._i18n, state.overview, state.busy, this._bannerActions)
+        : nothing}
       <div class="content">
         ${liveRegion(state.announce)} ${this._renderView()}
         ${state.connection === "polling" && state.status === "ready"

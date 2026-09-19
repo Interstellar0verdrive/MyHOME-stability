@@ -52,6 +52,7 @@ const overview = (covers: CoverRow[]): Overview => ({
   entries: [],
   entry_id: "01ENTRY",
   measuring: null,
+  session: null,
   profiles: [],
   covers,
   order: covers.map((row) => row.unique_id),

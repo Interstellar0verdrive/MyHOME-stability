@@ -997,7 +997,9 @@
         "action": {
           "resume": "Resume the session",
           "stop": "End it"
-        }
+        },
+        "panel_body": "A guided calibration of «{cover}» is running in this panel. Until it ends, this panel only reads: nothing is written.",
+        "end_panel_confirm": "End the guided calibration of «{cover}»? The measurements taken so far are discarded, and a run under way finishes by itself at its end stop."
       },
       "applying": {
         "title": "The changes are being applied…",
@@ -1142,6 +1144,14 @@
       "pick": {
         "title": "Which shutter is being measured?",
         "body": "Only the shutters whose position Home Assistant works out from their run times are listed: they are the only ones this calibration is about. The first time round it is worth choosing a shutter that is representative of its type and easy to measure."
+      },
+      "busy": {
+        "title": "The shutter is already in calibration",
+        "panel": "A guided calibration of «{cover}» is already running, in another panel or in another tab. It can be followed from here; taking control of it is a button on its screen.",
+        "other": "«{cover}» is in calibration in the Configure dialog.",
+        "end_other": "Close the dialog and free the shutter",
+        "end_other_confirm": "Close the Configure dialog open on this gateway? The unsaved measurements of that dialog are lost, and if it had saved something the integration is reloaded.",
+        "service": "A calibration run started by an action is still under way: wait for it to finish."
       }
     },
     "screen": {

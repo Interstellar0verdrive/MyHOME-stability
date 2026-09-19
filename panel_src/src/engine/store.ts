@@ -55,6 +55,35 @@ export interface DragState {
   insert: InsertPoint | null;
 }
 
+/**
+ * The question asked before a shutter is taken back from whoever is holding it.
+ *
+ * Two questions, one field, because they are never both on the screen and because the
+ * answer to either is the same gesture: confirm, or leave it alone.
+ *
+ * * `end_panel` - a guided calibration of this panel's own is running: ending it throws
+ *   its measurements away (`cancel` with `force`);
+ * * `end_other` - a *Configure* dialog of this gateway is holding one: closing it throws
+ *   away whatever that dialog had measured and, if it had saved something, reloads the
+ *   integration (`end_other`, SPEC §3.10).
+ */
+export type BusyAsk = "end_panel" | "end_other" | null;
+
+/**
+ * What the panel knows about a shutter it is not the one holding.
+ *
+ * `service` is what `end_other` answers with `still_calibrating`: every dialog of the
+ * gateway was closed and the shutter is *still* in calibration, so the holder was the
+ * 0.4.2 action - which has no window to close and finishes its run by itself. There is
+ * nothing left to offer then but the sentence saying so.
+ */
+export interface BusyState {
+  ask: BusyAsk;
+  service: boolean;
+}
+
+export const NOT_BUSY: BusyState = { ask: null, service: false };
+
 /** The feedback strip: one sentence, and the token that takes the write back. */
 export interface Snack {
   message: string;
@@ -213,6 +242,14 @@ export interface PanelState {
   /** This browser tab's name in the session, from `sessionStorage` where there is one. */
   clientId: string;
   /**
+   * The banner's and the wizard's shared state about a gateway somebody else is holding.
+   *
+   * One field for both because the two screens ask the same two questions, of the same
+   * gateway, and a shutter cannot be held twice: the banner asks them over the list and
+   * the wizard asks them on the screen a refused `start` leaves.
+   */
+  busy: BusyState;
+  /**
    * The wizard's "Leave the calibration?" question, open or shut.
    *
    * In the store and not in the element because the control that asks it is not in the
@@ -252,6 +289,7 @@ export const initialState = (route: Route): PanelState => ({
   sessionError: null,
   wizardIntent: null,
   clientId: "",
+  busy: NOT_BUSY,
   wizardExit: false,
 });
 
@@ -309,6 +347,11 @@ export class Store {
       entryId: overview.entry_id,
       status: "ready",
       error: null,
+      // A gateway that is holding nothing is a gateway with no question to answer about
+      // it. Left alone, a `service` found out about one calibration would still be on the
+      // screen during the next one, saying "wait for it to finish" about a shutter this
+      // panel could perfectly well let go of.
+      ...(overview.measuring === null ? { busy: NOT_BUSY } : {}),
     });
   }
 

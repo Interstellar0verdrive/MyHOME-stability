@@ -73,10 +73,23 @@ const overviewFor = (state) => {
   });
   answer.covers = [...answer.covers, extra];
   answer.order = answer.covers.map((cover) => cover.unique_id);
-  if (state === "measuring") {
+  if (state === "measuring" || state === "measuring-panel" || state === "measuring-service") {
     answer.measuring = {
       cover_unique_id: answer.covers[0].unique_id,
       name: answer.covers[0].name,
+    };
+  }
+  if (state === "measuring-panel") {
+    // `measuring` says a shutter is held; `session` says by whom. With both of them the
+    // banner offers the wizard and the way of ending it; with `measuring` alone it is the
+    // Configure dialog or the 0.4.2 action (SPEC §6).
+    const snapshot = sessionFixture("running_open_lift", answer.entry_id);
+    answer.session = {
+      session_id: snapshot.session_id,
+      cover_unique_id: answer.covers[0].unique_id,
+      name: answer.covers[0].name,
+      state: snapshot.state,
+      owner: snapshot.owner?.client_id ?? null,
     };
   }
   if (state === "first-run") {
@@ -137,8 +150,27 @@ const session = (state, message) => {
   if (message.type.endsWith("/cancel")) {
     return Promise.resolve({ session: null, already_ended: snapshot === null });
   }
+  if (message.type.endsWith("/end_other")) {
+    // The gateway that still reports a shutter in calibration after every dialog of it has
+    // been closed is the one the 0.4.2 action is holding: it is the only way the panel can
+    // tell the two apart, and `measuring-service` is the state that says so.
+    const still = state === "measuring-service";
+    return Promise.resolve({
+      flows_aborted: still ? 0 : 1,
+      still_calibrating: still,
+      overview: overviewFor(state),
+    });
+  }
   return Promise.resolve({ session: snapshot });
 };
+
+/** A gateway that refuses `start` because somebody else is holding a shutter of it. */
+const alreadyCalibrating = (by) => ({
+  code: "not_allowed",
+  message: "a shutter of this gateway is already in calibration",
+  translation_key: "already_calibrating",
+  translation_placeholders: { cover: "Hallway Shutter", by },
+});
 
 const connection = (state) => ({
   /** Every session command this mount sent, so a keyboard walk can say what it caused. */
@@ -198,6 +230,9 @@ const connection = (state) => ({
       return Promise.resolve({ entry_id: "01ENTRY", items: [] });
     }
     if (message.type.startsWith("myhome/calibration/session/")) {
+      if (message.type.endsWith("/start") && state.startsWith("busy:")) {
+        return Promise.reject(alreadyCalibrating(state.slice("busy:".length)));
+      }
       return session(state, message);
     }
     return Promise.reject({ code: "unknown_command", message: "unknown command" });
@@ -406,6 +441,18 @@ export const pressWide = (index) => async ({ panel, deepAll, settle }) => {
 };
 
 
+/** One of the banner's offers, named by the mark it carries. */
+const pressBanner = (mark) => async ({ panel, deep, settle }) => {
+  deep(panel.shadowRoot, `[data-banner="${mark}"]`)?.click();
+  await settle();
+};
+
+/** The first shutter of the choice, which is how a session is asked for (lot F3). */
+const pressPickedShutter = async ({ panel, deep, settle }) => {
+  deep(panel.shadowRoot, ".options button.option")?.click();
+  await settle();
+};
+
 /** The wizard's own address, whichever screen of it is being looked at. */
 const wizard = (name, scenario, more = {}) => ({
   name: `the wizard, ${name}`,
@@ -533,5 +580,51 @@ export const STATES = [
   // an empty list behind it.
   { name: "the wizard, nothing to calibrate", state: "no-basic-covers", hash: "#/calibrate", expect: "[data-wizard-empty]" },
   ...WIZARD_SCREENS,
+  // The banner in each of the three shapes SPEC §6 gives it, and the two questions it
+  // asks. `measuring` alone is the Configure dialog; `measuring` with a session beside it
+  // is this panel's own; `measuring-service` is the gateway that answers `end_other` with
+  // the shutter still held.
+  { name: "the banner, a session of the panel's", state: "measuring-panel", expect: '[data-banner="resume"]' },
+  {
+    name: "the banner, the question about ending it",
+    state: "measuring-panel",
+    drive: pressBanner("end-panel"),
+    expect: "[data-banner-question]",
+  },
+  {
+    name: "the banner, the question about the dialog",
+    state: "measuring",
+    drive: pressBanner("end-other"),
+    expect: "[data-banner-question]",
+  },
+  {
+    name: "the banner, an action of 0.4.2 holding the shutter",
+    state: "measuring-service",
+    drive: async (context) => {
+      await pressBanner("end-other")(context);
+      await pressBanner("confirm")(context);
+    },
+    expect: "[data-banner-service]",
+  },
+  // The waiting screen a refused `start` leaves, in the two shapes that have something to
+  // press and the one that has not.
+  ...["panel", "other", "reserved"].map((by) => ({
+    name: `the wizard, the gateway is busy (${by})`,
+    state: `busy:${by}`,
+    hash: "#/calibrate",
+    drive: pressPickedShutter,
+    expect: "[data-session-busy]",
+  })),
+  {
+    name: "the wizard, the question about the dialog",
+    state: "busy:other",
+    hash: "#/calibrate",
+    drive: async (context) => {
+      await pressPickedShutter(context);
+      context.deep(context.panel.shadowRoot, '[data-busy="end-other"]')?.click();
+      await context.settle();
+    },
+    expect: "[data-busy-question]",
+  },
 ];
 

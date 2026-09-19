@@ -997,7 +997,9 @@
         "action": {
           "resume": "Riprendi la sessione",
           "stop": "Termina"
-        }
+        },
+        "panel_body": "È in corso una calibrazione guidata di «{cover}» in questo pannello. Finché non termina, da qui si può solo leggere: non viene scritto niente.",
+        "end_panel_confirm": "Terminare la calibrazione guidata di «{cover}»? Le misure fatte finora vengono scartate, e una corsa in atto finisce da sola al finecorsa."
       },
       "applying": {
         "title": "Le modifiche vengono applicate…",
@@ -1142,6 +1144,14 @@
       "pick": {
         "title": "Quale tapparella misurare?",
         "body": "Sono elencate solo le tapparelle di cui Home Assistant stima la posizione dai tempi di corsa: sono le uniche che questa calibrazione riguarda. La prima volta conviene scegliere una tapparella rappresentativa del suo tipo e comoda da misurare."
+      },
+      "busy": {
+        "title": "La tapparella è già in calibrazione",
+        "panel": "Una calibrazione guidata di «{cover}» è già in corso, in un altro pannello o in un'altra scheda. Da qui si può seguirla; il controllo si prende con un pulsante sul suo schermo.",
+        "other": "«{cover}» è in calibrazione nel dialogo Configura.",
+        "end_other": "Chiudi il dialogo e libera la tapparella",
+        "end_other_confirm": "Chiudere il dialogo Configura aperto su questo gateway? Le misure non salvate di quel dialogo vanno perse, e se aveva salvato qualcosa l'integrazione viene ricaricata.",
+        "service": "Una corsa di calibrazione avviata da un'azione è ancora in corso: attendere che finisca."
       }
     },
     "screen": {

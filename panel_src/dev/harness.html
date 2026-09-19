@@ -183,7 +183,12 @@
     box.addEventListener("change", () => {
       if (id === "session") {
         sessionState = box.checked ? startSession() : null;
-        if (subscriber) subscriber({ type: "session", session: sessionState });
+        if (subscriber) {
+          subscriber({ type: "session", session: sessionState });
+          // …and the gateway, because `overview.session` is what decides which of the
+          // banner's three shapes is drawn (lot F3).
+          subscriber({ type: "overview", overview: overview() });
+        }
         return;
       }
       if (id === "measuring" && subscriber) {
@@ -238,6 +243,17 @@
     }
     if (flags.measuring()) {
       answer.measuring = { cover_unique_id: answer.covers[0].unique_id, name: answer.covers[0].name };
+    }
+    // Which of the banner's three shapes: `session` beside `measuring` is a calibration of
+    // this panel's own, `measuring` alone is the Configure dialog or the 0.4.2 action.
+    answer.session = sessionState
+      ? { session_id: sessionState.session_id,
+          cover_unique_id: sessionState.cover.unique_id, name: sessionState.cover.name,
+          state: sessionState.state, owner: sessionState.owner?.client_id ?? null }
+      : null;
+    if (answer.session) {
+      answer.measuring = { cover_unique_id: answer.session.cover_unique_id,
+                           name: answer.session.name };
     }
     if (flags.empty()) {
       answer.profiles = [];
@@ -442,6 +458,18 @@
         : null;
       if (subscriber) subscriber({ type: "session", session: sessionState });
       return Promise.resolve({ session: sessionState, already_ended: ended });
+    }
+    if (name === "end_other") {
+      // "writes refuse" stands in for the gateway where the 0.4.2 action is the holder:
+      // every dialog is closed and the shutter is *still* being calibrated, which is the
+      // only way the panel can tell the two apart (SPEC §3.10).
+      const still = flags.refuse();
+      if (!still) {
+        document.getElementById("measuring").checked = false;
+        if (subscriber) subscriber({ type: "measuring", cover_unique_id: null, name: null });
+      }
+      return Promise.resolve({ flows_aborted: still ? 0 : 1, still_calibrating: still,
+                               overview: overview() });
     }
     if (name === "leave" || name === "stop" || name === "attach" || name === "save") {
       return Promise.resolve({ session: sessionState, overview: overview() });

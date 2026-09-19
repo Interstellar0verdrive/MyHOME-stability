@@ -16,6 +16,7 @@ import {
   type SessionEvent,
   type SessionGetAnswer,
   type SessionHeartbeatAnswer,
+  type OverviewSession,
   type SessionPath,
   type SessionSaveAnswer,
   type SessionSaveTarget,
@@ -69,6 +70,15 @@ export interface Overview {
   entries: EntrySummary[];
   entry_id: string;
   measuring: { cover_unique_id: string; name: string } | null;
+  /**
+   * Which client is holding a shutter of this gateway, or `null` for none (contract §4.5).
+   *
+   * `measuring` beside it says *that* one is being measured; this says *who*. A
+   * `measuring` with no `session` is the *Configure* dialog or the 0.4.2 action - the two
+   * holders this panel did not open and cannot drive - and that is the whole distinction
+   * the banner is built on (SPEC §6).
+   */
+  session: OverviewSession | null;
   profiles: ProfileRow[];
   covers: CoverRow[];
   order: string[];

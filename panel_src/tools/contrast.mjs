@@ -141,7 +141,10 @@ const pairs = (t) => [
   ["destructive button", ink(t, t.error), mix(t.error, t.card, 14), 15],
   ["a field error", ink(t, t.error), t.card, 12.5],
   ["the measuring banner", t.text, mix(t.warning, t.card, 12), 14],
-  ["the banner's two links", ink(t, t.primary), mix(t.warning, t.card, 12), 14],
+  ["the banner's two offers", ink(t, t.primary), mix(t.warning, t.card, 12), 14],
+  // The offer that ends somebody's calibration, which is the one the panel spells out in
+  // the error colour rather than leaving it to read like the other one (lot F3).
+  ["the banner's offer that ends a calibration", ink(t, t.error), mix(t.warning, t.card, 12), 14],
   ["the applying / undo strip", t.background, t.text, 14],
   ["the word Annulla on that strip", snackAction(t), t.text, 14],
   ["the offline banner", t.text, mix(t.warning, t.card, 12), 14],

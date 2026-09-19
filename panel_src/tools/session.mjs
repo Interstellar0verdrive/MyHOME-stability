@@ -83,12 +83,24 @@ const scenario = (name, over = {}) => {
  * `session` is whatever the test wants the server to be holding; `refuse` is a function
  * that, given the command name, returns the refusal to throw or nothing.
  */
-const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => {
+const gateway = ({
+  session = null,
+  refuse = () => null,
+  owner = true,
+  overview = null,
+  endOther = null,
+} = {}) => {
   const counts = new Map();
   const lastOf = new Map();
   const listeners = new Map();
   let subscriber = null;
-  const state = { session, refuse, owner };
+  const state = {
+    session,
+    refuse,
+    owner,
+    overview: overview ?? structuredClone(overviewFixture),
+    endOther: endOther ?? { flows_aborted: 1, still_calibrating: false },
+  };
 
   const count = (type) => counts.get(type) ?? 0;
 
@@ -110,7 +122,7 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
         });
       }
       if (message.type === "myhome/calibration/overview") {
-        return Promise.resolve(structuredClone(overviewFixture));
+        return Promise.resolve(structuredClone(state.overview));
       }
       if (message.type.startsWith("myhome/calibration/session/")) {
         const name = message.type.slice("myhome/calibration/session/".length);
@@ -130,6 +142,19 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
             present_until: state.owner ? state.session?.idle_expires_at ?? null : null,
           });
         }
+        if (name === "end_other") {
+          // What the backend does: every options flow of this gateway is aborted, and the
+          // gateway is answered afresh. A shutter still in calibration afterwards was the
+          // 0.4.2 action's, which no dialog was holding.
+          if (!state.endOther.still_calibrating) {
+            state.overview = { ...state.overview, measuring: null, session: null };
+            subscriber?.({ type: "overview", overview: structuredClone(state.overview) });
+          }
+          return Promise.resolve({
+            ...state.endOther,
+            overview: structuredClone(state.overview),
+          });
+        }
         if (name === "cancel") {
           state.session = state.session
             ? { ...state.session, state: "ended", step: null, actions: [] }
@@ -145,7 +170,7 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
         return Promise.reject({ code: "unknown_command", message: "unknown command" });
       }
       subscriber = callback;
-      callback({ type: "overview", overview: structuredClone(overviewFixture) });
+      callback({ type: "overview", overview: structuredClone(state.overview) });
       callback({ type: "session", session: state.session });
       return Promise.resolve(async () => {
         subscriber = null;
@@ -170,6 +195,11 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
     sessions: (name) => count(`myhome/calibration/session/${name}`),
     /** The last frame of that command, so that a check can read what was really on it. */
     last: (name) => lastOf.get(`myhome/calibration/session/${name}`),
+    /** The gateway as the panel sees it, replaced whole and pushed, as the server does. */
+    pushOverview: (over) => {
+      state.overview = { ...state.overview, ...over };
+      subscriber?.({ type: "overview", overview: structuredClone(state.overview) });
+    },
     push: (session) => {
       state.session = session;
       subscriber?.({ type: "session", session });
@@ -564,7 +594,13 @@ console.log("\na start refused while the gateway is busy with another shutter");
   panel._assignActions.calibrate({ cover: "00:03:50:aa:bb:cc-2-84", name: "Attic Shutter" });
   await settle(300);
   check("the start was refused", bench.sessions("start"), 1);
-  checkThat("and the refusal is on the screen", find("[data-session-trouble]"));
+  // Never a bare refusal: `already_calibrating` is the one the user meets by pressing a
+  // button, so it is the waiting screen with the banner's own offers on it (SPEC §6).
+  checkThat("and the refusal is on the screen", find("[data-session-busy]"));
+  checkThat(
+    "as a screen with a way on, not an error on its own",
+    find("[data-session-busy]")?.querySelector("button") ?? null,
+  );
   check("nothing attached to the other shutter's session", bench.sessions("attach"), 0);
   check("and nothing was acted on it", bench.sessions("act"), 0);
 }
@@ -700,6 +736,94 @@ console.log("\nstopping the shutter in the middle of a timed run");
   // The screen it advances to is the step made repeatable, which is the server's business;
   // what matters here is that the panel has a way to interrupt the one thing that moves.
   checkThat("the wizard is still on the screen", find("[data-wizard]"));
+}
+
+console.log("\nthe banner over a session of this panel's, and 'Riprendi'");
+{
+  // `measuring` says a shutter of the gateway is held; `session` says by whom (contract
+  // §4.5). With both of them the wizard is a screen of this panel, so the banner's way on
+  // is the wizard's own address - and going there **reads**, it never starts anything.
+  const running = scenario("running_open_lift");
+  const bench = gateway({
+    session: running,
+    overview: {
+      ...structuredClone(overviewFixture),
+      measuring: { cover_unique_id: running.cover.unique_id, name: running.cover.name },
+      session: {
+        session_id: running.session_id,
+        cover_unique_id: running.cover.unique_id,
+        name: running.cover.name,
+        state: running.state,
+        owner: running.owner?.client_id ?? null,
+      },
+    },
+  });
+  const { window, settle, find } = await mount(bench.connection, "#/");
+  await settle(200);
+  checkThat("the banner names this panel's own calibration", find('[data-banner="resume"]'));
+  checkThat("and offers to end it", find('[data-banner="end-panel"]'));
+  find('[data-banner="resume"]')?.click();
+  await settle(240);
+  check("resuming goes to the wizard's own address", window.location.hash, "#/calibrate");
+  checkThat("and the screen it lands on is the session's", find("[data-wizard]"));
+  check("resuming started nothing", bench.sessions("start"), 0);
+}
+
+console.log("\nthe banner over the Configure dialog, and 'Termina'");
+{
+  // The same amber strip with **no** session beside `measuring`: the holder is the dialog
+  // or the 0.4.2 action, neither of which this panel can drive. So the way out is
+  // `end_other`, which closes every options flow of this gateway - after the question that
+  // says what closing one costs.
+  const first = overviewFixture.covers[0];
+  const bench = gateway({
+    session: null,
+    overview: {
+      ...structuredClone(overviewFixture),
+      measuring: { cover_unique_id: first.unique_id, name: first.name },
+      session: null,
+    },
+  });
+  const { settle, find } = await mount(bench.connection, "#/");
+  await settle(200);
+  checkThat("the banner does not offer to resume a session nobody here opened",
+    !find('[data-banner="resume"]'));
+  checkThat("it offers to close the dialog", find('[data-banner="end-other"]'));
+  find('[data-banner="end-other"]')?.click();
+  await settle(120);
+  checkThat("which asks first", find("[data-banner-question]"));
+  check("and sends nothing by asking", bench.sessions("end_other"), 0);
+  find('[data-banner="confirm"]')?.click();
+  await settle(200);
+  check("saying yes closes the dialogs of this gateway", bench.sessions("end_other"), 1);
+  checkThat("and the shutter is free, so the strip is gone", !find("[data-banner-measuring]"));
+  check("no session of this panel's was opened by any of it", bench.sessions("start"), 0);
+}
+
+console.log("\n…and the same strip when it was an action of 0.4.2 all along");
+{
+  const first = overviewFixture.covers[0];
+  const bench = gateway({
+    session: null,
+    overview: {
+      ...structuredClone(overviewFixture),
+      measuring: { cover_unique_id: first.unique_id, name: first.name },
+      session: null,
+    },
+    endOther: { flows_aborted: 0, still_calibrating: true },
+  });
+  const { settle, find } = await mount(bench.connection, "#/");
+  await settle(200);
+  find('[data-banner="end-other"]')?.click();
+  await settle(120);
+  find('[data-banner="confirm"]')?.click();
+  await settle(200);
+  check("every dialog was closed and the shutter is still held", bench.sessions("end_other"), 1);
+  checkThat("so the strip stops offering", find("[data-banner-service]"));
+  checkThat(
+    "and says to wait instead",
+    !find('[data-banner="end-other"]') && !find('[data-banner="configure"]'),
+  );
 }
 
 console.log("\nthe stylesheets the bundle ships");

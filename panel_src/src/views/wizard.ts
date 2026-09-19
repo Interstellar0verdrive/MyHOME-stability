@@ -43,7 +43,7 @@ import {
   type SessionSnapshot,
   type SessionSubmit,
 } from "../engine/session-contract";
-import { type PanelState } from "../engine/store";
+import { type BusyAsk, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "../engine/theme";
 import { type WizardIntent } from "../engine/session";
 import { type HomeAssistant } from "../types/ha";
@@ -102,6 +102,17 @@ export interface WizardActions {
    * as pressing "Misura di nuovo" on a shutter's card.
    */
   start(intent: WizardIntent): void;
+  /**
+   * Close every *Configure* dialog of this gateway and free the shutter (SPEC §3.10).
+   *
+   * Offered by the screen a refused `start` leaves, which is the wizard's half of the
+   * banner's own offer - and asked about first, through `ask`.
+   */
+  endOther(): void;
+  /** Put the question about the other holder on the screen, or take it back. */
+  ask(question: BusyAsk): void;
+  /** "Apri Configura": the one offer here that still leaves the panel. */
+  openFlow(source: HTMLElement): void;
   /** The card of the shutter that was just calibrated. */
   openCover(cover: string): void;
   /** Back to the list. */
@@ -120,6 +131,9 @@ const NO_ACTIONS: WizardActions = {
   exit: () => undefined,
   again: () => undefined,
   start: () => undefined,
+  endOther: () => undefined,
+  ask: () => undefined,
+  openFlow: () => undefined,
   openCover: () => undefined,
   back: () => undefined,
 };
@@ -588,6 +602,9 @@ export class MyHomeWizard extends LitElement {
     if (!trouble) {
       return nothing;
     }
+    if (trouble.error.translation_key === "already_calibrating") {
+      return this._renderBusy(trouble);
+    }
     const freed = trouble.freedAt ? this.i18n.time(trouble.freedAt) : "";
     return html`<div class="card problem" role="alert" data-session-trouble>
       <h2>${this.i18n.t("panel.wizard.trouble.title")}</h2>
@@ -606,6 +623,95 @@ export class MyHomeWizard extends LitElement {
         : nothing}
       <div class="actions">
         ${trouble.recovery.map((token) => this._recoveryButton(token))}
+      </div>
+    </div>`;
+  }
+
+  /**
+   * The gateway is busy: the waiting screen, with the same offers the banner makes.
+   *
+   * `start` is refused with `already_calibrating` whenever somebody is already holding a
+   * shutter of this gateway, and `{by}` says who - which is the only thing that decides
+   * what can be offered. A bare refusal here would be the one screen of the wizard with
+   * nothing on it to do, on the one occasion a user arrives at it by pressing a button.
+   *
+   * * `panel` - another panel or another tab is driving one: it can be read, so the way on
+   *    is to go and look at it;
+   * * `other` - a *Configure* dialog: it can be closed from here, after the question that
+   *    says what closing it costs, or opened;
+   * * `reserved` - the gateway is reserved for a run that is about to start, or the 0.4.2
+   *    action is holding it: there is nothing to close, only to wait for.
+   */
+  private _renderBusy(trouble: NonNullable<PanelState["sessionError"]>): TemplateResult {
+    const placeholders = trouble.error.translation_placeholders ?? {};
+    const cover = placeholders.cover ?? this.state.wizardIntent?.name ?? "";
+    const by = this.state.busy.service ? "reserved" : (placeholders.by ?? "other");
+    const body =
+      by === "panel"
+        ? this.i18n.t("panel.wizard.busy.panel", { cover })
+        : by === "other"
+          ? this.i18n.t("panel.wizard.busy.other", { cover })
+          : this.i18n.t("panel.wizard.busy.service");
+    if (this.state.busy.ask === "end_other") {
+      return html`<div class="card problem" role="alert" data-session-busy>
+        <h2>${this.i18n.t("panel.wizard.busy.title")}</h2>
+        <p data-busy-question>${this.i18n.t("panel.wizard.busy.end_other_confirm")}</p>
+        <div class="actions">
+          <button
+            class="cta text"
+            type="button"
+            data-busy="confirm"
+            @click=${() => this.actions.endOther()}
+          >
+            ${this.i18n.t("panel.wizard.busy.end_other")}
+          </button>
+          <button
+            class="cta text"
+            type="button"
+            data-busy="keep"
+            @click=${() => this.actions.ask(null)}
+          >
+            ${this.i18n.t("panel.common.action.cancel")}
+          </button>
+        </div>
+      </div>`;
+    }
+    return html`<div class="card problem" role="alert" data-session-busy>
+      <h2>${this.i18n.t("panel.wizard.busy.title")}</h2>
+      <p>${body}</p>
+      <div class="actions">
+        ${by === "panel"
+          ? html`<button
+              class="cta text"
+              type="button"
+              data-busy="resume"
+              @click=${() => this.actions.refresh()}
+            >
+              ${this.i18n.t("panel.banner.measuring.action.resume")}
+            </button>`
+          : nothing}
+        ${by === "other"
+          ? html`<button
+                class="cta text"
+                type="button"
+                data-busy="end-other"
+                @click=${() => this.actions.ask("end_other")}
+              >
+                ${this.i18n.t("panel.wizard.busy.end_other")}
+              </button>
+              <button
+                class="cta text"
+                type="button"
+                data-busy="configure"
+                @click=${(event: Event) =>
+                  this.actions.openFlow(event.currentTarget as HTMLElement)}
+              >
+                ${this.i18n.t("panel.common.action.configure")}
+              </button>`
+          : nothing}
+        <button class="cta text" type="button" data-busy="back" @click=${() => this.actions.back()}>
+          ${this.i18n.t("panel.common.action.back")}
+        </button>
       </div>
     </div>`;
   }
