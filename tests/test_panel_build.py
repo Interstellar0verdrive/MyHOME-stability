@@ -172,3 +172,40 @@ def test_every_stylesheet_is_one_the_build_can_minify() -> None:
         for block in blocks:
             assert "${" not in block, f"{source.name}: a stylesheet interpolates"
             assert "\\" not in block, f"{source.name}: a stylesheet escapes"
+
+
+# ------------------------------------------------------- the development harness
+# `panel_src/dev/harness.html` is the panel against the two committed fixtures, opened
+# from a file, with no Home Assistant and no node behind it: it is where a route is
+# walked by a person rather than by a check. It names the session's snapshots by the
+# fixture's own keys, and nothing in the toolchain reads that file - so a scenario
+# renamed in `tests/fixtures/panel_session_examples.json` would leave the harness
+# silently drawing `undefined` on the first press of a route.
+HARNESS = Path(myhome.__file__).parent.parent.parent / "panel_src" / "dev" / "harness.html"
+SESSION_EXAMPLES = Path(__file__).resolve().parent / "fixtures" / "panel_session_examples.json"
+HARNESS_CHAIN = re.compile(r"SESSION_CHAINS\s*=\s*\{(.*?)\n  \};", re.DOTALL)
+HARNESS_SAVED = re.compile(r"SESSION_SAVED\s*=\s*\{(.*?)\};", re.DOTALL)
+QUOTED = re.compile(r'"([a-z_]+)"')
+
+
+def test_the_harness_walks_scenarios_the_fixture_really_has() -> None:
+    """Every snapshot the three routes of the harness name is one of the committed ones.
+
+    Mutation caught: renaming a scenario in the fixture (which lot B3 does whenever the
+    walk behind it changes) and leaving the harness pointing at the old name - a page
+    that still opens, still draws the first screen, and falls apart on the press after
+    it, which nobody would see until they went looking for something else.
+    """
+    text = HARNESS.read_text(encoding="utf-8")
+    chains = HARNESS_CHAIN.search(text)
+    saved = HARNESS_SAVED.search(text)
+    assert chains and saved, "the harness no longer declares its chains by those names"
+    named = set(QUOTED.findall(chains.group(1))) | set(QUOTED.findall(saved.group(1)))
+    scenarios = set(json.loads(SESSION_EXAMPLES.read_text(encoding="utf-8"))["scenarios"])
+    assert named, "the harness names no scenario at all"
+    assert named <= scenarios, f"the harness names scenarios the fixture has not: {
+        sorted(named - scenarios)
+    }"
+    # ...and all three routes are there, because a chain that disappeared would pass the
+    # assertion above by naming nothing.
+    assert set(re.findall(r"\n    ([ABC]): \[", chains.group(1))) == {"A", "B", "C"}
