@@ -1122,6 +1122,46 @@ async def test_the_check_catches_the_window_of_the_twentieth_of_september(
             check_the_snapshot(one)
 
 
+async def test_a_check_this_cover_cannot_make_is_a_problem_and_not_a_shorter_run(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The profile wants more seconds than a whole run of this cover has.
+
+    The run primitive is given a fraction of the curtain time the *cover* is configured
+    with, and a fraction above 1 is clamped to a full run: the shutter would go to its
+    end stop and the tape would be held against a check that was never made. A cover
+    configured as a tenth of the window it really is says so instead - `bad_point`, the
+    dialog's own screen for a measurement that cannot be made, with the step on offer
+    again.
+    """
+    # The **cover's** three times and not the profile's, which is why the replacement is
+    # counted: the two blocks carry the same three keys at the same indentation, and the
+    # cover's come first.
+    quick = IN_USE_YAML.replace(
+        f"      opening_time: {OPENING}\n      closing_time: {CLOSING}\n      slat_time: {SLAT}\n",
+        "      opening_time: 2.4\n      closing_time: 2.3\n      slat_time: 0.4\n",
+        1,
+    )
+    async with setup_myhome(hass, tmp_path, quick) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
+        runs = len(runner.runs)
+        snapshot = await act(hass, session, Act("verify_now"))
+        assert snapshot["step"] == "problem_bad_point"
+        assert snapshot["problem"] == {"code": "bad_point"}
+        assert snapshot["actions"] == ["repeat_step"]
+        assert snapshot["check"] is None
+        # Nothing was sent anywhere: the run that could not be made was not made.
+        assert len(runner.runs) == runs
+        for one in published:
+            check_the_snapshot(one)
+        await session.async_cancel(CLIENT)
+
+
 async def test_the_panel_s_check_of_a_profile_is_not_the_dialog_s(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
