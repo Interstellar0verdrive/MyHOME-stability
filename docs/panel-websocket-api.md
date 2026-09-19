@@ -69,6 +69,7 @@ panel showing two at a time would have to merge two orders.
 | `entries` | array | `{entry_id, title, mac, loaded}` for **every** configured gateway, loaded or not. Present even when there is one, so the picker has one rule. |
 | `entry_id` | string | the gateway this payload is about |
 | `measuring` | object \| null | `{cover_unique_id, name}` while a guided calibration is running on one of this gateway's shutters. The panel's read-only lock hangs off it, which is why it names the window rather than being a boolean. |
+| `session` | object \| null | *(from the release that registers the session commands)* `{session_id, cover_unique_id, name, state, owner}` for the panel's own calibration session on this gateway, `null` when there is none. `state` is a token of §12.1 and `owner` the owner's `client_id` (`null` when nobody owns it). `measuring` says *that* a shutter is being measured, whoever is measuring it; `session` says *who*: `measuring` set with `session` at `null` is the guided dialog or the 0.4.2 action, and the panel offers to close that dialog (§11.2, `end_other`) rather than to resume a session it does not have. The shape is frozen with the rest of the session contract (`SESSION_OVERVIEW_KEYS`), so the key appearing here later is not a change to it. |
 | `profiles` | array | §2.1 |
 | `covers` | array | §2.2, **already in the order the user put them in** |
 | `order` | array of string | the stored order verbatim — unique ids, some of which may name nothing any more. The panel sends this list back, whole, when it reorders. |
@@ -703,7 +704,14 @@ section, `panel_schemas.py`, `panel_src/src/engine/session-contract.ts` and
   owns it. The owner is **present** while its last `heartbeat` or verb is less than
   **45 s** old; the panel sends a heartbeat every **15 s**. Presence decides *who may
   act* and nothing else: when it lapses nothing stops, nothing is cancelled and nothing
-  moves — the session simply becomes available to whichever client acts next (§11.3).
+  moves — the session simply becomes available to whichever client **acts** next (§11.3).
+  A heartbeat is not an act: **it never takes ownership**, however long the owner has
+  been away. A second tab left open on the wizard would otherwise become the owner by
+  doing nothing, forty-five seconds after the phone in the user's hand went to sleep, and
+  the phone would come back read-only in the middle of a tape reading. Ownership changes
+  on a verb that does something (`act`, `stop`, `save`, `leave`, `cancel`) or on an
+  `attach` — implicitly while the owner is absent, and with `claim: true`, after the
+  screen has asked, while the owner is present.
 * **The lease is the inactivity timer.** A session with no transition and no verb from
   its owner for **1800 s** on a screen where nothing has moved yet, or **600 s** after
   a movement, ends as `expired`, and a stop is written if the shutter is moving — the
@@ -714,6 +722,11 @@ section, `panel_schemas.py`, `panel_src/src/engine/session-contract.ts` and
   never at a heartbeat, never at a read. `act` and `save` carry the revision the client
   last read and are refused (`revision_conflict`) against any other, with nothing done:
   that is what makes a double tap on a press, or a retry after a reconnection, harmless.
+  **`cancel` carries no revision and never can.** Transitions the user did not cause — a
+  press timing out, a shutter brought back to its end stop — move the revision on their
+  own, and a "Cancel" that answered "somebody moved on, try again" would be exactly the
+  silent failure the panel exists to avoid. Cancelling is refused for one reason only
+  (another client owns the session), and `force: true` overrides that.
 * **A read never moves anything.** `get`, `attach` and the subscription answer with the
   snapshot and stop there. A movement starts only from an `act`, or from the end of the
   previous movement inside the same chain (a homing followed by its run to a fraction).
@@ -764,8 +777,9 @@ screen that comes before a movement:
 | `path: "path_c"` without `profile` | `path_c` — the profile form |
 | `path: "path_c"` with `profile` | `refine_scope`, with that profile chosen; `scope`, when given, is only highlighted (`intent`), not chosen |
 
-`profile` belongs to paths B and C and `scope` to path C: anything else is
-`invalid_format`, because a start that dropped half of what it was asked would open a
+`path_c` may also carry a `scope` without a `profile`: the session is then born on
+`path_c` and the scope waits in `intent` for the screen after it. `profile` belongs to
+paths B and C and `scope` to path C: anything else is `invalid_format`, because a start that dropped half of what it was asked would open a
 screen other than the one the user pressed a button for. A profile nobody defines is
 `unknown_profile`. The panel carries the user's *intention* in its own state and never
 in the URL, so reloading the page can never start a session by itself.
@@ -784,20 +798,24 @@ only. `claim: true` takes the session from a present owner — the panel asks fi
 turns read-only with its own "Take control".
 
 **`heartbeat`** keeps the owner present. It answers `{owner: true, present_until}` to
-the owner and `{owner: false, present_until: null}` to a client that no longer is —
-never an error, so that losing ownership is a state the panel draws rather than a
-failure it reports. It does not change `revision` and does not renew the lease.
+the owner and `{owner: false, present_until: null}` to any other client — including one
+whose session has no owner at all, because a heartbeat never takes ownership (§11.1). It
+is never an error, so that losing ownership is a state the panel draws rather than a
+failure it reports, and it changes neither `revision` nor the lease.
 
-**`act`** is the conversation: `action` is one of the snapshot's `actions` — the
-dialog's own `menu_options` ids — or `"submit"` when the snapshot has a `form`, with the
-field's content in `value`. A number is sent **as the text that was typed** (`"96,5"`):
+**`act`** is the conversation, and only ever a way *forward*: `action` is one of the
+snapshot's `actions` — the dialog's own `menu_options` ids — or `"submit"` when the
+snapshot has a `form`, with the field's content in `value`. The dialog's two ways out are
+**not** actions of this API and are never in `actions`: `save` is the `save` command, and
+`cancel_flow` is the `cancel` verb, which carries no revision precisely so that it cannot
+be refused for concurrency. A screen the dialog gives a "Cancel" to is a screen the panel
+closes with its own ✕, and the ✕ is on every screen. A number is sent **as the text that was typed** (`"96,5"`):
 the server reads it with the same lenient parser as the dialog, so a decimal comma
 survives. A value that cannot be accepted is **not a refusal**: the answer is the same
 step again with `form.error` set (`not_a_number`, `out_of_range`, `above_the_travel`,
 `invalid_name`), exactly as the dialog shows a field error, because it is the user's
 mistake and not the protocol's. An action the step does not offer is refused
-(`action_not_offered`). `cancel_flow`, where the step offers it, is the `cancel` verb
-below.
+(`action_not_offered`), and so are `save` and `cancel_flow`, which are commands.
 
 **The three verbs of the contract**, each with one meaning:
 
@@ -811,11 +829,15 @@ below.
   the first measurement — ends (`ended`, reason `left`); any other stays, without an
   owner, and can be picked up until its lease runs out. It is what closing the window or
   navigating away does. Because it is sent as a page goes away, a session that no longer
-  exists answers `{session: null}` rather than `unknown_session`.
+  exists answers `{session: null}` rather than `unknown_session`, and a `leave` from a
+  client that is not the owner does nothing and answers the snapshot rather than
+  `session_owned`: a read-only tab being closed has nothing to leave, and a refusal there
+  would be noise on a message nobody is waiting for.
 * **`cancel`** discards the provisional values and ends the session (`ended`, reason
   `cancelled`). It does **not** stop the shutter: a run already under way finishes at
-  its end stop, as the dialog's "Cancel" does. It is **idempotent**: on a session that
-  has already ended it answers that session with `already_ended: true`. Without
+  its end stop, as the dialog's "Cancel" does. It carries **no `revision`** and is never
+  refused for concurrency, and it is **idempotent**: on a session that has already ended
+  it answers that session with `already_ended: true`. Without
   `session_id` it means the gateway's session, whichever it is; with `force: true` it
   ends it **whoever owns it** — the way out that always works, and what the banner's
   "End" sends. With no session at all it answers `{session: null, already_ended: true}`.
@@ -830,6 +852,11 @@ below.
 | A | `"cover_only"` | no profile; this cover's record with the five measured values over whatever it already had, its travel and `raw`; its assignment untouched |
 | B | `"profile"` (the only exit) | this cover's record: the profile chosen, `profile_wins`, the travel measured, `raw`, no values of its own — what the dialog writes |
 | C | `"cover_only"` (the only exit) | only the keys measured, over what was already stored; `profile_wins` kept; for "the thorough calibration only" just the two roll coefficients — what the dialog writes |
+
+`target: "profile"` does not mean the same write on every path, and the table above is
+what it means: on path A it **writes** the profile (creating it, or updating the one of
+that name) and assigns it; on path B it writes no profile at all — the shutter is being
+told which kind of shutter it is, and `cover_profiles` is not touched.
 
 The write goes through the same door as every write of §8 — one write at a time per
 gateway (`write_in_progress`), the covers pick up the new numbers **in place, without a
@@ -854,8 +881,9 @@ this before asking for confirmation.
 |---|---|---|---|
 | `get`, `attach` without `claim` | yes | yes, read only | yes, and becomes the owner |
 | `attach` with `claim` | yes | yes (the screen asks first) | yes |
-| `act`, `stop`, `save`, `leave` | yes | `session_owned` | yes, and becomes the owner |
-| `heartbeat` | yes | `{owner: false}` | yes, and becomes the owner |
+| `act`, `stop`, `save` | yes | `session_owned` | yes, and becomes the owner |
+| `leave` | yes | a no-op that answers the snapshot | yes, and becomes the owner |
+| `heartbeat` | yes | `{owner: false}` | `{owner: false}`: it never takes ownership |
 | `cancel` | yes | `session_owned`, unless `force: true` | yes |
 
 `end_other` names no session and is not subject to ownership.
@@ -870,6 +898,10 @@ this before asking for confirmation.
 
 There is no separate "motor started" event: the transition to `awaiting_endpoint`
 **is** that signal, published the moment the actuator's echo arrives.
+
+The event carries the snapshot and **not** `capabilities`, which only `get` answers: a
+client that subscribes and never asks would have to assume what the backend offers, so
+the panel calls `get` once when it opens the wizard.
 
 ### 11.5 Moving the shutter from outside
 
@@ -887,8 +919,12 @@ opposite direction to the one under way.
   (`open_timed`, `open_home_again`, `close_timed`) — and then returns to the same brief
   with `notice: "rehomed"`. A timed run never starts from an unknown point.
 * **While a reading is awaited** after a run to a fraction, the reading no longer
-  corresponds: `notice: "reading_stale"`, and `repeat_tape` is offered first in
-  `actions`.
+  corresponds: `notice: "reading_stale"`, and `repeat_tape` is offered **first** in
+  `actions` although a reading step has no menu of its own. Its label is the dialog's
+  own, borrowed from the screen that normally offers it
+  (`options.step.tape_result.menu_options.repeat_tape`): the same word, in the same seven
+  languages. The field stays on the screen, because the user may have measured before the
+  shutter was touched and is the one who knows.
 * **During a measurement** (`running`, or a `positioning` that precedes a reading) a
   movement in the opposite direction, or a stop before the lift-off press, makes the
   step `problem_interrupted`. A stop while `awaiting_endpoint` with `press.kind =
@@ -913,9 +949,12 @@ opposite direction to the one under way.
 * **The gateway's reservation outlives the session** (contract §2.1): when a session
   ends while its shutter is still running — a free run cancelled — the gateway stays
   reserved until the cover stops moving, or until a full run in that direction plus the
-  settle margin has passed, and a `start` meanwhile is `already_calibrating`. The
-  shutter itself is released at once: `calibrating` drops and its other commands work
-  again.
+  settle margin has passed. A `start` meanwhile is `already_calibrating` with
+  `{by: "reserved"}`, which is the one value of `by` that names **no session and no
+  dialog**: there is nothing to resume and nothing to close, only a run finishing by
+  itself, and the screen says to wait rather than offering either. It is what the user
+  meets pressing "Calibrate another shutter" right after cancelling one. The shutter
+  itself is released at once: `calibrating` drops and its other commands work again.
 * A reload made by the dialog when it closes after saving ends a panel session on the
   same gateway as `unloaded`, with a stop.
 
@@ -923,8 +962,13 @@ opposite direction to the one under way.
 
 ## 12. The session snapshot
 
-One object, sent whole at every transition and never as a patch — about 2-3 kB at the
-largest. **Every key is always present**; what does not apply is `null` (or `[]` for a
+One object, sent whole at every transition and never as a patch. Around 2 kB on the
+screens that measure, and a little over 3 kB on a review; a review grows by roughly half
+a kilobyte for every other shutter that follows the profile being written (`affected`),
+so on a profile followed by a dozen shutters the review snapshot is several kilobytes.
+That is deliberate: the one screen that has to show, before writing, what the write does
+to every follower is the one screen worth the bytes, and it is published once per
+transition and not per frame. **Every key is always present**; what does not apply is `null` (or `[]` for a
 list). Instants are ISO-8601 in UTC from the backend's clock. Numbers are the values as
 computed, not rounded for display, except where the dialog itself rounds before
 storing or deciding: `review.rows[].after` for the measured keys (what `save` writes)
@@ -949,7 +993,7 @@ and `check.gap_cm` (the number the threshold decides on, to 0.1 cm).
 | `plan` | array | the dialog's plan, as stage names — step ids plus `summary` — in the order they will be walked (the tape readings are reordered when the tape phase begins, as in the dialog). `[]` before a path is chosen, and once the session has ended without saving |
 | `plan_index` | int \| null | where on `plan` the session stands |
 | `intent` | object \| null | `{scope}` when `start` named a scope, for `refine_scope` to highlight |
-| `actions` | array | the dialog's `menu_options` for this step, **in the dialog's order**, minus `save` (a command of its own). Labels: `options.step.<step>.menu_options.<action>` |
+| `actions` | array | the dialog's `menu_options` for this step, **in the dialog's order**, minus its two ways out: `save` (the `save` command) and `cancel_flow` (the `cancel` verb). Ways forward only. Labels: `options.step.<step>.menu_options.<action>`, except the borrowed `repeat_tape` of §11.5 |
 | `form` | object \| null | §12.3 |
 | `placeholders` | object | the values the step's texts substitute, under the **dialog's placeholder names** (`cover`, `percent`, `expected`, `run`, `deviation`, …), as raw numbers and strings: the panel formats them in the user's language |
 | `movement` | object \| null | what the session is moving: `{kind, direction, progress_action, started_at, planned_s}`. `kind` is `homing` (to an end stop), `free` (a timed run the user ends, the lift-off run while its stop goes out included) or `fraction` (a run to a fraction of the travel); `progress_action` is the dialog's `options.progress.<action>` key for it; `started_at` is the motion anchor — the actuator's echo, or the frame written plus its start delay for an actuator that sends none — and `null` while the motor is starting; `planned_s` is the modelled duration, for a progress bar only. `null` when nothing of the session's is moving |
@@ -979,13 +1023,13 @@ into seven languages. `problem_interrupted` is the one step the panel adds.
 
 | `step` | `state` | `actions` / `form` |
 |---|---|---|
-| `path` | armed | `path_a`, `path_b`, `path_c` (the last two only when a profile exists), `cancel_flow` |
-| `path_a` | armed | `begin`, `cancel_flow` |
+| `path` | armed | `path_a`, `path_b`, `path_c` (the last two only when a profile exists) |
+| `path_a` | armed | `begin` |
 | `path_b`, `path_c` | armed | form `profile` (choice) |
-| `refine_scope` | armed | `times_only`, `times_and_rolls`, `points_only`, `cancel_flow` |
+| `refine_scope` | armed | `times_only`, `times_and_rolls`, `points_only` |
 | `home_closed`, `open_timed`, `open_home_again`, `close_timed`, `height_read` | positioning | — (a homing) |
 | `home_closed_done` | briefing | `confirm_closed`, `repeat_step`, `not_right` |
-| `open_brief`, `open_full_brief`, `close_brief` | briefing | `open_start` / `open_full_start` / `close_start`, `repeat_step`, `cancel_flow` |
+| `open_brief`, `open_full_brief`, `close_brief` | briefing | `open_start` / `open_full_start` / `close_start`, `repeat_step` |
 | `open_start`, `open_full_start`, `close_start` | running, no substate | — (the motor is starting) |
 | `open_lift` | running / awaiting_endpoint, press `lift_off` | `lifted_off`, `repeat_step`, `not_right` |
 | `lift_stop` | running / awaiting_stop | — (the stop the press asked for) |
@@ -997,7 +1041,7 @@ into seven languages. `problem_interrupted` is the one step the panel adds.
 | `open_result`, `open_result_gap`, `close_result` | briefing | `accept_step`, `repeat_step` |
 | `height` | awaiting_reading | form `height` (20-500 cm) |
 | `height_result` | briefing | `accept_step`, `repeat_measure`, `not_right` |
-| `tape_brief` | briefing | `tape_start`, `cancel_flow` |
+| `tape_brief` | briefing | `tape_start` |
 | `half_down`, `half_up`, `quarter_down`, `three_quarter_down`, `quarter_up`, `three_quarter_up`, `verify`, `verify_b` | positioning | — (the homing before a reading) |
 | `tape_run` | positioning | — (the run to the fraction) |
 | `measure_descent`, `measure_ascent`, `measure_verify` | awaiting_reading | form `measured_cm` |
@@ -1005,9 +1049,13 @@ into seven languages. `problem_interrupted` is the one step the panel adds.
 | `verify_result` | checking | `path_c` (path B, gap above 3 cm), `accept_step`, `repeat_tape` |
 | `verify_offer` | briefing | `verify_now`, `skip_verify` |
 | `profile_name` | briefing | form `name` (text) |
-| `summary_basic`, `summary_correction` | review | `refine`, `cancel_flow` |
-| `summary_short`, `summary_precise` | review | `cancel_flow` |
-| `problem_<code>` | briefing | `repeat_step`, `cancel_flow` |
+| `summary_basic`, `summary_correction` | review | `refine`; the exits are `review.targets` |
+| `summary_short`, `summary_precise` | review | — ; the exit is `review.targets` |
+| `problem_<code>` | briefing | `repeat_step` |
+
+The dialog offers `cancel_flow` on several of these screens and `save` on the four
+summaries; neither is in `actions` (§11.2), because in the panel the way out is the ✕ on
+every screen and the way to save is the `save` command.
 
 The rules are the dialog's: `repeat_step` re-enters the stage the plan stands on, with
 its own movements; `not_right` writes a stop first and then does the same; `accept_step`
@@ -1036,7 +1084,14 @@ their screen is `options.progress.<movement.progress_action>`.
 | `name` | `text` | the profile name pattern of §8.7; `suggested`: one made from the entity id |
 
 `error` is `null` or the dialog's `options.error.*` key of the last value sent:
-`not_a_number`, `out_of_range`, `above_the_travel`, `invalid_name`.
+`not_a_number`, `out_of_range`, `above_the_travel`, `invalid_name`. `unit` is `"cm"` or
+`null`, and `choices` is present exactly for `kind: "choice"`.
+
+`choices` carries the profile **names** only, in the order `overview.profiles[]` has them
+(sorted by name), and nothing else: the line the screen shows under each name — its
+reference travel and the shutter it was measured on — is read from `overview.profiles[]`
+(`reference_height`, `measured_on_name`), which the panel already holds. One list of
+profiles, answered by one command.
 
 ### 12.4 `measured`
 
@@ -1072,9 +1127,15 @@ their screen is `options.progress.<movement.progress_action>`.
   plus the new profile.
 * `side_effects` lists any *other* key whose value would change — in practice the bus
   costs `stop_latency_s` / `start_delay_s`, when `myhome.yaml` writes them for this cover
-  and the profile carries the installation's defaults. Nothing changes silently.
+  and the profile carries the installation's defaults, so that following the profile
+  brings the profile's. Nothing changes silently. It is `[]` whenever the file writes no
+  bus cost for this shutter, which is the ordinary case and the one every example in the
+  fixture is in.
 * `affected` is filled when the profile already exists: every other cover that follows
-  it, with its own rows.
+  it, with its own rows. It is not truncated — the contract's first exit is precisely
+  "update the profile this cover follows", and it is worth a preview of **every** cover it
+  reaches — which is why a review of a much-followed profile is the largest snapshot
+  there is (see the head of §12).
 * `accuracy_cm` and `check_fraction` are the thorough calibration's check — within how
   many centimetres, at which fraction of the descent. `null` otherwise, and the screen
   says the accuracy has not been verified rather than showing a dash.
@@ -1155,7 +1216,9 @@ review, each problem and each ending — plus an example frame of every command.
 
 | Situation | Code | `translation_key` | Placeholders |
 |---|---|---|---|
-| A session already exists on the gateway, a cover of it is being calibrated by something else, or the gateway is still reserved | `not_allowed` | `already_calibrating` | `{cover}`, `{by}` — `panel` or `other` |
+| A session of the panel's already exists on the gateway | `not_allowed` | `already_calibrating` | `{cover}`, `{by}`: `panel` |
+| A cover of the gateway is being calibrated by the dialog or by the 0.4.2 action | `not_allowed` | `already_calibrating` | `{cover}`, `{by}`: `other` |
+| The gateway is still reserved by a session that ended while its shutter ran on (§11.6) | `not_allowed` | `already_calibrating` | `{cover}`, `{by}`: `reserved` — nothing to resume and nothing to close; the screen says to wait |
 | The cover has no entity, or it is `unavailable` | `not_found` | `cover_unavailable` | `{cover}` |
 | No such `session_id` — never existed, or removed 10 minutes after it ended | `not_found` | `unknown_session` | — |
 | A verb on a session that has ended (other than `cancel`, `get`, `attach`) | `not_allowed` | `session_ended` | `{reason}` |
@@ -1260,6 +1323,12 @@ every other follower shown first (`review.affected`) rather than a third button.
 now saves as the contract says — the profile and the assignment, **no values of the
 cover's own** — while the dialog goes on saving as it always has; the difference is
 deliberate.
+
+**The session in the overview.** `overview.session` (§2) is the same session seen from
+the outside: the one line a banner needs. It is declared with the rest of this contract
+and appears in the overview when the server starts sending it; `overview.measuring`,
+which predates the session and is raised by the dialog and the 0.4.2 action too, keeps
+its meaning exactly.
 
 **What is missing, and why.**
 

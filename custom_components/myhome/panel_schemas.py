@@ -653,12 +653,28 @@ SESSION_DIRECTIONS: tuple[str, ...] = ("open", "close")
 # `movement.kind`: to an end stop, a free run the user ends with a press (the lift-off
 # run while its stop goes out included), and a run to a fraction of the travel.
 SESSION_MOVEMENT_KINDS: tuple[str, ...] = ("homing", "free", "fraction")
+# `movement.progress_action`: the key of the sentence the screen shows while that
+# movement runs (`options.progress.<action>`), which is the dialog's own. Frozen as a
+# vocabulary and not merely as "a string", so that the panel can map every one of them
+# onto a screen and know the list is complete.
+SESSION_PROGRESS_ACTIONS: tuple[str, ...] = (
+    "homing_closed",
+    "homing_open",
+    "starting_open",
+    "starting_close",
+    "running_down",
+    "running_up",
+    "stopping_lift",
+    "starting_open_full",
+)
 # `press.kind`: the instant the bottom edge leaves its rest, or the motor at an end stop.
 SESSION_PRESS_KINDS: tuple[str, ...] = ("lift_off", "end_stop")
 # `form.field` (the dialog's field names), `form.kind`, and `form.error` (the dialog's
 # `options.error.*` keys, which are the contract's `bad_reading` in detail).
 SESSION_FORM_FIELDS: tuple[str, ...] = ("profile", "height", "measured_cm", "gap_cm", "name")
 SESSION_FORM_KINDS: tuple[str, ...] = ("number", "choice", "text")
+# `form.unit`: the one unit any field of this conversation carries, or `null` for a name.
+SESSION_FORM_UNITS: tuple[str, ...] = ("cm",)
 SESSION_FORM_ERRORS: tuple[str, ...] = (
     "not_a_number",
     "out_of_range",
@@ -671,9 +687,11 @@ SESSION_FORM_ERRORS: tuple[str, ...] = (
 # `reading_stale`: it was moved after it was positioned, so the reading on the screen
 # would not be the reading of this step (SPEC §3.7).
 SESSION_NOTICES: tuple[str, ...] = ("rehomed", "reading_stale")
-# `already_calibrating`'s `{by}`: the panel's own session, or anything else (the dialog,
-# the 0.4.2 service).
-SESSION_HOLDERS: tuple[str, ...] = ("panel", "other")
+# `already_calibrating`'s `{by}`: a live session of the panel's, anything else that holds
+# the shutter (the dialog, the 0.4.2 service), or the gateway still reserved by a session
+# that has already ended while its shutter ran on (§11.6 of the document). The third is
+# not a session anybody can go back to, and the screen may not offer to resume it.
+SESSION_HOLDERS: tuple[str, ...] = ("panel", "other", "reserved")
 
 # Every step a snapshot can stand on (SPEC §3.4), under the dialog's own ids - the name
 # of its `async_step_<id>` method, and of its `options.step.<id>` texts where it has
@@ -820,12 +838,18 @@ SESSION_PLAN_STAGES: tuple[str, ...] = (
 )
 
 # Every value `actions` can carry: the dialog's `menu_options` ids, each one a key of
-# `options.step.<step>.menu_options` - which is where its label comes from. `save` is
-# not one of them: saving is the `save` command, and the exits it offers are
-# `review.targets`. `cancel_flow` is, because the dialog places it on some screens and
-# not on others and the screen follows the dialog; sent through `act` it is the
-# `cancel` verb. `submit` is the one `act` value that is not a menu option: it sends
-# `form`'s value.
+# `options.step.<step>.menu_options` - which is where its label comes from. `actions` is
+# a list of ways *forward* only: the dialog's two ways out are commands of their own, and
+# neither is ever in it.
+#
+# * `save` is the `save` command, and the exits it offers are `review.targets`;
+# * `cancel_flow` is the `cancel` verb. It is deliberately not an `act`, because `act`
+#   carries a `revision` and is refused against a stale one - and a transition the user
+#   did not cause (a press timing out, a rehoming) would then be able to refuse the
+#   button that says "Cancel". Cancelling is never refused for concurrency (SPEC §5.2,
+#   "Annulla mai silenzioso"), so it does not travel on a command that could be.
+#
+# `submit` is the one `act` value that is not a menu option: it sends `form`'s value.
 SESSION_ACTIONS: tuple[str, ...] = (
     "path_a",
     "path_b",
@@ -855,7 +879,6 @@ SESSION_ACTIONS: tuple[str, ...] = (
     "refine",
     "repeat_step",
     "not_right",
-    "cancel_flow",
 )
 SESSION_SUBMIT = "submit"
 
@@ -1190,6 +1213,32 @@ SESSION_PROBLEM_KEYS: tuple[str, ...] = ("code",)
 SESSION_OWNER_KEYS: tuple[str, ...] = ("client_id", "present_until")
 SESSION_OUTCOME_KEYS: tuple[str, ...] = ("reason", "profile", "origin", "source")
 
+# ------------------------------------------------------- the session in the overview
+# What `overview.session` will carry: the one line the panel's banner and its
+# first-run screen need about the session running on this gateway, or `null`.
+#
+# It is declared here and **not** added to `OVERVIEW_KEYS` yet, on purpose: the key is
+# part of the overview the moment the server sends it, and the server sends it from the
+# lot that builds the session (B3), whose test regenerates `panel_overview_example.json`
+# with it. Declaring the shape now is what stops that from being a change to the frozen
+# contract: B3 adds `"session"` to `OVERVIEW_KEYS` and produces exactly these five keys.
+#
+# `measuring` (already there) says *that* a shutter of this gateway is being measured,
+# whoever is measuring it; `session` says *who*: `measuring` set with `session` at `null`
+# is the guided dialog or the 0.4.2 action, and the panel offers to close the dialog
+# rather than to resume a session it does not have.
+SESSION_OVERVIEW_KEYS: tuple[str, ...] = (
+    "session_id",
+    "cover_unique_id",
+    "name",
+    # One of `SESSION_STATES`.
+    "state",
+    # The owner's `client_id`, or `null` when the session has no owner: a panel comparing
+    # it with its own tells "my session" from "somebody else's" without asking.
+    "owner",
+)
+
+
 # ---------------------------------------------------------------------- refusals
 # The refusals the session adds (SPEC §4.6), kept **out of** `WS_ERROR_KEYS`: that tuple
 # is what `tests/test_translations.py` holds to having a sentence in every language, and
@@ -1291,6 +1340,7 @@ __all__ = [
     "SESSION_FORM_FIELDS",
     "SESSION_FORM_KEYS",
     "SESSION_FORM_KINDS",
+    "SESSION_FORM_UNITS",
     "SESSION_GET_KEYS",
     "SESSION_GET_SCHEMA",
     "SESSION_HEARTBEAT_KEYS",
@@ -1307,6 +1357,7 @@ __all__ = [
     "SESSION_NOTICES",
     "SESSION_OUTCOMES",
     "SESSION_OUTCOME_KEYS",
+    "SESSION_OVERVIEW_KEYS",
     "SESSION_OWNER_KEYS",
     "SESSION_PATHS",
     "SESSION_PLAN_STAGES",
@@ -1315,6 +1366,7 @@ __all__ = [
     "SESSION_PRESS_KINDS",
     "SESSION_PROBLEMS",
     "SESSION_PROBLEM_KEYS",
+    "SESSION_PROGRESS_ACTIONS",
     "SESSION_READING_KEYS",
     "SESSION_REUSED_STEPS",
     "SESSION_REVIEW_AFFECTED_KEYS",

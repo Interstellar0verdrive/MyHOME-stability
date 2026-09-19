@@ -78,11 +78,25 @@ export type SessionDirection = "open" | "close";
 
 export type SessionMovementKind = "homing" | "free" | "fraction";
 
+/** `movement.progress_action`: the key of `options.progress.<action>` for that movement. */
+export type SessionProgressAction =
+  | "homing_closed"
+  | "homing_open"
+  | "starting_open"
+  | "starting_close"
+  | "running_down"
+  | "running_up"
+  | "stopping_lift"
+  | "starting_open_full";
+
 export type SessionPressKind = "lift_off" | "end_stop";
 
 export type SessionFormField = "profile" | "height" | "measured_cm" | "gap_cm" | "name";
 
 export type SessionFormKind = "number" | "choice" | "text";
+
+/** The one unit a field of this conversation carries; a name has none. */
+export type SessionFormUnit = "cm";
 
 /** The dialog's `options.error.*` keys: the contract's `bad_reading`, in detail. */
 export type SessionFormError =
@@ -99,8 +113,13 @@ export type SessionFormError =
  */
 export type SessionNotice = "rehomed" | "reading_stale";
 
-/** `already_calibrating`'s `{by}`: the panel's own session, or the dialog or a service. */
-export type SessionHolder = "panel" | "other";
+/**
+ * `already_calibrating`'s `{by}`: a live session of the panel's, something else holding
+ * the shutter (the dialog, the 0.4.2 action), or the gateway still reserved by a session
+ * that has ended while its shutter ran on — which is nothing to go back to, so the screen
+ * says to wait rather than offering to resume it.
+ */
+export type SessionHolder = "panel" | "other" | "reserved";
 
 /** Every step a snapshot can stand on, under the dialog's own ids. */
 export type SessionStep =
@@ -229,8 +248,10 @@ export type SessionPlanStage =
 
 /**
  * Every value `actions` can carry: the dialog's `menu_options` ids, whose labels are
- * `options.step.<step>.menu_options.<action>`. Saving is not one of them (it is the
- * `save` command); `cancel_flow` sent through `act` is the `cancel` verb.
+ * `options.step.<step>.menu_options.<action>`. Ways forward only — the dialog's two ways
+ * out are commands of their own: `save` is the `save` command (its exits are
+ * `review.targets`), and `cancel_flow` is the `cancel` verb, which carries no revision
+ * and can never be refused for concurrency.
  */
 export type SessionAction =
   | "path_a"
@@ -260,8 +281,7 @@ export type SessionAction =
   | "skip_verify"
   | "refine"
   | "repeat_step"
-  | "not_right"
-  | "cancel_flow";
+  | "not_right";
 
 /** The one `act` value that is not a menu option: send `form`'s value. */
 export type SessionSubmit = "submit";
@@ -318,7 +338,7 @@ export interface SessionForm {
   field: SessionFormField;
   kind: SessionFormKind;
   optional: boolean;
-  unit: "cm" | null;
+  unit: SessionFormUnit | null;
   /** What the field opens on: a number, a name, or the profile preselected. */
   suggested: number | string | null;
   min: number | null;
@@ -331,8 +351,8 @@ export interface SessionForm {
 export interface SessionMovement {
   kind: SessionMovementKind;
   direction: SessionDirection;
-  /** `options.progress.<progress_action>`: the dialog's text for this movement. */
-  progress_action: string;
+  /** The dialog's text for this movement: `options.progress.<progress_action>`. */
+  progress_action: SessionProgressAction;
   /** The motion anchor; `null` while the motor is starting. */
   started_at: IsoTime | null;
   /** The modelled duration, for a progress bar only: no measurement reads it. */
@@ -405,6 +425,14 @@ export interface SessionCheck {
   profile_check_cm: number | null;
 }
 
+/** A row of `rows`: always the six measured keys, in the order of `SessionReviewRowKey`. */
+export interface SessionReviewMeasuredRow {
+  key: SessionReviewRowKey;
+  before: number | null;
+  after: number | null;
+}
+
+/** A row of `side_effects`, which may name a key this calibration never measured. */
 export interface SessionReviewRow {
   key: SessionValueKey;
   before: number | null;
@@ -414,7 +442,7 @@ export interface SessionReviewRow {
 export interface SessionReviewAffected {
   cover_unique_id: string;
   name: string;
-  rows: SessionReviewRow[];
+  rows: SessionReviewMeasuredRow[];
 }
 
 export interface SessionReview {
@@ -424,7 +452,7 @@ export interface SessionReview {
   profile_name: string | null;
   profile_exists: boolean;
   name_clash: "file" | null;
-  rows: SessionReviewRow[];
+  rows: SessionReviewMeasuredRow[];
   side_effects: SessionReviewRow[];
   affected: SessionReviewAffected[];
   accuracy_cm: number | null;
@@ -631,6 +659,23 @@ export interface SessionEndOtherAnswer {
   flows_aborted: number;
   still_calibrating: boolean;
   overview: Record<string, unknown>;
+}
+
+/**
+ * `overview.session`: the one line the banner and the first-run screen need.
+ *
+ * The server sends it from the lot that builds the session; the shape is here so that
+ * both halves write against it rather than inventing it. `measuring` in the same
+ * overview says *that* a shutter is being measured; this says *who*, and a `measuring`
+ * with no `session` beside it is the dialog or the 0.4.2 action.
+ */
+export interface OverviewSession {
+  session_id: string;
+  cover_unique_id: string;
+  name: string;
+  state: SessionState;
+  /** The owner's `client_id`, or `null` when the session has no owner. */
+  owner: string | null;
 }
 
 /** The third event of `myhome/calibration/subscribe`. */

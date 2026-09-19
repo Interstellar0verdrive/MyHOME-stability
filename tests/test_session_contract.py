@@ -67,8 +67,14 @@ PLACEHOLDER = re.compile(r"\{(\w+)\}")
 # The screens the frontend is built against before the backend exists (PLAN L0,
 # criterion 4). One snapshot each, no more and no fewer: a missing one is a screen F2
 # has nothing to draw, an extra one is a screen nobody asked for and nobody tests.
+#
+# Five are beyond the plan's list, added after the independent review: the profile form
+# of path B (the only `choice` form there is), a shutter moved from outside while a
+# screen was being read, a reading made stale by such a movement, and the two endings
+# the texts of SPEC §5.5 cover and no example did (`left`, `cover_gone`).
 SCENARIOS: tuple[str, ...] = (
     "armed_path",
+    "armed_path_b_profile_choice",
     "armed_refine_scope_intent",
     "briefing_open_brief",
     "briefing_open_brief_rehomed",
@@ -76,11 +82,13 @@ SCENARIOS: tuple[str, ...] = (
     "running_open_lift",
     "running_lift_stop",
     "briefing_lift_check",
+    "briefing_lift_check_external",
     "awaiting_reading_lift_gap",
     "positioning_home_closed",
     "positioning_tape_run",
     "awaiting_reading_measure_descent",
     "awaiting_reading_measure_descent_error",
+    "awaiting_reading_measure_descent_stale",
     "awaiting_reading_height",
     "briefing_profile_name",
     "review_basic",
@@ -96,6 +104,8 @@ SCENARIOS: tuple[str, ...] = (
     "ended_cancelled",
     "ended_expired",
     "ended_unloaded",
+    "ended_left",
+    "ended_cover_gone",
     "owned_by_other",
 )
 
@@ -230,6 +240,13 @@ def test_every_snapshot_speaks_only_the_contracts_vocabulary(name: str) -> None:
     assert isinstance(snap["revision"], int) and snap["revision"] >= 0
     assert set(snap["actions"]) <= set(ps.SESSION_ACTIONS)
     assert snap["notice"] in (None, *ps.SESSION_NOTICES)
+    # `{cover}` opens nearly every sentence of the dialog, and it is substituted from
+    # `placeholders`, never from `cover`: the two have to name the same shutter.
+    assert snap["placeholders"]["cover"] == snap["cover"]["name"]
+    if snap["notice"] == "reading_stale":
+        # The reading on the screen is not this step's any more, so repeating it is the
+        # first thing offered (§11.5).
+        assert snap["actions"][:1] == ["repeat_tape"]
     assert snap["position_known"] in (None, *ps.SESSION_POSITIONS)
     assert isinstance(snap["external_move"], bool)
 
@@ -254,11 +271,13 @@ def test_every_snapshot_speaks_only_the_contracts_vocabulary(name: str) -> None:
     if (form := snap["form"]) is not None:
         assert form["field"] in ps.SESSION_FORM_FIELDS
         assert form["kind"] in ps.SESSION_FORM_KINDS
+        assert form["unit"] in (None, *ps.SESSION_FORM_UNITS)
+        assert (form["choices"] is not None) == (form["kind"] == "choice")
         assert form["error"] in (None, *ps.SESSION_FORM_ERRORS)
     if (movement := snap["movement"]) is not None:
         assert movement["kind"] in ps.SESSION_MOVEMENT_KINDS
         assert movement["direction"] in ps.SESSION_DIRECTIONS
-        assert movement["progress_action"] in progress_texts("en")
+        assert movement["progress_action"] in ps.SESSION_PROGRESS_ACTIONS
     if snap["press"] is not None:
         assert snap["press"]["kind"] in ps.SESSION_PRESS_KINDS
         assert snap["substate"] == "awaiting_endpoint"
@@ -318,6 +337,14 @@ def test_the_fixture_restates_the_contract_lists_exactly() -> None:
     assert contract["reused_steps"] == list(ps.SESSION_REUSED_STEPS)
     assert contract["states"] == list(ps.SESSION_STATES)
     assert contract["error_keys"] == list(ps.SESSION_ERROR_KEYS)
+    assert contract["problems"] == list(ps.SESSION_PROBLEMS)
+    assert contract["outcomes"] == list(ps.SESSION_OUTCOMES)
+    assert contract["plan_stages"] == list(ps.SESSION_PLAN_STAGES)
+    assert contract["actions"] == list(ps.SESSION_ACTIONS)
+    assert contract["save_targets"] == list(ps.SESSION_SAVE_TARGETS)
+    assert contract["notices"] == list(ps.SESSION_NOTICES)
+    assert contract["progress_actions"] == list(ps.SESSION_PROGRESS_ACTIONS)
+    assert contract["holders"] == list(ps.SESSION_HOLDERS)
     assert contract["capabilities"] == json.loads(json.dumps(ps.SESSION_CAPABILITIES))
 
 
@@ -371,6 +398,7 @@ def test_the_vocabularies_that_come_from_the_dialog_are_the_dialogs() -> None:
     assert ps.SESSION_PATHS == (PATH_FIRST, PATH_PROFILE, PATH_REFINE)
     assert (*PROBLEM_REASONS, "interrupted") == ps.SESSION_PROBLEMS
     assert set(ps.SESSION_DIRECTIONS) == {DIRECTION_OPEN, DIRECTION_CLOSE}
+    assert set(ps.SESSION_PROGRESS_ACTIONS) == set(progress_texts("en"))
     assert set(ps.SESSION_FORM_ERRORS) == {
         ERROR_NOT_A_NUMBER,
         ERROR_OUT_OF_RANGE,
@@ -388,11 +416,13 @@ def test_every_action_is_a_menu_option_the_dialog_labels() -> None:
     """An action's label is `options.step.<step>.menu_options.<action>`, so it must have one.
 
     And the other way round: every menu option of a step the session walks is an action,
-    except `save`, which is a command of its own - otherwise the session would stand on a
-    screen whose button it cannot send.
+    except the dialog's two ways out - `save`, which is the `save` command, and
+    `cancel_flow`, which is the `cancel` verb and must never travel on a message carrying
+    a revision (§11.2).
 
     Mutation caught: an action invented for the panel with no label anywhere; a menu
-    option of a reused step forgotten in `SESSION_ACTIONS`.
+    option of a reused step forgotten in `SESSION_ACTIONS`; `cancel_flow` put back among
+    the actions, where a stale revision could refuse it.
     """
     texts = load(COMPONENT / "strings.json")["options"]["step"]
     labelled = {
@@ -400,21 +430,40 @@ def test_every_action_is_a_menu_option_the_dialog_labels() -> None:
         for step in ps.SESSION_STEPS
         for option in texts.get(step, {}).get("menu_options", {})
     }
-    assert set(ps.SESSION_ACTIONS) == labelled - {"save"}
+    assert set(ps.SESSION_ACTIONS) == labelled - {"save", "cancel_flow"}
+    assert "cancel_flow" not in ps.SESSION_ACTIONS
+
+
+# The one action offered on a screen whose own texts do not label it: a reading made
+# stale by a movement from outside is repeated with `repeat_tape`, and a reading step has
+# no menu of its own, so the label is borrowed from the screen that normally offers it
+# (§11.5). Anything else borrowed would be a label the panel would have to invent.
+BORROWED_LABELS: dict[str, str] = {"repeat_tape": "tape_result"}
 
 
 @pytest.mark.parametrize("name", SCENARIOS)
 def test_the_actions_of_a_reused_step_are_the_ones_its_texts_label(name: str) -> None:
     """A snapshot never offers, on a dialog screen, a button that screen has no label for.
 
-    Mutation caught: `lift_gap` offered on `open_lift`, whose texts do not name it.
+    The one exception is written down rather than waved through: `repeat_tape` on a stale
+    reading, whose label comes from `tape_result` and is checked to be there.
+
+    Mutation caught: `lift_gap` offered on `open_lift`, whose texts do not name it; a
+    borrowed label that does not exist where it is borrowed from.
     """
     snap = scenarios()[name]
     step = snap["step"]
     if step not in ps.SESSION_REUSED_STEPS:
         return
-    labels = set(step_texts("en")[step].get("menu_options", {}))
-    assert set(snap["actions"]) <= labels
+    texts = step_texts("en")
+    labels = set(texts[step].get("menu_options", {}))
+    for action in snap["actions"]:
+        if action in labels:
+            continue
+        lender = BORROWED_LABELS.get(action)
+        assert lender is not None, f"{step}: {action} has no label"
+        assert action in texts[lender].get("menu_options", {}), f"{lender}: {action}"
+        assert snap["notice"] is not None, f"{step}: {action} borrowed with no notice"
 
 
 # ------------------------------------------------------------------- reusing the texts
@@ -598,9 +647,11 @@ TS_UNIONS: dict[str, tuple[str, ...]] = {
     "SessionPosition": ps.SESSION_POSITIONS,
     "SessionDirection": ps.SESSION_DIRECTIONS,
     "SessionMovementKind": ps.SESSION_MOVEMENT_KINDS,
+    "SessionProgressAction": ps.SESSION_PROGRESS_ACTIONS,
     "SessionPressKind": ps.SESSION_PRESS_KINDS,
     "SessionFormField": ps.SESSION_FORM_FIELDS,
     "SessionFormKind": ps.SESSION_FORM_KINDS,
+    "SessionFormUnit": ps.SESSION_FORM_UNITS,
     "SessionFormError": ps.SESSION_FORM_ERRORS,
     "SessionNotice": ps.SESSION_NOTICES,
     "SessionHolder": ps.SESSION_HOLDERS,
@@ -630,6 +681,8 @@ TS_INTERFACES: dict[str, tuple[str, ...]] = {
     "SessionCheck": ps.SESSION_CHECK_KEYS,
     "SessionReview": ps.SESSION_REVIEW_KEYS,
     "SessionReviewRow": ps.SESSION_REVIEW_ROW_FIELDS,
+    "SessionReviewMeasuredRow": ps.SESSION_REVIEW_ROW_FIELDS,
+    "OverviewSession": ps.SESSION_OVERVIEW_KEYS,
     "SessionReviewAffected": ps.SESSION_REVIEW_AFFECTED_KEYS,
     "SessionProblem": ps.SESSION_PROBLEM_KEYS,
     "SessionOwner": ps.SESSION_OWNER_KEYS,
@@ -721,6 +774,8 @@ def test_the_api_document_names_every_command_error_and_state() -> None:
         *ps.SESSION_OUTCOMES,
         *ps.SESSION_PROBLEMS,
         *ps.SESSION_NOTICES,
+        *ps.SESSION_HOLDERS,
+        *ps.SESSION_OVERVIEW_KEYS,
         ps.WS_EVENT_SESSION,
     ):
         assert f"`{name}`" in doc or f'"{name}"' in doc, name
