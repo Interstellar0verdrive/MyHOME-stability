@@ -194,7 +194,24 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
  */
 let compressed = 0;
 
-const mount = async (connection, hash = "#/calibrate") => {
+/**
+ * Everything the bundle said out loud, so that "drawn without complaint" can be asserted.
+ *
+ * `runScripts: "outside-only"` evaluates the bundle against this window, so the `console`
+ * it reaches is this window's. Wrapped before the bundle is loaded and left forwarding, so
+ * a real failure is still printed where a person running this can read it.
+ */
+const recordConsole = (window, said) => {
+  for (const level of ["error", "warn"]) {
+    const original = window.console[level].bind(window.console);
+    window.console[level] = (...args) => {
+      said.push(`${level}: ${args.map((one) => String(one)).join(" ")}`);
+      original(...args);
+    };
+  }
+};
+
+const mount = async (connection, hash = "#/calibrate", said = null) => {
   const dom = new JSDOM(
     '<!doctype html><html lang="en"><head><title>Home Assistant</title></head><body></body></html>',
     {
@@ -220,6 +237,22 @@ const mount = async (connection, hash = "#/calibrate") => {
       return this.hidden || !this.isConnected ? null : (this.parentElement ?? null);
     },
   });
+  // This tab's name in the session, seeded before the bundle reads it.
+  //
+  // `SessionClient` keeps it in `sessionStorage` and every example of the fixture is owned
+  // by `_example.this_client_id`. Without this the panel would make a random name, find
+  // itself looking at somebody else's calibration, and every screen below would be audited
+  // in its read-only form - which is a real screen, but not the one with the controls on
+  // it (there is a state further down that is deliberately somebody else's).
+  try {
+    window.sessionStorage.setItem("myhome-calibration-client", sessions._example.this_client_id);
+  } catch {
+    // A jsdom without storage: the states go on being audited read-only, which the
+    // `expect` of each of them then catches.
+  }
+  if (said) {
+    recordConsole(window, said);
+  }
   window.eval((await readFile(bundle, "utf8")).replace(/\bexport\s*\{[^}]*\};?/g, ""));
   const panel = window.document.createElement("myhome-calibration-panel");
   panel.hass = {
@@ -239,7 +272,13 @@ const mount = async (connection, hash = "#/calibrate") => {
   window.document.body.appendChild(panel);
   const settle = (ms = 120) => new Promise((resolve) => window.setTimeout(resolve, ms));
   await settle(200);
-  return { window, panel, settle, find: (selector) => deep(panel.shadowRoot, selector) };
+  return {
+    window,
+    panel,
+    settle,
+    find: (selector) => deep(panel.shadowRoot, selector),
+    all: (selector) => deepAll(panel.shadowRoot, selector),
+  };
 };
 
 let failures = 0;
@@ -259,6 +298,20 @@ for (const signal of ["uncaughtException", "unhandledRejection"]) {
     process.exit(1);
   });
 }
+
+/**
+ * The ✕ of the header, and then "Leave without saving".
+ *
+ * The one way out of the wizard, and it is two presses on purpose: the second is a
+ * confirmation that says what leaving costs. Both controls are the panel's own - the cross
+ * is in the toolbar (SPEC §5.1) and the question is drawn by the wizard under it.
+ */
+const leaveTheCalibration = async (find, settle) => {
+  find("[data-wizard-exit]")?.click();
+  await settle(120);
+  find("[data-exit-leave]")?.click();
+  await settle(160);
+};
 
 const check = (what, got, want) => {
   const ok = got === want;
@@ -313,10 +366,7 @@ console.log("\n'Cancel', refused");
         : null,
   });
   const { settle, find } = await mount(bench.connection);
-  const end = deepAll(find("[data-wizard]").getRootNode(), "button")
-    .find((button) => (button.textContent ?? "").includes("End the calibration"));
-  end?.click();
-  await settle(160);
+  await leaveTheCalibration(find, settle);
   const card = find("[data-session-trouble]");
   checkThat("a refused cancel puts a card on the screen", card);
   // `claim_cancel`, not `claim`: this is the one place where taking control means ending the
@@ -413,10 +463,7 @@ console.log("\n'Cancel' refused with no hour to give");
     refuse: (name) => (name === "cancel" ? new Error("the connection is closed") : null),
   });
   const { settle, find } = await mount(bench.connection);
-  const end = deepAll(find("[data-wizard]").getRootNode(), "button")
-    .find((button) => (button.textContent ?? "").includes("End the calibration"));
-  end?.click();
-  await settle(160);
+  await leaveTheCalibration(find, settle);
   find('[data-recovery="force"]')?.click();
   await settle(160);
   const card = find("[data-session-trouble]");
@@ -472,6 +519,51 @@ console.log("\npresence lost, and taken back");
   checkThat("and it is still beating when ownership comes back", bench.sessions("heartbeat") > away);
   check("taking it back moved nothing either", bench.sessions("act"), 0);
   check("and stopped nothing", bench.sessions("stop"), 0);
+}
+
+console.log("\nevery state the contract can produce, drawn");
+{
+  // The thirty-four examples of the frozen fixture are one per screen the panel has to
+  // draw (lot L0), so this is the whole conversation walked through `wizard/model.ts` on
+  // the shipped bundle: every step of the sixty, every problem, every outcome, the form
+  // errors, the outside movements, the read-only session and the four reviews.
+  //
+  // What is asserted is not what any of them looks like - that is `test/wizard-model.test.ts`
+  // and the screenshots beside the design - but that **none of them is the error card** and
+  // that nothing was said on the console on the way. A screen the model half-understands
+  // draws something; a screen it throws on draws the card, and the card is a failure here.
+  const said = [];
+  const bench = gateway({ session: null });
+  const { settle, find } = await mount(bench.connection, "#/calibrate", said);
+  await settle(160);
+  const names = Object.keys(sessions.scenarios);
+  check("the fixture still carries every example", names.length, 34);
+  let drawn = 0;
+  let broken = [];
+  for (const name of names) {
+    bench.push(scenario(name));
+    await settle(90);
+    if (find("[data-render-error]")) {
+      broken.push(name);
+      continue;
+    }
+    if (find("[data-wizard]")) {
+      drawn += 1;
+    } else {
+      broken.push(`${name} (nothing drawn)`);
+    }
+  }
+  check("every one of them drew a screen", drawn, names.length);
+  checkThat(
+    broken.length === 0 ? "and none of them showed the card of a screen that could not be drawn"
+      : `and none of them showed the card of a screen that could not be drawn (${broken.join(", ")})`,
+    broken.length === 0,
+  );
+  const complaints = said.filter((one) => !one.includes("Lit is in dev mode"));
+  checkThat(
+    complaints.length === 0 ? "and nothing was said on the console" : `console: ${complaints[0]}`,
+    complaints.length === 0,
+  );
 }
 
 console.log("\nthe stylesheets the bundle ships");

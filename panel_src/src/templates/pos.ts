@@ -2,9 +2,12 @@
 // nothing for anybody to do but wait.
 //
 // It is the one template with no operative column, so the host lays it out as a single
-// centred column at every width. No button: the step advances by itself when the movement
-// ends, which is why the only controls here are a bar and a number of seconds. Both come
-// from the model; 0.6.0 never produces one, because 0.6.0 never moves a shutter.
+// centred column at every width. No big button: the step advances by itself when the
+// movement ends, which is why the only things here are a sentence, a bar and a number of
+// seconds. All three come from the model, and the bar is `planned_s` - a modelled
+// duration, which the contract warns is read by nothing that measures. The one control
+// the footer carries on these screens is "Stop the shutter", which is the `stop` verb and
+// makes the step a problem it can be repeated from.
 
 import { html, nothing, type TemplateResult } from "lit";
 
@@ -16,7 +19,7 @@ export const renderPos = (
 ): TemplateResult | typeof nothing => {
   const progress = model.progress;
   if (!progress) {
-    return html`<div class="stub">${context.i18n.t("panel.screen.not_in_this_version")}</div>`;
+    return nothing;
   }
   const percent = Math.max(0, Math.min(1, progress.fraction)) * 100;
   return html`<div class="progress-card">

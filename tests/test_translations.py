@@ -786,6 +786,17 @@ PANEL_PLACEHOLDERS: dict[str, str] = {
     "phase": "the name of one phase of the guided calibration",
     "index": "which step of that phase this is",
     "time": "a time of day, formatted by the browser",
+    # The guided calibration's own six (lot F2). Every one of them is a number the panel
+    # has already written out in the reader's language, with the decimals SPEC §5.3 fixes
+    # for it, except `origin`, which is one of the five phrases of
+    # `selector.calibration_origin.options.*` put into a sentence of the panel's.
+    "seconds": "a count of seconds, already formatted",
+    "origin": "where a shutter's values come from, as the origin phrases say it",
+    "accuracy": "how close the check came, in centimetres",
+    "percent": "a fraction of the travel, as a whole percentage",
+    "measured": "what the tape read, in centimetres",
+    "predicted": "where the model said the shutter would stop, in centimetres",
+    "threshold": "the deviation above which a shutter is worth measuring on its own",
 }
 
 

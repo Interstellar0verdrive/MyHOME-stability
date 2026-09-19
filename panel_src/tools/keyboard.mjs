@@ -270,32 +270,96 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
-// --- the guided calibration ---------------------------------------------------------------
+// --- the guided calibration --------------------------------------------------------------
 //
-// One state, and it is here for two reasons. The first is the keyboard: the wizard's screen
-// has to be reachable and its controls have to be real buttons, because from lot F2 this is
-// where a measurement is driven from. The second is the guard in `tools/panel-host.mjs`: the
-// accessors that throw "Method not implemented" on the form APIs only bite on a screen this
-// check actually mounts, and until this block existed `keyboard` was the one of the three
-// jsdom checks that never opened `#/calibrate` - so the README's claim about all three was
-// not true of it.
+// From lot F2 this is where a measurement is driven from, and the keyboard rules SPEC §5.7
+// fixes are behaviours rather than markup: where focus lands when a step arrives, that the
+// press really is a button, and that Escape asks the question instead of throwing three
+// minutes of measurements away.
+//
+// It is also where the guard in `tools/panel-host.mjs` bites: the accessors that throw
+// "Method not implemented" on the form APIs Home Assistant's scoped registry does not
+// implement only fire on a screen a check actually mounts, and the wizard's steps are the
+// screens with the fields on them.
 {
-  console.log("\nthe guided calibration");
-  const { window, panel, dom, settle } = await mount({
+  console.log("\nthe guided calibration, a brief before a timed run");
+  const { window, panel, dom, settle, calls } = await mount({
     name: "the wizard",
-    state: "calibrating",
+    state: "session:briefing_open_brief",
     hash: "#/calibrate",
     expect: "[data-wizard]",
   });
   await settle();
   const stops = tabOrder(panel.shadowRoot);
-  check("the wizard's controls are in the tab order", stops.length > 0, describe(stops[0]));
-  const first = deep(panel.shadowRoot, "[data-wizard] button");
-  check("and the first of them takes focus", (first?.focus(), active(panel) === first),
-    describe(active(panel)));
-  press(window, first, "Enter");
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  const big = deep(panel.shadowRoot, "button.big");
+  check("the big button is in the tab order", stops.includes(big), describe(big));
+  // Enter and Space are a `<button>`'s own, and jsdom does not synthesise the click a
+  // browser makes from them - so what is asserted is that the control really is one, and
+  // that pressing it is what sends the step on.
+  check("and it is a button, so Enter and Space press it", big?.tagName === "BUTTON");
+  check("focus is on the heading, because this step is words and not a press",
+    active(panel)?.tagName === "H1", describe(active(panel)));
+  big?.click();
   await settle();
-  check("the panel is still on the wizard after a key", deep(panel.shadowRoot, "myhome-wizard") !== null);
+  check("pressing it sends one act and nothing else",
+    calls.filter((one) => one === "act").length === 1 && !calls.includes("stop"),
+    calls.join(", "));
+
+  console.log("\n…and Escape on it");
+  press(window, active(panel) ?? big, "Escape");
+  await settle();
+  const dialog = deep(panel.shadowRoot, "[data-exit-dialog]");
+  check("Escape asks whether to leave", dialog !== null);
+  check("and nothing was cancelled by asking", !calls.includes("cancel"), calls.join(", "));
+  check("the keyboard is inside the question", dialog?.contains(active(panel)) === true,
+    describe(active(panel)));
+  press(window, active(panel), "Escape");
+  await settle();
+  check("Escape again goes back to measuring", deep(panel.shadowRoot, "[data-exit-dialog]") === null);
+  check("and still nothing was cancelled", !calls.includes("cancel"), calls.join(", "));
+  dom.window.close();
+}
+
+{
+  console.log("\nthe guided calibration, a press to be made");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, pressing",
+    state: "session:running_open_lift",
+    hash: "#/calibrate",
+    expect: "[data-wizard]",
+  });
+  await settle();
+  const big = deep(panel.shadowRoot, "button.big");
+  // The one step where focus does not go to the heading: the button *is* the step, and a
+  // user who had to Tab to it would have missed the instant it is about.
+  check("focus is on the big button", active(panel) === big, describe(active(panel)));
+  check("and it carries the dialog's own numbered label",
+    (big?.textContent ?? "").trim().startsWith("1)"), (big?.textContent ?? "").trim());
+  check("nothing has been sent by arriving on it", !calls.includes("act"), calls.join(", "));
+  big?.click();
+  await settle();
+  check("and the press sends exactly one act", calls.filter((one) => one === "act").length === 1);
+  dom.window.close();
+}
+
+{
+  console.log("\nthe guided calibration, driven by somebody else");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, read-only",
+    state: "session:owned_by_other",
+    hash: "#/calibrate",
+    expect: "[data-take-control]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const take = deep(panel.shadowRoot, "[data-take-control]");
+  check("the one thing to press is the offer to take control", stops.includes(take),
+    stops.map(describe).join(" → "));
+  check("and none of the step's own answers is reachable",
+    deepAll(panel.shadowRoot, "button.option").length === 0);
+  check("attaching to it took nothing from anybody",
+    !calls.includes("act") && !calls.includes("stop"), calls.join(", "));
   dom.window.close();
 }
 

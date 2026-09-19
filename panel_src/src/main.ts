@@ -41,9 +41,15 @@ import { DECIMALS } from "./engine/assign";
 import { isEmpty, valueProblem } from "./engine/fields";
 import { openOptionsFlow } from "./engine/flow";
 import { backPath, isDrawerRoute, nextBack } from "./engine/drawer";
-import { Router, type Route } from "./engine/router";
+import { Router, buildPath, type Route } from "./engine/router";
 import { SessionClient, isOver, type WizardIntent } from "./engine/session";
-import { type SessionSnapshot } from "./engine/session-contract";
+import {
+  type SessionAction,
+  type SessionSaveTarget,
+  type SessionSnapshot,
+  type SessionSubmit,
+} from "./engine/session-contract";
+import { phaseLine } from "./wizard/model";
 import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
 import { FocusTrap, deepActiveElement, focusWhenPainted, liveRegion } from "./engine/a11y";
@@ -200,6 +206,31 @@ export class MyHomeCalibrationPanel extends LitElement {
         margin: 0;
         font-size: inherit;
         font-weight: inherit;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /*
+       * On the wizard's route the title has a second line under it: which phase of the
+       * calibration this is (SPEC §5.1). It is in the header rather than on the screen
+       * because it is true of the whole route and not of one step, and because the two
+       * columns of a wide screen would otherwise each have somewhere to put it.
+       */
+      .toolbar .titles {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .toolbar .titles .title {
+        font-size: 15px;
+        font-weight: 500;
+      }
+
+      .toolbar .phase {
+        margin: 0;
+        font-size: 12px;
+        opacity: 0.85;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -815,6 +846,10 @@ export class MyHomeCalibrationPanel extends LitElement {
       // nothing - because the wizard was already on the screen - cannot swallow the read of
       // the next real arrival.
       this._openingSession = false;
+      // The question the ✕ asks does not survive the route it was asked on: coming back to
+      // the wizard later and finding "Leave the calibration?" already open would be a
+      // dialog nobody opened.
+      this._store.set({ wizardExit: false });
       this._leaveSession();
     }
     if (!this._started) {
@@ -1976,12 +2011,76 @@ export class MyHomeCalibrationPanel extends LitElement {
     });
   }
 
+  /**
+   * One step of the conversation.
+   *
+   * Every refusal lands in `sessionError`, which the screen draws with the ways out the
+   * client worked out - a step that was refused for ownership offers to take control, and
+   * never to end the calibration (lot F1, RIS-1).
+   */
+  private async _actSession(
+    action: SessionAction | SessionSubmit,
+    value?: string,
+  ): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const result = await client.act(action, value);
+    this._store.set({ sessionError: result.ok ? null : result });
+  }
+
+  /** The `stop` verb: the one thing the panel sends that touches the shutter. */
+  private async _stopSession(): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const result = await client.stop();
+    this._store.set({ sessionError: result.ok ? null : result });
+  }
+
+  /**
+   * The one write of the whole calibration, from the review.
+   *
+   * It answers with the rebuilt gateway as well as with the session, because the shutter's
+   * origin and values have just changed and the list behind the wizard is now out of date.
+   */
+  private async _saveSession(target: SessionSaveTarget): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const result = await client.save(target);
+    if (!result.ok) {
+      this._store.set({ sessionError: result });
+      return;
+    }
+    this._store.set({
+      sessionError: null,
+      wizardIntent: null,
+      ...(result.overview ? { overview: result.overview } : {}),
+    });
+  }
+
   private _wizardActions: WizardActions = {
     refresh: () => void this._readSession(),
+    act: (action, value) => void this._actSession(action, value),
+    stop: () => void this._stopSession(),
+    save: (target) => void this._saveSession(target),
     cancel: () => void this._cancelSession("plain"),
     claim: () => void this._takeControl(),
     claimAndCancel: () => void this._cancelSession("claim"),
     force: () => void this._cancelSession("force"),
+    exit: (open) => this._store.set({ wizardExit: open }),
+    again: () => {
+      // Back to the wizard's own address with nothing behind it: no session on the gateway
+      // any more, so what it shows is the choice of a shutter (lot F3). It never starts
+      // one - that is the whole of lesson 4.
+      this._store.set({ session: null, sessionError: null, wizardIntent: null });
+      this._navigate("/calibrate");
+    },
+    openCover: (cover) => this._navigate(buildPath("cover", cover)),
     back: () => this._navigate("/"),
   };
 
@@ -2054,6 +2153,7 @@ export class MyHomeCalibrationPanel extends LitElement {
         .i18n=${this._i18n}
         .state=${this._store.state}
         .actions=${this._wizardActions}
+        .hass=${this.hass ?? null}
       ></myhome-wizard>`;
     } catch (error) {
       console.error("MyHOME panel: the guided calibration could not be drawn", error);
@@ -2126,8 +2226,8 @@ export class MyHomeCalibrationPanel extends LitElement {
       <div class="page" role="region" aria-labelledby="panel-title">
         <div class="toolbar">
           ${this._renderMenuButton()}
-          <h1 class="title" id="panel-title">${title}</h1>
-          ${this._renderGatewayPicker()}
+          ${this._renderTitle(title)}
+          ${this._renderGatewayPicker()} ${this._renderWizardExit()}
         </div>
       ${state.connection === "offline"
         ? html`<div class="offline" role="status">
@@ -2160,6 +2260,42 @@ export class MyHomeCalibrationPanel extends LitElement {
         : nothing}
       </div>
     `;
+  }
+
+  /**
+   * The title, and on the wizard's route the phase under it.
+   *
+   * `phaseLine` answers `null` for anything it does not recognise rather than throwing:
+   * the toolbar is drawn outside the wizard's own `try`, and a snapshot that surprises the
+   * panel must cost the wizard its screen and never the panel its page.
+   */
+  private _renderTitle(title: string): TemplateResult {
+    const state = this._store.state;
+    const phase =
+      state.route.view === "calibrate" ? phaseLine(state.session ?? null, this._i18n) : null;
+    if (!phase) {
+      return html`<h1 class="title" id="panel-title">${title}</h1>`;
+    }
+    return html`<div class="titles">
+      <h1 class="title" id="panel-title">${title}</h1>
+      <p class="phase">${phase}</p>
+    </div>`;
+  }
+
+  /** The ✕ of the design: the one control that asks whether to throw the measurements away. */
+  private _renderWizardExit(): TemplateResult | typeof nothing {
+    const state = this._store.state;
+    if (state.route.view !== "calibrate" || !state.session) {
+      return nothing;
+    }
+    return html`<button
+      type="button"
+      data-wizard-exit
+      aria-label=${this._i18n.t("panel.wizard.action.exit")}
+      @click=${() => this._store.set({ wizardExit: true })}
+    >
+      ✕
+    </button>`;
   }
 
   /**

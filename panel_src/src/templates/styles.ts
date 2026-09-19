@@ -135,7 +135,7 @@ export const templateStyles = css`
 
   .big.moving {
     background: var(--myhome-accent);
-    color: var(--myhome-text);
+    color: var(--myhome-text-on-accent);
   }
 
   .big[disabled] {
@@ -426,5 +426,98 @@ export const templateStyles = css`
     padding: 12px 14px;
     font-size: 13.5px;
     line-height: 1.55;
+  }
+
+  /*
+   * The strip a screen wears while somebody else is driving. Above everything, because it
+   * is the answer to "why is nothing here pressable" and a reader who meets it after the
+   * step's prose has already tried.
+   */
+  /* What the panel adds under a step's own prose: the numbers a check was made of. */
+  .aside {
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--myhome-text-soft);
+  }
+
+  .read-only {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 12px 16px 0;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--myhome-warning-pastel);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  /* The switch for the signal at the start, 44 px tall so a thumb can find it. */
+  .cue {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 2px 0;
+    min-height: 44px;
+    font-size: 13.5px;
+    color: var(--myhome-text-soft);
+    cursor: pointer;
+  }
+
+  .cue input {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    accent-color: var(--myhome-primary);
+  }
+
+  /* The review's blocks: the side effects, and every shutter that follows the profile. */
+  .summary-group {
+    margin: 12px 0 0;
+  }
+
+  .summary-group > .group-title {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .summary .line {
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--myhome-text-soft);
+  }
+
+  .disclose {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 12px 0 0;
+  }
+
+  .code-label {
+    margin: 14px 0 6px;
+    font-size: 12.5px;
+    color: var(--myhome-text-soft);
+  }
+
+  @media (min-width: 900px) {
+    /* What the panel adds under a step's own prose: the numbers a check was made of. */
+  .aside {
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--myhome-text-soft);
+  }
+
+  .read-only {
+      margin: 0 auto;
+      max-width: 1080px;
+      width: calc(100% - 64px);
+    }
   }
 `;

@@ -92,22 +92,37 @@ const overviewFor = (state) => {
 };
 
 /**
+ * Which example of the frozen fixture a state stands on.
+ *
+ * `session:<name>` names one directly, so that every screen of the wizard SPEC §7.2 asks
+ * for is a state here without a second stub being written for each. `calibrating` is the
+ * one lot F1 added and is kept, because two checks name it.
+ */
+const scenarioOf = (state) => {
+  if (state === "calibrating") {
+    return "running_open_lift";
+  }
+  return state.startsWith("session:") ? state.slice("session:".length) : null;
+};
+
+/**
  * The session commands, answered from the fixture.
  *
- * Enough for the states this host audits and no more: the wizard's conversation is lot
- * F2's, and a stub that pretended to run one would be a second implementation of the
- * server. `heartbeat` answers as the owner because these states are all "this tab is
- * driving"; `cancel` ends it.
+ * Enough for the screens this host audits and no more: a stub that ran the conversation
+ * would be a second implementation of the server, and what is being audited is markup.
+ * Every verb answers with the same snapshot the state stands on, so an audit of a screen
+ * is an audit of that screen and not of wherever a press would have led. `heartbeat`
+ * answers as the owner except on the state that exists to be somebody else's.
  */
 const session = (state, message) => {
   const entryId = overviewFor(state).entry_id;
-  const scenario = state === "calibrating" ? "running_open_lift" : null;
+  const scenario = scenarioOf(state);
   const snapshot = scenario ? sessionFixture(scenario, entryId) : null;
   if (message.type.endsWith("/get")) {
     return Promise.resolve({ session: snapshot, capabilities: sessions._contract.capabilities });
   }
   if (message.type.endsWith("/heartbeat")) {
-    return Promise.resolve({ owner: true, present_until: null });
+    return Promise.resolve({ owner: scenario !== "owned_by_other", present_until: null });
   }
   if (message.type.endsWith("/cancel")) {
     return Promise.resolve({ session: null, already_ended: snapshot === null });
@@ -116,7 +131,12 @@ const session = (state, message) => {
 };
 
 const connection = (state) => ({
+  /** Every session command this mount sent, so a keyboard walk can say what it caused. */
+  calls: [],
   sendMessagePromise(message) {
+    if (message.type.startsWith("myhome/calibration/session/")) {
+      this.calls.push(message.type.slice("myhome/calibration/session/".length));
+    }
     if (message.type === "myhome/calibration/texts") {
       return Promise.resolve({
         language: "en",
@@ -268,6 +288,19 @@ export const mount = async ({ name, state, hash, drive, expect }) => {
   // jsdom has no `matchMedia`, and the panel already guards every use of it - which is
   // what makes it safe to leave absent rather than faked into one width.
   window.eval(await readFile(axeSource, "utf8"));
+  // This tab's name in the session, seeded before the bundle reads it.
+  //
+  // `SessionClient` keeps it in `sessionStorage` and every example of the fixture is owned
+  // by `_example.this_client_id`. Without this the panel would make a random name, find
+  // itself looking at somebody else's calibration, and every screen below would be audited
+  // in its read-only form - which is a real screen, but not the one with the controls on
+  // it (there is a state further down that is deliberately somebody else's).
+  try {
+    window.sessionStorage.setItem("myhome-calibration-client", sessions._example.this_client_id);
+  } catch {
+    // A jsdom without storage: the states go on being audited read-only, which the
+    // `expect` of each of them then catches.
+  }
   // …and, before the bundle is loaded, the document is made to behave the way Home
   // Assistant's really does. See `forbidFormApis`.
   forbidFormApis(window);
@@ -293,9 +326,15 @@ export const mount = async ({ name, state, hash, drive, expect }) => {
   });
 
   const panel = window.document.createElement("myhome-calibration-panel");
+  const gateway = connection(state);
   panel.hass = {
-    states: {},
-    connection: connection(state),
+    // One shutter's position, because the wizard's press screens show the shutter's own
+    // estimate beside the motor line and a state with no entity in it would audit a
+    // screen with one row where the panel draws two.
+    states: {
+      "cover.hallway_shutter": { state: "opening", attributes: { current_position: 12 } },
+    },
+    connection: gateway,
     language: "en",
     locale: { language: "en" },
   };
@@ -322,7 +361,7 @@ export const mount = async ({ name, state, hash, drive, expect }) => {
     throw new Error(`${name}: the state was never reached ('${expect}' is not on the screen)`);
   }
 
-  return { name, dom, window, panel, settle: (ms) => settle(window, ms ?? 80) };
+  return { name, dom, window, panel, calls: gateway.calls, settle: (ms) => settle(window, ms ?? 80) };
 };
 
 export const COVER = "#/cover/00:03:50:aa:bb:cc-2-81";
@@ -356,6 +395,59 @@ export const pressWide = (index) => async ({ panel, deepAll, settle }) => {
   await settle();
 };
 
+
+/** The wizard's own address, whichever screen of it is being looked at. */
+const wizard = (name, scenario, more = {}) => ({
+  name: `the wizard, ${name}`,
+  state: `session:${scenario}`,
+  hash: "#/calibrate",
+  expect: "[data-wizard]",
+  ...more,
+});
+
+/** One press on a control the wizard's screen draws, named by the selector that finds it. */
+const pressInWizard = (selector) => async ({ deep, panel, settle }) => {
+  deep(panel.shadowRoot, selector)?.click();
+  await settle();
+};
+
+/**
+ * Every screen of the guided calibration SPEC §7.2 lists, one per template and per state.
+ *
+ * The choice of route, a reading step, a reading the flow refused, the two moments of a
+ * press, a positioning run, a check, the check that carries a field, the review shut and
+ * open, the two ends, a problem, a calibration somebody else is driving, and the question
+ * the cross asks.
+ */
+export const WIZARD_SCREENS = [
+  wizard("the choice of route", "armed_path"),
+  wizard("a choice of profiles", "armed_path_b_profile_choice"),
+  wizard("a brief before a timed run", "briefing_open_brief"),
+  wizard("the motor starting", "running_open_start"),
+  wizard("a press to be made", "running_open_lift"),
+  wizard("a press registered", "running_lift_stop"),
+  wizard("a positioning run", "positioning_home_closed"),
+  wizard("a check with three answers", "briefing_lift_check"),
+  wizard("a check that asks for a number", "awaiting_reading_lift_gap"),
+  wizard("a tape reading", "awaiting_reading_measure_descent"),
+  wizard("a tape reading the flow refused", "awaiting_reading_measure_descent_error"),
+  wizard("a profile to name", "briefing_profile_name"),
+  wizard("the review", "review_basic_profile_exists"),
+  wizard("the review, every value shown", "review_basic_profile_exists", {
+    name: "the wizard, the review with every value shown",
+    drive: pressInWizard('[data-disclose="show:all"]'),
+    expect: "pre.code",
+  }),
+  wizard("a step that was abandoned", "problem_no_echo"),
+  wizard("a calibration that was saved", "saved_profile"),
+  wizard("a calibration that timed out", "ended_expired"),
+  wizard("one somebody else is driving", "owned_by_other", { expect: "[data-take-control]" }),
+  wizard("the question the cross asks", "running_open_lift", {
+    name: "the wizard, the question the cross asks",
+    drive: pressInWizard("[data-wizard-exit]"),
+    expect: "[data-exit-dialog]",
+  }),
+];
 
 /** Every state worth checking, and how to get the panel into it. */
 export const STATES = [
@@ -403,10 +495,12 @@ export const STATES = [
   { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-advanced-note]" },
   { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1), expect: "[data-drawer]" },
   { name: "profile card, last action", state: "ready", hash: "#/profile/tall", drive: pressWide(-1), expect: "[data-drawer]" },
-  // The wizard's address, with a session of the gateway's and without one. Lot F1 draws a
-  // stub there; the eight live models and the states SPEC §7.2 lists for them arrive with
-  // lot F2, which extends this list rather than replacing it.
+  // The wizard's address, with a session of the gateway's and without one, and then one
+  // state for every screen of SPEC §7.2 - each standing on the example of the frozen
+  // fixture that produces it, so that what is audited is a screen the server can really
+  // send rather than one this file invented.
   { name: "the wizard, a session running", state: "calibrating", hash: "#/calibrate", expect: "[data-wizard]" },
   { name: "the wizard, no session", state: "ready", hash: "#/calibrate", expect: "myhome-wizard" },
+  ...WIZARD_SCREENS,
 ];
 

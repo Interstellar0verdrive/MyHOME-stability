@@ -2,10 +2,15 @@
 // the step described.
 //
 // The big button never moves and never changes shape, only its words: start the shutter,
-// press when…, press registered. That is the whole point of a fixed footer, and it is why
-// the button lives in the host and the state lives here. Everything below is what the step
-// says about the motor - never what this panel worked out, because it is not the thing
-// driving the motor.
+// "…" while the motor is starting, the press itself, "press registered". That is the whole
+// point of a fixed footer, and it is why the button lives in the host and the state lives
+// here. Everything below is what the step says about the motor - never what this panel
+// worked out, because it is not the thing driving the motor.
+//
+// Two claims, from two sources, and they are deliberately not merged. "Motor" is the
+// session's own: `movement.started_at` plus the seconds since, on the server's clock.
+// "Estimated position" is the shutter's, out of `hass.states`, at about one hertz. A panel
+// that averaged them would be inventing a third number nobody measured.
 
 import { html, nothing, type TemplateResult } from "lit";
 
@@ -17,7 +22,7 @@ export const renderClick = (
 ): TemplateResult | typeof nothing => {
   const press = model.press;
   if (!press) {
-    return html`<div class="stub">${context.i18n.t("panel.screen.not_in_this_version")}</div>`;
+    return nothing;
   }
   const moving = press.state === "moving";
   return html`

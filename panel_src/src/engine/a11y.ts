@@ -14,14 +14,27 @@
 //   something that just happened but a standing condition of the whole page, and a user
 //   arriving mid-session has to meet it rather than be told about it once.
 //
-// An assertive region is deliberately absent. Nothing this panel does is an emergency, and
-// `alert` interrupts whatever the user was reading.
+// * **assertive**, for the guided calibration and for nothing else. It was deliberately
+//   absent while the panel only assigned profiles - nothing there is an emergency, and
+//   `alert` interrupts whatever the user was reading. A shutter that has just started
+//   moving is the exception the rule was waiting for: the whole step is a press timed to
+//   an instant a second or two away, and a reader who is told about it politely, after the
+//   step's prose, is told after the moment has gone (SPEC §5.7).
 
 import { html, type TemplateResult } from "lit";
 
 /** The polite live region. Rendered once, near the top of the panel, and never moved. */
 export const liveRegion = (message: string): TemplateResult =>
   html`<div class="sr-only" role="status" aria-live="polite" aria-atomic="true">${message}</div>`;
+
+/**
+ * The assertive one: the motor starting, and a step that was abandoned.
+ *
+ * Two sentences on the whole panel may use it, and both are about a shutter that is moving
+ * in the room the reader is standing in. Everything else goes through `liveRegion`.
+ */
+export const alertRegion = (message: string): TemplateResult =>
+  html`<div class="sr-only" role="alert" aria-live="assertive" aria-atomic="true">${message}</div>`;
 
 /**
  * Move focus somewhere, after Lit has painted it.
