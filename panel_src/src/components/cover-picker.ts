@@ -51,6 +51,10 @@ const originLabel = (i18n: I18n, cover: CoverRow): string =>
       ? i18n.t("panel.overview.cover.origin_adjusted")
       : i18n.origin(cover.origin, cover.profile);
 
+/** The three tones `origin-chip.ts` draws, by the same rule. */
+const originTone = (cover: CoverRow): "neutral" | "measured" | "adjusted" =>
+  cover.origin === "measured" ? "measured" : cover.origin === "adjusted" ? "adjusted" : "neutral";
+
 /**
  * The choice of shutter, as a screen of the wizard.
  *
@@ -63,6 +67,7 @@ export const coverPickerModel = (i18n: I18n, covers: readonly CoverRow[]): Scree
     title: cover.name,
     meta: coverSubtitle(i18n, cover, false),
     chip: originLabel(i18n, cover),
+    chipTone: originTone(cover),
     action: `${COVER}${cover.unique_id}`,
   }));
   return {

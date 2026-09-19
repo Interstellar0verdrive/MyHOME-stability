@@ -94,7 +94,11 @@ describe("the choice of shutter", () => {
     const measured = { ...covers[0], origin: "measured", profile: null };
     const model = coverPickerModel(en_gb, [inherited, measured]);
     assert.equal((model.options ?? [])[0].chip, en_gb.t("panel.overview.cover.origin_inherited"));
+    assert.equal((model.options ?? [])[0].chipTone, "neutral");
     assert.equal((model.options ?? [])[1].chip, en_gb.origin("measured", null));
+    // The colour the overview gives it, for the reason `origin-chip.ts` states: a list
+    // whose point is "pick a representative one" is a list where this is the distinction.
+    assert.equal((model.options ?? [])[1].chipTone, "measured");
   });
 
   it("leaves no placeholder unfilled in either language", () => {

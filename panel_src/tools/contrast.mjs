@@ -141,6 +141,10 @@ const pairs = (t) => [
   ["destructive button", ink(t, t.error), mix(t.error, t.card, 14), 15],
   ["a field error", ink(t, t.error), t.card, 12.5],
   ["the measuring banner", t.text, mix(t.warning, t.card, 12), 14],
+  // The origin chip an option of the choice of shutter carries, which is the overview's
+  // own chip inside a template (lot F3).
+  ["a measured shutter's chip in the choice of shutter", t.text, mix(t.primary, t.card, 20), 12],
+  ["an adjusted shutter's chip in the choice of shutter", t.text, mix(t.accent, t.card, 18), 12],
   ["the banner's two offers", ink(t, t.primary), mix(t.warning, t.card, 12), 14],
   // The offer that ends somebody's calibration, which is the one the panel spells out in
   // the error colour rather than leaving it to read like the other one (lot F3).
