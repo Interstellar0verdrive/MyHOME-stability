@@ -7,12 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 0.6.0 (in preparation)
 
-The management half of the guided calibration moves out of the dialog and onto a page
-of its own. **"Profili e tapparelle"** shows every basic cover of a gateway grouped by
-the profile it follows, and assigning a cover is moving it from one group to another.
-The measuring stays where it is: *Configure → "Calibrate a cover"* is unchanged, is
-still the only place a shutter is measured, and is still a complete alternative to
-everything the panel does.
+The guided calibration moves out of the dialog and onto a page of its own.
+**"Profili e tapparelle"** shows every basic cover of a gateway grouped by the profile
+it follows, assigning a cover is moving it from one group to another, and **measuring
+one is done in the panel too**: every button that used to send the user off to
+*Configure* now opens the calibration where they already are. *Configure → "Calibrate a
+cover"* is unchanged and stays a complete alternative to everything the panel does — a
+calibration held by that dialog is recognised for what it is, and can be closed from
+the panel when it is in the way.
 
 ### Added
 
@@ -139,6 +141,22 @@ everything the panel does.
   and the configuration snippet are all behind *"Show every value"*. A calibration
   somebody else is driving is shown whole, without its controls, with one offer to take
   it over. Nothing in the panel leads here yet.
+- **Every way into a measurement, in the panel.** *"Measure a cover"* on the overview
+  and on the first run open the calibration and ask **which shutter**, listing the
+  basic covers of the gateway with their room, their curtain travel and the chip that
+  says where their numbers come from. On a shutter's own card, *"Measure again"* opens
+  the calibration on that shutter at the choice of route, and *"Correct…"* opens it on
+  the scope that was pressed — times only, times and rolls, or the thorough calibration
+  only — instead of landing in a menu where it had to be found again. None of them
+  leaves the panel any more, so the *"↗"* that promised a dialog is gone with the
+  sentences that explained the detour. A gateway that is already busy answers with a
+  screen that says who is holding the shutter and what can be done about it, never a
+  bare refusal. And the **"Measurement in progress"** banner now says *which* of the
+  three possible holders has it: a calibration of this panel's own, which can be
+  resumed or ended from the banner; the *Configure* dialog, which can be opened or
+  closed from here — closing it frees the shutter and is asked about first, because the
+  unsaved measurements of that dialog are lost; or a run started by the 0.4.2 action,
+  which has no window to close and is simply waited out.
 
 ### Changed
 
