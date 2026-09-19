@@ -65,6 +65,13 @@
   <label><input type="checkbox" id="bulk" /> 40 covers</label>
   <label><input type="checkbox" id="offline" /> socket down</label>
   <label><input type="checkbox" id="session" /> a calibration session</label>
+  <label>route
+    <select id="sessionpath">
+      <option value="A">(A) the first of its kind</option>
+      <option value="B">(B) like one already measured</option>
+      <option value="C">(C) a correction</option>
+    </select>
+  </label>
   <button type="button" id="reset">reset the gateway</button>
   <span id="note"></span>
 </div>
@@ -199,6 +206,16 @@
       }
     });
   }
+  // Changing the route while a session is open starts that route from its first screen:
+  // a chain is a route, and half of one followed by half of another is neither.
+  document.getElementById("sessionpath").addEventListener("change", () => {
+    if (!document.getElementById("session").checked) return;
+    sessionState = startSession();
+    if (subscriber) {
+      subscriber({ type: "session", session: sessionState });
+      subscriber({ type: "overview", overview: overview() });
+    }
+  });
   document.getElementById("reset").addEventListener("click", () => {
     gateway = fresh();
     undoSlot = null;
@@ -415,8 +432,32 @@
   //
   // It is **not** a second implementation of the server: no timing, no arithmetic, no
   // plan. Lot F2 walks the real screens against the same fixture.
-  const SESSION_CHAIN = ["armed_path", "briefing_open_brief", "running_open_start",
-                         "running_open_lift", "briefing_lift_check", "review_basic"];
+  // One chain per route, each a plausible order of the *committed* snapshots rather
+  // than a plan of its own: the real order is in `tests/test_calibration_session_paths.py`
+  // and the real screens are checked against the whole fixture by `npm run session`.
+  // What the chains are for is the one thing no check can be: a person clicking
+  // through a route from end to end and looking at it.
+  const SESSION_CHAINS = {
+    // The whole of (A): the route, the brief, the two runs of the ascent and the press
+    // that ends the first, the travel read at the top, the descent, the tape phase, the
+    // name, and the review that offers the profile.
+    A: ["armed_path", "briefing_open_brief", "running_open_start", "running_open_lift",
+        "running_lift_stop", "briefing_lift_check", "awaiting_reading_height",
+        "positioning_home_closed", "positioning_tape_run",
+        "awaiting_reading_measure_descent", "briefing_profile_name", "review_basic"],
+    // (B) as far as the summary: the profile, the travel, and the check taken up.
+    B: ["armed_path", "armed_path_b_profile_choice", "awaiting_reading_height",
+        "briefing_verify_offer", "positioning_verify", "awaiting_reading_measure_verify",
+        "checking_verify_result_within", "review_short"],
+    // (C) as far as the summary: the profile, the scope, and the times measured again.
+    C: ["armed_path", "armed_path_c_profile_choice", "armed_refine_scope_intent",
+        "briefing_open_brief", "running_open_start", "running_open_lift",
+        "briefing_lift_check", "positioning_home_closed", "review_correction"],
+  };
+  // What a save looks like at the end of each: a profile born, or this window's own
+  // numbers. Both are snapshots of the fixture too.
+  const SESSION_SAVED = { A: "saved_profile", B: "saved_cover_only", C: "saved_cover_only" };
+  let sessionChain = "A";
   let sessionState = null;
   let sessionStep = 0;
   let sessionRevision = 0;
@@ -429,8 +470,9 @@
   };
 
   const startSession = () => {
+    sessionChain = document.getElementById("sessionpath").value;
     sessionStep = 0;
-    return sessionSnapshot(SESSION_CHAIN[0]);
+    return sessionSnapshot(SESSION_CHAINS[sessionChain][0]);
   };
 
   const sessionCommand = (message) => {
@@ -471,12 +513,23 @@
       return Promise.resolve({ flows_aborted: still ? 0 : 1, still_calibrating: still,
                                overview: overview() });
     }
-    if (name === "leave" || name === "stop" || name === "attach" || name === "save") {
+    if (name === "save") {
+      // The end of the route, drawn: the outcome screen, which is the one thing a chain
+      // that stopped at the review never showed.
+      sessionState = sessionSnapshot(SESSION_SAVED[sessionChain]);
+      if (subscriber) {
+        subscriber({ type: "session", session: sessionState });
+        subscriber({ type: "measuring", cover_unique_id: null, name: null });
+      }
+      return Promise.resolve({ session: sessionState, overview: overview() });
+    }
+    if (name === "leave" || name === "stop" || name === "attach") {
       return Promise.resolve({ session: sessionState, overview: overview() });
     }
     if (name === "act") {
-      sessionStep = Math.min(sessionStep + 1, SESSION_CHAIN.length - 1);
-      sessionState = sessionSnapshot(SESSION_CHAIN[sessionStep]);
+      const chain = SESSION_CHAINS[sessionChain];
+      sessionStep = Math.min(sessionStep + 1, chain.length - 1);
+      sessionState = sessionSnapshot(chain[sessionStep]);
       if (subscriber) subscriber({ type: "session", session: sessionState });
       return Promise.resolve({ session: sessionState });
     }

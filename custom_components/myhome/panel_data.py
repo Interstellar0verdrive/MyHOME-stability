@@ -270,12 +270,17 @@ def _registry_row(hass: HomeAssistant, unique_id: str) -> tuple[str | None, str 
 
 # --------------------------------------------------------------------- the rows
 @callback
-def _level_and_note(record: Mapping[str, Any] | None) -> tuple[str | None, float | None]:
+def level_and_note(record: Mapping[str, Any] | None) -> tuple[str | None, float | None]:
     """How thoroughly this window was measured, and by how much the check was out.
 
     Both come out of the `raw` block the guided flow keeps beside its conclusions. A
     record written by hand, or imported from the first draft, has no `raw`: the two are
     then `None` and the screen leaves the line out rather than guessing at a level.
+
+    Public, and on `__all__`, because it has a second caller: `calibration_session`
+    reads it for the screen that says how well the profile a check is questioning was
+    itself measured, so the overview row and that screen cannot disagree about what
+    "thorough" means. A private name with two importers is a private name in name only.
     """
     raw = (record or {}).get(CONF_RAW)
     if not isinstance(raw, Mapping):
@@ -314,7 +319,7 @@ def _cover_row(
     record = store.raw_covers.get(unique_id) if store else None
     resolved = resolve_cover_config(hass, entry, cfg, unique_id, yaml_profiles(hass, entry))
     entity_id, area_id, area = _registry_row(hass, unique_id)
-    level, verify_note = _level_and_note(record)
+    level, verify_note = level_and_note(record)
     stored = store.calibration(unique_id) if store else None
     row = {
         "unique_id": unique_id,
@@ -1010,5 +1015,6 @@ __all__ = [
     "basic_covers",
     "calibrating_now",
     "is_advanced_cover",
+    "level_and_note",
     "yaml_profiles",
 ]

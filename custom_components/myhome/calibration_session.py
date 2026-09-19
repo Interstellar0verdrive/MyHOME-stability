@@ -157,11 +157,11 @@ from .const import (
 from .cover import CALIBRATION_SETTLE_SEC, calibration_run_seconds
 from .panel_data import (
     CALIBRATION_LEVEL_PRECISE,
-    _level_and_note,
     async_overview,
     basic_covers,
     calibrating_now,
     is_advanced_cover,
+    level_and_note,
     yaml_profiles,
 )
 from .panel_schemas import (
@@ -1650,7 +1650,7 @@ class CalibrationSession:
         """The level of the profile being checked, and the gap its own check reported.
 
         Off the `raw` block the guided calibration keeps beside its conclusions, read
-        with the panel's own `_level_and_note` so that the overview row and this screen
+        with the panel's own `level_and_note` so that the overview row and this screen
         cannot disagree about what "thorough" means. A profile written by hand, or one
         that lives in `cover_profiles:` and was never measured here, has no `raw`: both
         are then `null` and the screen leaves the comparison out rather than inventing
@@ -1658,7 +1658,7 @@ class CalibrationSession:
         """
         store = self._store()
         stored = None if store is None else store.profile(self._profile or "")
-        level, gap = _level_and_note(stored)
+        level, gap = level_and_note(stored)
         if level is not None:
             # `precise` is what the store and the overview have called the level since
             # 0.5.0; `thorough` is what the contract calls it (SPEC §3.11).

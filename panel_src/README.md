@@ -300,7 +300,15 @@ compressed and fails if that count is zero, because a period that stopped matchi
 otherwise leave half the scenarios passing while exercising no heartbeat at all.
 
 `dev/harness.html` has the same thing to click at: the *a calibration session* checkbox
-opens one on the fixture's snapshots and `#/calibrate` walks it. The same checkbox is what
+opens one on the fixture's snapshots and `#/calibrate` walks it. The *route* selector
+beside it picks which walk - **(A)** the whole of the first route, from the choice of
+route through both runs of the ascent, the travel, the descent and the tape phase to the
+review, and then, on *save*, the outcome screen with the profile on it; **(B)** and
+**(C)** as far as their own summaries, the check of (B) included. The chains are orders
+of the committed snapshots and not a plan of the harness's own: the real order is
+`tests/test_calibration_session_paths.py` and every screen of the fixture is checked by
+`npm run session`. What the harness is for is the one thing no check is - a person
+clicking through a route and looking at it. The same checkbox is what
 puts `overview.session` beside `measuring`, so the banner's three shapes are *measuring*
 alone (the *Configure* dialog), *measuring* with a session (this panel's own) and
 *measuring* with *writes refuse* on, where `end_other` answers that the shutter is still

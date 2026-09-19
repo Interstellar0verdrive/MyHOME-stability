@@ -73,6 +73,11 @@ from custom_components.myhome.const import (
     LEGACY_SUBENTRY_COVER_PROFILE,
 )
 
+# The reference window and the shutter that answers like one. Taken from the shared
+# bench rather than from `tests/test_calibration_flow.py`, which imports it from here
+# too: a test file is not a module to re-export things through, and going through one
+# made the dialog's own tests a dependency of every file that needed a fake shutter.
+from .helpers_calibration import FakeRunner
 from .helpers_core import MAC, make_entry, mock_gateway, write_yaml
 from .helpers_platforms import (
     device_config,
@@ -89,7 +94,6 @@ from .helpers_platforms import (
 from .test_calibration_flow import (
     PATH_A_BASIC,
     YAML as GUIDED_YAML,
-    FakeRunner,
     calibrating,
     drive,
     open_dialog,

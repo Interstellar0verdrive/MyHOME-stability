@@ -58,105 +58,102 @@ the panel when it is in the way.
   whole picture to every open tab after every write. It is documented for contributors
   in [docs/architecture.md](docs/architecture.md#the-websocket-api); it is internal to
   the panel and carries no compatibility promise.
-- **The contract of the guided calibration's session in the panel**, written down
-  before any of it is built: ten WebSocket commands, a third event on the existing
-  subscription and the snapshot they all carry — states and verbs in the words of the
-  published calibration contract, screens and texts under the dialog's own step ids so
-  that its seven languages of instructions are reused as they are. It is
+- **The guided calibration, in the panel.** The measuring conversation of *Configure →
+  "Calibrate a cover"* — which is unchanged and goes on being a complete alternative —
+  now also runs at `/myhome-calibration`, on the page where the profiles and the covers
+  already are, and that is where every button of the panel leads. *"Measure a cover"* on
+  the overview and on the first-run card opens it and asks **which shutter**, listing
+  the gateway's basic covers with their room, their curtain travel and the chip that
+  says where their numbers come from; on a shutter's own card, *"Measure again"* opens
+  it at the choice of route and *"Correct…"* opens it on the scope that was pressed —
+  times only, times and rolls, or the thorough calibration only — instead of landing in
+  a menu where the shutter had to be found again. None of them leaves the panel any
+  more, so the *"↗"* that promised a dialog is gone with the sentences that explained
+  the detour.
+
+  **The conversation lives on the gateway, not in the window.** One session per gateway,
+  with its own identity, an owner that can go away and come back, and the whole picture
+  published at every step: closing the tab, locking the phone or losing the connection
+  does not end it and does not lose a tape reading, and a panel opened afterwards — on
+  another device, or the same one — finds the calibration where it was left. A
+  calibration somebody else is driving is shown whole, without its controls, with one
+  offer to take it over. The shutter is given back by the same half-hour watchdog the
+  dialog has always used, and the address alone never starts anything: what is being
+  measured travels inside the page, so a reload or a pasted link never sets a shutter
+  moving. The run times, the presses and the fit are the dialog's own arithmetic rather
+  than a second copy of it, and a test walks both conversations over the same shutter to
+  say that what each route saves is what *Configure* saves in the same case, key for
+  key.
+
+  **All three routes, and the thorough calibration.** The full measurement of a shutter
+  nobody has measured before; a shutter that is one of a kind already measured — pick
+  the profile, read the travel, and optionally send it half way down and hold a tape
+  against what the profile predicted; and a shutter that follows a profile and stops in
+  the wrong place — its times alone, its times and its coefficients, or the readings
+  alone over the times it already runs on. Any of them can end with the thorough
+  calibration: four more readings and a check at a position nothing was fitted to, which
+  is the accuracy figure the summary names. The check shows what the model predicted,
+  what the tape found, the gap between them and, when it is a profile being questioned,
+  how thoroughly that profile was itself measured, so that three centimetres can be read
+  against something rather than on its own; beyond that threshold the correction is
+  offered on the spot, and the travel just measured goes with it.
+
+  **The screens.** Sixty steps, each drawn by one of the eight step layouts the panel
+  already had. The words of every measuring step are the dialog's own, already
+  translated into seven languages, so the two clients say the same thing; the review,
+  the outcomes and the one problem the dialog cannot produce are the panel's, in English
+  and Italian. The big button keeps its place from step to step and changes only its
+  words, the motor line counts the seconds off the server's clock while the estimated
+  position beside it is the shutter's own, the phone buzzes and beeps when the motor
+  really starts (a switch on the brief, remembered in the browser), and the ✕ asks
+  before it throws a measurement away. **The position model stays behind the flow**: the
+  review shows the curtain travel and the two run times, and the roll coefficients, the
+  slat time, the values the save would change without measuring them and the
+  configuration snippet are all behind *"Show every value"*. It watches the shutter
+  while it works — lowering it from the wall switch while the instructions are being
+  read is accepted, and a timed run whose starting end stop is no longer known brings the
+  shutter back there by itself instead of measuring from a point nobody knows.
+
+  **Saving** writes once, reaches the shutters in place without reloading the
+  integration, and hands back the new picture of the gateway. The first route writes the
+  profile and assigns the shutter to it — *"Save for this shutter only"* is always
+  offered instead — and a correction writes only what it measured.
+
+  **One shutter at a time, per gateway, and the panel says which of three holders has
+  it.** A gateway that is already busy answers with a screen naming the holder and what
+  can be done about it, never a bare refusal, and the *"Measurement in progress"* banner
+  does the same: a calibration of this panel's own, which can be resumed or ended from
+  the banner; the *Configure* dialog, which can be opened or closed from here — closing
+  it frees the shutter and is asked about first, because the unsaved measurements of
+  that dialog are lost; or a run started by the 0.4.2 action, which has no window to
+  close and is simply waited out. Every refusal the calibration can make has a sentence
+  in English and Italian.
+
+  The full page is [docs/panel.md](docs/panel.md#measuring-a-cover); what the
+  conversation itself asks for is unchanged and is
+  [docs/guided-calibration.md](docs/guided-calibration.md).
+- **Ten more WebSocket commands, a third event, and the contract they were built
+  against** — for contributors. The interface between the two halves was written down
+  before either was built: the commands, the event on the subscription the panel already
+  keeps, and the snapshot they all carry, with states and verbs in the words of the
+  published calibration contract and screens and texts under the dialog's own step ids,
+  which is how its seven languages of instructions are reused as they are. It is
   [docs/panel-websocket-api.md](docs/panel-websocket-api.md#11-the-calibration-session)
-  §11-§14, with one example snapshot per screen and a test that holds the Python
-  schemas, the TypeScript types, the document and the examples to saying the same
-  thing. Nothing is registered yet and nothing a user sees changes.
-- **The panel's side of that session**, and the guards that go with it. The browser tab
-  holds the session in one class with no rendering in it: it keeps its own fifteen-second
-  presence signal, which no drawing can stop and which never takes ownership away from a
-  phone whose screen has gone dark; it answers "Cancel" on every branch, so that a
-  cancellation another device refuses, or one the gateway never answers, arrives on the
-  screen with a way out on it — take control, try again, end it anyway, or the time at
-  which the shutter is freed by itself; and it identifies the tab through a name kept
-  across reloads, so that reloading the page is the same device and a second tab is a
-  second one. The address `#/calibrate` shows the gateway's session and **cannot start
-  one**: what to measure travels inside the page, never in the link, so a reload or a
-  pasted address never sets a shutter moving. A screen that fails to draw shows what
-  happened with "Try again" and "End the calibration" on it instead of an empty page, and
-  the measurement behind it is untouched. Nothing a user sees changes yet: every button
-  that reaches the guided calibration still opens *Configure*.
-- **The guided calibration as a session that lives on the server.** The measuring
-  conversation of *Configure → "Calibrate a cover"* — which is unchanged and goes on
-  being a complete alternative — now also exists as a session the panel will drive:
-  one per gateway, with its own identity, an owner that can go away and come back, and
-  a whole picture published at every step. Closing a tab, locking a phone or losing the
-  connection does not end it and does not lose a tape reading; the shutter is given
-  back by the same half-hour watchdog the dialog has always used, and the run times,
-  the presses and the fit are the dialog's own arithmetic rather than a second copy of
-  it. It watches the shutter while it works: lowering it from the wall switch while the
-  instructions are being read is accepted, and a timed run whose starting end stop is no
-  longer known brings the shutter back there by itself instead of measuring from a point
-  nobody knows. The first path is complete — the full measurement of a shutter nobody
-  has measured before — and saving it writes the profile and assigns it, or, if
-  preferred, keeps the numbers for that window alone. Nothing a user sees changes.
-- **The other two paths of that session, and the thorough calibration.** The session
-  now holds the whole of the measuring conversation, not only the first path: a window
-  that is one of a kind already measured (pick the profile, read the travel, and
-  optionally send the shutter half way down and hold a tape against what the profile
-  predicted), a window that follows a profile and stops in the wrong place (its times
-  alone, its times and its coefficients, or the readings alone over the times it
-  already runs on), and the thorough calibration that both of them and the first path
-  can end with — four more readings and a check at a position nothing was fitted to,
-  which is the accuracy figure the summary names. The check the panel shows carries
-  what the model predicted, what the tape found, the gap between them and, when it is a
-  profile being questioned, how thoroughly that profile was itself measured, so that
-  three centimetres can be read against something rather than on its own; beyond that
-  threshold the correction is offered on the spot, and the travel just measured goes
-  with it. What each path saves is what *Configure* saves in the same case, key for
-  key, and a test walks both conversations over the same shutter to say so. Nothing a
-  user sees changes: it is the entry below that puts the conversation on the socket.
-- **That session on the WebSocket**: ten more commands, a third kind of event on the
-  subscription the panel already keeps, and a line in the overview saying which device
-  is holding a shutter. A panel opening on a calibration already under way is told
-  about it at once and then about every step of it; a tab that closes stops being told
-  and **the calibration goes on**, because it is on the server and not in the browser.
-  Saving from the session writes once, reaches the shutters in place without reloading
-  the integration, and hands back the new picture of the gateway. There is also a way
-  to close a *Configure* dialog that is holding a shutter — with the panel saying first
-  that unsaved measurements of that dialog are lost — and an answer that distinguishes
-  a dialog, which can be closed, from a calibration run started by the 0.4.2 action,
-  which has to be left to finish. Every refusal these commands can make now has a
-  sentence in English and Italian. Nothing a user sees changes yet: no button leads
-  here.
-- **The screens of that session, in the panel.** `#/calibrate` now draws the
-  calibration itself: the choice of route, the briefs before each timed run, the two
-  presses of the ascent and the one of the descent, the positioning runs, the checks,
-  the tape readings, the review and the six ways it can end — sixty steps, each one of
-  the eight step layouts the panel already had. The words of every measuring step are
-  the dialog's own, already translated into seven languages, so the two clients say the
-  same thing; the review, the outcomes and the one problem the dialog cannot produce are
-  the panel's, in English and Italian. The big button keeps its place from step to step
-  and changes only its words, the motor line counts the seconds off the server's clock
-  while the estimated position beside it is the shutter's own, the phone buzzes and
-  beeps when the motor really starts (a switch on the brief, remembered in the browser),
-  and the ✕ asks before it throws a measurement away. **The position model stays behind
-  the flow**: the review shows the curtain travel and the two run times, and the roll
-  coefficients, the slat time, the values the save would change without measuring them
-  and the configuration snippet are all behind *"Show every value"*. A calibration
-  somebody else is driving is shown whole, without its controls, with one offer to take
-  it over. Nothing in the panel leads here yet.
-- **Every way into a measurement, in the panel.** *"Measure a cover"* on the overview
-  and on the first run open the calibration and ask **which shutter**, listing the
-  basic covers of the gateway with their room, their curtain travel and the chip that
-  says where their numbers come from. On a shutter's own card, *"Measure again"* opens
-  the calibration on that shutter at the choice of route, and *"Correct…"* opens it on
-  the scope that was pressed — times only, times and rolls, or the thorough calibration
-  only — instead of landing in a menu where it had to be found again. None of them
-  leaves the panel any more, so the *"↗"* that promised a dialog is gone with the
-  sentences that explained the detour. A gateway that is already busy answers with a
-  screen that says who is holding the shutter and what can be done about it, never a
-  bare refusal. And the **"Measurement in progress"** banner now says *which* of the
-  three possible holders has it: a calibration of this panel's own, which can be
-  resumed or ended from the banner; the *Configure* dialog, which can be opened or
-  closed from here — closing it frees the shutter and is asked about first, because the
-  unsaved measurements of that dialog are lost; or a run started by the 0.4.2 action,
-  which has no window to close and is simply waited out.
+  §11-§14, with one example snapshot per screen and a test holding the Python schemas,
+  the TypeScript types, the document and the examples to saying the same thing — the
+  examples being what the server really sent, walk by walk. The overview grew a line
+  saying which device is holding a shutter, so a panel opening on a calibration already
+  under way is told about it at once and then about every step of it; a tab that closes
+  stops being told and the calibration goes on. On the browser's side the session is one
+  class with no rendering in it: it keeps its own fifteen-second presence signal, which
+  no drawing can stop and which never takes ownership away from a phone whose screen has
+  gone dark; it answers "Cancel" on every branch, so that a cancellation another device
+  refuses, or one the gateway never answers, arrives on the screen with a way out on it
+  — take control, try again, end it anyway, or the time at which the shutter is freed by
+  itself; and it identifies the tab through a name kept across reloads, so that
+  reloading the page is the same device and a second tab is a second one. A screen that
+  fails to draw shows what happened with "Try again" and "End the calibration" on it
+  instead of an empty page, and the measurement behind it is untouched.
 
 ### Changed
 
