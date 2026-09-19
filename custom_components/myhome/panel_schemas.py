@@ -1241,8 +1241,12 @@ SESSION_OVERVIEW_KEYS: tuple[str, ...] = (
 
 # ---------------------------------------------------------------------- refusals
 # The refusals the session adds (SPEC §4.6), kept **out of** `WS_ERROR_KEYS`: that tuple
-# is what `tests/test_translations.py` holds to having a sentence in every language, and
-# these have none until lot B3 writes them. B3 moves them in when it does.
+# is what `tests/test_translations.py` holds to having a sentence in **every** language,
+# and these have one in English and Italian only - the panel is written in two languages
+# (the decision of 14 September) and a translation lot before the release fills the other
+# five. They stay a tuple of their own for that reason rather than being folded in by lot
+# B3, which wrote their sentences: `refusal_keys()` reads both tuples, and the tolerance
+# for the five languages is stated over this one.
 # The session also answers with keys that already exist: `unknown_entry`,
 # `entry_not_loaded`, `unknown_cover`, `advanced_cover`, `unknown_profile`,
 # `invalid_name` and `write_in_progress`.

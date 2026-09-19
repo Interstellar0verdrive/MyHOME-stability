@@ -1209,6 +1209,30 @@
     },
     "not_a_number": {
       "message": "{key} needs a number. Decimals may be written with a comma or with a point."
+    },
+    "already_calibrating": {
+      "message": "{cover} is already being calibrated, or is still finishing a calibration run: only one calibration at a time reaches a gateway."
+    },
+    "cover_unavailable": {
+      "message": "{cover} has no entity, or its entity is unavailable: it cannot be calibrated until it answers again."
+    },
+    "unknown_session": {
+      "message": "This calibration is no longer there: it ended more than ten minutes ago, or it was never started."
+    },
+    "session_ended": {
+      "message": "This calibration has already ended: there is nothing left to carry on with."
+    },
+    "session_owned": {
+      "message": "Another device is guiding this calibration. Taking control from the panel is what carries it on here."
+    },
+    "revision_conflict": {
+      "message": "The calibration has moved on since this screen was drawn. Nothing was done; the screen updates by itself."
+    },
+    "action_not_offered": {
+      "message": "This step does not offer “{action}”."
+    },
+    "not_in_review": {
+      "message": "There is nothing to save until the calibration reaches its summary."
     }
   },
   "services": {

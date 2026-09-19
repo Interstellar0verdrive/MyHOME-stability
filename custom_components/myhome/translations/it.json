@@ -1209,6 +1209,30 @@
     },
     "not_a_number": {
       "message": "{key} richiede un numero. I decimali si scrivono con la virgola o con il punto."
+    },
+    "already_calibrating": {
+      "message": "{cover} è già in calibrazione, oppure sta ancora finendo una corsa di calibrazione: su un gateway si calibra una tapparella alla volta."
+    },
+    "cover_unavailable": {
+      "message": "{cover} non ha un'entità, oppure la sua entità non è disponibile: non si può calibrare finché non risponde di nuovo."
+    },
+    "unknown_session": {
+      "message": "Questa calibrazione non c'è più: è finita da più di dieci minuti, oppure non è mai stata avviata."
+    },
+    "session_ended": {
+      "message": "Questa calibrazione è già finita: non c'è più niente da riprendere."
+    },
+    "session_owned": {
+      "message": "Questa calibrazione è guidata da un altro dispositivo. Per continuarla qui occorre prendere il controllo dal pannello."
+    },
+    "revision_conflict": {
+      "message": "La calibrazione è andata avanti rispetto a questo schermo. Non è stato fatto niente: lo schermo si aggiorna da solo."
+    },
+    "action_not_offered": {
+      "message": "Questo passo non prevede l'azione “{action}”."
+    },
+    "not_in_review": {
+      "message": "Non c'è niente da salvare finché la calibrazione non arriva al riepilogo."
     }
   },
   "services": {
