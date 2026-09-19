@@ -562,7 +562,10 @@ const halfTravelResult = (
   const words = {
     gap: i18n.number(gap, 1),
     threshold: i18n.number(threshold ?? 0, 0),
-    half: i18n.number(check.predicted_cm ?? 0, 0),
+    // One decimal on both of the centimetres, and not the rounded-off "about 76 cm" the
+    // offer and the field promise: this sentence puts the three numbers side by side, and
+    // a reader who subtracts two of them has to arrive at the third.
+    half: i18n.number(check.predicted_cm ?? 0, 1),
     measured: i18n.number(check.measured_cm, 1),
     profile: session.profile ?? "",
   };

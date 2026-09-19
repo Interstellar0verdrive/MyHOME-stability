@@ -1159,7 +1159,7 @@
           },
           "within": {
             "title": "The profile suits this shutter",
-            "body": "**{gap} cm out**: within the {threshold} cm, so the profile «{profile}» suits this shutter. The bottom edge was to stop at {half} cm and stopped at {measured} cm.\n\nFor more accuracy this shutter can be measured on its own, from its card, with **Correct…**."
+            "body": "**{gap} cm out**: within the {threshold} cm, so the profile «{profile}» suits this shutter. The bottom edge was to stop at {half} cm and stopped at {measured} cm.\n\nFor more accuracy this shutter can be measured on its own, from its card, with **Correct…**"
           },
           "beyond": {
             "title": "This shutter does not follow the profile",

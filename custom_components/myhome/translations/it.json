@@ -1159,7 +1159,7 @@
           },
           "within": {
             "title": "Il profilo va bene per questa tapparella",
-            "body": "**Scarto {gap} cm**: entro i {threshold} cm, quindi il profilo «{profile}» va bene per questa tapparella. Il bordo inferiore doveva fermarsi a {half} cm e si è fermato a {measured} cm.\n\nPer una precisione maggiore si può misurare questa tapparella a parte, dalla sua scheda, con **Correggi…**."
+            "body": "**Scarto {gap} cm**: entro i {threshold} cm, quindi il profilo «{profile}» va bene per questa tapparella. Il bordo inferiore doveva fermarsi a {half} cm e si è fermato a {measured} cm.\n\nPer una precisione maggiore si può misurare questa tapparella a parte, dalla sua scheda, con **Correggi…**"
           },
           "beyond": {
             "title": "Questa tapparella non segue il profilo",

@@ -243,7 +243,7 @@
   "panel.wizard.check.half.reading.body": "The shutter has been taken to half its travel. Measure from the base to the bottom edge, from the same reference as the readings before: it should be about {half} cm.\n\nThis is the position the shutter will take from now on when it is asked to open half way, so the check really does say whether the profile suits this shutter.",
   "panel.wizard.check.half.reading.title": "Check {cover} — half way along the travel",
   "panel.wizard.check.half.reviewed": "Accuracy checked: the bottom edge stopped within {accuracy} cm of half the travel.",
-  "panel.wizard.check.half.within.body": "**{gap} cm out**: within the {threshold} cm, so the profile «{profile}» suits this shutter. The bottom edge was to stop at {half} cm and stopped at {measured} cm.\n\nFor more accuracy this shutter can be measured on its own, from its card, with **Correct…**.",
+  "panel.wizard.check.half.within.body": "**{gap} cm out**: within the {threshold} cm, so the profile «{profile}» suits this shutter. The bottom edge was to stop at {half} cm and stopped at {measured} cm.\n\nFor more accuracy this shutter can be measured on its own, from its card, with **Correct…**",
   "panel.wizard.check.half.within.title": "The profile suits this shutter",
   "panel.wizard.check.measured": "The tape read {measured} cm at {percent}% of the travel, where the model had predicted {predicted} cm.",
   "panel.wizard.check.no_reference.body": "The tape read {measured} cm at {percent}% of the travel, but the values {cover} was following are no longer there, so there is no prediction to compare it with. The reading has not been thrown away: go on, and the review says what would be saved.",

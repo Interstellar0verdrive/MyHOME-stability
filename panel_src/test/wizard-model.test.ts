@@ -839,9 +839,19 @@ describe("the check of a verification", () => {
     assert.ok((beyond.body ?? "").indexOf("\n\n") > 0);
     // The two numbers are still said, and they are said once: the separate lines the
     // screen used to carry are gone, not repeated under the words.
-    assert.match(beyond.body ?? "", new RegExp(escapeForMatch(en_gb.number(out.check!.predicted_cm, 0))));
+    assert.match(beyond.body ?? "", new RegExp(escapeForMatch(en_gb.number(out.check!.predicted_cm, 1))));
     assert.match(beyond.body ?? "", new RegExp(escapeForMatch(en_gb.number(out.check!.measured_cm, 1))));
     assert.equal(beyond.lines, undefined);
+    // ...and the three of them add up as printed. The verdict is a subtraction the reader
+    // is invited to check, so a "76" rounded off beside a "79.8" and a gap of "4.3" would
+    // be three numbers that argue with each other on one line.
+    const printed = (beyond.body ?? "").match(/[0-9]+(?:\.[0-9])?/g) ?? [];
+    const numbers = printed.map(Number);
+    assert.ok(
+      numbers.some((one, i) => numbers.some((other, j) =>
+        i !== j && Math.abs(Math.abs(other - one) - gap) < 0.05)),
+      `nothing in ${printed.join(", ")} differs by the gap of ${gap}`,
+    );
 
     const within = scenarios.checking_verify_result_within;
     assert.ok((within.check?.gap_cm ?? 0) <= (within.check?.threshold_cm ?? 0));
@@ -864,6 +874,26 @@ describe("the check of a verification", () => {
     }
     // The drawing of the tape against the shutter is the dialog's and is kept.
     assert.ok(screenModel(scenarios.awaiting_reading_measure_verify, context(en_gb)).image);
+  });
+
+  it("tells the review how close it came without naming a percentage, on path B", () => {
+    // The review's ordinary line is "within N cm at P% of the descent". Path B's check
+    // was aimed at half the travel and got there in whatever fraction of the run the
+    // model needed, which is not a number anybody wants read out.
+    const base = structuredClone(scenarios.review_short);
+    const checked: SessionSnapshot = {
+      ...base,
+      review: { ...base.review!, accuracy_cm: 1.2, check_fraction: 0.5820290651319239 },
+    } as unknown as SessionSnapshot;
+    const lines = screenModel(checked, context(en_gb)).summary?.lines ?? [];
+    assert.equal(
+      lines[0],
+      en_gb.t("panel.wizard.check.half.reviewed", { accuracy: en_gb.number(1.2, 1) }),
+    );
+    assert.doesNotMatch(lines[0] ?? "", /58|%/);
+    // The thorough calibration's own check keeps the sentence with the percentage in it.
+    const thorough: SessionSnapshot = { ...checked, path: "path_c" } as unknown as SessionSnapshot;
+    assert.match((screenModel(thorough, context(en_gb)).summary?.lines ?? [])[0] ?? "", /58%/);
   });
 
   it("offers a path among the ways forward without making it the big button", () => {
