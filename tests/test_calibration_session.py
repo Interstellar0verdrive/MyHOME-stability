@@ -424,6 +424,16 @@ def check_the_snapshot(snapshot: dict[str, Any]) -> None:
         # How the profile being questioned was itself measured is a level of the
         # contract's own vocabulary and not the store's word for it (`precise`).
         token(check["profile_level"], SESSION_LEVELS, "check.profile_level")
+        # A verification either has an answer or has none: where the model put the bar
+        # and how far from it the tape found it are one fact said twice.
+        assert (check["predicted_cm"] is None) == (check["gap_cm"] is None), check
+        if snapshot["path"] != "path_b":
+            # Only a profile is questioned against a threshold, and only a profile has
+            # a level of its own to be read against. The thorough calibration's check
+            # asks a fit it has just made, and has all three `null`.
+            assert check["threshold_cm"] is None, check
+            assert check["profile_level"] is None, check
+            assert check["profile_check_cm"] is None, check
 
     if (review := snapshot["review"]) is not None:
         keys(review, SESSION_REVIEW_KEYS, "review")
@@ -608,6 +618,30 @@ async def test_a_path_this_backend_cannot_walk_is_refused_before_the_shutter_is_
             assert current(hass, entry) is None, path
             assert entity.calibrating is False, path
         assert runner.log == []
+
+
+async def test_a_level_this_backend_cannot_reach_is_not_offered_on_a_summary(
+    hass: HomeAssistant, tmp_path, monkeypatch, freezer: FrozenDateTimeFactory
+) -> None:
+    """The second knob, turned: a backend that stops at the basic level says so.
+
+    The summary of path A is where the thorough calibration is offered from, so a
+    backend whose `IMPLEMENTED_LEVELS` leaves it out must reach that screen with
+    nothing but the ways out on it - never with a button that would be refused.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        snapshot = await walk(hass, session, PATH_A_BASIC, freezer=freezer)
+        assert snapshot["step"] == "summary_basic"
+        assert snapshot["actions"] == ["refine"]
+
+        monkeypatch.setattr(calibration_session, "IMPLEMENTED_LEVELS", ("basic",))
+        assert session.snapshot()["actions"] == []
+        with pytest.raises(PanelError) as refused:
+            await session.async_act(CLIENT, session.revision, "refine")
+        assert refused.value.translation_key == "action_not_offered"
+        await session.async_cancel(CLIENT)
 
 
 async def test_a_start_naming_a_profile_nobody_defines_is_refused(

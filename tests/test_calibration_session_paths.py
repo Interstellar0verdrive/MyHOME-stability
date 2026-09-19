@@ -44,7 +44,7 @@ from custom_components.myhome.calibration_flow import (
     VERIFY_RUN,
     VERIFY_RUN_PROFILE,
 )
-from custom_components.myhome.calibration_session import CalibrationSession
+from custom_components.myhome.calibration_session import CalibrationSession, current
 from custom_components.myhome.calibration_store import (
     loaded_store,
     merged_profiles,
@@ -82,6 +82,7 @@ from .test_calibration_session import (
     COVER_NAME,
     DEVICE_KEY,
     ENTITY,
+    OTHER_CLIENT,
     PATH_A_BASIC,
     UNIQUE_ID,
     YAML_KEY,
@@ -289,11 +290,36 @@ THE_FOUR_READINGS: tuple[Step, ...] = (
     Step("submit", str(descent_cm(VERIFY_RUN)), field="measured_cm"),
     Step("accept_step"),
 )
+# ...and the same four dealt from the bottom, which is where the descent of a
+# correction leaves the shutter: `tape_brief` puts the reading whose run starts there
+# first, so the ascent's quarter is asked for before the descent's.
+THE_FOUR_READINGS_FROM_CLOSED: tuple[Step, ...] = (
+    Step("tape_start"),
+    Step("submit", str(ascent_cm(0.25)), field="measured_cm"),
+    Step("accept_step"),
+    Step("submit", str(descent_cm(0.25)), field="measured_cm"),
+    Step("accept_step"),
+    Step("submit", str(descent_cm(0.75)), field="measured_cm"),
+    Step("accept_step"),
+    Step("submit", str(ascent_cm(0.75)), field="measured_cm"),
+    Step("accept_step"),
+    Step("submit", str(descent_cm(VERIFY_RUN)), field="measured_cm"),
+    Step("accept_step"),
+)
 PATH_C_POINTS: tuple[Step, ...] = (
     Step("path_c"),
     Step("submit", "tall", field=CONF_PROFILE),
     Step("points_only"),
     *THE_FOUR_READINGS,
+)
+# The two conversations that reach the thorough level from a summary rather than
+# choosing it: "Continua con la calibrazione approfondita" at the end of path A and at
+# the end of a correction.
+PATH_A_THOROUGH: tuple[Step, ...] = (*PATH_A, Step("refine"), *THE_FOUR_READINGS)
+PATH_C_THOROUGH: tuple[Step, ...] = (
+    *PATH_C_TIMES,
+    Step("refine"),
+    *THE_FOUR_READINGS_FROM_CLOSED,
 )
 
 
@@ -591,10 +617,13 @@ async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel
         assert snapshot["step"] == "path_c"
         assert snapshot["path"] == "path_c"
         assert snapshot["form"]["suggested"] == "tall"
+        # The verification belonged to the path that has just been left behind, and it
+        # goes with it: a screen of a *correction* publishing a check with path B's
+        # threshold on it would be describing a conversation that no longer exists.
+        assert snapshot["check"] is None
 
         snapshot = await act(hass, session, Act("submit", "tall"))
         assert snapshot["step"] == "refine_scope"
-        # The verification belonged to the path that has just been left behind.
         assert snapshot["check"] is None
         assert snapshot["actions"] == ["times_only", "times_and_rolls", "points_only"]
         assert snapshot["measured"]["travel_cm"] == HEIGHT
@@ -622,6 +651,78 @@ async def test_a_start_that_names_a_profile_opens_the_choice_on_it(
         assert snapshot["plan"] == []
         assert runner.log == []
         check_the_snapshot(snapshot)
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_start_for_a_correction_with_no_profile_named_opens_the_choice(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """"Correggi..." pressed without saying which profile: the form, opened on its own.
+
+    The choice is a list of every profile there is, and it opens on the one this
+    window follows today - not on the first name in the list, which for a window the
+    file already assigns would be telling the user something untrue about their own
+    installation.
+    """
+    async with setup_myhome(hass, tmp_path, ASSIGNED_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        store = the_store(hass, entry)
+        await store.async_set_profile(
+            "aaa",
+            {
+                CONF_NAME: "aaa",
+                "reference_height": HEIGHT,
+                CONF_OPENING_TIME: OPENING,
+                CONF_CLOSING_TIME: CLOSING,
+                CONF_SLAT_TIME: SLAT,
+                CONF_OPENING_ROLL: ROLL_UP,
+                CONF_CLOSING_ROLL: ROLL_DOWN,
+            },
+        )
+        session = await open_session(hass, entry, path="path_c")
+
+        snapshot = session.snapshot()
+        assert snapshot["step"] == "path_c"
+        assert snapshot["path"] == "path_c"
+        assert snapshot["profile"] is None
+        assert snapshot["form"]["choices"] == ["aaa", "tall"]
+        assert snapshot["form"]["suggested"] == "tall"
+        assert runner.log == []
+        check_the_snapshot(snapshot)
+        await session.async_cancel(CLIENT)
+
+
+async def test_reading_the_screens_of_a_check_never_touches_the_shutter(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The lesson of the v2 panel, on the screens this lot adds.
+
+    A redraw that re-entered the step restarted its movements there, so a phone waking
+    up sent a shutter off again. Read the offer of a check, the reading it asks for and
+    the answer it gives as often as you like: the fake runner's log stays where the
+    walk left it.
+    """
+    async with setup_myhome(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, for_the_session(PATH_B[:4]), freezer=freezer)
+
+        for one, step in (
+            (Act("accept_step"), "verify_offer"),
+            (Act("verify_now"), "measure_verify"),
+            (Act("submit", str(descent_cm(0.5))), "verify_result"),
+        ):
+            assert (await act(hass, session, one))["step"] == step
+            so_far = list(runner.log)
+            for _ in range(3):
+                session.snapshot()
+                session.attach(CLIENT)
+                session.attach(OTHER_CLIENT)
+                session.heartbeat(CLIENT)
+                assert current(hass, entry) is session
+                await hass.async_block_till_done()
+            assert runner.log == so_far, step
+            assert session.snapshot()["step"] == step
         await session.async_cancel(CLIENT)
 
 
@@ -1083,8 +1184,16 @@ async def test_a_correction_s_stopwatch_starts_from_a_known_end_stop_too(
         (PATH_C_TIMES, "cover_only", PROFILE_YAML),
         (PATH_C_ROLLS, "cover_only", PROFILE_YAML),
         (PATH_C_POINTS, "cover_only", IN_USE_YAML),
+        (PATH_C_THOROUGH, "cover_only", PROFILE_YAML),
     ],
-    ids=["path_b", "path_b_checked", "times_only", "times_and_rolls", "points_only"],
+    ids=[
+        "path_b",
+        "path_b_checked",
+        "times_only",
+        "times_and_rolls",
+        "points_only",
+        "correction_then_thorough",
+    ],
 )
 async def test_the_session_stores_what_the_dialog_stores(
     hass: HomeAssistant,
@@ -1110,6 +1219,11 @@ async def test_the_session_stores_what_the_dialog_stores(
         session = await open_session(hass, entry)
         snapshot = await walk(hass, session, for_the_session(steps), freezer=freezer)
         assert snapshot["state"] == "review"
+        if snapshot["step"] == "summary_precise":
+            # ...and the readings really were the ones the stages asked for: a thorough
+            # calibration fed an ascent where it wanted a descent would still agree with
+            # a dialog fed the same mistake, and agree on nonsense.
+            assert snapshot["review"]["accuracy_cm"] == pytest.approx(0.0, abs=1.0)
         await save(session, target)
 
         store = the_store(hass, entry)
@@ -1118,8 +1232,9 @@ async def test_the_session_stores_what_the_dialog_stores(
         assert store.raw_covers.keys() == by_the_dialog.keys()
 
 
+@pytest.mark.parametrize("steps", [PATH_A, PATH_A_THOROUGH], ids=["basic", "thorough"])
 async def test_path_a_saved_as_a_profile_moves_the_shutter_on_the_dialog_s_numbers(
-    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, steps: tuple[Step, ...]
 ) -> None:
     """The one deliberate difference, and the proof that it is only a difference of place.
 
@@ -1130,12 +1245,12 @@ async def test_path_a_saved_as_a_profile_moves_the_shutter_on_the_dialog_s_numbe
     key for key, and that is what is compared here.
     """
     dialog_covers, dialog_profiles = await what_the_dialog_stores(
-        hass, tmp_path, freezer, PROFILE_YAML, PATH_A
+        hass, tmp_path, freezer, PROFILE_YAML, steps
     )
     async with setup_myhome(hass, storage(tmp_path, "panel"), PROFILE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
-        await walk(hass, session, for_the_session(PATH_A), freezer=freezer)
+        await walk(hass, session, for_the_session(steps), freezer=freezer)
         await save(session, "profile")
 
         record = the_record(hass, entry)

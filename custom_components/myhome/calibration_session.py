@@ -41,10 +41,9 @@ leaves no undo token.
 
 Lot B2 built the core and path A at the basic level; lot B4 added the other two
 paths, the thorough calibration and the two verifications, so the conversation now
-covers the whole of SPEC §3.4. `IMPLEMENTED_PATHS` / `IMPLEMENTED_LEVELS` stay as the
-one place that says what this backend is willing to offer: an action it could not
-carry out is never advertised and is refused by the ordinary rule
-(`action_not_offered`).
+covers the whole of SPEC §3.4. `IMPLEMENTED_PATHS` / `IMPLEMENTED_LEVELS` remain the
+knob for a backend that walks less than all of it: an action they leave out is never
+put in `actions` and is refused by the ordinary rule (`action_not_offered`).
 """
 
 from __future__ import annotations
@@ -207,10 +206,15 @@ PRESENCE_SEC = 45.0
 REASON_INTERRUPTED = "interrupted"
 
 # What this backend can carry out, which is now the whole of SPEC §3.4. They are kept
-# as tuples rather than folded away because they are the one place a backend says what
-# it offers: `capabilities` answers them to the panel, and anything not in them is not
-# put in `actions` and is refused before a shutter is taken hold of, rather than
-# advertised and then failed on.
+# as tuples rather than folded away because they are the knob a backend that walks less
+# than all of it turns: what is not in them is not put in `actions` and is refused
+# before a shutter is taken hold of, rather than advertised and then failed on.
+#
+# They are **not** what `capabilities` answers. `panel_schemas.SESSION_CAPABILITIES` is
+# a constant of the frozen contract and lists the frozen tuples; the two agree today
+# because these two are complete, and making the published capabilities derive from
+# these is a change to a frozen artefact and therefore not this module's to make
+# (handoff §8, RISCHIO-1).
 IMPLEMENTED_PATHS: tuple[str, ...] = (PATH_FIRST, PATH_PROFILE, PATH_REFINE)
 IMPLEMENTED_LEVELS: tuple[str, ...] = ("basic", "thorough")
 
@@ -549,9 +553,9 @@ async def async_start(
             {"cover": running.cover_name, "by": "reserved"},
         )
     if path is not None and path not in IMPLEMENTED_PATHS:
-        # What this lot cannot carry out is not offered and not opened: a session born
-        # on a screen every one of whose buttons is refused would hold the shutter and
-        # do nothing (the only way out being `cancel`). Lot B4 widens the tuple.
+        # What this backend cannot carry out is not offered and not opened: a session
+        # born on a screen every one of whose buttons is refused would hold the shutter
+        # and do nothing, the only way out being `cancel`.
         raise _refuse(
             ERR_NOT_ALLOWED,
             ERROR_ACTION_NOT_OFFERED,
@@ -1243,6 +1247,11 @@ class CalibrationSession:
         the same tape (`async_step_path_c`, :1823-1828, and `_correct_this_profile`).
         """
         self._path = PATH_REFINE
+        # The verification that sent the user here was an answer about the profile
+        # this window is about to stop being described by. It goes with the path: a
+        # screen of a *correction* publishing a check with path B's threshold on it
+        # would be describing a conversation that no longer exists.
+        self._check = None
         self._show("path_c")
 
     # ---- the three scopes of a correction
@@ -1425,8 +1434,12 @@ class CalibrationSession:
             await self._async_submit_reading(value)
         elif field == CONF_NAME:
             await self._async_submit_name(value)
-        else:
+        elif field == CONF_PROFILE:
             await self._async_submit_profile(value)
+        else:  # pragma: no cover - every field of `SCREENS` is named above
+            # A field added to a screen and to nothing else: refused rather than sent
+            # to whichever handler happened to be last.
+            raise self._not_offered(SESSION_SUBMIT)
 
     async def _async_submit_height(self, value: Any) -> None:
         number = _finite(value)
@@ -1467,7 +1480,7 @@ class CalibrationSession:
         if number is None:
             self._show(step, error=error or ERROR_ABOVE_THE_TRAVEL)
             return
-        if step == "measure_verify":  # pragma: no cover - lot B4 walks the verifications
+        if step == "measure_verify":
             await self._async_verified(number)
             return
         if self._report is None:
@@ -1675,8 +1688,9 @@ class CalibrationSession:
             await self._async_fraction_stage(stage)
             return
         handler = getattr(self, f"_async_stage_{stage}", None)
-        if handler is None:
-            # A stage of a plan lot B4 installs, on a session that cannot walk it.
+        if handler is None:  # pragma: no cover - every stage of every plan has one
+            # A stage of a plan imported from the dialog that this module knows no
+            # screen for: it would be a stage added there and not here.
             raise self._not_offered(stage)
         await handler()
 
