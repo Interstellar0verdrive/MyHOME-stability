@@ -514,6 +514,28 @@ async def test_the_model_in_use_and_the_known_travel(conversation: Conversation)
     flow._measured = before
 
 
+async def test_the_adopted_times_come_on_readings_of_their_own(
+    conversation: Conversation,
+) -> None:
+    """`adopted_timings` hands back a measurement that shares nothing with its argument.
+
+    The dialog's method writes into the conversation it already has, so the question
+    never comes up there; the function returns a copy, and a copy that shared the very
+    lists the readings are appended to would grow the caller's own measurement behind
+    its back - a session that keeps the one it started from (an undo, the snapshot
+    before the thorough calibration) would never see it happen (review B1, R2).
+    """
+    c = conversation
+    adopted = adopted_timings(c.measured, c.values())
+    assert adopted is not None
+    assert adopted.descent is not c.measured.descent
+    assert adopted.ascent is not c.measured.ascent
+    before = (list(c.measured.descent), list(c.measured.ascent))
+    adopted.descent.append((1.0, 2.0))
+    adopted.ascent.append((3.0, 4.0))
+    assert (c.measured.descent, c.measured.ascent) == before
+
+
 async def test_the_fit(conversation: Conversation) -> None:
     """`_fits`, `_fit_both` and `_slat_from_gap`, and the model the check asks about."""
     c = conversation

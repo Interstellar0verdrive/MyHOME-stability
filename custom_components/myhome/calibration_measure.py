@@ -208,8 +208,14 @@ def adopted_timings(measured: Measured, values: Mapping[str, float] | None) -> M
     Ported from `GuidedCalibrationMixin._adopt_the_model_in_use`, which writes the
     same three fields into the conversation and answers `True`; here the conversation
     is handed back as a copy and `None` stands for `False`. `values` is what
-    `values_in_use` answered. The copy is shallow, as `dataclasses.replace` is: the
-    lists of readings are shared with `measured`.
+    `values_in_use` answered.
+
+    A copy with lists of its own: `dataclasses.replace` copies shallowly, which would
+    leave the two `Measured` sharing the very lists the readings are appended to, so a
+    caller that kept the one it started from (an undo, a snapshot taken before the
+    thorough calibration, a before-and-after) would see its own copy grow behind its
+    back. The readings are copied here rather than left to a rule the caller has to
+    remember.
     """
     if values is None:
         return None
@@ -219,6 +225,8 @@ def adopted_timings(measured: Measured, values: Mapping[str, float] | None) -> M
         opening=PressTiming(slat, values[CONF_OPENING_TIME]),
         closing=PressTiming(None, values[CONF_CLOSING_TIME]),
         times_adopted=True,
+        descent=list(measured.descent),
+        ascent=list(measured.ascent),
     )
 
 
