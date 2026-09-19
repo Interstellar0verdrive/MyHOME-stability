@@ -194,16 +194,26 @@ THREE_QUARTER_RUN = 0.75
 VERIFY_RUN = 0.40
 VERIFY_RUN_PROFILE = 0.50
 
-# Above this the profile is not describing this window (FLOW, "soglia affinamento":
-# 3 cm), and path B offers path C instead of pretending the check passed.
-REFINE_THRESHOLD_CM = 3.0
+# Above this the profile is not describing this window, and path B offers path C
+# instead of pretending the check passed.
+#
+# **Four centimetres**, the same number the panel has carried since 20 September and
+# the one both now share (SPEC decision 20, amended 20 September). The maintainer's
+# rule is that nothing may promise a precision it cannot keep on an installation
+# nobody here has seen: the basic calibration is stated as "about 4 cm", the thorough
+# one as "about 2 cm", and a check that offered a correction at 3,1 cm would be
+# contradicting the sentence the same route had just shown.
+REFINE_THRESHOLD_CM = 4.0
 
 # What the tape form promises next to the expected value. The precise level knows the
 # model it is checking, so it can afford to be strict; the basic level's expectation is
 # drawn from the default roll of an ordinary shutter and deserves a wider margin - the
 # live walk-through read fifteen centimetres off the default geometry on a shutter that
 # turned out to be perfectly ordinary, and a band of ten made that look like a fault.
-EXPECTED_TOLERANCE_CM = 3.0
+#
+# Four centimetres and not three, by the same rule: the tolerance under the field is
+# the precision this calibration declares, and it says the same number everywhere.
+EXPECTED_TOLERANCE_CM = 4.0
 ROUGH_TOLERANCE_CM = 15.0
 
 # The tape is read to the nearest centimetre; a window is at most a few metres of
@@ -2797,7 +2807,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         worth being strict about. The basic level has only the ordinary geometry of a
         roller shutter, so it says the same thing with a wider margin: the point of the
         line is to catch a tape read from the floor rather than from the rest, which is
-        wrong by tens of centimetres, not by three.
+        wrong by tens of centimetres, not by four.
         """
         direction, fraction = self._pending or (DIRECTION_CLOSE, HALF_RUN)
         height = self._measured.height
@@ -3015,7 +3025,7 @@ class GuidedCalibrationMixin(CalibrationContextMixin):
         """Show the deviation in centimetres, and what can be done about it."""
         deviation = self._measured.deviation
         # Rounded *before* the threshold is applied, so that the number on the screen is
-        # the number that decided: comparing the unrounded value showed "3 cm" both
+        # the number that decided: comparing the unrounded value showed "4 cm" both
         # with and without the refinement on offer, on a digit the user cannot see.
         off_by = round(abs(deviation), 1) if deviation is not None else 0.0
         options = ["accept_step", "repeat_tape"]

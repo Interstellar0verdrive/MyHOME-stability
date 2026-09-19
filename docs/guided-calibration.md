@@ -223,7 +223,7 @@ closes it. With three points per direction the
 fit solves the roll **and** a scale factor on the run times at the same time, which
 is what absorbs the reaction time of the button presses: the tape corrects the
 finger. Under each field the form prints the value the model expects
-("about 49 cm; anything within 3 cm is normal"), so a reading taken from the wrong
+("about 49 cm; anything within 4 cm is normal"), so a reading taken from the wrong
 reference point shows up while you are still standing there.
 
 It closes with a **verification at 40 % of the descent** — deliberately a position
@@ -581,7 +581,7 @@ calibration is running on it in the panel, or `myhome.cover_calibration_run` is 
 it. Finish or close that one first — the panel says which of the three it is, and can
 close a dialog for you.
 
-**The verification is more than 3 cm out.** On path B that means this shutter does
+**The verification is more than 4 cm out.** On path B that means this shutter does
 not behave like the profile it was given; measure it on its own with path C, which
 the verification screen offers directly. On a shutter measured with path A it means
 one of the readings was taken from a different reference point — measure every

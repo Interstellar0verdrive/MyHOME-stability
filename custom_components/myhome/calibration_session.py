@@ -114,6 +114,7 @@ from .calibration_flow import (
     REASON_TIMEOUT,
     REASON_UNKNOWN,
     REASON_UNKNOWN_COVER,
+    REFINE_THRESHOLD_CM,
     ROUGH_TOLERANCE_CM,
     RUNNING_ACTION,
     THREE_QUARTER_RUN,
@@ -366,17 +367,10 @@ PRESS_STEPS: dict[str, str] = {
 }
 
 # Above this the profile is not describing this shutter, and path B offers the
-# correction instead of pretending the check passed.
-#
-# **Four centimetres, and the dialog's own is still three.** The maintainer's rule of
-# 20 September is that nothing may promise a precision it cannot keep on an
-# installation nobody here has seen: the basic calibration is stated as "about 4 cm",
-# the thorough one as "about 2 cm", and a check that offered a correction at 3,1 cm
-# would be contradicting the sentence the same route had just shown. The dialog's
-# `REFINE_THRESHOLD_CM` stays at 3 because `calibration_flow.py` is not opened in this
-# lot; the two are meant to meet at 4 the next time it is (SPEC decision 20, amended
-# 20 September).
-REFINE_THRESHOLD_CM = 4.0
+# correction instead of pretending the check passed. **Four centimetres**, and the
+# dialog's `REFINE_THRESHOLD_CM` - imported above - is the same four: the number was
+# the panel's own for one lot and the two were reunited as soon as
+# `calibration_flow.py` could be opened (SPEC decision 20, amended 20 September).
 
 # The readings of the tape phase, as (direction, fraction, the step that asks for the
 # tape). `half_down` and `half_up` are path A's; the other four are the thorough
@@ -1248,12 +1242,12 @@ class CalibrationSession:
         """Path B's verification, far enough out to be worth correcting the window.
 
         Rounded *before* the threshold is applied, as the dialog rounds it
-        (`async_step_verify_result`, :3014): the number on the screen is the number
-        that decided, and a gap of 3.04 cm that read "3,0 cm" and offered a correction
-        was a screen arguing with itself over a digit nobody can see. The threshold is
-        this module's own fixed 4 cm (SPEC decision 20, amended 20 September); how well
-        the profile itself was measured is shown beside it (`check.profile_level`)
-        rather than folded into it.
+        (`async_step_verify_result`): the number on the screen is the number that
+        decided, and a gap of 4.04 cm that read "4,0 cm" and offered a correction was
+        a screen arguing with itself over a digit nobody can see. The threshold is the
+        fixed 4 cm the dialog and the panel share (SPEC decision 20, amended
+        20 September); how well the profile itself was measured is shown beside it
+        (`check.profile_level`) rather than folded into it.
         """
         if self._path != PATH_PROFILE or PATH_REFINE not in IMPLEMENTED_PATHS:
             return False

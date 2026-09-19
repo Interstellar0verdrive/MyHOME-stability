@@ -2718,7 +2718,7 @@
         "percent": 50,
         "direction": "close",
         "expected": 67.22858238297131,
-        "tolerance": 3.0
+        "tolerance": 4.0
       },
       "movement": null,
       "press": null,
@@ -2727,7 +2727,7 @@
         "fraction": 0.5,
         "from_end_stop": "open",
         "expected_cm": 67.22858238297131,
-        "tolerance_cm": 3.0
+        "tolerance_cm": 4.0
       },
       "measured": {
         "travel_cm": 151.0,

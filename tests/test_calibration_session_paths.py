@@ -556,7 +556,7 @@ async def test_path_b_checks_the_profile_against_the_shutter(
         assert reading["from_end_stop"] == "open"
         # A model of this window exists, so the tolerance is the tight one.
         assert reading["expected_cm"] == pytest.approx(descent_cm(VERIFY_RUN_PROFILE))
-        assert reading["tolerance_cm"] == 3.0
+        assert reading["tolerance_cm"] == 4.0
 
         snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5))))
         assert snapshot["state"] == "checking"
@@ -566,9 +566,9 @@ async def test_path_b_checks_the_profile_against_the_shutter(
         assert check["measured_cm"] == pytest.approx(descent_cm(0.5))
         assert check["predicted_cm"] == pytest.approx(descent_cm(0.5))
         assert check["gap_cm"] == 0.0
-        # The panel's own threshold, four centimetres since 20 September: the dialog's
-        # is still three, and this is the one the panel's screens are written against
-        # ("a basic calibration usually ends up within about 4 cm").
+        # The threshold, four centimetres since 20 September and the same one in the
+        # dialog: it is what the panel's screens are written against ("a basic
+        # calibration usually ends up within about 4 cm").
         assert check["threshold_cm"] == REFINE_THRESHOLD_CM == 4.0
         # The profile lives in `cover_profiles:` and was never measured here, so how
         # well it was measured is not known and is not guessed at.
@@ -869,9 +869,9 @@ async def test_a_verification_read_where_the_shutter_no_longer_is_says_so(
 async def test_the_check_says_how_well_the_profile_it_questions_was_measured(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """3 cm means nothing against a profile worth 4 cm and something against one worth 1.
+    """4 cm means nothing against a profile worth 4 cm and something against one worth 1.
 
-    The threshold stays the dialog's fixed 3 cm (SPEC decision 20); what the snapshot
+    The threshold stays a fixed 4 cm (SPEC decision 20, amended 20 September); what the snapshot
     adds is the level of the profile being questioned and the gap its *own* check
     reported, read off the `raw` block that calibration kept - so the number can be
     read against something rather than taken on its own.
