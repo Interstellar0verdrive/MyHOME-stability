@@ -79,6 +79,21 @@ everything the panel does.
   happened with "Try again" and "End the calibration" on it instead of an empty page, and
   the measurement behind it is untouched. Nothing a user sees changes yet: every button
   that reaches the guided calibration still opens *Configure*.
+- **The guided calibration as a session that lives on the server.** The measuring
+  conversation of *Configure → "Calibrate a cover"* — which is unchanged and goes on
+  being a complete alternative — now also exists as a session the panel will drive:
+  one per gateway, with its own identity, an owner that can go away and come back, and
+  a whole picture published at every step. Closing a tab, locking a phone or losing the
+  connection does not end it and does not lose a tape reading; the shutter is given
+  back by the same half-hour watchdog the dialog has always used, and the run times,
+  the presses and the fit are the dialog's own arithmetic rather than a second copy of
+  it. It watches the shutter while it works: lowering it from the wall switch while the
+  instructions are being read is accepted, and a timed run whose starting end stop is no
+  longer known brings the shutter back there by itself instead of measuring from a point
+  nobody knows. The first path is complete — the full measurement of a shutter nobody
+  has measured before — and saving it writes the profile and assigns it, or, if
+  preferred, keeps the numbers for that window alone. Nothing is registered on the
+  WebSocket yet and nothing a user sees changes.
 
 ### Changed
 

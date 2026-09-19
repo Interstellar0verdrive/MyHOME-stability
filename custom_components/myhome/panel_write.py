@@ -278,9 +278,18 @@ def _take(hass: HomeAssistant, entry: ConfigEntry, token: str) -> _Undo:
 
 # ------------------------------------------------------------------------ the lock
 @callback
-def _refuse_if_busy(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Refuse a write while a measurement is running, or while one is being applied."""
-    measuring = calibrating_now(hass, entry)
+def _refuse_if_busy(
+    hass: HomeAssistant, entry: ConfigEntry, *, holder: str | None = None
+) -> None:
+    """Refuse a write while a measurement is running, or while one is being applied.
+
+    `holder` is the one shutter the write is allowed to be about although it is being
+    calibrated: the panel's own calibration session, saving what it has just measured
+    (0.6.0 wizard, SPEC §3.9). Every other cover of the gateway still refuses, and a
+    write from anywhere else still refuses on this one - the exemption belongs to the
+    session that is holding it, not to the shutter.
+    """
+    measuring = calibrating_now(hass, entry) - ({holder} if holder else set())
     if measuring:
         unique_id = sorted(measuring)[0]
         name = str(basic_covers(hass, entry).get(unique_id, {}).get("name") or unique_id)
@@ -978,6 +987,8 @@ async def async_write(
     entry: ConfigEntry,
     what: str,
     work: Any,
+    *,
+    holder: str | None = None,
 ) -> dict[str, Any]:
     """Run one write under the rules every write obeys, and answer for it.
 
@@ -988,8 +999,14 @@ async def async_write(
     An `undo` is passed through the same door on purpose: it is refused while a
     measurement is running, it is refused while another write is being applied, and it
     reaches the covers exactly as the write it takes back did.
+
+    `holder` is the calibration session's own save (0.6.0 wizard): the shutter it names
+    is exempt from `busy_calibrating`, because the calibration refusing it is the very
+    one asking, and the write leaves **no undo token** - three minutes of measurements
+    are not a gesture to take back by accident, and "Rimuovi la misura" on the cover
+    card is the way back.
     """
-    _refuse_if_busy(hass, entry)
+    _refuse_if_busy(hass, entry, holder=holder)
     # Taken with no `await` between the refusal and the claim, so two frames that
     # arrived in the same tick cannot both find the gateway free.
     writing: set[str] = hass.data.setdefault(WRITING_DATA_KEY, set())
@@ -1003,7 +1020,7 @@ async def async_write(
         writing.discard(entry.entry_id)
 
     diff = _diff(before, after)
-    token = None if what == "undo" else _remember(hass, entry, diff, what)
+    token = None if what == "undo" or holder is not None else _remember(hass, entry, diff, what)
     if diff.anything:
         # ...and this is how it reaches the shutters: every cover of this gateway
         # re-resolves and swaps its numbers in place. No reload (plan decision 4).

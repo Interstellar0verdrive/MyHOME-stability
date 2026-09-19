@@ -854,3 +854,9 @@ def test_the_module_does_not_import_home_assistant_or_redefine_the_dialogs_const
         if isinstance(target, ast.Name) and not target.id.startswith("__")
     }
     assert not assigned & set(vars(calibration_flow)), assigned & set(vars(calibration_flow))
+    # ...and a closed list rather than only "not one of the dialog's names", because a
+    # threshold copied here under a *different* name would pass the line above and be
+    # exactly the second arithmetic this module exists to prevent (review of B1, A1).
+    # Anything added to this set is a number the port owns; there is one, and it is a
+    # list of keys rather than a value.
+    assert assigned == {"_MODEL_KEYS"}, assigned
