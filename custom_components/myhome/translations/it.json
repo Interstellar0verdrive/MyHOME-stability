@@ -746,7 +746,7 @@
       "action": {
         "measure": "Misura una tapparella"
       },
-      "note": "Si apre il dialogo Configura: è lì che si misura. Al termine, il profilo compare qui."
+      "note": "La calibrazione guidata si svolge in questo pannello: circa tre minuti, e al termine il profilo compare qui."
     },
     "overview": {
       "title": "Profili e tapparelle",
@@ -894,7 +894,7 @@
         "assign": "Assegna a un profilo…",
         "travel": "Imposta la corsa del telo…",
         "measure_again": "Misura di nuovo",
-        "measure_again_note": "Calibrazione base completa, nel dialogo",
+        "measure_again_note": "La calibrazione guidata dall'inizio: il percorso si sceglie sul primo schermo",
         "correct": "Correggi…",
         "correct_note": "Se si ferma nel posto sbagliato: solo i tempi, tempi e rulli, o solo la calibrazione approfondita",
         "thorough": "Calibrazione approfondita",
@@ -902,13 +902,14 @@
         "remove": "Rimuovi la misura…"
       },
       "correct": {
-        "intro": "La correzione apre il dialogo Configura sul percorso scelto. Al ritorno il pannello si aggiorna da solo.",
+        "intro": "La correzione si svolge in questo pannello, sull'ambito scelto qui: viene riscritto solo quello che misura, e nient'altro di questa tapparella cambia.",
         "times": "Solo i tempi",
         "times_note": "Una corsa per direzione, i rulli restano",
         "times_rolls": "Tempi e rulli",
         "times_rolls_note": "Calibrazione base completa",
         "thorough": "Solo la calibrazione approfondita",
-        "thorough_note": "Letture al 25 e al 75 % per direzione e una verifica"
+        "thorough_note": "Letture al 25 e al 75 % per direzione e una verifica",
+        "needs_profile": "La correzione parte dal profilo che questa tapparella dovrebbe seguire, e questo gateway non ne ha ancora nessuno: conviene misurarla di nuovo, e alla fine il profilo nasce."
       },
       "edit": {
         "title": "Modifica i valori a mano",
@@ -997,7 +998,9 @@
         "action": {
           "resume": "Riprendi la sessione",
           "stop": "Termina"
-        }
+        },
+        "panel_body": "È in corso una calibrazione guidata di «{cover}» in questo pannello. Finché non termina, da qui si può solo leggere: non viene scritto niente.",
+        "end_panel_confirm": "Terminare la calibrazione guidata di «{cover}»? Le misure fatte finora vengono scartate, e una corsa in atto finisce da sola al finecorsa."
       },
       "applying": {
         "title": "Le modifiche vengono applicate…",
@@ -1006,7 +1009,6 @@
     },
     "wizard": {
       "title": "Calibrazione guidata",
-      "none": "Nessuna calibrazione è in corso su questo gateway.",
       "action": {
         "end": "Termina la calibrazione",
         "claim": "Prendi il controllo",
@@ -1139,6 +1141,19 @@
           "title": "Non c'era niente con cui confrontare",
           "body": "Il metro ha letto {measured} cm al {percent}% della corsa, ma i valori che {cover} seguiva non ci sono più, quindi non c'è nessuna previsione da confrontare. La lettura non è stata buttata: si può proseguire, e il riepilogo dice che cosa verrebbe salvato."
         }
+      },
+      "pick": {
+        "title": "Quale tapparella misurare?",
+        "body": "Sono elencate solo le tapparelle di cui Home Assistant stima la posizione dai tempi di corsa: sono le uniche che questa calibrazione riguarda. La prima volta conviene scegliere una tapparella rappresentativa del suo tipo e comoda da misurare."
+      },
+      "busy": {
+        "title": "La tapparella è già in calibrazione",
+        "panel": "Una calibrazione guidata di «{cover}» è già in corso, in un altro pannello o in un'altra scheda. Da qui si può seguirla, e se quel dispositivo non è più presente il controllo passa qui; finché lo è, il controllo si prende con un pulsante sul suo schermo.",
+        "other": "«{cover}» è in calibrazione nel dialogo Configura.",
+        "end_other": "Chiudi il dialogo e libera la tapparella",
+        "end_other_confirm": "Chiudere il dialogo Configura aperto su questo gateway? Le misure non salvate di quel dialogo vanno perse, e se aveva salvato qualcosa l'integrazione viene ricaricata.",
+        "service": "Una corsa di calibrazione avviata da un'azione è ancora in corso: attendere che finisca.",
+        "here": "Questa scheda sta già misurando «{cover}»: su un gateway si misura una tapparella alla volta. Conviene tornarci, o terminarla, prima di misurarne un'altra."
       }
     },
     "screen": {

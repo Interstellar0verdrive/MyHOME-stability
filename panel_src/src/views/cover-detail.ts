@@ -76,16 +76,15 @@ export interface DetailActions {
   saveValues: () => void;
   saveTravel: () => void;
   remove: () => void;
-  /** "Misura di nuovo", "Correggi… → …", "Calibrazione approfondita": all end in the flow. */
-  openFlow: (source: HTMLElement) => void;
   /**
-   * The same three buttons, once they lead into the panel's own wizard instead (SPEC §6).
+   * "Misura di nuovo", "Correggi… → …" and "Calibrazione approfondita" (SPEC §6).
    *
-   * Declared by lot F1 and used by lot F3: the intention carries the shutter, the path
-   * and, for "Correggi…", the scope - which is what lets `start` open the screen the user
-   * pressed a button for rather than a menu they have to find it in again.
+   * The intention carries the shutter, the path and, for "Correggi…", the scope - which is
+   * what lets `start` open the screen the user pressed a button for rather than a menu
+   * they have to find it in again. `null` is never sent from here: this card always knows
+   * which shutter it is about.
    */
-  calibrate: (intent: WizardIntent) => void;
+  calibrate: (intent: WizardIntent | null) => void;
 }
 
 export class MyHomeCoverDetail extends LitElement {
@@ -183,6 +182,11 @@ export class MyHomeCoverDetail extends LitElement {
 
   private get _locked(): boolean {
     return this.state.overview?.measuring != null || this.state.applying;
+  }
+
+  /** The shutter this card is about, as `cover_detail` last answered it. */
+  private get _cover(): CoverRow | null {
+    return this.state.detail.answer?.cover ?? null;
   }
 
   /** The guided form's label, whole: for a sentence where no number carries the unit. */
@@ -329,6 +333,14 @@ export class MyHomeCoverDetail extends LitElement {
     );
     const hasOwn = cover.has_own.length > 0;
     const offersThorough = hasOwn && cover.level !== "precise";
+    // **A correction is a correction of a profile.** `path_c` is born on the profile
+    // form, whose choices are the gateway's profiles: with none defined the screen has an
+    // empty list, no actions and nothing to press, under a sentence that says a profile
+    // was assigned. Verified against the backend - `start(path_c, scope)` on a gateway
+    // with no profiles answers `step: "path_c"`, `actions: []`, `form.choices: []`. So
+    // the two buttons that can only mean `path_c` are offered only where an answer
+    // exists, and say why when it does not.
+    const correctable = (this.state.overview?.profiles ?? []).length > 0;
     return html`<section class="card">
         <h2 data-heading tabindex="-1">${this.i18n.t("panel.detail.values.title")}</h2>
         <p class="intro">${this.i18n.t("panel.detail.values.intro")}</p>
@@ -360,19 +372,37 @@ export class MyHomeCoverDetail extends LitElement {
               onClick: () => this.actions.openProfile(cover.profile as string),
             })
           : nothing}
-        ${this._flowButton(
+        ${this._calibrateButton(
           "panel.detail.action.measure_again",
           "panel.detail.action.measure_again_note",
+          // No path: the session is born on the choice of route, which is the screen that
+          // asks whether this shutter is the first of its kind or like one already
+          // measured. "Measure again" is that question, not an answer to it.
+          {},
+          "measure-again",
         )}
         ${hasOwn
           ? wideButton({
               label: this.i18n.t("panel.detail.action.correct"),
-              note: this.i18n.t("panel.detail.action.correct_note"),
+              note: correctable
+                ? this.i18n.t("panel.detail.action.correct_note")
+                : this.i18n.t("panel.detail.correct.needs_profile"),
+              mark: "correct",
+              disabled: !correctable,
               onClick: () => this.actions.mode("correct"),
             })
           : nothing}
         ${offersThorough
-          ? this._flowButton("panel.detail.action.thorough", "panel.detail.action.thorough_note")
+          ? this._calibrateButton(
+              "panel.detail.action.thorough",
+              "panel.detail.action.thorough_note",
+              // The same thing as "Correggi… → solo la calibrazione approfondita" (SPEC
+              // §6), which is why it sends the same intention rather than a path of its
+              // own: four readings and a check, with no timed run.
+              { path: "path_c", scope: "points_only" },
+              "thorough",
+              correctable,
+            )
           : nothing}
         ${hasOwn
           ? wideButton({
@@ -414,13 +444,41 @@ export class MyHomeCoverDetail extends LitElement {
     );
   }
 
-  /** A button that ends in the options flow, with the one line that says it will. */
-  private _flowButton(labelKey: string, noteKey: string): TemplateResult {
+  /**
+   * A button that opens the guided calibration on this shutter (SPEC §6).
+   *
+   * No "↗": nothing here leaves the panel any more, and an arrow that promised it would
+   * was the drift row 24 of the design check names. The profile is sent only when this
+   * shutter really follows one that exists - a name nobody defines is `unknown_profile`,
+   * and a correction of a shutter that follows none is born on the **choice of profile**
+   * instead, which is the screen that can answer it. `offered` is false where even that
+   * screen would have nothing on it: see `correctable` in `_view`.
+   */
+  private _calibrateButton(
+    labelKey: string,
+    noteKey: string,
+    intent: Omit<WizardIntent, "cover" | "name" | "profile">,
+    mark: string,
+    offered = true,
+  ): TemplateResult {
+    const cover = this._cover;
     return wideButton({
-      label: `${this.i18n.t(labelKey)} ↗`,
-      note: this.i18n.t(noteKey),
-      title: this.i18n.t("panel.common.opens_configure"),
-      onClick: (event: Event) => this.actions.openFlow(event.currentTarget as HTMLElement),
+      label: this.i18n.t(labelKey),
+      note: offered ? this.i18n.t(noteKey) : this.i18n.t("panel.detail.correct.needs_profile"),
+      mark,
+      disabled: cover === null || !offered,
+      onClick: () => {
+        if (!cover) {
+          return;
+        }
+        const profile = cover.profile !== null && !cover.profile_missing ? cover.profile : undefined;
+        this.actions.calibrate({
+          cover: cover.unique_id,
+          name: cover.name,
+          ...intent,
+          ...(intent.path && profile ? { profile } : {}),
+        });
+      },
     });
   }
 
@@ -567,23 +625,36 @@ export class MyHomeCoverDetail extends LitElement {
 
   // -------------------------------------------------------------------- "Correggi…"
   /**
-   * The three scopes of the lexicon, each of which ends in the options flow.
+   * The three scopes of the lexicon, each of which opens the wizard on the scope pressed.
    *
-   * None of them can be preselected: the flow's `init` step is a menu and takes no
-   * argument, so all three land the user in the same place. The intro says the dialog
-   * opens; naming the path in the button is what tells them which of the three menu
-   * entries to pick. Giving the flow an entry point that carries a scope is a 0.7.0 item.
+   * They used to land in the dialog's opening menu, all three of them in the same place,
+   * with a sentence apologising for it (design check, row 38). `start` carries the path,
+   * the profile and the scope now, so the session is born on `refine_scope` with the scope
+   * the user pressed already marked - and marked is all it is: the choice is still made by
+   * pressing it, because a highlight nobody confirmed is a suggestion (lot F2, §4.3).
    */
   private _correct(): TemplateResult {
     return html`<section class="card actions">
       <h2 data-heading tabindex="-1">${this.i18n.t("panel.detail.action.correct")}</h2>
       <p class="intro">${this.i18n.t("panel.detail.correct.intro")}</p>
-      ${this._flowButton("panel.detail.correct.times", "panel.detail.correct.times_note")}
-      ${this._flowButton(
+      ${this._calibrateButton(
+        "panel.detail.correct.times",
+        "panel.detail.correct.times_note",
+        { path: "path_c", scope: "times_only" },
+        "times-only",
+      )}
+      ${this._calibrateButton(
         "panel.detail.correct.times_rolls",
         "panel.detail.correct.times_rolls_note",
+        { path: "path_c", scope: "times_and_rolls" },
+        "times-and-rolls",
       )}
-      ${this._flowButton("panel.detail.correct.thorough", "panel.detail.correct.thorough_note")}
+      ${this._calibrateButton(
+        "panel.detail.correct.thorough",
+        "panel.detail.correct.thorough_note",
+        { path: "path_c", scope: "points_only" },
+        "points-only",
+      )}
       <div class="foot">
         <button class="cta text" type="button" @click=${() => this.actions.mode("view")}>
           ${this.i18n.t("panel.common.action.back")}

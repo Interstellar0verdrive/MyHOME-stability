@@ -50,7 +50,13 @@ import {
   type SessionSubmit,
 } from "./engine/session-contract";
 import { phaseLine } from "./wizard/model";
-import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
+import {
+  NOTHING_PENDING,
+  NO_DETAIL,
+  NO_PROFILE_CARD,
+  Store,
+  type BusyAsk,
+} from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
 import { FocusTrap, deepActiveElement, focusWhenPainted, liveRegion } from "./engine/a11y";
 import {
@@ -76,7 +82,11 @@ import {
 } from "./engine/ws";
 import { type HaPanelInfo, type HaRoute, type HomeAssistant } from "./types/ha";
 import { drawer, drawerStyles } from "./components/drawer";
-import { measuringBanner, measuringBannerStyles } from "./components/measuring-banner";
+import {
+  measuringBanner,
+  measuringBannerStyles,
+  type BannerActions,
+} from "./components/measuring-banner";
 import { cardSkeleton, overviewSkeleton, skeletonStyles } from "./components/skeleton";
 import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
@@ -437,6 +447,7 @@ export class MyHomeCalibrationPanel extends LitElement {
 
   protected override updated(changed: PropertyValues): void {
     this._manageDrawerFocus();
+    this._followBannerQuestion();
     if (changed.has("route")) {
       this._router.setHostPath(this.route?.path);
       this._onRoute(this._router.current);
@@ -458,6 +469,38 @@ export class MyHomeCalibrationPanel extends LitElement {
   /** Whether a drawer was on the screen the last time focus was looked at. */
   private _drawerWasOpen = false;
   private _dialogWasOpen = false;
+  /** The banner's question, as it stood on the last paint. */
+  private _bannerAsked: BusyAsk = null;
+
+  /**
+   * The keyboard follows the banner's question, and comes back when it is answered.
+   *
+   * The question **replaces** the offers inside the strip, so the button that was just
+   * pressed leaves the document: left alone, focus falls to `<body>` and answering "yes"
+   * or "no" means tabbing from the top of the page. The strip is `aria-live="polite"`, so
+   * the question is read out - which made the gap worse rather than better, because it is
+   * heard and cannot be answered.
+   */
+  private _followBannerQuestion(): void {
+    const ask = this._store.state.busy.ask;
+    if (ask === this._bannerAsked) {
+      return;
+    }
+    const before = this._bannerAsked;
+    this._bannerAsked = ask;
+    const root = this.shadowRoot;
+    if (ask) {
+      focusWhenPainted(() => root?.querySelector('[data-banner="confirm"]') as HTMLElement | null);
+      return;
+    }
+    // Answered "no": back to the offer that asked it, which is where the user was.
+    if (before) {
+      const mark = before === "end_panel" ? "end-panel" : "end-other";
+      focusWhenPainted(
+        () => root?.querySelector(`[data-banner="${mark}"]`) as HTMLElement | null,
+      );
+    }
+  }
 
   /**
    * The keyboard, while the drawer is open - the review panel's arrangement, moved up one
@@ -800,6 +843,13 @@ export class MyHomeCalibrationPanel extends LitElement {
     // One level, worked out from the two routes and nothing else: see `engine/drawer.ts`.
     this._drawerBack = nextBack(this._drawerBack, this._store.state.route, route);
     this._store.set({ route });
+    // A question does not survive the screen it was asked on. "Chiudi il dialogo e libera
+    // la tapparella?" left open on the list and found again after a walk through the
+    // wizard would be a question nobody asked, with a "yes" under it that closes somebody
+    // else's dialog - the same reason `wizardExit` is cleared further down.
+    if (before.view !== route.view && this._store.state.busy.ask !== null) {
+      this._store.set({ busy: { ...this._store.state.busy, ask: null } });
+    }
     if (route.view === "cover") {
       const id = route.params.id;
       if (this._store.state.detail.for !== id) {
@@ -1374,7 +1424,6 @@ export class MyHomeCalibrationPanel extends LitElement {
     saveValues: () => void this._saveValues(),
     saveTravel: () => void this._saveTravel(),
     remove: () => void this._removeMeasure(),
-    openFlow: (source) => this._openFlow(source),
     calibrate: (intent) => void this._calibrate(intent),
   };
 
@@ -1951,14 +2000,29 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   /**
-   * "Measure this shutter" - the one road into the wizard.
+   * "Measure this shutter" - the one road into the wizard (SPEC §6).
    *
    * The intention goes into the store **first** and the address is changed after it,
    * because the address says nothing about it: what a reload of `#/calibrate` finds is a
    * session or no session, never an instruction to open one.
+   *
+   * `null` is the other half of the same road: "Misura una tapparella" on the overview and
+   * the first run's own button know no shutter, so they go to the wizard and let it ask.
+   * That arrival is an ordinary one - the flag stays down, `_onRoute` reads the gateway's
+   * session as it would after a reload, and nothing is started.
    */
-  private async _calibrate(intent: WizardIntent): Promise<void> {
+  private async _calibrate(intent: WizardIntent | null): Promise<void> {
     this._store.set({ wizardIntent: intent, sessionError: null });
+    if (!intent) {
+      this._navigate("/calibrate");
+      // A press on the overview while the wizard is already the screen behind a drawer
+      // changes no address, so the session is read here instead of by a route change that
+      // never comes.
+      if (this._store.state.route.view === "calibrate") {
+        void this._readSession();
+      }
+      return;
+    }
     const client = this._ensureSession();
     // Raised across the navigation and put down by the route change it causes, so that the
     // arrival does not read over the top of this: see `_onRoute`.
@@ -2063,8 +2127,66 @@ export class MyHomeCalibrationPanel extends LitElement {
     });
   }
 
+  /**
+   * Close every *Configure* dialog of this gateway, and say what that left behind.
+   *
+   * The one command of the session API that is not about this panel's session at all: it
+   * acts on the **other** thing that can hold a shutter (SPEC §3.10). Three outcomes, and
+   * the screen shows each of them:
+   *
+   * * the shutter is free - the gateway that comes back is kept, because a dialog that had
+   *   saved something has just changed the origin and the values of a shutter on the list
+   *   behind this banner;
+   * * the shutter is still held - every dialog was closed and something is still running,
+   *   so it was the 0.4.2 action, and `busy.service` turns the offer into the sentence
+   *   that says to wait;
+   * * the command was refused - it lands where every refusal of this panel lands.
+   */
+  private async _endOther(): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    this._store.set({ busy: { ...this._store.state.busy, ask: null } });
+    const result = await client.endOther();
+    if (!result.ok) {
+      this._store.set({ sessionError: result });
+      return;
+    }
+    if (result.overview) {
+      this._store.setOverview(result.overview);
+    }
+    this._store.set({
+      busy: { ask: null, service: result.stillCalibrating },
+      // The shutter is free: the refusal that put the waiting screen on the wizard has
+      // stopped being true, and the screen behind it is the choice of shutter again.
+      ...(result.stillCalibrating ? {} : { sessionError: null }),
+    });
+  }
+
+  /** The banner's half of the same two questions, over the list instead of on the wizard. */
+  private _bannerActions: BannerActions = {
+    // The wizard's own address, which reads the session and shows whatever screen it is
+    // on. It never starts one - that is the whole of lesson 4 - so "resume" is a
+    // navigation and nothing more.
+    resume: () => this._navigate("/calibrate"),
+    ask: (question: BusyAsk) => this._store.set({ busy: { ...this._store.state.busy, ask: question } }),
+    endPanel: () => {
+      this._store.set({ busy: { ...this._store.state.busy, ask: null } });
+      void this._cancelSession("force");
+    },
+    endOther: () => void this._endOther(),
+    openFlow: (source: HTMLElement) => this._openFlow(source),
+  };
+
   private _wizardActions: WizardActions = {
     refresh: () => void this._readSession(),
+    // The choice of shutter is a screen of the wizard, so opening a session from it is the
+    // shell's one road in - the same `_calibrate` every button of lot F3 goes through.
+    start: (intent) => void this._calibrate(intent),
+    endOther: () => void this._endOther(),
+    ask: (question) => this._store.set({ busy: { ...this._store.state.busy, ask: question } }),
+    openFlow: (source) => this._openFlow(source),
     act: (action, value) => void this._actSession(action, value),
     stop: () => void this._stopSession(),
     save: (target) => void this._saveSession(target),
@@ -2214,7 +2336,6 @@ export class MyHomeCalibrationPanel extends LitElement {
   protected override render(): TemplateResult {
     const state = this._store.state;
     const title = this._title();
-    const measuring = state.overview?.measuring ?? null;
     const routed = state.route.view !== "overview";
     return html`
       <!--
@@ -2234,7 +2355,14 @@ export class MyHomeCalibrationPanel extends LitElement {
             ${this._i18n.t("panel.error.no_connection")}
           </div>`
         : nothing}
-      ${measuring ? measuringBanner(this._i18n, measuring.name, FLOW_URL) : nothing}
+      <!--
+        Not over the wizard: the banner's three offers are "go to the wizard", "end what is
+        running" and "close the dialog", and on that route all three of them are already on
+        the screen, with more to say about each than one strip can.
+      -->
+      ${state.overview && state.route.view !== "calibrate"
+        ? measuringBanner(this._i18n, state.overview, state.busy, this._bannerActions)
+        : nothing}
       <div class="content">
         ${liveRegion(state.announce)} ${this._renderView()}
         ${state.connection === "polling" && state.status === "ready"

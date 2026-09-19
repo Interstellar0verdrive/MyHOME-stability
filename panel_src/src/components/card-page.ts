@@ -420,6 +420,14 @@ export interface WideButtonOptions {
   title?: string;
   destructive?: boolean;
   disabled?: boolean;
+  /**
+   * A name for this button, for the checks that walk the card.
+   *
+   * The wide buttons used to be reached by their position in the column, and the column
+   * has three conditional entries in it: which shutter the fixture happens to describe
+   * decided which button a check pressed. A name is a name whatever else is drawn.
+   */
+  mark?: string;
   onClick: (event: Event) => void;
 }
 
@@ -428,6 +436,7 @@ export const wideButton = (options: WideButtonOptions): TemplateResult => html`<
   class="wide ${options.destructive ? "destructive" : ""}"
   type="button"
   title=${options.title ?? ""}
+  data-wide=${options.mark ?? ""}
   ?disabled=${options.disabled ?? false}
   @click=${options.onClick}
 >

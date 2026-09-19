@@ -363,6 +363,168 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+// --- the choice of shutter (lot F3) -----------------------------------------------------
+{
+  console.log("\nthe guided calibration, the choice of shutter");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, choosing a shutter",
+    state: "ready",
+    hash: "#/calibrate",
+    expect: "[data-wizard-pick]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const options = deepAll(panel.shadowRoot, ".options button.option");
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  check("every shutter on it is reachable", options.length > 0 && options.every((one) => stops.includes(one)),
+    `${options.length} shutters`);
+  check("and each of them is a button, so Enter and Space choose it",
+    options.every((one) => one.tagName === "BUTTON"));
+  check("arriving on the choice starts nothing", !calls.includes("start") && !calls.includes("attach"),
+    calls.join(", ") || "nothing sent");
+  // The choice is a screen of the wizard like any other (SPEC §5.7): the keyboard lands on
+  // its heading, and a reader is told which screen arrived. Without both, pressing "Misura
+  // una tapparella" leaves focus on a button that is no longer in the document.
+  check("focus is on the heading of the choice", active(panel)?.tagName === "H1",
+    describe(active(panel)));
+  const spoken = deepAll(panel.shadowRoot, "[data-wizard-pick] [aria-live='polite']")
+    .map((one) => (one.textContent ?? "").trim())
+    .filter(Boolean);
+  check("and the screen says out loud which one it is", spoken.length === 1, spoken.join(" | "));
+  options[0]?.click();
+  await settle();
+  check("choosing one opens exactly one session", calls.filter((one) => one === "start").length === 1,
+    calls.join(", "));
+  // The intention travels in the store, so the address stays the wizard's own and carries
+  // nothing that could reopen a session on a reload (SPEC §5.1).
+  check("and the address still says nothing about which shutter",
+    dom.window.location.hash === "#/calibrate", dom.window.location.hash);
+  dom.window.close();
+}
+
+// --- the measuring banner, in its three shapes (lot F3) ---------------------------------
+{
+  console.log("\nthe banner over a calibration of this panel's own");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the banner, a session of the panel's",
+    state: "measuring-panel",
+    expect: '[data-banner="resume"]',
+  });
+  const stops = tabOrder(panel.shadowRoot);
+  const resume = deep(panel.shadowRoot, '[data-banner="resume"]');
+  const end = deep(panel.shadowRoot, '[data-banner="end-panel"]');
+  check("both offers are in the tab order", stops.includes(resume) && stops.includes(end));
+  check("and they are buttons, not links that go to the integration page",
+    resume?.tagName === "BUTTON" && end?.tagName === "BUTTON");
+  end?.click();
+  await settle();
+  check("ending it asks first", deep(panel.shadowRoot, "[data-banner-question]") !== null);
+  check("and nothing was sent by asking", !calls.includes("cancel"), calls.join(", ") || "nothing");
+  // The question replaces the offers, so the button that was pressed leaves the document:
+  // left alone the keyboard falls to the top of the page, and the strip is read out but
+  // cannot be answered.
+  check("the keyboard is on the answer, not back at the top of the page",
+    active(panel) === deep(panel.shadowRoot, '[data-banner="confirm"]'), describe(active(panel)));
+  deep(panel.shadowRoot, '[data-banner="keep"]')?.click();
+  await settle();
+  check("saying no puts the offers back", deep(panel.shadowRoot, '[data-banner="resume"]') !== null);
+  check("and the keyboard comes back to the offer that asked",
+    active(panel) === deep(panel.shadowRoot, '[data-banner="end-panel"]'), describe(active(panel)));
+  check("and still nothing was sent", !calls.includes("cancel"), calls.join(", ") || "nothing");
+  end?.click();
+  await settle();
+  deep(panel.shadowRoot, '[data-banner="confirm"]')?.click();
+  await settle();
+  // `force`, because the session may be held by another device: a "Termina" that could be
+  // refused for ownership would be a button that does nothing on the one screen that has
+  // no other way of freeing the shutter.
+  check("saying yes ends it, whoever owns it",
+    calls.filter((one) => one === "cancel").length === 1, calls.join(", "));
+  dom.window.close();
+}
+
+{
+  console.log("\nthe banner over a calibration of the Configure dialog's");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the banner, the dialog",
+    state: "measuring",
+    expect: '[data-banner="end-other"]',
+  });
+  const stops = tabOrder(panel.shadowRoot);
+  const close = deep(panel.shadowRoot, '[data-banner="end-other"]');
+  check("closing the dialog is offered and reachable", stops.includes(close));
+  check("and so is opening it", stops.includes(deep(panel.shadowRoot, '[data-banner="configure"]')));
+  check("resuming is not, because this panel is not driving it",
+    deep(panel.shadowRoot, '[data-banner="resume"]') === null);
+  close?.click();
+  await settle();
+  check("closing it asks first", deep(panel.shadowRoot, "[data-banner-question]") !== null);
+  check("and nothing was sent by asking", !calls.includes("end_other"), calls.join(", ") || "nothing");
+  deep(panel.shadowRoot, '[data-banner="confirm"]')?.click();
+  await settle();
+  check("saying yes closes the dialogs of this gateway",
+    calls.filter((one) => one === "end_other").length === 1, calls.join(", "));
+  dom.window.close();
+}
+
+{
+  console.log("\nthe banner over a run an action of 0.4.2 started");
+  const { panel, dom, settle } = await mount({
+    name: "the banner, the service",
+    state: "measuring-service",
+    drive: async (context) => {
+      context.deep(context.panel.shadowRoot, '[data-banner="end-other"]')?.click();
+      await context.settle();
+      context.deep(context.panel.shadowRoot, '[data-banner="confirm"]')?.click();
+      await context.settle();
+    },
+    expect: "[data-banner-service]",
+  });
+  await settle();
+  // Every dialog of the gateway was closed and the shutter is still held: there is nothing
+  // left to close, so the banner stops offering and says to wait.
+  check("nothing is offered any more",
+    deepAll(panel.shadowRoot, "[data-banner-measuring] button.offer").length === 0);
+  check("and the strip says the run finishes by itself",
+    (deep(panel.shadowRoot, "[data-banner-measuring]")?.textContent ?? "").includes("wait for it"));
+  dom.window.close();
+}
+
+{
+  console.log("\nthe wizard, a start refused because the dialog is holding the shutter");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, busy",
+    state: "busy:other",
+    hash: "#/calibrate",
+    drive: async (context) => {
+      context.deep(context.panel.shadowRoot, ".options button.option")?.click();
+      await context.settle();
+    },
+    expect: "[data-session-busy]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  check("the refusal is a screen with something to do on it",
+    stops.includes(deep(panel.shadowRoot, '[data-busy="end-other"]')) &&
+      stops.includes(deep(panel.shadowRoot, '[data-busy="configure"]')),
+    stops.map(describe).join(" → "));
+  check("nothing was started", calls.filter((one) => one === "start").length === 1 &&
+    !calls.includes("attach"), calls.join(", "));
+  deep(panel.shadowRoot, '[data-busy="end-other"]')?.click();
+  await settle();
+  check("closing the dialog asks first", deep(panel.shadowRoot, "[data-busy-question]") !== null);
+  check("with the keyboard on the answer", 
+    active(panel) === deep(panel.shadowRoot, '[data-busy="confirm"]'), describe(active(panel)));
+  check("and nothing was sent by asking", !calls.includes("end_other"), calls.join(", "));
+  deep(panel.shadowRoot, '[data-busy="confirm"]')?.click();
+  await settle();
+  check("saying yes closes it, and the screen goes back to the choice of shutter",
+    calls.filter((one) => one === "end_other").length === 1 &&
+      deep(panel.shadowRoot, "[data-wizard-pick]") !== null,
+    calls.join(", "));
+  dom.window.close();
+}
+
 const failed = checks.filter((one) => !one.ok);
 console.log(`\n${checks.length} checks, ${failed.length} failed`);
 process.exit(failed.length === 0 ? 0 : 1);

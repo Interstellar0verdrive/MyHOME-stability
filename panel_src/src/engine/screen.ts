@@ -73,6 +73,16 @@ export interface ScreenOption {
   meta?: string;
   action: string;
   chip?: string;
+  /**
+   * What the chip is saying, when it is one of the origins the rest of the panel colours.
+   *
+   * The choice of shutter carries the same origin chip the overview's rows do, and the
+   * reason that chip is not grey there is the reason it must not be grey here: a list
+   * whose point is "pick a representative one" is a list where *measured* and *inherited*
+   * are the distinction being made. `origin-chip.ts` has the colours and why they are
+   * those; this is the same vocabulary inside a template that cannot import an element.
+   */
+  chipTone?: "neutral" | "measured" | "adjusted";
   /** The one currently chosen, drawn with a border and an inset ring so nothing moves. */
   current?: boolean;
 }

@@ -41,6 +41,7 @@ import {
   sessionAct,
   sessionAttach,
   sessionCancel,
+  sessionEndOther,
   sessionGet,
   sessionHeartbeat,
   sessionLeave,
@@ -124,6 +125,24 @@ export interface SessionFailed extends SessionTrouble {
 
 /** Every verb answers one of these two, and no verb answers `undefined`. */
 export type SessionResult = SessionDone | SessionFailed;
+
+/**
+ * What `end_other` came back with: how many *Configure* dialogs were closed, whether the
+ * shutter is still in calibration afterwards, and the gateway as it stands now.
+ *
+ * `stillCalibrating` is the whole reason this answer has a shape of its own. Closing every
+ * dialog of the gateway and finding the shutter still held means nobody's dialog was
+ * holding it: it is the 0.4.2 action, which has no window to close and finishes its run by
+ * itself (SPEC §3.10).
+ */
+export interface EndOtherDone {
+  ok: true;
+  flowsAborted: number;
+  stillCalibrating: boolean;
+  overview: Overview | null;
+}
+
+export type EndOtherResult = EndOtherDone | SessionFailed;
 
 /** Which of the four branches of §5.2 a `cancel()` ended on. */
 export type CancelBranch = "cancelled" | "already_ended" | "gone" | "owned" | "unconfirmed";
@@ -406,6 +425,34 @@ export class SessionClient {
       });
       this._adopt(answer.session);
       return this._done(answer.session);
+    } catch (raw) {
+      return this._failed(raw);
+    }
+  }
+
+  /**
+   * Close whatever *Configure* dialog is holding a shutter of this gateway, and free it.
+   *
+   * The one command that reaches outside the session: it is about the **other** thing that
+   * can hold a shutter, which is why it carries no session id and no client id, and why it
+   * is offered only where the panel has already been told that somebody else is holding
+   * one (the banner, and the screen a refused `start` leaves).
+   *
+   * Nothing of this client's changes: no snapshot arrives, no presence starts or stops. The
+   * gateway that comes back is the caller's to keep, because the origin and the values of
+   * a shutter a dialog had saved have just changed underneath the list.
+   */
+  async endOther(): Promise<EndOtherResult> {
+    try {
+      const answer = await sessionEndOther(this._connection, this.entryId);
+      return {
+        ok: true,
+        flowsAborted: answer.flows_aborted,
+        stillCalibrating: answer.still_calibrating,
+        // Typed loosely by the contract so that `session-contract.ts` depends on nothing;
+        // the client is where it becomes the answer the rest of the panel reads.
+        overview: (answer.overview as unknown as Overview) ?? null,
+      };
     } catch (raw) {
       return this._failed(raw);
     }

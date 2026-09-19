@@ -100,15 +100,14 @@ export interface AssignActions {
   undo: () => void;
   announce: (message: string) => void;
   /**
-   * Measure a shutter: the guided calibration, in the panel (0.6.0 wizard).
+   * The guided calibration, in the panel (SPEC §6).
    *
-   * Nothing on this screen calls it yet - lot F3 moves "Misura una tapparella" and the
-   * first run's own button onto it, and until then the two of them still open
-   * *Configure*. It is declared here rather than there so that the shell has one place
-   * that knows how a session is opened, and so that the intention travels as an object
-   * and never as an address (SPEC §5.1).
+   * `null` is "open the wizard with nothing in mind", which is the choice of shutter;
+   * an intention names the shutter and, from the shutter's own card, the path and the
+   * scope. Either way it is the shell that knows how a session is opened, and the
+   * intention travels as an object and never as an address (SPEC §5.1).
    */
-  calibrate: (intent: WizardIntent) => void;
+  calibrate: (intent: WizardIntent | null) => void;
 }
 
 export class MyHomeOverview extends LitElement {
@@ -731,9 +730,19 @@ export class MyHomeOverview extends LitElement {
         </select>
       </span>
       <span class="spacer"></span>
-      <a class="cta secondary compact" href=${FLOW_URL} title=${this.i18n.t("panel.firstrun.note")}
-        >${this.i18n.t("panel.firstrun.action.measure")}</a
+      <!--
+        The guided calibration, in this panel (SPEC §6). It used to be a link to the
+        integration page, where the user still had to find "Configura"; it is a button now
+        because what it does is move between two screens of this panel, and it carries no
+        shutter - the wizard asks which one.
+      -->
+      <button
+        class="cta secondary compact"
+        type="button"
+        @click=${() => this.actions.calibrate(null)}
       >
+        ${this.i18n.t("panel.firstrun.action.measure")}
+      </button>
     </div>`;
   }
 
@@ -747,7 +756,9 @@ export class MyHomeOverview extends LitElement {
       <h2>${this.i18n.t("panel.firstrun.title")}</h2>
       <div>${this.i18n.md("panel.firstrun.body")}</div>
       <div class="soft">${this.i18n.md("panel.firstrun.how")}</div>
-      <a class="cta" href=${FLOW_URL}>${this.i18n.t("panel.firstrun.action.measure")}</a>
+      <button class="cta" type="button" @click=${() => this.actions.calibrate(null)}>
+        ${this.i18n.t("panel.firstrun.action.measure")}
+      </button>
       <p class="after">${this.i18n.t("panel.firstrun.note")}</p>
     </section>`;
   }
@@ -859,7 +870,12 @@ export class MyHomeOverview extends LitElement {
       return html`<section class="card welcome">
         <h2>${this.i18n.t("panel.overview.no_basic_covers_title")}</h2>
         <div>${renderMarkdown(this.i18n.t("panel.overview.no_basic_covers"))}</div>
-        <a class="cta secondary" href=${FLOW_URL} title=${this.i18n.t("panel.common.opens_configure")}
+        <!--
+          No title promising the dialog: this link goes to the integration page, where
+          "Configura" still has to be pressed, and it is the last place on the overview
+          that said otherwise. The words on the link say where it goes.
+        -->
+        <a class="cta secondary" href=${FLOW_URL}
           >${this.i18n.t("panel.common.action.configure")}</a
         >
       </section>`;

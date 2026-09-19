@@ -214,7 +214,7 @@ entry point that carries one is a 0.7.0 item.
 
 ## The guided calibration
 
-The measuring itself is moving into the panel in 0.6.0. The session it runs in lives
+The measuring itself is in the panel in 0.6.0. The session it runs in lives
 **on the server**, one per gateway: closing the tab, locking the phone or losing the
 socket does not end it, and the panel's side of it is `src/engine/session.ts` - a class
 with no Lit and no DOM in it, which `src/main.ts` makes when the first answer names a
@@ -270,14 +270,21 @@ them:
 npm run session   # the committed bundle in jsdom, against a session that misbehaves
 ```
 
-It walks the ten states none of the other checks can reach: a snapshot the wizard cannot
+It walks the states none of the other checks can reach: a snapshot the wizard cannot
 draw (the error card appears, the panel goes on repainting when Home Assistant hands it a
 new state, **and** the heartbeats go on arriving - the console line it prints is the panel
 reporting that drawing error once, and is part of what is being checked), a "Cancel"
 refused twice over and again with no hour to give, the address opened with no session and
 opened on one somebody else is driving, a `start` refused while the gateway is busy with
 another shutter, a session picked up again in the middle of a positioning run, and presence
-lost and taken back. Two more are about the screens rather than the session: **every one
+lost and taken back. Four are the roads into a session and out of somebody else's: the
+overview's *"Measure a cover"* through the choice of shutter to a session that really
+opened, *"Correct… → Times only"* on a shutter's card to a `start` carrying the path, the
+profile and the scope that button named, and the banner in the two shapes that can act -
+*"Resume"* to the wizard's own address with nothing started, and *"End"* on a dialog's
+calibration through the question to `end_other`, with the third shape (the 0.4.2 action,
+found out by an `end_other` that freed nothing) left with nothing to press. Two more are
+about the screens rather than the session: **every one
 of the thirty-four examples of the frozen fixture pushed at the panel in turn**, each of
 which has to draw a screen and not the card of a screen that could not be drawn, with
 nothing said on the console on the way; and **every stylesheet the bundle ships**, which
@@ -293,7 +300,11 @@ compressed and fails if that count is zero, because a period that stopped matchi
 otherwise leave half the scenarios passing while exercising no heartbeat at all.
 
 `dev/harness.html` has the same thing to click at: the *a calibration session* checkbox
-opens one on the fixture's snapshots and `#/calibrate` walks it.
+opens one on the fixture's snapshots and `#/calibrate` walks it. The same checkbox is what
+puts `overview.session` beside `measuring`, so the banner's three shapes are *measuring*
+alone (the *Configure* dialog), *measuring* with a session (this panel's own) and
+*measuring* with *writes refuse* on, where `end_other` answers that the shutter is still
+being calibrated - which is what the 0.4.2 action looks like from here.
 
 **The screens themselves are a pure function.** `src/wizard/steps.ts` is one row per step
 the conversation can stand on - which of the eight templates draws it, which of the six
@@ -323,6 +334,20 @@ translated into seven languages and the panel shows it as it is, illustration an
 own, in English and Italian, is the four reviews, the outcomes, the positioning screens and
 the one problem the dialog cannot produce - the steps whose dialog texts speak of the
 dialog, of "Configure → Calibrations" or of "closing the dialog".
+
+**Where a measurement is asked for.** Nothing in the panel opens a session on its own:
+`main.ts` has one `calibrate(intent)` and every control goes through it (`views/overview.ts`
+and the first-run card with no intention at all, which is the choice of shutter;
+`views/cover-detail.ts` with the shutter and, for a correction, the path, the profile and
+the scope). The choice itself is `components/cover-picker.ts`, a pure function from the
+overview to a `ScreenModel` of the `scelta` template - the same second line and the same
+origin chip the rows of the overview carry, out of sentences that already exist in seven
+languages. `components/measuring-banner.ts` is the other half: `overview.measuring` says
+*that* a shutter of the gateway is held and `overview.session` says *who* by, and the
+difference is the whole of what the banner can offer. `end_other` - the one command that
+reaches outside this panel's own session, and the one that can close somebody's dialog -
+is asked about before it is sent, from the banner and from the screen a refused `start`
+leaves.
 
 ## The screen engine
 

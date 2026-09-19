@@ -256,6 +256,35 @@ export const templateStyles = css`
     color: var(--myhome-text-soft);
   }
 
+  /*
+   * …and the two the origin of a shutter's values is drawn in, which is the same
+   * vocabulary components/origin-chip.ts uses on every row of the overview, for the
+   * reason stated there: twenty per cent of a desaturated primary is grey by arithmetic,
+   * so the fill carries a ring of the colour itself, and the accent pastel carries a dot
+   * because two pastels of similar weight are not a distinction everybody can see.
+   */
+  .chip.measured {
+    background: var(--myhome-primary-pastel);
+    color: var(--myhome-text);
+    box-shadow: inset 0 0 0 1px var(--myhome-primary);
+  }
+
+  .chip.adjusted {
+    background: var(--myhome-accent-pastel);
+    color: var(--myhome-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .chip .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--myhome-accent);
+    display: inline-block;
+  }
+
   .instruction {
     margin: 0 0 16px;
     font-size: 16.5px;

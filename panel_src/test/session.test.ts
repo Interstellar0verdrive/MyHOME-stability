@@ -554,6 +554,61 @@ describe("the verbs", () => {
   });
 });
 
+describe("the other holder", () => {
+  // `end_other` is the one command of this API that is not about this client's session: it
+  // is about the **other** thing that can hold a shutter of the gateway (SPEC §3.10).
+  it("carries the gateway and nothing of this client", async (t) => {
+    const bench = gateway({
+      end_other: () => ({ flows_aborted: 1, still_calibrating: false, overview: { entry_id: ENTRY } }),
+    });
+    const session = client(t, bench);
+    const answer = await session.endOther();
+    assert.equal(answer.ok, true);
+    const frame = bench.last("end_other");
+    assert.equal(frame?.entry_id, ENTRY);
+    assert.equal("client_id" in (frame ?? {}), false);
+    assert.equal("session_id" in (frame ?? {}), false);
+  });
+
+  it("says when every dialog was closed and the shutter is still held", async (t) => {
+    const bench = gateway({
+      end_other: () => ({ flows_aborted: 0, still_calibrating: true, overview: null }),
+    });
+    const answer = await client(t, bench).endOther();
+    assert.equal(answer.ok, true);
+    assert.equal(answer.ok && answer.stillCalibrating, true);
+    assert.equal(answer.ok && answer.flowsAborted, 0);
+  });
+
+  it("neither takes a session nor gives one up", async (t) => {
+    const bench = gateway({
+      get: () => ({ session: snapshot(), capabilities: null }),
+      attach: () => ({ session: snapshot() }),
+      end_other: () => ({ flows_aborted: 1, still_calibrating: false, overview: null }),
+    });
+    const session = client(t, bench);
+    await session.get();
+    await session.attach(SESSION);
+    const owner = session.owner;
+    const beating = session.beating;
+    await session.endOther();
+    assert.equal(session.owner, owner);
+    assert.equal(session.beating, beating);
+    assert.equal(session.session?.session_id, SESSION);
+  });
+
+  it("answers with a way out when the gateway refuses it", async (t) => {
+    const bench = gateway({
+      end_other: () => {
+        throw { code: "not_allowed", message: "no", translation_key: "write_in_progress" };
+      },
+    });
+    const answer = await client(t, bench).endOther();
+    assert.equal(answer.ok, false);
+    assert.equal(answer.ok === false && answer.recovery.length > 0, true);
+  });
+});
+
 describe("who this tab is", () => {
   it("keeps one name across two clients of the same tab", () => {
     const kept: Record<string, string> = {};
