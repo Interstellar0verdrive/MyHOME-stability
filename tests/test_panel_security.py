@@ -5,7 +5,9 @@ The panel is admin-only twice over - `require_admin=True` on the panel itself an
 §1: a shutter's travel model is a *setting*, not a state, so somebody who may open a
 cover has no business rewriting what "open" means. Two tests already hold that over a
 hand-written list of payloads. This file holds it over the list the integration really
-registers, so a fourteenth command cannot be added without one.
+registers, so a twenty-fifth command cannot be added without one. The guided
+calibration's ten (0.6.0 wizard) are behind the same door and for a sharper reason
+still: they *move a shutter*.
 
 The rest is what an admin, or something running as one, can put into those commands: a
 number that is not one, a key the model has never heard of, a name a hundred thousand
@@ -40,6 +42,7 @@ from custom_components.myhome.calibration_store import (
 from custom_components.myhome.panel_schemas import (
     MEASURABLE_KEYS,
     WS_READ_COMMANDS,
+    WS_SESSION_COMMANDS,
     WS_TYPE_ASSIGN,
     WS_TYPE_COVER_DETAIL,
     WS_TYPE_COVER_EDIT,
@@ -50,6 +53,16 @@ from custom_components.myhome.panel_schemas import (
     WS_TYPE_PROFILE_EDIT,
     WS_TYPE_PROFILE_RENAME,
     WS_TYPE_REORDER,
+    WS_TYPE_SESSION_ACT,
+    WS_TYPE_SESSION_ATTACH,
+    WS_TYPE_SESSION_CANCEL,
+    WS_TYPE_SESSION_END_OTHER,
+    WS_TYPE_SESSION_GET,
+    WS_TYPE_SESSION_HEARTBEAT,
+    WS_TYPE_SESSION_LEAVE,
+    WS_TYPE_SESSION_SAVE,
+    WS_TYPE_SESSION_START,
+    WS_TYPE_SESSION_STOP,
     WS_TYPE_SET_TRAVEL,
     WS_TYPE_SUBSCRIBE,
     WS_TYPE_TEXTS,
@@ -60,6 +73,12 @@ from custom_components.myhome.panel_schemas import (
 from .helpers_core import MAC, MAC2, make_entry, mock_gateway, write_yaml
 from .helpers_platforms import setup_myhome
 from .test_websocket_api import CALIBRATION, FIRST, SECOND, WRITE_YAML, refused, result
+
+# One browser tab's identifier, of the alphabet `CLIENT_ID` declares, and one session
+# id that names no session: the frames below are about the *door* and never get as far
+# as a calibration.
+CLIENT = "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10"
+SESSION = "9f2c41b7e08d4a6fb35c17ea92d604c8"
 
 # Five numbers inside the profile's own bounds, so that a payload built for a *door*
 # test is not refused by the validator before it reaches the door.
@@ -90,6 +109,32 @@ PAYLOADS: dict[str, dict[str, Any]] = {
     WS_TYPE_PROFILE_DELETE: {"name": "tall"},
     WS_TYPE_UNDO: {"undo_token": "deadbeef"},
     WS_TYPE_SUBSCRIBE: {},
+    # The session's ten. Every one of them is schema-valid and would be honoured for an
+    # administrator, which is what makes the refusal the thing under test: `start`
+    # names a real basic cover of the fixture, and the six that carry a `session_id`
+    # carry a well-formed one that names nothing - the door is shut before the handler
+    # ever looks for a session, so `unknown_session` would be a *pass* here and is not
+    # what comes back.
+    WS_TYPE_SESSION_GET: {},
+    WS_TYPE_SESSION_START: {"cover_unique_id": FIRST, "client_id": CLIENT},
+    WS_TYPE_SESSION_ATTACH: {"session_id": SESSION, "client_id": CLIENT},
+    WS_TYPE_SESSION_HEARTBEAT: {"session_id": SESSION, "client_id": CLIENT},
+    WS_TYPE_SESSION_ACT: {
+        "session_id": SESSION,
+        "client_id": CLIENT,
+        "revision": 1,
+        "action": "path_a",
+    },
+    WS_TYPE_SESSION_STOP: {"session_id": SESSION, "client_id": CLIENT},
+    WS_TYPE_SESSION_LEAVE: {"session_id": SESSION, "client_id": CLIENT},
+    WS_TYPE_SESSION_CANCEL: {"client_id": CLIENT},
+    WS_TYPE_SESSION_SAVE: {
+        "session_id": SESSION,
+        "client_id": CLIENT,
+        "revision": 1,
+        "target": "profile",
+    },
+    WS_TYPE_SESSION_END_OTHER: {},
 }
 
 
@@ -114,7 +159,12 @@ async def test_the_map_below_names_every_command_the_integration_registers(
     the integration without a payload here.
     """
     async with setup_myhome(hass, tmp_path, WRITE_YAML) as (_entry, _commands):
-        declared = {*WS_READ_COMMANDS, *WS_WRITE_COMMANDS, WS_TYPE_SUBSCRIBE}
+        declared = {
+            *WS_READ_COMMANDS,
+            *WS_WRITE_COMMANDS,
+            *WS_SESSION_COMMANDS,
+            WS_TYPE_SUBSCRIBE,
+        }
         assert registered_commands(hass) == declared
         assert set(PAYLOADS) == declared
 
@@ -123,7 +173,7 @@ async def test_the_map_below_names_every_command_the_integration_registers(
 async def test_a_household_member_is_refused_at_every_single_command(
     hass: HomeAssistant, tmp_path, hass_ws_client, hass_admin_user, command: str
 ) -> None:
-    """Fourteen commands, fourteen closed doors, and the payload is a valid one.
+    """Twenty-four commands, twenty-four closed doors, and every payload a valid one.
 
     Valid on purpose: Home Assistant validates the schema *before* the handler runs, so
     a test that sent nonsense would be answered `invalid_format` and would pass whether

@@ -158,6 +158,7 @@ from .cover import CALIBRATION_SETTLE_SEC, calibration_run_seconds
 from .panel_data import (
     CALIBRATION_LEVEL_PRECISE,
     _level_and_note,
+    async_overview,
     basic_covers,
     calibrating_now,
     is_advanced_cover,
@@ -179,7 +180,7 @@ from .panel_schemas import (
     SESSION_SUBMIT,
     SESSION_VALUE_KEYS,
 )
-from .panel_write import PanelError, async_write
+from .panel_write import PanelError, async_publish, async_write
 
 # Where the sessions live: one slot per config entry, holding the live session or the
 # terminal snapshot of the last one. In `hass.data` and not in a module global for the
@@ -868,6 +869,28 @@ class CalibrationSession:
         else:
             self._step = "path"
         self._publish()
+        self._publish_the_overview()
+
+    @callback
+    def _publish_the_overview(self) -> dict[str, Any]:
+        """Push a fresh overview to every open panel of this gateway, and answer with it.
+
+        A session is not a write: it takes hold of a shutter and gives it back without
+        touching the store, so nothing in `panel_write` publishes an overview for it.
+        But `overview.session` **is** part of the overview, and a panel that was already
+        subscribed when this session began would otherwise read `null` there for the
+        whole of it - which the document says means "the guided dialog or the 0.4.2
+        action", so the second screen in the house would offer to close a dialog that
+        does not exist rather than to join the calibration that does.
+
+        Called at the two moments the answer changes: when the session appears
+        (`begin`) and when it goes (`_finish`, whatever ended it). `measuring` moves
+        with it, and the two are built from the same read, so no panel ever sees one
+        without the other.
+        """
+        overview = async_overview(self.hass, self.entry)
+        async_publish(self.hass, self.entry, overview)
+        return overview
 
     @callback
     def _watch_the_cover(self) -> None:
@@ -1069,14 +1092,20 @@ class CalibrationSession:
         terminal snapshot and not nothing: the screen that follows says the calibration
         was closed before the first measurement, and it needs the outcome to say it.
         One that *has* measured something stays, without an owner, until somebody picks
-        it up or the lease runs out. A `leave` from a client that is not the owner is a
-        no-op: it is sent as a page goes away, and a read-only tab has nothing to leave.
+        it up or the lease runs out.
+
+        A `leave` from a client that is **not** the owner is a no-op, whether the owner
+        is there or not (contract amendment, lot B3, after the independent review). It
+        is sent as a page goes away: a read-only tab being closed has nothing to leave,
+        and a departure is the one gesture that must never *acquire* anything. The rule
+        the amendment of 19 September wrote for the heartbeat - ownership is taken by a
+        verb that does something, or explicitly with `attach` and `claim` - reached this
+        one through a second door: a phone locked for forty-five seconds on the first
+        screen, a second tab closed, and the session ended as `left` under a user who
+        was about to come back to it.
         """
-        if self.ended:
+        if self.ended or self._owner != client_id:
             return self.snapshot()
-        if self._owner is not None and self._owner != client_id and self.present:
-            return self.snapshot()
-        self._take(client_id)
         if not self._anything_measured():
             self._end("left")
             return self.snapshot()
@@ -1140,6 +1169,10 @@ class CalibrationSession:
             )
             return {"session": self.snapshot(), "overview": written["overview"]}
         resolved = self._resolved()
+        # The overview `async_write` built is the gateway as it was **while this session
+        # still held the shutter**: the store is written inside the write and the session
+        # only ends when it comes back. So the answer carries the one `_finish` publishes
+        # instead, or it would say `review` beside a snapshot that says `saved`.
         self._finish(
             "saved",
             extra={
@@ -1153,7 +1186,7 @@ class CalibrationSession:
             self.cover_name,
             self._measured_name or self._profile or "overrides",
         )
-        return {"session": self.snapshot(), "overview": written["overview"]}
+        return {"session": self.snapshot(), "overview": async_overview(self.hass, self.entry)}
 
     # ---------------------------------------------------------------- the conversation
     @callback
@@ -2304,6 +2337,14 @@ class CalibrationSession:
         self._form_error = None
         if reason != "saved":
             self._measured = measure.Measured()
+            # ...and the two instants of the lift-off press, which live beside the
+            # measurements rather than in them: `measured.lift` is built from them, so a
+            # session emptied without them would answer a terminal snapshot carrying the
+            # one provisional value it had kept - against `docs/panel-websocket-api.md`
+            # §12.1, which says that `measured` is emptied once a session has ended
+            # without saving.
+            self._lift_off = None
+            self._stop_delivered = None
             self._plan = []
             self._index = None
             self._result = None
@@ -2316,6 +2357,10 @@ class CalibrationSession:
             self._claim.close()
             self._claim = None
         self._publish()
+        # ...and the gateway's picture, because the shutter has just been given back:
+        # `overview.measuring` and `overview.session` both change here, and a panel that
+        # is not on the wizard learns it from nowhere else.
+        self._publish_the_overview()
 
     # -------------------------------------------------------------------- the writing
     async def _async_store_the_result(self, store: CalibrationStore, target: str) -> dict[str, Any]:

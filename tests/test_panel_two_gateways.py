@@ -38,6 +38,7 @@ from custom_components.myhome.panel_schemas import (
     ERROR_UNDO_EXPIRED,
     ERROR_UNKNOWN_COVER,
     WS_EVENT_OVERVIEW,
+    WS_EVENT_SESSION,
     WS_TYPE_ASSIGN,
     WS_TYPE_OVERVIEW,
     WS_TYPE_PROFILE_DELETE,
@@ -362,6 +363,10 @@ async def test_two_panels_on_two_gateways_are_told_apart(
             assert pushed["id"] == answer["id"]
             assert pushed["event"]["type"] == WS_EVENT_OVERVIEW
             assert pushed["event"]["overview"]["entry_id"] == entry.entry_id
+            # ...and the session event that follows it, under the same id (lot B3).
+            session = await client.receive_json()
+            assert session["id"] == answer["id"]
+            assert session["event"] == {"type": WS_EVENT_SESSION, "session": None}
 
         assert len(async_subscribers(hass, first.entry_id)) == 1
         assert len(async_subscribers(hass, second.entry_id)) == 1

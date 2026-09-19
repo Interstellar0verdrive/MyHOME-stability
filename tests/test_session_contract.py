@@ -75,6 +75,7 @@ PLACEHOLDER = re.compile(r"\{(\w+)\}")
 SCENARIOS: tuple[str, ...] = (
     "armed_path",
     "armed_path_b_profile_choice",
+    "armed_path_c_profile_choice",
     "armed_refine_scope_intent",
     "briefing_open_brief",
     "briefing_open_brief_rehomed",
@@ -96,6 +97,10 @@ SCENARIOS: tuple[str, ...] = (
     "review_precise",
     "review_short",
     "review_correction",
+    "briefing_verify_offer",
+    "positioning_verify",
+    "awaiting_reading_measure_verify",
+    "checking_verify_result_within",
     "checking_verify_result_offers_c",
     "problem_no_echo",
     "problem_interrupted",

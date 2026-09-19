@@ -90,6 +90,7 @@ from custom_components.myhome.panel_schemas import (
     UNDO_KEYS,
     WS_EVENT_MEASURING,
     WS_EVENT_OVERVIEW,
+    WS_EVENT_SESSION,
     WS_READ_COMMANDS,
     WS_TYPE_ASSIGN,
     WS_TYPE_COVER_DETAIL,
@@ -114,7 +115,7 @@ from custom_components.myhome.panel_write import (
     async_subscribers,
     async_write,
 )
-from custom_components.myhome.websocket_api import WS_REGISTERED
+from custom_components.myhome.websocket_api import SESSION_WATCHERS_DATA_KEY, WS_REGISTERED
 
 from .helpers_core import MAC, MAC2, make_entry, mock_gateway, write_yaml
 from .helpers_platforms import entity_object, mock_commands, setup_myhome
@@ -2186,6 +2187,11 @@ async def test_subscribe_sends_the_overview_now_and_after_every_write(
         assert first["id"] == sub_id
         assert first["event"]["type"] == WS_EVENT_OVERVIEW
         assert tuple(first["event"]["overview"]) == OVERVIEW_KEYS
+        # ...and then the gateway's guided calibration, which is `null` here because
+        # nothing is measuring (0.6.0 wizard, lot B3). It arrives on subscribing like
+        # the overview, so that a panel opening on a session already under way draws it
+        # without asking - `tests/test_websocket_session.py` is where that is tested.
+        assert (await client.receive_json())["event"] == {"type": WS_EVENT_SESSION, "session": None}
 
         await client.send_json_auto_id(
             {
@@ -2222,6 +2228,7 @@ async def test_subscribe_says_when_a_measurement_starts_and_when_it_ends(
         await client.send_json_auto_id({"type": WS_TYPE_SUBSCRIBE, "entry_id": entry.entry_id})
         assert (await client.receive_json())["success"] is True
         assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+        assert (await client.receive_json())["event"]["type"] == WS_EVENT_SESSION
 
         cover = entity_object(hass, "cover", "2-81")
         with cover.calibration_session():
@@ -2258,7 +2265,9 @@ async def test_a_subscription_dies_with_the_socket(
         subscription = await client.receive_json()
         assert subscription["success"] is True
         assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+        assert (await client.receive_json())["event"]["type"] == WS_EVENT_SESSION
         assert len(async_subscribers(hass, entry.entry_id)) == 1
+        assert len(hass.data[SESSION_WATCHERS_DATA_KEY][entry.entry_id]) == 1
 
         await client.send_json_auto_id(
             {"type": "unsubscribe_events", "subscription": subscription["id"]}
@@ -2266,6 +2275,9 @@ async def test_a_subscription_dies_with_the_socket(
         assert (await client.receive_json())["success"] is True
         await hass.async_block_till_done()
         assert async_subscribers(hass, entry.entry_id) == []
+        # The session's watchers go the same way. What does *not* go with the socket is
+        # the session itself: `tests/test_websocket_session.py` holds that.
+        assert hass.data[SESSION_WATCHERS_DATA_KEY][entry.entry_id] == []
 
 
 async def test_a_second_write_is_refused_while_the_first_is_being_applied(
@@ -2432,6 +2444,7 @@ async def test_two_gateways_are_two_subscriptions(
             )
             assert (await client.receive_json())["success"] is True
             assert (await client.receive_json())["event"]["type"] == WS_EVENT_OVERVIEW
+            assert (await client.receive_json())["event"]["type"] == WS_EVENT_SESSION
             assert len(async_subscribers(hass, entry.entry_id)) == 1
             assert async_subscribers(hass, second.entry_id) == []
 

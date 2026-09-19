@@ -1915,9 +1915,20 @@ async def test_leave_keeps_a_session_that_has_something_to_protect(
 
 
 async def test_leave_from_a_client_that_is_not_the_owner_does_nothing(
-    hass: HomeAssistant, tmp_path
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """It is sent as a page goes away: a read-only tab has nothing to leave."""
+    """It is sent as a page goes away: a read-only tab has nothing to leave.
+
+    And it does nothing **whether the owner is there or not** (contract amendment, lot
+    B3). Ownership is taken by a verb that does something or explicitly with `attach`
+    and `claim`; a departure is the one gesture that must never acquire anything. The
+    case this closes is the one the heartbeat's amendment of 19 September closed from
+    the other side: a phone locked for forty-five seconds on the first screen, a second
+    tab closed behind it, and the session ended as `left` with nothing measured - under
+    a user who was about to come back to it.
+
+    Mutation caught: `leave` taking the session when the owner has gone quiet.
+    """
     async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
@@ -1925,6 +1936,14 @@ async def test_leave_from_a_client_that_is_not_the_owner_does_nothing(
         snapshot = session.leave(OTHER_CLIENT)
 
         assert snapshot is not None
+        assert session.ended is False
+        assert session.owner == CLIENT
+
+        # ...and the same with the owner gone quiet: the session is available to
+        # whoever acts, and a tab closing is not acting.
+        freezer.tick(timedelta(seconds=PRESENCE_SEC + 1))
+        assert session.present is False
+        assert session.leave(OTHER_CLIENT) is not None
         assert session.ended is False
         assert session.owner == CLIENT
         await session.async_cancel(CLIENT)
@@ -2481,3 +2500,41 @@ async def test_the_screens_that_end_badly_are_the_contract_s_own_too(
         assert ended["position_known"] is None
         assert ended["actions"] == []
         assert ended["owner"] is None
+
+
+async def test_an_ending_that_saved_nothing_keeps_none_of_what_it_had_measured(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """`measured` is emptied - **all** of it, the lift-off press included.
+
+    The press is held in two instants beside the measurements rather than inside them,
+    and `measured.lift` is built from those two: a session that emptied `Measured` and
+    left them behind would answer a terminal snapshot carrying the one provisional value
+    it had kept, which is what `docs/panel-websocket-api.md` §12.1 says it does not do.
+    Found by regenerating the committed examples from the server (lot B3).
+
+    Mutation caught: clearing `Measured` and not the two instants.
+    """
+    async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        # As far as the lift-off press, which is the first thing this walk measures.
+        await walk(hass, session, PATH_A_BASIC[:5], freezer=freezer)
+        assert session.snapshot()["measured"]["lift"] is not None
+
+        await session.async_cancel(CLIENT)
+        measured = session.snapshot()["measured"]
+        assert measured == {
+            "travel_cm": None,
+            "travel_measured": False,
+            "opening_time_s": None,
+            "closing_time_s": None,
+            "slat_time_s": None,
+            "lift": None,
+            "descent": [],
+            "ascent": [],
+            "times_adopted": False,
+        }
+        # ...while a session that *saved* keeps everything, so that the outcome screen
+        # can say what was written.
+        assert session.snapshot()["outcome"]["reason"] == "cancelled"

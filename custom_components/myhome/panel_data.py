@@ -475,12 +475,51 @@ def async_overview(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
         "entries": async_entries(hass),
         "entry_id": entry.entry_id,
         "measuring": measuring,
+        "session": _session_row(hass, entry),
         "profiles": _profile_rows(hass, entry, profiles=profiles, covers=covers),
         "covers": covers,
         "order": store.raw_order if store else [],
         # Not an error and not an empty list to be styled: a gateway with only advanced
         # shutters has nothing this panel can do anything about, and says so once.
         "no_basic_covers": not covers,
+    }
+
+
+@callback
+def _session_row(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any] | None:
+    """The one line the banner needs about this gateway's session, or None.
+
+    `measuring` beside it says *that* a shutter is being measured, whoever is measuring
+    it; this says *who*, so that `measuring` set with `session` at `null` reads as "the
+    guided dialog or the 0.4.2 action" and the panel offers to close the dialog rather
+    than to resume a session it does not have (`panel_schemas.SESSION_OVERVIEW_KEYS`).
+
+    Read off the snapshot and not off the session's own attributes: `state` and `owner`
+    are answers the session composes - a terminal one has no owner and says `saved` or
+    `ended` rather than the screen it stopped on - and two places computing them would
+    be two places to keep in step. The import is inside the function because
+    `calibration_session` reads this module: the session is built out of the panel's
+    view of a gateway, and the overview only borrows a line back from it.
+
+    **This read has one side effect**, and it is deliberate: `current()` forgets a
+    session that ended more than ten minutes ago, which is how this key goes back to
+    `null` by itself. So an overview built at any moment is right, and no timer is
+    needed to make it so - but a reader expecting a pure read should know that the
+    tenth-minute forgetting happens here, in the first overview anybody asks for after
+    it falls due.
+    """
+    from .calibration_session import current  # noqa: PLC0415 - the cycle is the point
+
+    session = current(hass, entry)
+    if session is None:
+        return None
+    snapshot = session.snapshot()
+    return {
+        "session_id": snapshot["session_id"],
+        "cover_unique_id": snapshot["cover"]["unique_id"],
+        "name": snapshot["cover"]["name"],
+        "state": snapshot["state"],
+        "owner": None if snapshot["owner"] is None else snapshot["owner"]["client_id"],
     }
 
 

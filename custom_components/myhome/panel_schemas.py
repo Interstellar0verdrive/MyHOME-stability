@@ -34,6 +34,7 @@ backend, because the language is the *user's* and a WebSocket answer has no user
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import voluptuous as vol
@@ -339,6 +340,12 @@ OVERVIEW_KEYS: tuple[str, ...] = (
     # `{cover_unique_id, name}` while a guided calibration is running on one of this
     # gateway's shutters, `null` otherwise. The panel's read-only lock hangs off it.
     "measuring",
+    # ...and, beside it, *whose* calibration it is: `SESSION_OVERVIEW_KEYS` for a
+    # session of this panel's, `null` for the guided dialog, for the 0.4.2 action and
+    # for a gateway nobody is measuring (0.6.0 wizard, lot B3). Declared with the rest
+    # of the session's contract at the bottom of this file; the key is here because
+    # this is the lot in which the server really sends it.
+    "session",
     # One row per profile: see `PROFILE_KEYS`.
     "profiles",
     # One row per basic cover, already in the order the user put them in: `COVER_KEYS`.
@@ -941,13 +948,31 @@ def _not_a_bool(value: Any) -> Any:
     return value
 
 
+def _a_finite_number(value: Any) -> Any:
+    """Refuse `NaN` and the two infinities where a measurement is meant.
+
+    A JSON document has no literal for them, but `json.loads` reads `NaN`, `Infinity`
+    and `-Infinity` by default and a client can put one on the wire. None of the three
+    is a length: fed to the fit they make every number after them `nan`, and the screen
+    three steps later is the one that breaks (lot B1, R1). The controller has its own
+    net (`calibration_session._finite`, which is also what catches the *string* `"nan"`
+    that `parse_number` would be happy with); this one is the door, so that a frame
+    carrying one is `invalid_format` and never reaches the arithmetic at all.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        raise vol.Invalid("expected a finite number")
+    return value
+
+
 # The revision the client last read. A number that cannot be one is a malformed frame;
 # a well-formed one that is not the current one is `revision_conflict`.
 REVISION = vol.All(_not_a_bool, int, vol.Range(min=0))
 # `act`'s value: the text typed in a field (a number stays a string, so a decimal comma
 # survives to `parse_number`), the profile chosen, or nothing. A JSON number is taken
-# too, for a client that has one.
-SESSION_VALUE = vol.Any(None, str, vol.All(_not_a_bool, vol.Any(int, float)))
+# too, for a client that has one - provided it is one.
+SESSION_VALUE = vol.Any(
+    None, str, vol.All(_not_a_bool, vol.Any(int, float), _a_finite_number)
+)
 
 SESSION_GET_SCHEMA: VolDictType = {
     vol.Required("type"): WS_TYPE_SESSION_GET,
@@ -1241,8 +1266,12 @@ SESSION_OVERVIEW_KEYS: tuple[str, ...] = (
 
 # ---------------------------------------------------------------------- refusals
 # The refusals the session adds (SPEC §4.6), kept **out of** `WS_ERROR_KEYS`: that tuple
-# is what `tests/test_translations.py` holds to having a sentence in every language, and
-# these have none until lot B3 writes them. B3 moves them in when it does.
+# is what `tests/test_translations.py` holds to having a sentence in **every** language,
+# and these have one in English and Italian only - the panel is written in two languages
+# (the decision of 14 September) and a translation lot before the release fills the other
+# five. They stay a tuple of their own for that reason rather than being folded in by lot
+# B3, which wrote their sentences: `refusal_keys()` reads both tuples, and the tolerance
+# for the five languages is stated over this one.
 # The session also answers with keys that already exist: `unknown_entry`,
 # `entry_not_loaded`, `unknown_cover`, `advanced_cover`, `unknown_profile`,
 # `invalid_name` and `write_in_progress`.

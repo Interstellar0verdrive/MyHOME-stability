@@ -38,7 +38,7 @@ from custom_components.myhome.const import (
     MAX_COMMAND_WORKERS,
 )
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
-from custom_components.myhome.panel_schemas import WS_ERROR_KEYS
+from custom_components.myhome.panel_schemas import SESSION_ERROR_KEYS, WS_ERROR_KEYS
 from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,10 +93,28 @@ PANEL_PREFIX = f"{PANEL_BLOCK}."
 # The languages the panel's sentences are written in today.
 PANEL_LANGUAGES = frozenset({"en", "it"})
 
+# The same decision reaches one block outside ``config_panel``: the refusals the guided
+# calibration's session sends (0.6.0 wizard, lot B3). They live under ``exceptions``,
+# where Home Assistant resolves a ``translation_key``, so they cannot be moved inside the
+# panel's block - and they are the panel's sentences all the same, written beside the
+# screens that show them. The same five languages may therefore lag on exactly these
+# keys, and on no other refusal: the ones of 0.5.0 and earlier are shipped, and a user
+# reading them in French is not a developer waiting for a lot.
+#
+# ``async_get_exception_message`` falls back to English key by key, as
+# ``panel_data.async_texts`` does for the panel, so a key those five have not reached yet
+# arrives as the English sentence rather than as ``already_calibrating``.
+SESSION_REFUSAL_KEYS = frozenset(f"exceptions.{key}.message" for key in SESSION_ERROR_KEYS)
+
 
 def panel_may_lag(path: Path) -> bool:
     """True for a file whose ``config_panel`` block is allowed to be a subset."""
     return path != STRINGS and path.stem not in PANEL_LANGUAGES
+
+
+def may_lag(path: Path, key: str) -> bool:
+    """True for one dotted key a file written in two languages need not carry yet."""
+    return panel_may_lag(path) and (key.startswith(PANEL_PREFIX) or key in SESSION_REFUSAL_KEYS)
 
 
 def test_the_translation_files_are_found() -> None:
@@ -118,9 +136,7 @@ def test_each_locale_has_the_same_keys_as_strings_json(path: Path) -> None:
     expected = leaf_keys(load(STRINGS))
     actual = leaf_keys(load(path))
     assert actual - expected == set(), f"{path.name} has keys strings.json does not"
-    missing = expected - actual
-    if panel_may_lag(path):
-        missing = {key for key in missing if not key.startswith(PANEL_PREFIX)}
+    missing = {key for key in expected - actual if not may_lag(path, key)}
     assert missing == set(), f"{path.name} is missing keys of strings.json"
 
 
@@ -160,9 +176,10 @@ def test_each_locale_uses_the_same_placeholders_as_strings_json(path: Path) -> N
     actual = flatten(load(path))
     for key, text in expected.items():
         assert isinstance(text, str), key
-        if key not in actual and panel_may_lag(path):
-            # A panel key this language has not reached yet: `async_texts` serves the
-            # English one. The key test above is what holds that to the panel's block.
+        if key not in actual and may_lag(path, key):
+            # A panel key this language has not reached yet, or one of the session's
+            # refusals: the English one is served in its place. The key test above is
+            # what holds that to those two lists and to nothing else.
             continue
         assert set(PLACEHOLDER.findall(actual[key])) == set(PLACEHOLDER.findall(text)), key
 
@@ -974,7 +991,10 @@ def test_every_key_the_sources_use_is_declared_and_every_declared_key_is_used() 
 # commands share with the guided dialog are read off `calibration_flow`, which is where
 # they are defined. The seven the write half adds (lot 3) are named below because this
 # branch predates the commit that declares them: the assertion is a superset one, so the
-# moment `WS_ERROR_KEYS` grows to carry them the two agree instead of drifting.
+# moment `WS_ERROR_KEYS` grows to carry them the two agree instead of drifting. The eight
+# the session adds (0.6.0 wizard) are `SESSION_ERROR_KEYS`, a tuple of their own because
+# those eight - and only those eight - may still be missing from the five languages the
+# panel is not being written in.
 WRITE_REFUSALS: tuple[str, ...] = (
     "busy_calibrating",
     "write_in_progress",
@@ -992,6 +1012,7 @@ def refusal_keys() -> set[str]:
         set(WS_ERROR_KEYS)
         | {ERROR_NOT_A_NUMBER, ERROR_OUT_OF_RANGE, ERROR_INVALID_NAME}
         | set(WRITE_REFUSALS)
+        | set(SESSION_ERROR_KEYS)
     )
 
 
@@ -1003,29 +1024,84 @@ def test_every_refusal_the_panel_can_send_has_a_sentence(path: Path) -> None:
     `WS_ERROR_KEYS` with no text behind it fails here rather than reaching a user as
     `unknown_profile`.
 
+    The session's eight are the one exception, and a narrow one: they are held over
+    `strings.json`, English and Italian, and tolerated - **only they** - in the five
+    languages the panel is not being written in, where the English sentence is served in
+    their place. A sixth key added to that tolerance would fail the test below, which
+    holds the set of them to the constant.
+
     Mutation caught: adding a refusal to the WebSocket API and translating it nowhere;
-    writing the sentence under `options.error.*`, where nothing resolves it.
+    writing the sentence under `options.error.*`, where nothing resolves it; letting a
+    refusal that is not the session's go untranslated in French.
     """
     written = load(path).get("exceptions", {})
-    missing = sorted(refusal_keys() - set(written))
+    wanted = refusal_keys()
+    if panel_may_lag(path):
+        wanted -= set(SESSION_ERROR_KEYS)
+    missing = sorted(wanted - set(written))
     assert not missing, f"{path.name}: no exceptions.<key>.message for {missing}"
-    for key in sorted(refusal_keys()):
+    for key in sorted(refusal_keys() & set(written)):
         assert set(written[key]) == {"message"}, f"{path.name}: exceptions.{key}"
+
+
+def test_the_session_s_refusals_are_the_only_ones_five_languages_may_still_miss() -> None:
+    """The tolerance above, stated as the list it is, and held to the constant.
+
+    The decision of 14 September is about the panel's own sentences; these eight are
+    under `exceptions` because that is where Home Assistant resolves a
+    `translation_key`, and nowhere else. Without this test "the five may lag" would
+    widen by one key at a time, and a user reading Italian-only refusals in Spanish is
+    exactly what the eight-file parity was for.
+
+    Mutation caught: adding an older refusal to the tolerated set; a language file that
+    has lost the session's block *and* a sentence it used to have.
+    """
+    assert {key.split(".")[1] for key in SESSION_REFUSAL_KEYS} == set(SESSION_ERROR_KEYS)
+    for path in (STRINGS, COMPONENT / "translations" / "en.json", COMPONENT / "translations" / "it.json"):
+        written = set(load(path)["exceptions"])
+        assert set(SESSION_ERROR_KEYS) <= written, path.name
+    for path in TRANSLATIONS:
+        if not panel_may_lag(path):
+            continue
+        written = set(load(path)["exceptions"])
+        assert written - set(SESSION_ERROR_KEYS) == set(load(STRINGS)["exceptions"]) - set(
+            SESSION_ERROR_KEYS
+        ), f"{path.name}: a refusal that is not the session's is missing"
+
+
+# What the handler passes and the sentence deliberately leaves out. Two reasons, both
+# of them "the sentence would be worse with it":
+#
+# * `unknown_entry` is sent twice, once with the entry id the client asked for and once,
+#   when no gateway is loaded at all, with nothing - so a sentence naming the id would
+#   show braces on the second path;
+# * `already_calibrating`'s `{by}` (`panel` / `other` / `reserved`) and `session_ended`'s
+#   `{reason}` (`cancelled`, `expired`, ...) are **tokens for the panel to branch on** -
+#   it has a screen for each - and not words in anybody's language. Printed, an Italian
+#   sentence would end in the English word `reserved`.
+#
+# Everything not in here is passed *and* printed, which is the ordinary case.
+TOKENS_NOT_PRINTED: dict[str, set[str]] = {
+    "unknown_entry": {"entry_id"},
+    "already_calibrating": {"by"},
+    "session_ended": {"reason"},
+}
 
 
 def test_every_refusal_substitutes_what_the_code_really_passes() -> None:
     """The braces have to match the dict beside them, refusal by refusal.
 
-    `unknown_entry` is the one that has to stay bare: it is sent twice, once with the
-    entry id the client asked for and once, when no gateway is loaded at all, with
-    nothing - so a sentence naming the id would show braces on the second path. The rest
-    name exactly what their `translation_placeholders` carry.
+    `PASSES` is what each refusal's `translation_placeholders` carries, read off the
+    handlers; what the sentence may print is that, minus `TOKENS_NOT_PRINTED`. Stating
+    the two separately is what keeps "this one is bare" an explained decision with a
+    list behind it instead of a sentence that quietly stopped naming something.
 
     Mutation caught: writing a sentence around a placeholder the handler does not pass
-    (braces on screen), or naming one it does pass under a different name.
+    (braces on screen), or naming one it does pass under a different name; printing a
+    token the panel is meant to switch on.
     """
-    expected: dict[str, set[str]] = {
-        "unknown_entry": set(),
+    passes: dict[str, set[str]] = {
+        "unknown_entry": {"entry_id"},
         "entry_not_loaded": {"gateway"},
         "unknown_cover": set(),
         "advanced_cover": set(),
@@ -1039,12 +1115,27 @@ def test_every_refusal_substitutes_what_the_code_really_passes() -> None:
         "not_a_number": {"key"},
         "out_of_range": {"key", "min", "max"},
         "invalid_name": {"profile"},
+        # ...and the session's eight (0.6.0 wizard).
+        "already_calibrating": {"cover", "by"},
+        "cover_unavailable": {"cover"},
+        "unknown_session": set(),
+        "session_ended": {"reason"},
+        "session_owned": set(),
+        "revision_conflict": set(),
+        "action_not_offered": {"action"},
+        "not_in_review": set(),
     }
-    assert set(expected) == refusal_keys()
+    assert set(passes) == refusal_keys()
+    assert set(TOKENS_NOT_PRINTED) <= set(passes)
+    for key, hidden in TOKENS_NOT_PRINTED.items():
+        assert hidden <= passes[key], key
     for path in [STRINGS, *TRANSLATIONS]:
-        for key, names in expected.items():
-            message = load(path)["exceptions"][key]["message"]
-            assert set(PLACEHOLDER.findall(message)) == names, f"{path.name}: {key}"
+        written = load(path)["exceptions"]
+        for key, names in passes.items():
+            if key not in written and may_lag(path, f"exceptions.{key}.message"):
+                continue
+            printed = names - TOKENS_NOT_PRINTED.get(key, set())
+            assert set(PLACEHOLDER.findall(written[key]["message"])) == printed, f"{path.name}: {key}"
 
 
 # ------------------------------------------------------------------- the drawings

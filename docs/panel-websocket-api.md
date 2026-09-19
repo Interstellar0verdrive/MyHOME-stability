@@ -69,7 +69,7 @@ panel showing two at a time would have to merge two orders.
 | `entries` | array | `{entry_id, title, mac, loaded}` for **every** configured gateway, loaded or not. Present even when there is one, so the picker has one rule. |
 | `entry_id` | string | the gateway this payload is about |
 | `measuring` | object \| null | `{cover_unique_id, name}` while a guided calibration is running on one of this gateway's shutters. The panel's read-only lock hangs off it, which is why it names the window rather than being a boolean. |
-| `session` | object \| null | *(from the release that registers the session commands)* `{session_id, cover_unique_id, name, state, owner}` for the panel's own calibration session on this gateway, `null` when there is none. `state` is a token of §12.1 and `owner` the owner's `client_id` (`null` when nobody owns it). `measuring` says *that* a shutter is being measured, whoever is measuring it; `session` says *who*: `measuring` set with `session` at `null` is the guided dialog or the 0.4.2 action, and the panel offers to close that dialog (§11.2, `end_other`) rather than to resume a session it does not have. The shape is frozen with the rest of the session contract (`SESSION_OVERVIEW_KEYS`), so the key appearing here later is not a change to it. |
+| `session` | object \| null | `{session_id, cover_unique_id, name, state, owner}` for the panel's own calibration session on this gateway, `null` when there is none. `state` is a token of §12.1 and `owner` the owner's `client_id` (`null` when nobody owns it). `measuring` says *that* a shutter is being measured, whoever is measuring it; `session` says *who*: `measuring` set with `session` at `null` is the guided dialog or the 0.4.2 action, and the panel offers to close that dialog (§11.2, `end_other`) rather than to resume a session it does not have. |
 | `profiles` | array | §2.1 |
 | `covers` | array | §2.2, **already in the order the user put them in** |
 | `order` | array of string | the stored order verbatim — unique ids, some of which may name nothing any more. The panel sends this list back, whole, when it reorders. |
@@ -709,7 +709,7 @@ section, `panel_schemas.py`, `panel_src/src/engine/session-contract.ts` and
   been away. A second tab left open on the wizard would otherwise become the owner by
   doing nothing, forty-five seconds after the phone in the user's hand went to sleep, and
   the phone would come back read-only in the middle of a tape reading. Ownership changes
-  on a verb that does something (`act`, `stop`, `save`, `leave`, `cancel`) or on an
+  on a verb that does something (`act`, `stop`, `save`, `cancel`) or on an
   `attach` — implicitly while the owner is absent, and with `claim: true`, after the
   screen has asked, while the owner is present.
 * **The lease is the inactivity timer.** A session with no transition and no verb from
@@ -832,7 +832,8 @@ mistake and not the protocol's. An action the step does not offer is refused
   exists answers `{session: null}` rather than `unknown_session`, and a `leave` from a
   client that is not the owner does nothing and answers the snapshot rather than
   `session_owned`: a read-only tab being closed has nothing to leave, and a refusal there
-  would be noise on a message nobody is waiting for.
+  would be noise on a message nobody is waiting for. **It does nothing whether the owner
+  is present or not, and it never takes ownership** — see below.
 * **`cancel`** discards the provisional values and ends the session (`ended`, reason
   `cancelled`). It does **not** stop the shutter: a run already under way finishes at
   its end stop, as the dialog's "Cancel" does. It carries **no `revision`** and is never
@@ -882,11 +883,24 @@ this before asking for confirmation.
 | `get`, `attach` without `claim` | yes | yes, read only | yes, and becomes the owner |
 | `attach` with `claim` | yes | yes (the screen asks first) | yes |
 | `act`, `stop`, `save` | yes | `session_owned` | yes, and becomes the owner |
-| `leave` | yes | a no-op that answers the snapshot | yes, and becomes the owner |
+| `leave` | yes | a no-op that answers the snapshot | a no-op that answers the snapshot |
 | `heartbeat` | yes | `{owner: false}` | `{owner: false}`: it never takes ownership |
 | `cancel` | yes | `session_owned`, unless `force: true` | yes |
 
 `end_other` names no session and is not subject to ownership.
+
+> **Amendment of 20 September 2026 (lot B3, RISCHIO-8 of the independent review).** In
+> this table a `leave` from a client that was not the owner used to make that client the
+> owner when the owner was absent — and, with nothing measured yet, to **end** the
+> session. It is the same door the amendment of 19 September closed for the heartbeat,
+> reached from the other side: a phone locked for more than forty-five seconds on the
+> first screen, a second tab closed behind it, and the calibration gone with the message
+> "closed before the first measurement" under a user who was about to come back to it.
+> A departure is the one gesture that must never *acquire* anything. Ownership is taken
+> by a verb that does something (`act`, `stop`, `save`, `cancel`) or by `attach` —
+> implicitly while the owner is absent, and with `claim: true`, after the screen has
+> asked, while the owner is present. `leave` is now a no-op from anybody but the owner,
+> whether the owner is there or not.
 
 ### 11.4 The event
 
@@ -1154,10 +1168,13 @@ and the screen asks for the tape.
 {
   "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8",
   "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
-  "revision": 35,
-  "server_time": "2026-09-18T10:04:32.100+00:00",
-  "cover": {"unique_id": "00:03:50:aa:bb:cc-2-81", "entity_id": "cover.hallway_shutter",
-            "name": "Hallway Shutter"},
+  "revision": 32,
+  "server_time": "2026-09-18T10:01:26.200000+00:00",
+  "cover": {
+    "unique_id": "00:03:50:aa:bb:cc-2-81",
+    "entity_id": "cover.hallway_shutter",
+    "name": "Hallway Shutter"
+  },
   "state": "awaiting_reading",
   "substate": null,
   "step": "measure_descent",
@@ -1165,25 +1182,68 @@ and the screen asks for the tape.
   "scope": null,
   "profile": null,
   "level": "basic",
-  "plan": ["home_closed", "open_timed", "height_read", "close_timed", "tape_brief",
-           "half_up", "half_down", "profile_name", "summary"],
+  "plan": [
+    "home_closed",
+    "open_timed",
+    "height_read",
+    "close_timed",
+    "tape_brief",
+    "half_up",
+    "half_down",
+    "profile_name",
+    "summary"
+  ],
   "plan_index": 6,
   "intent": null,
   "actions": [],
-  "form": {"field": "measured_cm", "kind": "number", "optional": false, "unit": "cm",
-           "suggested": null, "min": 0.0, "max": 195.0, "choices": null, "error": null},
-  "placeholders": {"cover": "Hallway Shutter", "expected": 86.25, "percent": 50,
-                   "tolerance": 15},
+  "form": {
+    "field": "measured_cm",
+    "kind": "number",
+    "optional": false,
+    "unit": "cm",
+    "suggested": null,
+    "min": 0.0,
+    "max": 195.0,
+    "choices": null,
+    "error": null
+  },
+  "placeholders": {
+    "cover": "Hallway Shutter",
+    "percent": 50,
+    "direction": "close",
+    "expected": 86.25,
+    "tolerance": 15.0
+  },
   "movement": null,
   "press": null,
-  "reading": {"direction": "close", "fraction": 0.5, "from_end_stop": "open",
-              "expected_cm": 86.25, "tolerance_cm": 15.0},
-  "measured": {"travel_cm": 195.0, "travel_measured": true, "opening_time_s": 22.6,
-               "closing_time_s": 21.9, "slat_time_s": 4.8,
-               "lift": {"pressed_at": "2026-09-18T10:01:15.420+00:00",
-                        "stop_written_at": "2026-09-18T10:01:15.470+00:00",
-                        "gap_cm": null, "late": false},
-               "descent": [], "ascent": [[13.7, 81.0]], "times_adopted": false},
+  "reading": {
+    "direction": "close",
+    "fraction": 0.5,
+    "from_end_stop": "open",
+    "expected_cm": 86.25,
+    "tolerance_cm": 15.0
+  },
+  "measured": {
+    "travel_cm": 195.0,
+    "travel_measured": true,
+    "opening_time_s": 22.299999952316284,
+    "closing_time_s": 21.700000047683716,
+    "slat_time_s": 4.700000047683716,
+    "lift": {
+      "pressed_at": "2026-09-18T10:00:14.700000+00:00",
+      "stop_written_at": "2026-09-18T10:00:14.700000+00:00",
+      "gap_cm": null,
+      "late": false
+    },
+    "descent": [],
+    "ascent": [
+      [
+        13.5,
+        81.5
+      ]
+    ],
+    "times_adopted": false
+  },
   "fit": null,
   "check": null,
   "review": null,
@@ -1191,24 +1251,34 @@ and the screen asks for the tape.
   "notice": null,
   "position_known": null,
   "external_move": false,
-  "owner": {"client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
-            "present_until": "2026-09-18T10:05:17.100+00:00"},
-  "idle_expires_at": "2026-09-18T10:14:32.100+00:00",
+  "owner": {
+    "client_id": "3b0c7e1a-5d2f-4a8e-9c61-0e7f4b2d9a10",
+    "present_until": "2026-09-18T10:02:11.200000+00:00"
+  },
+  "idle_expires_at": "2026-09-18T10:11:26.200000+00:00",
   "outcome": null
 }
 ```
+
+The three run times are **raw**: they are clock differences and nothing rounds them
+before they are saved, which is what "numbers as numbers, formatted by the panel"
+(§1) means when the number is a measurement rather than a stored setting.
 
 The panel answers it with:
 
 ```jsonc
 {"type": "myhome/calibration/session/act", "entry_id": "01EXAMPLEEXAMPLEEXAMPLEEXA",
  "session_id": "6f1d2c3b4a5e4f708192a3b4c5d6e7f8", "client_id": "3b0c7e1a-…",
- "revision": 35, "action": "submit", "value": "84,5"}
+ "revision": 32, "action": "submit", "value": "83,5"}
 ```
 
 `tests/fixtures/panel_session_examples.json` has one such snapshot for every screen the
 panel draws — the first press, the lift-off check, a positioning, a field error, each
-review, each problem and each ending — plus an example frame of every command.
+review, each check, each problem and each ending — plus an example frame of every
+command. From the release that registers these commands the file is **regenerated from
+the server** by `tests/test_websocket_session.py`, walk by walk, rather than written by
+hand; the snapshot above is its `awaiting_reading_measure_descent`, copied, and a test
+compares the two so that the example cannot go stale under a regeneration.
 
 ---
 
@@ -1236,8 +1306,15 @@ nobody defines). Malformed frames are `invalid_format`, from the schema.
 
 No refusal leaves anything half written, and none is used for what is the user's to
 correct: a value that cannot be a reading is a `form.error`, and a movement that fails
-is a `problem` step. The first eight keys are new with the session; their sentences
-arrive with the commands.
+is a `problem` step.
+
+The first eight keys are new with the session, and their sentences are written in
+**English and Italian only** — the decision of 14 September, which is how the panel's own
+block is written and which reaches these eight because they are the panel's sentences
+even though `exceptions` is where Home Assistant resolves them. The other five languages
+fall back to English key by key until the translation lot before the release;
+`tests/test_translations.py` holds the tolerance to exactly these eight and to no other
+refusal.
 
 ---
 
