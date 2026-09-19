@@ -421,6 +421,9 @@ def check_the_snapshot(snapshot: dict[str, Any]) -> None:
 
     if (check := snapshot["check"]) is not None:
         keys(check, SESSION_CHECK_KEYS, "check")
+        # How the profile being questioned was itself measured is a level of the
+        # contract's own vocabulary and not the store's word for it (`precise`).
+        token(check["profile_level"], SESSION_LEVELS, "check.profile_level")
 
     if (review := snapshot["review"]) is not None:
         keys(review, SESSION_REVIEW_KEYS, "review")
