@@ -393,6 +393,14 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   check("and the screen says out loud which one it is", spoken.length === 1, spoken.join(" | "));
   options[0]?.click();
   await settle();
+  // A row selects; "Continue" is what opens a session (live finding 3, and the design's
+  // own `Continua`). Both are buttons, so Enter and Space reach the whole gesture.
+  check("pressing a row still starts nothing", !calls.includes("start"), calls.join(", ") || "nothing sent");
+  const going_on = deepAll(panel.shadowRoot, "button.big")[0];
+  check("and the way on is a button of the footer", going_on?.tagName === "BUTTON",
+    describe(going_on));
+  going_on?.click();
+  await settle();
   check("choosing one opens exactly one session", calls.filter((one) => one === "start").length === 1,
     calls.join(", "));
   // The intention travels in the store, so the address stays the wizard's own and carries
@@ -498,6 +506,8 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
     hash: "#/calibrate",
     drive: async (context) => {
       context.deep(context.panel.shadowRoot, ".options button.option")?.click();
+      await context.settle();
+      context.deepAll(context.panel.shadowRoot, "button.big")[0]?.click();
       await context.settle();
     },
     expect: "[data-session-busy]",

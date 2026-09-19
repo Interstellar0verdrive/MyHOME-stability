@@ -728,7 +728,8 @@
         "retry": "Try again",
         "save": "Save",
         "show_all": "Show every value, roll coefficients included",
-        "hide_all": "Hide the roll coefficients"
+        "hide_all": "Hide the roll coefficients",
+        "continue": "Continue"
       },
       "advanced": {
         "title": "Advanced parameters",
@@ -843,7 +844,8 @@
         "confirm_one": "Confirm 1 assignment",
         "missing_travel": "{count} travels missing",
         "missing_travel_one": "1 travel missing"
-      }
+      },
+      "unchanged": "unchanged"
     },
     "dialog": {
       "title": "Which profile?",
@@ -1014,7 +1016,7 @@
         "claim": "Take control",
         "claim_cancel": "Take control and end it",
         "force": "End it anyway",
-        "submit": "That is right, go on",
+        "submit": "Done, go on",
         "stop": "Stop the shutter",
         "exit": "Leave the calibration"
       },
@@ -1095,13 +1097,18 @@
         "key": {
           "stop_latency": "Stop delay (s)",
           "start_delay": "Start delay (s)"
-        }
+        },
+        "details_show": "Show the technical details",
+        "details_hide": "Hide the technical details",
+        "details_note": "The roll coefficients, the slat opening time, the values this calibration did not measure, and the equivalent for the configuration file."
       },
       "outcome": {
         "saved": {
           "title": "Calibration saved",
-          "profile": "{cover} is saved and already in use: it follows the profile «{profile}» ({origin}). Shutters like it are calibrated with route (B).",
-          "cover": "{cover} is saved and already in use, with values of its own ({origin})."
+          "cover": "The calibration is saved. The values belong to {cover} alone, and it uses them from now on.",
+          "profile_new": "The calibration is saved. The profile «{profile}» has been created, and {cover} uses it from now on.",
+          "profile_updated": "The calibration is saved. The profile «{profile}» has been updated, and {cover} uses it from now on.",
+          "reuse": "Shutters of the same kind can be given this profile from this panel, or measured with route (B)."
         },
         "cancelled": {
           "title": "Calibration cancelled",

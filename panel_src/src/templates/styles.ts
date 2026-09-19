@@ -459,6 +459,16 @@ export const templateStyles = css`
     font-weight: 500;
   }
 
+  /*
+   * A value the calibration did not move: the number once, and the word for it beside.
+   * The word is what carries the meaning - a struck-through number repeated is not a
+   * difference, it is two numbers in a row (live finding 23).
+   */
+  .summary-row .same {
+    font-size: 12.5px;
+    color: var(--myhome-text-soft);
+  }
+
   .summary .note-line {
     margin: 10px 0;
     font-size: 12.5px;
@@ -554,6 +564,14 @@ export const templateStyles = css`
     flex-direction: column;
     gap: 6px;
     margin: 12px 0 0;
+  }
+
+  /* What is behind a disclosure, said under its button rather than inside its label. */
+  .disclose-note {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--myhome-text-soft);
   }
 
   .code-label {

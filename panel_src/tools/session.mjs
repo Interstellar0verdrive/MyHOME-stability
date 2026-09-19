@@ -787,6 +787,13 @@ console.log("\nthe overview, 'Misura una tapparella', a shutter chosen, a sessio
   bench.state.session = scenario("armed_path");
   all(".options button.option")[0]?.click();
   await settle(240);
+  // Pressing a row selects it and sends nothing: the choice is made with "Continue" (live
+  // finding 3), which is the design's own `Continua` and the reason a list long enough to
+  // scroll under a finger cannot start a calibration on the wrong window.
+  check("pressing a row starts nothing", bench.sessions("start"), 0);
+  checkThat("it marks the row instead", all(".options button.option")[0]?.getAttribute("aria-pressed") === "true");
+  find("button.big")?.click();
+  await settle(240);
   check("choosing one opens one session", bench.sessions("start"), 1);
   check(
     "on the shutter that was pressed",

@@ -728,7 +728,8 @@
         "retry": "Riprova",
         "save": "Salva",
         "show_all": "Mostra tutti i valori, compresi i coefficienti di rullo",
-        "hide_all": "Nascondi i coefficienti di rullo"
+        "hide_all": "Nascondi i coefficienti di rullo",
+        "continue": "Continua"
       },
       "advanced": {
         "title": "Parametri avanzati",
@@ -843,7 +844,8 @@
         "confirm_one": "Conferma 1 assegnazione",
         "missing_travel": "Mancano {count} corse",
         "missing_travel_one": "Manca 1 corsa"
-      }
+      },
+      "unchanged": "invariato"
     },
     "dialog": {
       "title": "Quale profilo?",
@@ -1014,7 +1016,7 @@
         "claim": "Prendi il controllo",
         "claim_cancel": "Prendi il controllo e termina",
         "force": "Termina comunque",
-        "submit": "Va bene, avanti",
+        "submit": "Fatto, avanti",
         "stop": "Ferma la tapparella",
         "exit": "Esci dalla calibrazione"
       },
@@ -1095,13 +1097,18 @@
         "key": {
           "stop_latency": "Ritardo di arresto (s)",
           "start_delay": "Ritardo di avvio (s)"
-        }
+        },
+        "details_show": "Mostra i dettagli tecnici",
+        "details_hide": "Nascondi i dettagli tecnici",
+        "details_note": "I coefficienti di rullo, il tempo di apertura delle lamelle, i valori che questa calibrazione non ha misurato e l'equivalente per il file di configurazione."
       },
       "outcome": {
         "saved": {
           "title": "Calibrazione salvata",
-          "profile": "{cover} è salvata e già in uso: segue il profilo «{profile}» ({origin}). Le tapparelle simili si calibrano con il percorso (B).",
-          "cover": "{cover} è salvata e già in uso, con valori propri ({origin})."
+          "cover": "La calibrazione è stata salvata. I valori sono soltanto di {cover}, che li usa da subito.",
+          "profile_new": "La calibrazione è stata salvata. È stato creato il profilo «{profile}», e {cover} lo usa da subito.",
+          "profile_updated": "La calibrazione è stata salvata. Il profilo «{profile}» è stato aggiornato, e {cover} lo usa da subito.",
+          "reuse": "Le tapparelle uguali possono ricevere questo profilo dal pannello, oppure essere misurate con il percorso (B)."
         },
         "cancelled": {
           "title": "Calibrazione annullata",

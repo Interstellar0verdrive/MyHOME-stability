@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { COVER, coverOf, coverPickerModel } from "../src/components/cover-picker";
+import { CHOOSE } from "../src/wizard/model";
 import { I18n } from "../src/engine/i18n";
 import { type CoverRow } from "../src/engine/ws";
 import { type HaConnection } from "../src/types/ha";
@@ -67,13 +68,34 @@ describe("the choice of shutter", () => {
   it("names a shutter by its identifier and never by anything else", () => {
     const model = coverPickerModel(en_gb, covers);
     for (const [index, option] of (model.options ?? []).entries()) {
-      assert.equal(option.action, `${COVER}${covers[index].unique_id}`);
-      assert.equal(coverOf(option.action), covers[index].unique_id);
+      // A row selects and does not act, so its token is the choice with the shutter
+      // inside it; "Continue" carries the shutter's own token.
+      assert.equal(option.action, `${CHOOSE}${COVER}${covers[index].unique_id}`);
+      assert.equal(coverOf(option.action.slice(CHOOSE.length)), covers[index].unique_id);
     }
     // Every other token of the wizard has to be left alone by this one: an `act:` read as
     // a shutter would open a session on a name that is a verb.
     assert.equal(coverOf("act:path_a"), null);
     assert.equal(coverOf("submit"), null);
+  });
+
+  it("waits for Continue, and says which shutter it would open", () => {
+    // Live finding 3, and the design's own `Continua`: the list is long enough to scroll
+    // under a finger, and one gesture for two decisions starts a calibration on the wrong
+    // window. The design draws the button dead until a row is picked.
+    const nothing_yet = coverPickerModel(en_gb, covers);
+    assert.equal(nothing_yet.primary?.disabled, true);
+    assert.ok((nothing_yet.options ?? []).every((option) => !option.current));
+
+    const first = covers[0];
+    const picked = coverPickerModel(en_gb, covers, `${COVER}${first.unique_id}`);
+    assert.equal(picked.primary?.disabled, false);
+    assert.equal(picked.primary?.action, `${COVER}${first.unique_id}`);
+    assert.equal(picked.primary?.label, en_gb.t("panel.common.action.continue"));
+    assert.deepEqual(
+      (picked.options ?? []).map((option) => option.current === true),
+      covers.map((_cover, index) => index === 0),
+    );
   });
 
   it("says the room and the travel the way the overview says them", () => {
@@ -108,6 +130,7 @@ describe("the choice of shutter", () => {
         model.title,
         model.body ?? "",
         ...(model.options ?? []).flatMap((option) => [option.title, option.meta ?? "", option.chip ?? ""]),
+        model.primary?.label ?? "",
         ...(model.secondary ?? []).map((action) => action.label),
       ].join(" ");
       assert.equal(/\{[a-z_]+\}/.test(said), false, said);

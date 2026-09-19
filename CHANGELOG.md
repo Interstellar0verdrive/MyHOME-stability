@@ -266,6 +266,34 @@ the panel when it is in the way.
   taking its height from the drawing rather than the other way round, so nothing is cut
   at any width. A check walks every screen of the calibration at 1280 and at 390 px and
   says, drawing by drawing, that the whole of it fits.
+- **A choice in the guided calibration takes two gestures.** Pressing a shutter in the
+  list, or one of the three routes, sent the calibration on at once: one gesture for two
+  decisions, on a list long enough to scroll under a finger. A row is now selected and
+  **"Continue"** is what acts, as the design draws it — and on a desktop a long list
+  scrolls inside its own column instead of stretching the page until the button is off the
+  bottom of it. The three routes start on **(A)**, which is the one to take when in doubt.
+- **The screens of the calibration say each thing once.** The shutter's name was under the
+  title of nearly every screen although the header above it already said it; the summary
+  printed "Curtain travel (cm) … 110 cm" and struck a 14.3 s through to replace it with
+  14.3 s; and the one control that opens the technical details called itself "Show every
+  value, roll coefficients included" and then "Hide the roll coefficients", although what
+  it hides includes the snippet for the configuration file. The name is said once, by the
+  header; a unit is said once, beside its number; a value that did not move is one number
+  and the word "unchanged"; the details open and shut with the same words, under a line
+  saying what is behind them. "Continue with the thorough calibration" is a bordered
+  button beside "Save for this shutter only", because it is a way forward and not a way
+  out, and the screen that starts a run keeps the step's own instruction instead of
+  blanking it — on the descent, which has no drawing, it left a title and two buttons.
+- **"Calibration saved" says what was saved and what was made of it.** It used to read
+  "«Shutter» is saved and already in use: it follows the profile «name» (Inherited from
+  profile «name»)", which names the profile three times and explains none of them. Three
+  sentences in the order they are asked: the calibration is saved, the profile was created
+  (or updated), the shutter uses it from now on — with how a shutter like it is calibrated
+  on a line of its own. A calibration saved for one shutter alone says so instead of
+  naming a profile it does not follow.
+- **The button under a tape reading says "Done, go on".** "That is right, go on" is the
+  answer to a proposal, and what is being confirmed there is a number the user has just
+  written down.
 
 ## [0.5.0] - 2026-09-13
 

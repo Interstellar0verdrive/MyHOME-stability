@@ -125,6 +125,15 @@ export interface ScreenSummaryRow {
   label: string;
   before?: string;
   after: string;
+  /**
+   * The value the calibration did not move: one number, said once.
+   *
+   * A row whose before and after are the same number used to print both of them and
+   * strike the first one through, which says "14,3 s becomes 14,3 s" and makes the reader
+   * hunt for a difference there is not (live finding 23). The struck-through number is
+   * kept for the rows that really change, which is the only place it means anything.
+   */
+  unchanged?: boolean;
 }
 
 /** A named block of rows: the side effects, or one shutter that follows the profile. */
@@ -138,6 +147,8 @@ export interface ScreenDisclosure {
   label: string;
   action: string;
   open: boolean;
+  /** One line saying what is behind it, so the label does not have to list it. */
+  note?: string;
 }
 
 export interface ScreenSummary {
@@ -288,6 +299,18 @@ export class MyHomeScreen extends LitElement {
       @media (min-width: 900px) {
         .screen {
           max-width: 100%;
+        }
+
+        /*
+         * A choice of twelve shutters is as tall as twelve shutters, and the column it
+         * sits in is the column the way forward is at the bottom of: the page grew to the
+         * length of the list and "Continue" went off the screen with it (live finding 2).
+         * The list scrolls inside its own column instead; three paths never reach the cap,
+         * and the buttons inside it keep the keyboard's way through it.
+         */
+        .right .options {
+          max-height: calc(100vh - 260px);
+          overflow-y: auto;
         }
 
         .pane {
