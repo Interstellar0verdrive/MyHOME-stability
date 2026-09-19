@@ -92,8 +92,7 @@ everything the panel does.
   longer known brings the shutter back there by itself instead of measuring from a point
   nobody knows. The first path is complete — the full measurement of a shutter nobody
   has measured before — and saving it writes the profile and assigns it, or, if
-  preferred, keeps the numbers for that window alone. Nothing is registered on the
-  WebSocket yet and nothing a user sees changes.
+  preferred, keeps the numbers for that window alone. Nothing a user sees changes.
 - **The other two paths of that session, and the thorough calibration.** The session
   now holds the whole of the measuring conversation, not only the first path: a window
   that is one of a kind already measured (pick the profile, read the travel, and
@@ -108,8 +107,21 @@ everything the panel does.
   three centimetres can be read against something rather than on its own; beyond that
   threshold the correction is offered on the spot, and the travel just measured goes
   with it. What each path saves is what *Configure* saves in the same case, key for
-  key, and a test walks both conversations over the same shutter to say so. Still
-  nothing registered on the WebSocket, and still nothing a user sees changes.
+  key, and a test walks both conversations over the same shutter to say so. Nothing a
+  user sees changes: it is the entry below that puts the conversation on the socket.
+- **That session on the WebSocket**: ten more commands, a third kind of event on the
+  subscription the panel already keeps, and a line in the overview saying which device
+  is holding a shutter. A panel opening on a calibration already under way is told
+  about it at once and then about every step of it; a tab that closes stops being told
+  and **the calibration goes on**, because it is on the server and not in the browser.
+  Saving from the session writes once, reaches the shutters in place without reloading
+  the integration, and hands back the new picture of the gateway. There is also a way
+  to close a *Configure* dialog that is holding a shutter — with the panel saying first
+  that unsaved measurements of that dialog are lost — and an answer that distinguishes
+  a dialog, which can be closed, from a calibration run started by the 0.4.2 action,
+  which has to be left to finish. Every refusal these commands can make now has a
+  sentence in English and Italian. Nothing a user sees changes yet: no button leads
+  here.
 
 ### Changed
 
