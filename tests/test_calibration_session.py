@@ -1915,9 +1915,20 @@ async def test_leave_keeps_a_session_that_has_something_to_protect(
 
 
 async def test_leave_from_a_client_that_is_not_the_owner_does_nothing(
-    hass: HomeAssistant, tmp_path
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """It is sent as a page goes away: a read-only tab has nothing to leave."""
+    """It is sent as a page goes away: a read-only tab has nothing to leave.
+
+    And it does nothing **whether the owner is there or not** (contract amendment, lot
+    B3). Ownership is taken by a verb that does something or explicitly with `attach`
+    and `claim`; a departure is the one gesture that must never acquire anything. The
+    case this closes is the one the heartbeat's amendment of 19 September closed from
+    the other side: a phone locked for forty-five seconds on the first screen, a second
+    tab closed behind it, and the session ended as `left` with nothing measured - under
+    a user who was about to come back to it.
+
+    Mutation caught: `leave` taking the session when the owner has gone quiet.
+    """
     async with setup_myhome(hass, tmp_path, YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
@@ -1925,6 +1936,14 @@ async def test_leave_from_a_client_that_is_not_the_owner_does_nothing(
         snapshot = session.leave(OTHER_CLIENT)
 
         assert snapshot is not None
+        assert session.ended is False
+        assert session.owner == CLIENT
+
+        # ...and the same with the owner gone quiet: the session is available to
+        # whoever acts, and a tab closing is not acting.
+        freezer.tick(timedelta(seconds=PRESENCE_SEC + 1))
+        assert session.present is False
+        assert session.leave(OTHER_CLIENT) is not None
         assert session.ended is False
         assert session.owner == CLIENT
         await session.async_cancel(CLIENT)

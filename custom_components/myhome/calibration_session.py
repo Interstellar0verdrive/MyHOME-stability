@@ -1092,14 +1092,20 @@ class CalibrationSession:
         terminal snapshot and not nothing: the screen that follows says the calibration
         was closed before the first measurement, and it needs the outcome to say it.
         One that *has* measured something stays, without an owner, until somebody picks
-        it up or the lease runs out. A `leave` from a client that is not the owner is a
-        no-op: it is sent as a page goes away, and a read-only tab has nothing to leave.
+        it up or the lease runs out.
+
+        A `leave` from a client that is **not** the owner is a no-op, whether the owner
+        is there or not (contract amendment, lot B3, after the independent review). It
+        is sent as a page goes away: a read-only tab being closed has nothing to leave,
+        and a departure is the one gesture that must never *acquire* anything. The rule
+        the amendment of 19 September wrote for the heartbeat - ownership is taken by a
+        verb that does something, or explicitly with `attach` and `claim` - reached this
+        one through a second door: a phone locked for forty-five seconds on the first
+        screen, a second tab closed, and the session ended as `left` under a user who
+        was about to come back to it.
         """
-        if self.ended:
+        if self.ended or self._owner != client_id:
             return self.snapshot()
-        if self._owner is not None and self._owner != client_id and self.present:
-            return self.snapshot()
-        self._take(client_id)
         if not self._anything_measured():
             self._end("left")
             return self.snapshot()

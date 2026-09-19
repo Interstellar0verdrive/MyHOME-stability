@@ -709,7 +709,7 @@ section, `panel_schemas.py`, `panel_src/src/engine/session-contract.ts` and
   been away. A second tab left open on the wizard would otherwise become the owner by
   doing nothing, forty-five seconds after the phone in the user's hand went to sleep, and
   the phone would come back read-only in the middle of a tape reading. Ownership changes
-  on a verb that does something (`act`, `stop`, `save`, `leave`, `cancel`) or on an
+  on a verb that does something (`act`, `stop`, `save`, `cancel`) or on an
   `attach` — implicitly while the owner is absent, and with `claim: true`, after the
   screen has asked, while the owner is present.
 * **The lease is the inactivity timer.** A session with no transition and no verb from
@@ -832,7 +832,8 @@ mistake and not the protocol's. An action the step does not offer is refused
   exists answers `{session: null}` rather than `unknown_session`, and a `leave` from a
   client that is not the owner does nothing and answers the snapshot rather than
   `session_owned`: a read-only tab being closed has nothing to leave, and a refusal there
-  would be noise on a message nobody is waiting for.
+  would be noise on a message nobody is waiting for. **It does nothing whether the owner
+  is present or not, and it never takes ownership** — see below.
 * **`cancel`** discards the provisional values and ends the session (`ended`, reason
   `cancelled`). It does **not** stop the shutter: a run already under way finishes at
   its end stop, as the dialog's "Cancel" does. It carries **no `revision`** and is never
@@ -882,11 +883,24 @@ this before asking for confirmation.
 | `get`, `attach` without `claim` | yes | yes, read only | yes, and becomes the owner |
 | `attach` with `claim` | yes | yes (the screen asks first) | yes |
 | `act`, `stop`, `save` | yes | `session_owned` | yes, and becomes the owner |
-| `leave` | yes | a no-op that answers the snapshot | yes, and becomes the owner |
+| `leave` | yes | a no-op that answers the snapshot | a no-op that answers the snapshot |
 | `heartbeat` | yes | `{owner: false}` | `{owner: false}`: it never takes ownership |
 | `cancel` | yes | `session_owned`, unless `force: true` | yes |
 
 `end_other` names no session and is not subject to ownership.
+
+> **Amendment of 20 September 2026 (lot B3, RISCHIO-8 of the independent review).** In
+> this table a `leave` from a client that was not the owner used to make that client the
+> owner when the owner was absent — and, with nothing measured yet, to **end** the
+> session. It is the same door the amendment of 19 September closed for the heartbeat,
+> reached from the other side: a phone locked for more than forty-five seconds on the
+> first screen, a second tab closed behind it, and the calibration gone with the message
+> "closed before the first measurement" under a user who was about to come back to it.
+> A departure is the one gesture that must never *acquire* anything. Ownership is taken
+> by a verb that does something (`act`, `stop`, `save`, `cancel`) or by `attach` —
+> implicitly while the owner is absent, and with `claim: true`, after the screen has
+> asked, while the owner is present. `leave` is now a no-op from anybody but the owner,
+> whether the owner is there or not.
 
 ### 11.4 The event
 
