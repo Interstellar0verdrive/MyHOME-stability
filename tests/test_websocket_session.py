@@ -75,7 +75,7 @@ from custom_components.myhome.panel_schemas import (
 )
 from custom_components.myhome.websocket_api import SESSION_WATCHERS_DATA_KEY
 
-from .helpers_calibration import HEIGHT, FakeRunner, ascent_cm, descent_cm
+from .helpers_calibration import CLOSING, HEIGHT, OPENING, SLAT, FakeRunner, ascent_cm, descent_cm
 from .helpers_platforms import entity_object, setup_myhome
 from .test_calibration_session import PATH_A_BASIC, Act, act, check_the_snapshot, walk
 from .test_panel_two_gateways import two_gateways
@@ -105,9 +105,11 @@ def the_fixture() -> dict[str, Any]:
     return json.loads(EXAMPLES.read_text(encoding="utf-8"))
 
 
-async def open_session(hass: HomeAssistant, entry, **kwargs) -> CalibrationSession:
-    """Start the gateway's session on the first shutter and let its screen settle."""
-    session = await async_start(hass, entry, cover_unique_id=FIRST, client_id=CLIENT, **kwargs)
+async def open_session(
+    hass: HomeAssistant, entry, cover: str = FIRST, **kwargs
+) -> CalibrationSession:
+    """Start the gateway's session on one shutter and let its screen settle."""
+    session = await async_start(hass, entry, cover_unique_id=cover, client_id=CLIENT, **kwargs)
     await hass.async_block_till_done()
     return session
 
@@ -1107,19 +1109,10 @@ A_NAMED_AFTER_THE_WINDOW = (*A_TAPED[:-1], Act("submit", "hallway_shutter"))
 # seconds every time, and the fixture keeps hours a panel can subtract.
 FIXTURE_START = datetime(2026, 9, 18, 10, 0, tzinfo=UTC)
 
-# The scenarios lot B4 fills in: paths B and C, the thorough level and the verifications
-# are not in this backend yet, so the six snapshots that stand on them are still lot L0's
-# hand-written ones. B4 adds a walk for each, here, and the list empties.
-STILL_BY_HAND: frozenset[str] = frozenset(
-    {
-        "armed_path_b_profile_choice",
-        "armed_refine_scope_intent",
-        "review_short",
-        "review_correction",
-        "review_precise",
-        "checking_verify_result_offers_c",
-    }
-)
+# Nothing is written by hand any more. The six snapshots that stood on paths B and C, on
+# the thorough level and on the verifications were lot L0's until the backend could walk
+# them; they are walked here now, and five more went with them.
+STILL_BY_HAND: frozenset[str] = frozenset()
 
 
 class Recorder:
@@ -1146,27 +1139,6 @@ class Recorder:
 
     def steps(self) -> list[str]:
         return [snapshot["step"] for snapshot in self.seen]
-
-
-@pytest.fixture
-def every_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Let the controller offer the paths and the level lot B4 has yet to walk.
-
-    The sequencing decision of the B2 handoff (§4, RISCHIO-6 of its review), taken here
-    rather than discovered halfway through: `armed_path` and the reviews list `path_b`,
-    `path_c` and `refine` among their `actions`, and this backend does not offer them
-    yet - it refuses them at `start` and leaves them out of `actions`, on purpose, so
-    that nothing published is a promise it cannot keep.
-
-    Regenerating those three scenarios against the narrow tuples would rewrite them to
-    `["path_a"]` and `[]`, and lot B4 would rewrite them straight back - with the
-    frontend lot building screens against the shorter list in between. So the generator
-    widens the two tables, which is exactly the one-line change B4 makes for real, and
-    the scenarios stay what the panel has to be able to draw. **It is not an amendment**:
-    nothing in the contract changes, and no other screen of path A reads either tuple.
-    """
-    monkeypatch.setattr(calibration_session, "IMPLEMENTED_PATHS", SESSION_PATHS)
-    monkeypatch.setattr(calibration_session, "IMPLEMENTED_LEVELS", SESSION_LEVELS)
 
 
 def normalised(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -1227,7 +1199,7 @@ PATH_A_SCREENS = (
 
 
 async def test_the_committed_session_examples_are_what_the_server_sends_on_path_a(
-    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, every_path: None
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
     """Twelve screens of one walk, from the shutter's first movement to its summary."""
     freezer.move_to(FIXTURE_START)
@@ -1263,7 +1235,6 @@ async def test_the_committed_session_examples_are_what_the_server_sends_when_it_
     hass: HomeAssistant,
     tmp_path,
     freezer: FrozenDateTimeFactory,
-    every_path: None,
     name: str,
     target: str,
 ) -> None:
@@ -1278,7 +1249,7 @@ async def test_the_committed_session_examples_are_what_the_server_sends_when_it_
 
 
 async def test_the_committed_session_examples_are_what_the_server_sends_over_a_profile(
-    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory, every_path: None
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
     """The review that updates a profile, with every other window it reaches named."""
     freezer.move_to(FIXTURE_START)
@@ -1452,6 +1423,159 @@ async def test_the_committed_session_examples_are_what_the_server_sends_to_the_o
         await session.async_cancel(OTHER_CLIENT)
 
 
+
+# ------------------------------------------------------- the other two paths, and the checks
+# Paths B and C are about a window that is *one of a kind already measured*, so their
+# scenarios stand on the second shutter of the example gateway - the one that follows
+# `tall` and whose own travel nobody has measured with a tape. The profile really is the
+# reference window, so a reading taken where the profile predicts comes out at nothing
+# and one that misses can be made to miss by a stated amount.
+SECOND_NAME = "Landing Shutter"
+# What the tape finds this window's travel to be: a centimetre more than the file says,
+# so that the review of a short path has a "before" and an "after" that differ.
+SECOND_TRAVEL = 151.0
+# Scaled onto this window, the profile predicts the bar at **50.3 cm** half way down the
+# descent. One tape reading agrees with it and one misses by more than the three
+# centimetres at which the correction is offered on the spot - which are the two answers
+# the check exists to tell apart, and the two screens the panel has to draw.
+A_READING_ON_THE_MARK = 50.3
+A_READING_THAT_MISSES = 54.6
+
+PATH_B_TO_THE_OFFER: tuple[Act, ...] = (
+    Act("submit", "tall", 2.5),
+    Act("tape_start", None, 2.5),
+    Act("submit", str(SECOND_TRAVEL), 2.5),
+    Act("accept_step", None, 2.5),
+)
+PATH_C_TIMES_ONLY: tuple[Act, ...] = (
+    Act("submit", "tall", 2.5),
+    Act("times_only", None, 2.5),
+    Act("confirm_closed", None, 2.5),
+    Act("open_start", None, 2.5),
+    Act("lifted_off", None, SLAT),
+    Act("lift_accept", None, 2.5),
+    Act("confirm_closed_again", None, 2.5),
+    Act("open_full_start", None, 2.5),
+    Act("stopped_open", None, OPENING),
+    Act("accept_step", None, 2.5),
+    Act("close_start", None, 2.5),
+    Act("stopped_closed", None, CLOSING),
+    Act("accept_step", None, 2.5),
+)
+# The four readings of the thorough calibration and the check that closes it, grafted
+# onto the summary of path A. The tape is a centimetre and a half off the model here
+# too, for the same reason the two readings of path A are.
+THE_FOUR_READINGS: tuple[Act, ...] = (
+    Act("refine", None, 2.5),
+    Act("tape_start", None, 2.5),
+    Act("submit", str(round(descent_cm(0.25) + 1.5, 1)), 2.5),
+    Act("accept_step", None, 2.5),
+    Act("submit", str(round(descent_cm(0.75) - 1.5, 1)), 2.5),
+    Act("accept_step", None, 2.5),
+    Act("submit", str(round(ascent_cm(0.25) - 1.5, 1)), 2.5),
+    Act("accept_step", None, 2.5),
+    Act("submit", str(round(ascent_cm(0.75) + 1.5, 1)), 2.5),
+    Act("accept_step", None, 2.5),
+    Act("submit", str(round(descent_cm(0.40) + 0.8, 1)), 2.5),
+    Act("accept_step", None, 2.5),
+)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_when_it_is_told_the_kind(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path B: the profile, the travel, the offer of a check, and both of its answers."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, "2-82"))
+        produced: dict[str, dict[str, Any]] = {}
+
+        # The choice itself, on a `start` that named no profile; then the offer, and the
+        # summary of somebody who did not take it up.
+        session = await open_session(hass, entry, SECOND, path="path_b")
+        produced["armed_path_b_profile_choice"] = session.snapshot()
+        await walk(hass, session, PATH_B_TO_THE_OFFER, freezer=freezer)
+        produced["briefing_verify_offer"] = session.snapshot()
+        produced["review_short"] = await act(
+            hass, session, Act("skip_verify", None, 2.5), freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        # ...and taken up: the run to the middle of the descent, the tape, and a reading
+        # that agrees with the profile.
+        session = await open_session(hass, entry, SECOND, path="path_b")
+        await walk(hass, session, PATH_B_TO_THE_OFFER, freezer=freezer)
+        seen = Recorder(session)
+        await act(hass, session, Act("verify_now", None, 2.5), freezer=freezer)
+        produced["positioning_verify"] = seen.on("verify_b")
+        produced["awaiting_reading_measure_verify"] = seen.on("measure_verify")
+        produced["checking_verify_result_within"] = await act(
+            hass, session, Act("submit", str(A_READING_ON_THE_MARK), 2.5), freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        # ...and a reading that does not: the correction is offered on the spot, and the
+        # travel just measured goes with it.
+        session = await open_session(hass, entry, SECOND, path="path_b")
+        await walk(
+            hass,
+            session,
+            (*PATH_B_TO_THE_OFFER, Act("verify_now", None, 2.5)),
+            freezer=freezer,
+        )
+        produced["checking_verify_result_offers_c"] = await act(
+            hass, session, Act("submit", str(A_READING_THAT_MISSES), 2.5), freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        they_are_the_committed_examples(produced)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_for_a_correction(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path C: the profile is right and the window stops in the wrong place."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, "2-82"))
+        produced: dict[str, dict[str, Any]] = {}
+
+        session = await open_session(hass, entry, SECOND, path="path_c")
+        produced["armed_path_c_profile_choice"] = session.snapshot()
+        await session.async_cancel(CLIENT)
+
+        # ...and the same with the profile named and a scope highlighted: `start` says
+        # which correction the panel came in for, and the screen shows it chosen by
+        # nobody yet.
+        session = await open_session(
+            hass, entry, SECOND, path="path_c", profile="tall", scope="points_only"
+        )
+        produced["armed_refine_scope_intent"] = session.snapshot()
+        await session.async_cancel(CLIENT)
+
+        session = await open_session(hass, entry, SECOND, path="path_c")
+        produced["review_correction"] = await walk(
+            hass, session, PATH_C_TIMES_ONLY, freezer=freezer
+        )
+        await session.async_cancel(CLIENT)
+
+        they_are_the_committed_examples(produced)
+
+
+async def test_the_committed_session_examples_are_what_the_server_sends_at_the_thorough_level(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The four readings and the check grafted onto the summary of path A."""
+    freezer.move_to(FIXTURE_START)
+    async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        await walk(hass, session, A_NAMED_AFTER_THE_WINDOW, freezer=freezer)
+        review = await walk(hass, session, THE_FOUR_READINGS, freezer=freezer)
+        they_are_the_committed_examples({"review_precise": review})
+        await session.async_cancel(CLIENT)
+
+
 REGENERATED: frozenset[str] = frozenset(
     {
         *PATH_A_SCREENS,
@@ -1471,6 +1595,18 @@ REGENERATED: frozenset[str] = frozenset(
         "ended_unloaded",
         "ended_cover_gone",
         "owned_by_other",
+        # ...and the paths lot B4 walks.
+        "armed_path_b_profile_choice",
+        "armed_path_c_profile_choice",
+        "armed_refine_scope_intent",
+        "briefing_verify_offer",
+        "positioning_verify",
+        "awaiting_reading_measure_verify",
+        "checking_verify_result_within",
+        "checking_verify_result_offers_c",
+        "review_short",
+        "review_correction",
+        "review_precise",
     }
 )
 
