@@ -281,6 +281,27 @@ async def test_start_opens_a_session_that_get_then_answers(
         assert runner.log == []
         await current(hass, entry).async_cancel(CLIENT)
 
+        # ...and the three optional keys of `start` reach the session: the path decides
+        # which screen it is born on, the profile is chosen on it, and the scope waits in
+        # `intent` for the screen to highlight - the one of the three whose loss would
+        # break nothing loudly, and would simply stop highlighting anything.
+        answer = await result(
+            client,
+            type=WS_TYPE_SESSION_START,
+            entry_id=entry.entry_id,
+            cover_unique_id=SECOND,
+            client_id=CLIENT,
+            path="path_c",
+            profile="tall",
+            scope="points_only",
+        )
+        snapshot = answer["session"]
+        assert snapshot["step"] == "refine_scope"
+        assert snapshot["profile"] == "tall"
+        assert snapshot["intent"] == {"scope": "points_only"}
+        assert runner.log == []
+        await current(hass, entry).async_cancel(CLIENT)
+
 
 async def test_every_verb_comes_back_through_the_socket(
     hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
@@ -331,6 +352,26 @@ async def test_every_verb_comes_back_through_the_socket(
         assert tuple(stopped) == SESSION_ANSWER_KEYS
         assert runner.stops == 1
 
+        # ...and the two ways out of the contract, which travel as optional keys and are
+        # therefore the two easiest to drop between the frame and the call: taking
+        # control of a session somebody else is present on (lesson 5), and the "Cancel"
+        # that works whoever owns it (lesson 2). The controller's side is held by
+        # `test_calibration_session.py`; what is held here is the wiring.
+        other = {
+            "entry_id": entry.entry_id,
+            "session_id": session_id,
+            "client_id": OTHER_CLIENT,
+        }
+        # Without `claim` the same frame is a read, and the owner is left alone...
+        read_only = await result(client, type=WS_TYPE_SESSION_ATTACH, **other)
+        assert read_only["session"]["owner"]["client_id"] == CLIENT
+        # ...and with it the session changes hands, which is the only way it does while
+        # the client holding it is still there.
+        taken = await result(client, type=WS_TYPE_SESSION_ATTACH, **other, claim=True)
+        assert taken["session"]["owner"]["client_id"] == OTHER_CLIENT
+        back = await result(client, type=WS_TYPE_SESSION_ATTACH, **common, claim=True)
+        assert back["session"]["owner"]["client_id"] == CLIENT
+
         left = await result(client, type=WS_TYPE_SESSION_LEAVE, **common)
         # Nothing has been measured, so leaving ends it - and answers how it ended.
         assert left["session"]["outcome"]["reason"] == "left"
@@ -374,13 +415,52 @@ async def test_cancel_ends_the_session_it_names_and_never_the_one_that_replaced_
         )
         assert session.ended is False
 
-        # ...and with no id at all it is the gateway's, whichever it is.
+        # `leave` names one too, and it is the verb the panel sends **by itself** as a
+        # page goes away: a tab left open across a cancellation and a fresh start would
+        # otherwise detach - and, with nothing measured, end - the calibration that took
+        # its place.
         answer = await result(
-            client, type=WS_TYPE_SESSION_CANCEL, entry_id=entry.entry_id, client_id=CLIENT
+            client,
+            type=WS_TYPE_SESSION_LEAVE,
+            entry_id=entry.entry_id,
+            client_id=CLIENT,
+            session_id=EXAMPLE_SESSION_ID,
+        )
+        assert answer == {"session": None}
+        assert session.ended is False
+        assert session.owner == CLIENT
+
+        # ...and a `leave` that names the right session from the wrong client is a
+        # no-op, because a page going away must never acquire a calibration (§11.3,
+        # amended). This is the frame a read-only tab sends as it closes.
+        answer = await result(
+            client,
+            type=WS_TYPE_SESSION_LEAVE,
+            entry_id=entry.entry_id,
+            client_id=OTHER_CLIENT,
+            session_id=session.session_id,
+        )
+        assert answer["session"]["owner"]["client_id"] == CLIENT
+        assert session.ended is False
+
+        # ...and the way out that always works: another client, and `force`.
+        answer = await result(
+            client,
+            type=WS_TYPE_SESSION_CANCEL,
+            entry_id=entry.entry_id,
+            client_id=OTHER_CLIENT,
+            force=True,
         )
         assert answer["already_ended"] is False
         assert answer["session"]["outcome"]["reason"] == "cancelled"
         assert session.ended is True
+
+        # ...and with no id at all it is the gateway's, whichever it is - answered again
+        # because ending one is idempotent.
+        answer = await result(
+            client, type=WS_TYPE_SESSION_CANCEL, entry_id=entry.entry_id, client_id=CLIENT
+        )
+        assert answer["already_ended"] is True
 
 
 async def test_a_value_that_cannot_be_a_reading_is_a_form_error_and_not_a_refusal(
@@ -799,6 +879,19 @@ async def test_a_panel_that_opens_on_a_session_already_running_is_told_about_it(
         assert event["type"] == WS_EVENT_SESSION
         assert event["session"]["session_id"] == session.session_id
         assert event["session"]["step"] == "path_a"
+
+        # ...and it goes on being told. This is the wizard's own arrangement - the phone
+        # measures, the tablet watches - and reading the first event proves only that the
+        # tab was given a starting picture, not that it is following one.
+        await session.async_act(CLIENT, session.revision, "begin")
+        await hass.async_block_till_done()
+        seen: list[dict[str, Any]] = []
+        while not seen or seen[-1]["revision"] < session.revision:
+            message = await client.receive_json()
+            if message["event"]["type"] == WS_EVENT_SESSION:
+                seen.append(message["event"]["session"])
+        assert seen[-1]["step"] != "path_a"
+        assert seen[-1]["revision"] == session.revision
         await session.async_cancel(CLIENT)
 
 
@@ -911,8 +1004,16 @@ async def test_the_socket_closing_takes_the_subscriber_away_and_leaves_the_sessi
 
 
 # ========================================================================== the save
+@pytest.mark.parametrize(
+    ("target", "profile_written"), [("profile", True), ("cover_only", False)]
+)
 async def test_save_writes_once_publishes_the_overview_and_reloads_nothing(
-    hass: HomeAssistant, tmp_path, hass_ws_client, freezer: FrozenDateTimeFactory
+    hass: HomeAssistant,
+    tmp_path,
+    hass_ws_client,
+    freezer: FrozenDateTimeFactory,
+    target: str,
+    profile_written: bool,
 ) -> None:
     """Three minutes of measuring, written in place and without a reload.
 
@@ -923,8 +1024,15 @@ async def test_save_writes_once_publishes_the_overview_and_reloads_nothing(
     overview to every open panel, the signal to the shutters, and no
     `async_schedule_reload`.
 
+    Both exits, because `target` is the one thing in these frames that decides **what is
+    written into the store** rather than what a screen says: a user who asked for "save
+    for this shutter alone" and got a profile created and assigned would have to undo it
+    by hand. The two scenarios of the fixture walk the controller directly, so the wire
+    is what is held here.
+
     Mutation caught: saving twice (the second would find the store it had just written);
-    scheduling a reload; answering without the overview.
+    scheduling a reload; answering without the overview; a handler that passes a fixed
+    `target` and writes the profile whatever was asked.
     """
     async with setup_myhome(hass, tmp_path, YAML, calibration=CALIBRATION) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
@@ -935,6 +1043,7 @@ async def test_save_writes_once_publishes_the_overview_and_reloads_nothing(
         assert session.snapshot()["state"] == "review"
 
         seen: list[dict[str, Any]] = []
+        overviews: list[dict[str, Any]] = []
         with (
             patch.object(hass.config_entries, "async_schedule_reload", autospec=True) as scheduled,
             patch.object(hass.config_entries, "async_reload", autospec=True) as reloaded,
@@ -947,29 +1056,42 @@ async def test_save_writes_once_publishes_the_overview_and_reloads_nothing(
                     "session_id": session.session_id,
                     "client_id": CLIENT,
                     "revision": session.revision,
-                    "target": "profile",
+                    "target": target,
                 },
             )
-            answer = await answered(client, msg_id, seen)
+            answer = await answered(client, msg_id, seen, overviews)
         assert scheduled.call_count == 0
         assert reloaded.call_count == 0
         assert tuple(answer) == SESSION_SAVE_KEYS
         assert answer["session"]["state"] == "saved"
         assert answer["session"]["outcome"]["reason"] == "saved"
-        # Written once: the profile is there, the cover follows it, and the shutter is
-        # running on it without anything having been reloaded.
+        # Written once, and written the exit that was asked for: a profile created and
+        # assigned, or this window's own numbers and no profile at all.
         store = loaded_store(hass, entry)
-        assert store.raw_profiles["hallway_shutter"]["opening_time"] == pytest.approx(22.3, abs=0.2)
-        assert store.raw_covers[FIRST]["profile"] == "hallway_shutter"
-        assert hass.states.get(ENTITY).attributes["Profile"] == "hallway_shutter"
+        assert ("hallway_shutter" in store.raw_profiles) is profile_written
+        if profile_written:
+            assert store.raw_profiles["hallway_shutter"]["opening_time"] == pytest.approx(
+                22.3, abs=0.2
+            )
+            assert store.raw_covers[FIRST]["profile"] == "hallway_shutter"
+            assert hass.states.get(ENTITY).attributes["Profile"] == "hallway_shutter"
+        else:
+            assert store.raw_covers[FIRST]["profile"] == "tall"
+            assert store.raw_covers[FIRST]["overrides"]["opening_time"] == pytest.approx(
+                22.3, abs=0.2
+            )
         # ...and it left no undo token, because three minutes of measuring are not a
         # gesture to take back by accident.
         assert "undo_token" not in answer
 
         # Every open panel was given the session's last transition on the way, and the
-        # overview that the write published with it says the same thing.
+        # last overview **pushed** to them says the same thing - which is the half of
+        # this that the answer alone cannot show, and the reason the overview is
+        # published at all.
         assert seen[-1]["state"] == "saved"
         assert answer["overview"]["session"]["state"] == "saved"
+        assert overviews[-1]["session"]["state"] == "saved"
+        assert overviews[-1]["measuring"] is None
         assert sub_id
 
 
