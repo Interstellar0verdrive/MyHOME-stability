@@ -937,14 +937,16 @@ class CalibrationSession:
         return self.snapshot()
 
     @callback
-    def leave(self, client_id: str) -> dict[str, Any] | None:
+    def leave(self, client_id: str) -> dict[str, Any]:
         """Detach this client. Nothing is written and nothing is stopped.
 
         A session with nothing measured ends with it - there is nothing to protect and
-        a shutter should not be held by a window somebody closed. One that has measured
-        something stays, without an owner, until somebody picks it up or the lease runs
-        out. A `leave` from a client that is not the owner is a no-op: it is sent as a
-        page goes away, and a read-only tab has nothing to leave.
+        a shutter should not be held by a window somebody closed. The answer is then the
+        terminal snapshot and not nothing: the screen that follows says the calibration
+        was closed before the first measurement, and it needs the outcome to say it.
+        One that *has* measured something stays, without an owner, until somebody picks
+        it up or the lease runs out. A `leave` from a client that is not the owner is a
+        no-op: it is sent as a page goes away, and a read-only tab has nothing to leave.
         """
         if self.ended:
             return self.snapshot()
@@ -953,7 +955,7 @@ class CalibrationSession:
         self._take(client_id)
         if not self._anything_measured():
             self._end("left")
-            return None
+            return self.snapshot()
         self._owner = None
         self._publish()
         return self.snapshot()

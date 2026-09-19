@@ -869,6 +869,51 @@ async def test_saving_for_this_shutter_alone_writes_its_own_values_and_no_profil
         assert session.snapshot()["outcome"]["source"] == "guided"
 
 
+async def test_saving_for_this_shutter_alone_leaves_its_assignment_exactly_as_it_was(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """Path A measured a window; it said nothing about which kind of shutter it is.
+
+    So "Salva solo per questa tapparella" writes the five numbers and does not touch
+    the profile this cover was following, nor whether that profile wins over the file.
+    Clearing it would be a decision nobody made, on the one screen whose whole promise
+    is that it is about this window alone.
+    """
+    async with setup_myhome(
+        hass,
+        tmp_path,
+        FOLLOWER_YAML,
+        calibration={
+            "profiles": {},
+            "covers": {
+                UNIQUE_ID: {
+                    "cover_unique_id": UNIQUE_ID,
+                    "profile": "tall",
+                    "profile_wins": True,
+                    "height": HEIGHT,
+                }
+            },
+        },
+    ) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        snapshot = await walk(hass, session, PATH_A_BASIC, freezer=freezer)
+        await session.async_save(CLIENT, snapshot["revision"], "cover_only")
+
+        record = the_record(hass, entry)
+        assert record[CONF_PROFILE] == "tall"
+        assert record[CONF_PROFILE_WINS] is True
+        assert set(record["overrides"]) == {
+            CONF_OPENING_TIME,
+            CONF_CLOSING_TIME,
+            CONF_SLAT_TIME,
+            CONF_OPENING_ROLL,
+            CONF_CLOSING_ROLL,
+        }
+        # ...and no profile of the measured name was written on the way.
+        assert the_store(hass, entry).raw_profiles == {}
+
+
 async def test_a_save_leaves_no_undo_and_does_not_reload_the_entry(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -1407,9 +1452,14 @@ async def test_leave_ends_a_session_that_has_measured_nothing(
         FakeRunner(entity)
         session = await open_session(hass, entry)
 
-        assert session.leave(CLIENT) is None
+        snapshot = session.leave(CLIENT)
+
         assert session.ended is True
-        assert session.snapshot()["outcome"]["reason"] == "left"
+        # The answer is the terminal snapshot and not nothing: the screen that follows
+        # says the calibration was closed before the first measurement, and it reads
+        # that off the outcome.
+        assert snapshot["state"] == "ended"
+        assert snapshot["outcome"]["reason"] == "left"
         assert entity.calibrating is False
 
 
