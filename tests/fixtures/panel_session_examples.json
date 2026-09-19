@@ -2809,7 +2809,7 @@
         "predicted_cm": 50.3334968319457,
         "measured_cm": 50.3,
         "gap_cm": 0.0,
-        "threshold_cm": 3.0,
+        "threshold_cm": 4.0,
         "profile_level": null,
         "profile_check_cm": null
       },
@@ -2881,7 +2881,7 @@
         "predicted_cm": 50.3334968319457,
         "measured_cm": 54.6,
         "gap_cm": 4.3,
-        "threshold_cm": 3.0,
+        "threshold_cm": 4.0,
         "profile_level": null,
         "profile_check_cm": null
       },

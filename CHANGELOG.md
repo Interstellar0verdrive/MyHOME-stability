@@ -323,6 +323,10 @@ the panel when it is in the way.
   **about 4 cm** after the basic calibration and **about 2 cm** after the thorough one,
   less than either near the end stops — on the route screen, in the summaries, in the
   panel's own review and in the documentation.
+- **The check of route (B) offers the correction beyond 4 cm**, not beyond 3. It is the
+  number the same route has just promised a basic calibration ends up within, and a
+  check that contradicted the screen before it is a check nobody believes. The guided
+  dialog keeps its own 3 cm for now; the two meet the next time it is touched.
 
 ## [0.5.0] - 2026-09-13
 
