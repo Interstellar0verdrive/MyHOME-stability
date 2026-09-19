@@ -122,6 +122,23 @@ everything the panel does.
   which has to be left to finish. Every refusal these commands can make now has a
   sentence in English and Italian. Nothing a user sees changes yet: no button leads
   here.
+- **The screens of that session, in the panel.** `#/calibrate` now draws the
+  calibration itself: the choice of route, the briefs before each timed run, the two
+  presses of the ascent and the one of the descent, the positioning runs, the checks,
+  the tape readings, the review and the six ways it can end — sixty steps, each one of
+  the eight step layouts the panel already had. The words of every measuring step are
+  the dialog's own, already translated into seven languages, so the two clients say the
+  same thing; the review, the outcomes and the one problem the dialog cannot produce are
+  the panel's, in English and Italian. The big button keeps its place from step to step
+  and changes only its words, the motor line counts the seconds off the server's clock
+  while the estimated position beside it is the shutter's own, the phone buzzes and
+  beeps when the motor really starts (a switch on the brief, remembered in the browser),
+  and the ✕ asks before it throws a measurement away. **The position model stays behind
+  the flow**: the review shows the curtain travel and the two run times, and the roll
+  coefficients, the slat time, the values the save would change without measuring them
+  and the configuration snippet are all behind *"Show every value"*. A calibration
+  somebody else is driving is shown whole, without its controls, with one offer to take
+  it over. Nothing in the panel leads here yet.
 
 ### Changed
 
