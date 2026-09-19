@@ -212,6 +212,14 @@ export interface PanelState {
   wizardIntent: WizardIntent | null;
   /** This browser tab's name in the session, from `sessionStorage` where there is one. */
   clientId: string;
+  /**
+   * The wizard's "Leave the calibration?" question, open or shut.
+   *
+   * In the store and not in the element because the control that asks it is not in the
+   * element: the ✕ is in the panel's own toolbar (SPEC §5.1), beside the shutter's name
+   * and the phase, and the dialog it opens belongs to the screen underneath it.
+   */
+  wizardExit: boolean;
 }
 
 export const initialState = (route: Route): PanelState => ({
@@ -244,6 +252,7 @@ export const initialState = (route: Route): PanelState => ({
   sessionError: null,
   wizardIntent: null,
   clientId: "",
+  wizardExit: false,
 });
 
 /** Everything the user was composing, dropped: what "Scarta tutto" and a confirm leave. */

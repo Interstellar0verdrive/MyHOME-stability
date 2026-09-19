@@ -64,6 +64,15 @@ const LIGHT = {
   divider: "#e0e0e0",
 };
 
+/**
+ * The words on the one amber button, which are a fixed near-black in both themes.
+ *
+ * `engine/theme.ts`'s `--myhome-text-on-accent`, and the one literal colour the panel
+ * paints. The pair it makes with `--accent-color` is measured below in both themes,
+ * because it is the button of a press timed to a tenth of a second.
+ */
+const ON_ACCENT = "#1a1a1a";
+
 /** ...and its dark theme, which is what `dev/harness.html` paints. */
 const DARK = {
   name: "dark",
@@ -139,6 +148,33 @@ const pairs = (t) => [
   ["the advanced parameters note of a hand edit", t.text, mix(t.warning, t.card, 12), 13],
   ["the refusal card", t.text, mix(t.error, t.card, 12), 14],
   ["page text on the page background", t.text, t.background, 14],
+  // --- the guided calibration (lot F2) -----------------------------------------------
+  ["the big button while the shutter is moving", ON_ACCENT, t.accent, 16],
+  ["the note of a press that was registered", t.text, mix(t.success, t.card, 12), 14],
+  ["the note of a reading that no longer matches", t.text, mix(t.error, t.card, 12), 14],
+  ["the note about a movement from outside", t.text, mix(t.info, t.card, 12), 14],
+  ["the strip of a calibration somebody else is driving", t.text, mix(t.warning, t.card, 12), 13.5],
+  ["the switch for the signal at the start", t.soft, t.card, 13.5],
+  ["the motor line while it is running", ink(t, t.warning), t.card, 14],
+  ["the seconds left of a positioning run", t.soft, t.card, 13],
+  ["the review's lines under its rows", t.soft, t.card, 12.5],
+  ["the name of a value in the review", t.soft, t.card, 13.5],
+  ["a value the save would write", t.text, t.card, 13.5],
+  // The three faces an outcome screen wears: a glyph at 18 px and 600, which WCAG's own
+  // definition of large text (18.66 px bold) does not reach, so they are held to 4.5:1.
+  ["the outcome's face, saved", ink(t, t.success), mix(t.success, t.card, 12), 18],
+  ["the outcome's face, cancelled", ink(t, t.error), mix(t.error, t.card, 12), 18],
+  ["the outcome's face, timed out", ink(t, t.warning), mix(t.warning, t.card, 12), 18],
+  // The screen every number of a calibration is written on. It was missing from this list,
+  // and that is the hole a whole-screen defect went through: the label and the value were
+  // white on a white card because the field's card took the filled button's colour. The
+  // rule that made that possible is caught by `npm run session`, which reads what really
+  // reaches the element; these two lines are what the colours are supposed to be.
+  ["the label of a tape reading", t.text, t.card, 13.5],
+  ["the number typed into it, and its caret", t.text, t.card, 32],
+  ["its unit, beside the field", t.soft, t.card, 18],
+  ["the buttons of the question the cross asks", ink(t, t.primary), mix(t.primary, t.card, 10), 13.5],
+  ["and the one that leaves without saving", ink(t, t.error), mix(t.error, t.card, 14), 13.5],
 ];
 
 /**
@@ -225,6 +261,16 @@ for (const theme of [LIGHT, DARK]) {
   for (const [what, front, ground] of theirs(theme)) {
     console.log(`  ${theme.name}: ${ratio(front, ground).toFixed(2)}:1  ${what}`);
   }
+  // The filled bar of a positioning screen, for the same reason as the filled button: it
+  // is Home Assistant's own `--primary-color` on Home Assistant's own
+  // `--secondary-background-color`, the pair the design names and the pair every progress
+  // bar in the frontend uses. It is also not the only way the screen says how far along it
+  // is - the bar carries `role="progressbar"` with `aria-valuenow`, and the seconds left
+  // are written under it in text that is measured above.
+  console.log(
+    `  ${theme.name}: ${ratio(theme.primary, theme.backgroundSoft).toFixed(2)}:1` +
+      "  the positioning bar's fill on its track (--primary-color on --secondary-background-color)",
+  );
 }
 
 console.log(`\n${failures} pair${failures === 1 ? "" : "s"} under 4.5:1`);

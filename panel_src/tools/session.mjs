@@ -194,7 +194,40 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
  */
 let compressed = 0;
 
-const mount = async (connection, hash = "#/calibrate") => {
+/**
+ * Everything the bundle said out loud, so that "drawn without complaint" can be asserted.
+ *
+ * `runScripts: "outside-only"` evaluates the bundle against this window, so the `console`
+ * it reaches is this window's. Wrapped before the bundle is loaded and left forwarding, so
+ * a real failure is still printed where a person running this can read it.
+ */
+const recordConsole = (window, said) => {
+  for (const level of ["error", "warn"]) {
+    const original = window.console[level].bind(window.console);
+    window.console[level] = (...args) => {
+      said.push(`${level}: ${args.map((one) => String(one)).join(" ")}`);
+      original(...args);
+    };
+  }
+};
+
+/**
+ * Every custom element the bundle registers, collected as it registers them.
+ *
+ * Written down rather than listed: a list is right on the day it is written, and the
+ * defect the stylesheet check exists to catch is silent, so a component added next month
+ * would go unchecked without anybody noticing. The bundle registers itself, so the names
+ * can be taken from it.
+ */
+const recordDefinitions = (window, into) => {
+  const original = window.customElements.define.bind(window.customElements);
+  window.customElements.define = (name, ...rest) => {
+    into.push(name);
+    return original(name, ...rest);
+  };
+};
+
+const mount = async (connection, hash = "#/calibrate", said = null, defined = null) => {
   const dom = new JSDOM(
     '<!doctype html><html lang="en"><head><title>Home Assistant</title></head><body></body></html>',
     {
@@ -220,6 +253,25 @@ const mount = async (connection, hash = "#/calibrate") => {
       return this.hidden || !this.isConnected ? null : (this.parentElement ?? null);
     },
   });
+  // This tab's name in the session, seeded before the bundle reads it.
+  //
+  // `SessionClient` keeps it in `sessionStorage` and every example of the fixture is owned
+  // by `_example.this_client_id`. Without this the panel would make a random name, find
+  // itself looking at somebody else's calibration, and every screen below would be audited
+  // in its read-only form - which is a real screen, but not the one with the controls on
+  // it (there is a state further down that is deliberately somebody else's).
+  try {
+    window.sessionStorage.setItem("myhome-calibration-client", sessions._example.this_client_id);
+  } catch {
+    // A jsdom without storage: the states go on being audited read-only, which the
+    // `expect` of each of them then catches.
+  }
+  if (said) {
+    recordConsole(window, said);
+  }
+  if (defined) {
+    recordDefinitions(window, defined);
+  }
   window.eval((await readFile(bundle, "utf8")).replace(/\bexport\s*\{[^}]*\};?/g, ""));
   const panel = window.document.createElement("myhome-calibration-panel");
   panel.hass = {
@@ -239,7 +291,13 @@ const mount = async (connection, hash = "#/calibrate") => {
   window.document.body.appendChild(panel);
   const settle = (ms = 120) => new Promise((resolve) => window.setTimeout(resolve, ms));
   await settle(200);
-  return { window, panel, settle, find: (selector) => deep(panel.shadowRoot, selector) };
+  return {
+    window,
+    panel,
+    settle,
+    find: (selector) => deep(panel.shadowRoot, selector),
+    all: (selector) => deepAll(panel.shadowRoot, selector),
+  };
 };
 
 let failures = 0;
@@ -259,6 +317,63 @@ for (const signal of ["uncaughtException", "unhandledRejection"]) {
     process.exit(1);
   });
 }
+
+/**
+ * The ✕ of the header, and then "Leave without saving".
+ *
+ * The one way out of the wizard, and it is two presses on purpose: the second is a
+ * confirmation that says what leaving costs. Both controls are the panel's own - the cross
+ * is in the toolbar (SPEC §5.1) and the question is drawn by the wizard under it.
+ */
+const leaveTheCalibration = async (find, settle) => {
+  find("[data-wizard-exit]")?.click();
+  await settle(120);
+  find("[data-exit-leave]")?.click();
+  await settle(160);
+};
+
+/**
+ * A stylesheet's text, split into selectors and what they declare.
+ *
+ * Not a CSS parser: braces are balanced, comments are dropped and a conditional group is
+ * walked into. It exists because jsdom leaves a shadow root's stylesheets unparsed, and
+ * because the question being asked - *which rules reach this element* - needs selectors
+ * and nothing else.
+ */
+const splitRules = (text) => {
+  const found = [];
+  const scan = (source) => {
+    let at = 0;
+    while (at < source.length) {
+      const open = source.indexOf("{", at);
+      if (open < 0) {
+        return;
+      }
+      const selector = source.slice(at, open).trim();
+      let depth = 1;
+      let close = open + 1;
+      while (close < source.length && depth > 0) {
+        if (source[close] === "{") {
+          depth += 1;
+        } else if (source[close] === "}") {
+          depth -= 1;
+        }
+        close += 1;
+      }
+      const body = source.slice(open + 1, close - 1);
+      if (selector.startsWith("@")) {
+        if (/^@(media|supports|layer|container)\b/.test(selector)) {
+          scan(body);
+        }
+      } else if (selector !== "") {
+        found.push({ selectorText: selector, cssText: `${selector}{${body}}` });
+      }
+      at = close;
+    }
+  };
+  scan(text.replace(/\/\*[\s\S]*?\*\//g, ""));
+  return found;
+};
 
 const check = (what, got, want) => {
   const ok = got === want;
@@ -313,10 +428,7 @@ console.log("\n'Cancel', refused");
         : null,
   });
   const { settle, find } = await mount(bench.connection);
-  const end = deepAll(find("[data-wizard]").getRootNode(), "button")
-    .find((button) => (button.textContent ?? "").includes("End the calibration"));
-  end?.click();
-  await settle(160);
+  await leaveTheCalibration(find, settle);
   const card = find("[data-session-trouble]");
   checkThat("a refused cancel puts a card on the screen", card);
   // `claim_cancel`, not `claim`: this is the one place where taking control means ending the
@@ -413,10 +525,7 @@ console.log("\n'Cancel' refused with no hour to give");
     refuse: (name) => (name === "cancel" ? new Error("the connection is closed") : null),
   });
   const { settle, find } = await mount(bench.connection);
-  const end = deepAll(find("[data-wizard]").getRootNode(), "button")
-    .find((button) => (button.textContent ?? "").includes("End the calibration"));
-  end?.click();
-  await settle(160);
+  await leaveTheCalibration(find, settle);
   find('[data-recovery="force"]')?.click();
   await settle(160);
   const card = find("[data-session-trouble]");
@@ -472,6 +581,156 @@ console.log("\npresence lost, and taken back");
   checkThat("and it is still beating when ownership comes back", bench.sessions("heartbeat") > away);
   check("taking it back moved nothing either", bench.sessions("act"), 0);
   check("and stopped nothing", bench.sessions("stop"), 0);
+}
+
+console.log("\nevery state the contract can produce, drawn");
+{
+  // The thirty-four examples of the frozen fixture are one per screen the panel has to
+  // draw (lot L0), so this is the whole conversation walked through `wizard/model.ts` on
+  // the shipped bundle: every step of the sixty, every problem, every outcome, the form
+  // errors, the outside movements, the read-only session and the four reviews.
+  //
+  // What is asserted is not what any of them looks like - that is `test/wizard-model.test.ts`
+  // and the screenshots beside the design - but that **none of them is the error card** and
+  // that nothing was said on the console on the way. A screen the model half-understands
+  // draws something; a screen it throws on draws the card, and the card is a failure here.
+  const said = [];
+  const bench = gateway({ session: null });
+  const { settle, find } = await mount(bench.connection, "#/calibrate", said);
+  await settle(160);
+  const names = Object.keys(sessions.scenarios);
+  check("the fixture still carries every example", names.length, 39);
+  let drawn = 0;
+  let broken = [];
+  for (const name of names) {
+    bench.push(scenario(name));
+    await settle(90);
+    if (find("[data-render-error]")) {
+      broken.push(name);
+      continue;
+    }
+    if (find("[data-wizard]")) {
+      drawn += 1;
+    } else {
+      broken.push(`${name} (nothing drawn)`);
+    }
+  }
+  check("every one of them drew a screen", drawn, names.length);
+  checkThat(
+    broken.length === 0 ? "and none of them showed the card of a screen that could not be drawn"
+      : `and none of them showed the card of a screen that could not be drawn (${broken.join(", ")})`,
+    broken.length === 0,
+  );
+  const complaints = said.filter((one) => !one.includes("Lit is in dev mode"));
+  checkThat(
+    complaints.length === 0 ? "and nothing was said on the console" : `console: ${complaints[0]}`,
+    complaints.length === 0,
+  );
+}
+
+console.log("\nthe field a measurement is written into");
+{
+  // BUG-1 of the independent review, and the shape of it rather than one colour: the tape
+  // reading's card is `class="reading big"`, where "big" means "the 64 px field of a
+  // measurement" - and the 64 px *button* was `.big` too. Same specificity, so `.reading`
+  // won back the background and not the colour, and the label, the number and the caret
+  // were painted `--myhome-text-on-primary`: white on a white card, on every tape reading
+  // of every route.
+  //
+  // What is asserted is that no rule written for a filled button reaches the field. It is
+  // read off the stylesheets the shadow root really carries rather than off a colour,
+  // because jsdom resolves no custom property - and because the next collision of two
+  // meanings of one word will not be this one.
+  const bench = gateway({ session: scenario("awaiting_reading_measure_descent") });
+  const { settle, find } = await mount(bench.connection);
+  await settle(160);
+  const card = find(".reading");
+  checkThat("the reading's card is on the screen", card);
+  const label = card?.querySelector("label");
+  const input = card?.querySelector("input");
+  checkThat("with its label and its field in it", label && input);
+  const root = card?.getRootNode();
+  // jsdom parses no stylesheet inside a shadow root - `style.sheet` is null and
+  // `adoptedStyleSheets` carries no rules - so the text is split here. Selectors and
+  // declarations is all this needs, and `element.matches` is jsdom's own.
+  const rules = splitRules(
+    [...(root?.querySelectorAll?.("style") ?? [])].map((style) => style.textContent ?? "").join("\n"),
+  );
+  checkThat(`the screen's stylesheets were read (${rules.length} rules)`, rules.length > 0);
+  const reaching = (element) =>
+    rules.filter((rule) => {
+      try {
+        return element.matches(rule.selectorText);
+      } catch {
+        return false;
+      }
+    });
+  const painted = [...reaching(card), ...(input ? reaching(input) : []), ...(label ? reaching(label) : [])]
+    .filter((rule) => /--myhome-text-on-primary|--myhome-primary\)/.test(rule.cssText));
+  checkThat(
+    painted.length === 0
+      ? "no rule written for a filled button reaches it"
+      : `a button's rule reaches the field: ${painted.map((one) => one.selectorText).join(", ")}`,
+    painted.length === 0,
+  );
+  // …and the rule that really is the button still reaches the button.
+  const big = find("button.big");
+  const onBig = big ? reaching(big).filter((rule) => /min-height: ?64px/.test(rule.cssText)) : [];
+  checkThat("and the button still has the rule that makes it 64 px", onBig.length > 0);
+}
+
+console.log("\nstopping the shutter in the middle of a timed run");
+{
+  // BUG-2: `stop` is a verb of the contract and not one of the step's `menu_options`, so it
+  // is never in `actions` and the screen has to offer it itself (SPEC §5.4, decision 10).
+  // These are the three moments the shutter is really running towards an end stop.
+  const bench = gateway({ session: scenario("running_open_lift") });
+  const { settle, find, all } = await mount(bench.connection);
+  await settle(160);
+  const stop = all("button").find((button) => (button.textContent ?? "").includes("Stop the shutter"));
+  checkThat("a run under way offers to stop the shutter", stop);
+  check("and nothing has been stopped by arriving", bench.sessions("stop"), 0);
+  stop?.click();
+  await settle(160);
+  check("pressing it sends the stop verb, once", bench.sessions("stop"), 1);
+  check("and nothing else", bench.sessions("act"), 0);
+  // The screen it advances to is the step made repeatable, which is the server's business;
+  // what matters here is that the panel has a way to interrupt the one thing that moves.
+  checkThat("the wizard is still on the screen", find("[data-wizard]"));
+}
+
+console.log("\nthe stylesheets the bundle ships");
+{
+  // A Lit stylesheet that arrives with no text in it costs a screen its whole appearance
+  // and nothing else: the markup is right, the checks that read markup pass, and the panel
+  // ships looking like an unstyled document. It happened - the CSS minifier wrote a tick
+  // as `\2713`, which is not a valid escape inside the JavaScript template literal the
+  // text is put back into, so the tagged template's cooked value was `undefined` and every
+  // rule of the eight step templates was dropped. jsdom resolves no CSS and could not see
+  // it; this can, because `cssText` is a string either way.
+  const bench = gateway({ session: scenario("briefing_open_brief") });
+  const defined = [];
+  const { window } = await mount(bench.connection, "#/calibrate", null, defined);
+  const empty = [];
+  checkThat(`the bundle registered ${defined.length} elements`, defined.length >= 6);
+  for (const tag of defined) {
+    const element = window.customElements.get(tag);
+    // `styles` is a `CSSResultGroup`: a stylesheet, or a nest of arrays of them (several
+    // components export `[sheetStyles, css`…`]`), so it is flattened before it is read.
+    const sheets = [element?.styles ?? []].flat(Infinity);
+    for (const [at, sheet] of sheets.entries()) {
+      const text = sheet?.cssText;
+      if (typeof text !== "string" || text.trim() === "") {
+        empty.push(`${tag}[${at}]`);
+      }
+    }
+  }
+  checkThat(
+    empty.length === 0
+      ? "every stylesheet the bundle ships has text in it"
+      : `a stylesheet shipped empty: ${empty.join(", ")}`,
+    empty.length === 0,
+  );
 }
 
 console.log("\nthe check's own footing");

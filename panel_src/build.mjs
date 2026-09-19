@@ -40,6 +40,17 @@ const BANNER = "/* MyHOME calibration panel */";
 // mangled, because the closing backtick would be the wrong one.
 //
 // The source stays readable and the bundle stays small, which is the whole trade.
+//
+// **`charset: "utf8"` on the minifier is load-bearing, not a tidiness.** Without it
+// esbuild writes a non-ASCII character in the CSS as a CSS escape - `content: "✓"` became
+// `content:"\2713"` - and that text is then put back inside a JavaScript template
+// literal, where `\2` is not a valid escape sequence. A tagged template with an invalid
+// escape has an **undefined cooked value**, so Lit's `css` built a `CSSResult` whose
+// `cssText` was `undefined`, `replaceSync(undefined)` made an empty stylesheet, and every
+// rule of `templates/styles.ts` - the whole look of the eight step templates - was
+// silently absent in a real browser. jsdom resolves no CSS, so none of the checks here
+// could see it; it was found by photographing the wizard against the design (lot F2).
+// `tools/session.mjs` now asserts that no stylesheet the bundle ships is empty.
 const CSS_BLOCK = /(^|[\s=(,[:])css`([^`]*)`/g;
 
 const minifyStylesheets = {
@@ -55,11 +66,24 @@ const minifyStylesheets = {
         return null;
       }
       const minified = await Promise.all(
-        blocks.map((match) => transform(match[2], { loader: "css", minify: true })),
+        blocks.map((match) =>
+          transform(match[2], { loader: "css", minify: true, charset: "utf8" }),
+        ),
       );
       let index = 0;
       const contents = source.replace(CSS_BLOCK, (_whole, before) => {
         const done = minified[index++].code.trim();
+        // A net, not a correction: what goes back in has to be safe inside a template
+        // literal. A backslash, a backtick or a `${` there is either an invalid escape -
+        // which makes the tagged template's cooked value `undefined` and the stylesheet
+        // empty - or the end of the literal. Failing here names the file; failing later
+        // says `myhome-screen[5]`.
+        if (/[\\`]|\$\{/.test(done)) {
+          throw new Error(
+            `${args.path}: the minified CSS carries a backslash, a backtick or an ` +
+              "interpolation, which cannot go back inside a template literal",
+          );
+        }
         return `${before}css\`${done}\``;
       });
       return { contents, loader: "ts" };

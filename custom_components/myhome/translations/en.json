@@ -1011,7 +1011,10 @@
         "end": "End the calibration",
         "claim": "Take control",
         "claim_cancel": "Take control and end it",
-        "force": "End it anyway"
+        "force": "End it anyway",
+        "submit": "That is right, go on",
+        "stop": "Stop the shutter",
+        "exit": "Leave the calibration"
       },
       "trouble": {
         "title": "The calibration was not closed",
@@ -1021,12 +1024,126 @@
       "render_error": {
         "title": "This screen could not be drawn",
         "body": "The calibration is still running on the gateway and nothing has been lost. Try again, or end it."
+      },
+      "phase": {
+        "route": "Route",
+        "prepare": "Preparation",
+        "ascent": "Ascent",
+        "descent": "Descent",
+        "readings": "Tape readings",
+        "summary": "Summary"
+      },
+      "motor": {
+        "starting": "starting…",
+        "moving": "running for {seconds} s",
+        "stopped": "stopped",
+        "position": "{percent}%"
+      },
+      "press": {
+        "registered": "Press registered ✓",
+        "registered_note": "Press registered at {seconds} s: the shutter has been stopped."
+      },
+      "cue": {
+        "toggle": "Buzz and beep when the motor starts"
+      },
+      "positioning": {
+        "title": "The shutter is being positioned",
+        "remaining": "About {seconds} s left"
+      },
+      "external": {
+        "rehomed": "The shutter had been moved by a command from outside: it has been brought back to its end stop, and the measurement starts from there.",
+        "reading": "The shutter was moved after it had been positioned: this reading no longer matches. Repeat the step.",
+        "moved": "The shutter has been moved by a command from outside. Nothing of this step depended on where it was, so the calibration goes on from here."
+      },
+      "announce": {
+        "motor": "The motor has started."
+      },
+      "problem": {
+        "interrupted": {
+          "title": "The measurement was interrupted",
+          "body": "During this step the shutter was stopped or moved by another command, so what the step was measuring no longer holds. Nothing has been written. Wait until the shutter is still and repeat the step."
+        }
+      },
+      "exit": {
+        "title": "Leave the calibration?",
+        "body": "Nothing is saved: the measurements taken so far are discarded. If the shutter is moving, the run under way finishes by itself at its end stop.",
+        "stay": "Go on measuring",
+        "leave": "Leave without saving"
+      },
+      "profile": {
+        "meta": "reference travel {reference} cm",
+        "meta_measured": "reference travel {reference} cm · measured on {cover}",
+        "meta_no_reference": "reference travel not given",
+        "from_file": "The values the configuration file writes for this shutter."
+      },
+      "review": {
+        "title": "What was measured",
+        "intro": "Before saving: on the left what {cover} uses today, on the right what it will use afterwards. Nothing has been written yet.",
+        "where": "Once saved, the values stay in Home Assistant and {cover} uses them at once, with no restart. They can be reviewed, corrected by hand or removed from the shutter's card in this panel.",
+        "accuracy_checked": "Accuracy checked: within {accuracy} cm at {percent}% of the descent, in a position nothing was calculated on.",
+        "accuracy_unchecked": "The accuracy has not been checked yet. The thorough calibration adds four readings and a check, about two minutes.",
+        "save_profile": "Save as the profile «{profile}»",
+        "save_cover_only": "Save for this shutter only",
+        "profile_exists": "The profile «{profile}» already exists: saving updates it, and with it the shutters that follow it ({count}).",
+        "name_clash": "The configuration file defines «{profile}» as well: the measured profile takes precedence.",
+        "side_effects": "Saving also changes values this calibration did not measure:",
+        "affected_show": "Show the shutters that follow the profile",
+        "affected_hide": "Hide the shutters that follow the profile",
+        "yaml": "The equivalent for myhome.yaml",
+        "key": {
+          "stop_latency": "Stop delay (s)",
+          "start_delay": "Start delay (s)"
+        }
+      },
+      "outcome": {
+        "saved": {
+          "title": "Calibration saved",
+          "profile": "{cover} is saved and already in use: it follows the profile «{profile}» ({origin}). Shutters like it are calibrated with route (B).",
+          "cover": "{cover} is saved and already in use, with values of its own ({origin})."
+        },
+        "cancelled": {
+          "title": "Calibration cancelled",
+          "body": "Nothing has been saved: {cover} answers ordinary commands again. A run under way is not stopped and finishes by itself at its end stop."
+        },
+        "expired": {
+          "title": "The session timed out",
+          "body": "The calibration stood still for too long, so {cover} has been released and, if it was moving, stopped. Nothing has been saved."
+        },
+        "unloaded": {
+          "title": "The integration was reloaded",
+          "body": "A reload of the integration closed the calibration of {cover}. Nothing has been saved; if the shutter was moving it has been stopped."
+        },
+        "left": {
+          "title": "The calibration was closed",
+          "body": "The calibration was closed before the first measurement. Nothing has been saved."
+        },
+        "gone": {
+          "title": "The shutter is no longer there",
+          "body": "{cover} is no longer in this gateway's configuration: the calibration has been closed without saving."
+        },
+        "action": {
+          "again": "Calibrate another shutter",
+          "open_cover": "Open the shutter's card",
+          "close": "Close"
+        }
+      },
+      "owner": {
+        "other": "This calibration is being driven by another device.",
+        "take": "Take control"
+      },
+      "check": {
+        "measured": "The tape read {measured} cm at {percent}% of the travel, where the model had predicted {predicted} cm.",
+        "threshold": "Above {threshold} cm it is worth measuring this shutter on its own rather than trusting the profile.",
+        "threshold_profile": "Above {threshold} cm it is worth measuring this shutter on its own: the profile «{profile}» was itself checked to within {accuracy} cm.",
+        "no_reference": {
+          "title": "There was nothing to check against",
+          "body": "The tape read {measured} cm at {percent}% of the travel, but the values {cover} was following are no longer there, so there is no prediction to compare it with. The reading has not been thrown away: go on, and the review says what would be saved."
+        }
       }
     },
     "screen": {
       "phase": "{phase} · {index} of {count}",
       "new_text": "new text — not translated yet",
-      "not_in_this_version": "This step belongs to the guided calibration, which moves into the panel in a later version.",
       "motor": "Motor",
       "position": "Estimated position",
       "progress": "Positioning progress",

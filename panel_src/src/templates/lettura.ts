@@ -1,10 +1,11 @@
 // `lettura` - a step that only reads: a title, a drawing, some prose and the way on.
 //
-// It is the plainest of the eight and the one 0.6.0 actually uses: the first-run welcome,
-// "no basic shutters", "that gateway is not loaded", and every screen whose whole job is to
-// say something before offering a button. The text and the drawing are rendered by the host
-// (they are common to all eight); what belongs to this template is the operative column,
-// and for a reading step that column is empty - the footer's buttons are the step.
+// It is the plainest of the eight and the one the wizard uses most: "before the shutter
+// starts moving", the two briefs before a timed run, every "that was measured, go on" -
+// and, outside the wizard, the first-run welcome and "no basic shutters". The text and the
+// drawing are rendered by the host (they are common to all eight); what belongs to this
+// template is the operative column, and for a reading step that column is almost empty -
+// the footer's buttons are the step.
 
 import { html, nothing, type TemplateResult } from "lit";
 

@@ -270,14 +270,24 @@ them:
 npm run session   # the committed bundle in jsdom, against a session that misbehaves
 ```
 
-It walks the eight states none of the other checks can reach: a snapshot the wizard cannot
+It walks the ten states none of the other checks can reach: a snapshot the wizard cannot
 draw (the error card appears, the panel goes on repainting when Home Assistant hands it a
 new state, **and** the heartbeats go on arriving - the console line it prints is the panel
 reporting that drawing error once, and is part of what is being checked), a "Cancel"
 refused twice over and again with no hour to give, the address opened with no session and
 opened on one somebody else is driving, a `start` refused while the gateway is busy with
 another shutter, a session picked up again in the middle of a positioning run, and presence
-lost and taken back. The one thing it fakes beyond the gateway is the length of fifteen
+lost and taken back. Two more are about the screens rather than the session: **every one
+of the thirty-four examples of the frozen fixture pushed at the panel in turn**, each of
+which has to draw a screen and not the card of a screen that could not be drawn, with
+nothing said on the console on the way; and **every stylesheet the bundle ships**, which
+has to have text in it. That last one exists because one of them did not: the CSS minifier
+wrote a tick as `\2713`, which is not a valid escape inside the JavaScript template literal
+the text goes back into, so the tagged template's cooked value was `undefined` and every
+rule of `templates/styles.ts` was silently absent in a real browser. jsdom resolves no CSS
+and no check here could see it; it was found by photographing the wizard beside the design.
+
+The one thing it fakes beyond the gateway is the length of fifteen
 seconds, so that it takes a second rather than a minute - and it counts the intervals it
 compressed and fails if that count is zero, because a period that stopped matching would
 otherwise leave half the scenarios passing while exercising no heartbeat at all.
@@ -285,13 +295,42 @@ otherwise leave half the scenarios passing while exercising no heartbeat at all.
 `dev/harness.html` has the same thing to click at: the *a calibration session* checkbox
 opens one on the fixture's snapshots and `#/calibrate` walks it.
 
+**The screens themselves are a pure function.** `src/wizard/steps.ts` is one row per step
+the conversation can stand on - which of the eight templates draws it, which of the six
+phases the header names, which action is the big button, and whose words to show when the
+step has none of its own - and `src/wizard/model.ts` turns a snapshot and that row into the
+`ScreenModel` `<myhome-screen>` draws. Nothing else reads the snapshot: `views/wizard.ts`
+holds the clock the motor line counts on, what the one field contains and where the
+keyboard lands, and hands the rest over. That is what lets `test/wizard-model.test.ts` walk
+every screen of the calibration without a browser, and it is what makes the error card of
+SPEC §5.8 possible - a function that throws is a screen that can be replaced, where a view
+that threw halfway through painting is a blank panel. The step table is held to the
+contract's own list of sixty steps by that test, so a step the backend gains is a failure
+that names it rather than a screen that quietly falls back to something.
+
+One thing the screens add to the dialog's words: a **verification** carries the numbers it
+was made of - where the shutter was sent, what the tape read, what the model had predicted -
+under the dialog's own sentence about the deviation, and on path B the threshold the offer
+to correct this shutter rests on. A check whose `gap_cm` is `null` had nothing to compare
+against (the profile went out from under the session) and says so in the panel's own words:
+the snapshot still carries `deviation: 0` because the dialog's sentence has to substitute
+something, and a screen that printed "0.0 cm" there would be telling somebody their shutter
+is perfect.
+
+**The words of a measuring step are the dialog's.** `options.step.<step>` is already
+translated into seven languages and the panel shows it as it is, illustration and all
+(`splitLeadingImage` lifts the leading image into the drawing slot). What is the panel's
+own, in English and Italian, is the four reviews, the outcomes, the positioning screens and
+the one problem the dialog cannot produce - the steps whose dialog texts speak of the
+dialog, of "Configure → Calibrations" or of "closing the dialog".
+
 ## The screen engine
 
 Four pieces, and each is the thing 0.7.0 reuses without changing it.
 
 **The router** (`engine/router.ts`) turns a location into `{view, params}` over four
-patterns: `/`, `/cover/:id`, `/profile/:name` and - reserved, and rendered as "not in this
-version" until 0.7.0 - `/calibrate/:session`. (The plan's fifth, `/gateway/:entry_id`, is
+patterns: `/`, `/cover/:id`, `/profile/:name` and `/calibrate`, which carries nothing after
+it (see rule 4 above). (The plan's fifth, `/gateway/:entry_id`, is
 not routed: the gateway is chosen by a select in the header, and a house with
 one gateway - which is nearly all of them - never sees it.) It reads the panel's **own hash** first (`#/cover/…`, written by the
 panel and moved by `hashchange`, both of them platform behaviour) and falls back to the

@@ -29,14 +29,14 @@ export const renderMetro = (
 ): TemplateResult | typeof nothing => {
   const field = model.field;
   if (!field) {
-    return html`<div class="stub">${context.i18n.t("panel.screen.not_in_this_version")}</div>`;
+    return nothing;
   }
   return html`<div class="reading ${field.big === false ? "" : "big"}">
     <label for="reading">${field.label}</label>
     <div class="row">
       <input
         id="reading"
-        inputmode="decimal"
+        inputmode=${field.inputMode ?? "decimal"}
         .value=${field.value}
         placeholder=${field.placeholder ?? ""}
         aria-describedby=${describedBy(field) ?? nothing}

@@ -1,37 +1,82 @@
-// `<myhome-wizard>` - the guided calibration's screen. **A stub**: lot F2 replaces the
-// body of `_renderSession` with the eight live models, and everything else here is what
-// that lot inherits.
+// `<myhome-wizard>` - the guided calibration's screen.
 //
-// What is already real, because it is the part the v2 panel got wrong (SPEC §5.8,
-// lesson 1):
+// One snapshot arrives, `wizard/model.ts` turns it into a `ScreenModel`, and
+// `<myhome-screen>` draws it. Everything that is not "what does this step look like" lives
+// here and nowhere else: the clock the motor line counts on, what the one field holds, the
+// two disclosures of the review, the signal at the start, where the keyboard lands, and
+// the question the ✕ asks.
 //
-// * **every drawing is inside a `try`.** An exception building the model or rendering it
-//   shows the card below - which says what happened, offers "Try again" and offers the
-//   robust way of ending the session - instead of an empty panel. It is logged once; the
-//   second identical stack trace tells nobody anything;
+// What was already real before the screens existed, because it is the part the v2 panel
+// got wrong (SPEC §5.8, lesson 1):
+//
+// * **every drawing is inside a `try`, and so is the model.** An exception building the
+//   model or rendering it shows the card below - which says the calibration is still
+//   running, offers "Try again" and offers the robust way of ending it - instead of an
+//   empty panel. It is logged once; the second identical stack trace tells nobody
+//   anything;
 // * **nothing on this path keeps the session alive.** The presence signal is
 //   `SessionClient`'s own timer (`engine/session.ts`); this element cannot start it, stop
-//   it or delay it, which is the whole point of the class having no DOM in it;
+//   it or delay it, which is the whole point of the class having no DOM in it. The ten
+//   repaints a second the motor line asks for are repaints and nothing else;
 // * **a refusal always arrives with something to press.** `state.sessionError` carries the
-//   recovery tokens the client worked out, and each becomes one button here. A screen
-//   that says "Cancel failed" and nothing else is the silent failure with a sentence on
-//   it.
+//   recovery tokens the client worked out, and each becomes one button here. A screen that
+//   says "Cancel failed" and nothing else is the silent failure with a sentence on it.
 //
-// The stub itself shows the shutter's name and where the session stands, as plain text.
-// Those are tokens from the server, not sentences: F2 turns them into the screens.
+// **Two clocks, and neither of them measures anything.** The seconds beside "Motor" are
+// `movement.started_at` - the server's instant - plus the time since, corrected by the
+// difference this tab measured between its own clock and `server_time` when the snapshot
+// arrived. It is drawn at about ten hertz so that it reads as a running number; no
+// measurement is taken from it, and the press is timed by its arrival at the server
+// (SPEC decision 15). The estimated position beside it is the shutter's own estimate out
+// of `hass.states`, at about one hertz, and is a different claim from a different source.
 
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
+import { FocusReturn, FocusTrap, alertRegion, liveRegion } from "../engine/a11y";
+import { readCue, signalStart, writeCue } from "../engine/cue";
 import { I18n } from "../engine/i18n";
+import { MyHomeScreen } from "../engine/screen";
 import { type SessionRecovery } from "../engine/session";
-import { type SessionSnapshot } from "../engine/session-contract";
+import {
+  type SessionAction,
+  type SessionSaveTarget,
+  type SessionSnapshot,
+  type SessionSubmit,
+} from "../engine/session-contract";
 import { type PanelState } from "../engine/store";
-import { buttonStyles, cardStyles, themeStyles } from "../engine/theme";
+import { buttonStyles, cardStyles, srOnly, themeStyles } from "../engine/theme";
+import { type HomeAssistant } from "../types/ha";
+import { exitDialog, exitDialogStyles } from "../components/exit-dialog";
+import {
+  ACT,
+  AGAIN,
+  CLAIM,
+  CLOSE,
+  CUE,
+  OPEN_COVER,
+  PICK,
+  SAVE,
+  SHOW_AFFECTED,
+  SHOW_ALL,
+  STOP,
+  SUBMIT,
+  screenModel,
+} from "../wizard/model";
 
-/** What the screen can ask the shell to do. Lot F2 adds the verbs of the conversation. */
+// The element has to be referenced so the bundler keeps it: the template below names it as
+// a tag and nothing else imports it.
+void MyHomeScreen;
+
+/** What the screen can ask the shell to do. */
 export interface WizardActions {
   /** Read the session again. */
   refresh(): void;
+  /** One step of the conversation, or the value of the step's form. */
+  act(action: SessionAction | SessionSubmit, value?: string): void;
+  /** The one verb that touches the shutter: stop it, and make this step repeatable. */
+  stop(): void;
+  /** Write the result, once, from the review. */
+  save(target: SessionSaveTarget): void;
   /** End the session, through the four branches of SPEC §5.2. */
   cancel(): void;
   /**
@@ -43,43 +88,87 @@ export interface WizardActions {
   claimAndCancel(): void;
   /** End it whoever owns it. */
   force(): void;
+  /** Open or shut the question the ✕ asks. It is in the store, because the ✕ is not here. */
+  exit(open: boolean): void;
+  /** Measure another shutter. */
+  again(): void;
+  /** The card of the shutter that was just calibrated. */
+  openCover(cover: string): void;
   /** Back to the list. */
   back(): void;
 }
+
+const NO_ACTIONS: WizardActions = {
+  refresh: () => undefined,
+  act: () => undefined,
+  stop: () => undefined,
+  save: () => undefined,
+  cancel: () => undefined,
+  claim: () => undefined,
+  claimAndCancel: () => undefined,
+  force: () => undefined,
+  exit: () => undefined,
+  again: () => undefined,
+  openCover: () => undefined,
+  back: () => undefined,
+};
+
+/** How often the motor line is redrawn: ten times a second, as SPEC §5.4 asks. */
+const TICK_MS = 100;
 
 export class MyHomeWizard extends LitElement {
   static override properties = {
     i18n: { attribute: false },
     state: { attribute: false },
     actions: { attribute: false },
+    hass: { attribute: false },
   };
 
   declare i18n: I18n;
   declare state: PanelState;
   declare actions: WizardActions;
+  /** Only for one number: the shutter's own estimate of where it is. */
+  declare hass: HomeAssistant | null;
 
   /** Set by a drawing that threw, cleared by "Try again". */
   private _broken: unknown = null;
   private _reported = false;
+  /** What the one field on the screen holds, and which step it was typed on. */
+  private _typed: string | null = null;
+  private _typedFor = "";
+  /** The review's two disclosures. Shut on arrival: the model stays behind the flow. */
+  private _showAll = false;
+  private _showAffected = false;
+  /** The signal at the start, as this browser remembers it. */
+  private _cue = readCue();
+  /** This tab's clock minus the server's, measured when the snapshot arrived. */
+  private _skewMs = 0;
+  private _skewFor = "";
+  /** The ten-hertz repaint of the motor line, while something of the session is moving. */
+  private _clock: number | null = null;
+  private _painted = 0;
+  /** What the last paint was about, so that focus and the signal fire once each. */
+  private _focusedFor = "";
+  private _signalledFor = "";
+  /** The keyboard stays inside the exit question while it is open, and comes back after. */
+  private _trap = new FocusTrap();
+  private _return = new FocusReturn();
+  private _trapped = false;
 
   constructor() {
     super();
     this.i18n = new I18n();
     this.state = {} as PanelState;
-    this.actions = {
-      refresh: () => undefined,
-      cancel: () => undefined,
-      claim: () => undefined,
-      claimAndCancel: () => undefined,
-      force: () => undefined,
-      back: () => undefined,
-    };
+    this.actions = NO_ACTIONS;
+    this.hass = null;
   }
 
   static override styles = [
     themeStyles,
     cardStyles,
     buttonStyles,
+    srOnly,
+    exitDialogStyles,
     css`
       :host {
         display: block;
@@ -102,23 +191,6 @@ export class MyHomeWizard extends LitElement {
         font-size: 18px;
       }
 
-      dl {
-        margin: 0;
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 4px 12px;
-        font-size: 14px;
-      }
-
-      dt {
-        color: var(--myhome-text-soft);
-      }
-
-      dd {
-        margin: 0;
-        font-variant-numeric: tabular-nums;
-      }
-
       .actions {
         display: flex;
         flex-wrap: wrap;
@@ -134,12 +206,25 @@ export class MyHomeWizard extends LitElement {
     `,
   ];
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.addEventListener("keydown", this._onKey);
+  }
+
+  override disconnectedCallback(): void {
+    this.removeEventListener("keydown", this._onKey);
+    this._stopClock();
+    this._trap.release();
+    this._trapped = false;
+    super.disconnectedCallback();
+  }
+
   protected override render(): TemplateResult {
     if (this._broken) {
       return this._renderBroken();
     }
     try {
-      return html`${this._renderSession()}${this._renderTrouble()}`;
+      return html`${this._renderSession()}${this._renderTrouble()}${this._renderExit()}`;
     } catch (error) {
       // Caught here rather than left to Lit, because what Lit does with it is leave the
       // screen half-painted. The flag makes the next paint the error card, which is a
@@ -149,7 +234,37 @@ export class MyHomeWizard extends LitElement {
     }
   }
 
-  /** The stub F2 replaces: the shutter, and where the session stands, as plain text. */
+  protected override updated(): void {
+    const session = this.state.session ?? null;
+    this._followClock(session);
+    this._followExit();
+    if (!session || this._broken) {
+      return;
+    }
+    const here = `${session.session_id}:${session.state}:${session.step ?? ""}`;
+    if (here !== this._focusedFor) {
+      this._focusedFor = here;
+      // SPEC §5.7: the title, except where the step *is* the button - Space and Enter
+      // press it, and a user who had to Tab to it would have missed the moment.
+      //
+      // After the screen's own update and not in this one: a child element's shadow root
+      // is painted after its parent's, so the heading this is aiming at does not exist yet
+      // when `updated()` runs here. Asked for before it is drawn, focus stays wherever it
+      // was - which on the first step of a calibration is the top of the document.
+      const screen = this.shadowRoot?.querySelector("myhome-screen") as MyHomeScreen | null;
+      const where = session.substate === "awaiting_endpoint" ? "primary" : "title";
+      void screen?.updateComplete.then(() => screen.focusEntry(where));
+    }
+    // The motor really has begun: the transition to `awaiting_endpoint` is the echo of the
+    // actuator and nothing this browser worked out (SPEC §4.3).
+    const moving = `${session.session_id}:${session.substate === "awaiting_endpoint" ? session.step : ""}`;
+    if (session.substate === "awaiting_endpoint" && moving !== this._signalledFor) {
+      this._signalledFor = moving;
+      signalStart(this._cue);
+    }
+  }
+
+  /** The screen of the step, built from the snapshot and from nothing else. */
   private _renderSession(): TemplateResult {
     const session: SessionSnapshot | null = this.state.session ?? null;
     if (!session) {
@@ -163,25 +278,258 @@ export class MyHomeWizard extends LitElement {
         </div>
       </div>`;
     }
-    return html`<div class="card" data-wizard>
-      <h2>${session.cover.name}</h2>
-      <dl>
-        <dt>state</dt>
-        <dd data-session-state>${session.state}</dd>
-        <dt>step</dt>
-        <dd data-session-step>${session.step ?? "-"}</dd>
-        <dt>revision</dt>
-        <dd>${session.revision}</dd>
-      </dl>
-      <div class="actions">
-        <button class="cta text" type="button" @click=${() => this.actions.cancel()}>
-          ${this.i18n.t("panel.wizard.action.end")}
-        </button>
-        <button class="cta text" type="button" @click=${() => this.actions.back()}>
-          ${this.i18n.t("panel.common.action.back")}
-        </button>
-      </div>
+    this._rememberField(session);
+    const model = screenModel(session, {
+      i18n: this.i18n,
+      now: Date.now(),
+      skewMs: this._skew(session),
+      typed: this._typed,
+      position: this._position(session),
+      readOnly: this._readOnly(session),
+      showAll: this._showAll,
+      showAffected: this._showAffected,
+      cue: this._cue,
+      profiles: this.state.overview?.profiles ?? [],
+    });
+    return html`<div data-wizard>
+      ${liveRegion(model.announce ?? "")}${alertRegion(model.alert ?? "")}
+      <myhome-screen
+        .model=${model}
+        .i18n=${this.i18n}
+        @myhome-screen-action=${this._onScreenAction}
+      ></myhome-screen>
     </div>`;
+  }
+
+  /**
+   * Which of the two clients this tab is.
+   *
+   * Off the snapshot rather than off the heartbeat: ownership only ever changes on a verb
+   * that does something, and every one of those produces a new snapshot (contract §11.1,
+   * amended). A snapshot with no owner at all is not read-only - nobody is holding the
+   * tape, and the first act takes the session.
+   */
+  private _readOnly(session: SessionSnapshot): boolean {
+    const owner = session.owner?.client_id;
+    return owner !== undefined && owner !== this.state.clientId;
+  }
+
+  /** The shutter's own estimate of where it is, when Home Assistant has one. */
+  private _position(session: SessionSnapshot): number | null {
+    const entity = session.cover?.entity_id;
+    const value = entity ? this.hass?.states?.[entity]?.attributes?.current_position : undefined;
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
+  /**
+   * How far this tab's clock is from the server's, measured once per snapshot.
+   *
+   * Memoised in `render` on purpose: the difference is a property of the snapshot that
+   * just arrived, and recomputing it on every one of the ten repaints a second would make
+   * the elapsed time stand still. A `server_time` that will not parse leaves it at zero,
+   * which shows this tab's own clock - wrong by whatever the two disagree, and never
+   * wrong by an hour of counting.
+   */
+  private _skew(session: SessionSnapshot): number {
+    const stamp = `${session.session_id}:${session.revision}`;
+    if (stamp !== this._skewFor) {
+      this._skewFor = stamp;
+      const server = Date.parse(session.server_time);
+      this._skewMs = Number.isNaN(server) ? 0 : Date.now() - server;
+    }
+    return this._skewMs;
+  }
+
+  /**
+   * The field opens on what the step suggests, and keeps what was typed until the step
+   * changes.
+   *
+   * Keeping it across revisions is the point: a reading the backend refused comes back as
+   * the same step with `form.error` on it, and a field emptied under a refusal is a field
+   * that makes the reader measure the wall again.
+   */
+  private _rememberField(session: SessionSnapshot): void {
+    const form = session.form;
+    const here = `${session.session_id}:${session.step ?? ""}:${form?.field ?? ""}`;
+    if (here === this._typedFor) {
+      return;
+    }
+    this._typedFor = here;
+    this._showAll = false;
+    this._showAffected = false;
+    const suggested = form && form.kind !== "choice" ? form.suggested : null;
+    this._typed =
+      suggested === null || suggested === undefined
+        ? ""
+        : typeof suggested === "number"
+          ? this.i18n.number(suggested, 1)
+          : suggested;
+  }
+
+  /**
+   * The keyboard, while the exit question is open.
+   *
+   * It is a real confirmation - two buttons, one of which throws three minutes of
+   * measurements away - so Tab stays inside it and focus comes back to whatever opened it
+   * when it closes. `FocusTrap` is the panel's own, the same one the review sheet and the
+   * profile choice use.
+   */
+  private _followExit(): void {
+    const open = Boolean(this.state.wizardExit);
+    if (open === this._trapped) {
+      return;
+    }
+    this._trapped = open;
+    if (!open) {
+      this._trap.release();
+      this._return.restore();
+      return;
+    }
+    this._return.remember(
+      (this.getRootNode() as ShadowRoot | Document | null as DocumentOrShadowRoot | null)
+        ?.activeElement ?? null,
+    );
+    const dialog = this.shadowRoot?.querySelector("[data-exit-dialog]") as HTMLElement | null;
+    if (dialog) {
+      this._trap.hold(dialog);
+    }
+  }
+
+  /** The ten-hertz repaint, running only while something of the session is moving. */
+  private _followClock(session: SessionSnapshot | null): void {
+    const running = session?.movement?.started_at != null && !this._broken;
+    if (running) {
+      this._startClock();
+    } else {
+      this._stopClock();
+    }
+  }
+
+  private _startClock(): void {
+    if (this._clock !== null) {
+      return;
+    }
+    const frame = (globalThis as { requestAnimationFrame?: (cb: () => void) => number })
+      .requestAnimationFrame;
+    if (typeof frame !== "function") {
+      return;
+    }
+    const loop = (): void => {
+      this._clock = frame(loop);
+      const now = Date.now();
+      if (now - this._painted < TICK_MS) {
+        return;
+      }
+      this._painted = now;
+      this.requestUpdate();
+    };
+    this._clock = frame(loop);
+  }
+
+  private _stopClock(): void {
+    if (this._clock === null) {
+      return;
+    }
+    const cancel = (globalThis as { cancelAnimationFrame?: (id: number) => void })
+      .cancelAnimationFrame;
+    if (typeof cancel === "function") {
+      cancel(this._clock);
+    }
+    this._clock = null;
+  }
+
+  /** Escape is the ✕: it asks the question, and on the question it answers "keep going". */
+  private _onKey = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    if (!this.state.session) {
+      return;
+    }
+    event.stopPropagation();
+    this.actions.exit(!this.state.wizardExit);
+  };
+
+  private _onScreenAction = (event: Event): void => {
+    const detail = (event as CustomEvent<{ action: string; value?: string }>).detail;
+    const action = detail?.action ?? "";
+    const value = detail?.value;
+    if (action === "field") {
+      // Recorded and **not** repainted: the characters are already in the field, and
+      // writing them back into it on every keystroke is how a caret ends up at the end of
+      // a number somebody is editing in the middle.
+      this._typed = value ?? "";
+      return;
+    }
+    if (action === SUBMIT) {
+      this.actions.act("submit", this._typed ?? "");
+      return;
+    }
+    if (action.startsWith(PICK)) {
+      this.actions.act("submit", action.slice(PICK.length));
+      return;
+    }
+    if (action.startsWith(ACT)) {
+      this.actions.act(action.slice(ACT.length) as SessionAction);
+      return;
+    }
+    if (action.startsWith(SAVE)) {
+      this.actions.save(action.slice(SAVE.length) as SessionSaveTarget);
+      return;
+    }
+    if (action === STOP) {
+      this.actions.stop();
+      return;
+    }
+    if (action === CLAIM) {
+      this.actions.claim();
+      return;
+    }
+    if (action === CUE) {
+      this._cue = value !== "off";
+      writeCue(this._cue);
+      this.requestUpdate();
+      return;
+    }
+    if (action === SHOW_ALL) {
+      this._showAll = !this._showAll;
+      this.requestUpdate();
+      return;
+    }
+    if (action === SHOW_AFFECTED) {
+      this._showAffected = !this._showAffected;
+      this.requestUpdate();
+      return;
+    }
+    if (action === AGAIN) {
+      this.actions.again();
+      return;
+    }
+    if (action === OPEN_COVER) {
+      const cover = this.state.session?.cover?.unique_id;
+      if (cover) {
+        this.actions.openCover(cover);
+      }
+      return;
+    }
+    if (action === CLOSE) {
+      this.actions.back();
+    }
+  };
+
+  /** The question the ✕ asks, and the only answer that throws measurements away. */
+  private _renderExit(): TemplateResult | typeof nothing {
+    if (!this.state.wizardExit) {
+      return nothing;
+    }
+    return exitDialog({
+      i18n: this.i18n,
+      onStay: () => this.actions.exit(false),
+      onLeave: () => {
+        this.actions.exit(false);
+        this.actions.cancel();
+      },
+    });
   }
 
   /**
@@ -280,6 +628,15 @@ export class MyHomeWizard extends LitElement {
 
   private _fail(error: unknown): void {
     this._broken = error;
+    // A screen that cannot be drawn is a screen that cannot count seconds either, and a
+    // loop asking for a repaint that throws every time is a loop nobody can read past.
+    this._stopClock();
+    // …and the error card is the whole of the next paint, so the exit question goes with
+    // the rest of it. Left alone, `_followExit` would see the flag it left behind, decide
+    // nothing had changed, and hold the keyboard inside a dialog that is no longer in the
+    // document - on the one screen whose whole job is to offer a way on.
+    this._trap.release();
+    this._trapped = false;
     if (!this._reported) {
       this._reported = true;
       console.error("MyHOME panel: the guided calibration could not be drawn", error);

@@ -513,6 +513,22 @@ describe("the verbs", () => {
     assert.equal(bench.count("leave"), 0, "there was nothing to leave");
   });
 
+  it("never takes the session by going away - lesson 5", async (t) => {
+    // Amended by lot B3: a page going away never acquires a calibration. `leave` from a
+    // client that is not the owner does nothing and answers the snapshot, so the one
+    // thing this class must not do with that answer is read itself into it - a tab being
+    // closed would end up the owner of a measurement somebody else is taking.
+    const owned = snapshot({ owner: { client_id: OTHER, present_until: "2026-09-18T10:02:22.000+00:00" } });
+    const bench = gateway({ leave: () => ({ session: owned }) });
+    const session = client(t, bench);
+    session.apply(owned);
+    const result = await session.leave();
+    assert.equal(result.ok, true);
+    assert.equal(bench.count("leave"), 1);
+    assert.equal(session.owner, false, "leaving did not make this tab the owner");
+    assert.equal(session.beating, false, "and it stopped being present");
+  });
+
   it("answers a refusal of every verb with something to press", async (t) => {
     const refuse = () => {
       throw { code: "not_found", message: "no gateway", translation_key: "entry_not_loaded" };

@@ -29,6 +29,17 @@ export const themeStyles = css`
     /* Project-introduced, with the documented fallbacks. */
     --myhome-text-on-primary: var(--text-primary-color, #ffffff);
     /*
+     * The words on the one button that turns amber: the press of a timed run.
+     *
+     * A fixed near-black rather than the theme's own text colour: it is the design's
+     * value, and the only literal colour in this file. The accent is a warm mid-tone in
+     * both of Home Assistant's themes - ff9800 and ffb74d - so the theme's text colour on
+     * it is 4.4:1 in the light one and 1.3:1 in the dark one, which is a button nobody can
+     * read at the one moment of the calibration that is timed to a tenth of a second.
+     * The contrast run measures this pair in both themes.
+     */
+    --myhome-text-on-accent: #1a1a1a;
+    /*
      * The action word inside an inverted strip - "Annulla" - computed against the strip
      * it sits on rather than fixed.
      *

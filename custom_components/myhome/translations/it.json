@@ -1006,27 +1006,144 @@
     },
     "wizard": {
       "title": "Calibrazione guidata",
-      "none": "Nessuna calibrazione \u00e8 in corso su questo gateway.",
+      "none": "Nessuna calibrazione è in corso su questo gateway.",
       "action": {
         "end": "Termina la calibrazione",
         "claim": "Prendi il controllo",
         "claim_cancel": "Prendi il controllo e termina",
-        "force": "Termina comunque"
+        "force": "Termina comunque",
+        "submit": "Va bene, avanti",
+        "stop": "Ferma la tapparella",
+        "exit": "Esci dalla calibrazione"
       },
       "trouble": {
-        "title": "La calibrazione non \u00e8 stata chiusa",
+        "title": "La calibrazione non è stata chiusa",
         "freed": "Se non riesce nulla, il gateway libera la tapparella da solo alle {time}.",
         "freed_later": "Se non riesce nulla, il gateway libera la tapparella da solo alla scadenza della calibrazione."
       },
       "render_error": {
-        "title": "Questa schermata non \u00e8 stata disegnata",
-        "body": "La calibrazione \u00e8 ancora in corso sul gateway e non \u00e8 andato perso niente. Riprovare, oppure terminarla."
+        "title": "Questa schermata non è stata disegnata",
+        "body": "La calibrazione è ancora in corso sul gateway e non è andato perso niente. Riprovare, oppure terminarla."
+      },
+      "phase": {
+        "route": "Percorso",
+        "prepare": "Preparazione",
+        "ascent": "Salita",
+        "descent": "Discesa",
+        "readings": "Letture col metro",
+        "summary": "Riepilogo"
+      },
+      "motor": {
+        "starting": "avvio in corso…",
+        "moving": "in movimento da {seconds} s",
+        "stopped": "fermato",
+        "position": "{percent}%"
+      },
+      "press": {
+        "registered": "Pressione registrata ✓",
+        "registered_note": "Pressione registrata a {seconds} s: la tapparella è stata fermata."
+      },
+      "cue": {
+        "toggle": "Vibra e suona quando il motore parte"
+      },
+      "positioning": {
+        "title": "La tapparella si sta posizionando",
+        "remaining": "Tempo residuo circa {seconds} s"
+      },
+      "external": {
+        "rehomed": "La tapparella era stata mossa da un comando esterno: è stata riportata al finecorsa, e la misura parte da lì.",
+        "reading": "La tapparella è stata mossa dopo il posizionamento: questa lettura non corrisponde più. Ripetere il passo.",
+        "moved": "La tapparella è stata mossa da un comando esterno. Niente di questo passo dipendeva da dove si trovava, quindi la calibrazione prosegue da qui."
+      },
+      "announce": {
+        "motor": "Il motore è partito."
+      },
+      "problem": {
+        "interrupted": {
+          "title": "La misura è stata interrotta",
+          "body": "Durante questo passo la tapparella è stata fermata o mossa da un altro comando, quindi quello che il passo misurava non vale più. Non è stato scritto niente. Attendere che la tapparella sia ferma e ripetere il passo."
+        }
+      },
+      "exit": {
+        "title": "Uscire dalla calibrazione?",
+        "body": "Non viene salvato niente: le misure fatte finora vengono scartate. Se la tapparella si sta muovendo, la corsa in atto finisce da sola al finecorsa.",
+        "stay": "Continua a misurare",
+        "leave": "Esci senza salvare"
+      },
+      "profile": {
+        "meta": "corsa di riferimento {reference} cm",
+        "meta_measured": "corsa di riferimento {reference} cm · misurato su {cover}",
+        "meta_no_reference": "corsa di riferimento non indicata",
+        "from_file": "I valori che il file di configurazione scrive per questa tapparella."
+      },
+      "review": {
+        "title": "Cosa è stato misurato",
+        "intro": "Prima del salvataggio: a sinistra i valori che {cover} usa oggi, a destra quelli che userà dopo. Niente è ancora scritto.",
+        "where": "Salvando, i valori restano in Home Assistant e {cover} li usa subito, senza riavvii. Si possono rivedere, correggere a mano o rimuovere dalla scheda della tapparella in questo pannello.",
+        "accuracy_checked": "Precisione verificata: entro {accuracy} cm al {percent}% della discesa, in una posizione su cui non è stato calcolato niente.",
+        "accuracy_unchecked": "La precisione non è ancora stata verificata. La calibrazione approfondita aggiunge quattro letture e una verifica, circa due minuti.",
+        "save_profile": "Salva come profilo «{profile}»",
+        "save_cover_only": "Salva solo per questa tapparella",
+        "profile_exists": "Il profilo «{profile}» esiste già: salvando viene aggiornato, e con esso le tapparelle che lo seguono ({count}).",
+        "name_clash": "Anche il file di configurazione definisce «{profile}»: il profilo misurato ha la precedenza.",
+        "side_effects": "Salvando cambiano anche valori che questa calibrazione non ha misurato:",
+        "affected_show": "Mostra le tapparelle che seguono il profilo",
+        "affected_hide": "Nascondi le tapparelle che seguono il profilo",
+        "yaml": "Equivalente per myhome.yaml",
+        "key": {
+          "stop_latency": "Ritardo di arresto (s)",
+          "start_delay": "Ritardo di avvio (s)"
+        }
+      },
+      "outcome": {
+        "saved": {
+          "title": "Calibrazione salvata",
+          "profile": "{cover} è salvata e già in uso: segue il profilo «{profile}» ({origin}). Le tapparelle simili si calibrano con il percorso (B).",
+          "cover": "{cover} è salvata e già in uso, con valori propri ({origin})."
+        },
+        "cancelled": {
+          "title": "Calibrazione annullata",
+          "body": "Non è stato salvato niente: {cover} torna a rispondere ai comandi normali. Una corsa in atto non viene fermata e finisce da sola al finecorsa."
+        },
+        "expired": {
+          "title": "Sessione scaduta per inattività",
+          "body": "La calibrazione è rimasta ferma troppo a lungo, quindi {cover} è stata liberata e, se si muoveva, fermata. Non è stato salvato niente."
+        },
+        "unloaded": {
+          "title": "L'integrazione è stata ricaricata",
+          "body": "Una ricarica dell'integrazione ha chiuso la calibrazione di {cover}. Non è stato salvato niente; se la tapparella si muoveva è stata fermata."
+        },
+        "left": {
+          "title": "La calibrazione è stata chiusa",
+          "body": "La calibrazione è stata chiusa prima della prima misura. Non è stato salvato niente."
+        },
+        "gone": {
+          "title": "La tapparella non c'è più",
+          "body": "{cover} non è più nella configurazione di questo gateway: la calibrazione è stata chiusa senza salvare."
+        },
+        "action": {
+          "again": "Calibra un'altra tapparella",
+          "open_cover": "Apri la scheda della tapparella",
+          "close": "Chiudi"
+        }
+      },
+      "owner": {
+        "other": "Questa calibrazione è guidata da un altro dispositivo.",
+        "take": "Prendi il controllo"
+      },
+      "check": {
+        "measured": "Il metro ha letto {measured} cm al {percent}% della corsa, dove il modello prevedeva {predicted} cm.",
+        "threshold": "Oltre {threshold} cm conviene misurare questa tapparella a parte invece di fidarsi del profilo.",
+        "threshold_profile": "Oltre {threshold} cm conviene misurare questa tapparella a parte: il profilo «{profile}» è stato verificato entro {accuracy} cm.",
+        "no_reference": {
+          "title": "Non c'era niente con cui confrontare",
+          "body": "Il metro ha letto {measured} cm al {percent}% della corsa, ma i valori che {cover} seguiva non ci sono più, quindi non c'è nessuna previsione da confrontare. La lettura non è stata buttata: si può proseguire, e il riepilogo dice che cosa verrebbe salvato."
+        }
       }
     },
     "screen": {
       "phase": "{phase} · {index} di {count}",
       "new_text": "testo nuovo — non ancora tradotto",
-      "not_in_this_version": "Questo passaggio appartiene alla calibrazione guidata, che si sposta nel pannello in una versione successiva.",
       "motor": "Motore",
       "position": "Posizione stimata",
       "progress": "Avanzamento del posizionamento",

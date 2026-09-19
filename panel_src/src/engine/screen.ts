@@ -86,6 +86,12 @@ export interface ScreenField {
   placeholder?: string;
   /** The tape reading uses a 64 px field at 32 px; the smaller ones are 56 px at 26 px. */
   big?: boolean;
+  /**
+   * Which keyboard a phone offers. A measurement wants the decimal pad; a profile name
+   * wants letters, and a name field that opened a number pad would be a field nobody
+   * could fill in on the device the calibration is actually done from.
+   */
+  inputMode?: "decimal" | "text";
 }
 
 /** What the motor is doing, as the step was told - never as the panel worked it out. */
@@ -112,11 +118,42 @@ export interface ScreenSummaryRow {
   after: string;
 }
 
+/** A named block of rows: the side effects, or one shutter that follows the profile. */
+export interface ScreenSummaryGroup {
+  title: string;
+  rows: ScreenSummaryRow[];
+}
+
+/** One disclosure of the review: what it says now, and whether it is open. */
+export interface ScreenDisclosure {
+  label: string;
+  action: string;
+  open: boolean;
+}
+
 export interface ScreenSummary {
   rows: ScreenSummaryRow[];
   note?: string;
   /** The YAML block of the summary screen, shown as it would be written. */
   code?: string;
+  /** What the code block is: shown above it, so the block is never an unlabelled wall. */
+  codeLabel?: string;
+  /**
+   * The rows behind "Show every value": the slat time and the two roll coefficients.
+   *
+   * They are absent rather than hidden when the disclosure is shut, because the principle
+   * is that the model stays behind the flow - and a value in the DOM with `display: none`
+   * on it is a value a screen reader still reads out.
+   */
+  more?: ScreenSummaryRow[];
+  /** Values this calibration never measured and the save would change all the same. */
+  sideEffects?: ScreenSummaryGroup;
+  /** The other shutters that follow the profile, each with its own before and after. */
+  affected?: ScreenSummaryGroup[];
+  /** The sentences under the rows: the accuracy, the profile, where the values go. */
+  lines?: string[];
+  /** The buttons that open and shut the two blocks above. */
+  disclose?: ScreenDisclosure[];
 }
 
 export interface ScreenModel {
@@ -138,6 +175,29 @@ export interface ScreenModel {
   press?: ScreenPress;
   summary?: ScreenSummary;
   outcome?: "saved" | "cancelled" | "expired" | "problem";
+  /**
+   * Sentences the panel adds under the step's own prose.
+   *
+   * The check of a verification is the one thing that uses them: the dialog's text says
+   * how far out the shutter was and nothing else, and the numbers the check was made of -
+   * where it was sent, what the tape read, what the model had predicted - are the answer
+   * to "how do you know". They are lines and not a card because they belong to the
+   * sentence above them.
+   */
+  lines?: string[];
+  /** Something that happened around the step: an outside movement, a stale reading. */
+  note?: { text: string; tone: "info" | "success" | "error" };
+  /** A switch that belongs to this screen and to the browser, not to the session. */
+  toggle?: { label: string; checked: boolean; action: string };
+  /**
+   * Another client is driving. The screen is the same one, without its controls, and with
+   * one strip saying so and offering to take it over (SPEC §5.4).
+   */
+  readOnly?: { text: string; label: string; action: string };
+  /** What a screen reader is told politely when this screen arrives. */
+  announce?: string;
+  /** …and what interrupts it: the motor starting, and a step that was abandoned. */
+  alert?: string;
 }
 
 /** What a template is handed besides its model. */
@@ -262,6 +322,32 @@ export class MyHomeScreen extends LitElement {
     `,
   ];
 
+  /**
+   * Where the keyboard lands when a step arrives: the title, or the big button.
+   *
+   * SPEC §5.7's rule, and the reason it is a method here rather than a `querySelector` in
+   * the view: the two elements are inside this shadow root, and a caller that reached
+   * through it would break the moment either of them moved. On a press screen the button
+   * is the whole step - Space and Enter are the press - so focus goes there; everywhere
+   * else it goes to the heading, which is what a reader needs read out first.
+   */
+  focusEntry(where: "title" | "primary"): boolean {
+    const root = this.shadowRoot;
+    if (!root) {
+      return false;
+    }
+    const wanted =
+      where === "primary"
+        ? (root.querySelector("button.big:not([disabled])") as HTMLElement | null)
+        : null;
+    const target = wanted ?? (root.querySelector("h1.screen-title") as HTMLElement | null);
+    if (!target) {
+      return false;
+    }
+    target.focus();
+    return true;
+  }
+
   private _fire = (action: string, value?: string): void => {
     this.dispatchEvent(
       new CustomEvent("myhome-screen-action", {
@@ -305,6 +391,7 @@ export class MyHomeScreen extends LitElement {
         ? html`<button
             class="big ${model.press?.state === "moving" ? "moving" : ""}"
             type="button"
+            data-big
             ?disabled=${model.primary.disabled}
             @click=${() => this._fire(model.primary!.action)}
           >
@@ -332,7 +419,26 @@ export class MyHomeScreen extends LitElement {
     const context: ScreenContext = { i18n: this.i18n, fire: this._fire };
     const single = model.model === "pos";
     const drawing = model.image ? drawingStyle(model.image) : null;
+    // The illustrations the steps carry come out of the translation files, where their alt
+    // text is empty - the dialog draws them inline, under prose that already describes
+    // what they show. So they are decorative here rather than an image with no name on it:
+    // `role="img"` with an empty label is a thing a screen reader stops at and says
+    // nothing about.
+    const labelled = (model.image?.alt ?? "") !== "";
     return html`<div class="screen">
+      ${model.readOnly
+        ? html`<div class="read-only" role="status">
+            <span>${model.readOnly.text}</span>
+            <button
+              class="cta secondary"
+              type="button"
+              data-take-control
+              @click=${() => this._fire(model.readOnly!.action)}
+            >
+              ${model.readOnly.label}
+            </button>
+          </div>`
+        : nothing}
       <div class="pane ${single ? "single" : ""}">
         <div class="text-column">
           ${model.phase
@@ -347,22 +453,44 @@ export class MyHomeScreen extends LitElement {
           ${model.newText
             ? html`<p class="new-text">${this.i18n.t("panel.screen.new_text")}</p>`
             : nothing}
-          <h1 class="screen-title">
+          <h1 class="screen-title" tabindex="-1">
             ${model.outcome ? html`<span class="outcome-icon ${model.outcome}" aria-hidden="true"></span>` : nothing}
             <span>${model.title}</span>
           </h1>
           ${drawing
             ? html`<div
                 class="drawing"
-                role="img"
-                aria-label=${model.image?.alt ?? ""}
+                role=${labelled ? "img" : nothing}
+                aria-label=${labelled ? (model.image?.alt ?? "") : nothing}
+                aria-hidden=${labelled ? nothing : "true"}
                 style=${styleMap(drawing)}
               ></div>`
             : nothing}
           ${model.body ? html`<div class="prose">${renderMarkdown(model.body)}</div>` : nothing}
+          ${(model.lines ?? []).map((line) => html`<p class="aside">${line}</p>`)}
+          ${model.note
+            ? html`<div class="note ${model.note.tone}" role=${model.note.tone === "error" ? "alert" : "status"}>
+                ${model.note.text}
+              </div>`
+            : nothing}
         </div>
         <div class="right">
-          ${this._renderOperative(model, context)} ${this._renderFooter(model, context)}
+          ${this._renderOperative(model, context)}
+          ${model.toggle
+            ? html`<label class="cue">
+                <input
+                  type="checkbox"
+                  .checked=${model.toggle.checked}
+                  @change=${(event: Event) =>
+                    this._fire(
+                      model.toggle!.action,
+                      (event.target as HTMLInputElement).checked ? "on" : "off",
+                    )}
+                />
+                <span>${model.toggle.label}</span>
+              </label>`
+            : nothing}
+          ${this._renderFooter(model, context)}
         </div>
       </div>
     </div>`;
