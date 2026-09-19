@@ -1009,12 +1009,14 @@
       "none": "No calibration is running on this gateway.",
       "action": {
         "end": "End the calibration",
-        "claim": "Take control and end it",
+        "claim": "Take control",
+        "claim_cancel": "Take control and end it",
         "force": "End it anyway"
       },
       "trouble": {
         "title": "The calibration was not closed",
-        "freed": "If nothing works, the gateway releases the shutter by itself at {time}."
+        "freed": "If nothing works, the gateway releases the shutter by itself at {time}.",
+        "freed_later": "If nothing works, the gateway releases the shutter by itself when the calibration's time runs out."
       },
       "render_error": {
         "title": "This screen could not be drawn",

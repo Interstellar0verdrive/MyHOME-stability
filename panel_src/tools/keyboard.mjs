@@ -270,6 +270,35 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+// --- the guided calibration ---------------------------------------------------------------
+//
+// One state, and it is here for two reasons. The first is the keyboard: the wizard's screen
+// has to be reachable and its controls have to be real buttons, because from lot F2 this is
+// where a measurement is driven from. The second is the guard in `tools/panel-host.mjs`: the
+// accessors that throw "Method not implemented" on the form APIs only bite on a screen this
+// check actually mounts, and until this block existed `keyboard` was the one of the three
+// jsdom checks that never opened `#/calibrate` - so the README's claim about all three was
+// not true of it.
+{
+  console.log("\nthe guided calibration");
+  const { window, panel, dom, settle } = await mount({
+    name: "the wizard",
+    state: "calibrating",
+    hash: "#/calibrate",
+    expect: "[data-wizard]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  check("the wizard's controls are in the tab order", stops.length > 0, describe(stops[0]));
+  const first = deep(panel.shadowRoot, "[data-wizard] button");
+  check("and the first of them takes focus", (first?.focus(), active(panel) === first),
+    describe(active(panel)));
+  press(window, first, "Enter");
+  await settle();
+  check("the panel is still on the wizard after a key", deep(panel.shadowRoot, "myhome-wizard") !== null);
+  dom.window.close();
+}
+
 const failed = checks.filter((one) => !one.ok);
 console.log(`\n${checks.length} checks, ${failed.length} failed`);
 process.exit(failed.length === 0 ? 0 : 1);

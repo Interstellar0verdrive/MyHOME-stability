@@ -71,10 +71,13 @@ export const buildPath = (view: ViewId, value?: string): string => {
     // Nothing is ever appended, whatever the caller passes: see `parsePath`.
     return "/calibrate";
   }
-  if (view === "overview" || !value) {
+  // Anything that is not a screen with a name in its address is the list. `unknown` used to
+  // fall through to the last branch, which after the change above would have written a
+  // *valid* address of a different screen - a worse answer than an obviously wrong one.
+  if (!value || (view !== "cover" && view !== "profile")) {
     return "/";
   }
-  return `/${view === "cover" ? "cover" : "profile"}/${encodeURIComponent(value)}`;
+  return `/${view}/${encodeURIComponent(value)}`;
 };
 
 export class Router {

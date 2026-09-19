@@ -34,8 +34,13 @@ export interface WizardActions {
   refresh(): void;
   /** End the session, through the four branches of SPEC §5.2. */
   cancel(): void;
-  /** Take the session from the client that owns it, and end it. */
+  /**
+   * Take the session from the client that owns it, and **stop there**: the screen comes
+   * back with its actions live and the user presses the one they meant to press.
+   */
   claim(): void;
+  /** Take it and end it - the offer a refused "Cancel" makes, and only that one. */
+  claimAndCancel(): void;
   /** End it whoever owns it. */
   force(): void;
   /** Back to the list. */
@@ -65,6 +70,7 @@ export class MyHomeWizard extends LitElement {
       refresh: () => undefined,
       cancel: () => undefined,
       claim: () => undefined,
+      claimAndCancel: () => undefined,
       force: () => undefined,
       back: () => undefined,
     };
@@ -199,8 +205,12 @@ export class MyHomeWizard extends LitElement {
           trouble.error.translation_placeholders ?? {},
         )}
       </p>
-      ${trouble.recovery.includes("wait") && freed
-        ? html`<p class="soft">${this.i18n.t("panel.wizard.trouble.freed", { time: freed })}</p>`
+      ${trouble.recovery.includes("wait")
+        ? html`<p class="soft">
+            ${freed
+              ? this.i18n.t("panel.wizard.trouble.freed", { time: freed })
+              : this.i18n.t("panel.wizard.trouble.freed_later")}
+          </p>`
         : nothing}
       <div class="actions">
         ${trouble.recovery.map((token) => this._recoveryButton(token))}
@@ -208,6 +218,11 @@ export class MyHomeWizard extends LitElement {
     </div>`;
   }
 
+  /**
+   * One token, one button - except `wait`, which is the one token with nothing to press and
+   * is therefore always drawn as the sentence above instead. That pairing is what makes the
+   * card impossible to leave empty: every other token is a button, and `wait` is a line.
+   */
   private _recoveryButton(token: SessionRecovery): TemplateResult | typeof nothing {
     if (token === "wait") {
       return nothing;
@@ -215,15 +230,19 @@ export class MyHomeWizard extends LitElement {
     const label =
       token === "claim"
         ? this.i18n.t("panel.wizard.action.claim")
-        : token === "force"
-          ? this.i18n.t("panel.wizard.action.force")
-          : this.i18n.t("panel.common.action.retry");
+        : token === "claim_cancel"
+          ? this.i18n.t("panel.wizard.action.claim_cancel")
+          : token === "force"
+            ? this.i18n.t("panel.wizard.action.force")
+            : this.i18n.t("panel.common.action.retry");
     const press =
       token === "claim"
         ? () => this.actions.claim()
-        : token === "force"
-          ? () => this.actions.force()
-          : () => this.actions.refresh();
+        : token === "claim_cancel"
+          ? () => this.actions.claimAndCancel()
+          : token === "force"
+            ? () => this.actions.force()
+            : () => this.actions.refresh();
     return html`<button class="cta text" type="button" data-recovery=${token} @click=${press}>
       ${label}
     </button>`;

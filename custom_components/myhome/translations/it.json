@@ -1009,12 +1009,14 @@
       "none": "Nessuna calibrazione \u00e8 in corso su questo gateway.",
       "action": {
         "end": "Termina la calibrazione",
-        "claim": "Prendi il controllo e termina",
+        "claim": "Prendi il controllo",
+        "claim_cancel": "Prendi il controllo e termina",
         "force": "Termina comunque"
       },
       "trouble": {
         "title": "La calibrazione non \u00e8 stata chiusa",
-        "freed": "Se non riesce nulla, il gateway libera la tapparella da solo alle {time}."
+        "freed": "Se non riesce nulla, il gateway libera la tapparella da solo alle {time}.",
+        "freed_later": "Se non riesce nulla, il gateway libera la tapparella da solo alla scadenza della calibrazione."
       },
       "render_error": {
         "title": "Questa schermata non \u00e8 stata disegnata",

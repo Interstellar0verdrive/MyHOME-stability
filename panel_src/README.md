@@ -240,12 +240,20 @@ them:
    end it" and "end it anyway"; the session is gone, which is what was asked for; or the
    gateway did not answer, and the offer is "try again" and "end it anyway", and when that
    is what failed, the time at which the lease frees the shutter by itself. No branch
-   answers nothing.
+   answers nothing, and no card ever comes out with a refusal on it and nothing underneath:
+   the one recovery token that is not a button (`wait`) is always drawn as the sentence
+   saying what happens anyway, with the hour when there is one to give.
+   **"Take control" and "take control and end it" are two different offers**, with two
+   tokens and two labels: only a refused "Cancel" ever offers the second, because only
+   there is ending the thing that was asked for. A step refused because a second tab owns
+   the session offers the first, and throws nothing away.
 3. **No form APIs, anywhere.** Home Assistant loads custom elements through a scoped
    registry polyfill that does not implement them: `form.elements` threw "Method not
    implemented" in production. `test/scoped-registry.test.ts` scans `src/` for the eight
    of them and names the line; `tools/panel-host.mjs` makes those properties throw before
-   it loads the bundle, so the three jsdom checks fail if the shipped code uses one.
+   it loads the bundle, so `a11y`, `keyboard` and `session` fail if the shipped code uses
+   one. A guard like that only bites on a screen a check actually mounts, which is why each
+   of the three opens `#/calibrate` in at least one of its states.
 4. **Reloading `#/calibrate` never starts a session.** The address carries nothing -
    `/calibrate/<anything>` is the same route with what it names dropped - and the shutter,
    the path, the profile and the scope travel in the store as an *intention*. Arriving
@@ -253,18 +261,26 @@ them:
    button opens a session.
 5. **Ownership is per browser tab, and taking it is deliberate.** The `client_id` lives in
    `sessionStorage`, so reloading the page is the same owner and a second tab is a second
-   client. A heartbeat never takes ownership, however long the owner has been away.
+   client. A heartbeat never takes ownership, however long the owner has been away, and the
+   `attach` that arriving on the address sends goes **without `claim`**: opening a page can
+   never take a measurement away from somebody who is in the middle of one. Taking control
+   is a press, and both checks assert that the frame carried no claim.
 
 ```sh
 npm run session   # the committed bundle in jsdom, against a session that misbehaves
 ```
 
-It walks the four states none of the other checks can reach: a snapshot the wizard cannot
-draw (the error card appears **and** the heartbeats go on arriving - the console line it
-prints is the panel reporting that drawing error once, and is part of what is being
-checked), a "Cancel" refused twice over, a session picked up again in the middle of a
-positioning run, and presence lost and taken back. The one thing it fakes beyond the
-gateway is the length of fifteen seconds, so that it takes a second rather than a minute.
+It walks the eight states none of the other checks can reach: a snapshot the wizard cannot
+draw (the error card appears, the panel goes on repainting when Home Assistant hands it a
+new state, **and** the heartbeats go on arriving - the console line it prints is the panel
+reporting that drawing error once, and is part of what is being checked), a "Cancel"
+refused twice over and again with no hour to give, the address opened with no session and
+opened on one somebody else is driving, a `start` refused while the gateway is busy with
+another shutter, a session picked up again in the middle of a positioning run, and presence
+lost and taken back. The one thing it fakes beyond the gateway is the length of fifteen
+seconds, so that it takes a second rather than a minute - and it counts the intervals it
+compressed and fails if that count is zero, because a period that stopped matching would
+otherwise leave half the scenarios passing while exercising no heartbeat at all.
 
 `dev/harness.html` has the same thing to click at: the *a calibration session* checkbox
 opens one on the fixture's snapshots and `#/calibrate` walks it.

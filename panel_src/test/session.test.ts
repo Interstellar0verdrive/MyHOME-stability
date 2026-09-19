@@ -257,6 +257,42 @@ describe("the presence signal", () => {
     assert.ok(seen.includes(false), "the screen was told, so it can offer to take it back");
   });
 
+  it("never takes the session from a client that is there - lesson 5", async (t) => {
+    // The one guarantee that makes `attach`-on-arrival safe, and the one a single character
+    // can undo: `attach(id)` must go out **without** `claim`. With it, opening `#/calibrate`
+    // would tear the session away from a phone that is in the middle of a tape reading, which
+    // is what SPEC §4.2 ("attach with claim: yes, after the screen has asked") forbids.
+    // `ws.ts` omits the key when it is false, so `undefined` is what the wire really carries.
+    const bench = gateway({
+      get: () => ({
+        session: snapshot({ owner: { client_id: OTHER, present_until: "2026-09-18T10:06:00+00:00" } }),
+        capabilities: null,
+      }),
+      attach: (message) => ({
+        session: snapshot({
+          owner: message.claim
+            ? { client_id: CLIENT, present_until: "2026-09-18T10:06:00+00:00" }
+            : { client_id: OTHER, present_until: "2026-09-18T10:06:00+00:00" },
+        }),
+      }),
+      heartbeat: () => ({ owner: false, present_until: null }),
+    });
+    const session = client(t, bench);
+    await session.get();
+    await session.attach(SESSION);
+    assert.equal(
+      bench.last("attach")?.claim,
+      undefined,
+      "arriving on the address is a read: it never takes the session from somebody present",
+    );
+    assert.equal(session.owner, false, "and the tab knows it is read-only");
+
+    // Taking it is a separate verb, which only a press reaches.
+    await session.takeControl();
+    assert.equal(bench.last("attach")?.claim, true);
+    assert.equal(session.owner, true);
+  });
+
   it("never sends an act of its own when a session is picked up again - lesson 5", async (t) => {
     const bench = gateway({
       get: () => ({ session: snapshot({ state: "positioning", step: "tape_run", actions: [] }), capabilities: null }),
@@ -312,7 +348,7 @@ describe("cancelling", () => {
     const refused = await session.cancel();
     assert.equal(refused.ok, false);
     assert.equal(refused.branch, "owned");
-    assert.deepEqual(refused.recovery, ["claim", "force"]);
+    assert.deepEqual(refused.recovery, ["claim_cancel", "force"]);
 
     // …and the offer works: attach with `claim`, then cancel.
     const taken = await session.claimAndCancel();
@@ -359,6 +395,25 @@ describe("cancelling", () => {
     assert.equal(forced.freedAt, "2026-09-18T10:14:22.300+00:00");
   });
 
+  it("branch 4 with no hour to say still offers something to press - lesson 2", async (t) => {
+    // `idle_expires_at` is nullable in the contract. With "End it anyway" the thing that just
+    // failed and no hour to give, the card would otherwise carry a refusal and an empty row
+    // of buttons: the silent failure with a sentence over it.
+    const bench = gateway({
+      get: () => ({ session: snapshot({ idle_expires_at: null }), capabilities: null }),
+      cancel: () => {
+        throw new Error("the connection is closed");
+      },
+    });
+    const session = client(t, bench);
+    await session.get();
+    const forced = await session.cancel({ force: true });
+    assert.equal(forced.ok, false);
+    assert.equal(forced.freedAt, null);
+    assert.deepEqual(forced.recovery, ["retry", "force"]);
+    assert.ok(forced.recovery.length > 0, "a card with nothing on it");
+  });
+
   it("answers on every branch, and never with undefined", async (t) => {
     const refusals = [
       { code: "not_allowed", message: "owned", translation_key: "session_owned" },
@@ -383,6 +438,46 @@ describe("cancelling", () => {
 });
 
 describe("the verbs", () => {
+  it("offers to take control, never to end it, when a verb is refused for ownership", async (t) => {
+    // The two are separate tokens because one of them throws the measurements away. A step
+    // refused because a second tab owns the session - which is the ordinary case the moment
+    // two screens are open - must not put a button on the screen that says "take control"
+    // and ends the calibration.
+    const refuse = () => {
+      throw { code: "not_allowed", message: "owned", translation_key: "session_owned" };
+    };
+    const bench = gateway({ act: refuse, stop: refuse, save: refuse });
+    const session = client(t, bench);
+    session.apply(snapshot());
+    for (const result of [await session.act("stopped_open"), await session.stop(), await session.save("profile")]) {
+      assert.equal(result.ok, false);
+      if (result.ok === false) {
+        assert.deepEqual(result.recovery, ["claim"]);
+        assert.equal(result.recovery.includes("claim_cancel"), false);
+      }
+    }
+  });
+
+  it("stops being present in a session it never asked to join", async (t) => {
+    // A gateway holds one session after another. When the one this tab joined ends and
+    // somebody else opens a new one, the event that brings it must not restart the presence
+    // signal here: this tab has asked to take part in nothing.
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    const bench = gateway({
+      start: () => ({ session: snapshot() }),
+      heartbeat: () => ({ owner: true, present_until: null }),
+    });
+    const session = client(t, bench);
+    await session.start({ cover: "00:03:50:aa:bb:cc-2-81" });
+    t.mock.timers.tick(HEARTBEAT_MS + 1);
+    assert.equal(bench.count("heartbeat"), 1);
+    session.apply(snapshot({ state: "saved", step: null, owner: null }));
+    session.apply(snapshot({ session_id: "somebody else's session", revision: 1 }));
+    t.mock.timers.tick(HEARTBEAT_MS * 4);
+    assert.equal(bench.count("heartbeat"), 1, "a session nobody here joined is not kept alive");
+    assert.equal(session.beating, false);
+  });
+
   it("guards an act with the revision the screen last read", async (t) => {
     const bench = gateway({
       get: () => ({ session: snapshot({ revision: 12 }), capabilities: null }),

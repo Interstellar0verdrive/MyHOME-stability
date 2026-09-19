@@ -85,12 +85,21 @@ export interface WizardIntent {
  * the wizard turns each token into one of its own buttons.
  *
  * * `retry` - send the same thing again;
- * * `claim` - take the session from the client that owns it, then repeat;
+ * * `claim` - take the session from the client that owns it, and **nothing else**: the screen
+ *   comes back with its actions live and the user presses the one they meant to press;
+ * * `claim_cancel` - take it and end it. Only `cancel()` ever offers this, because it is the
+ *   only place where ending is what was asked for;
  * * `force` - end it whoever owns it (`cancel` with `force`), the way out that always works;
  * * `reload` - read the session again, because it has moved on;
  * * `wait` - nothing left to press: the gateway frees the shutter by itself at `freedAt`.
+ *
+ * **`claim` and `claim_cancel` are two tokens on purpose.** They used to be one, and one of
+ * them throws three minutes of measurements away: a step refused because a second tab owns
+ * the session would have put a button on the screen promising to take control and ending the
+ * calibration instead. A button that does the opposite of what it says is a data loss, so the
+ * two meanings have two names and two labels.
  */
-export type SessionRecovery = "retry" | "claim" | "force" | "reload" | "wait";
+export type SessionRecovery = "retry" | "claim" | "claim_cancel" | "force" | "reload" | "wait";
 
 /** A refusal, and what can be done about it. The recovery list is never empty. */
 export interface SessionTrouble {
@@ -211,8 +220,16 @@ export class SessionClient {
   private _session: SessionSnapshot | null = null;
   private _capabilities: SessionCapabilities | null = null;
   private _owner = false;
-  /** True between an `attach`/`start` that worked and the end of the session. */
-  private _attached = false;
+  /**
+   * The session this client asked to take part in, between an `attach`/`start` that worked
+   * and the end of that session; `null` when it is taking part in none.
+   *
+   * The identifier and not a flag, because a gateway can hold one session after another. A
+   * flag stayed true when a session ended, and the next `session` event - somebody else's
+   * calibration, on the same gateway - restarted the presence signal in a session this tab
+   * had never asked to join.
+   */
+  private _attachedTo: string | null = null;
   private _timer: ReturnType<typeof setInterval> | null = null;
   private _disposed = false;
   /** So that a listener that throws is reported once and not on every beat. */
@@ -273,9 +290,8 @@ export class SessionClient {
         profile: intent.profile,
         scope: intent.scope,
       });
-      this._attached = true;
+      this._attachedTo = answer.session?.session_id ?? null;
       this._adopt(answer.session);
-      this._startHeartbeat();
       return this._done(answer.session);
     } catch (raw) {
       return this._failed(raw);
@@ -293,9 +309,8 @@ export class SessionClient {
         client_id: this.clientId,
         claim,
       });
-      this._attached = true;
+      this._attachedTo = answer.session?.session_id ?? null;
       this._adopt(answer.session);
-      this._startHeartbeat();
       return this._done(answer.session);
     } catch (raw) {
       return this._failed(raw);
@@ -376,8 +391,10 @@ export class SessionClient {
   async leave(): Promise<SessionResult> {
     const session = this._session;
     this._stopHeartbeat();
-    this._attached = false;
+    this._attachedTo = null;
     if (!session) {
+      // Nothing to leave, and nothing to tell the screen: no snapshot changed. It is the one
+      // exit of this class that does not notify, and deliberately.
       return this._done(null);
     }
     try {
@@ -417,7 +434,7 @@ export class SessionClient {
         force,
       });
       this._stopHeartbeat();
-      this._attached = false;
+      this._attachedTo = null;
       this._adopt(answer.session);
       return {
         ok: true,
@@ -436,7 +453,7 @@ export class SessionClient {
           branch: "owned",
           session: this._session,
           error,
-          recovery: ["claim", "force"],
+          recovery: ["claim_cancel", "force"],
           freedAt: this._session?.idle_expires_at ?? null,
         };
       }
@@ -444,7 +461,7 @@ export class SessionClient {
         // Refused, and yet the thing the user asked for is true: there is no session on
         // this gateway any more. The outcome carries whatever the last snapshot said.
         this._stopHeartbeat();
-        this._attached = false;
+        this._attachedTo = null;
         return {
           ok: true,
           branch: "gone",
@@ -454,17 +471,43 @@ export class SessionClient {
           freedAt: null,
         };
       }
+      const freed = this._session?.idle_expires_at ?? null;
       return {
         ok: false,
         branch: "unconfirmed",
         session: this._session,
         error,
-        // "End it anyway" is the offer until it is the thing that just failed; then the
-        // only honest sentence left is the one about the lease, and the screen says it.
-        recovery: force ? ["wait"] : ["retry", "force"],
-        freedAt: this._session?.idle_expires_at ?? null,
+        // "End it anyway" is the offer until it is the thing that just failed; then the only
+        // honest sentence left is the one about the lease - **and only if there is an hour to
+        // say**. `idle_expires_at` is nullable in the contract, and a session with no watchdog,
+        // or one cancelled before any snapshot was read, would otherwise leave a card with a
+        // refusal on it and nothing at all underneath: the silent failure with a sentence over
+        // it, which is the thing lesson 2 exists to make impossible. With no hour to give, the
+        // offer stays what it was.
+        recovery: force && freed ? ["wait"] : ["retry", "force"],
+        freedAt: freed,
       };
     }
+  }
+
+  /**
+   * Take the session from the client that owns it, and stop there.
+   *
+   * The one place `claim` is ever sent from a screen, and it is always a press: arriving at
+   * the wizard's address attaches **without** it (`_readSession` in `main.ts`), because
+   * opening a page must never take a measurement away from somebody who is in the middle of
+   * one (SPEC §4.2, lesson 5).
+   */
+  async takeControl(): Promise<SessionResult> {
+    const session = this._session;
+    if (!session) {
+      return this._failed({
+        code: "not_found",
+        message: "no session",
+        translation_key: "unknown_session",
+      });
+    }
+    return this.attach(session.session_id, true);
   }
 
   /** Branch 2: take the session from the client that owns it, then cancel it. */
@@ -507,7 +550,7 @@ export class SessionClient {
    * tab, and the snapshot the screen is showing may be several transitions old.
    */
   async resume(): Promise<SessionResult> {
-    if (this._attached) {
+    if (this._attachedTo) {
       void this._beat();
     }
     return this.get();
@@ -517,7 +560,7 @@ export class SessionClient {
   dispose(): void {
     this._disposed = true;
     this._stopHeartbeat();
-    this._attached = false;
+    this._attachedTo = null;
     this._onChange = () => undefined;
   }
 
@@ -565,7 +608,7 @@ export class SessionClient {
       if (GONE.has(key)) {
         // The session really is gone: there is nothing left to be present for.
         this._stopHeartbeat();
-        this._attached = false;
+        this._attachedTo = null;
         return;
       }
       // Anything else - the socket down, the gateway reloading - is a reason to beat
@@ -579,9 +622,15 @@ export class SessionClient {
   private _adopt(session: SessionSnapshot | null): void {
     this._session = session;
     this._owner = session?.owner?.client_id === this.clientId;
-    if (isOver(session) || session === null) {
+    if (session === null || isOver(session) || session.session_id !== this._attachedTo) {
+      // Not this client's session any more - ended, or replaced on the gateway by one
+      // somebody else opened. Either way this tab has nothing to be present for until it
+      // asks to take part again.
       this._stopHeartbeat();
-    } else if (this._attached) {
+      if (session?.session_id !== this._attachedTo) {
+        this._attachedTo = null;
+      }
+    } else {
       this._startHeartbeat();
     }
     this._notify();
@@ -615,6 +664,8 @@ export class SessionClient {
     const key = refusal(error);
     let recovery: SessionRecovery[] = ["retry"];
     if (key === "session_owned") {
+      // Take control, and nothing else. Whatever was refused is the user's to press again on
+      // a screen that is theirs; ending the calibration is `cancel`'s offer alone.
       recovery = ["claim"];
     } else if (key === "revision_conflict" || GONE.has(key) || key === "already_calibrating") {
       // Somebody - or something the session did by itself - moved on. Reading again is

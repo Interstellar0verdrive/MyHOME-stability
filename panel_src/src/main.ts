@@ -143,6 +143,12 @@ export class MyHomeCalibrationPanel extends LitElement {
    * and that is deliberate - see the head of `engine/session.ts`.
    */
   private _sessionClient: SessionClient | null = null;
+  /**
+   * True from `_calibrate` until the route change it causes has arrived: that one arrival
+   * must not read, because `_calibrate` is already asking. Put down again on leaving the
+   * wizard, so it can never outlive the navigation it belongs to.
+   */
+  private _openingSession = false;
   /** What `hass.states` last said about the shutter being calibrated: see `shouldUpdate`. */
   private _coverState = "";
   /** The queue `_listen` runs on, so that two callers can never open two subscriptions. */
@@ -332,9 +338,21 @@ export class MyHomeCalibrationPanel extends LitElement {
     // of presence. Best effort by nature - if the message never leaves, presence lapses.
     const session = this._sessionClient;
     this._sessionClient = null;
-    if (session) {
-      void session.leave().finally(() => session.dispose());
+    this._release(session);
+  }
+
+  /**
+   * Give a session client back: this tab's claim first, then the client itself.
+   *
+   * `leave` stops the timer before it sends anything, so even a message that never arrives
+   * leaves nothing running here; what it buys is the other client picking the session up at
+   * once instead of waiting out the forty-five seconds of presence.
+   */
+  private _release(client: SessionClient | null): void {
+    if (!client) {
+      return;
     }
+    void client.leave().finally(() => client.dispose());
   }
 
   protected override shouldUpdate(changed: PropertyValues): boolean {
@@ -366,7 +384,12 @@ export class MyHomeCalibrationPanel extends LitElement {
    * empty string never changes.
    */
   private _coverStateNow(): string {
-    const entity = this._store.state.session?.cover.entity_id;
+    // `?.` on the cover as well, for the reason `_title()` gives: this runs inside
+    // `shouldUpdate`, so an exception here escapes asynchronously through Lit's update and
+    // the panel simply stops repainting - the exact opposite of the guarantee a snapshot the
+    // wizard cannot draw is supposed to demonstrate. The contract types `cover` as always
+    // present; nothing outside the contract does.
+    const entity = this._store.state.session?.cover?.entity_id;
     if (!entity) {
       return "";
     }
@@ -722,10 +745,14 @@ export class MyHomeCalibrationPanel extends LitElement {
       return;
     }
     void this._refresh();
-    // The tab has come back to the front. A background tab's timers are throttled to a
-    // crawl by every browser, so the session is told "still here" at once and read again -
-    // both of which are still reads: nothing here can restart a movement.
-    void this._sessionClient?.resume();
+    // The tab has come back to the front. A background tab's timers are throttled to a crawl
+    // by every browser, so the session is told "still here" at once and read again - both of
+    // which are still reads: nothing here can restart a movement. Only on the wizard's own
+    // address, though: every other screen would be buying a round trip per tab switch for a
+    // session nobody is looking at.
+    if (this._store.state.route.view === "calibrate") {
+      void this._sessionClient?.resume();
+    }
   };
 
   /**
@@ -764,11 +791,30 @@ export class MyHomeCalibrationPanel extends LitElement {
       // the store by `_calibrate`, before the navigation, and a reload of this address
       // finds no intention and no session of its own - which is the whole reason the
       // address carries nothing (SPEC §5.1).
-      this._store.set({ sessionError: null });
-      if (this._started) {
-        void this._readSession();
+      //
+      // …unless this navigation is `_calibrate`'s own, in which case `_calibrate` is doing
+      // the asking and this must keep out of the way. Reading here would clear the refusal
+      // `start` is about to produce - an `already_calibrating`, which is exactly what a
+      // gateway busy with another shutter answers - and, far worse, would `attach` to *that
+      // other shutter's* session, making this tab the owner of a calibration nobody chose.
+      //
+      // The flag is **consumed here** rather than lowered when `start` answers: `hashchange`
+      // is asynchronous and a refusal can arrive before it or after it, so a flag lowered on
+      // a timer of the network's is a race in one direction or the other. Consumed on
+      // arrival, and cleared on departure below, it is right whichever wins.
+      if (this._openingSession) {
+        this._openingSession = false;
+      } else {
+        this._store.set({ sessionError: null });
+        if (this._started) {
+          void this._readSession();
+        }
       }
     } else if (before.view === "calibrate") {
+      // Leaving also puts the flag down, so that a `_calibrate` whose navigation changed
+      // nothing - because the wizard was already on the screen - cannot swallow the read of
+      // the next real arrival.
+      this._openingSession = false;
       this._leaveSession();
     }
     if (!this._started) {
@@ -1810,7 +1856,10 @@ export class MyHomeCalibrationPanel extends LitElement {
     if (this._sessionClient && this._sessionClient.entryId === entryId) {
       return this._sessionClient;
     }
-    this._sessionClient?.dispose();
+    // The gateway on the screen has changed, so this tab's claim on the old one is given
+    // back rather than merely dropped: without the `leave` the previous gateway holds it
+    // present for the full forty-five seconds.
+    this._release(this._sessionClient);
     const client = new SessionClient({
       connection: this.hass.connection,
       entryId,
@@ -1875,12 +1924,25 @@ export class MyHomeCalibrationPanel extends LitElement {
    */
   private async _calibrate(intent: WizardIntent): Promise<void> {
     this._store.set({ wizardIntent: intent, sessionError: null });
-    this._navigate("/calibrate");
     const client = this._ensureSession();
+    // Raised across the navigation and put down by the route change it causes, so that the
+    // arrival does not read over the top of this: see `_onRoute`.
+    this._openingSession = true;
+    this._navigate("/calibrate");
     if (!client) {
       return;
     }
     const result = await client.start(intent);
+    this._store.set({ sessionError: result.ok ? null : result });
+  }
+
+  /** Take the session from the client that owns it, and stop there (never end it). */
+  private async _takeControl(): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const result = await client.takeControl();
     this._store.set({ sessionError: result.ok ? null : result });
   }
 
@@ -1917,7 +1979,8 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _wizardActions: WizardActions = {
     refresh: () => void this._readSession(),
     cancel: () => void this._cancelSession("plain"),
-    claim: () => void this._cancelSession("claim"),
+    claim: () => void this._takeControl(),
+    claimAndCancel: () => void this._cancelSession("claim"),
     force: () => void this._cancelSession("force"),
     back: () => this._navigate("/"),
   };
@@ -1974,11 +2037,16 @@ export class MyHomeCalibrationPanel extends LitElement {
   /**
    * The wizard, and the guarantee that a wizard that throws does not empty the panel.
    *
-   * The element catches its own exceptions and draws the error card (SPEC §5.8); this is
-   * the second net, for anything that goes wrong on the way to it. Neither of them touches
-   * the session: it is on the server, the presence signal is on its own timer, and what
-   * the user sees is a screen with "Try again" and "End the calibration" on it rather than
-   * a blank panel.
+   * **The net that catches a drawing is the one inside `views/wizard.ts`**, and it has to
+   * be: the `html` tag below only builds a template, and `<myhome-wizard>`'s own `render()`
+   * runs afterwards, in its own Lit update, so its exception never passes through this
+   * frame. What this `try` catches is whatever goes wrong *on the way* - and it is where
+   * lot F2 should build the `ScreenModel`, because a model built here is a model this net
+   * really covers.
+   *
+   * Neither net touches the session: it is on the server, the presence signal is on its own
+   * timer, and what the user sees is a screen with "Try again" and "End the calibration" on
+   * it rather than a blank panel.
    */
   private _renderWizard(): TemplateResult {
     try {
@@ -1993,6 +2061,9 @@ export class MyHomeCalibrationPanel extends LitElement {
         <div>${this._i18n.t("panel.wizard.render_error.title")}</div>
         <div class="soft">${this._i18n.t("panel.wizard.render_error.body")}</div>
         <div class="soft">
+          <button class="cta text" type="button" @click=${() => this.requestUpdate()}>
+            ${this._i18n.t("panel.common.action.retry")}
+          </button>
           <button class="cta text" type="button" @click=${() => void this._cancelSession("plain")}>
             ${this._i18n.t("panel.wizard.action.end")}
           </button>
@@ -2145,7 +2216,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     // subscription. The new gateway's is made by `_ensureSession` on the next read.
     const session = this._sessionClient;
     this._sessionClient = null;
-    session?.dispose();
+    this._release(session);
     this._store.set({
       ...NOTHING_PENDING,
       entryId,

@@ -1,7 +1,7 @@
 // `npm run session` - the committed bundle against a calibration session that misbehaves.
 //
-// The five states behind the failures the v2 panel shipped, each one unreachable from the
-// other checks:
+// The states behind the failures the v2 panel shipped, each one unreachable from the other
+// checks:
 // `npm test` is the half of the panel with no DOM in it, `a11y` and `keyboard` mount it
 // against a gateway that always answers, and `socket` is about subscriptions and not about
 // sessions. What is asserted here is not what the screen looks like but what the panel
@@ -20,7 +20,14 @@
 // 4. a session picked up again in the middle of a positioning run: **no `act` is sent**.
 //    A client that re-entered its step would send a shutter that is already moving on a
 //    second journey;
-// 5. presence lost and taken back: still no `act`, and no `stop`. Losing ownership turns a
+// 5. the address opened on a session somebody else is driving: it attaches **without**
+//    `claim`, so opening a page never takes a measurement away from whoever is holding the
+//    tape. Taking control is a press, and only a press;
+// 6. "Cancel" refused when the session has no hour to give: still something to press, or a
+//    sentence saying what happens anyway;
+// 7. a `start` refused while the gateway is busy: the refusal stays on the screen, and the
+//    tab does not end up attached to the other shutter's session;
+// 8. presence lost and taken back: still no `act`, and no `stop`. Losing ownership turns a
 //    screen read-only; it moves nothing.
 //
 // The document is the one `tools/panel-host.mjs` builds for the other checks, with the
@@ -78,6 +85,7 @@ const scenario = (name, over = {}) => {
  */
 const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => {
   const counts = new Map();
+  const lastOf = new Map();
   const listeners = new Map();
   let subscriber = null;
   const state = { session, refuse, owner };
@@ -87,6 +95,7 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
   const connection = {
     sendMessagePromise(message) {
       counts.set(message.type, count(message.type) + 1);
+      lastOf.set(message.type, message);
       if (message.type === "myhome/calibration/texts") {
         return Promise.resolve({
           language: "en",
@@ -159,6 +168,8 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
     count,
     /** How many of the session's commands of that name were sent. */
     sessions: (name) => count(`myhome/calibration/session/${name}`),
+    /** The last frame of that command, so that a check can read what was really on it. */
+    last: (name) => lastOf.get(`myhome/calibration/session/${name}`),
     push: (session) => {
       state.session = session;
       subscriber?.({ type: "session", session });
@@ -170,6 +181,18 @@ const gateway = ({ session = null, refuse = () => null, owner = true } = {}) => 
     },
   };
 };
+
+/**
+ * How many intervals this file has compressed.
+ *
+ * The period is repeated here rather than read out of the source, so that a check on the
+ * bundle is not coupled to the text of a TypeScript file - but a repeated constant is a
+ * constant that can silently stop matching. If `HEARTBEAT_MS` ever changes, the scenarios
+ * that count beats would fail loudly and the three that do not would go on passing while
+ * exercising no heartbeat at all. So the compression itself is counted, and asserted at the
+ * end: zero means this file, not the panel, is what needs updating.
+ */
+let compressed = 0;
 
 const mount = async (connection, hash = "#/calibrate") => {
   const dom = new JSDOM(
@@ -185,8 +208,12 @@ const mount = async (connection, hash = "#/calibrate") => {
   // The heartbeat's fifteen seconds, and only those, made short enough to watch. Every
   // other interval the panel keeps - the thirty-second poll - is left alone.
   const realSetInterval = window.setInterval.bind(window);
-  window.setInterval = (handler, ms, ...rest) =>
-    realSetInterval(handler, ms === REAL_HEARTBEAT_MS ? FAST_HEARTBEAT_MS : ms, ...rest);
+  window.setInterval = (handler, ms, ...rest) => {
+    if (ms === REAL_HEARTBEAT_MS) {
+      compressed += 1;
+    }
+    return realSetInterval(handler, ms === REAL_HEARTBEAT_MS ? FAST_HEARTBEAT_MS : ms, ...rest);
+  };
   Object.defineProperty(window.HTMLElement.prototype, "offsetParent", {
     configurable: true,
     get() {
@@ -216,6 +243,23 @@ const mount = async (connection, hash = "#/calibrate") => {
 };
 
 let failures = 0;
+
+/**
+ * Anything that escapes a check is a failure with a name.
+ *
+ * Without this the tool simply dies and the shell reports an exit code, which is true but
+ * says nothing - and the interesting case is exactly that: an exception thrown inside
+ * `shouldUpdate`, from a snapshot the panel did not expect, leaves Lit unable to repaint and
+ * reaches the process rather than any assertion here.
+ */
+for (const signal of ["uncaughtException", "unhandledRejection"]) {
+  process.on(signal, (error) => {
+    console.log(`  ✖   nothing may escape a check (${signal}) - ${error}`);
+    console.log("\n1 check failed");
+    process.exit(1);
+  });
+}
+
 const check = (what, got, want) => {
   const ok = got === want;
   if (!ok) {
@@ -239,6 +283,13 @@ console.log("a snapshot the wizard cannot draw");
   await settle(200);
   checkThat("the drawing that threw shows a card", find("[data-render-error]"));
   checkThat("the panel itself is still there", panel.shadowRoot.querySelector(".toolbar"));
+  // …and it is still a panel. Home Assistant replaces `hass` on every state change in the
+  // whole house, so this happens constantly; `shouldUpdate` reads the session's shutter out
+  // of it, and an exception there escapes asynchronously through Lit's update and stops the
+  // panel repainting for good - which is the opposite of what this snapshot is here to show.
+  panel.hass = { ...panel.hass, states: { "cover.hallway_shutter": { state: "open", attributes: {} } } };
+  await settle(120);
+  checkThat("and it goes on repainting when Home Assistant hands it a new state", find("[data-render-error]"));
   checkThat(
     "the presence signal went on arriving",
     bench.sessions("heartbeat") > before,
@@ -268,9 +319,16 @@ console.log("\n'Cancel', refused");
   await settle(160);
   const card = find("[data-session-trouble]");
   checkThat("a refused cancel puts a card on the screen", card);
+  // `claim_cancel`, not `claim`: this is the one place where taking control means ending the
+  // calibration, and it has a token and a label of its own so that no other refusal can put
+  // a button on the screen that promises to take control and throws the measurements away.
   checkThat(
     "with the way out on it",
-    card && card.querySelector('[data-recovery="claim"]'),
+    card && card.querySelector('[data-recovery="claim_cancel"]'),
+  );
+  checkThat(
+    "and not the one that only takes control",
+    card && !card.querySelector('[data-recovery="claim"]'),
   );
 
   // …and now the gateway stops answering at all, which is the other half of branch 4.
@@ -313,6 +371,11 @@ console.log("\na session picked up again in the middle of a run");
   const { settle } = await mount(bench.connection);
   await settle(200);
   check("the session was read", bench.sessions("get") > 0, true);
+  // Lesson 5, and the one guarantee a single character can undo: arriving on the address
+  // attaches **without** `claim`, so opening a page never takes a measurement away from
+  // whoever is holding the tape. `ws.ts` leaves the key out when it is false.
+  check("it attached to it", bench.sessions("attach") > 0, true);
+  check("and it did not take it from anybody", bench.last("attach")?.claim, undefined);
   check("nothing was acted", bench.sessions("act"), 0);
   check("nothing was stopped", bench.sessions("stop"), 0);
   check("nothing was started", bench.sessions("start"), 0);
@@ -324,6 +387,74 @@ console.log("\na session picked up again in the middle of a run");
   await settle(240);
   check("still nothing acted after a reconnection", bench.sessions("act"), 0);
   check("still nothing stopped", bench.sessions("stop"), 0);
+}
+
+console.log("\nthe address opened on a session somebody else is driving");
+{
+  // The dangerous half of "attach on arrival": the owner is present and is not this tab.
+  // The screen has to end up read-only, and the session has to stay where it is.
+  const owned = scenario("owned_by_other");
+  const bench = gateway({ session: owned, owner: false });
+  const { settle, find } = await mount(bench.connection);
+  await settle(200);
+  checkThat("the wizard is drawn", find("[data-wizard]"));
+  check("it attached", bench.sessions("attach") > 0, true);
+  check("without claiming anything", bench.last("attach")?.claim, undefined);
+  check("and it started nothing", bench.sessions("start"), 0);
+  check("and acted nothing", bench.sessions("act"), 0);
+}
+
+console.log("\n'Cancel' refused with no hour to give");
+{
+  // `idle_expires_at` is nullable in the contract. The card must never come out with a
+  // refusal on it and an empty row of buttons underneath.
+  const bench = gateway({
+    session: scenario("running_open_lift", { idle_expires_at: null }),
+    refuse: (name) => (name === "cancel" ? new Error("the connection is closed") : null),
+  });
+  const { settle, find } = await mount(bench.connection);
+  const end = deepAll(find("[data-wizard]").getRootNode(), "button")
+    .find((button) => (button.textContent ?? "").includes("End the calibration"));
+  end?.click();
+  await settle(160);
+  find('[data-recovery="force"]')?.click();
+  await settle(160);
+  const card = find("[data-session-trouble]");
+  checkThat("there is a card", card);
+  const pressable = card ? card.querySelectorAll("[data-recovery]").length : 0;
+  const sentence = (card?.textContent ?? "").includes("releases the shutter");
+  checkThat("with something to press, or a sentence saying what happens anyway", pressable > 0 || sentence);
+}
+
+console.log("\na start refused while the gateway is busy with another shutter");
+{
+  // BUG-4, from the independent review: `Router.navigate` sets `location.hash` and
+  // `hashchange` is asynchronous, so the route the wizard's own entry point causes fires
+  // while `start` is still in the air. Reading there would wipe the refusal off the screen
+  // and - far worse - attach this tab to the *other* shutter's session, making it the owner
+  // of a calibration nobody chose.
+  const busy = scenario("running_open_lift", { owner: null });
+  const bench = gateway({
+    session: busy,
+    refuse: (name) =>
+      name === "start"
+        ? {
+            code: "not_allowed",
+            message: "Hallway Shutter is already being calibrated",
+            translation_key: "already_calibrating",
+            translation_placeholders: { cover: "Hallway Shutter", by: "panel" },
+          }
+        : null,
+  });
+  const { panel, settle, find } = await mount(bench.connection, "#/");
+  await settle(160);
+  // The one road into the wizard, called the way lot F3 will call it.
+  panel._assignActions.calibrate({ cover: "00:03:50:aa:bb:cc-2-84", name: "Attic Shutter" });
+  await settle(300);
+  check("the start was refused", bench.sessions("start"), 1);
+  checkThat("and the refusal is on the screen", find("[data-session-trouble]"));
+  check("nothing attached to the other shutter's session", bench.sessions("attach"), 0);
+  check("and nothing was acted on it", bench.sessions("act"), 0);
 }
 
 console.log("\npresence lost, and taken back");
@@ -342,6 +473,14 @@ console.log("\npresence lost, and taken back");
   check("taking it back moved nothing either", bench.sessions("act"), 0);
   check("and stopped nothing", bench.sessions("stop"), 0);
 }
+
+console.log("\nthe check's own footing");
+check(
+  "the heartbeat's period is the one this file compresses " +
+    "(update REAL_HEARTBEAT_MS when HEARTBEAT_MS changes)",
+  compressed > 0,
+  true,
+);
 
 console.log(`\n${failures} check${failures === 1 ? "" : "s"} failed`);
 process.exit(failures === 0 ? 0 : 1);

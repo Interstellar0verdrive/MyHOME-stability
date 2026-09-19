@@ -79,6 +79,13 @@ describe("writing an address", () => {
     assert.equal(buildPath("calibrate", "00:03:50:aa:bb:cc-2-81"), "/calibrate");
   });
 
+  it("writes the list for a view with no address of its own", () => {
+    // Never another screen's address: a wrong one that leads somewhere real is worse than
+    // a wrong one that leads nowhere.
+    assert.equal(buildPath("unknown", "tall"), "/");
+    assert.equal(buildPath("unknown"), "/");
+  });
+
   it("survives a round trip", () => {
     const name = "Tall shutters / west";
     assert.equal(parsePath(buildPath("profile", name)).params.name, name);
