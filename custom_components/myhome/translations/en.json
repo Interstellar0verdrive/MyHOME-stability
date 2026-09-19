@@ -244,7 +244,7 @@
       },
       "calibrate": {
         "title": "Guided cover calibration",
-        "description": "This tool calibrates “basic” covers: the ones whose actuator does not report its position. For those, the percentage you see in Home Assistant is an estimate computed from the run times; the calibration measures those times and the geometry of the roller, so as to obtain a more accurate estimate.\n\nIt will not be perfect. Expect a few centimetres out: 1-2 cm near the end stops, 2-4 cm at intermediate positions. Every full open or close re-synchronises the estimate, so the error does not build up.\n\n“Advanced” covers report their position by themselves and need none of this, which is why they do not appear in the list in the next steps.\n\n**What is about to happen**: you will pick a cover and one of three ways of measuring it. The cover will run to its end stops several times.\n\n**What you have to do**: keep a tape measure to hand, make sure nothing is in the cover's way, and stay where you can see it. Nothing is saved until the last screen: you can close this dialog whenever you like and nothing will have changed, and a run already under way ends by itself at the end stop.",
+        "description": "This tool calibrates “basic” covers: the ones whose actuator does not report its position. For those, the percentage you see in Home Assistant is an estimate computed from the run times; the calibration measures those times and the geometry of the roller, so as to obtain a more accurate estimate.\n\nIt will not be perfect. Expect a few centimetres out: about 4 cm after the basic calibration and about 2 cm after the thorough one, and less than that near the end stops. Every full open or close re-synchronises the estimate, so the error does not build up.\n\n“Advanced” covers report their position by themselves and need none of this, which is why they do not appear in the list in the next steps.\n\n**What is about to happen**: you will pick a cover and one of three ways of measuring it. The cover will run to its end stops several times.\n\n**What you have to do**: keep a tape measure to hand, make sure nothing is in the cover's way, and stay where you can see it. Nothing is saved until the last screen: you can close this dialog whenever you like and nothing will have changed, and a run already under way ends by itself at the end stop.",
         "menu_options": {
           "cover": "Start",
           "init": "Back to the menu"
@@ -259,7 +259,7 @@
       },
       "path": {
         "title": "How do you want to measure this cover?",
-        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is meant precisely for covers similar to one already calibrated: pick the profile, measure the curtain travel, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be corrected.\n\n**What you have to do**: pick one of the ways below. Nothing moves until the next screen.",
+        "description": "**Cover**: {cover}\n\nThere are three ways, and the right one depends on what you have measured already. They are not steps in a sequence: you pick one.\n\nThe first (A) is for the first cover of its kind, and for anybody who is not sure which of the three is theirs. It is the long one, about four minutes: three button presses and three tape readings. It ends in a **profile**, the description of this kind of cover, which every similar cover (same model, same size, ...) can then reuse.\n\nThe second (B) is for a cover of the same model and the same size as one already measured: pick the profile, measure the curtain travel, done.\n\nThe third (C) is for a cover that has been given a profile but stops in the wrong place: in that case the calibration of this cover has to be corrected.\n\n**What you have to do**: pick one of the three. **If in doubt, choose (A)**: it is the longest, and the only one that needs nothing measured beforehand. Nothing moves until the next screen.",
         "menu_options": {
           "path_a": "(A) It is the first cover of its kind (full measurement, ~4 minutes)",
           "path_b": "(B) It is similar to a cover already measured (curtain travel only)",
@@ -291,7 +291,7 @@
       },
       "refine_scope": {
         "title": "How far do you want to correct the calibration?",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: one of three things. Three timed runs (two up and one down); those plus three tape readings - the curtain travel, and one at half the travel in each direction; or no timed run at all, four tape readings at a quarter and at three quarters of the travel in each direction and then a check. Each option below says how many movements it costs.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\nThe last one is the thorough calibration on its own, for a cover that has been measured already: it keeps every time this cover runs on today and reads nothing but the tape. If its curtain travel has never been measured, that reading comes first and costs no movement of its own: the cover has to be taken to the top for it in any case.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: one of three things. Three timed runs (two up and one down); those plus three tape readings - the curtain travel, and one at half the travel in each direction; or no timed run at all, four tape readings at a quarter and at three quarters of the travel in each direction and then a check. Each option says how many movements it costs.\n\nThe times alone are enough for a cover whose motor is simply slower or faster than the one the profile was measured on. Add the coefficients when it is wrong *half way* as well: there it is not the motor that turns differently, it is the curtain that winds differently.\n\nThe last one is the thorough calibration on its own, for a cover that has been measured already: it keeps every time this cover runs on today and reads nothing but the tape. If its curtain travel has never been measured, that reading comes first and costs no movement of its own: the cover has to be taken to the top for it in any case.\n\n**What you have to do**: choose how far to go. You can always come back and do the rest.",
         "menu_options": {
           "times_only": "Its own run times only (3 presses, 5 movements)",
           "times_and_rolls": "Its own times and its own coefficients (3 presses, 3 readings, 8 movements)",
@@ -301,7 +301,7 @@
       },
       "home_closed_done": {
         "title": "Is the cover completely closed?",
-        "description": "**Cover**: {cover}\n\n**What happened**: the cover was closed completely: this way everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was closed completely: this way everything measured from here on starts from a known point.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so with one of the answers.",
         "menu_options": {
           "confirm_closed": "It is completely closed",
           "repeat_step": "Repeat this step",
@@ -310,7 +310,7 @@
       },
       "open_brief": {
         "title": "We are about to measure the ascent",
-        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: the ascent is measured by two runs, one press each, and this is the first. When you press the button below the cover starts upwards from the base: for the first second or two only the slats open, while the bottom edge stays on its rest, and then the whole curtain begins to rise. The cover is stopped the instant you press, a few centimetres up, and the next screen asks you to look at where it stopped.\n\n**What you have to do**: here you will have to be quick and precise. One press, at the instant the bottom edge leaves the base. You are not timing anything: the instant of the press is the measurement.\n\nThe second run comes afterwards, from the base again, and asks for the other press: the instant the cover reaches the end stop at the top and the motor stops, which you recognise by the noise ceasing. The drawing shows both.\n\nThe screens that follow carry a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "![](/myhome_static/ascent_presses.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: the ascent is measured by two runs, one press each, and this is the first. When the run is started the cover goes upwards from the base: for the first second or two only the slats open, while the bottom edge stays on its rest, and then the whole curtain begins to rise. The cover is stopped the instant you press, a few centimetres up, and the next screen asks you to look at where it stopped.\n\n**What you have to do**: here you will have to be quick and precise. Start the run, then press once, at the instant the bottom edge leaves the base. You are not timing anything: the instant of the press is the measurement.\n\nThe second run comes afterwards, from the base again, and asks for the other press: the instant the cover reaches the end stop at the top and the motor stops, which you recognise by the noise ceasing. The drawing shows both.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "open_start": "Start the cover",
           "repeat_step": "Send it back down first",
@@ -328,10 +328,10 @@
       },
       "lift_check": {
         "title": "Where is the bottom edge now?",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What happened**: the cover was stopped the instant you pressed. Between a press and the motor coming to rest there is always a moment - your own reaction, the command reaching the gateway, the motor braking - and the curtain goes on rising for all of it.\n\n**What you have to do**: look at the bottom edge and say which of the three it is. A few centimetres above the base is what a press that went well looks like. Still resting on the base means the press came before the edge left it: that measurement cannot be repaired, only made again. A hand's breadth or more means the press was late, and a late press is the one case a tape measure can put right.\n\nIf in doubt, measure: the reading is the most precise of the three answers, because it puts the instant the edge left the base back where it belongs instead of trusting the press.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What happened**: the cover was stopped the instant you pressed. Between a press and the motor coming to rest there is always a moment - your own reaction, the command reaching the gateway, the motor braking - and the curtain goes on rising for all of it.\n\n**What you have to do**: look at the bottom edge and say which of the three it is. Two or three centimetres above the base is what a press that went well looks like. Still resting on the base means the press came before the edge left it: that measurement cannot be repaired, only made again. A hand's breadth or more means the press was late, and a late press is the one case a tape measure can put right.\n\nIf in doubt, measure: the reading is the most precise of the three answers, because it puts the instant the edge left the base back where it belongs instead of trusting the press.",
         "menu_options": {
           "lift_too_early": "It is still touching the base",
-          "lift_accept": "It stands a few centimetres up, go on",
+          "lift_accept": "It stands two or three centimetres up, go on",
           "lift_gap": "I want to measure the gap for more precision",
           "not_right": "It did not do what it should"
         }
@@ -341,14 +341,14 @@
         "description": "![](/myhome_static/lift_off.webp)\n\n**Cover**: {cover}\n\n**What happened**: the cover was stopped the instant you pressed - but the gateway had other commands in its queue and took more than a second to write ours to the bus. The curtain went on rising for all of that, so the gap you are about to see is wider than usual and it is not your doing.\n\n**What you have to do**: look at the bottom edge and say which of the three it is. Still resting on the base means the press came before the edge left it: that measurement cannot be repaired, only made again. Anything above the base is worth measuring here, because on this run the tape is the only thing that can say when the edge really left.",
         "menu_options": {
           "lift_too_early": "It is still touching the base",
-          "lift_accept": "It stands a few centimetres up, go on",
+          "lift_accept": "It stands two or three centimetres up, go on",
           "lift_gap": "I want to measure the gap for more precision",
           "not_right": "It did not do what it should"
         }
       },
       "lift_gap": {
         "title": "Measure the gap - {cover}",
-        "description": "![](/myhome_static/lift_off.webp)\n\n**What you have to do**: measure from the base - the point where the bottom edge rests when the cover is closed - up to the bottom edge where it is now, and write the centimetres below. That distance says exactly when the edge really left the base, so the slat opening time stops depending on how quick your finger was.\n\nLeaving the field empty goes on without measuring, and the press stands as it was made.",
+        "description": "![](/myhome_static/lift_off.webp)\n\n**What you have to do**: measure from the base - the point where the bottom edge rests when the cover is closed - up to the bottom edge where it is now, and write the centimetres in the field. That distance says exactly when the edge really left the base, so the slat opening time stops depending on how quick your finger was.\n\nLeaving the field empty goes on without measuring, and the press stands as it was made.",
         "data": {
           "gap_cm": "Gap between the bottom edge and the base (cm)"
         },
@@ -367,7 +367,7 @@
       },
       "closed_again": {
         "title": "Is the cover completely closed again?",
-        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent back down to the base, because the full ascent has to start from there exactly as the first run did.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so below.",
+        "description": "**Cover**: {cover}\n\n**What happened**: the cover was sent back down to the base, because the full ascent has to start from there exactly as the first run did.\n\n**What you have to do**: look at it. If it is completely closed, slats shut and the bottom edge resting, go on. If it is still moving, wait and then go on. If it did not move at all, or moved the wrong way, say so with one of the answers.",
         "menu_options": {
           "confirm_closed_again": "It is completely closed",
           "repeat_step": "Repeat this step",
@@ -376,7 +376,7 @@
       },
       "open_full_brief": {
         "title": "Now the whole ascent",
-        "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts upwards from the base again and this time it is left to run - the slats open, the whole curtain rises, and at the top the cover stops by itself at its end stop.\n\n**What you have to do**: one press only, at the instant the motor stops at the top. You recognise it by the noise ceasing. Nothing is asked of you at the base this time: that measurement is already made.\n\nThe screen during the movement carries a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "![](/myhome_static/top_stop.webp)\n\n**Cover**: {cover}\n\n**What is about to happen**: when the run is started, the cover goes upwards from the base again and this time it is left to run - the slats open, the whole curtain rises, and at the top the cover stops by itself at its end stop.\n\n**What you have to do**: start the run, then press once, at the instant the motor stops at the top. You recognise it by the noise ceasing. Nothing is asked of you at the base this time: that measurement is already made.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "open_full_start": "Start the cover",
           "repeat_step": "Measure the ascent again from the start",
@@ -402,7 +402,7 @@
       },
       "open_result_gap": {
         "title": "The ascent was measured",
-        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s, and a gap of {gap} cm above the base.\n\nThe slat opening time above is the one the press produced. The gap you measured replaces it when the values are computed, so what ends up stored may differ from it by a few tenths of a second - that is the whole point of having measured it.\n\n**What you have to do**: if the press at the top and the reading both felt right, go on. Repeating the measurement makes both runs of the ascent again from the base.",
+        "description": "**Cover**: {cover}\n\n**What was measured**: slats {slat} s, full ascent {run} s, and a gap of {gap} cm above the base.\n\nThe slat opening time just given is the one the press produced. The gap you measured replaces it when the values are computed, so what ends up stored may differ from it by a few tenths of a second - that is the whole point of having measured it.\n\n**What you have to do**: if the press at the top and the reading both felt right, go on. Repeating the measurement makes both runs of the ascent again from the base.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_step": "Repeat the measurement"
@@ -410,7 +410,7 @@
       },
       "close_brief": {
         "title": "We are about to measure the descent",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: when you press the button below, the cover starts downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time there is only one press, at the instant the motor stops at the bottom.\n\n**Careful**: do not press when the bottom edge touches the base. From there the cover goes on moving for a moment longer, to close the slats. Press only when it stops moving altogether, slats included, that is when the motor stops: you recognise it by the noise ceasing.\n\nA cover comes down a little faster than it goes up, which is why this is measured separately. The screen during the movement carries a single line, because there is no time to read while watching the cover.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: when the run is started, the cover goes downwards from the top and stops by itself once the curtain is down and the slats have closed.\n\n**What you have to do**: here too you will have to be quick and precise, but this time, once the run is started, there is one press only, at the instant the motor stops at the bottom.\n\n**Careful**: do not press when the bottom edge touches the base. From there the cover goes on moving for a moment longer, to close the slats. Press only when it stops moving altogether, slats included, that is when the motor stops: you recognise it by the noise ceasing.\n\nA cover comes down a little faster than it goes up, which is why this is measured separately.\n\nRead this at your own pace, get into position, and start the movement yourself when you are ready.",
         "menu_options": {
           "close_start": "Start the cover",
           "repeat_step": "Send it back up first",
@@ -436,7 +436,7 @@
       },
       "height": {
         "title": "What is the curtain travel of {cover}?",
-        "description": "![](/myhome_static/height.webp)\n\n**What you have to do**: with the cover completely open, measure from the point where the bottom edge of the cover rests when it is closed (the base) up to the bottom edge of the cover in its present position (completely open). In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres below.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the opening: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
+        "description": "![](/myhome_static/height.webp)\n\n**What you have to do**: with the cover completely open, measure from the point where the bottom edge of the cover rests when it is closed (the base) up to the bottom edge of the cover in its present position (completely open). In other words, measure the distance the cover travels from fully open to fully closed (or the other way round), and write the centimetres in the field.\n\nThat distance is the curtain travel, and it is the reference every other measurement is compared against. Measure the curtain, not the opening: if the bottom edge rests on a sill rather than on the floor, measure from the sill.",
         "data": {
           "height": "Curtain travel (cm)"
         },
@@ -446,7 +446,7 @@
       },
       "height_result": {
         "title": "The curtain travel was written down",
-        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this curtain travel. If the cover is not completely open, so that this is not the whole travel, say so below: it is opened again and the reading is taken again.",
+        "description": "**Cover**: {cover}\n\n**What was written down**: {height} cm from the base to the bottom edge with the cover completely open.\n\n**What you have to do**: if that is the number you read off the tape, go on. Check the value: the tape readings of the next steps are compared against this curtain travel. If the cover is not completely open, so that this is not the whole travel, say so with one of the answers: it is opened again and the reading is taken again.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_measure": "Repeat the measurement",
@@ -455,7 +455,7 @@
       },
       "tape_brief": {
         "title": "Before the automatic readings",
-        "description": "**Cover**: {cover}\n\n**What is about to happen**: from here on the cover moves by itself. Readings to take: {readings}. Each one begins by taking the cover to the end stop that reading is taken from, and where there is a run to measure the cover makes it and stops there on its own. There is nothing to press and nothing to catch in time: after each movement a screen asks for the distance in centimetres.\n\n**What you have to do**: make sure nothing is in the way, keep the tape measure to hand and stand clear while the cover is moving. If a movement does not do what it should, say so on the screen that follows the reading: the step is made again.",
+        "description": "**Cover**: {cover}\n\n**What is about to happen**: from here on the cover moves by itself. Readings to take: {readings}.\n\nEach reading is two movements. First the cover goes to the end stop that reading starts from. Then it runs the stretch to be measured and stops there on its own.\n\n**What you have to do**: when the cover is still, measure with the tape from the base up to the bottom edge, and write the centimetres in the field. There is nothing to catch in time: every screen waits.\n\nBefore starting: clear anything in the way, keep the tape measure to hand, and stand clear of the cover while it is moving. If a movement does not do what it should, the screen after the reading says so and the step is made again.",
         "menu_options": {
           "tape_start": "Understood, start the readings",
           "cancel_flow": "Cancel"
@@ -463,7 +463,7 @@
       },
       "measure_descent": {
         "title": "Measure {cover} - {percent}% of the way down",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. The same reference as the curtain travel, so that the two measurements can be compared.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was opened completely and then run down about {percent}% of its travel.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres in the field. The same reference as the curtain travel, so that the two measurements can be compared.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -473,7 +473,7 @@
       },
       "measure_ascent": {
         "title": "Measure {cover} - {percent}% of the way up",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run upwards: first the slats opened, then the curtain travelled about {percent}% of its way.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres below. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was closed completely and then run upwards: first the slats opened, then the curtain travelled about {percent}% of its way.\n\n**What you have to do**: measure from the base up to the bottom edge where it is now, and write the centimetres in the field. A cover is not loaded the same way going up and going down, which is why the same fraction is measured twice.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -483,7 +483,7 @@
       },
       "measure_verify": {
         "title": "Check {cover} - {percent}% of the way down",
-        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was taken to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres below. The next screen shows the difference between the measured position and the position estimated by Home Assistant.",
+        "description": "![](/myhome_static/reading.webp)\n\n**What happened**: the cover was taken to a position nothing was measured at, so this is a real check and not a repetition.\n\n**What you have to do**: measure the height of the bottom edge one last time, from the same reference as before, and write the centimetres in the field. The next screen shows the difference between the measured position and the position estimated by Home Assistant.",
         "data": {
           "measured_cm": "Height of the bottom edge (cm)"
         },
@@ -493,7 +493,7 @@
       },
       "tape_result": {
         "title": "The reading was written down",
-        "description": "**Cover**: {cover} - read at {percent}% of the travel\n\n**What was written down**: {measured} cm from the base to the bottom edge.\n\n**What you have to do**: if that is the number you read off the tape, go on. If you suspect you measured from the wrong point, repeat the measurement: the cover goes back to its end stop and runs the same distance again, so the reading can be taken under the same conditions. If the cover did not do what it should (it never moved, or it moved the wrong way), say so below: it is stopped and the movements of this step are made again.",
+        "description": "**Cover**: {cover} - read at {percent}% of the travel\n\n**What was written down**: {measured} cm from the base to the bottom edge.\n\n**What you have to do**: if that is the number you read off the tape, go on. If you suspect you measured from the wrong point, repeat the measurement: the cover goes back to its end stop and runs the same distance again, so the reading can be taken under the same conditions. If the cover did not do what it should (it never moved, or it moved the wrong way), say so with one of the answers: it is stopped and the movements of this step are made again.",
         "menu_options": {
           "accept_step": "That is right, go on",
           "repeat_tape": "Repeat the measurement",
@@ -526,7 +526,7 @@
       },
       "summary_basic": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet. “Continue with the thorough calibration” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is here: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\nThe accuracy has not been checked yet: a basic calibration usually ends up within about 4 cm. “Continue with the thorough calibration” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted; it usually ends up within about 2 cm.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
         "menu_options": {
           "save": "Save",
           "refine": "Continue with the thorough calibration (~2 minutes, 5 more readings)",
@@ -535,7 +535,7 @@
       },
       "summary_short": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save, or leave without saving anything.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is here: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save, or leave without saving anything.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"
@@ -543,7 +543,7 @@
       },
       "summary_correction": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\nThe accuracy has not been checked yet. “Continue with the thorough calibration” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is here: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\nThe accuracy has not been checked yet: a basic calibration usually ends up within about 4 cm. “Continue with the thorough calibration” fits four more points, at a quarter and three quarters of the travel in each direction, and then puts the model to a fifth reading taken where nothing was fitted; it usually ends up within about 2 cm.\n\n**What you have to do**: save, or continue with five more tape readings, taking about two minutes.",
         "menu_options": {
           "save": "Save",
           "refine": "Continue with the thorough calibration (~2 minutes, 5 more readings)",
@@ -552,7 +552,7 @@
       },
       "summary_precise": {
         "title": "What was measured",
-        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}\n\nThat is the check the thorough calibration closes with: at {percent}% of the descent - a position nothing was fitted to - the cover stopped within {accuracy} of where the model said it would. It is a question put to the model, not a repetition of a reading it was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is below: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save.",
+        "description": "**Cover**: {cover}\n\n**Curtain travel**: {height}\n**Accuracy**: within {accuracy}\n\nThat is the check the thorough calibration closes with: at {percent}% of the descent - a position nothing was fitted to - the cover stopped within {accuracy} of where the model said it would. It is a question put to the model, not a repetition of a reading it was fitted to.\n\n**Where these values go**: if you save, they stay inside Home Assistant, here under Configure → Calibrations. They are written the moment you save, and the cover starts using them when this dialog is closed, instead of the ones in the configuration file, if you use one. From that same screen you can look at them again, correct them by hand or delete them at any time.\n\nIf you would rather write them into the file yourself, the equivalent snippet is here: copy it before you close this, because without saving nothing is kept.\n\n{yaml}\n**What is replaced and what is kept**: saving writes {replacing} and leaves everything else that is already stored for this cover exactly as it is: {keeping}.\n\n**What you have to do**: save.",
         "menu_options": {
           "save": "Save",
           "cancel_flow": "Cancel without saving anything"
@@ -1085,7 +1085,7 @@
         "intro": "Before saving: on the left what {cover} uses today, on the right what it will use afterwards. Nothing has been written yet.",
         "where": "Once saved, the values stay in Home Assistant and {cover} uses them at once, with no restart. They can be reviewed, corrected by hand or removed from the shutter's card in this panel.",
         "accuracy_checked": "Accuracy checked: within {accuracy} cm at {percent}% of the descent, in a position nothing was calculated on.",
-        "accuracy_unchecked": "The accuracy has not been checked yet. The thorough calibration adds four readings and a check, about two minutes.",
+        "accuracy_unchecked": "The accuracy has not been checked yet: a basic calibration usually ends up within about 4 cm. The thorough calibration adds four readings and a check, about two minutes, and usually ends up within about 2 cm.",
         "save_profile": "Save as the profile «{profile}»",
         "save_cover_only": "Save for this shutter only",
         "profile_exists": "The profile «{profile}» already exists: saving updates it, and with it the shutters that follow it ({count}).",

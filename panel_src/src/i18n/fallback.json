@@ -294,7 +294,7 @@
   "panel.wizard.render_error.body": "The calibration is still running on the gateway and nothing has been lost. Try again, or end it.",
   "panel.wizard.render_error.title": "This screen could not be drawn",
   "panel.wizard.review.accuracy_checked": "Accuracy checked: within {accuracy} cm at {percent}% of the descent, in a position nothing was calculated on.",
-  "panel.wizard.review.accuracy_unchecked": "The accuracy has not been checked yet. The thorough calibration adds four readings and a check, about two minutes.",
+  "panel.wizard.review.accuracy_unchecked": "The accuracy has not been checked yet: a basic calibration usually ends up within about 4 cm. The thorough calibration adds four readings and a check, about two minutes, and usually ends up within about 2 cm.",
   "panel.wizard.review.affected_hide": "Hide the shutters that follow the profile",
   "panel.wizard.review.affected_show": "Show the shutters that follow the profile",
   "panel.wizard.review.details_hide": "Hide the technical details",

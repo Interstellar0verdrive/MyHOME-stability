@@ -1006,10 +1006,11 @@ A cover that misses by a lot has no business in that profile: measure it with st
 
 #### What accuracy to expect
 
-After calibration, runs from the end stops land within 1–2 cm and chained runs
-between intermediate positions within about 2 cm, with the occasional shutter at
-4 cm; no drift accumulates across runs, because every full open or close
-re-synchronises the estimate.
+After calibration, expect **about 4 cm** from the basic calibration and **about
+2 cm** from the thorough one, and less than either on runs that start or end at an
+end stop; no drift accumulates across runs, because every full open or close
+re-synchronises the estimate. The figures are deliberately modest: they have to
+hold on installations nobody here has seen.
 
 - **On the calibrated cover**: 2-3 cm at mid-travel on a 2 m shutter, which is as
   good as the measurements you fed it. Each solved coefficient reproduces its own

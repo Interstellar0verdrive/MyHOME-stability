@@ -300,6 +300,29 @@ the panel when it is in the way.
   to somebody who has already said they are done. A click outside now returns to the
   overview in one gesture, from however deep the panel has gone. The arrow in the head is
   what walks back one screen, and Escape still does what the arrow does.
+- **The screens of the calibration stop explaining themselves and stop pointing.** Three
+  of them told the reader why the screen during a movement carries a single line, which is
+  a reason somebody had for drawing it that way and of no use to anybody holding a tape
+  measure. A dozen others said "press the button below" or "write the centimetres below",
+  which is true on a phone and false on a desktop, where the same button is the right-hand
+  column. Both are gone, in all seven languages, and a check holds them out.
+- **A timed run is briefed in two moments.** "One press only, at the instant the motor
+  stops at the top" is not what happens: the run is started first and pressed afterwards,
+  and the briefings now say so in that order. "A few centimetres above the base" — the
+  answer that says a press went well — carries the two or three centimetres it means.
+- **The briefing before the tape readings is written again from nothing.** It was one
+  sentence that tried to describe two movements, a fraction and a reading at once. It is
+  now four short ones: what the shutter does by itself, what to measure and where from,
+  when to write, and what to clear before starting. English and Italian; the other five
+  languages keep the old text until the Italian has been read on the wall.
+- **The three routes say which one is yours.** Each of them opens with the case it is for,
+  and the screen ends with "if in doubt, choose (A)" — the one that needs nothing measured
+  beforehand, and the one the choice starts on.
+- **What the calibration promises is what it can keep.** The figures were "1–2 cm near the
+  end stops, 2–4 cm at intermediate positions", read off one installation. They are now
+  **about 4 cm** after the basic calibration and **about 2 cm** after the thorough one,
+  less than either near the end stops — on the route screen, in the summaries, in the
+  panel's own review and in the documentation.
 
 ## [0.5.0] - 2026-09-13
 

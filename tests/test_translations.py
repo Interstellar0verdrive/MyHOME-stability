@@ -38,7 +38,11 @@ from custom_components.myhome.const import (
     MAX_COMMAND_WORKERS,
 )
 from custom_components.myhome.device_trigger import ALL_SUBTYPES, ALL_TRIGGER_TYPES
-from custom_components.myhome.panel_schemas import SESSION_ERROR_KEYS, WS_ERROR_KEYS
+from custom_components.myhome.panel_schemas import (
+    SESSION_ERROR_KEYS,
+    SESSION_REUSED_STEPS,
+    WS_ERROR_KEYS,
+)
 from custom_components.myhome.validate import CONF_ENERGY_DEFAULTS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1678,3 +1682,150 @@ def test_the_docs_quote_labels_that_exist(page: str) -> None:
             f"{page} quotes {label!r}, which is not a label of strings.json"
         )
         assert re.sub(r"\s+", " ", label) in text, f"{page} no longer quotes {label!r}"
+
+
+# --------------------------------------------------- what a screen may not talk about
+# The first live walk of the panel (19 September) found three sentences that explain the
+# *screen* to the person standing in front of a shutter: "the screen during the movement
+# carries a single line, because there is no time to read while watching the cover". It is
+# a reason somebody had for laying a screen out that way, it is true, and it is of no use
+# whatever to the reader, who is holding a tape measure.
+#
+# The rule is about a sentence that describes the screen's own shape, not about mentioning
+# a screen at all: "the next screen asks for the distance" is what is about to happen, and
+# the flow says it on purpose. So the pair is what is banned - the word for a screen and
+# the word for the line it carries, or the reason nobody has time to read it.
+TALKS_ABOUT_ITSELF: dict[str, tuple[tuple[str, ...], ...]] = {
+    "strings": (("screen", "single line"), ("screen", "no time to read")),
+    "en": (("screen", "single line"), ("screen", "no time to read")),
+    "it": (("schermat", "riga sola"), ("schermat", "non c'è tempo per leggere")),
+    "fr": (("écran", "seule ligne"), ("écran", "pas le temps de lire")),
+    "de": (("bildschirm", "eine zeile"), ("bildschirm", "zum lesen bleibt keine zeit")),
+    "es": (("pantalla", "sola línea"), ("pantalla", "no hay tiempo de leer")),
+    "nl": (("scherm", "één regel"), ("scherm", "geen tijd om te lezen")),
+    "pt": (("ecrã", "só linha"), ("ecrã", "não há tempo para ler")),
+}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_screen_of_the_flow_explains_its_own_layout(path: Path) -> None:
+    """Live finding 13, in all eight files.
+
+    Mutation caught: the design's reason for a one-line screen written back into the
+    text the user reads, in any language and on any screen.
+    """
+    offences = [
+        (key, pair)
+        for key, text in flatten(options_block(path)).items()
+        for pair in TALKS_ABOUT_ITSELF[path.stem]
+        if all(word in text.lower() for word in pair)
+    ]
+    assert not offences, "\n".join(
+        f"{path.name}: {key}: a sentence about the screen itself {pair}" for key, pair in offences
+    )
+
+
+# ------------------------------------------- and where a control is, which nobody knows
+# "Press the button below" is true on a phone and false on a desktop, where the footer is
+# the right-hand column (live finding 11). The same goes for a field, for the list of
+# answers and for the configuration snippet: the panel and the dialog lay the same words
+# out differently, so the words say *what* to press and never where it is.
+#
+# Checked on the steps the panel reuses (`SESSION_REUSED_STEPS`), which are exactly the
+# ones drawn in two layouts. The dialog's own screens keep their wording.
+_ENGLISH_SAYS_WHERE = (
+    "button below",
+    "ways below",
+    "option below",
+    "snippet is below",
+    "say so below",
+    "centimetres below",
+)
+SAYS_WHERE: dict[str, tuple[str, ...]] = {
+    "strings": _ENGLISH_SAYS_WHERE,
+    "en": _ENGLISH_SAYS_WHERE,
+    "it": ("qui sotto", "qui sopra"),
+    "fr": ("ci-dessous", "ci-dessus"),
+    "de": (
+        "knopf unten",
+        "zentimeter unten",
+        "es unten",
+        "ausschnitt unten",
+        "wege unten",
+        "eintrag unten",
+        "lamellen oben ist",
+    ),
+    "es": (
+        "botón de abajo",
+        "aquí abajo",
+        "abajo los centímetros",
+        "formas de abajo",
+        "opción de abajo",
+        "abajo está el fragmento",
+    ),
+    "nl": ("hieronder", "hierboven"),
+    "pt": (
+        "botão abaixo",
+        "aqui abaixo",
+        "abaixo os centímetros",
+        "formas abaixo",
+        "opção abaixo",
+        "equivalente está abaixo",
+        "lâminas acima é",
+    ),
+}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_no_screen_the_panel_reuses_says_where_a_control_is(path: Path) -> None:
+    """Live finding 11, in all eight files.
+
+    Mutation caught: "premendo il pulsante qui sotto" coming back into any of the
+    screens the panel draws beside the dialog.
+    """
+    steps = options_block(path)["step"]
+    offences = [
+        (step, key, word)
+        for step in SESSION_REUSED_STEPS
+        for key, text in flatten(steps.get(step, {})).items()
+        for word in SAYS_WHERE[path.stem]
+        if word in text.lower()
+    ]
+    assert not offences, "\n".join(
+        f"{path.name}: {step}.{key}: {word!r} says where a control is" for step, key, word in offences
+    )
+
+
+# ------------------------------------------------ one drawing per instant, and no other
+# Live finding 7: a step that asks for a press shows the drawing of the instant it is
+# asking about, and never the one that shows both presses of the ascent - which is a
+# briefing's picture and confuses which of the two is being asked for.
+#
+# `close_bottom` is the gap: there is no drawing of a shutter coming down, so the descent
+# has none. It is named here rather than left out, so that adding the drawing without
+# wiring it up, or adding a fourth press step without deciding, both fail.
+PRESS_DRAWINGS: dict[str, str | None] = {
+    "open_lift": "lift_off.webp",
+    "open_top": "top_stop.webp",
+    "close_bottom": None,
+}
+
+
+@pytest.mark.parametrize("path", [STRINGS, *TRANSLATIONS], ids=lambda path: path.stem)
+def test_every_press_shows_the_drawing_of_its_own_instant(path: Path) -> None:
+    """Mutation caught: the two-press drawing on a one-press screen, in any language."""
+    steps = options_block(path)["step"]
+    for step, drawing in PRESS_DRAWINGS.items():
+        description = steps[step]["description"]
+        if drawing is None:
+            assert "/myhome_static/" not in description, f"{path.name}: {step} has a drawing now"
+            continue
+        assert description.startswith(f"![](/myhome_static/{drawing})"), f"{path.name}: {step}"
+        assert "ascent_presses" not in description, f"{path.name}: {step} shows both presses"
+    # ...and the one screen the two-press drawing belongs to is the briefing of the ascent.
+    illustrated = {
+        step
+        for step, body in steps.items()
+        if "ascent_presses.webp" in body.get("description", "")
+    }
+    assert illustrated == {"open_brief"}, f"{path.name}: {illustrated}"
