@@ -8,6 +8,20 @@
 // and the only way to guarantee it is that one function computes it, on the server.
 
 import { type HaConnection } from "../types/ha";
+import {
+  type SessionAction,
+  type SessionAnswer,
+  type SessionCancelAnswer,
+  type SessionEndOtherAnswer,
+  type SessionEvent,
+  type SessionGetAnswer,
+  type SessionHeartbeatAnswer,
+  type SessionPath,
+  type SessionSaveAnswer,
+  type SessionSaveTarget,
+  type SessionScope,
+  type SessionSubmit,
+} from "./session-contract";
 
 export interface EntrySummary {
   entry_id: string;
@@ -230,7 +244,14 @@ export interface MeasuringEvent {
   name: string | null;
 }
 
-export type CalibrationEvent = OverviewEvent | MeasuringEvent;
+/**
+ * The third event (contract §11.4), pushed on subscribing and at every transition of the
+ * gateway's calibration session. The type is the frozen contract's own: nothing about the
+ * session is restated here.
+ */
+export type { SessionEvent };
+
+export type CalibrationEvent = OverviewEvent | MeasuringEvent | SessionEvent;
 
 export const subscribe = (
   connection: HaConnection,
@@ -412,4 +433,183 @@ export const undo = (
     type: "myhome/calibration/undo",
     entry_id: entryId,
     undo_token: undoToken,
+  });
+
+// --- the calibration session (contract §11) --------------------------------------------
+//
+// Ten commands, one per line of `docs/panel-websocket-api.md` §11.2 and of
+// `WS_SESSION_COMMANDS` in `panel_schemas.py`. The shapes come from
+// `engine/session-contract.ts`, which is frozen: nothing is restated here, and a wrapper
+// that invented a key would fail to compile against the request interfaces there.
+//
+// `entry_id` is required on every one of them, reads included: a session is always one
+// gateway's. Only `engine/session.ts` calls these - the screens talk to the client, and
+// the client talks to the socket - so that there is one place that knows what a verb
+// means and one place that knows what it is called.
+
+export const sessionGet = (
+  connection: HaConnection,
+  entryId: string,
+): Promise<SessionGetAnswer> =>
+  connection.sendMessagePromise<SessionGetAnswer>({
+    type: "myhome/calibration/session/get",
+    entry_id: entryId,
+  });
+
+export interface SessionStartFields {
+  cover_unique_id: string;
+  client_id: string;
+  path?: SessionPath;
+  /** Only with `path_b` or `path_c`; anything else is `invalid_format`. */
+  profile?: string;
+  /** Only with `path_c`. */
+  scope?: SessionScope;
+}
+
+export const sessionStart = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionStartFields,
+): Promise<SessionAnswer> =>
+  connection.sendMessagePromise<SessionAnswer>({
+    type: "myhome/calibration/session/start",
+    entry_id: entryId,
+    cover_unique_id: fields.cover_unique_id,
+    client_id: fields.client_id,
+    // Left out rather than sent as `undefined`: the schema refuses a key it does not
+    // expect, and a `path` nobody chose is a key nobody sent.
+    ...(fields.path ? { path: fields.path } : {}),
+    ...(fields.profile ? { profile: fields.profile } : {}),
+    ...(fields.scope ? { scope: fields.scope } : {}),
+  });
+
+export interface SessionAttachFields {
+  session_id: string;
+  client_id: string;
+  claim?: boolean;
+}
+
+export const sessionAttach = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionAttachFields,
+): Promise<SessionAnswer> =>
+  connection.sendMessagePromise<SessionAnswer>({
+    type: "myhome/calibration/session/attach",
+    entry_id: entryId,
+    session_id: fields.session_id,
+    client_id: fields.client_id,
+    ...(fields.claim ? { claim: true } : {}),
+  });
+
+export interface SessionClientFields {
+  session_id: string;
+  client_id: string;
+}
+
+export const sessionHeartbeat = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionClientFields,
+): Promise<SessionHeartbeatAnswer> =>
+  connection.sendMessagePromise<SessionHeartbeatAnswer>({
+    type: "myhome/calibration/session/heartbeat",
+    entry_id: entryId,
+    session_id: fields.session_id,
+    client_id: fields.client_id,
+  });
+
+export interface SessionActFields extends SessionClientFields {
+  revision: number;
+  action: SessionAction | SessionSubmit;
+  /** A number goes as the text that was typed, so a decimal comma survives. */
+  value?: string | number | null;
+}
+
+export const sessionAct = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionActFields,
+): Promise<SessionAnswer> =>
+  connection.sendMessagePromise<SessionAnswer>({
+    type: "myhome/calibration/session/act",
+    entry_id: entryId,
+    session_id: fields.session_id,
+    client_id: fields.client_id,
+    revision: fields.revision,
+    action: fields.action,
+    ...(fields.value === undefined ? {} : { value: fields.value }),
+  });
+
+export const sessionStop = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionClientFields,
+): Promise<SessionAnswer> =>
+  connection.sendMessagePromise<SessionAnswer>({
+    type: "myhome/calibration/session/stop",
+    entry_id: entryId,
+    session_id: fields.session_id,
+    client_id: fields.client_id,
+  });
+
+export const sessionLeave = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionClientFields,
+): Promise<SessionAnswer> =>
+  connection.sendMessagePromise<SessionAnswer>({
+    type: "myhome/calibration/session/leave",
+    entry_id: entryId,
+    session_id: fields.session_id,
+    client_id: fields.client_id,
+  });
+
+export interface SessionCancelFields {
+  client_id: string;
+  /** Left out: the gateway's session, whichever it is. */
+  session_id?: string;
+  /** Ends it whoever owns it - the way out that always works. */
+  force?: boolean;
+}
+
+export const sessionCancel = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionCancelFields,
+): Promise<SessionCancelAnswer> =>
+  connection.sendMessagePromise<SessionCancelAnswer>({
+    type: "myhome/calibration/session/cancel",
+    entry_id: entryId,
+    client_id: fields.client_id,
+    ...(fields.session_id ? { session_id: fields.session_id } : {}),
+    ...(fields.force ? { force: true } : {}),
+  });
+
+export interface SessionSaveFields extends SessionClientFields {
+  revision: number;
+  target: SessionSaveTarget;
+}
+
+export const sessionSave = (
+  connection: HaConnection,
+  entryId: string,
+  fields: SessionSaveFields,
+): Promise<SessionSaveAnswer> =>
+  connection.sendMessagePromise<SessionSaveAnswer>({
+    type: "myhome/calibration/session/save",
+    entry_id: entryId,
+    session_id: fields.session_id,
+    client_id: fields.client_id,
+    revision: fields.revision,
+    target: fields.target,
+  });
+
+export const sessionEndOther = (
+  connection: HaConnection,
+  entryId: string,
+): Promise<SessionEndOtherAnswer> =>
+  connection.sendMessagePromise<SessionEndOtherAnswer>({
+    type: "myhome/calibration/session/end_other",
+    entry_id: entryId,
   });

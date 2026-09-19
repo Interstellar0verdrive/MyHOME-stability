@@ -19,6 +19,8 @@
 // dependency somebody has to keep in step with Lit.
 
 import { type Route } from "./router";
+import { type SessionTrouble, type WizardIntent } from "./session";
+import { type SessionSnapshot } from "./session-contract";
 import { type CoverDetail, type Overview, type PreviewItem, type WsError } from "./ws";
 
 /** Where the model is coming from, which the panel says out loud when it is not live. */
@@ -188,6 +190,28 @@ export interface PanelState {
   // --- the two routed cards (lot 8) --------------------------------------------------
   detail: DetailState;
   profile: ProfileState;
+
+  // --- the guided calibration (0.6.0 wizard) -----------------------------------------
+  //
+  // A third server model, kept beside the other two under the same rule: the snapshot is
+  // replaced whole at every transition and nothing of the panel's is merged into it.
+  /** The gateway's session, as the server last described it, or `null` for none. */
+  session: SessionSnapshot | null;
+  /**
+   * A refusal the wizard has to answer, with the ways out it offers.
+   *
+   * It carries the recovery tokens rather than the bare refusal because of lesson 2: a
+   * screen that can show an error and nothing to press is the silent failure with an
+   * error message on it.
+   */
+  sessionError: SessionTrouble | null;
+  /**
+   * What the user asked to calibrate, on its way to `start` - and **never in the URL**
+   * (SPEC §5.1): reloading `#/calibrate` reads the session and can never open one.
+   */
+  wizardIntent: WizardIntent | null;
+  /** This browser tab's name in the session, from `sessionStorage` where there is one. */
+  clientId: string;
 }
 
 export const initialState = (route: Route): PanelState => ({
@@ -216,6 +240,10 @@ export const initialState = (route: Route): PanelState => ({
   writeError: null,
   detail: NO_DETAIL,
   profile: NO_PROFILE_CARD,
+  session: null,
+  sessionError: null,
+  wizardIntent: null,
+  clientId: "",
 });
 
 /** Everything the user was composing, dropped: what "Scarta tutto" and a confirm leave. */
