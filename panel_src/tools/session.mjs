@@ -474,6 +474,45 @@ console.log("\npresence lost, and taken back");
   check("and stopped nothing", bench.sessions("stop"), 0);
 }
 
+console.log("\nthe stylesheets the bundle ships");
+{
+  // A Lit stylesheet that arrives with no text in it costs a screen its whole appearance
+  // and nothing else: the markup is right, the checks that read markup pass, and the panel
+  // ships looking like an unstyled document. It happened - the CSS minifier wrote a tick
+  // as `\2713`, which is not a valid escape inside the JavaScript template literal the
+  // text is put back into, so the tagged template's cooked value was `undefined` and every
+  // rule of the eight step templates was dropped. jsdom resolves no CSS and could not see
+  // it; this can, because `cssText` is a string either way.
+  const bench = gateway({ session: scenario("briefing_open_brief") });
+  const { window } = await mount(bench.connection);
+  const empty = [];
+  for (const tag of [
+    "myhome-calibration-panel",
+    "myhome-screen",
+    "myhome-wizard",
+    "myhome-overview",
+    "myhome-cover-detail",
+    "myhome-profile-card",
+  ]) {
+    const element = window.customElements.get(tag);
+    // `styles` is a `CSSResultGroup`: a stylesheet, or a nest of arrays of them (several
+    // components export `[sheetStyles, css`…`]`), so it is flattened before it is read.
+    const sheets = [element?.styles ?? []].flat(Infinity);
+    for (const [at, sheet] of sheets.entries()) {
+      const text = sheet?.cssText;
+      if (typeof text !== "string" || text.trim() === "") {
+        empty.push(`${tag}[${at}]`);
+      }
+    }
+  }
+  checkThat(
+    empty.length === 0
+      ? "every stylesheet the bundle ships has text in it"
+      : `a stylesheet shipped empty: ${empty.join(", ")}`,
+    empty.length === 0,
+  );
+}
+
 console.log("\nthe check's own footing");
 check(
   "the heartbeat's period is the one this file compresses " +
