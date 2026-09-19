@@ -339,6 +339,13 @@ OVERVIEW_KEYS: tuple[str, ...] = (
     # `{cover_unique_id, name}` while a guided calibration is running on one of this
     # gateway's shutters, `null` otherwise. The panel's read-only lock hangs off it.
     "measuring",
+    # ...and, beside it, *whose* calibration it is: `SESSION_OVERVIEW_KEYS` for a
+    # session of this panel's, `null` for the guided dialog, for the 0.4.2 action and
+    # for a gateway nobody is measuring (0.6.0 wizard, lot B3). Declared with the rest
+    # of the session's contract at the bottom of this file; the key is here because
+    # this is the lot in which the server really sends it.
+    "session",
+    # One row per profile: see `PROFILE_KEYS`.
     # One row per profile: see `PROFILE_KEYS`.
     "profiles",
     # One row per basic cover, already in the order the user put them in: `COVER_KEYS`.
