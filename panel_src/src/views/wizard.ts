@@ -631,6 +631,12 @@ export class MyHomeWizard extends LitElement {
     // A screen that cannot be drawn is a screen that cannot count seconds either, and a
     // loop asking for a repaint that throws every time is a loop nobody can read past.
     this._stopClock();
+    // …and the error card is the whole of the next paint, so the exit question goes with
+    // the rest of it. Left alone, `_followExit` would see the flag it left behind, decide
+    // nothing had changed, and hold the keyboard inside a dialog that is no longer in the
+    // document - on the one screen whose whole job is to offer a way on.
+    this._trap.release();
+    this._trapped = false;
     if (!this._reported) {
       this._reported = true;
       console.error("MyHOME panel: the guided calibration could not be drawn", error);

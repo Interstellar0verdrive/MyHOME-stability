@@ -238,6 +238,7 @@
   "panel.wizard.external.reading": "The shutter was moved after it had been positioned: this reading no longer matches. Repeat the step.",
   "panel.wizard.external.rehomed": "The shutter had been moved by a command from outside: it has been brought back to its end stop, and the measurement starts from there.",
   "panel.wizard.motor.moving": "running for {seconds} s",
+  "panel.wizard.motor.position": "{percent}%",
   "panel.wizard.motor.starting": "starting…",
   "panel.wizard.motor.stopped": "stopped",
   "panel.wizard.none": "No calibration is running on this gateway.",

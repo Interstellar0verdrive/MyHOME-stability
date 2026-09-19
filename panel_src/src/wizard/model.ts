@@ -292,8 +292,15 @@ const clickParts = (
   } else {
     model.body = "";
   }
+  // Through the files like every other number, and with the per cent sign written the way
+  // the rest of the block writes it: the same route used to read "12 %" on one screen and
+  // "50%" two steps later.
   const position =
-    context.position === null ? undefined : `${i18n.number(context.position, 0)} %`;
+    context.position === null
+      ? undefined
+      : i18n.t("panel.wizard.motor.position", {
+          percent: i18n.number(context.position, 0),
+        });
   if (row.press === "starting") {
     model.press = {
       state: "starting",
@@ -303,6 +310,8 @@ const clickParts = (
       position,
     };
     model.primary = { label: "…", action: "", disabled: true, kind: "primary" };
+    // The motor is starting, which is exactly a moment somebody may want to interrupt.
+    stopAction(model, row, i18n);
     return;
   }
   if (row.press === "registered") {
@@ -329,6 +338,7 @@ const clickParts = (
       disabled: true,
       kind: "primary",
     };
+    stopAction(model, row, i18n);
     return;
   }
   const press = session.actions[0];
@@ -353,6 +363,27 @@ const clickParts = (
       action: `${ACT}${action}`,
       kind: "secondary" as const,
     }));
+  stopAction(model, row, i18n);
+};
+
+/**
+ * "Stop the shutter", on every screen where something of this session is running.
+ *
+ * It is the panel's and not the step's: `stop` is a verb of the contract, not one of the
+ * dialog's `menu_options`, so it is never in `actions` and the screen has to add it (SPEC
+ * §5.4, decision 10). The design does not draw it; the contract defines it, and a shutter
+ * running towards an end stop with nothing on the screen that stops it is the reason the
+ * wall switch gets used instead. It comes last, under whatever the step itself offers,
+ * because it is the way out of the step and not a way through it.
+ */
+const stopAction = (model: ScreenModel, row: StepRow, i18n: I18n): void => {
+  if (!row.stoppable) {
+    return;
+  }
+  model.secondary = [
+    ...(model.secondary ?? []),
+    { label: i18n.t("panel.wizard.action.stop"), action: STOP, kind: "text" },
+  ];
 };
 
 /**
@@ -575,11 +606,7 @@ const positioningScreen = (
       done: planned !== null && left <= 0,
     },
   };
-  if (row.stoppable) {
-    model.secondary = [
-      { label: i18n.t("panel.wizard.action.stop"), action: STOP, kind: "text" },
-    ];
-  }
+  stopAction(model, row, i18n);
   return model;
 };
 

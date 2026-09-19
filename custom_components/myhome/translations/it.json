@@ -1036,7 +1036,8 @@
       "motor": {
         "starting": "avvio in corso…",
         "moving": "in movimento da {seconds} s",
-        "stopped": "fermato"
+        "stopped": "fermato",
+        "position": "{percent}%"
       },
       "press": {
         "registered": "Pressione registrata ✓",

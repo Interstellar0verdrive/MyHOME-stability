@@ -105,6 +105,9 @@ const standingOn = (step: SessionStep): SessionSnapshot => {
   };
 };
 
+/** A number already written out, made safe to look for with a regular expression. */
+const escapeForMatch = (written: string): string => written.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** Every string a screen shows, however deep in the model it is. */
 const sentences = (model: ReturnType<typeof screenModel>): string[] => {
   const out: string[] = [model.title, model.body ?? ""];
@@ -246,8 +249,11 @@ describe("the numbers", () => {
     const deviation = snapshot.check?.gap_cm ?? 0;
     const italian_ = screenModel(snapshot, context(it_it));
     const english_ = screenModel(snapshot, context(en_gb));
-    assert.match(italian_.body ?? "", new RegExp(deviation.toFixed(1).replace(".", ",")));
-    assert.match(english_.body ?? "", new RegExp(deviation.toFixed(1).replace(".", "\\.")));
+    // Built with the same formatter the panel uses: `toFixed` and `Intl` disagree on an
+    // exact half (`(1.05).toFixed(1)` is "1.0" where `Intl` gives "1,1"), and a check on
+    // the decimal separator must not fall over a rounding rule it is not about.
+    assert.match(italian_.body ?? "", new RegExp(escapeForMatch(it_it.number(deviation, 1))));
+    assert.match(english_.body ?? "", new RegExp(escapeForMatch(en_gb.number(deviation, 1))));
   });
 
   it("writes a value of the model with its unit, and a missing one as a dash", () => {
@@ -276,7 +282,11 @@ describe("the screen of a press", () => {
       it_it.t("options.step.open_lift.menu_options.lifted_off"),
     );
     assert.match(model.primary?.label ?? "", /^1\)/);
-    assert.equal(model.secondary?.length, 2);
+    // The step's own two, and the panel's way of stopping the shutter under them.
+    assert.deepEqual(
+      (model.secondary ?? []).map((one) => one.action),
+      ["act:repeat_step", "act:not_right", "stop"],
+    );
   });
 
   it("counts the seconds off the server's clock and not off this one", () => {
@@ -296,7 +306,10 @@ describe("the screen of a press", () => {
     assert.equal(model.press?.state, "registered");
     assert.equal(model.primary?.disabled, true);
     assert.match(model.press?.note ?? "", /4,8/);
-    assert.equal(model.press?.position, "3 %");
+    assert.equal(
+      model.press?.position,
+      it_it.t("panel.wizard.motor.position", { percent: it_it.number(3, 0) }),
+    );
   });
 
   it("carries the switch for the signal on the brief that starts a run, and nowhere else", () => {
@@ -424,6 +437,49 @@ describe("the outside world", () => {
   });
 });
 
+describe("stopping the shutter", () => {
+  it("offers it on every screen where something of this session is running", () => {
+    // `stop` is a verb of the contract and not one of the step's `menu_options`, so it is
+    // never in `actions`: the screen adds it (SPEC §5.4, decision 10). The three timed
+    // runs are the moments the shutter is really going somewhere.
+    for (const name of ["running_open_start", "running_open_lift", "positioning_home_closed"]) {
+      const model = screenModel(scenarios[name], context(en_gb));
+      const stop = (model.secondary ?? []).find((one) => one.action === "stop");
+      assert.ok(stop, name);
+      assert.equal(stop?.label, en_gb.t("panel.wizard.action.stop"), name);
+      // Last, under whatever the step itself offers: it is the way out of the step.
+      assert.equal(model.secondary?.[model.secondary.length - 1]?.action, "stop", name);
+    }
+  });
+
+  it("does not offer it where nothing of this session is moving", () => {
+    for (const name of ["briefing_open_brief", "briefing_lift_check", "review_basic"]) {
+      const model = screenModel(scenarios[name], context(en_gb));
+      assert.equal(
+        (model.secondary ?? []).some((one) => one.action === "stop"),
+        false,
+        name,
+      );
+    }
+  });
+
+  it("marks every step that moves, and only those", () => {
+    // The flag and the shutter have to say the same thing: a step with a movement of the
+    // session's own is a step with a way to interrupt it.
+    for (const [name, snapshot] of Object.entries(scenarios)) {
+      const step = snapshot.step;
+      if (!step || !STEPS[step]) {
+        continue;
+      }
+      const moving = snapshot.movement !== null;
+      const offered = (screenModel(snapshot, context(en_gb)).secondary ?? []).some(
+        (one) => one.action === "stop",
+      );
+      assert.equal(offered, moving && Boolean(STEPS[step].stoppable), name);
+    }
+  });
+});
+
 describe("a session somebody else is driving", () => {
   it("shows the same screen with nothing on it that acts", () => {
     const driving = screenModel(scenarios.owned_by_other, context(en_gb));
@@ -434,6 +490,45 @@ describe("a session somebody else is driving", () => {
     assert.equal(watching.field, undefined);
     assert.equal(watching.title, driving.title);
     assert.equal(watching.readOnly?.label, en_gb.t("panel.wizard.owner.take"));
+  });
+
+  it("takes the field away from a reading, and the switch from a brief", () => {
+    // One state exercised one branch of `decorate`. These are the other three: the field
+    // of a tape reading, the switch for the signal at the start, and the two disclosures
+    // of the review - each of which is a control that would otherwise be pressable on a
+    // calibration somebody else is holding the tape for.
+    const reading = screenModel(
+      scenarios.awaiting_reading_measure_descent,
+      context(en_gb, { readOnly: true }),
+    );
+    assert.equal(reading.field, undefined);
+    assert.equal(reading.primary, undefined);
+    assert.ok(reading.readOnly);
+
+    const brief = screenModel(scenarios.briefing_open_brief, context(en_gb, { readOnly: true }));
+    assert.equal(brief.toggle, undefined);
+    assert.equal(brief.secondary, undefined);
+    assert.ok(brief.readOnly);
+
+    const review = screenModel(
+      scenarios.review_basic_profile_exists,
+      context(en_gb, { readOnly: true, showAll: true }),
+    );
+    assert.equal(review.summary?.disclose, undefined);
+    assert.equal(review.primary, undefined);
+    assert.ok(review.readOnly);
+    // …and what it says is still there to read: the rows and the lines are not controls.
+    assert.equal(review.summary?.rows.length, 3);
+    assert.ok((review.summary?.lines ?? []).length > 0);
+  });
+
+  it("leaves the running screens showing what they were showing", () => {
+    const watching = screenModel(scenarios.running_open_lift, context(en_gb, { readOnly: true }));
+    // The motor card stays: somebody standing in front of the shutter has to be able to
+    // see where it has got to, whoever is driving.
+    assert.equal(watching.press?.state, "moving");
+    assert.equal(watching.secondary, undefined);
+    assert.equal(watching.primary, undefined);
   });
 });
 
@@ -452,38 +547,51 @@ describe("the errors of a form", () => {
   });
 
   it("makes a choice of profiles out of the names the form offers", () => {
-    const model = screenModel(scenarios.armed_path_b_profile_choice, context(en_gb, {
-      profiles: [
-        {
-          name: "tall",
-          source: "store",
-          editable: true,
-          values: {},
-          reference_height: 195,
-          measured_on: "00:03:50:aa:bb:cc-2-81",
-          measured_on_name: "Hallway Shutter",
-          measured_at: null,
-          followers: [],
-          followers_from_file: [],
-          missing: false,
-        },
-      ],
-    }));
+    // Nothing of the fixture is written into this test: the profile it describes is
+    // whichever name the form offers that is not the file, and the option that is marked
+    // is whichever one the form suggests. It has to survive the regeneration of the
+    // fixture from the real controller (lot B3), which moves both.
     const snapshot = scenarios.armed_path_b_profile_choice;
     const choices = snapshot.form?.choices ?? [];
+    const named = choices.find((one) => one !== "from_the_file") ?? "";
+    assert.notEqual(named, "");
+    const model = screenModel(
+      snapshot,
+      context(en_gb, {
+        profiles: [
+          {
+            name: named,
+            source: "store",
+            editable: true,
+            values: {},
+            reference_height: 195,
+            measured_on: "00:03:50:aa:bb:cc-2-81",
+            measured_on_name: "Hallway Shutter",
+            measured_at: null,
+            followers: [],
+            followers_from_file: [],
+            missing: false,
+          },
+        ],
+      }),
+    );
+    // One option per choice, in the order the form gives them.
     assert.equal(model.options?.length, choices.length);
-    // One option per choice, in the order the form gives them, and the one the form
-    // suggests is the one marked - read off the snapshot, because the fixture is
-    // regenerated from the real controller (lot B3) and the suggestion moves.
+    assert.deepEqual(
+      (model.options ?? []).map((one) => one.action),
+      choices.map((one) => `pick:${one}`),
+    );
     const marked = (model.options ?? []).filter((one) => one.current);
     assert.equal(marked.length, 1);
     assert.equal(marked[0]?.action, `pick:${String(snapshot.form?.suggested)}`);
+    // The file is named by one of the origin phrases, which exist in all eight languages;
+    // a profile is named by itself and carries its reference travel beside it.
     const file = (model.options ?? []).find((one) => one.action === "pick:from_the_file");
     assert.equal(file?.title, en_gb.origin("from_the_file", null));
-    const tall = (model.options ?? []).find((one) => one.action === "pick:tall");
-    assert.equal(tall?.title, "tall");
-    assert.match(tall?.meta ?? "", /195/);
-    assert.match(tall?.meta ?? "", /Hallway Shutter/);
+    const profile = (model.options ?? []).find((one) => one.action === `pick:${named}`);
+    assert.equal(profile?.title, named);
+    assert.match(profile?.meta ?? "", new RegExp(en_gb.number(195, 0)));
+    assert.match(profile?.meta ?? "", /Hallway Shutter/);
   });
 
   it("highlights the scope the panel's own button meant, without choosing it", () => {
@@ -502,8 +610,8 @@ describe("the check of a verification", () => {
     const model = screenModel(snapshot, context(en_gb));
     const lines = model.lines ?? [];
     assert.ok(lines.length >= 1);
-    assert.match(lines[0] ?? "", new RegExp(check.measured_cm.toFixed(1).replace(".", "\\.")));
-    assert.match(lines[0] ?? "", new RegExp(check.predicted_cm.toFixed(1).replace(".", "\\.")));
+    assert.match(lines[0] ?? "", new RegExp(escapeForMatch(en_gb.number(check.measured_cm, 1))));
+    assert.match(lines[0] ?? "", new RegExp(escapeForMatch(en_gb.number(check.predicted_cm, 1))));
   });
 
   it("says what the offer to correct this shutter rests on, on path B", () => {

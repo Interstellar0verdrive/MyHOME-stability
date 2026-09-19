@@ -102,6 +102,9 @@ const scenarioOf = (state) => {
   if (state === "calibrating") {
     return "running_open_lift";
   }
+  if (state === "session:cannot-be-drawn") {
+    return "running_open_lift";
+  }
   return state.startsWith("session:") ? state.slice("session:".length) : null;
 };
 
@@ -118,6 +121,13 @@ const session = (state, message) => {
   const entryId = overviewFor(state).entry_id;
   const scenario = scenarioOf(state);
   const snapshot = scenario ? sessionFixture(scenario, entryId) : null;
+  if (snapshot && state === "session:cannot-be-drawn") {
+    // A snapshot the model cannot survive, so that the card of SPEC §5.8 is a state axe
+    // looks at rather than one only `npm run session` walks past. The shutter is what the
+    // contract says is always there, which is why its absence is the shape of "anything
+    // the model does not survive".
+    snapshot.cover = null;
+  }
   if (message.type.endsWith("/get")) {
     return Promise.resolve({ session: snapshot, capabilities: sessions._contract.capabilities });
   }
@@ -446,6 +456,13 @@ export const WIZARD_SCREENS = [
     name: "the wizard, the question the cross asks",
     drive: pressInWizard("[data-wizard-exit]"),
     expect: "[data-exit-dialog]",
+  }),
+  // The card of SPEC §5.8. `npm run session` asserts that it appears and that the presence
+  // signal goes on arriving; this asks whether it is a card anybody can use - it is the
+  // one screen whose whole job is to offer a way on.
+  wizard("a screen that could not be drawn", "cannot-be-drawn", {
+    name: "the wizard, a screen that could not be drawn",
+    expect: "[data-render-error]",
   }),
 ];
 

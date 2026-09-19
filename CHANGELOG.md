@@ -183,6 +183,15 @@ everything the panel does.
 
 ### Fixed
 
+- **The stylesheet of the panel's step layouts really reaches the browser.** It never had:
+  the build minifies each `css` block and wrote a tick as `\2713`, which is not a valid
+  escape inside the JavaScript template literal the text goes back into, so the tagged
+  template's cooked value was `undefined`, the stylesheet came out empty, and every rule
+  of the eight layouts was silently absent. Nothing shipped in a release used those
+  layouts, so nobody could have seen it; the guided calibration is the first screen that
+  does. The build now leaves the character alone and fails by name if a minified block
+  ever carries something a template literal cannot hold, and a check reads the text of
+  every stylesheet the bundle ships.
 - **One mistyped line in the calibration store no longer costs every cover of that
   gateway.** `.storage/myhome.calibration.<entry>` is a file a user is free to open in
   an editor, and a single malformed record in it — a profile that is `null`, a

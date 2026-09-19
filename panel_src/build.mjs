@@ -73,6 +73,17 @@ const minifyStylesheets = {
       let index = 0;
       const contents = source.replace(CSS_BLOCK, (_whole, before) => {
         const done = minified[index++].code.trim();
+        // A net, not a correction: what goes back in has to be safe inside a template
+        // literal. A backslash, a backtick or a `${` there is either an invalid escape -
+        // which makes the tagged template's cooked value `undefined` and the stylesheet
+        // empty - or the end of the literal. Failing here names the file; failing later
+        // says `myhome-screen[5]`.
+        if (/[\\`]|\$\{/.test(done)) {
+          throw new Error(
+            `${args.path}: the minified CSS carries a backslash, a backtick or an ` +
+              "interpolation, which cannot go back inside a template literal",
+          );
+        }
         return `${before}css\`${done}\``;
       });
       return { contents, loader: "ts" };

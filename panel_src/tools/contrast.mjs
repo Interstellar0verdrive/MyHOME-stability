@@ -165,6 +165,14 @@ const pairs = (t) => [
   ["the outcome's face, saved", ink(t, t.success), mix(t.success, t.card, 12), 18],
   ["the outcome's face, cancelled", ink(t, t.error), mix(t.error, t.card, 12), 18],
   ["the outcome's face, timed out", ink(t, t.warning), mix(t.warning, t.card, 12), 18],
+  // The screen every number of a calibration is written on. It was missing from this list,
+  // and that is the hole a whole-screen defect went through: the label and the value were
+  // white on a white card because the field's card took the filled button's colour. The
+  // rule that made that possible is caught by `npm run session`, which reads what really
+  // reaches the element; these two lines are what the colours are supposed to be.
+  ["the label of a tape reading", t.text, t.card, 13.5],
+  ["the number typed into it, and its caret", t.text, t.card, 32],
+  ["its unit, beside the field", t.soft, t.card, 18],
   ["the buttons of the question the cross asks", ink(t, t.primary), mix(t.primary, t.card, 10), 13.5],
   ["and the one that leaves without saving", ink(t, t.error), mix(t.error, t.card, 14), 13.5],
 ];

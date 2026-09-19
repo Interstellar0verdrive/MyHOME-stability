@@ -211,7 +211,23 @@ const recordConsole = (window, said) => {
   }
 };
 
-const mount = async (connection, hash = "#/calibrate", said = null) => {
+/**
+ * Every custom element the bundle registers, collected as it registers them.
+ *
+ * Written down rather than listed: a list is right on the day it is written, and the
+ * defect the stylesheet check exists to catch is silent, so a component added next month
+ * would go unchecked without anybody noticing. The bundle registers itself, so the names
+ * can be taken from it.
+ */
+const recordDefinitions = (window, into) => {
+  const original = window.customElements.define.bind(window.customElements);
+  window.customElements.define = (name, ...rest) => {
+    into.push(name);
+    return original(name, ...rest);
+  };
+};
+
+const mount = async (connection, hash = "#/calibrate", said = null, defined = null) => {
   const dom = new JSDOM(
     '<!doctype html><html lang="en"><head><title>Home Assistant</title></head><body></body></html>',
     {
@@ -252,6 +268,9 @@ const mount = async (connection, hash = "#/calibrate", said = null) => {
   }
   if (said) {
     recordConsole(window, said);
+  }
+  if (defined) {
+    recordDefinitions(window, defined);
   }
   window.eval((await readFile(bundle, "utf8")).replace(/\bexport\s*\{[^}]*\};?/g, ""));
   const panel = window.document.createElement("myhome-calibration-panel");
@@ -311,6 +330,49 @@ const leaveTheCalibration = async (find, settle) => {
   await settle(120);
   find("[data-exit-leave]")?.click();
   await settle(160);
+};
+
+/**
+ * A stylesheet's text, split into selectors and what they declare.
+ *
+ * Not a CSS parser: braces are balanced, comments are dropped and a conditional group is
+ * walked into. It exists because jsdom leaves a shadow root's stylesheets unparsed, and
+ * because the question being asked - *which rules reach this element* - needs selectors
+ * and nothing else.
+ */
+const splitRules = (text) => {
+  const found = [];
+  const scan = (source) => {
+    let at = 0;
+    while (at < source.length) {
+      const open = source.indexOf("{", at);
+      if (open < 0) {
+        return;
+      }
+      const selector = source.slice(at, open).trim();
+      let depth = 1;
+      let close = open + 1;
+      while (close < source.length && depth > 0) {
+        if (source[close] === "{") {
+          depth += 1;
+        } else if (source[close] === "}") {
+          depth -= 1;
+        }
+        close += 1;
+      }
+      const body = source.slice(open + 1, close - 1);
+      if (selector.startsWith("@")) {
+        if (/^@(media|supports|layer|container)\b/.test(selector)) {
+          scan(body);
+        }
+      } else if (selector !== "") {
+        found.push({ selectorText: selector, cssText: `${selector}{${body}}` });
+      }
+      at = close;
+    }
+  };
+  scan(text.replace(/\/\*[\s\S]*?\*\//g, ""));
+  return found;
 };
 
 const check = (what, got, want) => {
@@ -566,6 +628,77 @@ console.log("\nevery state the contract can produce, drawn");
   );
 }
 
+console.log("\nthe field a measurement is written into");
+{
+  // BUG-1 of the independent review, and the shape of it rather than one colour: the tape
+  // reading's card is `class="reading big"`, where "big" means "the 64 px field of a
+  // measurement" - and the 64 px *button* was `.big` too. Same specificity, so `.reading`
+  // won back the background and not the colour, and the label, the number and the caret
+  // were painted `--myhome-text-on-primary`: white on a white card, on every tape reading
+  // of every route.
+  //
+  // What is asserted is that no rule written for a filled button reaches the field. It is
+  // read off the stylesheets the shadow root really carries rather than off a colour,
+  // because jsdom resolves no custom property - and because the next collision of two
+  // meanings of one word will not be this one.
+  const bench = gateway({ session: scenario("awaiting_reading_measure_descent") });
+  const { settle, find } = await mount(bench.connection);
+  await settle(160);
+  const card = find(".reading");
+  checkThat("the reading's card is on the screen", card);
+  const label = card?.querySelector("label");
+  const input = card?.querySelector("input");
+  checkThat("with its label and its field in it", label && input);
+  const root = card?.getRootNode();
+  // jsdom parses no stylesheet inside a shadow root - `style.sheet` is null and
+  // `adoptedStyleSheets` carries no rules - so the text is split here. Selectors and
+  // declarations is all this needs, and `element.matches` is jsdom's own.
+  const rules = splitRules(
+    [...(root?.querySelectorAll?.("style") ?? [])].map((style) => style.textContent ?? "").join("\n"),
+  );
+  checkThat(`the screen's stylesheets were read (${rules.length} rules)`, rules.length > 0);
+  const reaching = (element) =>
+    rules.filter((rule) => {
+      try {
+        return element.matches(rule.selectorText);
+      } catch {
+        return false;
+      }
+    });
+  const painted = [...reaching(card), ...(input ? reaching(input) : []), ...(label ? reaching(label) : [])]
+    .filter((rule) => /--myhome-text-on-primary|--myhome-primary\)/.test(rule.cssText));
+  checkThat(
+    painted.length === 0
+      ? "no rule written for a filled button reaches it"
+      : `a button's rule reaches the field: ${painted.map((one) => one.selectorText).join(", ")}`,
+    painted.length === 0,
+  );
+  // …and the rule that really is the button still reaches the button.
+  const big = find("button.big");
+  const onBig = big ? reaching(big).filter((rule) => /min-height: ?64px/.test(rule.cssText)) : [];
+  checkThat("and the button still has the rule that makes it 64 px", onBig.length > 0);
+}
+
+console.log("\nstopping the shutter in the middle of a timed run");
+{
+  // BUG-2: `stop` is a verb of the contract and not one of the step's `menu_options`, so it
+  // is never in `actions` and the screen has to offer it itself (SPEC §5.4, decision 10).
+  // These are the three moments the shutter is really running towards an end stop.
+  const bench = gateway({ session: scenario("running_open_lift") });
+  const { settle, find, all } = await mount(bench.connection);
+  await settle(160);
+  const stop = all("button").find((button) => (button.textContent ?? "").includes("Stop the shutter"));
+  checkThat("a run under way offers to stop the shutter", stop);
+  check("and nothing has been stopped by arriving", bench.sessions("stop"), 0);
+  stop?.click();
+  await settle(160);
+  check("pressing it sends the stop verb, once", bench.sessions("stop"), 1);
+  check("and nothing else", bench.sessions("act"), 0);
+  // The screen it advances to is the step made repeatable, which is the server's business;
+  // what matters here is that the panel has a way to interrupt the one thing that moves.
+  checkThat("the wizard is still on the screen", find("[data-wizard]"));
+}
+
 console.log("\nthe stylesheets the bundle ships");
 {
   // A Lit stylesheet that arrives with no text in it costs a screen its whole appearance
@@ -576,16 +709,11 @@ console.log("\nthe stylesheets the bundle ships");
   // rule of the eight step templates was dropped. jsdom resolves no CSS and could not see
   // it; this can, because `cssText` is a string either way.
   const bench = gateway({ session: scenario("briefing_open_brief") });
-  const { window } = await mount(bench.connection);
+  const defined = [];
+  const { window } = await mount(bench.connection, "#/calibrate", null, defined);
   const empty = [];
-  for (const tag of [
-    "myhome-calibration-panel",
-    "myhome-screen",
-    "myhome-wizard",
-    "myhome-overview",
-    "myhome-cover-detail",
-    "myhome-profile-card",
-  ]) {
+  checkThat(`the bundle registered ${defined.length} elements`, defined.length >= 6);
+  for (const tag of defined) {
     const element = window.customElements.get(tag);
     // `styles` is a `CSSResultGroup`: a stylesheet, or a nest of arrays of them (several
     // components export `[sheetStyles, css`…`]`), so it is flattened before it is read.

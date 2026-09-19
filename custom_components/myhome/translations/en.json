@@ -1036,7 +1036,8 @@
       "motor": {
         "starting": "starting…",
         "moving": "running for {seconds} s",
-        "stopped": "stopped"
+        "stopped": "stopped",
+        "position": "{percent}%"
       },
       "press": {
         "registered": "Press registered ✓",

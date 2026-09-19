@@ -118,8 +118,18 @@ export const templateStyles = css`
     margin: 0 0 12px;
   }
 
-  /* The one big button, 64 px, in the same place on every step. */
-  .big {
+  /*
+   * The one big button, 64 px, in the same place on every step.
+   *
+   * **button.big and not .big.** The tape reading's card is class="reading big" -
+   * "big" there means "the 64 px field of a measurement", a different thing with the same
+   * word - and a bare .big reached it at equal specificity. .reading is declared after
+   * and won back the background, the radius and the padding, but not the colour, so the
+   * label, the number and the caret were painted --myhome-text-on-primary: white on a
+   * white card, on every tape reading of every route. Naming the element is what keeps the
+   * two meanings of the word apart.
+   */
+  button.big {
     width: 100%;
     min-height: 64px;
     border: none;
@@ -133,12 +143,12 @@ export const templateStyles = css`
     box-shadow: var(--myhome-shadow);
   }
 
-  .big.moving {
+  button.big.moving {
     background: var(--myhome-accent);
     color: var(--myhome-text-on-accent);
   }
 
-  .big[disabled] {
+  button.big[disabled] {
     background: var(--myhome-background-soft);
     color: var(--myhome-text-off);
     cursor: default;
@@ -428,11 +438,6 @@ export const templateStyles = css`
     line-height: 1.55;
   }
 
-  /*
-   * The strip a screen wears while somebody else is driving. Above everything, because it
-   * is the answer to "why is nothing here pressable" and a reader who meets it after the
-   * step's prose has already tried.
-   */
   /* What the panel adds under a step's own prose: the numbers a check was made of. */
   .aside {
     margin: 0 0 12px;
@@ -441,6 +446,11 @@ export const templateStyles = css`
     color: var(--myhome-text-soft);
   }
 
+  /*
+   * The strip a screen wears while somebody else is driving. Above everything, because it
+   * is the answer to "why is nothing here pressable" and a reader who meets it after the
+   * step's prose has already tried.
+   */
   .read-only {
     display: flex;
     flex-wrap: wrap;
@@ -506,15 +516,8 @@ export const templateStyles = css`
   }
 
   @media (min-width: 900px) {
-    /* What the panel adds under a step's own prose: the numbers a check was made of. */
-  .aside {
-    margin: 0 0 12px;
-    font-size: 13.5px;
-    line-height: 1.55;
-    color: var(--myhome-text-soft);
-  }
-
-  .read-only {
+    /* The strip spans the two columns, so it lines up with them and not with the page. */
+    .read-only {
       margin: 0 auto;
       max-width: 1080px;
       width: calc(100% - 64px);

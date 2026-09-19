@@ -70,11 +70,16 @@ type AudioContextLike = new () => {
   close(): void;
 };
 
-/** 880 Hz for eighty milliseconds: short enough not to be a noise, high enough to carry. */
-const tone = (): void => {
+/**
+ * 880 Hz for eighty milliseconds: short enough not to be a noise, high enough to carry.
+ *
+ * It answers whether anything was really played. A browser with no `AudioContext` is not a
+ * browser that beeped quietly, and `signalStart` used to report a signal either way.
+ */
+const tone = (): boolean => {
   const Constructor = (globalThis as { AudioContext?: AudioContextLike }).AudioContext;
   if (!Constructor) {
-    return;
+    return false;
   }
   const audio = new Constructor();
   const oscillator = audio.createOscillator();
@@ -96,6 +101,7 @@ const tone = (): void => {
       // Already closed, or closing twice: neither is worth a word.
     }
   }, 200);
+  return true;
 };
 
 /**
@@ -121,8 +127,7 @@ export const signalStart = (on: boolean): boolean => {
     // A browser that has the method and refuses it: nothing to do and nothing to say.
   }
   try {
-    tone();
-    signalled = true;
+    signalled = tone() || signalled;
   } catch {
     // No audio context, or one the browser will not start without a gesture.
   }
