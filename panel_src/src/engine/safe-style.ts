@@ -1,26 +1,26 @@
-// The illustration a step can carry, and the check that keeps it from being a stylesheet.
+// The illustration a step can carry, and the check that keeps it from being an address
+// of somebody else's.
 //
 // It lives beside `engine/screen.ts` rather than inside it for one reason: the rule below
 // is the panel's only piece of security-relevant arithmetic that a unit test can reach
 // without a DOM. `screen.ts` is a Lit element and registers itself on import; this is
 // three regular expressions and a function.
 
-/** The illustration of a step: a path this integration serves, and how to lay it out. */
+/** The illustration of a step: a path this integration serves, and its description. */
 export interface ScreenImage {
   src: string;
   alt: string;
-  size?: string;
-  pos?: string;
 }
 
-// The drawing is the one place a step's model reaches CSS, and CSS built by joining
-// strings is CSS somebody else can add declarations to: a `src` carrying `");` would turn
-// the illustration slot into any rule it liked, including a full-screen overlay and a
-// request to a host nobody chose. So the three values are checked here, at the point of
-// use, rather than trusted from wherever the model was built - `splitLeadingImage` already
-// refuses an image from outside `/myhome_static/`, and this says the same thing again where
-// it cannot be skipped. They are then set through `styleMap`, which writes one property at
-// a time and cannot grow a second declaration.
+// The drawing used to be a `background-image` built by joining strings, and CSS built by
+// joining strings is CSS somebody else can add declarations to: a `src` carrying `");`
+// would turn the illustration slot into any rule it liked, including a full-screen overlay
+// and a request to a host nobody chose. It is an `<img>` now - because a box with a
+// background can only ever guess at the shape of what is inside it, and guessing is what
+// cropped three of the wizard's drawings (live findings 10, 14 and 19) - but the address
+// is still checked here, at the point of use, rather than trusted from wherever the model
+// was built. `splitLeadingImage` already refuses an image from outside `/myhome_static/`,
+// and this says the same thing again where it cannot be skipped.
 
 /** A path this integration serves, and nothing else: no scheme, no host, no quoting. */
 const SAFE_SRC = /^\/myhome_static\/[A-Za-z0-9._~\-/]+$/;
@@ -38,18 +38,14 @@ const DOT_SEGMENT = /(^|\/)\.\.?(\/|$)/;
  */
 export const servedByUs = (src: string): boolean =>
   SAFE_SRC.test(src) && !DOT_SEGMENT.test(src);
-/** `background-size` / `background-position`: lengths, percentages and the CSS keywords. */
-const SAFE_VALUE = /^[A-Za-z0-9 %.,\-]+$/;
 
-export const drawingStyle = (image: ScreenImage): Record<string, string> | null => {
-  if (!servedByUs(image.src)) {
-    return null;
-  }
-  const size = image.size && SAFE_VALUE.test(image.size) ? image.size : "100% auto";
-  const position = image.pos && SAFE_VALUE.test(image.pos) ? image.pos : "50% 60%";
-  return {
-    backgroundImage: `url("${image.src}")`,
-    backgroundSize: size,
-    backgroundPosition: position,
-  };
-};
+/**
+ * The address the `<img>` is given, or `null` when the step points anywhere else.
+ *
+ * Nothing about the shape of the drawing is decided here any more. The element is laid out
+ * by `.drawing` alone - full width, its own height, `object-fit: contain` - so the picture
+ * that arrives is the picture that is shown, whatever its proportions and whatever the
+ * width of the column it lands in.
+ */
+export const drawingSrc = (image: ScreenImage): string | null =>
+  servedByUs(image.src) ? image.src : null;

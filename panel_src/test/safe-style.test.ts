@@ -1,32 +1,27 @@
-// The illustration slot: the one place a value the panel did not write reaches CSS.
+// The illustration slot: the one place a value the panel did not write reaches the DOM.
 //
-// A step's drawing is a background image, and a background image used to be built by
-// joining strings - which meant a `src` carrying `");` could add declarations of its own
-// and turn the slot into a full-screen overlay fetching from a host nobody chose. REVIEW
-// lot 5 found it and fixed it; this is the assertion that was missing underneath.
+// A step's drawing used to be a background image built by joining strings - which meant a
+// `src` carrying `");` could add declarations of its own and turn the slot into a
+// full-screen overlay fetching from a host nobody chose. REVIEW lot 5 found it and fixed
+// it; this is the assertion that was missing underneath. The drawing is an `<img>` now
+// (live findings 10, 14 and 19: a box with a background crops whatever does not match its
+// shape), so no string is joined into CSS any more - but the address is still the
+// translation files' and is still checked here before anything asks for it.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { drawingStyle } from "../src/engine/safe-style";
+import { drawingSrc } from "../src/engine/safe-style";
 
 describe("a drawing the integration serves", () => {
-  it("is three properties and the documented defaults", () => {
-    assert.deepEqual(drawingStyle({ src: "/myhome_static/metro.webp", alt: "" }), {
-      backgroundImage: 'url("/myhome_static/metro.webp")',
-      backgroundSize: "100% auto",
-      backgroundPosition: "50% 60%",
-    });
+  it("is the address itself, and nothing about its shape", () => {
+    assert.equal(drawingSrc({ src: "/myhome_static/metro.webp", alt: "" }), "/myhome_static/metro.webp");
   });
 
-  it("keeps a size and a position that are lengths and keywords", () => {
-    assert.deepEqual(
-      drawingStyle({ src: "/myhome_static/a.webp", alt: "", size: "contain", pos: "50% 40%" }),
-      {
-        backgroundImage: 'url("/myhome_static/a.webp")',
-        backgroundSize: "contain",
-        backgroundPosition: "50% 40%",
-      },
+  it("does not care what the step called it", () => {
+    assert.equal(
+      drawingSrc({ src: "/myhome_static/a/b_c-1.webp", alt: "the bottom edge" }),
+      "/myhome_static/a/b_c-1.webp",
     );
   });
 });
@@ -41,7 +36,7 @@ describe("a drawing from anywhere else is not drawn", () => {
       "/myhome_static/../secret.png",
       "/myhome_static/a/../../secret.png",
     ]) {
-      assert.equal(drawingStyle({ src, alt: "" }), null, src);
+      assert.equal(drawingSrc({ src, alt: "" }), null, src);
     }
   });
 
@@ -62,31 +57,17 @@ describe("a drawing from anywhere else is not drawn", () => {
       // The prefix alone, with no file after it, is not a drawing either.
       "/myhome_static/",
     ]) {
-      assert.equal(drawingStyle({ src, alt: "" }), null, src);
+      assert.equal(drawingSrc({ src, alt: "" }), null, src);
     }
   });
 
   it("refuses a src that tries to close the url and open a declaration", () => {
     assert.equal(
-      drawingStyle({
+      drawingSrc({
         src: '/myhome_static/a.png");background-color:red;--x:url("',
         alt: "",
       }),
       null,
     );
-  });
-
-  it("falls back to the defaults for a size or a position carrying anything else", () => {
-    const style = drawingStyle({
-      src: "/myhome_static/a.webp",
-      alt: "",
-      size: "auto;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999",
-      pos: "50% 60%;background:url(https://evil.example/x.png)",
-    });
-    assert.deepEqual(style, {
-      backgroundImage: 'url("/myhome_static/a.webp")',
-      backgroundSize: "100% auto",
-      backgroundPosition: "50% 60%",
-    });
   });
 });

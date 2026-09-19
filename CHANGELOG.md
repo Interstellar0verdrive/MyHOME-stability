@@ -258,6 +258,14 @@ the panel when it is in the way.
   the fraction the shutter was last sent to, with the slat phase counted only on the
   run that goes through it. Nothing is measured from it: it is a progress bar, and the
   step still ends when the shutter stops and never when the bar fills.
+- **The illustrations of the calibration are shown whole.** Three of the five — the full
+  ascent, the curtain travel and the reading taken half way along it — lost their top and
+  their bottom on every screen that carried them, on a desktop and on a phone alike. The
+  slot they go through was a box of a fixed height with the picture as its background,
+  which is a box that decides the shape of whatever is put in it; it is an image now,
+  taking its height from the drawing rather than the other way round, so nothing is cut
+  at any width. A check walks every screen of the calibration at 1280 and at 390 px and
+  says, drawing by drawing, that the whole of it fits.
 
 ## [0.5.0] - 2026-09-13
 
