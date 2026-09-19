@@ -209,7 +209,15 @@ async def session_events(
 async def test_the_ten_commands_are_registered_under_the_one_flag(
     hass: HomeAssistant, tmp_path
 ) -> None:
-    """A command name is global, so the session's ten go up with the other fourteen."""
+    """A command name is global, so the session's ten go up with the other fourteen.
+
+    Membership only. What closes the door - every registered command compared with the
+    two tuples `panel_schemas` declares, and with a payload per command behind the admin
+    check - is
+    `test_panel_security.py::test_the_map_below_names_every_command_the_integration_registers`
+    and the parametrised refusal beside it. Nothing here would notice an eleventh
+    command.
+    """
     async with setup_myhome(hass, tmp_path, YAML) as (_entry, _commands):
         registered = hass.data["websocket_api"]
         for command in WS_SESSION_COMMANDS:

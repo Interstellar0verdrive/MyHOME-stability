@@ -500,6 +500,13 @@ def _session_row(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any] | No
     be two places to keep in step. The import is inside the function because
     `calibration_session` reads this module: the session is built out of the panel's
     view of a gateway, and the overview only borrows a line back from it.
+
+    **This read has one side effect**, and it is deliberate: `current()` forgets a
+    session that ended more than ten minutes ago, which is how this key goes back to
+    `null` by itself. So an overview built at any moment is right, and no timer is
+    needed to make it so - but a reader expecting a pure read should know that the
+    tenth-minute forgetting happens here, in the first overview anybody asks for after
+    it falls due.
     """
     from .calibration_session import current  # noqa: PLC0415 - the cycle is the point
 

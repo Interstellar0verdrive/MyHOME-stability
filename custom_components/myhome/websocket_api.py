@@ -714,6 +714,21 @@ def _refuse(
 
 
 @callback
+def _unknown_session() -> PanelError:
+    """The one refusal two commands make, so that they make it in the same words.
+
+    `cancel` cannot go through `_the_session` - its `session_id` is optional and its
+    absence means "the gateway's session, whichever it is" - so the check is written
+    twice; the sentence, the code and the key are written once.
+    """
+    return PanelError(
+        websocket_api.ERR_NOT_FOUND,
+        ERROR_UNKNOWN_SESSION,
+        "No calibration session with that id on this gateway",
+    )
+
+
+@callback
 def _the_session(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
@@ -730,13 +745,7 @@ def _the_session(
     session = current(hass, entry)
     if session is not None and session.session_id == msg["session_id"]:
         return session
-    connection.send_error(
-        msg["id"],
-        websocket_api.ERR_NOT_FOUND,
-        "No calibration session with that id on this gateway",
-        translation_key=ERROR_UNKNOWN_SESSION,
-        translation_domain=DOMAIN,
-    )
+    _refuse(connection, msg, _unknown_session())
     return None
 
 
@@ -813,19 +822,22 @@ async def websocket_session_start(
 async def websocket_session_attach(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Read the session as this client, taking it over where that is allowed."""
+    """Read the session as this client, taking it over where that is allowed.
+
+    The one verb with no refusal of its own to catch: `attach` changes hands only with
+    `claim` (which overrides the owner), only while the owner is absent, or only for the
+    client that already owns it, and `_check_owner` refuses in none of those three. It
+    is answered like the reads and not like the verbs for that reason.
+    """
     entry = _entry(hass, connection, msg)
     if entry is None:
         return
     session = _the_session(hass, connection, msg, entry)
     if session is None:
         return
-    try:
-        answer = session.attach(msg["client_id"], msg.get("claim", False))
-    except PanelError as err:
-        _refuse(connection, msg, err)
-        return
-    connection.send_result(msg["id"], {"session": answer})
+    connection.send_result(
+        msg["id"], {"session": session.attach(msg["client_id"], msg.get("claim", False))}
+    )
 
 
 @websocket_api.require_admin
@@ -939,13 +951,7 @@ async def websocket_session_cancel(
         return
     named = msg.get("session_id")
     if named is not None and named != session.session_id:
-        connection.send_error(
-            msg["id"],
-            websocket_api.ERR_NOT_FOUND,
-            "No calibration session with that id on this gateway",
-            translation_key=ERROR_UNKNOWN_SESSION,
-            translation_domain=DOMAIN,
-        )
+        _refuse(connection, msg, _unknown_session())
         return
     try:
         answer = await session.async_cancel(msg["client_id"], msg.get("force", False))
