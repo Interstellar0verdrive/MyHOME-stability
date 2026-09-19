@@ -525,7 +525,13 @@ export const STATES = [
   // fixture that produces it, so that what is audited is a screen the server can really
   // send rather than one this file invented.
   { name: "the wizard, a session running", state: "calibrating", hash: "#/calibrate", expect: "[data-wizard]" },
-  { name: "the wizard, no session", state: "ready", hash: "#/calibrate", expect: "myhome-wizard" },
+  // No session on the gateway is the choice of shutter (lot F3), not an empty card: the
+  // `expect` names the picker so that a route that stopped drawing it would fail here
+  // rather than audit a screen with nothing on it and pass.
+  { name: "the wizard, no session", state: "ready", hash: "#/calibrate", expect: "[data-wizard-pick]" },
+  // …and the gateway where there is nothing to calibrate, which is the same address with
+  // an empty list behind it.
+  { name: "the wizard, nothing to calibrate", state: "no-basic-covers", hash: "#/calibrate", expect: "[data-wizard-empty]" },
   ...WIZARD_SCREENS,
 ];
 

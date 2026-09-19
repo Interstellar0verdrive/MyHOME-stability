@@ -2065,6 +2065,9 @@ export class MyHomeCalibrationPanel extends LitElement {
 
   private _wizardActions: WizardActions = {
     refresh: () => void this._readSession(),
+    // The choice of shutter is a screen of the wizard, so opening a session from it is the
+    // shell's one road in - the same `_calibrate` every button of lot F3 goes through.
+    start: (intent) => void this._calibrate(intent),
     act: (action, value) => void this._actSession(action, value),
     stop: () => void this._stopSession(),
     save: (target) => void this._saveSession(target),

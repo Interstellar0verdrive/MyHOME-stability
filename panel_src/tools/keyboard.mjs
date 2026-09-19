@@ -363,6 +363,36 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+// --- the choice of shutter (lot F3) -----------------------------------------------------
+{
+  console.log("\nthe guided calibration, the choice of shutter");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, choosing a shutter",
+    state: "ready",
+    hash: "#/calibrate",
+    expect: "[data-wizard-pick]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const options = deepAll(panel.shadowRoot, ".options button.option");
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  check("every shutter on it is reachable", options.length > 0 && options.every((one) => stops.includes(one)),
+    `${options.length} shutters`);
+  check("and each of them is a button, so Enter and Space choose it",
+    options.every((one) => one.tagName === "BUTTON"));
+  check("arriving on the choice starts nothing", !calls.includes("start") && !calls.includes("attach"),
+    calls.join(", ") || "nothing sent");
+  options[0]?.click();
+  await settle();
+  check("choosing one opens exactly one session", calls.filter((one) => one === "start").length === 1,
+    calls.join(", "));
+  // The intention travels in the store, so the address stays the wizard's own and carries
+  // nothing that could reopen a session on a reload (SPEC §5.1).
+  check("and the address still says nothing about which shutter",
+    dom.window.location.hash === "#/calibrate", dom.window.location.hash);
+  dom.window.close();
+}
+
 const failed = checks.filter((one) => !one.ok);
 console.log(`\n${checks.length} checks, ${failed.length} failed`);
 process.exit(failed.length === 0 ? 0 : 1);

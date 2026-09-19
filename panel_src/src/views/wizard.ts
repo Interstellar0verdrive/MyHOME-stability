@@ -45,7 +45,9 @@ import {
 } from "../engine/session-contract";
 import { type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "../engine/theme";
+import { type WizardIntent } from "../engine/session";
 import { type HomeAssistant } from "../types/ha";
+import { coverOf, coverPickerModel } from "../components/cover-picker";
 import { exitDialog, exitDialogStyles } from "../components/exit-dialog";
 import {
   ACT,
@@ -92,6 +94,14 @@ export interface WizardActions {
   exit(open: boolean): void;
   /** Measure another shutter. */
   again(): void;
+  /**
+   * Open a session on the shutter the user just chose (lot F3).
+   *
+   * It is the shell's `calibrate`, the one road into a session, and it is here because the
+   * choice of shutter is a screen of the wizard: pressing a row on it is the same gesture
+   * as pressing "Misura di nuovo" on a shutter's card.
+   */
+  start(intent: WizardIntent): void;
   /** The card of the shutter that was just calibrated. */
   openCover(cover: string): void;
   /** Back to the list. */
@@ -109,6 +119,7 @@ const NO_ACTIONS: WizardActions = {
   force: () => undefined,
   exit: () => undefined,
   again: () => undefined,
+  start: () => undefined,
   openCover: () => undefined,
   back: () => undefined,
 };
@@ -268,15 +279,7 @@ export class MyHomeWizard extends LitElement {
   private _renderSession(): TemplateResult {
     const session: SessionSnapshot | null = this.state.session ?? null;
     if (!session) {
-      return html`<div class="card">
-        <h2>${this.i18n.t("panel.wizard.title")}</h2>
-        <p>${this.i18n.t("panel.wizard.none")}</p>
-        <div class="actions">
-          <button class="cta text" type="button" @click=${() => this.actions.back()}>
-            ${this.i18n.t("panel.common.action.back")}
-          </button>
-        </div>
-      </div>`;
+      return this._renderPick();
     }
     this._rememberField(session);
     const model = screenModel(session, {
@@ -295,6 +298,38 @@ export class MyHomeWizard extends LitElement {
       ${liveRegion(model.announce ?? "")}${alertRegion(model.alert ?? "")}
       <myhome-screen
         .model=${model}
+        .i18n=${this.i18n}
+        @myhome-screen-action=${this._onScreenAction}
+      ></myhome-screen>
+    </div>`;
+  }
+
+  /**
+   * No session on the gateway: the choice of which shutter to measure (SPEC §5.1).
+   *
+   * This is what the address alone produces - a reload, a pasted link, "Calibra un'altra
+   * tapparella" - and it is a screen and not an instruction: nothing moves until a row is
+   * pressed. The list is `overview.covers`, which the server has already narrowed to the
+   * shutters a travel model applies to.
+   */
+  private _renderPick(): TemplateResult {
+    const covers = this.state.overview?.covers ?? [];
+    if (covers.length === 0) {
+      // A gateway whose shutters all report their own position: there is nothing here to
+      // calibrate, and the overview's own sentence says so in every language already.
+      return html`<div class="card" data-wizard-empty>
+        <h2>${this.i18n.t("panel.overview.no_basic_covers_title")}</h2>
+        <p>${this.i18n.t("panel.overview.no_basic_covers")}</p>
+        <div class="actions">
+          <button class="cta text" type="button" @click=${() => this.actions.back()}>
+            ${this.i18n.t("panel.common.action.back")}
+          </button>
+        </div>
+      </div>`;
+    }
+    return html`<div data-wizard-pick>
+      <myhome-screen
+        .model=${coverPickerModel(this.i18n, covers)}
         .i18n=${this.i18n}
         @myhome-screen-action=${this._onScreenAction}
       ></myhome-screen>
@@ -467,6 +502,15 @@ export class MyHomeWizard extends LitElement {
     }
     if (action.startsWith(PICK)) {
       this.actions.act("submit", action.slice(PICK.length));
+      return;
+    }
+    // The choice of shutter, which is the one screen here that has no session behind it:
+    // pressing a row is what opens one, with the shutter in the intention and never in
+    // the address.
+    const picked = coverOf(action);
+    if (picked !== null) {
+      const cover = (this.state.overview?.covers ?? []).find((one) => one.unique_id === picked);
+      this.actions.start({ cover: picked, name: cover?.name });
       return;
     }
     if (action.startsWith(ACT)) {

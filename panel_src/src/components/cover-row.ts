@@ -304,8 +304,12 @@ export interface CoverRowContext {
  * A shutter on its way into a profile with no travel recorded says "corsa da inserire"
  * rather than "corsa non indicata": the first is a thing the user is about to be asked
  * for, the second is a fact about a shutter nobody is moving.
+ *
+ * Exported because the wizard's choice of shutter (`components/cover-picker.ts`) draws the
+ * same second line, and two wordings for "Cucina · corsa 195 cm" would be two things to
+ * translate and two things to drift.
  */
-const subtitle = (i18n: I18n, cover: CoverRow, needsTravel: boolean): string => {
+export const coverSubtitle = (i18n: I18n, cover: CoverRow, needsTravel: boolean): string => {
   const travel =
     cover.height !== null
       ? i18n.t("panel.overview.cover.travel", { travel: i18n.number(cover.height, 0) })
@@ -377,7 +381,7 @@ export const coverRow = (cover: CoverRow, context: CoverRowContext): TemplateRes
       <button class="main" type="button" title=${cover.name} aria-describedby=${chipsId}
         @click=${() => context.onOpen(cover)}>
         <span class="name">${cover.name}</span>
-        <span class="sub">${subtitle(i18n, cover, needsTravel)}</span>
+        <span class="sub">${coverSubtitle(i18n, cover, needsTravel)}</span>
         ${note ? html`<span class="note">${note}</span>` : nothing}
         ${cover.profile_missing
           ? html`<span class="warn"

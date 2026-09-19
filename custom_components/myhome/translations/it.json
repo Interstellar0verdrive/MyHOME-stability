@@ -1006,7 +1006,6 @@
     },
     "wizard": {
       "title": "Calibrazione guidata",
-      "none": "Nessuna calibrazione è in corso su questo gateway.",
       "action": {
         "end": "Termina la calibrazione",
         "claim": "Prendi il controllo",
@@ -1139,6 +1138,10 @@
           "title": "Non c'era niente con cui confrontare",
           "body": "Il metro ha letto {measured} cm al {percent}% della corsa, ma i valori che {cover} seguiva non ci sono più, quindi non c'è nessuna previsione da confrontare. La lettura non è stata buttata: si può proseguire, e il riepilogo dice che cosa verrebbe salvato."
         }
+      },
+      "pick": {
+        "title": "Quale tapparella misurare?",
+        "body": "Sono elencate solo le tapparelle di cui Home Assistant stima la posizione dai tempi di corsa: sono le uniche che questa calibrazione riguarda. La prima volta conviene scegliere una tapparella rappresentativa del suo tipo e comoda da misurare."
       }
     },
     "screen": {

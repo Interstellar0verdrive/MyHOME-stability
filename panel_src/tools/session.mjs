@@ -462,16 +462,19 @@ console.log("\nthe wizard's address, opened with no session on the gateway");
   // followed from a link somebody pasted - at this address finds a session or finds
   // nothing, and never an instruction to set a shutter moving.
   const bench = gateway({ session: null });
-  const { settle, find } = await mount(bench.connection, "#/calibrate/00:03:50:aa:bb:cc-2-81");
+  const { settle, find, all } = await mount(bench.connection, "#/calibrate/00:03:50:aa:bb:cc-2-81");
   await settle(200);
   checkThat("the wizard is drawn", find("myhome-wizard"));
   check("the session was read", bench.sessions("get") > 0, true);
   check("and nothing was started", bench.sessions("start"), 0);
   check("nor attached to", bench.sessions("attach"), 0);
   check("nor acted", bench.sessions("act"), 0);
+  // What the address alone produces is the *question* (lot F3), never an answer to it:
+  // the shutter the identifier in the address names is one row of a list of them.
+  checkThat("the screen asks which shutter to measure", find("[data-wizard-pick]"));
   checkThat(
-    "the screen says there is no calibration running",
-    (find("myhome-wizard")?.shadowRoot?.textContent ?? "").includes("No calibration is running"),
+    "and it offers every shutter of the gateway, not the one that was in the address",
+    all(".options button.option").length === overviewFixture.covers.length,
   );
 }
 

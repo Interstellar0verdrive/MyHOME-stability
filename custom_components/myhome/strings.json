@@ -1006,7 +1006,6 @@
     },
     "wizard": {
       "title": "Guided calibration",
-      "none": "No calibration is running on this gateway.",
       "action": {
         "end": "End the calibration",
         "claim": "Take control",
@@ -1139,6 +1138,10 @@
           "title": "There was nothing to check against",
           "body": "The tape read {measured} cm at {percent}% of the travel, but the values {cover} was following are no longer there, so there is no prediction to compare it with. The reading has not been thrown away: go on, and the review says what would be saved."
         }
+      },
+      "pick": {
+        "title": "Which shutter is being measured?",
+        "body": "Only the shutters whose position Home Assistant works out from their run times are listed: they are the only ones this calibration is about. The first time round it is worth choosing a shutter that is representative of its type and easy to measure."
       }
     },
     "screen": {
