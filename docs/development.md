@@ -83,6 +83,30 @@ audits:
 pytest tests -q --cov=custom_components/myhome --cov-report=term-missing
 ```
 
+### The panel's own checks
+
+`pytest` and `ruff` cover the Python; the panel's TypeScript is checked by its own
+scripts, which need Node and are **not** run by `pytest`. From `panel_src/`, after
+`npm ci`:
+
+```bash
+npm run check      # tsc over the sources and over the tests
+npm test           # the unit tests of the models and the engine
+npm run contrast   # every colour pair the panel draws, against 4.5:1
+npm run a11y       # axe over every state of every screen, in jsdom
+npm run keyboard   # focus, roving tabindex and what the screen reader is told
+npm run socket     # the committed bundle against a WebSocket that misbehaves
+npm run session    # the committed bundle against a calibration session that misbehaves
+npm run build      # rebuilds custom_components/myhome/frontend/myhome-panel.js
+```
+
+The last one is the only one that writes anything, and the file it writes is
+**committed**: after a change to `panel_src/`, `git diff --exit-code
+custom_components/myhome/frontend` must be clean in the same commit as the sources.
+`.github/workflows/panel.yml` runs that comparison. `panel_src/README.md` has what each
+check is for and the rules the frontend code follows; `dev/harness.html` is the same
+panel against a fixture, opened from a file and needing no Home Assistant.
+
 The tests never talk to a real gateway: `tests/test_gateway.py` and
 `tests/test_init.py` spin up a loopback fake OpenWebNet server instead.
 `tests/fixtures/myhome.yaml` is a fictional home — invented names and addresses

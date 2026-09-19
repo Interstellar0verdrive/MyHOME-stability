@@ -3,14 +3,19 @@
 A full-page screen inside Home Assistant that shows every basic cover of a MyHOME
 gateway grouped by the profile it follows, and lets you move covers between those
 groups, correct what was measured and look after the profiles themselves. It is the
-management half of the [guided calibration](guided-calibration.md) taken out of a
-dialog: the same stored data, the same rules about what beats what, on a page you
-can see all of at once.
+[guided calibration](guided-calibration.md) taken out of a dialog: the same stored
+data, the same rules about what beats what, on a page you can see all of at once.
 
-It never moves a shutter and it never measures one. Everything that leads to a
-measurement opens the *Configure* dialog, which stays the only place the guided
-calibration runs — and stays a complete alternative to the panel for everything the
-panel does.
+**Measuring a cover happens here too.** Every button that leads to a measurement —
+*Measure a cover* on the overview, *Measure again* and *Correct…* on a cover's card —
+opens the calibration on the page the user is already standing on, at
+`/myhome-calibration#/calibrate`. The *Configure* dialog is unchanged and stays a
+complete alternative for everything the panel does, measuring included; a calibration
+held by that dialog is recognised for what it is and can be closed from here when it
+is in the way.
+
+Outside that calibration the panel only reads the bus: the management screens move
+nothing.
 
 Available since **0.6.0**. For the WebSocket commands behind it, see
 [The panel's WebSocket API](panel-websocket-api.md).
@@ -24,6 +29,7 @@ Available since **0.6.0**. For the WebSocket commands behind it, see
 - [Reordering](#reordering)
 - [The cover detail](#the-cover-detail)
 - [The profile card](#the-profile-card)
+- [Measuring a cover](#measuring-a-cover)
 - [When changes take effect](#when-changes-take-effect)
 - [What the panel never does](#what-the-panel-never-does)
 - [Troubleshooting](#troubleshooting)
@@ -31,9 +37,9 @@ Available since **0.6.0**. For the WebSocket commands behind it, see
 
 ## What it is for
 
-For the house with more than two or three shutters. One cover is measured well in
-the dialog and the others are told to follow it, and doing that in a menu — one
-selector per cover, one screen at a time — hides the only thing worth looking at:
+For the house with more than two or three shutters. One cover is measured well and
+the others are told to follow it, and doing that in a menu — one selector per cover,
+one screen at a time — hides the only thing worth looking at:
 which covers are on which profile, and which ones are on nothing at all. The panel
 draws that as groups, and assigning a cover is moving it from one group to another.
 
@@ -147,8 +153,8 @@ room to be filtered by.
 
 A gateway with no profile at all does not show an empty list. It shows **No profile
 yet**, a paragraph on what a profile is, and **Measure a cover**, which opens the
-*Configure* dialog where the measuring happens. When it is done the profile appears
-here.
+calibration here and asks which shutter to measure. When it is done the profile
+appears here.
 
 ## Assigning covers to profiles
 
@@ -298,20 +304,21 @@ afterwards.
 
 The measurements cannot be recovered. Getting them back means measuring again.
 
-### Back to the dialog
+### Measuring it again, and correcting it
 
-Three controls lead to the guided calibration, which lives in the *Configure* dialog:
+Three controls open the [calibration](#measuring-a-cover) **on this cover**, without
+leaving the panel and without asking which cover it is again:
 
 | Control | What it opens |
 |---|---|
-| **Measure again** | the full basic calibration of this cover |
+| **Measure again** | the calibration from the start; the route is chosen on the first screen |
 | **Correct…** | the correction, in one of its three scopes — **Times only**, **Times and rolls**, **Thorough calibration only** |
 | **Thorough calibration** | the readings at 25 and 75 % per direction, and the check |
 
-The panel cannot hand the dialog a cover: the dialog opens on its own menu and takes
-no argument. So the control names the path, the dialog opens, and you pick the same
-cover there. When the dialog closes, the panel notices and refreshes on its own —
-there is nothing to reload by hand.
+A correction starts from the profile the cover should follow, so on a gateway that has
+no profile at all **Correct…** and **Thorough calibration** cannot be pressed and say
+why: there is nothing to correct against, and **Measure again** is the answer — a
+profile is born at the end of it.
 
 ## The profile card
 
@@ -354,6 +361,52 @@ rather than counted.
 
 A profile that lives in the configuration file offers none of the three and says why.
 
+## Measuring a cover
+
+The guided calibration runs at `/myhome-calibration#/calibrate`, inside the panel, on
+the same page as everything above. It is the same conversation as *Configure →
+"Calibrate a cover"* — the same routes, the same presses, the same arithmetic and the
+same three tape readings — drawn as a full page instead of a dialog. The whole of it is
+described in [Guided calibration](guided-calibration.md); what follows is what is
+different about having it here.
+
+**The session lives on the server, not in the browser.** One per gateway. Closing the
+tab, locking the phone or losing the connection does not end it and does not lose a
+reading: opening the panel again shows the calibration where it was left. That is also
+why the address alone never starts one — what is being measured travels inside the
+page, so a reload or a pasted link lands on the calibration that exists, or on nothing,
+and never sets a shutter moving.
+
+**Which shutter.** *Measure a cover*, from the overview or from the first-run card,
+asks **Which shutter is being measured?** and lists the gateway's basic covers with
+their room, their curtain travel and the same origin chip the overview carries. The
+three controls on a cover's card skip that question, because they already know.
+
+**One at a time, per gateway.** If something else already holds a shutter of this
+gateway, the calibration does not refuse and stop: it shows **The shutter is already in
+calibration** and says which of the three holders it is — another panel or another tab,
+which can be followed and taken over from its own screen; the *Configure* dialog, which
+offers **Close the dialog and free the shutter** after asking, because the unsaved
+measurements of that dialog are lost; or a run started by the 0.4.2 action, which has no
+window to close and is waited out.
+
+**While it runs.** The shutter moves, and every screen says so before it does: nothing
+moves before a screen has announced it. During a run there are one or two lines and a
+button, the motor line counts the seconds off the server's clock beside the estimated
+position, and **Stop the shutter** is offered wherever something is moving. The phone
+buzzes and beeps when the motor really starts, which is a switch on the briefing
+(**Buzz and beep when the motor starts**) remembered in that browser. **Leave the
+calibration** asks first whenever there is a measurement to throw away.
+
+**What it saves.** The review shows what the cover uses today beside what it would use
+afterwards, and nothing has been written until it is confirmed. The curtain travel and
+the two run times are in front; the roll coefficients, the slat time, the values a save
+would change without having measured them and the `myhome.yaml` equivalent are behind
+**Show every value, roll coefficients included**. The first route offers both **Save as
+the profile «…»** — which writes the profile and assigns the cover to it — and **Save
+for this shutter only**; a correction offers only the second, because a correction is
+about one window. Saving reaches the covers in place, without reloading the integration.
+
 ## When changes take effect
 
 **Immediately, and without a reload.** A write publishes a signal, every cover of
@@ -368,12 +421,21 @@ rebuilt the config entry. That is the right price for one guided measurement and
 too high for a panel where assigning twelve covers would take the whole gateway away
 and back twelve times.
 
-**While a guided calibration is running, the panel only reads.** A banner says
-**Measurement in progress** and names the cover, every handle and every write control
-is disabled, and the banner offers **Resume the session** and **End it**. Pending
-changes are kept while the lock lasts — they are not thrown away, only held. The lock
-covers the whole gateway and not just the cover being measured, because a measurement
-that ends by storing a profile changes what the assignments around it are worth.
+**While a guided calibration is running, the management screens only read.** A banner
+says **Measurement in progress** and names the cover, and every handle and every write
+control is disabled. Pending changes are kept while the lock lasts — they are not thrown
+away, only held. The lock covers the whole gateway and not just the cover being
+measured, because a measurement that ends by storing a profile changes what the
+assignments around it are worth.
+
+The banner says *which* of the three holders has the cover, and offers what can be done
+about that one:
+
+| Holder | What the banner offers |
+|---|---|
+| a calibration of this panel | **Resume the session**, which goes back to it, and **End it**, which asks first |
+| the *Configure* dialog | **Open Configure**, and **Close the dialog and free the shutter**, which asks first because that dialog's unsaved measurements are lost |
+| a run started by the 0.4.2 action | nothing to press: it has no window to close, and the sentence says to wait |
 
 The panel is told about the lock before it lets anything be attempted, so the refusal
 from the server is a backstop and not the user interface.
@@ -385,13 +447,16 @@ from the server is a backstop and not the user interface.
   Your configuration file is read and never rewritten — which is also why a
   `cover_profiles:` profile is read-only here, and why a cover the file assigns to a
   profile cannot be reassigned from this page.
-- **It never moves a shutter.** No control on any of its screens sends a command to
-  the bus. Every path to a measurement opens the *Configure* dialog.
+- **It moves a shutter only inside a calibration.** No control of the overview, of the
+  two cards or of an assignment ever sends a command to the bus; the only screens that
+  do are the guided calibration's, and each of them says what is about to move before
+  it moves.
 - **It does not configure the gateway.** Address, port, password, the file path and
   the session tunables stay under *Configure → Gateway and connection*.
-- **It does not replace the dialog.** *Configure → Profiles and covers* and
-  *Configure → Calibrations* do everything the panel does, unchanged, and are the way
-  in on a version of Home Assistant where the panel cannot load at all.
+- **It does not replace the dialog.** *Configure → Profiles and covers*,
+  *Configure → Calibrations* and *Configure → "Calibrate a cover"* do everything the
+  panel does, unchanged, and are the way in on a version of Home Assistant where the
+  panel cannot load at all.
 - **It does not show advanced covers**, which have no travel model to manage.
 
 ## Troubleshooting
@@ -404,8 +469,8 @@ gateway is loaded, then reload the page.
 
 **The address says the page is not available, or the sidebar entry is missing on one
 account.** The panel is admin only, and so is every command behind it. There is no
-read-only mode: a non-admin sees nothing at `/myhome-calibration`. The guided
-calibration is equally admin-only, so this is not a door the panel closed.
+read-only mode: a non-admin sees nothing at `/myhome-calibration`, calibration
+included. The dialog is equally admin-only, so this is not a door the panel closed.
 
 **The page is blank, or says it could not start.** The panel catches its own
 start-up errors and draws a plain sentence with a link to the integration page rather
@@ -448,13 +513,17 @@ drift apart:
 | `docs/images/panel/cover-detail.png` | the cover detail, values in use with their origin |
 | `docs/images/panel/profile-card.png` | the profile card, followers and the impact preview |
 | `docs/images/panel/measuring.png` | the read-only lock while a guided calibration is running |
+| `docs/images/panel/calibrate-pick.png` | the choice of shutter, with the origin chips |
+| `docs/images/panel/calibrate-step.png` | a timed run: the motor line, the estimated position and the big button |
+| `docs/images/panel/calibrate-review.png` | the review before saving, with the two exits |
 
 *Added at release.*
 
 ## See also
 
-- [Guided calibration](guided-calibration.md) — the dialog that measures a cover, the
-  three paths, the two levels, and the same data seen from the other side.
+- [Guided calibration](guided-calibration.md) — the measuring conversation itself: the
+  three routes, the two levels, how timing by button press works, and the *Configure*
+  dialog that runs the same one.
 - [Configuration → Cover](configuration.md#cover) — the `myhome.yaml` keys, the
   precedence between the file and what is stored, and the `Calibration source`
   attribute.

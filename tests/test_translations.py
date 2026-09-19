@@ -1559,8 +1559,12 @@ DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
         "The cover is already moving",
         "This cover is already being calibrated",
         # ...and the panel, which the page's last section sends the reader to by the
-        # name at the top of its overview.
+        # name at the top of its overview - and, since 0.6.0, by the two buttons of it
+        # that open this same conversation there.
         "Profiles and covers",
+        "Measure a cover",
+        "Measure again",
+        "Correct\u2026",
     ),
     # The panel's own page. Forty-six labels, which is what a page describing four
     # screens costs: the same two assertions as everywhere else, and the reason they
@@ -1616,8 +1620,21 @@ DOCUMENTED_LABELS: dict[str, tuple[str, ...]] = {
         "Measurement in progress",
         "Resume the session",
         "End it",
+        # The calibration, which since 0.6.0 runs on this page: the question the choice
+        # of shutter asks, the screen a busy gateway answers with, and the controls of
+        # a measurement under way. Sentences carrying a placeholder are paraphrased
+        # here as everywhere else - "Save as the profile «{profile}»" among them.
+        "Which shutter is being measured?",
+        "The shutter is already in calibration",
+        "Close the dialog and free the shutter",
+        "Open Configure",
+        "Stop the shutter",
+        "Leave the calibration",
+        "Buzz and beep when the motor starts",
+        "Show every value, roll coefficients included",
+        "Save for this shutter only",
         # The two doors out of the panel and into the dialog, which the page names
-        # because every measurement still happens there. `Calibrate a cover` - the
+        # because the dialog stays a complete alternative. `Calibrate a cover` - the
         # third one - is *not* here: lot 11's handoff lists it, but the page never
         # quotes the label, it links the guided-calibration page instead. The map says
         # what the page really does, because the test asserts both directions and a

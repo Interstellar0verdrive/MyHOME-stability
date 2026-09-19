@@ -1,13 +1,17 @@
 # Guided shutter calibration
 
-A dialog that measures one shutter and writes the result where the integration
-reads it. It replaces the tape-and-action procedure of
+A guided conversation that measures one shutter and writes the result where the
+integration reads it. It replaces the tape-and-action procedure of
 [Recipes → Calibrating a shutter in centimetres](recipes.md#calibrating-a-shutter-in-centimetres)
 for everything except the cases that recipe still covers better: it asks for the
 same measurements, does the arithmetic itself, and keeps the numbers inside Home
 Assistant instead of asking you to paste them into a file.
 
-Available since **0.5.0**.
+Available since **0.5.0** as a dialog under *Configure*. Since **0.6.0** the same
+conversation also runs in the [Profiles and covers panel](panel.md), which is where
+its buttons lead from; the dialog is unchanged and remains a complete alternative.
+This page describes the measuring itself, which is the same on both — the routes, the
+presses, the readings and the arithmetic. Where the two differ it says so.
 
 ## Contents
 
@@ -45,10 +49,19 @@ accumulating one.
 
 ## Where to find it
 
-**Settings → Devices & services → MyHOME → Configure**, then **"Calibrate a
-cover"**. There is nothing to add on the integration page and nothing to install:
-the whole thing — the guided measurement, what it stored, and the connection
-options that used to be the only content of that button — is behind **Configure**.
+Two doors onto the same conversation.
+
+**In the panel** (since 0.6.0): *Profili e tapparelle* → **Measure a cover**, which
+asks which shutter, or **Measure again** / **Correct…** on a shutter's own card, which
+do not have to ask. The measurement then runs on that page, at
+`/myhome-calibration#/calibrate`. This is the route the panel's own buttons take, and
+the one this page's screenshots of a full page belong to.
+
+**In the dialog**: **Settings → Devices & services → MyHOME → Configure**, then
+**"Calibrate a cover"**. There is nothing to add on the integration page and nothing
+to install: the whole thing — the guided measurement, what it stored, and the
+connection options that used to be the only content of that button — is behind
+**Configure**.
 
 ```
 Configure
@@ -69,6 +82,11 @@ has already moved stays where it is. A run still under way when you cancel or cl
 is not cut short — it ends at the end stop it was heading for — while a session that
 expires through inactivity does send a stop (see
 [Idle timers and expired sessions](#idle-timers-and-expired-sessions)).
+
+In the panel the same holds with one difference: **closing the page is not closing the
+conversation**. The measurement lives on the gateway, so the tab can be closed and the
+calibration picked up again from another one; *Leave the calibration* is what throws it
+away, and it asks first whenever there is something to throw.
 
 While a guided step owns a shutter the entity publishes `Calibrating: true` and
 refuses `cover.set_cover_position`: two things timing the same motor would each
@@ -362,11 +380,32 @@ and the same deletion as the screens above.
 It is admin only and its sidebar entry is hidden until somebody turns it on. The full
 page is [Profiles and covers panel](panel.md).
 
-The panel never measures anything: **"Calibrate a cover"** and the corrections stay
-here, in this dialog, and the panel's buttons open it. The two are the same stored
-data seen twice — a change made in either is visible in the other as soon as the
-screen is drawn again — and the dialog goes on working unchanged on an installation
-where the panel cannot be loaded.
+**The measuring runs there too.** The three routes, the presses, the tape readings and
+the arithmetic are the same — the panel asks the same questions of the same shutter and
+gets the same numbers out of it. What it adds is that the conversation **lives on the
+gateway rather than in the window it is being driven from**: closing the tab or locking
+the phone does not end it and does not lose a reading, a second device can be told to
+take it over, and the panel can close a *Configure* dialog that is holding a shutter it
+wants. A dialog cannot do any of that, because a dialog is a flow inside one browser.
+
+Two differences worth knowing, both of them deliberate:
+
+- **What route (A) saves.** The dialog stores the profile **and** the same values on
+  the shutter itself, so the shutter's origin reads *Measured*. The panel stores the
+  profile and **assigns** the shutter to it, with nothing of its own, so the origin
+  reads *Inherited from profile «…»* — which is what the published calibration contract
+  asks for, and what makes every later correction of that profile reach this shutter
+  too. The numbers the shutter runs on are the same either way, and **Save for this
+  shutter only** is offered on both if that is what you want.
+- **No undo after a save.** The panel's assignment screens offer *Undo* for a few
+  seconds; a calibration does not, on either side. Three minutes of measuring are not a
+  gesture to take back by accident, and the way back is *Remove the measurement…* on the
+  shutter's card.
+
+Everything else is one store seen twice: a change made in either is visible in the
+other as soon as the screen is drawn again, and the dialog goes on working unchanged on
+an installation where the panel cannot be loaded. Only one of the two may hold a shutter
+at a time — whichever asks second is told who has it, and by which of them.
 
 ## Where the data lives
 
@@ -485,9 +524,9 @@ they are deleted.
 ## Idle timers and expired sessions
 
 A browser tab that is simply closed — a laptop that sleeps, a phone that kills the
-tab — tells nobody, and the dialog would otherwise hold the shutter for the rest of
-the Home Assistant run. So a conversation that sits on one screen too long gives
-the shutter back:
+tab — tells nobody, and the conversation would otherwise hold the shutter for the rest
+of the Home Assistant run. So one that sits on one screen too long gives the shutter
+back, in the panel exactly as in the dialog:
 
 - **30 minutes** on a screen with nothing moving. Reading three paragraphs, being
   interrupted by the doorbell and coming back is an ordinary thing to do;
@@ -501,7 +540,9 @@ expired through inactivity, that nothing was saved, and offers to start again or
 close. The measurements taken so far are gone — they were never written anywhere.
 
 The same screen appears if the integration is reloaded, or its configuration
-re-read, while a dialog is open.
+re-read, while a calibration is open — including the reload the dialog itself does when
+it is closed after saving, which ends a calibration the panel was holding on the same
+gateway.
 
 ## Troubleshooting
 
@@ -532,8 +573,10 @@ calibration also helps — the scale factor it fits absorbs a systematic reactio
 shutter cannot stop before it starts, or open its slats after arriving. One press
 per event, at the moment it happens.
 
-**"This cover is already being calibrated."** Another dialog is open on it, or
-`myhome.cover_calibration_run` is driving it. Finish or close that one first.
+**"This cover is already being calibrated."** Another dialog is open on it, a
+calibration is running on it in the panel, or `myhome.cover_calibration_run` is driving
+it. Finish or close that one first — the panel says which of the three it is, and can
+close a dialog for you.
 
 **The verification is more than 3 cm out.** On path B that means this shutter does
 not behave like the profile it was given; measure it on its own with path C, which
@@ -551,9 +594,10 @@ times or the roll.
 declared `advanced: true`, or none is declared at all. Advanced actuators report
 their own position and have nothing to calibrate.
 
-**The shutter still runs on the old numbers.** The values reach it when the dialog
-is closed, which is when the entry is rebuilt — once, and only if something was
-stored. Check `Calibration source` in **Developer tools → States** afterwards.
+**The shutter still runs on the old numbers.** From the dialog, the values reach it
+when the dialog is closed, which is when the entry is rebuilt — once, and only if
+something was stored. From the panel they reach it at the moment of the save, with no
+rebuild at all. Check `Calibration source` in **Developer tools → States** afterwards.
 
 See also [Troubleshooting → Cover position issues](troubleshooting.md#cover-position-issues)
 for the symptoms that are not about the calibration dialog at all.

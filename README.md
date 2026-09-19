@@ -83,9 +83,9 @@ Bug reports and pull requests are welcome; I will answer on a best-effort basis.
   basic cover grouped by the profile it follows, where a cover is assigned by
   dragging it into another group (or a long press on a phone, or the keyboard), a
   batch is reviewed with the values each cover would end up on before anything is
-  written, and the last write can be undone. Admin only, hidden in the sidebar until
-  you turn it on, and it never writes `myhome.yaml` — see
-  [Profiles and covers panel](docs/panel.md)
+  written, and the last write can be undone. The guided calibration runs on that page
+  too. Admin only, hidden in the sidebar until you turn it on, and it never writes
+  `myhome.yaml` — see [Profiles and covers panel](docs/panel.md)
 - **Switches**: WHO 1 actuators driving loads other than lights (outlets, generic relays)
 - **Climate**: thermoregulation zones and central unit (heat/cool/auto/off, set point)
 - **Sensors**: instant power with a built-in keep-alive, daily/monthly/total energy
@@ -193,20 +193,24 @@ copy-paste automations.
 
 ## What's new / Upgrading
 
-**0.6.0** (unreleased) puts the management half of the calibration on **a page of its
-own**. "Profili e tapparelle" is a full-page panel — admin only, hidden in the
-sidebar until you add it from your own user page — that shows every basic cover of a
-gateway grouped by the profile it follows. A cover is assigned by dragging it into
+**0.6.0** (unreleased) puts the calibration on **a page of its own**. "Profili e
+tapparelle" is a full-page panel — admin only, hidden in the sidebar until you add it
+from your own user page — that shows every basic cover of a gateway grouped by the
+profile it follows. A cover is assigned by dragging it into
 another group, by a long press and a tap on a phone, or from the keyboard; nothing is
 written until a review panel has shown, cover by cover, the values it would end up
 running on, and the write that follows can be undone. There is a card per cover, with
 every value saying where it comes from and a hand edit where an empty field means
 "inherit", and a card per profile, with its followers and a live preview of what
 changing it would do to each of them. Assignments now reach the covers **without
-reloading the integration**: nothing goes unavailable, no history is lost. The
-measuring itself stays in *Configure → "Calibrate a cover"*, which remains a complete
-alternative to everything the panel does. Home Assistant **2026.9** or newer is
-required. See [Profiles and covers panel](docs/panel.md).
+reloading the integration**: nothing goes unavailable, no history is lost. **Measuring
+a cover happens on that page as well**: every button that used to send you to
+*Configure* opens the calibration where you already are, the conversation lives on the
+gateway rather than in the browser — so closing the tab does not lose a reading — and a
+calibration held by the dialog can be closed from the panel when it is in the way.
+*Configure → "Calibrate a cover"* is unchanged and remains a complete alternative to
+everything the panel does. Home Assistant **2026.9** or newer is required. See
+[Profiles and covers panel](docs/panel.md).
 
 **0.5.0** (13 September 2026) is the current release. Its one theme is that a basic
 roller shutter can be **calibrated without a stopwatch**: **Settings → Devices &
