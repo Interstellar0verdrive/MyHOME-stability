@@ -727,6 +727,13 @@ PANEL_VIEWS: tuple[str, ...] = (
     "detail",
     "profile",
     "banner",
+    # The thirteenth, added by lot F1 of the 0.6.0 wizard: the guided calibration's own
+    # screen. It is a view and not part of `screen` because `screen` is the engine's
+    # chrome - the phase line, the two live rows of a timed run - and these are the
+    # sentences of the wizard itself: what it says when there is nothing to show, what it
+    # says when a drawing threw, and the ways out it offers when ending a session is
+    # refused.
+    "wizard",
     "screen",
     "error",
 )
@@ -761,6 +768,7 @@ PANEL_PLACEHOLDERS: dict[str, str] = {
     "entry_id": "the id of a config entry",
     "phase": "the name of one phase of the guided calibration",
     "index": "which step of that phase this is",
+    "time": "a time of day, formatted by the browser",
 }
 
 

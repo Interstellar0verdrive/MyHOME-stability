@@ -18,12 +18,12 @@
 // is left to the browser and to Home Assistant's own router. Only movement **inside** the
 // panel goes through here.
 
-/** The views the panel can show. `calibrate` is reserved: 0.7.0 routes it, 0.6.0 does not. */
+/** The views the panel can show. */
 export type ViewId = "overview" | "cover" | "profile" | "calibrate" | "unknown";
 
 export interface Route {
   view: ViewId;
-  /** `id` for `/cover/:id`, `name` for `/profile/:name`, `session` for `/calibrate/:session`. */
+  /** `id` for `/cover/:id` and `name` for `/profile/:name`. `/calibrate` carries none. */
   params: Record<string, string>;
   /** The normalised path this route was read from, leading slash included. */
   path: string;
@@ -52,19 +52,29 @@ export const parsePath = (raw: string): Route => {
   if (parts[0] === "profile" && rest) {
     return { view: "profile", params: { name: value }, path };
   }
-  if (parts[0] === "calibrate" && rest) {
-    return { view: "calibrate", params: { session: value }, path };
+  if (parts[0] === "calibrate") {
+    // **The address carries nothing about the session, and never will** (SPEC §5.1,
+    // decision 24). What the user asked to calibrate - the shutter, the path, the profile,
+    // the scope - lives in the store, because a route that named a shutter would start a
+    // measurement every time somebody reloaded the page or followed a link somebody
+    // pasted. `/calibrate/<anything>` is therefore not a second screen but the same one:
+    // the links written before this version still open the wizard, and what they name is
+    // dropped rather than obeyed.
+    return { view: "calibrate", params: {}, path: "/calibrate" };
   }
   return { view: "unknown", params: {}, path };
 };
 
 /** `/profile/Tall shutters` -> `#/profile/Tall%20shutters`. */
 export const buildPath = (view: ViewId, value?: string): string => {
+  if (view === "calibrate") {
+    // Nothing is ever appended, whatever the caller passes: see `parsePath`.
+    return "/calibrate";
+  }
   if (view === "overview" || !value) {
     return "/";
   }
-  const segment = view === "cover" ? "cover" : view === "profile" ? "profile" : "calibrate";
-  return `/${segment}/${encodeURIComponent(value)}`;
+  return `/${view === "cover" ? "cover" : "profile"}/${encodeURIComponent(value)}`;
 };
 
 export class Router {

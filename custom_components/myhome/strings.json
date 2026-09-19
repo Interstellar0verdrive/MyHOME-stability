@@ -1004,6 +1004,23 @@
         "body": "The covers are unavailable for a few seconds"
       }
     },
+    "wizard": {
+      "title": "Guided calibration",
+      "none": "No calibration is running on this gateway.",
+      "action": {
+        "end": "End the calibration",
+        "claim": "Take control and end it",
+        "force": "End it anyway"
+      },
+      "trouble": {
+        "title": "The calibration was not closed",
+        "freed": "If nothing works, the gateway releases the shutter by itself at {time}."
+      },
+      "render_error": {
+        "title": "This screen could not be drawn",
+        "body": "The calibration is still running on the gateway and nothing has been lost. Try again, or end it."
+      }
+    },
     "screen": {
       "phase": "{phase} · {index} of {count}",
       "new_text": "new text — not translated yet",

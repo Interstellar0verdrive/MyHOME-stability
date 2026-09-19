@@ -42,6 +42,8 @@ import { isEmpty, valueProblem } from "./engine/fields";
 import { openOptionsFlow } from "./engine/flow";
 import { backPath, isDrawerRoute, nextBack } from "./engine/drawer";
 import { Router, type Route } from "./engine/router";
+import { SessionClient, type WizardIntent } from "./engine/session";
+import { type SessionSnapshot } from "./engine/session-contract";
 import { NOTHING_PENDING, NO_DETAIL, NO_PROFILE_CARD, Store } from "./engine/store";
 import { buttonStyles, cardStyles, srOnly, themeStyles } from "./engine/theme";
 import { FocusTrap, deepActiveElement, focusWhenPainted, liveRegion } from "./engine/a11y";
@@ -74,6 +76,7 @@ import { applyingStrip, snackStrip, stripStyles } from "./components/strips";
 import { FLOW_URL, MyHomeOverview, type AssignActions } from "./views/overview";
 import { DETAIL_KEYS, MyHomeCoverDetail, type DetailActions } from "./views/cover-detail";
 import { MyHomeProfileCard, PROFILE_KEYS, type ProfileActions } from "./views/profile-card";
+import { MyHomeWizard, type WizardActions } from "./views/wizard";
 import { MyHomeScreen, type ScreenModel } from "./engine/screen";
 
 /** How often the panel asks again when the backend has no subscription to offer. */
@@ -132,6 +135,16 @@ export class MyHomeCalibrationPanel extends LitElement {
   private _impactTimer: ReturnType<typeof setTimeout> | null = null;
   private _followTimer: ReturnType<typeof setTimeout> | null = null;
   private _followedAt = 0;
+  /**
+   * The gateway's calibration session, as this tab holds it (0.6.0 wizard, lot F1).
+   *
+   * Made when the first answer names a gateway and remade when the gateway changes. It
+   * owns its own presence timer: nothing in this file starts it, stops it or delays it,
+   * and that is deliberate - see the head of `engine/session.ts`.
+   */
+  private _sessionClient: SessionClient | null = null;
+  /** What `hass.states` last said about the shutter being calibrated: see `shouldUpdate`. */
+  private _coverState = "";
   /** The queue `_listen` runs on, so that two callers can never open two subscriptions. */
   /** The one screen remembered behind the drawer, and the control it draws. */
   private _drawerBack: Route | null = null;
@@ -313,13 +326,55 @@ export class MyHomeCalibrationPanel extends LitElement {
     // The socket outlives the element, so a subscription that is not given back keeps a
     // gateway pushing overviews at nobody for the rest of the session.
     void unsubscribe?.().catch(() => undefined);
+    // The calibration session outlives the element too, and on purpose: it is the server's
+    // and closing a page does not end it. What is given back here is this tab's claim on
+    // it, so the next device to act picks it up without waiting out the forty-five seconds
+    // of presence. Best effort by nature - if the message never leaves, presence lapses.
+    const session = this._sessionClient;
+    this._sessionClient = null;
+    if (session) {
+      void session.leave().finally(() => session.dispose());
+    }
   }
 
   protected override shouldUpdate(changed: PropertyValues): boolean {
     if (changed.size > 1 || !changed.has("hass")) {
       return true;
     }
-    return this._languageOf(this.hass) !== this._language;
+    if (this._languageOf(this.hass) !== this._language) {
+      return true;
+    }
+    // The second half the note at the top of this file asked for. `hass` is replaced on
+    // every state change in the whole installation, so the question is not "did anything
+    // change" but "did the one thing this panel draws out of `hass.states` change": the
+    // position of the shutter being calibrated, which the wizard shows beside the motor's
+    // own elapsed time. Everything else still arrives over the WebSocket.
+    const cover = this._coverStateNow();
+    if (cover !== this._coverState) {
+      this._coverState = cover;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * What the shutter under calibration is saying about itself, as one string.
+   *
+   * Its state and `current_position` and nothing else: the estimate the shutter keeps for
+   * itself, at about 1 Hz, which is what the wizard draws as "Posizione stimata". With no
+   * session, or a session whose shutter has no entity, there is nothing to follow and the
+   * empty string never changes.
+   */
+  private _coverStateNow(): string {
+    const entity = this._store.state.session?.cover.entity_id;
+    if (!entity) {
+      return "";
+    }
+    const state = this.hass?.states?.[entity];
+    if (!state) {
+      return "";
+    }
+    return `${state.state}|${String(state.attributes?.current_position ?? "")}`;
   }
 
   protected override firstUpdated(): void {
@@ -426,6 +481,13 @@ export class MyHomeCalibrationPanel extends LitElement {
     // overview has named one there is nothing to ask it about.
     await this._loadDetail();
     await this._listen();
+    // …and the same for the session: every one of its commands carries an `entry_id`.
+    // A deep link straight to `#/calibrate` therefore reads the session here, and reads
+    // it - nothing about arriving at that address opens one.
+    this._ensureSession();
+    if (this._store.state.route.view === "calibrate") {
+      await this._readSession();
+    }
   }
 
   /**
@@ -566,6 +628,19 @@ export class MyHomeCalibrationPanel extends LitElement {
       this._followPush();
       return;
     }
+    if (event.type === "session") {
+      // The third event of the subscription (contract §11.4): the whole snapshot at every
+      // transition of this gateway's session. It is folded into the client, which adopts
+      // it exactly as it adopts the answer to a verb - and which sends nothing back, so an
+      // event can never restart a movement.
+      const client = this._ensureSession();
+      if (client) {
+        client.apply(event.session);
+      } else {
+        this._store.set({ session: event.session });
+      }
+      return;
+    }
     if (event.type === "measuring") {
       // The measuring flag is the one thing that changes what the screens *allow*, so it
       // arrives on its own and is folded into the model the views already read.
@@ -647,6 +722,10 @@ export class MyHomeCalibrationPanel extends LitElement {
       return;
     }
     void this._refresh();
+    // The tab has come back to the front. A background tab's timers are throttled to a
+    // crawl by every browser, so the session is told "still here" at once and read again -
+    // both of which are still reads: nothing here can restart a movement.
+    void this._sessionClient?.resume();
   };
 
   /**
@@ -659,6 +738,7 @@ export class MyHomeCalibrationPanel extends LitElement {
    * the middle of composing a batch comes back to the batch.
    */
   private _onRoute(route: Route): void {
+    const before = this._store.state.route;
     // One level, worked out from the two routes and nothing else: see `engine/drawer.ts`.
     this._drawerBack = nextBack(this._drawerBack, this._store.state.route, route);
     this._store.set({ route });
@@ -678,6 +758,18 @@ export class MyHomeCalibrationPanel extends LitElement {
       }
     } else if (this._store.state.profile.for !== null) {
       this._store.set({ profile: NO_PROFILE_CARD });
+    }
+    if (route.view === "calibrate") {
+      // **Arriving reads; it never starts.** The intention that opens a session is put in
+      // the store by `_calibrate`, before the navigation, and a reload of this address
+      // finds no intention and no session of its own - which is the whole reason the
+      // address carries nothing (SPEC §5.1).
+      this._store.set({ sessionError: null });
+      if (this._started) {
+        void this._readSession();
+      }
+    } else if (before.view === "calibrate") {
+      this._leaveSession();
     }
     if (!this._started) {
       return;
@@ -898,6 +990,8 @@ export class MyHomeCalibrationPanel extends LitElement {
     undo: () => void this._undo(),
 
     announce: (message) => this._store.announce(message),
+
+    calibrate: (intent) => void this._calibrate(intent),
   };
 
   /**
@@ -1200,6 +1294,7 @@ export class MyHomeCalibrationPanel extends LitElement {
     saveTravel: () => void this._saveTravel(),
     remove: () => void this._removeMeasure(),
     openFlow: (source) => this._openFlow(source),
+    calibrate: (intent) => void this._calibrate(intent),
   };
 
   /**
@@ -1434,6 +1529,16 @@ export class MyHomeCalibrationPanel extends LitElement {
    * region behind it.
    */
   private _title(): string {
+    const state = this._store.state;
+    if (state.route.view === "calibrate") {
+      // The shutter's own name, which is what the wizard is about. The phase line and the
+      // control that closes it, which the design puts beside it, arrive with lot F2.
+      return (
+        state.session?.cover.name ??
+        state.wizardIntent?.name ??
+        this._i18n.t("panel.wizard.title")
+      );
+    }
     return this._i18n.t("panel.overview.title");
   }
 
@@ -1680,6 +1785,119 @@ export class MyHomeCalibrationPanel extends LitElement {
     }
   }
 
+  // --- the guided calibration (0.6.0 wizard, lot F1) -------------------------------------
+  //
+  // The shell's half of the session: making the client, giving it what arrives over the
+  // subscription, and turning the wizard's five actions into its verbs. The rules the
+  // whole lot exists for are in `engine/session.ts` and are not restated here; what this
+  // file must not do is the short list:
+  //
+  // * it never sends a heartbeat, and nothing here can stop one. The timer is the
+  //   client's and this element is not on its path (lesson 1);
+  // * it never starts a session from a route (lesson 4). `_readSession` reads;
+  // * it never swallows the outcome of a cancel (lesson 2). Every branch ends either as a
+  //   session that is over or as `sessionError`, which the screen draws with its ways out.
+
+  /** The client for the gateway on the screen, made once and remade when it changes. */
+  private _ensureSession(): SessionClient | null {
+    const entryId = this._store.state.entryId;
+    if (!entryId || !this.hass) {
+      return null;
+    }
+    if (this._sessionClient && this._sessionClient.entryId === entryId) {
+      return this._sessionClient;
+    }
+    this._sessionClient?.dispose();
+    const client = new SessionClient({
+      connection: this.hass.connection,
+      entryId,
+      onChange: (session: SessionSnapshot | null) => this._store.set({ session }),
+    });
+    this._sessionClient = client;
+    this._store.set({ clientId: client.clientId, session: client.session });
+    return client;
+  }
+
+  /** Read the gateway's session. Arriving at `#/calibrate` does this and nothing else. */
+  private async _readSession(): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const result = await client.get();
+    this._store.set({ sessionError: result.ok ? null : result });
+  }
+
+  /**
+   * Leaving the wizard's address: this tab's claim given back, best effort.
+   *
+   * Not the session - that is the server's, and a run under way finishes by itself. A
+   * `leave` that never arrives costs forty-five seconds of presence and nothing else.
+   */
+  private _leaveSession(): void {
+    const client = this._sessionClient;
+    if (!client || !client.session) {
+      return;
+    }
+    void client.leave();
+  }
+
+  /**
+   * "Measure this shutter" - the one road into the wizard.
+   *
+   * The intention goes into the store **first** and the address is changed after it,
+   * because the address says nothing about it: what a reload of `#/calibrate` finds is a
+   * session or no session, never an instruction to open one.
+   */
+  private async _calibrate(intent: WizardIntent): Promise<void> {
+    this._store.set({ wizardIntent: intent, sessionError: null });
+    this._navigate("/calibrate");
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const result = await client.start(intent);
+    this._store.set({ sessionError: result.ok ? null : result });
+  }
+
+  /**
+   * "Cancel", from the wizard's own control or from its error card, through the robust
+   * path of SPEC §5.2.
+   *
+   * The outcome is always shown: a branch that ended the session leaves the snapshot on
+   * the screen with its outcome, and one that did not leaves `sessionError` with the ways
+   * out the client worked out. Neither of them is silence.
+   */
+  private async _cancelSession(how: "plain" | "claim" | "force"): Promise<void> {
+    const client = this._ensureSession();
+    if (!client) {
+      return;
+    }
+    const outcome =
+      how === "claim"
+        ? await client.claimAndCancel()
+        : await client.cancel({ force: how === "force" });
+    if (outcome.ok || !outcome.error) {
+      this._store.set({ sessionError: null, wizardIntent: null });
+      return;
+    }
+    this._store.set({
+      sessionError: {
+        error: outcome.error,
+        recovery: outcome.recovery,
+        freedAt: outcome.freedAt,
+      },
+    });
+  }
+
+  private _wizardActions: WizardActions = {
+    refresh: () => void this._readSession(),
+    cancel: () => void this._cancelSession("plain"),
+    claim: () => void this._cancelSession("claim"),
+    force: () => void this._cancelSession("force"),
+    back: () => this._navigate("/"),
+  };
+
   /**
    * What is on the page itself, which since the first live pass is always the list.
    *
@@ -1712,8 +1930,11 @@ export class MyHomeCalibrationPanel extends LitElement {
       </div>`;
     }
     const route = state.route;
+    if (route.view === "calibrate") {
+      return this._renderWizard();
+    }
     if (route.view !== "overview" && !isDrawerRoute(route)) {
-      // `/calibrate/…` is reserved for 0.7.0, and anything else is a typed URL.
+      // A typed URL, or a link to a screen this version does not have.
       return this._renderPlaceholder(
         this._i18n.t("panel.overview.title"),
         this._i18n.t("panel.common.not_yet"),
@@ -1724,6 +1945,37 @@ export class MyHomeCalibrationPanel extends LitElement {
       .state=${state}
       .actions=${this._assignActions}
     ></myhome-overview>`;
+  }
+
+  /**
+   * The wizard, and the guarantee that a wizard that throws does not empty the panel.
+   *
+   * The element catches its own exceptions and draws the error card (SPEC §5.8); this is
+   * the second net, for anything that goes wrong on the way to it. Neither of them touches
+   * the session: it is on the server, the presence signal is on its own timer, and what
+   * the user sees is a screen with "Try again" and "End the calibration" on it rather than
+   * a blank panel.
+   */
+  private _renderWizard(): TemplateResult {
+    try {
+      return html`<myhome-wizard
+        .i18n=${this._i18n}
+        .state=${this._store.state}
+        .actions=${this._wizardActions}
+      ></myhome-wizard>`;
+    } catch (error) {
+      console.error("MyHOME panel: the guided calibration could not be drawn", error);
+      return html`<div class="card problem" role="alert">
+        <div>${this._i18n.t("panel.wizard.render_error.title")}</div>
+        <div class="soft">${this._i18n.t("panel.wizard.render_error.body")}</div>
+        <div class="soft">
+          <button class="cta text" type="button" @click=${() => void this._cancelSession("plain")}>
+            ${this._i18n.t("panel.wizard.action.end")}
+          </button>
+          <a href=${FLOW_URL}>${this._i18n.t("panel.common.action.configure")}</a>
+        </div>
+      </div>`;
+    }
   }
 
   /**
@@ -1865,9 +2117,17 @@ export class MyHomeCalibrationPanel extends LitElement {
     this._unsubscribeWs = null;
     await unsubscribe?.().catch(() => undefined);
     this._clearSnack();
+    // The session is one gateway's, so the client for the old one is given back with the
+    // subscription. The new gateway's is made by `_ensureSession` on the next read.
+    const session = this._sessionClient;
+    this._sessionClient = null;
+    session?.dispose();
     this._store.set({
       ...NOTHING_PENDING,
       entryId,
+      session: null,
+      sessionError: null,
+      wizardIntent: null,
       detail: NO_DETAIL,
       profile: NO_PROFILE_CARD,
       search: "",
@@ -1886,6 +2146,7 @@ void MyHomeOverview;
 void MyHomeCoverDetail;
 void MyHomeProfileCard;
 void MyHomeScreen;
+void MyHomeWizard;
 
 // Defined once, and only once: Home Assistant keeps a panel's module in the document after
 // a navigation, so a second visit re-imports nothing - but a development reload would

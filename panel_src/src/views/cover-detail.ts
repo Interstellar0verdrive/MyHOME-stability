@@ -42,6 +42,7 @@ import {
 } from "../engine/fields";
 import { cardSkeleton, skeletonStyles } from "../components/skeleton";
 import { I18n } from "../engine/i18n";
+import { type WizardIntent } from "../engine/session";
 import { initialState, type PanelState } from "../engine/store";
 import { buttonStyles, cardStyles, fieldStyles, themeStyles } from "../engine/theme";
 import { type CoverKeyRow, type CoverRow, type PreviewItem } from "../engine/ws";
@@ -77,6 +78,14 @@ export interface DetailActions {
   remove: () => void;
   /** "Misura di nuovo", "Correggi… → …", "Calibrazione approfondita": all end in the flow. */
   openFlow: (source: HTMLElement) => void;
+  /**
+   * The same three buttons, once they lead into the panel's own wizard instead (SPEC §6).
+   *
+   * Declared by lot F1 and used by lot F3: the intention carries the shutter, the path
+   * and, for "Correggi…", the scope - which is what lets `start` open the screen the user
+   * pressed a button for rather than a menu they have to find it in again.
+   */
+  calibrate: (intent: WizardIntent) => void;
 }
 
 export class MyHomeCoverDetail extends LitElement {

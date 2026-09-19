@@ -64,6 +64,7 @@
   <label><input type="checkbox" id="twogateways" /> two gateways</label>
   <label><input type="checkbox" id="bulk" /> 40 covers</label>
   <label><input type="checkbox" id="offline" /> socket down</label>
+  <label><input type="checkbox" id="session" /> a calibration session</label>
   <button type="button" id="reset">reset the gateway</button>
   <span id="note"></span>
 </div>
@@ -72,9 +73,10 @@
   import "../../custom_components/myhome/frontend/myhome-panel.js";
 
   const base = new URL("../../", import.meta.url);
-  const [fixture, strings] = await Promise.all([
+  const [fixture, strings, sessions] = await Promise.all([
     fetch(new URL("tests/fixtures/panel_overview_example.json", base)).then((r) => r.json()),
     fetch(new URL("custom_components/myhome/strings.json", base)).then((r) => r.json()),
+    fetch(new URL("tests/fixtures/panel_session_examples.json", base)).then((r) => r.json()),
   ]);
 
   // A twelfth shutter nobody has ever measured: the window with no travel, which is what
@@ -175,10 +177,15 @@
     flags[id] = () => box.checked;
     box.addEventListener("change", render);
   }
-  for (const id of ["measuring", "refuse", "live", "filetravel"]) {
+  for (const id of ["measuring", "refuse", "live", "filetravel", "session"]) {
     const box = document.getElementById(id);
     flags[id] = () => box.checked;
     box.addEventListener("change", () => {
+      if (id === "session") {
+        sessionState = box.checked ? startSession() : null;
+        if (subscriber) subscriber({ type: "session", session: sessionState });
+        return;
+      }
       if (id === "measuring" && subscriber) {
         const cover = gateway.covers[0];
         subscriber(box.checked
@@ -382,8 +389,77 @@
     }
   };
 
+  // --- a calibration session, faked just enough to walk `#/calibrate` ------------------
+  //
+  // The snapshots are the frozen examples (`tests/fixtures/panel_session_examples.json`,
+  // lot L0), not invented ones: a stub with its own idea of a snapshot is a stub that
+  // agrees with nothing. What it adds is movement - `act` walks a short chain of them, so
+  // the wizard can be watched changing - and the two states that are hard to reach
+  // otherwise: another client owning the session, and a cancel the gateway refuses.
+  //
+  // It is **not** a second implementation of the server: no timing, no arithmetic, no
+  // plan. Lot F2 walks the real screens against the same fixture.
+  const SESSION_CHAIN = ["armed_path", "briefing_open_brief", "running_open_start",
+                         "running_open_lift", "briefing_lift_check", "review_basic"];
+  let sessionState = null;
+  let sessionStep = 0;
+  let sessionRevision = 0;
+
+  const sessionSnapshot = (name) => {
+    const one = structuredClone(sessions.scenarios[name]);
+    one.entry_id = gateway.entry_id;
+    one.revision = (sessionRevision += 1);
+    return one;
+  };
+
+  const startSession = () => {
+    sessionStep = 0;
+    return sessionSnapshot(SESSION_CHAIN[0]);
+  };
+
+  const sessionCommand = (message) => {
+    const name = message.type.slice("myhome/calibration/session/".length);
+    if (name === "get") {
+      return Promise.resolve({ session: sessionState, capabilities: sessions._contract.capabilities });
+    }
+    if (name === "heartbeat") {
+      return Promise.resolve({ owner: true, present_until: sessionState?.idle_expires_at ?? null });
+    }
+    if (name === "start") {
+      sessionState = startSession();
+      if (subscriber) subscriber({ type: "session", session: sessionState });
+      return Promise.resolve({ session: sessionState });
+    }
+    if (name === "cancel") {
+      if (flags.refuse()) {
+        return Promise.reject({ code: "not_allowed", message: "another client owns this session",
+                                translation_key: "session_owned" });
+      }
+      const ended = sessionState === null;
+      sessionState = sessionState
+        ? { ...sessionState, state: "ended", step: null, actions: [],
+            outcome: { reason: "cancelled", profile: null, origin: null, source: null } }
+        : null;
+      if (subscriber) subscriber({ type: "session", session: sessionState });
+      return Promise.resolve({ session: sessionState, already_ended: ended });
+    }
+    if (name === "leave" || name === "stop" || name === "attach" || name === "save") {
+      return Promise.resolve({ session: sessionState, overview: overview() });
+    }
+    if (name === "act") {
+      sessionStep = Math.min(sessionStep + 1, SESSION_CHAIN.length - 1);
+      sessionState = sessionSnapshot(SESSION_CHAIN[sessionStep]);
+      if (subscriber) subscriber({ type: "session", session: sessionState });
+      return Promise.resolve({ session: sessionState });
+    }
+    return Promise.reject({ code: "unknown_command", message: "unknown command" });
+  };
+
   const connection = {
     sendMessagePromise(message) {
+      if (message.type.startsWith("myhome/calibration/session/")) {
+        return sessionCommand(message);
+      }
       if (message.type === "myhome/calibration/texts") {
         return Promise.resolve({ language: "en", requested: message.language, fallback: false,
                                  texts: { options: strings.options, selector: strings.selector,
@@ -588,6 +664,7 @@
       }
       subscriber = callback;
       callback({ type: "overview", overview: overview(message.entry_id) });
+      callback({ type: "session", session: sessionState });
       return Promise.resolve(async () => { subscriber = null; });
     },
   };

@@ -25,6 +25,22 @@ const fixture = JSON.parse(
 const strings = JSON.parse(
   await readFile(join(root, "custom_components", "myhome", "strings.json"), "utf8"),
 );
+/**
+ * The frozen session examples (lot L0), which is where every snapshot in this file comes
+ * from: a stub that made its own would be a stub agreeing with nothing.
+ */
+const sessions = JSON.parse(
+  await readFile(join(root, "tests", "fixtures", "panel_session_examples.json"), "utf8"),
+);
+
+/** One scenario of the fixture, with the gateway of the overview this host serves. */
+export const sessionFixture = (name, entryId) => {
+  const scenario = sessions.scenarios[name];
+  if (!scenario) {
+    throw new Error(`no session scenario called '${name}' in the fixture`);
+  }
+  return { ...structuredClone(scenario), entry_id: entryId };
+};
 
 /** The rules jsdom cannot honestly answer: they need layout, and it has none. */
 export const NEEDS_LAYOUT = [
@@ -73,6 +89,30 @@ const overviewFor = (state) => {
     answer.profiles = [];
   }
   return answer;
+};
+
+/**
+ * The session commands, answered from the fixture.
+ *
+ * Enough for the states this host audits and no more: the wizard's conversation is lot
+ * F2's, and a stub that pretended to run one would be a second implementation of the
+ * server. `heartbeat` answers as the owner because these states are all "this tab is
+ * driving"; `cancel` ends it.
+ */
+const session = (state, message) => {
+  const entryId = overviewFor(state).entry_id;
+  const scenario = state === "calibrating" ? "running_open_lift" : null;
+  const snapshot = scenario ? sessionFixture(scenario, entryId) : null;
+  if (message.type.endsWith("/get")) {
+    return Promise.resolve({ session: snapshot, capabilities: sessions._contract.capabilities });
+  }
+  if (message.type.endsWith("/heartbeat")) {
+    return Promise.resolve({ owner: true, present_until: null });
+  }
+  if (message.type.endsWith("/cancel")) {
+    return Promise.resolve({ session: null, already_ended: snapshot === null });
+  }
+  return Promise.resolve({ session: snapshot });
 };
 
 const connection = (state) => ({
@@ -126,6 +166,9 @@ const connection = (state) => ({
     }
     if (message.type === "myhome/calibration/preview") {
       return Promise.resolve({ entry_id: "01ENTRY", items: [] });
+    }
+    if (message.type.startsWith("myhome/calibration/session/")) {
+      return session(state, message);
     }
     return Promise.reject({ code: "unknown_command", message: "unknown command" });
   },
@@ -360,5 +403,10 @@ export const STATES = [
   { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-advanced-note]" },
   { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1), expect: "[data-drawer]" },
   { name: "profile card, last action", state: "ready", hash: "#/profile/tall", drive: pressWide(-1), expect: "[data-drawer]" },
+  // The wizard's address, with a session of the gateway's and without one. Lot F1 draws a
+  // stub there; the eight live models and the states SPEC §7.2 lists for them arrive with
+  // lot F2, which extends this list rather than replacing it.
+  { name: "the wizard, a session running", state: "calibrating", hash: "#/calibrate", expect: "[data-wizard]" },
+  { name: "the wizard, no session", state: "ready", hash: "#/calibrate", expect: "myhome-wizard" },
 ];
 
