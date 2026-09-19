@@ -870,7 +870,12 @@ export class MyHomeOverview extends LitElement {
       return html`<section class="card welcome">
         <h2>${this.i18n.t("panel.overview.no_basic_covers_title")}</h2>
         <div>${renderMarkdown(this.i18n.t("panel.overview.no_basic_covers"))}</div>
-        <a class="cta secondary" href=${FLOW_URL} title=${this.i18n.t("panel.common.opens_configure")}
+        <!--
+          No title promising the dialog: this link goes to the integration page, where
+          "Configura" still has to be pressed, and it is the last place on the overview
+          that said otherwise. The words on the link say where it goes.
+        -->
+        <a class="cta secondary" href=${FLOW_URL}
           >${this.i18n.t("panel.common.action.configure")}</a
         >
       </section>`;

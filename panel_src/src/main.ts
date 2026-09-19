@@ -447,6 +447,7 @@ export class MyHomeCalibrationPanel extends LitElement {
 
   protected override updated(changed: PropertyValues): void {
     this._manageDrawerFocus();
+    this._followBannerQuestion();
     if (changed.has("route")) {
       this._router.setHostPath(this.route?.path);
       this._onRoute(this._router.current);
@@ -468,6 +469,38 @@ export class MyHomeCalibrationPanel extends LitElement {
   /** Whether a drawer was on the screen the last time focus was looked at. */
   private _drawerWasOpen = false;
   private _dialogWasOpen = false;
+  /** The banner's question, as it stood on the last paint. */
+  private _bannerAsked: BusyAsk = null;
+
+  /**
+   * The keyboard follows the banner's question, and comes back when it is answered.
+   *
+   * The question **replaces** the offers inside the strip, so the button that was just
+   * pressed leaves the document: left alone, focus falls to `<body>` and answering "yes"
+   * or "no" means tabbing from the top of the page. The strip is `aria-live="polite"`, so
+   * the question is read out - which made the gap worse rather than better, because it is
+   * heard and cannot be answered.
+   */
+  private _followBannerQuestion(): void {
+    const ask = this._store.state.busy.ask;
+    if (ask === this._bannerAsked) {
+      return;
+    }
+    const before = this._bannerAsked;
+    this._bannerAsked = ask;
+    const root = this.shadowRoot;
+    if (ask) {
+      focusWhenPainted(() => root?.querySelector('[data-banner="confirm"]') as HTMLElement | null);
+      return;
+    }
+    // Answered "no": back to the offer that asked it, which is where the user was.
+    if (before) {
+      const mark = before === "end_panel" ? "end-panel" : "end-other";
+      focusWhenPainted(
+        () => root?.querySelector(`[data-banner="${mark}"]`) as HTMLElement | null,
+      );
+    }
+  }
 
   /**
    * The keyboard, while the drawer is open - the review panel's arrangement, moved up one
@@ -810,6 +843,13 @@ export class MyHomeCalibrationPanel extends LitElement {
     // One level, worked out from the two routes and nothing else: see `engine/drawer.ts`.
     this._drawerBack = nextBack(this._drawerBack, this._store.state.route, route);
     this._store.set({ route });
+    // A question does not survive the screen it was asked on. "Chiudi il dialogo e libera
+    // la tapparella?" left open on the list and found again after a walk through the
+    // wizard would be a question nobody asked, with a "yes" under it that closes somebody
+    // else's dialog - the same reason `wizardExit` is cleared further down.
+    if (before.view !== route.view && this._store.state.busy.ask !== null) {
+      this._store.set({ busy: { ...this._store.state.busy, ask: null } });
+    }
     if (route.view === "cover") {
       const id = route.params.id;
       if (this._store.state.detail.for !== id) {

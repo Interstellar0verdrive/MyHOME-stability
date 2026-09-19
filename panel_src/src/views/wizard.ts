@@ -32,7 +32,7 @@
 
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 
-import { FocusReturn, FocusTrap, alertRegion, liveRegion } from "../engine/a11y";
+import { FocusReturn, FocusTrap, alertRegion, focusWhenPainted, liveRegion } from "../engine/a11y";
 import { readCue, signalStart, writeCue } from "../engine/cue";
 import { I18n } from "../engine/i18n";
 import { MyHomeScreen } from "../engine/screen";
@@ -141,6 +141,15 @@ const NO_ACTIONS: WizardActions = {
 /** How often the motor line is redrawn: ten times a second, as SPEC §5.4 asks. */
 const TICK_MS = 100;
 
+/**
+ * What `_focusedFor` holds while the screen is the choice of shutter.
+ *
+ * A step of a session is named by its session, state and step; the choice belongs to no
+ * session, so it needs a name of its own - and it needs one at all so that focus is moved
+ * **once**, on arrival, and not again on every repaint.
+ */
+const PICK_PAINT = "pick";
+
 export class MyHomeWizard extends LitElement {
   static override properties = {
     i18n: { attribute: false },
@@ -175,6 +184,8 @@ export class MyHomeWizard extends LitElement {
   /** What the last paint was about, so that focus and the signal fire once each. */
   private _focusedFor = "";
   private _signalledFor = "";
+  /** The waiting screen's question, as it stood on the last paint. */
+  private _askedFor: BusyAsk = null;
   /** The keyboard stays inside the exit question while it is open, and comes back after. */
   private _trap = new FocusTrap();
   private _return = new FocusReturn();
@@ -263,7 +274,20 @@ export class MyHomeWizard extends LitElement {
     const session = this.state.session ?? null;
     this._followClock(session);
     this._followExit();
-    if (!session || this._broken) {
+    this._followBusy();
+    if (this._broken) {
+      return;
+    }
+    if (!session) {
+      // The choice of shutter is a screen of this wizard like any other, so the keyboard
+      // lands on its heading too (SPEC §5.7). Without this, pressing "Misura una
+      // tapparella" on the overview left focus on a button that is no longer in the
+      // document, which is the top of the page for whoever is using the keyboard.
+      if (this._focusedFor !== PICK_PAINT) {
+        this._focusedFor = PICK_PAINT;
+        const screen = this.shadowRoot?.querySelector("myhome-screen") as MyHomeScreen | null;
+        void screen?.updateComplete.then(() => screen.focusEntry("title"));
+      }
       return;
     }
     const here = `${session.session_id}:${session.state}:${session.step ?? ""}`;
@@ -341,9 +365,17 @@ export class MyHomeWizard extends LitElement {
         </div>
       </div>`;
     }
+    const model = coverPickerModel(this.i18n, covers);
+    // **The banner is not drawn on this route**, and this is the one screen of it where
+    // that costs something: offering twelve shutters of a gateway that is already holding
+    // one is offering a refusal. So the same card the refusal would leave is drawn
+    // *before* the list, which is the guarantee the banner's own comment claims - the
+    // user meets the condition rather than discovering it by pressing.
     return html`<div data-wizard-pick>
+      ${this.state.overview?.measuring ? this._renderBusy(null) : nothing}
+      ${liveRegion(model.announce ?? "")}
       <myhome-screen
-        .model=${coverPickerModel(this.i18n, covers)}
+        .model=${model}
         .i18n=${this.i18n}
         @myhome-screen-action=${this._onScreenAction}
       ></myhome-screen>
@@ -441,6 +473,32 @@ export class MyHomeWizard extends LitElement {
     const dialog = this.shadowRoot?.querySelector("[data-exit-dialog]") as HTMLElement | null;
     if (dialog) {
       this._trap.hold(dialog);
+    }
+  }
+
+  /**
+   * The keyboard follows the waiting screen's question, and comes back when it is answered.
+   *
+   * The question **replaces** the offers in the same card, so the button that was just
+   * pressed leaves the document and focus would otherwise fall to `<body>` - on a card
+   * whose whole job is to be answered.
+   */
+  private _followBusy(): void {
+    const ask = this.state.busy?.ask ?? null;
+    if (ask === this._askedFor) {
+      return;
+    }
+    const before = this._askedFor;
+    this._askedFor = ask;
+    const root = this.shadowRoot;
+    if (ask) {
+      focusWhenPainted(() => root?.querySelector('[data-busy="confirm"]') as HTMLElement | null);
+      return;
+    }
+    if (before) {
+      focusWhenPainted(
+        () => root?.querySelector('[data-busy="end-other"]') as HTMLElement | null,
+      );
     }
   }
 
@@ -603,7 +661,11 @@ export class MyHomeWizard extends LitElement {
       return nothing;
     }
     if (trouble.error.translation_key === "already_calibrating") {
-      return this._renderBusy(trouble);
+      // …unless the choice of shutter has already drawn it: two identical cards saying the
+      // same thing is one card and a copy of it.
+      return this.state.session || !this.state.overview?.measuring
+        ? this._renderBusy(trouble)
+        : nothing;
     }
     const freed = trouble.freedAt ? this.i18n.time(trouble.freedAt) : "";
     return html`<div class="card problem" role="alert" data-session-trouble>
@@ -642,13 +704,34 @@ export class MyHomeWizard extends LitElement {
    * * `reserved` - the gateway is reserved for a run that is about to start, or the 0.4.2
    *    action is holding it: there is nothing to close, only to wait for.
    */
-  private _renderBusy(trouble: NonNullable<PanelState["sessionError"]>): TemplateResult {
-    const placeholders = trouble.error.translation_placeholders ?? {};
-    const cover = placeholders.cover ?? this.state.wizardIntent?.name ?? "";
-    const by = this.state.busy.service ? "reserved" : (placeholders.by ?? "other");
+  private _renderBusy(trouble: NonNullable<PanelState["sessionError"]> | null): TemplateResult {
+    const placeholders = trouble?.error.translation_placeholders ?? {};
+    const held = this.state.overview?.measuring ?? null;
+    const cover = placeholders.cover ?? held?.name ?? this.state.wizardIntent?.name ?? "";
+    // **An unknown `by` waits; it never offers to close somebody's dialog.** `end_other`
+    // aborts every options flow of the gateway and can reload the integration, so a
+    // placeholder that did not arrive - an older backend, a refusal that came another way
+    // - must not choose it by default. `reserved` says to wait, and waiting is never wrong.
+    //
+    // With no refusal at all (the card drawn over the choice of shutter) there is no
+    // placeholder to be missing: who is holding it is read off the gateway, exactly as the
+    // banner reads it, and "the dialog or the action" is a distinction only `end_other`
+    // can settle.
+    const by = this.state.busy.service
+      ? "reserved"
+      : trouble === null
+        ? (this.state.overview?.session ? "panel" : "other")
+        : (placeholders.by ?? "reserved");
+    // "Another panel or another tab" has to be true: `already_calibrating` is raised for
+    // *any* session of the gateway, this tab's own included - which is reachable, because
+    // opening a shutter's card and pressing "Misura di nuovo" while this very tab is
+    // measuring another one is a thing a person does.
+    const mine = this.state.overview?.session?.owner === this.state.clientId;
     const body =
       by === "panel"
-        ? this.i18n.t("panel.wizard.busy.panel", { cover })
+        ? mine
+          ? this.i18n.t("panel.wizard.busy.here", { cover })
+          : this.i18n.t("panel.wizard.busy.panel", { cover })
         : by === "other"
           ? this.i18n.t("panel.wizard.busy.other", { cover })
           : this.i18n.t("panel.wizard.busy.service");

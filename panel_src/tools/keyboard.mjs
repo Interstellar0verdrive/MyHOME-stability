@@ -382,6 +382,15 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
     options.every((one) => one.tagName === "BUTTON"));
   check("arriving on the choice starts nothing", !calls.includes("start") && !calls.includes("attach"),
     calls.join(", ") || "nothing sent");
+  // The choice is a screen of the wizard like any other (SPEC §5.7): the keyboard lands on
+  // its heading, and a reader is told which screen arrived. Without both, pressing "Misura
+  // una tapparella" leaves focus on a button that is no longer in the document.
+  check("focus is on the heading of the choice", active(panel)?.tagName === "H1",
+    describe(active(panel)));
+  const spoken = deepAll(panel.shadowRoot, "[data-wizard-pick] [aria-live='polite']")
+    .map((one) => (one.textContent ?? "").trim())
+    .filter(Boolean);
+  check("and the screen says out loud which one it is", spoken.length === 1, spoken.join(" | "));
   options[0]?.click();
   await settle();
   check("choosing one opens exactly one session", calls.filter((one) => one === "start").length === 1,
@@ -411,9 +420,16 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   await settle();
   check("ending it asks first", deep(panel.shadowRoot, "[data-banner-question]") !== null);
   check("and nothing was sent by asking", !calls.includes("cancel"), calls.join(", ") || "nothing");
+  // The question replaces the offers, so the button that was pressed leaves the document:
+  // left alone the keyboard falls to the top of the page, and the strip is read out but
+  // cannot be answered.
+  check("the keyboard is on the answer, not back at the top of the page",
+    active(panel) === deep(panel.shadowRoot, '[data-banner="confirm"]'), describe(active(panel)));
   deep(panel.shadowRoot, '[data-banner="keep"]')?.click();
   await settle();
   check("saying no puts the offers back", deep(panel.shadowRoot, '[data-banner="resume"]') !== null);
+  check("and the keyboard comes back to the offer that asked",
+    active(panel) === deep(panel.shadowRoot, '[data-banner="end-panel"]'), describe(active(panel)));
   check("and still nothing was sent", !calls.includes("cancel"), calls.join(", ") || "nothing");
   end?.click();
   await settle();
@@ -497,6 +513,8 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   deep(panel.shadowRoot, '[data-busy="end-other"]')?.click();
   await settle();
   check("closing the dialog asks first", deep(panel.shadowRoot, "[data-busy-question]") !== null);
+  check("with the keyboard on the answer", 
+    active(panel) === deep(panel.shadowRoot, '[data-busy="confirm"]'), describe(active(panel)));
   check("and nothing was sent by asking", !calls.includes("end_other"), calls.join(", "));
   deep(panel.shadowRoot, '[data-busy="confirm"]')?.click();
   await settle();

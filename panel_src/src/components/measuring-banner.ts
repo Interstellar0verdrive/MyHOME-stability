@@ -78,8 +78,11 @@ export const measuringBannerStyles = css`
    * to action, at the link's own colour, so the strip reads as it did.
    */
   .measuring button.offer {
-    min-height: 44px;
-    padding: 0;
+    /* SPEC §5.7's minimum target: these are five narrow controls side by side, and the
+       44 px they inherited from the links that used to be here left the hit area exactly
+       as tall as the text. */
+    min-height: 48px;
+    padding: 0 4px;
     border: none;
     background: none;
     font: inherit;

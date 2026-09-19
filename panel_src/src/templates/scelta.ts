@@ -29,7 +29,11 @@ export const renderScelta = (
         <span class="option-head">
           <strong class="option-title">${option.title}</strong>
           ${option.chip
-            ? html`<span class="chip ${option.chipTone ?? "neutral"}">${option.chip}</span>`
+            ? html`<span class="chip ${option.chipTone ?? "neutral"}"
+                >${option.chipTone === "adjusted"
+                  ? html`<span class="dot" aria-hidden="true"></span>`
+                  : nothing}${option.chip}</span
+              >`
             : nothing}
         </span>
         ${option.meta ? html`<span class="option-meta">${option.meta}</span>` : nothing}

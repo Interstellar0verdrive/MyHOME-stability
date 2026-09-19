@@ -830,6 +830,183 @@ console.log("\nthe shutter's card, 'Correggi… → Solo i tempi'");
   checkThat("and the screen is the wizard's", find("[data-wizard]"));
 }
 
+console.log("\nthe shutter's card, the other three ways into a measurement");
+{
+  // RISCHIO-7 of the review: three of the five rows of SPEC §6 were read in the code and
+  // pressed by nothing. They are the buttons whose intention is built by the one line that
+  // decides whether a profile travels with a path, which is the line BUG-1 was on.
+  const cover = overviewFixture.covers.find(
+    (one) => one.profile !== null && one.has_own.length > 0,
+  );
+  const open = async (mark, inCorrect = false) => {
+    const bench = gateway({ session: null });
+    const { settle, find } = await mount(
+      bench.connection,
+      `#/cover/${encodeURIComponent(cover.unique_id)}`,
+    );
+    await settle(240);
+    if (inCorrect) {
+      find('button.wide[data-wide="correct"]')?.click();
+      await settle(160);
+    }
+    bench.state.session = scenario("armed_refine_scope_intent");
+    find(`[data-wide="${mark}"]`)?.click();
+    await settle(280);
+    return { bench, find };
+  };
+
+  {
+    // "Misura di nuovo": the choice of route, so **no** path - and therefore no profile
+    // and no scope, which is what the schema wants of a start that names no path.
+    const { bench, find } = await open("measure-again");
+    check("'Misura di nuovo' opens one session", bench.sessions("start"), 1);
+    const asked = bench.last("start");
+    check("on this shutter", asked?.cover_unique_id, cover.unique_id);
+    check("with no route decided for the user", asked?.path, undefined);
+    check("so with no profile", asked?.profile, undefined);
+    check("and no scope", asked?.scope, undefined);
+    checkThat("and the wizard is drawing it", find("[data-wizard]"));
+  }
+  {
+    const { bench } = await open("times-and-rolls", true);
+    check("'Tempi e rulli' carries its own scope", bench.last("start")?.scope, "times_and_rolls");
+    check("on the correction's route", bench.last("start")?.path, "path_c");
+  }
+  {
+    const { bench } = await open("points-only", true);
+    check("'Solo la calibrazione approfondita' carries its own", bench.last("start")?.scope, "points_only");
+  }
+  {
+    // "Calibrazione approfondita" is the same thing by another button, and this shutter is
+    // already thorough, so the button is not offered on it - the one that is offered is
+    // the scope of the same name inside "Correggi…", checked just above.
+    const { bench } = await open("thorough");
+    check("the button that is not offered sends nothing", bench.sessions("start"), 0);
+  }
+}
+
+console.log("\n…and a shutter that follows no profile, on a gateway that has none");
+{
+  // BUG-1 of the review. `start{path_c, scope}` without a profile is a frame the schema
+  // accepts, and the backend answers with the profile form - whose choices are the
+  // gateway's profiles. With none, that screen has an empty list, no actions and nothing
+  // to press, under a sentence saying a profile was assigned. Verified against the real
+  // backend: `step: "path_c"`, `actions: []`, `form.choices: []`.
+  const bare = structuredClone(overviewFixture);
+  bare.profiles = [];
+  bare.covers = bare.covers.map((one) => ({ ...one, profile: null }));
+  const cover = bare.covers.find((one) => one.has_own.length > 0);
+  const bench = gateway({ session: null, overview: bare });
+  const { settle, find, all } = await mount(
+    bench.connection,
+    `#/cover/${encodeURIComponent(cover.unique_id)}`,
+  );
+  await settle(280);
+  const correct = find('button.wide[data-wide="correct"]');
+  checkThat("'Correggi…' is still on the card", correct);
+  checkThat("but it cannot be pressed", correct?.hasAttribute("disabled"));
+  checkThat(
+    "and it says why, instead of opening a screen with nothing on it",
+    (correct?.textContent ?? "").includes("has none yet"),
+  );
+  checkThat(
+    "the thorough calibration says the same",
+    all('button.wide[data-wide="thorough"]').every((one) => one.hasAttribute("disabled")),
+  );
+  correct?.click();
+  await settle(200);
+  check("and pressing it starts nothing", bench.sessions("start"), 0);
+  // …while the way that does not need a profile is still there and still works.
+  bench.state.session = scenario("armed_path");
+  find('[data-wide="measure-again"]')?.click();
+  await settle(240);
+  check("'Misura di nuovo' still opens a session", bench.sessions("start"), 1);
+  check("with no path, so with nothing that needs a profile", bench.last("start")?.path, undefined);
+}
+
+console.log("\n…and one that follows none on a gateway that has some");
+{
+  // The middle case of BUG-1, and the one the correction keeps alive: the profile form
+  // really has something in it, so `path_c` **without** a profile is the question this
+  // shutter can be asked - "which profile should it follow?" - instead of a blank screen.
+  const some = structuredClone(overviewFixture);
+  const cover = { ...some.covers.find((one) => one.has_own.length > 0), profile: null };
+  some.covers = some.covers.map((one) => (one.unique_id === cover.unique_id ? cover : one));
+  const bench = gateway({ session: null, overview: some });
+  const { settle, find } = await mount(
+    bench.connection,
+    `#/cover/${encodeURIComponent(cover.unique_id)}`,
+  );
+  await settle(280);
+  const correct = find('button.wide[data-wide="correct"]');
+  checkThat("'Correggi…' can be pressed", correct && !correct.hasAttribute("disabled"));
+  correct?.click();
+  await settle(160);
+  bench.state.session = scenario("armed_path_c_profile_choice");
+  find('[data-wide="times-only"]')?.click();
+  await settle(280);
+  const asked = bench.last("start");
+  check("the correction opens on the route it names", asked?.path, "path_c");
+  check("carrying the scope", asked?.scope, "times_only");
+  check("and no profile, because this shutter follows none", asked?.profile, undefined);
+  checkThat("the screen it lands on is the choice of profile", find(".options button.option"));
+}
+
+console.log("\nthe choice of shutter on a gateway that is already holding one");
+{
+  // RISCHIO-1: the banner is not drawn on this route, and this is the screen where that
+  // costs something - a list of shutters on a gateway that will refuse every one of them.
+  const held = structuredClone(overviewFixture);
+  held.measuring = {
+    cover_unique_id: held.covers[0].unique_id,
+    name: held.covers[0].name,
+  };
+  const bench = gateway({ session: null, overview: held });
+  const { settle, find } = await mount(bench.connection, "#/calibrate");
+  await settle(280);
+  checkThat("the choice is drawn", find("[data-wizard-pick]"));
+  checkThat("and says first that a shutter is already being measured", find("[data-session-busy]"));
+  checkThat(
+    "naming it",
+    (find("[data-session-busy]")?.textContent ?? "").includes(held.covers[0].name),
+  );
+  check("and nothing was started to find that out", bench.sessions("start"), 0);
+}
+
+console.log("\na question does not survive the screen it was asked on");
+{
+  // RISCHIO-2 and RISCHIO-3: the two ways the question can outlive what it was about.
+  const held = structuredClone(overviewFixture);
+  held.measuring = {
+    cover_unique_id: held.covers[0].unique_id,
+    name: held.covers[0].name,
+  };
+  const bench = gateway({ session: null, overview: held });
+  const { window, settle, find } = await mount(bench.connection, "#/");
+  await settle(240);
+  find('[data-banner="end-other"]')?.click();
+  await settle(120);
+  checkThat("the question is on the screen", find("[data-banner-question]"));
+  window.location.hash = "#/calibrate";
+  await settle(240);
+  window.location.hash = "#/";
+  await settle(240);
+  checkThat("and it is gone after a walk through another screen", !find("[data-banner-question]"));
+  check("with nothing sent by any of it", bench.sessions("end_other"), 0);
+
+  // …and the holder changing under it, which is the narrower window: the sentence would go
+  // on naming a shutter the answer no longer frees.
+  find('[data-banner="end-other"]')?.click();
+  await settle(120);
+  checkThat("the question is back", find("[data-banner-question]"));
+  bench.pushOverview({
+    measuring: { cover_unique_id: held.covers[1].unique_id, name: held.covers[1].name },
+  });
+  await settle(200);
+  checkThat("and it goes when somebody else takes a shutter", !find("[data-banner-question]"));
+  checkThat("leaving the strip on the screen", find("[data-banner-measuring]"));
+}
+
 console.log("\nthe banner over a session of this panel's, and 'Riprendi'");
 {
   // `measuring` says a shutter of the gateway is held; `session` says by whom (contract

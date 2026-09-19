@@ -272,6 +272,17 @@ export const templateStyles = css`
   .chip.adjusted {
     background: var(--myhome-accent-pastel);
     color: var(--myhome-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .chip .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--myhome-accent);
+    display: inline-block;
   }
 
   .instruction {

@@ -908,7 +908,8 @@
         "times_rolls": "Times and rolls",
         "times_rolls_note": "Full basic calibration",
         "thorough": "Thorough calibration only",
-        "thorough_note": "Readings at 25 and 75 % per direction, and a check"
+        "thorough_note": "Readings at 25 and 75 % per direction, and a check",
+        "needs_profile": "A correction starts from the profile this shutter should follow, and this gateway has none yet: measure it again instead, and a profile is born at the end."
       },
       "edit": {
         "title": "Edit the values by hand",
@@ -1147,11 +1148,12 @@
       },
       "busy": {
         "title": "The shutter is already in calibration",
-        "panel": "A guided calibration of «{cover}» is already running, in another panel or in another tab. It can be followed from here; taking control of it is a button on its screen.",
+        "panel": "A guided calibration of «{cover}» is already running, in another panel or in another tab. It can be followed from here, and if that device is no longer present the control passes here; while it is, taking over is a button on its screen.",
         "other": "«{cover}» is in calibration in the Configure dialog.",
         "end_other": "Close the dialog and free the shutter",
         "end_other_confirm": "Close the Configure dialog open on this gateway? The unsaved measurements of that dialog are lost, and if it had saved something the integration is reloaded.",
-        "service": "A calibration run started by an action is still under way: wait for it to finish."
+        "service": "A calibration run started by an action is still under way: wait for it to finish.",
+        "here": "This tab is already measuring «{cover}»: one shutter at a time on a gateway. Go back to it, or end it, before measuring another one."
       }
     },
     "screen": {

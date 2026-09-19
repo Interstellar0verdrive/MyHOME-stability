@@ -333,6 +333,14 @@ export class MyHomeCoverDetail extends LitElement {
     );
     const hasOwn = cover.has_own.length > 0;
     const offersThorough = hasOwn && cover.level !== "precise";
+    // **A correction is a correction of a profile.** `path_c` is born on the profile
+    // form, whose choices are the gateway's profiles: with none defined the screen has an
+    // empty list, no actions and nothing to press, under a sentence that says a profile
+    // was assigned. Verified against the backend - `start(path_c, scope)` on a gateway
+    // with no profiles answers `step: "path_c"`, `actions: []`, `form.choices: []`. So
+    // the two buttons that can only mean `path_c` are offered only where an answer
+    // exists, and say why when it does not.
+    const correctable = (this.state.overview?.profiles ?? []).length > 0;
     return html`<section class="card">
         <h2 data-heading tabindex="-1">${this.i18n.t("panel.detail.values.title")}</h2>
         <p class="intro">${this.i18n.t("panel.detail.values.intro")}</p>
@@ -376,8 +384,11 @@ export class MyHomeCoverDetail extends LitElement {
         ${hasOwn
           ? wideButton({
               label: this.i18n.t("panel.detail.action.correct"),
-              note: this.i18n.t("panel.detail.action.correct_note"),
+              note: correctable
+                ? this.i18n.t("panel.detail.action.correct_note")
+                : this.i18n.t("panel.detail.correct.needs_profile"),
               mark: "correct",
+              disabled: !correctable,
               onClick: () => this.actions.mode("correct"),
             })
           : nothing}
@@ -390,6 +401,7 @@ export class MyHomeCoverDetail extends LitElement {
               // own: four readings and a check, with no timed run.
               { path: "path_c", scope: "points_only" },
               "thorough",
+              correctable,
             )
           : nothing}
         ${hasOwn
@@ -438,21 +450,23 @@ export class MyHomeCoverDetail extends LitElement {
    * No "↗": nothing here leaves the panel any more, and an arrow that promised it would
    * was the drift row 24 of the design check names. The profile is sent only when this
    * shutter really follows one that exists - a name nobody defines is `unknown_profile`,
-   * and a correction of a shutter with no profile is born on the choice of profile
-   * instead, which is the screen that can answer it.
+   * and a correction of a shutter that follows none is born on the **choice of profile**
+   * instead, which is the screen that can answer it. `offered` is false where even that
+   * screen would have nothing on it: see `correctable` in `_view`.
    */
   private _calibrateButton(
     labelKey: string,
     noteKey: string,
     intent: Omit<WizardIntent, "cover" | "name" | "profile">,
     mark: string,
+    offered = true,
   ): TemplateResult {
     const cover = this._cover;
     return wideButton({
       label: this.i18n.t(labelKey),
-      note: this.i18n.t(noteKey),
+      note: offered ? this.i18n.t(noteKey) : this.i18n.t("panel.detail.correct.needs_profile"),
       mark,
-      disabled: cover === null,
+      disabled: cover === null || !offered,
       onClick: () => {
         if (!cover) {
           return;

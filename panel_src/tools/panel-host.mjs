@@ -92,7 +92,7 @@ const overviewFor = (state) => {
       owner: snapshot.owner?.client_id ?? null,
     };
   }
-  if (state === "first-run") {
+  if (state === "first-run" || state === "no-profiles") {
     answer.profiles = [];
     answer.covers = answer.covers.map((cover) => ({ ...cover, profile: null }));
   }
@@ -441,11 +441,10 @@ export const pressWide = (index) => async ({ panel, deepAll, settle }) => {
 };
 
 /** …and the same by name, for the buttons whose position depends on the shutter. */
-export const pressNamedWide = (mark) => async ({ panel, deep, settle }) => {
+const pressNamedWide = (mark) => async ({ panel, deep, settle }) => {
   deep(panel.shadowRoot, `button.wide[data-wide="${mark}"]`)?.click();
   await settle();
 };
-
 
 /** One of the banner's offers, named by the mark it carries. */
 const pressBanner = (mark) => async ({ panel, deep, settle }) => {
@@ -577,6 +576,15 @@ export const STATES = [
     drive: pressNamedWide("correct"),
     expect: 'button.wide[data-wide="times-only"]',
   },
+  // A gateway where nothing has ever been measured into a profile: a correction has no
+  // profile to start from, so the two buttons that can only mean `path_c` say why instead
+  // of opening a screen with nothing on it (BUG-1 of the review).
+  {
+    name: "cover detail, a gateway with no profiles to correct against",
+    state: "no-profiles",
+    hash: COVER,
+    expect: 'button.wide[data-wide="correct"][disabled]',
+  },
   { name: "profile card", state: "ready", hash: "#/profile/tall", expect: "[data-drawer]" },
   { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-advanced-note]" },
   { name: "profile card, second action", state: "ready", hash: "#/profile/tall", drive: pressWide(1), expect: "[data-drawer]" },
@@ -593,6 +601,9 @@ export const STATES = [
   // …and the gateway where there is nothing to calibrate, which is the same address with
   // an empty list behind it.
   { name: "the wizard, nothing to calibrate", state: "no-basic-covers", hash: "#/calibrate", expect: "[data-wizard-empty]" },
+  // …and the same choice on a gateway that is already holding a shutter: the condition is
+  // said before the list, not discovered by pressing one of it.
+  { name: "the wizard, choosing while the gateway is busy", state: "measuring", hash: "#/calibrate", expect: "[data-session-busy]" },
   ...WIZARD_SCREENS,
   // The banner in each of the three shapes SPEC §6 gives it, and the two questions it
   // asks. `measuring` alone is the Configure dialog; `measuring` with a session beside it
@@ -606,7 +617,7 @@ export const STATES = [
     expect: "[data-banner-question]",
   },
   {
-    name: "the banner, the question about the dialog",
+    name: "the banner, the question about closing the dialog",
     state: "measuring",
     drive: pressBanner("end-other"),
     expect: "[data-banner-question]",
@@ -630,7 +641,7 @@ export const STATES = [
     expect: "[data-session-busy]",
   })),
   {
-    name: "the wizard, the question about the dialog",
+    name: "the wizard, the question about closing the dialog",
     state: "busy:other",
     hash: "#/calibrate",
     drive: async (context) => {

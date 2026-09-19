@@ -342,16 +342,32 @@ export class Store {
    * confirming them, or asking to (`NOTHING_PENDING`).
    */
   setOverview(overview: Overview): void {
+    const held = this.state.overview?.measuring ?? null;
+    const now = overview.measuring;
+    // A gateway that is holding nothing is a gateway with no question to answer about it.
+    // Left alone, a `service` found out about one calibration would still be on the
+    // screen during the next one, saying "wait for it to finish" about a shutter this
+    // panel could perfectly well let go of.
+    //
+    // …and a **change of holder** is the same thing in a narrower window: the panel's own
+    // session ends and the dialog takes another shutter in the same push, and the strip
+    // goes on asking "End the guided calibration of «X»?" - naming the *new* shutter,
+    // with a "yes" that sends a `cancel` freeing nothing while the dialog keeps it. So
+    // the question goes whenever who-is-holding-what changes, and only the answer to the
+    // question that is on the screen now can be pressed.
+    const wasPanel = (this.state.overview?.session ?? null) !== null;
+    const isPanel = overview.session !== null;
+    const changed =
+      now === null ||
+      held === null ||
+      held.cover_unique_id !== now.cover_unique_id ||
+      wasPanel !== isPanel;
     this.set({
       overview,
       entryId: overview.entry_id,
       status: "ready",
       error: null,
-      // A gateway that is holding nothing is a gateway with no question to answer about
-      // it. Left alone, a `service` found out about one calibration would still be on the
-      // screen during the next one, saying "wait for it to finish" about a shutter this
-      // panel could perfectly well let go of.
-      ...(overview.measuring === null ? { busy: NOT_BUSY } : {}),
+      ...(now === null ? { busy: NOT_BUSY } : changed ? { busy: { ...this.state.busy, ask: null } } : {}),
     });
   }
 

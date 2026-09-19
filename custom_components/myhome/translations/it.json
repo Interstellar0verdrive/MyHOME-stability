@@ -908,7 +908,8 @@
         "times_rolls": "Tempi e rulli",
         "times_rolls_note": "Calibrazione base completa",
         "thorough": "Solo la calibrazione approfondita",
-        "thorough_note": "Letture al 25 e al 75 % per direzione e una verifica"
+        "thorough_note": "Letture al 25 e al 75 % per direzione e una verifica",
+        "needs_profile": "La correzione parte dal profilo che questa tapparella dovrebbe seguire, e questo gateway non ne ha ancora nessuno: conviene misurarla di nuovo, e alla fine il profilo nasce."
       },
       "edit": {
         "title": "Modifica i valori a mano",
@@ -1147,11 +1148,12 @@
       },
       "busy": {
         "title": "La tapparella è già in calibrazione",
-        "panel": "Una calibrazione guidata di «{cover}» è già in corso, in un altro pannello o in un'altra scheda. Da qui si può seguirla; il controllo si prende con un pulsante sul suo schermo.",
+        "panel": "Una calibrazione guidata di «{cover}» è già in corso, in un altro pannello o in un'altra scheda. Da qui si può seguirla, e se quel dispositivo non è più presente il controllo passa qui; finché lo è, il controllo si prende con un pulsante sul suo schermo.",
         "other": "«{cover}» è in calibrazione nel dialogo Configura.",
         "end_other": "Chiudi il dialogo e libera la tapparella",
         "end_other_confirm": "Chiudere il dialogo Configura aperto su questo gateway? Le misure non salvate di quel dialogo vanno perse, e se aveva salvato qualcosa l'integrazione viene ricaricata.",
-        "service": "Una corsa di calibrazione avviata da un'azione è ancora in corso: attendere che finisca."
+        "service": "Una corsa di calibrazione avviata da un'azione è ancora in corso: attendere che finisca.",
+        "here": "Questa scheda sta già misurando «{cover}»: su un gateway si misura una tapparella alla volta. Conviene tornarci, o terminarla, prima di misurarne un'altra."
       }
     },
     "screen": {
