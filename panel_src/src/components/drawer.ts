@@ -51,7 +51,17 @@ export interface DrawerContext {
   hasBack: boolean;
   /** True while a write is in the air: every way out is inert, the backdrop included. */
   applying: boolean;
+  /** The head's control: one screen back where there is one, the list otherwise. */
   onClose: () => void;
+  /**
+   * A press on the dark half, which is not the same gesture.
+   *
+   * A click outside a panel is "I am done with this", and it used to be wired to the same
+   * handler as the arrow: from a profile card opened out of a shutter's card it walked one
+   * screen back to the shutter, and a second click outside was needed to get to the list
+   * (live finding 27). The history is what the arrow is for; the backdrop leaves.
+   */
+  onDismiss: () => void;
   content: TemplateResult;
 }
 
@@ -62,8 +72,13 @@ export const drawer = (context: DrawerContext): TemplateResult => {
       context.onClose();
     }
   };
+  const dismiss = (): void => {
+    if (!context.applying) {
+      context.onDismiss();
+    }
+  };
   return html`
-    <div class="sheet-backdrop" aria-hidden="true" @click=${close}></div>
+    <div class="sheet-backdrop" aria-hidden="true" @click=${dismiss}></div>
     <div
       class="sheet drawer"
       role="dialog"

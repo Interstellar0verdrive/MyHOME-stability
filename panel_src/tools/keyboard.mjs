@@ -255,6 +255,35 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+// --- ...and the dark half, which is not the arrow -----------------------------------------
+{
+  console.log("\ndetail → profile → a click outside");
+  // Live finding 27: a click outside answered like the arrow, so from a profile card
+  // opened out of a shutter's card it went back to the shutter and a second click outside
+  // was needed to leave. A click outside is "I am done with this", from however deep.
+  const { window, panel, dom, settle } = await mount({
+    name: "the drawer, dismissed from two levels down",
+    state: "ready",
+    hash: COVER,
+    expect: "[data-drawer]",
+  });
+  const toProfile = deepAll(deep(panel.shadowRoot, "[data-drawer]"), "button.wide").find(
+    (button) => (button.textContent ?? "").includes("Open the profile card"),
+  );
+  toProfile?.click();
+  await settle();
+  check("the profile is in the drawer, two screens deep",
+    window.location.hash.startsWith("#/profile/"));
+  deep(panel.shadowRoot, ".sheet-backdrop")?.click();
+  await settle();
+  check("one click outside lands on the list, not on the shutter it came from",
+    window.location.hash === "#/" || window.location.hash === "" || window.location.hash === "#",
+    window.location.hash);
+  check("and the drawer is gone", deep(panel.shadowRoot, "[data-drawer]") === null &&
+    deep(panel.shadowRoot, "button.handle") !== null);
+  dom.window.close();
+}
+
 // --- the measuring lock ------------------------------------------------------------------
 {
   console.log("\na measurement is running");

@@ -294,6 +294,12 @@ the panel when it is in the way.
 - **The button under a tape reading says "Done, go on".** "That is right, go on" is the
   answer to a proposal, and what is being confirmed there is a number the user has just
   written down.
+- **A click outside a side panel closes it, whatever is in it.** From a shutter's card the
+  panel can be replaced by the card of the profile it follows; a click outside then went
+  *back* to the shutter and a second click outside was needed to leave, which looks stuck
+  to somebody who has already said they are done. A click outside now returns to the
+  overview in one gesture, from however deep the panel has gone. The arrow in the head is
+  what walks back one screen, and Escape still does what the arrow does.
 
 ## [0.5.0] - 2026-09-13
 
