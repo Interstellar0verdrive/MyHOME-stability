@@ -119,6 +119,23 @@ const standingOn = (step: SessionStep): SessionSnapshot => {
 /** A number already written out, made safe to look for with a regular expression. */
 const escapeForMatch = (written: string): string => written.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/**
+ * The thorough calibration's check, built from path B's scenario.
+ *
+ * The fixture has no walk that stops on `verify_result` at the thorough level - the
+ * thorough scenarios are reviews - and since lot W3 the two checks are drawn by different
+ * code: path B's is the panel's own screen, the thorough one is still the dialog's. This
+ * is the second of the two, which is what `path` and the three null fields make it.
+ */
+const theThoroughCheck = (): SessionSnapshot => {
+  const snapshot = structuredClone(scenarios.checking_verify_result_offers_c);
+  return {
+    ...snapshot,
+    path: "path_c",
+    check: { ...snapshot.check!, threshold_cm: null, profile_level: null, profile_check_cm: null },
+  } as unknown as SessionSnapshot;
+};
+
 /** Every string a screen shows, however deep in the model it is. */
 const sentences = (model: ReturnType<typeof screenModel>): string[] => {
   const out: string[] = [model.title, model.body ?? ""];
@@ -258,8 +275,10 @@ describe("the words of every screen", () => {
   });
 
   it("keeps the line where it says something the header does not", () => {
-    // "**Tapparella**: {cover} - lettura al {percent}% della corsa" is not the name twice.
-    const model = screenModel(scenarios.checking_verify_result_offers_c, context(it_it));
+    // "**Tapparella**: {cover} - **scarto**: {deviation} cm" is not the name twice. The
+    // thorough calibration's own check is where that screen is still the dialog's: path
+    // B's has been the panel's own since lot W3.
+    const model = screenModel(theThoroughCheck(), context(it_it));
     assert.match(model.body ?? "", /^\*\*Tapparella\*\*:/);
   });
 
@@ -790,32 +809,61 @@ describe("the errors of a form", () => {
 
 describe("the check of a verification", () => {
   it("says what the tape read and what the model had predicted", () => {
-    const snapshot = scenarios.checking_verify_result_offers_c;
+    // The thorough calibration's check, which is still the dialog's: the model predicted
+    // a place, the tape found another, and the two numbers are what the gap is made of.
+    const snapshot = theThoroughCheck();
     const check = snapshot.check;
     assert.ok(check);
     const model = screenModel(snapshot, context(en_gb));
     const lines = model.lines ?? [];
-    assert.ok(lines.length >= 1);
+    assert.equal(lines.length, 1);
     assert.match(lines[0] ?? "", new RegExp(escapeForMatch(en_gb.number(check.measured_cm, 1))));
     assert.match(lines[0] ?? "", new RegExp(escapeForMatch(en_gb.number(check.predicted_cm, 1))));
-  });
-
-  it("says what the offer to correct this shutter rests on, on path B", () => {
-    const snapshot = scenarios.checking_verify_result_offers_c;
-    // Only path B carries a threshold; everywhere else the second line is absent.
-    assert.notEqual(snapshot.check?.threshold_cm, null);
-    const lines = screenModel(snapshot, context(en_gb)).lines ?? [];
-    assert.equal(lines.length, 2);
-    assert.match(lines[1] ?? "", /profile/);
-    // Path A checks the same way and has no threshold to offer a correction against: the
-    // second line is absent rather than empty.
-    const alone: SessionSnapshot = {
-      ...structuredClone(snapshot),
-      check: { ...structuredClone(snapshot.check!), threshold_cm: null, profile_check_cm: null },
-    } as unknown as SessionSnapshot;
-    assert.equal((screenModel(alone, context(en_gb)).lines ?? []).length, 1);
     // …and the review says it its own way, with the accuracy line, not with these.
     assert.equal(screenModel(scenarios.review_precise, context(en_gb)).lines, undefined);
+  });
+
+  it("gives the verdict before the offer, on path B", () => {
+    // Live finding 32: the screen printed the two numbers and then "Above 4 cm it is
+    // worth measuring this shutter on its own", which was read as "middling" by the one
+    // person who had measured the shutter. What decided is a comparison the panel has, so
+    // the panel makes it and puts it first - both ways round.
+    const out = scenarios.checking_verify_result_offers_c;
+    const gap = out.check?.gap_cm ?? 0;
+    const threshold = out.check?.threshold_cm ?? 0;
+    assert.ok(gap > threshold);
+    const beyond = screenModel(out, context(en_gb));
+    assert.equal(beyond.title, en_gb.t("panel.wizard.check.half.beyond.title"));
+    // The gap opens the body, and the offer comes after it, in its own paragraph.
+    assert.match(beyond.body ?? "", new RegExp(`^\\*\\*${escapeForMatch(en_gb.number(gap, 1))}`));
+    assert.ok((beyond.body ?? "").indexOf("\n\n") > 0);
+    // The two numbers are still said, and they are said once: the separate lines the
+    // screen used to carry are gone, not repeated under the words.
+    assert.match(beyond.body ?? "", new RegExp(escapeForMatch(en_gb.number(out.check!.predicted_cm, 0))));
+    assert.match(beyond.body ?? "", new RegExp(escapeForMatch(en_gb.number(out.check!.measured_cm, 1))));
+    assert.equal(beyond.lines, undefined);
+
+    const within = scenarios.checking_verify_result_within;
+    assert.ok((within.check?.gap_cm ?? 0) <= (within.check?.threshold_cm ?? 0));
+    const passed = screenModel(within, context(en_gb));
+    assert.equal(passed.title, en_gb.t("panel.wizard.check.half.within.title"));
+    assert.notEqual(passed.title, beyond.title);
+    assert.equal(passed.lines, undefined);
+  });
+
+  it("promises half the travel on the screens that lead up to it, on path B", () => {
+    // What the tape should read is half the curtain travel, and it is the same number on
+    // the offer, under the field and in the verdict - or the check would be asking the
+    // user to trust three different promises about one movement.
+    const half = en_gb.number((scenarios.briefing_verify_offer.measured?.travel_cm ?? 0) / 2, 0);
+    assert.equal(half, "76");
+    for (const name of ["briefing_verify_offer", "awaiting_reading_measure_verify"] as const) {
+      const model = screenModel(scenarios[name], context(en_gb));
+      assert.match(model.body ?? "", new RegExp(escapeForMatch(half)), name);
+      assert.doesNotMatch(model.body ?? "", /Configur/, name);
+    }
+    // The drawing of the tape against the shutter is the dialog's and is kept.
+    assert.ok(screenModel(scenarios.awaiting_reading_measure_verify, context(en_gb)).image);
   });
 
   it("offers a path among the ways forward without making it the big button", () => {

@@ -1147,6 +1147,25 @@
         "no_reference": {
           "title": "There was nothing to check against",
           "body": "The tape read {measured} cm at {percent}% of the travel, but the values {cover} was following are no longer there, so there is no prediction to compare it with. The reading has not been thrown away: go on, and the review says what would be saved."
+        },
+        "half": {
+          "offer": {
+            "title": "Check the shutter?",
+            "body": "The curtain travel was all that was needed: the calibration can be saved as it is.\n\n**What the check is**: the shutter is closed completely, then taken back up to half its travel — the very movement it will make from now on when it is asked to open half way. Measure where the bottom edge stopped: it should be about {half} cm. It takes about a minute and one tape reading."
+          },
+          "reading": {
+            "title": "Check {cover} — half way along the travel",
+            "body": "The shutter has been taken to half its travel. Measure from the base to the bottom edge, from the same reference as the readings before: it should be about {half} cm.\n\nThis is the position the shutter will take from now on when it is asked to open half way, so the check really does say whether the profile suits this shutter."
+          },
+          "within": {
+            "title": "The profile suits this shutter",
+            "body": "**{gap} cm out**: within the {threshold} cm, so the profile «{profile}» suits this shutter. The bottom edge was to stop at {half} cm and stopped at {measured} cm.\n\nFor more accuracy this shutter can be measured on its own, from its card, with **Correct…**."
+          },
+          "beyond": {
+            "title": "This shutter does not follow the profile",
+            "body": "**{gap} cm out**: more than the {threshold} cm. The bottom edge was to stop at {half} cm and stopped at {measured} cm, so this shutter does not move the way the profile «{profile}» does.\n\nIt is worth measuring it on its own: the correction keeps the curtain travel just measured and asks only for what is missing."
+          },
+          "reviewed": "Accuracy checked: the bottom edge stopped within {accuracy} cm of half the travel."
         }
       },
       "pick": {

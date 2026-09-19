@@ -297,6 +297,7 @@ const stepScreen = (
     // what the design draws and what the dialog's own three answers are.
     chooseAndContinue(model, context, defaultChoice(session, model.options ?? []));
   }
+  halfTravelWords(model, session, context, step);
   if (session.check) {
     checkParts(model, session, context);
   }
@@ -456,6 +457,121 @@ const stopAction = (model: ScreenModel, row: StepRow, i18n: I18n): void => {
 };
 
 /**
+ * Path B's check is the panel's own screen, and it says so in the panel's own words.
+ *
+ * The dialog's sentences on `verify_offer`, `measure_verify` and `verify_result` describe
+ * the dialog's check - half the closing time, downwards, compared with what the profile
+ * predicts for it - and the dialog still makes that one. The panel's goes up to half the
+ * curtain travel and expects the tape to read half the travel (contract §12.2b), so
+ * reusing those sentences would describe a movement the shutter did not make. Everywhere
+ * else on the route the dialog's words stand, translated into seven languages; here they
+ * would be wrong in all seven.
+ *
+ * `path` is the discriminator because `verify_b` is the only check path B has and the
+ * only one path B can reach: `check` is not even in the snapshot on two of the three
+ * screens, so a field of its own would still leave this one asking `path`.
+ */
+const halfTravelCheck = (session: SessionSnapshot): boolean => session.path === "path_b";
+
+/**
+ * The four screens of that check, written out rather than built from a token.
+ *
+ * `test_every_key_the_sources_use_is_declared_and_every_declared_key_is_used` reads these
+ * files for string literals, which is the only way a suite with no Node in it can know
+ * what the bundle asks for: a key assembled out of a template would have no stand-in
+ * beside it and nobody would notice until it rendered as its own dotted name.
+ */
+const HALF_TRAVEL_WORDS = {
+  offer: {
+    title: "panel.wizard.check.half.offer.title",
+    body: "panel.wizard.check.half.offer.body",
+  },
+  reading: {
+    title: "panel.wizard.check.half.reading.title",
+    body: "panel.wizard.check.half.reading.body",
+  },
+  within: {
+    title: "panel.wizard.check.half.within.title",
+    body: "panel.wizard.check.half.within.body",
+  },
+  beyond: {
+    title: "panel.wizard.check.half.beyond.title",
+    body: "panel.wizard.check.half.beyond.body",
+  },
+} as const;
+
+/** Half the curtain travel, as a word, or `null` when nobody has measured the travel. */
+const halfTheTravel = (session: SessionSnapshot, i18n: I18n): string | null => {
+  const travel = session.measured?.travel_cm;
+  return typeof travel === "number" ? i18n.number(travel / 2, 0) : null;
+};
+
+/**
+ * The words of path B's check, on the screen that offers it and the one that reads it.
+ *
+ * Title and body only: the drawing the dialog's description carries is the same drawing
+ * of the same tape held against the same shutter, and it is kept.
+ */
+const halfTravelWords = (
+  model: ScreenModel,
+  session: SessionSnapshot,
+  context: WizardContext,
+  step: SessionStep,
+): void => {
+  const { i18n } = context;
+  if (!halfTravelCheck(session) || (step !== "verify_offer" && step !== "measure_verify")) {
+    return;
+  }
+  const half =
+    step === "measure_verify" && typeof session.reading?.expected_cm === "number"
+      ? i18n.number(session.reading.expected_cm, 0)
+      : halfTheTravel(session, i18n);
+  if (half === null) {
+    // Nothing has measured the travel, so there is no number to promise. The dialog's
+    // own sentences are wrong about the movement but right about the gesture, and a
+    // screen with the words missing would be worse than one with the old ones.
+    return;
+  }
+  const said = step === "verify_offer" ? HALF_TRAVEL_WORDS.offer : HALF_TRAVEL_WORDS.reading;
+  model.title = i18n.t(said.title, { cover: session.cover.name });
+  model.body = i18n.t(said.body, { half });
+};
+
+/**
+ * ...and on the screen that answers it: the verdict first, the offer after it.
+ *
+ * The screen used to print the two numbers and then a sentence beginning "Above 4 cm it
+ * is worth measuring this shutter on its own", which reads as a verdict of "middling" and
+ * was read as one (live finding 32). What decides is a comparison the panel already has,
+ * so the panel makes it: the gap against the threshold, in the title, and what can be
+ * done about it underneath - in the same neutral words whichever way it came out.
+ */
+const halfTravelResult = (
+  model: ScreenModel,
+  session: SessionSnapshot,
+  context: WizardContext,
+  check: NonNullable<SessionSnapshot["check"]>,
+): void => {
+  const { i18n } = context;
+  const gap = check.gap_cm ?? 0;
+  const threshold = check.threshold_cm;
+  const said =
+    threshold !== null && gap > threshold
+      ? HALF_TRAVEL_WORDS.beyond
+      : HALF_TRAVEL_WORDS.within;
+  const words = {
+    gap: i18n.number(gap, 1),
+    threshold: i18n.number(threshold ?? 0, 0),
+    half: i18n.number(check.predicted_cm ?? 0, 0),
+    measured: i18n.number(check.measured_cm, 1),
+    profile: session.profile ?? "",
+  };
+  model.title = i18n.t(said.title);
+  model.body = i18n.t(said.body, words);
+  model.lines = undefined;
+};
+
+/**
  * The numbers a verification was made of, said out loud.
  *
  * The dialog's own sentence gives the deviation and stops there; where the shutter was
@@ -480,6 +596,10 @@ const checkParts = (
     return;
   }
   const percent = i18n.number(check.fraction * 100, 0);
+  if (check.gap_cm !== null && halfTravelCheck(session)) {
+    halfTravelResult(model, session, context, check);
+    return;
+  }
   if (check.gap_cm === null) {
     model.title = i18n.t("panel.wizard.check.no_reference.title");
     model.body = i18n.t("panel.wizard.check.no_reference.body", {
@@ -759,7 +879,15 @@ const reviewScreen = (
     .map((key) => summaryRow(review.rows, key, i18n))
     .filter((one): one is ScreenSummaryRow => one !== null);
   const lines: string[] = [];
-  if (review.accuracy_cm !== null && review.check_fraction !== null) {
+  if (review.accuracy_cm !== null && halfTravelCheck(session)) {
+    // Path B's check has no percentage to name: it was aimed at half the travel, and
+    // the fraction of the run it took to get there is not a number anybody wants.
+    lines.push(
+      i18n.t("panel.wizard.check.half.reviewed", {
+        accuracy: i18n.number(review.accuracy_cm, 1),
+      }),
+    );
+  } else if (review.accuracy_cm !== null && review.check_fraction !== null) {
     lines.push(
       i18n.t("panel.wizard.review.accuracy_checked", {
         accuracy: i18n.number(review.accuracy_cm, 1),

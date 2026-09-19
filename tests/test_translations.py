@@ -801,6 +801,10 @@ PANEL_PLACEHOLDERS: dict[str, str] = {
     "measured": "what the tape read, in centimetres",
     "predicted": "where the model said the shutter would stop, in centimetres",
     "threshold": "the deviation above which a shutter is worth measuring on its own",
+    # ...and the two of path B's check (lot W3), which is the panel's own screen because
+    # the dialog makes a different check (contract §12.2b).
+    "half": "half the curtain travel, in centimetres - what the check expects to read",
+    "gap": "how far the tape was from what was expected, in centimetres",
 }
 
 
