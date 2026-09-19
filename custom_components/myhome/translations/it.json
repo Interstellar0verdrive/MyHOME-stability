@@ -746,7 +746,7 @@
       "action": {
         "measure": "Misura una tapparella"
       },
-      "note": "Si apre il dialogo Configura: è lì che si misura. Al termine, il profilo compare qui."
+      "note": "La calibrazione guidata si svolge in questo pannello: circa tre minuti, e al termine il profilo compare qui."
     },
     "overview": {
       "title": "Profili e tapparelle",
@@ -894,7 +894,7 @@
         "assign": "Assegna a un profilo…",
         "travel": "Imposta la corsa del telo…",
         "measure_again": "Misura di nuovo",
-        "measure_again_note": "Calibrazione base completa, nel dialogo",
+        "measure_again_note": "La calibrazione guidata dall'inizio: il percorso si sceglie sul primo schermo",
         "correct": "Correggi…",
         "correct_note": "Se si ferma nel posto sbagliato: solo i tempi, tempi e rulli, o solo la calibrazione approfondita",
         "thorough": "Calibrazione approfondita",
@@ -902,7 +902,7 @@
         "remove": "Rimuovi la misura…"
       },
       "correct": {
-        "intro": "La correzione apre il dialogo Configura sul percorso scelto. Al ritorno il pannello si aggiorna da solo.",
+        "intro": "La correzione si svolge in questo pannello, sull'ambito scelto qui: viene riscritto solo quello che misura, e nient'altro di questa tapparella cambia.",
         "times": "Solo i tempi",
         "times_note": "Una corsa per direzione, i rulli restano",
         "times_rolls": "Tempi e rulli",

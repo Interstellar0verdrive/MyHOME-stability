@@ -440,6 +440,12 @@ export const pressWide = (index) => async ({ panel, deepAll, settle }) => {
   await settle();
 };
 
+/** …and the same by name, for the buttons whose position depends on the shutter. */
+export const pressNamedWide = (mark) => async ({ panel, deep, settle }) => {
+  deep(panel.shadowRoot, `button.wide[data-wide="${mark}"]`)?.click();
+  await settle();
+};
+
 
 /** One of the banner's offers, named by the mark it carries. */
 const pressBanner = (mark) => async ({ panel, deep, settle }) => {
@@ -562,6 +568,14 @@ export const STATES = [
       await context.settle();
     },
     expect: ".dialog",
+  },
+  // "Correggi…" and its three scopes, which are three ways into the wizard since lot F3.
+  {
+    name: "cover detail, the three scopes of a correction",
+    state: "ready",
+    hash: COVER,
+    drive: pressNamedWide("correct"),
+    expect: 'button.wide[data-wide="times-only"]',
   },
   { name: "profile card", state: "ready", hash: "#/profile/tall", expect: "[data-drawer]" },
   { name: "profile card, first action", state: "ready", hash: "#/profile/tall", drive: pressWide(0), expect: "[data-advanced-note]" },

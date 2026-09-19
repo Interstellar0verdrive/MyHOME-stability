@@ -746,7 +746,7 @@
       "action": {
         "measure": "Measure a cover"
       },
-      "note": "This opens the Configure dialog: that is where the measuring happens. When it is done, the profile appears here."
+      "note": "The guided calibration runs in this panel: about three minutes, and when it is done the profile appears here."
     },
     "overview": {
       "title": "Profiles and covers",
@@ -894,7 +894,7 @@
         "assign": "Assign to a profile…",
         "travel": "Set the curtain travel…",
         "measure_again": "Measure again",
-        "measure_again_note": "Full basic calibration, in the dialog",
+        "measure_again_note": "The guided calibration from the start: the route is chosen on the first screen",
         "correct": "Correct…",
         "correct_note": "If it stops in the wrong place: times only, times and rolls, or the thorough calibration only",
         "thorough": "Thorough calibration",
@@ -902,7 +902,7 @@
         "remove": "Remove the measurement…"
       },
       "correct": {
-        "intro": "The correction opens the Configure dialog on the path chosen. When it comes back, the panel refreshes on its own.",
+        "intro": "The correction runs in this panel, on the scope chosen here: only what it measures is written again, and nothing else of this shutter changes.",
         "times": "Times only",
         "times_note": "One run per direction, the rolls stay",
         "times_rolls": "Times and rolls",

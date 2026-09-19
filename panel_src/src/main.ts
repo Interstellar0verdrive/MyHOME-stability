@@ -1384,7 +1384,6 @@ export class MyHomeCalibrationPanel extends LitElement {
     saveValues: () => void this._saveValues(),
     saveTravel: () => void this._saveTravel(),
     remove: () => void this._removeMeasure(),
-    openFlow: (source) => this._openFlow(source),
     calibrate: (intent) => void this._calibrate(intent),
   };
 
@@ -1961,14 +1960,29 @@ export class MyHomeCalibrationPanel extends LitElement {
   }
 
   /**
-   * "Measure this shutter" - the one road into the wizard.
+   * "Measure this shutter" - the one road into the wizard (SPEC §6).
    *
    * The intention goes into the store **first** and the address is changed after it,
    * because the address says nothing about it: what a reload of `#/calibrate` finds is a
    * session or no session, never an instruction to open one.
+   *
+   * `null` is the other half of the same road: "Misura una tapparella" on the overview and
+   * the first run's own button know no shutter, so they go to the wizard and let it ask.
+   * That arrival is an ordinary one - the flag stays down, `_onRoute` reads the gateway's
+   * session as it would after a reload, and nothing is started.
    */
-  private async _calibrate(intent: WizardIntent): Promise<void> {
+  private async _calibrate(intent: WizardIntent | null): Promise<void> {
     this._store.set({ wizardIntent: intent, sessionError: null });
+    if (!intent) {
+      this._navigate("/calibrate");
+      // A press on the overview while the wizard is already the screen behind a drawer
+      // changes no address, so the session is read here instead of by a route change that
+      // never comes.
+      if (this._store.state.route.view === "calibrate") {
+        void this._readSession();
+      }
+      return;
+    }
     const client = this._ensureSession();
     // Raised across the navigation and put down by the route change it causes, so that the
     // arrival does not read over the top of this: see `_onRoute`.

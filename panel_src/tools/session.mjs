@@ -124,6 +124,32 @@ const gateway = ({
       if (message.type === "myhome/calibration/overview") {
         return Promise.resolve(structuredClone(state.overview));
       }
+      if (message.type === "myhome/calibration/cover_detail") {
+        // Enough of the card to press its buttons: what is being walked here is the road
+        // from one of them into a session, not the card's own numbers.
+        const cover = state.overview.covers.find(
+          (one) => one.unique_id === message.cover_unique_id,
+        );
+        if (!cover) {
+          return Promise.reject({ code: "not_found", message: "no such cover" });
+        }
+        return Promise.resolve({
+          entry_id: state.overview.entry_id,
+          cover,
+          keys: Object.keys(cover.values).map((key) => ({
+            key,
+            value: cover.values[key],
+            origin: cover.has_own.includes(key) ? "own" : "profile",
+            own: cover.has_own.includes(key),
+            inherited_value: cover.values[key],
+            inherited_origin: "inherited",
+            profile_value: cover.values[key],
+            file_value: null,
+            default_value: null,
+          })),
+          forget: { falls_back_to: "defaults", profile: null, travel_stays: false },
+        });
+      }
       if (message.type.startsWith("myhome/calibration/session/")) {
         const name = message.type.slice("myhome/calibration/session/".length);
         const refusal = state.refuse(name, message);
@@ -736,6 +762,72 @@ console.log("\nstopping the shutter in the middle of a timed run");
   // The screen it advances to is the step made repeatable, which is the server's business;
   // what matters here is that the panel has a way to interrupt the one thing that moves.
   checkThat("the wizard is still on the screen", find("[data-wizard]"));
+}
+
+console.log("\nthe overview, 'Misura una tapparella', a shutter chosen, a session open");
+{
+  // SPEC §6, first two rows: the control that used to be a link to the integration page
+  // now goes to the wizard, which asks *which* shutter - and only then is a session
+  // opened. The whole road, on the shipped bundle, from the list to the first screen of a
+  // calibration.
+  const bench = gateway({ session: null });
+  const { window, settle, find, all } = await mount(bench.connection, "#/");
+  await settle(200);
+  const measure = all("button.cta").find((one) =>
+    (one.textContent ?? "").includes("Measure a cover"),
+  );
+  checkThat("the overview offers to measure a shutter", measure);
+  checkThat("and it is a button, not a link out of the panel", measure?.tagName === "BUTTON");
+  measure?.click();
+  await settle(240);
+  check("it goes to the wizard's own address", window.location.hash, "#/calibrate");
+  checkThat("which asks which shutter", find("[data-wizard-pick]"));
+  check("and nothing was started by getting there", bench.sessions("start"), 0);
+  // The first snapshot the gateway hands back once a shutter is chosen.
+  bench.state.session = scenario("armed_path");
+  all(".options button.option")[0]?.click();
+  await settle(240);
+  check("choosing one opens one session", bench.sessions("start"), 1);
+  check(
+    "on the shutter that was pressed",
+    bench.last("start")?.cover_unique_id,
+    overviewFixture.covers[0].unique_id,
+  );
+  check("with no path decided for the user", bench.last("start")?.path, undefined);
+  checkThat("and the wizard is drawing its first screen", find("[data-wizard]"));
+}
+
+console.log("\nthe shutter's card, 'Correggi… → Solo i tempi'");
+{
+  // SPEC §6, fourth row: the three scopes used to land in the dialog's opening menu, all
+  // three of them in the same place. `start` carries the path, the profile and the scope
+  // now, so the session is born on the screen the button named.
+  // A shutter with values of its own: "Correggi…" is offered only where there is
+  // something to correct.
+  const cover = overviewFixture.covers.find(
+    (one) => one.profile !== null && one.has_own.length > 0,
+  );
+  const bench = gateway({ session: null });
+  const { window, settle, find } = await mount(
+    bench.connection,
+    `#/cover/${encodeURIComponent(cover.unique_id)}`,
+  );
+  await settle(240);
+  find('button.wide[data-wide="correct"]')?.click();
+  await settle(160);
+  checkThat("the card offers the three scopes of a correction", find('[data-wide="times-only"]'));
+  bench.state.session = scenario("armed_refine_scope_intent");
+  find('[data-wide="times-only"]')?.click();
+  await settle(280);
+  check("one session is opened", bench.sessions("start"), 1);
+  const asked = bench.last("start");
+  check("on this shutter", asked?.cover_unique_id, cover.unique_id);
+  check("on the correction's own route", asked?.path, "path_c");
+  check("with the scope the button named", asked?.scope, "times_only");
+  check("and the profile it follows, so the scope is what the screen asks about",
+    asked?.profile, cover.profile);
+  check("the address is the wizard's, and says nothing else", window.location.hash, "#/calibrate");
+  checkThat("and the screen is the wizard's", find("[data-wizard]"));
 }
 
 console.log("\nthe banner over a session of this panel's, and 'Riprendi'");
