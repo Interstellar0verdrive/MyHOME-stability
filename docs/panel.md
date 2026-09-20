@@ -474,12 +474,17 @@ included. The dialog is equally admin-only, so this is not a door the panel clos
 
 **The page is blank, or says it could not start.** The panel catches its own
 start-up errors and draws a plain sentence with a link to the integration page rather
-than a white screen. It is usually a stale bundle: the page is served with a cache
-key — `/myhome_panel/myhome-panel.js?v=<version>` — that changes with the
-integration's version, so an upgrade normally invalidates it by itself. A browser
-that has cached the old file anyway is cleared with a hard refresh
-(`Ctrl`+`Shift`+`R`, or `Cmd`+`Shift`+`R` on a Mac). If that does not do it, restart
-Home Assistant: the module URL is composed when the panel is registered.
+than a white screen. It is usually a stale bundle, although that is now hard to
+arrange: the page is served with a cache key —
+`/myhome_panel/myhome-panel.js?v=<version>-<fingerprint>` — in which the fingerprint
+is twelve characters of the bundle's own checksum, computed when the panel is
+registered. It moves whenever a single byte of the file moves, so any new bundle
+— a release, a hand-copied one, a version installed twice — is asked for at an
+address the browser has never seen. A browser that has cached the old file anyway is
+cleared with a hard refresh (`Ctrl`+`Shift`+`R`, or `Cmd`+`Shift`+`R` on a Mac). If
+that does not do it, restart Home Assistant: the module URL is composed when the panel
+is registered, so a file replaced under a running Home Assistant keeps the old address
+until the next restart.
 
 **A line at the foot of the page says live updates are not available.** The panel is
 talking to a version of the integration that does not push changes, so it re-reads

@@ -20,6 +20,7 @@ Contract D (see .audit-2026-09/CONTRACTS.md):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -152,6 +153,11 @@ PANEL_ELEMENT = "myhome-calibration-panel"
 PANEL_STATIC_URL = "/myhome_panel"
 PANEL_DIR = str(Path(__file__).parent / "frontend")
 PANEL_BUNDLE = "myhome-panel.js"
+PANEL_BUNDLE_PATH = Path(__file__).parent / "frontend" / PANEL_BUNDLE
+# How much of the bundle's SHA-256 goes into the cache key.  Twelve hex characters are
+# 48 bits: enough that two bundles of this repository will not collide, short enough
+# that the URL in a network tab or a bug report is still readable next to the version.
+PANEL_FINGERPRINT_CHARS = 12
 # The one string Home Assistant renders server-side, so the one string the panel's own
 # translations cannot reach: a panel is global, not per user, and re-registering it per
 # language is not a thing the frontend offers.  It is the repository's own name for the
@@ -479,6 +485,15 @@ async def _async_register_static_paths(hass: HomeAssistant) -> None:
     directory, and aiohttp's router is append-only, so one call is also the only way to
     keep the two registrations from drifting apart on a retry.
 
+    ``cache_headers=True`` on both is deliberate, and it is deliberate on the bundle
+    *because* of the address it is fetched from.  Home Assistant serves such a directory
+    with ``Cache-Control: public, max-age=2678400`` - a month - which would be reckless
+    for a file whose URL never moved and is free for one whose URL carries a fingerprint
+    of its own contents (see ``_async_register_panel``): the browser is told to keep this
+    exact bundle for as long as it likes, and the next build simply asks for a different
+    one.  The drawings are named files that change with a release and are cached on the
+    same terms.
+
     ``http`` is a stage-0 integration, so in a running Home Assistant ``hass.http`` is
     always there by the time a custom integration is set up; on a bare ``hass`` - what
     the test suite builds - the attribute is declared and left at ``None``, and the
@@ -500,6 +515,27 @@ async def _async_register_static_paths(hass: HomeAssistant) -> None:
     hass.data[_STATIC_PATH_REGISTERED] = True
 
 
+def _bundle_fingerprint() -> str | None:
+    """Return the first `PANEL_FINGERPRINT_CHARS` of the bundle's SHA-256, or `None`.
+
+    **Blocking**: it opens and reads a file, so it runs in an executor and never on the
+    event loop.  It is read once per Home Assistant run, at registration time, and the
+    file is a couple of hundred kilobytes.
+
+    `None` means the bundle could not be read - it is not there, or the permissions on
+    it are wrong.  The caller falls back to the version alone rather than refusing to
+    register the panel: a panel that cannot find its bundle is a broken panel either
+    way, and an address the browser cannot cache-bust is the smaller of the two
+    problems to report.
+    """
+    try:
+        with PANEL_BUNDLE_PATH.open("rb") as bundle:
+            digest = hashlib.file_digest(bundle, "sha256").hexdigest()
+    except OSError:
+        return None
+    return digest[:PANEL_FINGERPRINT_CHARS]
+
+
 async def _async_register_panel(hass: HomeAssistant) -> None:
     """Register "Profili e tapparelle" as a custom panel, once per Home Assistant run.
 
@@ -515,12 +551,34 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
     page's "Configura" button to this panel, and "Configura" still owns the guided
     calibration and the connection form - which 0.6.0 does not reimplement.
 
-    Cache busting is the query string, not a hashed file name: ``release.yml`` rewrites
-    and asserts ``manifest.json``'s version before it tags, so ``?v=`` changes on every
-    release and on nothing else.  The version is read back out of the integration rather
-    than restated here, and the panel reads it from its own ``config`` at runtime - which
-    is why the committed bundle carries no version and does not have to be rebuilt for a
-    release.
+    Cache busting is the query string, not a hashed file name, and the query string is
+    ``?v=<version>-<fingerprint>``: the version the manifest declares, then twelve hex
+    characters of the bundle's SHA-256.
+
+    The version alone is not enough, and the reason is not theoretical.  ``manifest.json``
+    says ``0.5.0`` and goes on saying it until ``release.yml`` rewrites it at tag time, so
+    between two test installations the address does not move and the browser serves the
+    bundle it already has - twenty minutes spent testing an old panel, on 19 September, is
+    what put this here (live finding 30).  The fingerprint changes whenever a single byte
+    of the bundle changes and at no other time, so every deploy - test or release - gets
+    its own address, while the version in front of it keeps the address readable: a
+    released panel is still recognisably ``?v=0.6.0-...``.
+
+    The bundle is read **once per Home Assistant run, in an executor**: the registration
+    happens during ``async_setup`` and the event loop does not do file I/O.  If the file
+    cannot be read the address falls back to the version alone and says so in the log -
+    the panel is registered either way, because a missing bundle is a problem the panel's
+    own error screen states better than a missing sidebar entry does.
+
+    The static directory keeps ``cache_headers=True`` (a month of ``max-age``), which is
+    exactly what an address that changes with the content is for: the browser may hold
+    the file as long as it likes, because the next build is a different URL.
+
+    The version is read back out of the integration rather than restated here, and the
+    panel reads it from its own ``config`` at runtime - which is why the committed bundle
+    carries no version and does not have to be rebuilt for a release.  The fingerprint is
+    deliberately *not* in ``config``: it is a property of the file, not of the release,
+    and the version is what a bug report needs to name.
 
     A failure here costs the panel and nothing else: the options flow is a complete path
     to everything the panel does, and a gateway that refuses to load because a sidebar
@@ -533,6 +591,17 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
             return
         integration = await async_get_integration(hass, DOMAIN)
         version = str(integration.version)
+        fingerprint = await hass.async_add_executor_job(_bundle_fingerprint)
+        if fingerprint is None:
+            LOGGER.warning(
+                "Could not read %s to fingerprint it; the panel's address will carry "
+                "version %s alone, and a browser may serve a bundle it cached earlier",
+                PANEL_BUNDLE_PATH,
+                version,
+            )
+            cache_key = version
+        else:
+            cache_key = f"{version}-{fingerprint}"
         frontend.async_register_built_in_panel(
             hass,
             component_name="custom",
@@ -556,7 +625,7 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
                     "trust_external": False,
                     # The panel draws its own safe-area insets.
                     "handle_safe_area": True,
-                    "module_url": f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}",
+                    "module_url": f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={cache_key}",
                 },
             },
         )
