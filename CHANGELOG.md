@@ -164,12 +164,12 @@ the panel when it is in the way.
   this route" and the reader still counts to six. On a wide screen it is a column of its
   own to the left, and the column the buttons are in does not move; below about 1150 px
   it is one row above the step that says where the reader is, opens on a tap and is
-  remembered open for the rest of the calibration. It is a view and not a way back: the
-  only row that can be pressed is the tape reading the flow is already offering to
-  repeat, and pressing it sends that same offer. The phase the header names is now read
-  off the plan of the route being walked, so it no longer counts 2, 3, **5**, 4, 5, 6 on
-  the full measurement — the travel of the curtain is read at the top of the ascent, and
-  is now named as part of it.
+  remembered open for the rest of the calibration. It is a view and never a way back:
+  nothing in it can be pressed and nothing in it takes the keyboard, so the way to repeat
+  a reading is the one the step itself offers and there is only ever one of it. The phase
+  the header names is now read off the plan of the route being walked, so it no longer
+  counts 2, 3, **5**, 4, 5, 6 on the full measurement — the travel of the curtain is read
+  at the top of the ascent, and is now named as part of it.
 
 ### Changed
 
