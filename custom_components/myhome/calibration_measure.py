@@ -262,19 +262,70 @@ def adopted_timings(measured: Measured, values: Mapping[str, float] | None) -> M
 
 
 # ------------------------------------------------------------------ the tape
+def model_fraction(
+    direction: str, *, model: Mapping[str, float], motor_seconds: float
+) -> float:
+    """How much of the MODEL's curtain time the motor really spent, as a fraction.
+
+    The three lines of `calibration.deviation_cm` (:632-634), written out here because
+    `calibration.py` is not touched in 0.6.0 and the two callers must not drift apart:
+    the expectation printed under the reading field and the verdict printed after it
+    are the same question about the same run, so they are now the same arithmetic.
+
+    The seconds are the motor's, not the run that was asked for: the primitive counts
+    in fractions of the times the **cover** is configured with, while the model asked
+    for a prediction carries times of its own (a fit that has just corrected them, or a
+    profile scaled to this window). The two coincide only when the cover is already
+    configured with the model's times, which on a window being calibrated is precisely
+    what is not true - that is the whole of the defect this replaces.
+
+    Both directions, unlike `deviation_cm`, which is written for descents: an ascent
+    spends its first `slat_time` seconds turning the slats and only the rest moves the
+    bar, exactly as `cover.calibration_ascent_cm` and `calibration.fit_from_run` have
+    it. The curtain time is the run time less the slat phase in either direction,
+    which is the convention the fit itself is built on.
+    """
+    run_time = model[CONF_CLOSING_TIME if direction == DIRECTION_CLOSE else CONF_OPENING_TIME]
+    slat_time = model[CONF_SLAT_TIME]
+    curtain = max(1e-3, run_time - slat_time)
+    moving = motor_seconds if direction == DIRECTION_CLOSE else max(0.0, motor_seconds - slat_time)
+    return min(1.0, moving / curtain)
+
+
 def expected_cm(
     *,
     pending: tuple[str, float] | None,
     height: float | None,
     model: Mapping[str, float] | None,
+    report: RunReport | None,
 ) -> tuple[str, str]:
     """Where the model thinks the bar is, and how far out is still normal.
 
-    Ported from `GuidedCalibrationMixin._expected_cm`. `pending` is the run the reading
-    is about (`_pending`), `height` the travel (`_measured.height`) and `model` what
-    `model_values` answers for this conversation. The method only asks for the model
-    when there is a height; asking for it regardless changes nothing, because
-    `model_values` reads and never writes.
+    Ported from `GuidedCalibrationMixin._expected_cm`, and **no longer equal to it**
+    (lot W5): where the dialog predicts the fraction of the run it *commanded*, this
+    predicts the seconds the motor *spent*, through `model_fraction`. `pending` is the
+    run the reading is about (`_pending`), `height` the travel (`_measured.height`),
+    `model` what `model_values` answers for this conversation and `report` the run that
+    has just finished (`_report`).
+
+    Why the divergence is deliberate. The commanded fraction is a fraction of the
+    closing time the **cover** is configured with today; the model predicting the
+    reading has run times of its own. Reading the one as the other put the suggestion
+    "about 74 cm are expected" under a field whose own result screen then said 76,5 for
+    the very same run - on all five readings of the thorough calibration, which the
+    user sees one after the other. Nothing stored was ever wrong, because the fit and
+    `deviation` have always worked in motor seconds; it was the suggestion alone. The
+    dialog keeps its version, because it is not touched in 0.6.0 and the divergence is
+    declared instead: `tests/test_calibration_measure.py::test_the_tape`,
+    `tests/test_calibration_session.py::test_the_expected_reading_is_the_one_the_verdict_will_use`
+    and the panel's section of `docs/guided-calibration.md`.
+
+    Without a model there is nothing to convert with - no run time, no slat time - so
+    the commanded fraction stands, drawn on the default geometry and with the wider
+    tolerance. That screen makes no verdict either, so there is no second number for
+    this one to disagree with. The method only asks for the model when there is a
+    height; asking for it regardless changes nothing, because `model_values` reads and
+    never writes.
     """
     direction, fraction = pending or (DIRECTION_CLOSE, HALF_RUN)
     if not height:
@@ -282,6 +333,10 @@ def expected_cm(
     if model is not None:
         roll = model[CONF_CLOSING_ROLL if direction == DIRECTION_CLOSE else CONF_OPENING_ROLL]
         tolerance = EXPECTED_TOLERANCE_CM
+        if report is not None:
+            fraction = model_fraction(
+                direction, model=model, motor_seconds=report.motor_seconds
+            )
     else:
         roll = DEFAULT_ROLL_SHUTTER
         tolerance = ROUGH_TOLERANCE_CM
@@ -626,6 +681,7 @@ __all__ = [
     "fits",
     "known_height",
     "merged_with",
+    "model_fraction",
     "model_values",
     "own_height",
     "profile_still_wins",

@@ -402,7 +402,7 @@ the phone does not end it and does not lose a reading, a second device can be to
 take it over, and the panel can close a *Configure* dialog that is holding a shutter it
 wants. A dialog cannot do any of that, because a dialog is a flow inside one browser.
 
-Three differences worth knowing, all of them deliberate:
+Four differences worth knowing, all of them deliberate:
 
 - **What route (A) saves.** The dialog stores the profile **and** the same values on
   the shutter itself, so the shutter's origin reads *Measured*. The panel stores the
@@ -418,6 +418,18 @@ Three differences worth knowing, all of them deliberate:
 - **Route (B)'s check.** The panel takes the shutter up to half its travel and expects
   the tape to read half the travel; the dialog runs it down for half its closing time
   and expects what the profile predicts for that run. See route (B) above for why.
+- **The expected reading under the field.** Both say "about N cm are expected, and
+  anything within M is normal", and on a shutter whose configured run times are not
+  the ones the model carries they say different numbers. The dialog predicts the
+  **fraction of the run it asked for**, which is a fraction of the times the shutter is
+  configured with today; the panel predicts the **seconds the motor really spent**,
+  over the run times of the model making the prediction. The second is what the screen
+  after the reading has always judged the tape against, so in the panel the sentence
+  under the field and the verdict after it are one number instead of two — on a real
+  window the two used to differ by two or three centimetres, on every reading of the
+  thorough calibration. Nothing that was ever *saved* differs: the fit and the gap have
+  always worked in motor seconds. It is the sentence that was wrong, and only in the
+  dialog it still is.
 
 Everything else is one store seen twice: a change made in either is visible in the
 other as soon as the screen is drawn again, and the dialog goes on working unchanged on
