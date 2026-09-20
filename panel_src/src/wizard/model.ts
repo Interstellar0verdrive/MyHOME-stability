@@ -620,6 +620,14 @@ const checkParts = (
       percent,
     }),
   ];
+  // Unreachable since lot W3, and deliberately left standing. `threshold_cm` is
+  // non-null only on path B (`_the_check`: `if self._path == PATH_PROFILE`), and path B
+  // now leaves this function two branches up. It stays because it is the shape of the
+  // contract - a check *may* carry a threshold - and because the decision it waits on is
+  // the maintainer's: either these two sentences and `check.profile_level` /
+  // `profile_check_cm` go, or how well the profile was itself measured comes back into
+  // the new verdict, which is the one place the number would mean something (4 cm
+  // against a profile measured to 1 cm is not 4 cm against one measured to 4).
   if (check.threshold_cm !== null) {
     lines.push(
       check.profile_check_cm === null

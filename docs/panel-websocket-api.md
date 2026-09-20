@@ -1015,7 +1015,7 @@ and `check.gap_cm` (the number the threshold decides on, to 0.1 cm).
 | `reading` | object \| null | in `awaiting_reading` after a run to a fraction: `{direction, fraction, from_end_stop, expected_cm, tolerance_cm}` — where the bar is expected and how far off is still normal (4 cm with a fitted model, 15 cm without). `fraction` is the fraction of the **configured** run the motor was given; `expected_cm` is what the model predicts for it, except on path B's check, where it is half the curtain travel (§12.2b). `null` for the travel and the lift-off gap |
 | `measured` | object | what has been measured so far (§12.4). Emptied once the session has ended without saving: provisional values are discarded |
 | `fit` | object \| null | `{opening, closing}`, each `{run_time_s, slat_time_s, roll, time_scale, points: [{motor_s, measured_cm, residual_cm}]}`, once both directions have a reading. `residual_cm` is model minus tape, and `null` for a direction fitted through a single point, which reproduces itself exactly and has nothing left over to be a residual |
-| `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. `predicted_cm` is where the bottom edge was expected and `gap_cm` is `\|measured − predicted\|` to 0.1 cm; **the two checks expect it from different places** (§12.2b). In path B, `threshold_cm` is the fixed 4 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check |
+| `check` | object \| null | a verification run: `{fraction, predicted_cm, measured_cm, gap_cm, threshold_cm, profile_level, profile_check_cm}`. `predicted_cm` is where the bottom edge was expected and `gap_cm` is `\|measured − predicted\|` to 0.1 cm; **the two checks expect it from different places** (§12.2b). In path B, `threshold_cm` is the fixed 4 cm above which the correction is offered, and `profile_level` / `profile_check_cm` say how the profile being checked was itself measured, so the gap can be read against it; all three are `null` for the thorough calibration's own check. **A `problem_<code>` step never carries one**: a screen that says a measurement could not be made gives no verdict about one |
 | `review` | object \| null | in `review` (and kept in `saved`): §12.5 |
 | `problem` | object \| null | `{code}` on a `problem_<code>` step: `no_echo`, `not_delivered`, `not_stopped`, `busy`, `bad_point`, `timeout`, `unknown` — the dialog's — and `interrupted` |
 | `notice` | token \| null | `rehomed` or `reading_stale` (§11.5): something to say about what happened around the step that is not a problem |
@@ -1119,7 +1119,15 @@ primitive counts in. Two consequences the panel depends on:
 
 `percent` in `placeholders` is therefore the percentage **of the travel** (50) and not
 `fraction × 100`, so that `options.progress.running_up` — "run up to about {percent}% of
-its travel" — says something true. The panel does not reuse the dialog's texts on
+its travel" — says something true.
+
+**`fraction` loses its referent once the session is saved.** It is a fraction of the
+curtain time the cover was configured with *before* the save, and path B's save replaces
+exactly those times: read against the model the cover ends up on, the same number points
+somewhere else. It is kept because it describes the run that was made — and the same is
+true of `review.check_fraction`, which is that number on the review and in the record —
+but nothing should compute a position from it after the write. What survives the save is
+`predicted_cm`: half the travel is half the travel whatever the model says. The panel does not reuse the dialog's texts on
 `verify_offer`, `measure_verify` and `verify_result` when `path` is `path_b`: those
 sentences describe the dialog's own check, which still runs half the closing time
 downwards and is unchanged. The divergence is deliberate and is written up in
@@ -1193,9 +1201,16 @@ profiles, answered by one command.
   "update the profile this cover follows", and it is worth a preview of **every** cover it
   reaches — which is why a review of a much-followed profile is the largest snapshot
   there is (see the head of §12).
-* `accuracy_cm` and `check_fraction` are the thorough calibration's check — within how
-  many centimetres, at which fraction of the descent. `null` otherwise, and the screen
-  says the accuracy has not been verified rather than showing a dash.
+* `accuracy_cm` and `check_fraction` are **whichever check this route made** — within
+  how many centimetres, and at which fraction of the run. `null` when none was made,
+  and the screen then says the accuracy has not been verified rather than showing a
+  dash. Which check it was is `path`, and the two are not alike (§12.2b): on the
+  thorough calibration it is 0.40 of a **descent** and the centimetres are the distance
+  from what the fit predicted; **on path B it is an ascent**, `check_fraction` is the
+  fraction the model worked out for half the travel — around 0.58, never 0.50 — and the
+  centimetres are the distance from half the travel. A sentence that says "within N cm
+  at P % of the descent" is wrong twice on path B, which is why the panel has a
+  sentence of its own for it.
 * `replacing` are the keys this session measured and `save` writes; `keeping` the keys
   this cover already had stored that it leaves as they are.
 * `yaml` is the `myhome.yaml` equivalent, as the dialog shows it.

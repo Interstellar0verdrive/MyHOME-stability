@@ -423,6 +423,11 @@ def half_travel_seconds(direction: str, model: Mapping[str, float]) -> float:
     complement of the descent to the same point.
     """
     slat = model[CONF_SLAT_TIME]
+    # `max(0.0, …)` where `calibration_descent_cm` writes `max(MIN_CURTAIN_TIME, …)`:
+    # theirs is a divisor and cannot be zero, this one is a multiplier and may be. The
+    # two only part company on a model with no curtain time at all, which
+    # `fraction_of_the_run` refuses a line later - but they are the same equation read
+    # in opposite directions and have to stay in step.
     if direction == DIRECTION_OPEN:
         curtain = max(0.0, model[CONF_OPENING_TIME] - slat)
         return slat + curtain * (1.0 - roll_tau(model[CONF_OPENING_ROLL], HALF_TRAVEL_X))
@@ -897,10 +902,16 @@ class CalibrationSession:
         )
 
     def _model_now(self) -> dict[str, float]:
-        """The run times the shutter moves on today, for the progress bars.
+        """The run times the shutter is configured with today.
 
-        Only ever read to say how long a movement should take: no measurement is
-        computed from it (the run times a measurement uses are the presses').
+        Two readers, and the second one is not a progress bar. Most of the module asks
+        it how long a movement should take, and **no measurement is computed from it**:
+        the run times a measurement uses are the presses'. But `_half_travel_fraction`
+        asks it what the run primitive counts its fraction against, because that is
+        what the entity really spends (`cover.calibration_run_seconds`), and the answer
+        decides the seconds of path B's check - the movement the whole of lot W3 rests
+        on. Changing what this returns therefore changes a shutter's journey and not
+        only a bar: the two callers are `_full_run`/`_planned_*` and that one.
         """
         values = self._resolved().values
         return {
@@ -2074,7 +2085,16 @@ class CalibrationSession:
         # Where the bottom edge stands, as a fraction of the curtain travel above the
         # base: a run that went up by `fraction` left it there, one that came down by
         # `fraction` left it that much below the top.
-        here = fraction if ran == DIRECTION_OPEN else 1.0 - fraction
+        #
+        # `fraction` is a fraction of the curtain **time**, which the readings of the
+        # tape phase treat as a fraction of the travel - near enough for a bar, and the
+        # error the readings carry is the roll's. Path B's check is the one run that
+        # knows better: it was aimed at half the travel and the bar really is there, so
+        # a bar planned on its 0.59 of the time would promise a tenth of a curtain that
+        # is not there to run (live finding 22, the same class of error).
+        here = HALF_TRAVEL_X if self._half_travel else (
+            fraction if ran == DIRECTION_OPEN else 1.0 - fraction
+        )
         here = min(1.0, max(0.0, here))
         slat = model[CONF_SLAT_TIME]
         curtain = max(0.0, full - slat)
@@ -2882,11 +2902,22 @@ class CalibrationSession:
 
     @callback
     def _show_problem(self, reason: str) -> None:
+        """The screen that says what went wrong, and offers the step again.
+
+        The answer of a verification does not survive it. A `problem_*` screen is what
+        the session shows when a measurement could not be made at all, so a `check`
+        left in the snapshot beside it would be the verdict of a run that did not
+        happen - drawn by nobody today, because the panel paints a problem with the
+        `esito` model, but read by a second client and published as the contract's own
+        `check` (§12.1). Cleared **here**, where every one of the twelve ways to a
+        problem goes through, and not in the stage that happens to own one of them.
+        """
         code = reason if reason in (*PROBLEM_REASONS, REASON_INTERRUPTED) else REASON_UNKNOWN
         self._step = f"problem_{code}"
         self._problem = code
         self._form_error = None
         self._notice = None
+        self._check = None
         self._publish()
 
     @callback

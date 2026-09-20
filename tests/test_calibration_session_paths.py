@@ -886,10 +886,16 @@ async def test_a_verification_can_be_made_again(
     A verification fits nothing, so there is no reading to take back - but the answer
     it gave is about a shutter that is about to be moved again, and a screen that kept
     it would be reporting a gap measured before the run it is describing.
+
+    And the run back to the closed end stop is planned on where the bar **is**. The
+    check left it at half the travel, not at 0.59 of one, and a bar that announced the
+    difference would be the promise of live finding 22 all over again.
     """
     async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
         await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
         await act(hass, session, Act("verify_now"))
         snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2 + 4.0)))
@@ -900,6 +906,18 @@ async def test_a_verification_can_be_made_again(
         assert snapshot["step"] == "measure_verify"
         assert snapshot["check"] is None
         assert len(runner.runs) == runs + 1
+
+        # The homing this repetition opened with: half the curtain to run down, plus
+        # the slat phase it closes with. Half of the *time* would have promised 14.7 s
+        # of a movement that takes 13.2.
+        homings = [
+            one["movement"]
+            for one in published
+            if one["step"] == "verify_b" and one["movement"] is not None
+        ]
+        assert homings, "the repetition did not home"
+        assert homings[-1]["direction"] == "close"
+        assert homings[-1]["planned_s"] == pytest.approx((CLOSING - SLAT) * 0.5 + SLAT)
 
         snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2)))
         assert snapshot["check"]["gap_cm"] == 0.0
@@ -1162,6 +1180,60 @@ async def test_a_check_this_cover_cannot_make_is_a_problem_and_not_a_shorter_run
         await session.async_cancel(CLIENT)
 
 
+async def test_a_check_that_gives_up_before_its_run_takes_its_answer_with_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A problem screen says a measurement could not be made; it does not give a verdict.
+
+    "Repeat the measurement" on a verification re-enters the stage, and the stage works
+    out where to send the shutter before it sends it anywhere. If the profile went out
+    from under the conversation in between, it gives up there - and the answer of the
+    verification *before* has to go with it, or a second client attaching to the session
+    reads the verdict of a run nobody made.
+
+    The invariant is `check_the_snapshot`'s now, so every walk of every path checks it;
+    this is the one walk that reaches the state.
+    """
+    async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        store = the_store(hass, entry)
+        await store.async_set_profile(
+            "stored",
+            {
+                CONF_NAME: "stored",
+                "reference_height": HEIGHT,
+                CONF_OPENING_TIME: OPENING,
+                CONF_CLOSING_TIME: CLOSING,
+                CONF_SLAT_TIME: SLAT,
+                CONF_OPENING_ROLL: ROLL_UP,
+                CONF_CLOSING_ROLL: ROLL_DOWN,
+            },
+        )
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await act(hass, session, Act("path_b"))
+        await act(hass, session, Act("submit", "stored"))
+        await walk(hass, session, for_the_session(PATH_B[2:5]), freezer=freezer)
+        await act(hass, session, Act("verify_now"))
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2 + 5.0)))
+        assert snapshot["check"]["gap_cm"] == 5.0
+
+        await store.async_remove_profile("stored")
+        snapshot = await act(hass, session, Act("repeat_tape"))
+        assert snapshot["step"] == "problem_bad_point"
+        assert snapshot["problem"] == {"code": "bad_point"}
+        assert snapshot["actions"] == ["repeat_step"]
+        # The verdict of the run before it is gone, not carried onto a screen that says
+        # the measurement could not be made at all.
+        assert snapshot["check"] is None
+        assert snapshot["placeholders"].get("deviation") is None
+        for one in published:
+            check_the_snapshot(one)
+        await session.async_cancel(CLIENT)
+
+
 async def test_the_panel_s_check_of_a_profile_is_not_the_dialog_s(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -1180,8 +1252,11 @@ async def test_the_panel_s_check_of_a_profile_is_not_the_dialog_s(
     async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
-        await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
-        snapshot = await act(hass, session, Act("verify_now"))
+        # `PATH_B_CHECKED` is the conversation that left the dialog parity behind, so
+        # this is where it is walked: the same list, minus the reading and what follows.
+        await walk(hass, session, for_the_session(PATH_B_CHECKED[:-2]), freezer=freezer)
+        snapshot = session.snapshot()
+        assert snapshot["step"] == "measure_verify"
 
         direction, commanded = runner.runs[-1]
         assert (direction, commanded) != (DIRECTION_CLOSE, VERIFY_RUN_PROFILE)
