@@ -197,7 +197,6 @@ const pairs = (t) => [
   ["the dash inside a mark this route skips", t.soft, t.card, 10],
   ["the exclamation inside a mark that has to be done again", ink(t, t.error), mix(t.error, t.card, 12), 12],
   ["a row that has to be done again", ink(t, t.error), t.card, 12],
-  ["the mark that a row can be done again", ink(t, t.primary), t.card, 14],
 ];
 
 /**

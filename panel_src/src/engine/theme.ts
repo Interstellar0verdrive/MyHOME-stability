@@ -114,8 +114,14 @@ export const themeStyles = css`
      * still blue, an error still red - which is the point of not simply painting them all
      * in the text colour.
      *
-     * Borders, dots, bars and fills keep the pure colour: they are not read, and 1.4.11
-     * asks 3:1 of them, which the unmixed colours meet.
+     * Borders, dots, bars and fills mostly keep the pure colour: they are not read, and
+     * 1.4.11 asks 3:1 of them, which the unmixed colours usually meet. **Usually is not
+     * always**, and --primary-color is the exception: Home Assistant's own default is
+     * #03a9f4, which is 2,63:1 on a white card - the pair tools/contrast.mjs reports
+     * among the ones it does not count, because it is the theme's and not the panel's. So a
+     * filled shape that is the only thing saying where the reader is - the stepper's
+     * current mark - takes the ink instead, and a new one should be measured rather than
+     * assumed.
      */
     --myhome-primary-ink: color-mix(in srgb, var(--myhome-primary) 50%, var(--myhome-text));
     --myhome-error-ink: color-mix(in srgb, var(--myhome-error) 50%, var(--myhome-text));

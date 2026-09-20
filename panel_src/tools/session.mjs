@@ -1151,29 +1151,32 @@ console.log("\nwhere the calibration has got to");
 }
 
 {
-  // …and the one row a verb is offered for, which is the only thing on the rail that acts.
+  // …and the state where the session really is offering the verb that would repeat the stage
+  // in hand. The rail used to carry it on the row; the independent review showed that such a
+  // row is always a second copy of a button already on the screen, and the design says in
+  // three places that no step of the stepper is pressable or focusable. So what is asserted
+  // now is the opposite: the rail is nine labels, pressing every one of them sends nothing,
+  // and the way to repeat the reading is still exactly where the step puts it.
   const bench = gateway({ session: scenario("awaiting_reading_measure_descent_stale") });
-  const { find, all, settle } = await mount(bench.connection);
+  const { all, settle } = await mount(bench.connection);
   const rows = all("[data-stepper] li.step");
-  const pressable = all("[data-stepper] button.step-press");
   checkThat(`the rail draws ${rows.length} rows`, rows.length >= 6);
-  check("exactly one of them can be pressed", pressable.length, 1);
-  check("and nothing has been sent by arriving", bench.sessions("act"), 0);
-  for (const still of all("[data-stepper] .step-still")) {
-    still.click();
+  check("and not one of them is a control", all("[data-stepper] button:not(.stepper-toggle)").length, 0);
+  check("nothing has been sent by arriving", bench.sessions("act"), 0);
+  for (const row of all("[data-stepper] .step-still")) {
+    row.click();
   }
   await settle(120);
-  check(
-    `pressing all ${rows.length - 1} of the others sends nothing`,
-    bench.sessions("act"),
-    0,
-  );
-  pressable[0].click();
+  check(`pressing all ${rows.length} of them sends nothing`, bench.sessions("act"), 0);
+  check("and stops nothing", bench.sessions("stop"), 0);
+  check("and starts nothing", bench.sessions("start"), 0);
+  // The verb is still offered, once, by the step itself.
+  const again = all("button.cta.secondary");
+  checkThat("while the step still offers the way to repeat the reading", again.length >= 1);
+  again[0].click();
   await settle(160);
-  check("pressing the one that can be sends one act", bench.sessions("act"), 1);
+  check("and pressing that sends one act", bench.sessions("act"), 1);
   check("carrying the verb the session was offering", bench.last("act")?.action, "repeat_tape");
-  check("and nothing was stopped or started by it", bench.sessions("stop") + bench.sessions("start"), 0);
-  void find;
 }
 
 {

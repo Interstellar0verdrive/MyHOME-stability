@@ -648,8 +648,14 @@ export const templateStyles = css`
     background: var(--myhome-primary-ink);
   }
 
+  /*
+   * A square and not a disc: on the collapsed row - which is the whole of the stepper on a
+   * phone - "in hand" and "has to be done again" would otherwise differ by colour alone, and
+   * the line beside them ("Tape readings · 5 of 6") says nothing about either.
+   */
   .dot.error {
     background: var(--myhome-error-ink);
+    border-radius: 2px;
   }
 
   .dot.future {
@@ -703,11 +709,7 @@ export const templateStyles = css`
     padding: 0;
   }
 
-  /*
-   * The row itself, pressable or not, drawn the same way: the two differ in what they are,
-   * never in what they look like, so a rail does not jump when a verb is offered.
-   */
-  .step-press,
+  /* The row: a label, with nothing in it that can be pressed or take the keyboard. */
   .step-still {
     display: flex;
     align-items: flex-start;
@@ -715,32 +717,36 @@ export const templateStyles = css`
     width: 100%;
     box-sizing: border-box;
     padding: 5px 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-  }
-
-  .step-press {
-    min-height: 48px;
-    align-items: center;
-    cursor: pointer;
-    border-radius: 8px;
-    padding: 5px 8px;
-    margin: 0 -8px;
-  }
-
-  .step-press:hover {
-    background: var(--myhome-primary-faint);
   }
 
   /*
    * The mark: 24 px for a phase, 18 px for a stage inside it, both centred in a 24 px
-   * column so the names line up whatever the row is. The connector the design draws between
-   * marks is the left rule on the words, which costs no element per row.
+   * column so the names line up whatever the row is.
+   *
+   * The connector the design draws between the marks is one rule per row, behind them, and
+   * each mark hides the piece of it that passes under its own circle - which is why the two
+   * hollow states carry an opaque ground as well as a border. It is decoration: it says
+   * nothing a reader does not already have from the marks themselves, so it is the divider
+   * colour and is not measured.
    */
+  .step {
+    position: relative;
+  }
+
+  .step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 11px;
+    top: 6px;
+    bottom: -2px;
+    width: 2px;
+    background: var(--myhome-divider);
+  }
+
   .mark {
+    position: relative;
+    z-index: 1;
+    background-color: var(--myhome-card);
     width: 24px;
     height: 24px;
     flex: 0 0 24px;
@@ -776,6 +782,7 @@ export const templateStyles = css`
 
   .mark.current {
     background: var(--myhome-primary-ink);
+    box-shadow: 0 0 0 3px var(--myhome-primary-faint);
   }
 
   .mark.future {
@@ -843,13 +850,6 @@ export const templateStyles = css`
     color: var(--myhome-error-ink);
   }
 
-  /* The one mark that says "this can be done again", beside the name it belongs to. */
-  .step .redo {
-    color: var(--myhome-primary-ink);
-    font-size: 14px;
-    line-height: 1;
-  }
-
   @media (min-width: 900px) {
     /* The strip spans the two columns, so it lines up with them and not with the page. */
     .read-only {
@@ -878,8 +878,9 @@ export const templateStyles = css`
       padding: 0;
     }
 
-    .step-press {
-      min-height: 44px;
+    /* The rail sits on the page and not on a card, so the hollow marks take that ground. */
+    .mark {
+      background-color: var(--myhome-background);
     }
 
     /*

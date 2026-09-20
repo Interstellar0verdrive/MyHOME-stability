@@ -26,17 +26,29 @@
 // 6, because the table gives every step one fixed phase and the same step sits at different
 // points of different plans.
 //
-// **Nothing here is a road back.** The contract has no verb that repeats an arbitrary past
-// stage: `repeat_tape` repeats the tape reading the session is standing on, `repeat_measure`
-// the curtain travel. So exactly one row can ever be pressed - the stage at `plan_index`,
-// and only while the matching verb is in `actions` - and pressing it sends that verb and
-// nothing else. Every other row is a label with no control in it (SPEC §5.7: a row that
-// looks pressable and does nothing is worse than a row that does not look pressable).
+// **Nothing here acts, and nothing here takes the keyboard.** The stepper is orientation and
+// never a road back: no row can be pressed, no row is focusable, and the only control in the
+// whole region is the button that opens the list below ~1150 px.
+//
+// That is the design's own rule, written in three places of the PoC - "nessuna azione dallo
+// stepper: nessun passo è cliccabile", "la correzione non passa dallo stepper" on the panel
+// of states, and "i passi dello stepper non ricevono il focus" on the reading order - and it
+// survives an attempt at the opposite. Lot W2 first made one row pressable, the one the
+// session's own `repeat_tape` would act on; the independent review then showed that such a
+// row is **always** a duplicate of a button already on the same screen, and has to be:
+// `offered` required `session.actions.includes(verb)`, and `model.ts` renders every member
+// of `actions` as the primary, a secondary or an option. So the rail offered a second way to
+// press a button that was 700 px to the right of it, and cost the keyboard a stop between
+// the heading and the field a reading is typed into.
+//
+// The contract would not support the useful version of it either: there is no verb that
+// repeats an arbitrary *past* stage - `repeat_tape` repeats the reading the session is
+// standing on - so "touch a reading to reopen it", which is what the PoC's one sentence in
+// the other direction asks for, needs an amendment before it can be built honestly.
 
 import { type I18n } from "../engine/i18n";
 import { type ScreenStepper, type ScreenStepState, type ScreenStepperStep } from "../engine/screen";
 import {
-  type SessionAction,
   type SessionPath,
   type SessionPlanStage,
   type SessionSnapshot,
@@ -185,27 +197,6 @@ const STATE_KEY: Readonly<Record<ScreenStepState, string>> = {
   error: "panel.wizard.stepper.state.error",
 };
 
-/**
- * Which verb, if any, repeats a given stage.
- *
- * The two the contract has, and no third: a tape reading at a fraction and the verification
- * are repeated with `repeat_tape`, the curtain travel with `repeat_measure`. The timed runs
- * are deliberately absent - repeating one throws away the times already registered, and the
- * way to do it is "It did not do what it should" inside the step or "Correct…" after the
- * save (the design's own rule, and live finding 29's "le corse no").
- */
-const REPEAT: Readonly<Partial<Record<SessionPlanStage, SessionAction>>> = {
-  height_read: "repeat_measure",
-  half_down: "repeat_tape",
-  half_up: "repeat_tape",
-  quarter_down: "repeat_tape",
-  three_quarter_down: "repeat_tape",
-  quarter_up: "repeat_tape",
-  three_quarter_up: "repeat_tape",
-  verify: "repeat_tape",
-  verify_b: "repeat_tape",
-};
-
 /** The phase of one stage of a plan, with `height_read` resolved by what came before it. */
 const phaseOfStage = (plan: readonly SessionPlanStage[], at: number): WizardPhase => {
   const stage = plan[at];
@@ -306,6 +297,20 @@ const stageValue = (
   if (stage === "verify" || stage === "verify_b") {
     return session.check ? centimetres(session.check.measured_cm, i18n) : null;
   }
+  // A timed run carries the time it measured. The *phase* it belongs to says nothing when it
+  // has nothing to say (see `phaseValue`), but a stage that produced a number and does not
+  // show it leaves that number nowhere on the rail: while the ascent is the phase in hand it
+  // shows "step 2 of 2" instead of the value, so "Timed ascent" is the only place left.
+  if (stage === "open_timed") {
+    return session.measured.opening_time_s === null
+      ? null
+      : valueLine("opening_time_s", session.measured.opening_time_s, i18n);
+  }
+  if (stage === "close_timed") {
+    return session.measured.closing_time_s === null
+      ? null
+      : valueLine("closing_time_s", session.measured.closing_time_s, i18n);
+  }
   return readingValue(session, plan, at, i18n);
 };
 
@@ -382,19 +387,6 @@ export interface StepperContext {
   i18n: I18n;
   /** The collapsible row, as this tab has it. */
   open: boolean;
-  /** Another client is driving: the rows are the same, and none of them acts. */
-  readOnly: boolean;
-  /** The words of a verb, from the step that offers it or from its lender. */
-  label: (action: SessionAction) => string;
-  /**
-   * The token a verb is fired as.
-   *
-   * Handed in rather than built here, so that this file never imports `model.ts` - which
-   * imports this one. A cycle between the two would be a bundle whose evaluation order
-   * decides whether a constant exists, which is a bug that appears on one build and not the
-   * next.
-   */
-  token: (action: SessionAction) => string;
 }
 
 /**
@@ -414,7 +406,18 @@ export const stepperModel = (
   if (plan.length === 0 || here === null) {
     return null;
   }
+  // The same guard `currentPhase` makes two functions up, and for the same reason. A plan
+  // with no index into it, or an index past its end, would put every phase in "future" or
+  // "skipped": no row would be the one in hand, so the region would carry no
+  // `aria-current="step"` while the header beside it went on naming a phase. The controller
+  // cannot produce it today - `_index` is `None` only with an empty plan - but neither the
+  // type (`plan_index: number | null`) nor the API document says so, and a rail that
+  // silently loses the reader's place is not a thing to leave to an invariant nobody wrote
+  // down. No index, no stepper.
   const at = session.plan_index;
+  if (at === null || at < 0 || at >= plan.length) {
+    return null;
+  }
   const wrong = wrongHere(session);
   // Which stages belong to each phase, once, so the states below are arithmetic on indices
   // and never a second walk of the plan.
@@ -448,9 +451,12 @@ export const stepperModel = (
         ? phaseValue(session, phase, stages, i18n)
         : state === "skipped"
           ? i18n.t("panel.wizard.stepper.not_on_route")
-          : state === "current" && stages.length > 1
-            ? i18n.t("panel.wizard.stepper.within", {
-                index: stages.indexOf(at as number) + 1,
+          : (state === "current" || state === "error") && stages.length > 1
+            ? // Kept while a reading is being done again, because the design's rule for a
+              // phase with an error is that the rest of the stepper does not change - and
+              // the counter disappearing from under the phase name is a change.
+              i18n.t("panel.wizard.stepper.within", {
+                index: stages.indexOf(at) + 1,
                 count: stages.length,
               })
             : null;
@@ -477,15 +483,6 @@ export const stepperModel = (
               ? "error"
               : "current";
       const value = own === "done" || own === "error" ? stageValue(session, plan, index, i18n) : null;
-      const verb = REPEAT[stage];
-      // The one row that can be pressed: the stage the session is standing on, and only
-      // while the verb that repeats *it* is being offered. `readOnly` takes it away with
-      // every other control on the screen.
-      const offered =
-        verb !== undefined &&
-        !context.readOnly &&
-        index === at &&
-        session.actions.includes(verb);
       rows.push(
         row(
           `${phase}/${index}`,
@@ -493,12 +490,7 @@ export const stepperModel = (
           own,
           own === "error" ? i18n.t(STATE_KEY.error) : value,
           i18n,
-          {
-            sub: true,
-            ...(offered && verb !== undefined
-              ? { action: context.token(verb), actionLabel: context.label(verb) }
-              : {}),
-          },
+          { sub: true },
         ),
       );
     }

@@ -187,16 +187,6 @@ export interface ScreenStepperStep {
   /** What it produced, why it is not on this route, or what went wrong with it. */
   meta?: string;
   state: ScreenStepState;
-  /**
-   * The token pressing the row fires, on the **one** row the session offers a verb for.
-   *
-   * Absent everywhere else, and absent everywhere when somebody else is driving: a row with
-   * no action is drawn as a label with nothing focusable in it, so the keyboard walks past
-   * the stepper and lands on the step.
-   */
-  action?: string;
-  /** The words of that verb, which is what pressing the row is announced as. */
-  actionLabel?: string;
   /** A stage of the phase in hand rather than a phase: smaller, lighter, same column. */
   sub?: boolean;
   /**
@@ -558,38 +548,30 @@ export class MyHomeScreen extends LitElement {
    *
    * Drawn once and never twice: the button is hidden by the media query above ~1150 px and
    * the list is hidden below it unless the button has been pressed, which is one region for
-   * a screen reader at any width. A row that carries no action is a <div> with nothing
-   * focusable in it - the design's rule that the stepper is orientation, not a road back -
-   * and the one that does is a real <button> whose name says which verb it sends.
+   * a screen reader at any width.
+   *
+   * **No row is a control.** Every one of them is a <div> with nothing focusable in it, so
+   * the only stop the whole region adds to the keyboard is the button that opens the list,
+   * and that only at the widths where it is drawn. It is the design's rule, written in three
+   * places of the PoC, and wizard/stepper.ts says why the one row that was briefly pressable
+   * had to go.
    */
   private _renderStepper(stepper: ScreenStepper): TemplateResult {
-    const row = (step: ScreenStepperStep): TemplateResult => {
-      const inside = html`<span class="mark ${step.state}" aria-hidden="true"></span>
+    const row = (step: ScreenStepperStep): TemplateResult => html`<li
+      class="step ${step.state} ${step.sub ? "sub" : "phase"}"
+      aria-current=${step.inHand ? "step" : nothing}
+    >
+      <div class="step-still" data-step=${step.id}>
+        <span class="mark ${step.state}" aria-hidden="true"></span>
         <span class="words">
           <span class="name">${step.label}</span>
-          ${step.action ? html`<span class="redo" aria-hidden="true">↺</span>` : nothing}
+          ${step.meta === step.stateLabel
+            ? nothing
+            : html`<span class="sr-only">${step.stateLabel}</span>`}
           ${step.meta ? html`<span class="meta">${step.meta}</span>` : nothing}
         </span>
-        ${step.meta === step.stateLabel
-          ? nothing
-          : html`<span class="sr-only">${step.stateLabel}</span>`}`;
-      return html`<li
-        class="step ${step.state} ${step.sub ? "sub" : "phase"}"
-        aria-current=${step.inHand ? "step" : nothing}
-      >
-        ${step.action
-          ? html`<button
-              class="step-press"
-              type="button"
-              data-step=${step.id}
-              aria-label=${`${step.label} — ${step.stateLabel} — ${step.actionLabel ?? ""}`}
-              @click=${() => this._fire(step.action!)}
-            >
-              ${inside}
-            </button>`
-          : html`<div class="step-still">${inside}</div>`}
-      </li>`;
-    };
+      </div>
+    </li>`;
     return html`<nav class="stepper" aria-label=${stepper.label} data-stepper>
       <button
         class="stepper-toggle"

@@ -277,13 +277,7 @@ export const screenModel = (session: SessionSnapshot, context: WizardContext): S
     // outcome is the end of the calibration rather than a place in it, and a problem
     // interrupted a stage the snapshot does not name (`steps.ts`: the `problem_*` rows have
     // no phase, so `stepperModel` answers nothing for them of its own accord).
-    const stepper = stepperModel(session, {
-      i18n,
-      open: context.stepperOpen,
-      readOnly: context.readOnly,
-      label: (action) => actionLabel(i18n, step, action, ph),
-      token: (action) => `${ACT}${action}`,
-    });
+    const stepper = stepperModel(session, { i18n, open: context.stepperOpen });
     if (stepper) {
       model.stepper = stepper;
     }

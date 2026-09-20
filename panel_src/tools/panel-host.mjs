@@ -565,7 +565,7 @@ export const WIZARD_SCREENS = [
   wizard("a route that skips three phases", "briefing_verify_offer", { expect: "[data-stepper]" }),
   wizard("a correction, which takes no readings", "review_correction", { expect: "[data-stepper]" }),
   wizard("a reading that has to be done again", "awaiting_reading_measure_descent_stale", {
-    expect: "[data-stepper] button.step-press",
+    expect: "[data-stepper] li.step.error",
   }),
   wizard("the stepper opened on a phone", "awaiting_reading_measure_descent", {
     name: "the wizard, the stepper opened",

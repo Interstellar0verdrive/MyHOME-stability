@@ -596,7 +596,8 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
   check(`the stepper draws ${rows.length} rows`, rows.length >= 6, String(rows.length));
   check("and not one of them is in the tab order",
-    deepAll(panel.shadowRoot, "[data-stepper] button.step-press").length === 0);
+    stops.every((one) => !deep(panel.shadowRoot, "[data-stepper]")?.contains(one) ||
+      one.classList?.contains("stepper-toggle")));
   check("the collapsible row is a button, so Enter and Space open it",
     toggle?.tagName === "BUTTON", describe(toggle));
   check("it is in the tab order", stops.includes(toggle));
@@ -620,32 +621,38 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
 }
 
 {
-  console.log("\n…and on a reading that has to be done again");
-  const { panel, dom, settle, calls } = await mount({
-    name: "the wizard, the stepper with a way back",
+  console.log("\n…and on a reading that has to be done again, where a verb is being offered");
+  const { window, panel, dom, settle, calls } = await mount({
+    name: "the wizard, the stepper with nothing to press",
     state: "session:awaiting_reading_measure_descent_stale",
     hash: "#/calibrate",
-    expect: "[data-stepper] button.step-press",
+    expect: "[data-stepper]",
   });
   await settle();
-  const stops = tabOrder(panel.shadowRoot);
-  const pressable = deepAll(panel.shadowRoot, "[data-stepper] button.step-press");
-  check("exactly one row can be pressed", pressable.length === 1, String(pressable.length));
-  check("and it is the only one of them in the tab order",
-    stops.filter((one) => one.classList?.contains("step-press")).length === 1);
-  check("it says which verb it sends", (pressable[0]?.getAttribute("aria-label") ?? "").length > 0,
-    pressable[0]?.getAttribute("aria-label") ?? "");
-  // Every row that is not that one: a div with nothing focusable in it, which is the whole
-  // of "the stepper does not act".
-  const still = deepAll(panel.shadowRoot, "[data-stepper] .step-still");
-  still.forEach((row) => row.click?.());
+  const rows = deepAll(panel.shadowRoot, "[data-stepper] .step-still");
+  const before = active(panel);
+  check(`the rail draws ${rows.length} rows`, rows.length >= 6, String(rows.length));
+  check("and not one of them is a control",
+    deepAll(panel.shadowRoot, "[data-stepper] button:not(.stepper-toggle)").length === 0);
+  check("nor has a tabindex that would put it in the way",
+    rows.every((row) => row.getAttribute("tabindex") === null));
+  // Pressed one by one, which is what a finger does to a row that looks like a link.
+  for (const row of rows) {
+    row.click();
+  }
   await settle();
-  check(`pressing all ${still.length} of the other rows sends nothing`,
-    !calls.includes("act"), calls.join(", "));
-  pressable[0]?.click();
+  check(`pressing all ${rows.length} of them sends nothing`,
+    !calls.includes("act") && !calls.includes("stop"), calls.join(", "));
+  check("and moves the keyboard nowhere", active(panel) === before, describe(active(panel)));
+  // …and the verb the rail used to duplicate is still offered, once, where it belongs.
+  const secondary = deepAll(panel.shadowRoot, "button.cta.secondary");
+  check("while the step itself still offers the way to repeat the reading",
+    secondary.length >= 1, secondary.map((one) => (one.textContent ?? "").trim()).join(" / "));
+  secondary[0]?.click();
   await settle();
-  check("and pressing the one that can be sends exactly one act",
+  check("and pressing that sends exactly one act",
     calls.filter((one) => one === "act").length === 1, calls.join(", "));
+  void window;
   dom.window.close();
 }
 

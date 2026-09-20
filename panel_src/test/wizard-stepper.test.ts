@@ -25,8 +25,24 @@ import { I18n } from "../src/engine/i18n";
 import { type SessionSnapshot } from "../src/engine/session-contract";
 import { type HaConnection } from "../src/types/ha";
 import { PHASES } from "../src/wizard/steps";
-import { screenModel, type WizardContext } from "../src/wizard/model";
-import { currentPhase, readStepperOpen, writeStepperOpen } from "../src/wizard/stepper";
+import {
+  ACT,
+  AGAIN,
+  CHOOSE,
+  CLAIM,
+  CLOSE,
+  CUE,
+  OPEN_COVER,
+  PICK,
+  SAVE,
+  SHOW_AFFECTED,
+  SHOW_ALL,
+  STOP,
+  SUBMIT,
+  screenModel,
+  type WizardContext,
+} from "../src/wizard/model";
+import { STEPPER, currentPhase, readStepperOpen, writeStepperOpen } from "../src/wizard/stepper";
 import { valueLabel, valueLine } from "../src/wizard/format";
 
 import fixture from "../../tests/fixtures/panel_session_examples.json";
@@ -228,6 +244,19 @@ describe("the phase the session is in", () => {
     }
   });
 
+  it("names the only plan that is not straight, so a new one cannot slip past in silence", () => {
+    // The check above excludes the plans whose phases are interleaved, by shape and not by
+    // name. Without this, a route that gained two interleaved phases by accident would be
+    // excluded in silence and nobody would learn about it.
+    const crooked = Object.entries(scenarios)
+      .filter(([, snapshot]) => snapshot.plan.length > 0 && !straight(snapshot))
+      .map(([name]) => name)
+      .sort();
+    // The thorough calibration: the reader saw the review, pressed "Continue with the
+    // thorough calibration", and the plan was rewritten around a stage already behind them.
+    assert.deepEqual(crooked, ["review_precise"]);
+  });
+
   it("never draws a finished phase under the one in hand, on any plan at all", () => {
     // Including the thorough one: whatever the plan did, what the rail shows has to read
     // top to bottom - everything behind, then where the reader is, then everything ahead.
@@ -340,77 +369,120 @@ describe("a reading that came out wrong", () => {
     }
   });
 
-  it("leaves the rest of the rail exactly as it was", () => {
-    const wrong = shapeOf("awaiting_reading_measure_descent_error").map((row) =>
-      row.replace(":error", ":current"),
+  it("leaves the rest of the rail exactly as it was, meta included", () => {
+    // `shapeOf` used to compare the states alone, and the design's rule for a phase with an
+    // error is that the rest of the stepper does not change - which includes the counter
+    // under the phase name, and did not (the review's AFF-2).
+    const named = (one: string) =>
+      (stepperOf(one)?.rows ?? []).map(
+        (row) => `${row.sub ? "  " : ""}${row.id}:${row.state}:${row.meta ?? ""}`,
+      );
+    const right = named("awaiting_reading_measure_descent");
+    const wrong = named("awaiting_reading_measure_descent_error");
+    assert.equal(wrong.length, right.length);
+    for (const [at, line] of wrong.entries()) {
+      // The two rows that really are different - the phase and the stage in hand - and
+      // nothing else on the rail.
+      if (line.includes(":error:")) {
+        assert.ok(right[at].includes(":current:"), right[at]);
+        continue;
+      }
+      assert.equal(line, right[at]);
+    }
+    // …and the counter is one of the things that did not move.
+    assert.equal(
+      wrong.find((one) => one.startsWith("readings:")),
+      `readings:error:${en_gb.t("panel.wizard.stepper.within", { index: 3, count: 3 })}`,
     );
-    assert.deepEqual(wrong, shapeOf("awaiting_reading_measure_descent"));
   });
 });
 
-describe("what can be pressed, and what only looks like it", () => {
-  it("offers nothing at all on a screen whose session offers no verb that repeats a stage", () => {
-    for (const [name] of Object.entries(scenarios)) {
-      const stepper = stepperOf(name);
-      if (!stepper) {
-        continue;
-      }
-      const pressable = stepper.rows.filter((row) => row.action !== undefined);
-      const offered =
-        scenarios[name].actions.includes("repeat_tape") ||
-        scenarios[name].actions.includes("repeat_measure");
-      assert.ok(
-        pressable.length <= 1,
-        `${name} made ${pressable.length} rows pressable`,
-      );
-      if (!offered) {
-        assert.equal(pressable.length, 0, `${name} made a row pressable with no verb behind it`);
-      }
-    }
-  });
-
-  it("makes the stage the verb would act on pressable, and sends that verb", () => {
-    const rows = stepperOf("awaiting_reading_measure_descent_stale")?.rows ?? [];
-    const pressable = rows.filter((row) => row.action !== undefined);
-    assert.equal(pressable.length, 1);
-    // The stage the session is standing on, which is the one `repeat_tape` repeats.
-    assert.equal(pressable[0].id, `readings/${scenarios.awaiting_reading_measure_descent_stale.plan_index}`);
-    assert.equal(pressable[0].action, "act:repeat_tape");
-    // …named with the words of the verb itself, so pressing the row and pressing the button
-    // under the field are visibly the same act.
-    assert.ok((pressable[0].actionLabel ?? "").length > 0);
-  });
-
-  it("never makes a phase pressable, whatever is offered", () => {
-    for (const [name] of Object.entries(scenarios)) {
-      for (const row of stepperOf(name)?.rows ?? []) {
-        if (!row.sub) {
-          assert.equal(row.action, undefined, `${name}: the phase ${row.id} can be pressed`);
+describe("what the stepper is not: a control", () => {
+  // The design says it in three places - "nessuna azione dallo stepper: nessun passo è
+  // cliccabile", "la correzione non passa dallo stepper", "i passi dello stepper non
+  // ricevono il focus" - and the independent review of this lot showed why the one
+  // exception could not work: a row can only offer a verb the session is already offering,
+  // and `model.ts` draws every one of those as a button on the same screen. So the rail was
+  // a second way to press a button 700 px to its right, and one more stop for the keyboard.
+  it("gives no row an action, on any example of the fixture at any point of its plan", () => {
+    for (const [name, snapshot] of Object.entries(scenarios)) {
+      for (let at = 0; at < Math.max(1, snapshot.plan.length); at += 1) {
+        const stepper = screenModel(
+          { ...snapshot, plan_index: snapshot.plan.length === 0 ? snapshot.plan_index : at },
+          context(en_gb),
+        ).stepper;
+        for (const row of stepper?.rows ?? []) {
+          assert.deepEqual(
+            Object.keys(row).filter((key) => key === "action" || key === "actionLabel"),
+            [],
+            `${name}@${at}: ${row.id} carries an action`,
+          );
         }
       }
     }
   });
 
-  it("never makes a timed run pressable: repeating one throws the times away", () => {
-    // The stages that are runs rather than readings, on every example of the fixture.
-    const runs = new Set(["home_closed", "open_timed", "close_timed", "tape_brief", "verify_offer", "profile_name", "summary"]);
+  it("gives no row an action even where a verb that repeats a stage is being offered", () => {
+    // The four states the review found, where `repeat_tape` really is in `actions`.
+    for (const name of [
+      "awaiting_reading_measure_descent_stale",
+      "checking_verify_result_within",
+      "checking_verify_result_offers_c",
+    ]) {
+      assert.ok(
+        scenarios[name].actions.includes("repeat_tape"),
+        `${name} no longer offers the verb this test is about`,
+      );
+      const rows = stepperOf(name)?.rows ?? [];
+      assert.ok(rows.length > 0, name);
+      for (const row of rows) {
+        assert.equal("action" in row, false, `${name}: ${row.id}`);
+      }
+    }
+  });
+
+  it("draws the same rows whoever is driving, because none of them acts", () => {
+    const mine = stepperOf("awaiting_reading_measure_descent_stale");
+    const theirs = stepperOf("awaiting_reading_measure_descent_stale", { readOnly: true });
+    assert.deepEqual(theirs, mine);
+  });
+});
+
+describe("a plan with no place in it", () => {
+  // RIS-1 of the review. Not producible by today's controller, and not written down as an
+  // invariant either: `plan_index` is `number | null` and the API document says nothing, so
+  // the rail refuses to draw rather than losing the reader's place in silence.
+  const lost = (over: Partial<SessionSnapshot>) =>
+    screenModel({ ...scenarios.awaiting_reading_measure_descent, ...over } as SessionSnapshot,
+      context(en_gb)).stepper;
+
+  it("draws nothing when the plan has no index into it", () => {
+    assert.equal(lost({ plan_index: null }), undefined);
+  });
+
+  it("draws nothing when the index is past the end of the plan", () => {
+    const plan = scenarios.awaiting_reading_measure_descent.plan;
+    assert.equal(lost({ plan_index: plan.length }), undefined);
+    assert.equal(lost({ plan_index: plan.length + 4 }), undefined);
+    assert.equal(lost({ plan_index: -1 }), undefined);
+  });
+
+  it("never draws a rail with nothing in hand", () => {
+    // The rule the two above exist for, asserted over everything the fixture can produce.
     for (const [name, snapshot] of Object.entries(scenarios)) {
-      for (const row of stepperOf(name)?.rows ?? []) {
-        if (!row.sub || row.action === undefined) {
+      for (const at of [null, -1, 0, snapshot.plan.length, snapshot.plan.length + 1]) {
+        const stepper = screenModel({ ...snapshot, plan_index: at } as SessionSnapshot, context(en_gb))
+          .stepper;
+        if (!stepper) {
           continue;
         }
-        const at = Number.parseInt(row.id.split("/")[1] ?? "", 10);
-        assert.ok(!runs.has(snapshot.plan[at]), `${name}: ${snapshot.plan[at]} can be repeated`);
+        assert.equal(
+          stepper.rows.filter((row) => row.inHand).length,
+          1,
+          `${name}@${at}: the rail has no row in hand`,
+        );
       }
     }
-  });
-
-  it("takes every action away when somebody else is driving", () => {
-    const rows = stepperOf("awaiting_reading_measure_descent_stale", { readOnly: true })?.rows ?? [];
-    assert.equal(rows.filter((row) => row.action !== undefined).length, 0);
-    // …and the rows themselves are still all there: the stepper is what a reader standing in
-    // front of somebody else's shutter is looking at.
-    assert.equal(rows.length, (stepperOf("awaiting_reading_measure_descent_stale")?.rows ?? []).length);
   });
 });
 
@@ -457,6 +529,27 @@ describe("the collapsible row", () => {
     };
     assert.equal(readStepperOpen(broken), false);
     assert.doesNotThrow(() => writeStepperOpen(true, broken));
+  });
+});
+
+describe("the token the collapsible row fires", () => {
+  it("is not one of the screen's other tokens", () => {
+    // `STEPPER` is the one token declared outside the block in `wizard/model.ts`, because
+    // `stepper.ts` may not import that file (`model.ts` imports this one). Nothing made the
+    // set distinct; this does (the review's AFF-10).
+    const tokens = [ACT, SAVE, PICK, SUBMIT, STOP, CLAIM, CUE, CHOOSE, SHOW_ALL, SHOW_AFFECTED,
+      AGAIN, OPEN_COVER, CLOSE, STEPPER];
+    assert.equal(new Set(tokens).size, tokens.length);
+    // …and no token is a prefix of another, because `views/wizard.ts` dispatches some of
+    // them with `startsWith`.
+    for (const one of tokens) {
+      for (const other of tokens) {
+        if (one === other) {
+          continue;
+        }
+        assert.equal(other.startsWith(one), false, `'${other}' starts with '${one}'`);
+      }
+    }
   });
 });
 
