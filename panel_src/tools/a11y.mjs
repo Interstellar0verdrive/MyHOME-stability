@@ -17,7 +17,9 @@
 
 import { readFile } from "node:fs/promises";
 
-import { NEEDS_LAYOUT, STATES, axeSource, mount } from "./panel-host.mjs";
+import { NEEDS_LAYOUT, STATES, axeSource, mount, refuseAStaleBundle } from "./panel-host.mjs";
+
+await refuseAStaleBundle();
 
 const audit = async (one) => {
   const { name, dom, window } = await mount(one);

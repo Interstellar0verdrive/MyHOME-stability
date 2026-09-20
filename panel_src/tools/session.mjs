@@ -48,7 +48,9 @@ import { fileURLToPath } from "node:url";
 
 import { JSDOM } from "jsdom";
 
-import { deep, deepAll, forbidFormApis } from "./panel-host.mjs";
+import { deep, deepAll, forbidFormApis, refuseAStaleBundle } from "./panel-host.mjs";
+
+await refuseAStaleBundle();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");

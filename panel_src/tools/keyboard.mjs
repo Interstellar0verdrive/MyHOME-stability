@@ -14,7 +14,17 @@
 //
 // Dev-only, like its two neighbours: it loads the committed bundle and nothing imports it.
 
-import { COVER, deep, deepAll, makePending, mount, openDialog } from "./panel-host.mjs";
+import {
+  COVER,
+  deep,
+  deepAll,
+  makePending,
+  mount,
+  openDialog,
+  refuseAStaleBundle,
+} from "./panel-host.mjs";
+
+await refuseAStaleBundle();
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +

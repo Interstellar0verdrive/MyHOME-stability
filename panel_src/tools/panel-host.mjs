@@ -8,7 +8,7 @@
 // Dev-only. `jsdom` is a devDependency and nothing under `src/` imports it; what is loaded
 // is the built bundle, so what is checked is what ships.
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +18,41 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const bundle = join(root, "custom_components", "myhome", "frontend", "myhome-panel.js");
 export const axeSource = join(here, "..", "node_modules", "axe-core", "axe.min.js");
+
+/**
+ * Refuse to run against a bundle older than the sources it was built from.
+ *
+ * `a11y`, `keyboard` and `session` load the **committed bundle**, not `src/` - which is the
+ * point, because what is audited is then what ships. The cost is a trap: edit a source, run
+ * one of the three without `npm run build`, and it comes back green about code that is not
+ * being executed. The independent review of lot W2 walked into it, twice: two guards were
+ * deliberately broken and all three tools stayed green until the bundle was rebuilt.
+ *
+ * So the three refuse to start when any file under `src/` is newer than the bundle. It is a
+ * comparison of modification times and nothing more - it cannot tell whether the bundle was
+ * built *from* those sources, only that it cannot have been.
+ */
+export const refuseAStaleBundle = async () => {
+  const newest = async (folder) => {
+    let latest = 0;
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      const path = join(folder, entry.name);
+      const at = entry.isDirectory() ? await newest(path) : (await stat(path)).mtimeMs;
+      latest = Math.max(latest, at);
+    }
+    return latest;
+  };
+  const built = (await stat(bundle)).mtimeMs;
+  const written = await newest(join(here, "..", "src"));
+  if (written <= built) {
+    return;
+  }
+  console.error(
+    "the bundle is older than the sources: this check would audit code that is not running.\n" +
+      "run `npm run build` first.",
+  );
+  process.exit(1);
+};
 
 const fixture = JSON.parse(
   await readFile(join(root, "tests", "fixtures", "panel_overview_example.json"), "utf8"),
