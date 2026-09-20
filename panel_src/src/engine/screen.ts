@@ -658,7 +658,7 @@ export class MyHomeScreen extends LitElement {
     const labelled = (model.image?.alt ?? "") !== "";
     return html`<div class="screen">
       ${model.readOnly
-        ? html`<div class="read-only" role="status">
+        ? html`<div class="read-only ${model.stepper ? "" : "no-stepper"}" role="status">
             <span>${model.readOnly.text}</span>
             <button
               class="cta secondary"

@@ -1176,6 +1176,30 @@ console.log("\nwhere the calibration has got to");
   void find;
 }
 
+{
+  // …and the strip that says another device is driving carries the same marking the pane
+  // does, which is the other half of BUG-1: the numbers above are only right if the two
+  // elements agree about which of the two maxima they are on.
+  const driven = gateway({ session: scenario("owned_by_other") });
+  const { find } = await mount(driven.connection);
+  const strip = find(".read-only");
+  const pane = find(".pane");
+  checkThat("a calibration somebody else is driving still shows the stepper", find("[data-stepper]") !== null);
+  checkThat("and the strip saying so is on the screen", strip !== null);
+  check(
+    "the strip and the pane agree about which maximum they are on",
+    strip?.classList.contains("no-stepper"),
+    pane?.classList.contains("no-stepper"),
+  );
+  const bare = gateway({ session: scenario("problem_no_echo") });
+  const other = await mount(bare.connection);
+  check(
+    "and on a screen with no stepper they agree about the other one",
+    other.find(".pane")?.classList.contains("no-stepper"),
+    true,
+  );
+}
+
 console.log("\nthe drawings, whole, at both widths");
 {
   // Live findings 10, 14 and 19: three of the five illustrations arrived cropped, top and
@@ -1287,6 +1311,51 @@ console.log("\nthe drawings, whole, at both widths");
     "and the widest layout is exactly the old one plus the rail and its gap",
     three.max,
     two.max + rail + gap,
+  );
+
+  // BUG-1 of the independent review: the strip that says another device is driving is drawn
+  // **above** the pane and not inside it, so nothing lines the two up but their maxima. The
+  // rail raised the pane's and the strip kept the old one, which is 68 px of overhang per
+  // side at 1280 px and 115 px at 1600. Measured the way a browser would: both elements are
+  // centred and both have a maximum, so the left edge of each is (viewport - width) / 2 with
+  // the width capped, and the strip's own `calc(100% - 64px)` is the pane's padding.
+  const strip = (upTo, property) => {
+    const rules = splitRules(css).filter((one) => one.selectorText === ".read-only");
+    for (let at = Math.min(upTo, rules.length - 1); at >= 0; at -= 1) {
+      const found = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;}]+)`).exec(
+        rules[at].cssText,
+      );
+      if (found) {
+        return found[1].trim();
+      }
+    }
+    return null;
+  };
+  const stripless = splitRules(css).filter((one) => one.selectorText === ".read-only.no-stepper");
+  const strippedMax = (property) => {
+    const found = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;}]+)`).exec(
+      stripless[stripless.length - 1]?.cssText ?? "",
+    );
+    return found ? px(found[1].trim()) : null;
+  };
+  // `.read-only` gets its own rule in each of the three layouts too, and the third is the
+  // one the rail introduced.
+  const stripAt = (viewport) =>
+    viewport < 900
+      ? null
+      : px(strip(viewport < STEPPER_AT ? 1 : 2, "max-width"));
+  for (const viewport of [1280, 1600]) {
+    const pane = Math.min(viewport, viewport < STEPPER_AT ? two.max : three.max);
+    check(
+      `the strip and the panel start at the same place at ${viewport} px, with the stepper`,
+      Math.min(viewport, stripAt(viewport) ?? 0),
+      pane,
+    );
+  }
+  check(
+    "and at the old maximum on a screen that has no stepper",
+    strippedMax("max-width"),
+    two.max,
   );
   checkThat(
     "the three column widths are read off the stylesheet " +

@@ -881,5 +881,23 @@ export const templateStyles = css`
     .step-press {
       min-height: 44px;
     }
+
+    /*
+     * The strip takes the maximum the pane really has, once the rail has widened it.
+     *
+     * It says another device is driving, and it is drawn above the pane rather than inside
+     * it: nothing lines the two up but this number. Lot W2 raised the pane from 1080 to
+     * 1374 px wherever there is a rail beside the step, and for one commit the strip stayed
+     * at 1080 - 68 px of overhang per side at 1280, 115 px at 1600. So it carries the same
+     * marking the pane does and reads the same pair of numbers, and tools/session.mjs
+     * measures the two against each other at both widths.
+     */
+    .read-only {
+      max-width: 1374px;
+    }
+
+    .read-only.no-stepper {
+      max-width: 1080px;
+    }
   }
 `;
