@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 from pathlib import Path
@@ -20,7 +21,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 import custom_components.myhome as myhome
 from custom_components.myhome import (
     PANEL_BUNDLE,
+    PANEL_BUNDLE_PATH,
     PANEL_ELEMENT,
+    PANEL_FINGERPRINT_CHARS,
     PANEL_SIDEBAR_ICON,
     PANEL_SIDEBAR_TITLE,
     PANEL_STATIC_URL,
@@ -1115,6 +1118,12 @@ async def test_the_drawings_and_the_bundle_are_served_from_one_call(hass: HomeAs
     Assistant run, not once per gateway -- out of the directory that ships inside the
     integration, and the files the descriptions name have to be in it.
 
+    `cache_headers=True` asks Home Assistant to serve both directories with a month of
+    `max-age`, which is safe precisely because the bundle's address carries a
+    fingerprint of its contents (`_async_register_panel`): the browser keeps *that*
+    bundle for as long as it likes and the next build asks for a different URL. The two
+    decisions have to move together, so they are asserted together.
+
     Mutation caught: registering the path under another URL (or another directory),
     dropping `cache_headers`, or moving the call somewhere a second gateway would run
     it again, which Home Assistant refuses with "Static path already registered".
@@ -1242,33 +1251,145 @@ async def test_the_panel_is_registered_with_the_flags_that_were_decided(
     assert custom["handle_safe_area"] is True
 
 
-async def test_the_bundles_url_carries_the_version_the_manifest_says(
+def _manifest_version() -> str:
+    """The version `manifest.json` declares, which is what `?v=` starts with."""
+    return json.loads(
+        (Path(myhome.__file__).parent / "manifest.json").read_text(encoding="utf-8")
+    )["version"]
+
+
+async def test_the_bundles_url_carries_the_version_and_a_fingerprint_of_the_file(
     hass: HomeAssistant, tmp_path
 ) -> None:
     """`cache_headers=True` means the URL has to change when the bundle does.
 
-    It changes on the query string, read back out of the integration rather than
-    restated: `release.yml` rewrites and asserts `manifest.json`'s version before it
-    tags, so `?v=` moves on every release and on nothing else. The same version reaches
-    the element through the panel's own `config`, which is why the committed bundle
-    carries no stamp and a release does not have to rebuild it.
+    The version alone does not: `manifest.json` says 0.5.0 until `release.yml` rewrites
+    it at tag time, so two test installations of two different bundles were served from
+    one address and the browser kept the first (live finding 30 - twenty minutes spent
+    testing a panel that was no longer installed). So the query string is
+    `?v=<version>-<fingerprint>`: the manifest's version, read back out of the
+    integration rather than restated, then twelve hex characters of the bundle's own
+    SHA-256, which move when a byte of the file moves and at no other time.
 
-    Mutation caught: hard-coding a version, dropping the query string (after which a
-    browser keeps a year-old bundle), or stamping the version into the bundle instead.
+    The version in front of the fingerprint is not decoration: it is what keeps a
+    released address readable, and it is what the element receives through the panel's
+    own `config` - the fingerprint deliberately does not go there, because it is a
+    property of the file and a bug report names the release.
+
+    Mutation caught: dropping the fingerprint (after which a test deploy is served from
+    cache), dropping the version, hashing something other than the bundle that is
+    actually served, or stamping either of them into the bundle instead.
     """
-    version = json.loads(
-        (Path(myhome.__file__).parent / "manifest.json").read_text(encoding="utf-8")
-    )["version"]
+    version = _manifest_version()
+    digest = hashlib.sha256(PANEL_BUNDLE_PATH.read_bytes()).hexdigest()
+    fingerprint = digest[:PANEL_FINGERPRINT_CHARS]
+    assert len(fingerprint) == 12
 
     entry = make_entry(write_yaml(tmp_path))
     with mock_gateway():
         assert await _setup(hass, entry)
 
     panel = _panel(hass)
+    # The element is told the release it belongs to, and nothing else.
     assert panel["config"]["version"] == version
+    assert panel["config"]["_panel_custom"]["module_url"] == (
+        f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}-{fingerprint}"
+    )
+    # ...and the file behind that address is the one that was hashed.
+    assert Path(myhome.__file__).parent / "frontend" / PANEL_BUNDLE == PANEL_BUNDLE_PATH
+
+
+async def test_the_fingerprint_moves_when_the_bundle_does(hass: HomeAssistant) -> None:
+    """The whole point: one edited byte, one different address.
+
+    Two registrations of two different files, with nothing else changed - not the
+    version, not the file name - have to produce two different `?v=`. The same file
+    twice has to produce the same one, or the browser would re-download an unchanged
+    bundle on every restart and the caching would be for nothing.
+
+    Mutation caught: a fingerprint that is not of the contents (a timestamp, the file
+    size, a random value per run), or a version-only fallback that also fires when the
+    file is perfectly readable.
+    """
+    version = _manifest_version()
+
+    async def register(contents: bytes, where: Path) -> str:
+        where.write_bytes(contents)
+        if frontend.async_panel_exists(hass, PANEL_URL_PATH):
+            frontend.async_remove_panel(hass, PANEL_URL_PATH)
+        with patch.object(myhome, "PANEL_BUNDLE_PATH", where):
+            await myhome._async_register_panel(hass)
+        return _panel(hass)["config"]["_panel_custom"]["module_url"]
+
+    bundle = Path(hass.config.path("fake-bundle.js"))
+    first = await register(b"/* MyHOME calibration panel */ one", bundle)
+    again = await register(b"/* MyHOME calibration panel */ one", bundle)
+    second = await register(b"/* MyHOME calibration panel */ two", bundle)
+
+    assert first == again
+    assert first != second
+    assert first.startswith(f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}-")
+    assert second.startswith(f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}-")
+    # A full SHA-256 in the address would be sixty-four characters of noise.
+    assert len(first.rsplit("-", 1)[1]) == PANEL_FINGERPRINT_CHARS
+
+
+async def test_the_bundle_is_hashed_off_the_event_loop(hass: HomeAssistant) -> None:
+    """Reading a couple of hundred kilobytes is file I/O, and file I/O blocks.
+
+    `async_setup` runs on the event loop with every other integration's start-up behind
+    it, so the read goes to an executor. Home Assistant's own blocking-call detector
+    would also catch an `open()` here, but it would say "blocking call" and not "the
+    panel registration went back to reading its bundle inline", which is what this says.
+
+    Mutation caught: calling `_bundle_fingerprint()` directly instead of handing it to
+    `async_add_executor_job`.
+    """
+    loop_thread = threading.get_ident()
+    threads: list[int] = []
+    real = myhome._bundle_fingerprint
+
+    def recording() -> str | None:
+        threads.append(threading.get_ident())
+        return real()
+
+    with patch.object(myhome, "_bundle_fingerprint", recording):
+        await myhome._async_register_panel(hass)
+
+    assert threads, "the bundle was never fingerprinted"
+    assert loop_thread not in threads
+    assert _panel(hass) is not None
+
+
+async def test_a_bundle_that_cannot_be_read_still_gets_a_panel(
+    hass: HomeAssistant, caplog
+) -> None:
+    """A missing bundle costs the fingerprint, not the sidebar entry.
+
+    There is nothing the registration can do about a file that is not there, and
+    refusing to register would replace the panel's own "could not start" screen - which
+    names the problem - with a silent absence. So the address falls back to the version
+    alone, exactly as it was before this lot, and the log says which file could not be
+    read and what the consequence is.
+
+    Mutation caught: letting the `OSError` out of `_bundle_fingerprint` (the panel is
+    then swallowed by the outer `except` and logged as a registration failure), or
+    writing a literal `None` into the address.
+    """
+    version = _manifest_version()
+    missing = Path(hass.config.path("not-here", "myhome-panel.js"))
+
+    with patch.object(myhome, "PANEL_BUNDLE_PATH", missing):
+        await myhome._async_register_panel(hass)
+
+    panel = _panel(hass)
+    assert panel is not None
     assert panel["config"]["_panel_custom"]["module_url"] == (
         f"{PANEL_STATIC_URL}/{PANEL_BUNDLE}?v={version}"
     )
+    assert "Could not register the MyHOME panel" not in caplog.text
+    assert "fingerprint" in caplog.text
+    assert str(missing) in caplog.text
 
 
 async def test_the_panel_is_registered_once_per_home_assistant_run(hass: HomeAssistant) -> None:

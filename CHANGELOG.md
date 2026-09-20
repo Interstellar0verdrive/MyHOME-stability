@@ -342,6 +342,16 @@ the panel when it is in the way.
   number the same route has just promised a basic calibration ends up within, and a
   check that contradicted the screen before it is a check nobody believes. The guided
   dialog keeps its own 3 cm for now; the two meet the next time it is touched.
+- **The panel's address carries a fingerprint of the bundle it asks for**, not only the
+  version: `/myhome_panel/myhome-panel.js?v=<version>-<twelve hex characters of the
+  file's SHA-256>`. The version alone does not move between two installations of the
+  same release — it is rewritten at tag time — so a browser went on serving the panel it
+  had already cached, and a test installation could be twenty minutes of looking at a
+  page that was no longer installed. The bundle is now read once at start-up, in an
+  executor, and every build gets an address of its own while a released one stays
+  readable. If the file cannot be read the address falls back to the version alone and
+  the log says so; the static directory keeps its month of caching, which is what an
+  address that changes with its contents is for.
 
 ## [0.5.0] - 2026-09-13
 

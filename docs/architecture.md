@@ -570,13 +570,33 @@ order, so `/myhome_static/panel/...` would be matched by the drawings' resource 
 and looked for inside `images/`.
 
 `cache_headers=True` means the URL has to change when the bundle does, and it does:
-the module URL is `/myhome_panel/myhome-panel.js?v=<the manifest's version>`, read
-back from the integration rather than restated. `release.yml` rewrites and asserts
-that version before it tags, so the URL moves on every release and on nothing else.
+the module URL is `/myhome_panel/myhome-panel.js?v=<version>-<fingerprint>` — the
+manifest's version, read back from the integration rather than restated, then twelve
+hex characters of the bundle's SHA-256.
 
-The same version is passed to the element in the panel's `config`, which is how the
-panel can name its own version without the bundle carrying a stamp — and therefore
-without a release having to rebuild it.
+The version alone was the whole key until lot W4, and it was not enough. `release.yml`
+rewrites that version at tag time and at no other moment, so between two test
+installations of the same release the address did not move and the browser went on
+serving the bundle it already had — twenty minutes of a live test on 19 September were
+spent on a panel that was no longer installed (live finding 30). The fingerprint moves
+with the contents of the file and with nothing else, which gives every build its own
+address while the version in front of it keeps a released one readable.
+
+The bundle is read **once per Home Assistant run, in an executor**: `async_setup` runs
+on the event loop, and a couple of hundred kilobytes of file I/O do not belong there. A
+bundle that cannot be read costs the fingerprint and not the panel — the address falls
+back to the version alone and a warning names the file, because a missing bundle is a
+problem the panel's own start-up screen states better than a missing sidebar entry
+does.
+
+That address is also what makes the month of `max-age` on the static directory safe:
+the browser is told to keep *that* bundle for as long as it likes, and the next build
+simply asks for a different URL.
+
+The same version — without the fingerprint, which is a property of the file and not of
+the release — is passed to the element in the panel's `config`, which is how the panel
+can name its own version without the bundle carrying a stamp, and therefore without a
+release having to rebuild it.
 
 ### The panel's words, and the two languages they are written in
 
