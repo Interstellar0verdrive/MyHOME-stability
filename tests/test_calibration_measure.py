@@ -29,9 +29,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from custom_components.myhome import calibration_flow, calibration_measure
-from custom_components.myhome.calibration import PressTiming, RunReport
+from custom_components.myhome.calibration import PressTiming, RunReport, predict_cm
 from custom_components.myhome.calibration_flow import (
+    EXPECTED_TOLERANCE_CM,
     FIELD_MEASURED_CM,
+    HALF_RUN,
     PATH_FIRST,
     PATH_PROFILE,
     PATH_REFINE,
@@ -54,6 +56,7 @@ from custom_components.myhome.calibration_measure import (
     fits,
     known_height,
     merged_with,
+    model_fraction,
     model_values,
     own_height,
     profile_still_wins,
@@ -756,9 +759,27 @@ async def test_the_fit(conversation: Conversation) -> None:
 
 
 async def test_the_tape(conversation: Conversation) -> None:
-    """`_expected_cm`, `_accept_measurement` and `_deviation`, over several readings."""
+    """`_expected_cm`, `_accept_measurement` and `_deviation`, over several readings.
+
+    The first of the three is the **one declared divergence** of the port (lot W5), and
+    the only place in this file where a method and the function taken from it are
+    allowed to answer differently. The dialog predicts the fraction of the run it
+    *commanded*, which is a fraction of the times the cover is configured with today;
+    the panel predicts the seconds the motor *spent*, over the run times of the model
+    doing the predicting. The second is what the verdict screen already judged by
+    (`_deviation`, which has always worked in motor seconds), so the suggestion under
+    the field and the result after it are now one number instead of two.
+
+    They still coincide wherever there is nothing to convert with - no model, no travel
+    or no run - and there the parity of lot B1 is asserted unchanged. Where they part,
+    both sides are checked against the arithmetic written out by hand, so that a change
+    to either is caught rather than absorbed.
+    """
     c = conversation
     flow = c.flow
+    model = c.model()
+    report = c.case.report
+    differ: list[bool] = []
     for pending in (
         c.case.pending,
         None,
@@ -766,11 +787,34 @@ async def test_the_tape(conversation: Conversation) -> None:
         (DIRECTION_OPEN, THREE_QUARTER_RUN),
     ):
         flow._pending = pending
-        assert outcome(flow._expected_cm) == outcome(
+        dialog = outcome(flow._expected_cm)
+        panel = outcome(
             lambda pending=pending: expected_cm(
-                pending=pending, height=c.measured.height, model=c.model()
+                pending=pending, height=c.measured.height, model=model, report=report
             )
         )
+        height = c.measured.height
+        if model is None or not height or report is None:
+            assert panel == dialog
+            continue
+        direction, commanded = pending or (DIRECTION_CLOSE, HALF_RUN)
+        roll = model[CONF_CLOSING_ROLL if direction == DIRECTION_CLOSE else CONF_OPENING_ROLL]
+        spent = model_fraction(direction, model=model, motor_seconds=report.motor_seconds)
+        tolerance = f"{EXPECTED_TOLERANCE_CM:.0f}"
+        assert panel == (
+            "returned",
+            (f"{predict_cm(direction, roll, 1.0, spent, height):.0f}", tolerance),
+        )
+        assert dialog == (
+            "returned",
+            (f"{predict_cm(direction, roll, 1.0, commanded, height):.0f}", tolerance),
+        )
+        differ.append(panel[1][0] != dialog[1][0])
+    if model is not None and c.measured.height and report is not None:
+        # ...and the divergence is not a theoretical one: on the conversations that
+        # have both a model and a finished run - the ones the user actually reads this
+        # line on - the two disagree on the printed centimetre.
+        assert any(differ)
     flow._pending = c.case.pending
     for typed in (
         # What the dialog's form hands over: text, as typed, in either notation.

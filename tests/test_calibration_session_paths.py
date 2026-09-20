@@ -34,7 +34,12 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
 
 from custom_components.myhome import calibration_session
-from custom_components.myhome.calibration import REASON_BAD_POINT, CalibrationError, RunReport
+from custom_components.myhome.calibration import (
+    REASON_BAD_POINT,
+    CalibrationError,
+    RunReport,
+    predict_cm,
+)
 from custom_components.myhome.calibration_flow import (
     HALF_RUN,
     PLAN_PRECISE,
@@ -211,6 +216,33 @@ gateway:
       slat_time: {LIVE_WINDOW[CONF_SLAT_TIME]}
       opening_roll: {LIVE_WINDOW[CONF_OPENING_ROLL]}
       closing_roll: {LIVE_WINDOW[CONF_CLOSING_ROLL]}
+  cover_profiles:
+    short:
+      reference_height: 110
+      opening_time: 14.3
+      closing_time: 14.3
+      slat_time: 2.7
+      roll: 2.07
+      opening_roll: 2.07
+      closing_roll: 2.33
+"""
+
+
+# ...and the same window seen from the other side: configured with that profile scaled
+# to its 198 cm - which is what the cover really moved on before anything was measured -
+# while the shutter on the wall is still the window itself. The two sets of times differ
+# by a second of run and half a second of slats, which is all it takes to make "the
+# fraction the motor was given" and "the fraction of the model's curtain time" two
+# different questions (lot W5).
+LIVE_INHERITED_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    {YAML_KEY}:
+      where: '81'
+      name: {COVER_NAME}
+      height: {LIVE_TRAVEL}
+      profile: short
   cover_profiles:
     short:
       reference_height: 110
@@ -1136,6 +1168,135 @@ async def test_the_check_catches_the_window_of_the_twentieth_of_september(
         )
         assert abs(down - was_predicted) == pytest.approx(3.2, abs=0.3)
         assert abs(down - was_predicted) < REFINE_THRESHOLD_CM
+        for one in published:
+            check_the_snapshot(one)
+
+
+async def test_the_expected_reading_and_the_verdict_are_one_number_on_that_window(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same window, and the defect the suggestion under the field used to have.
+
+    The bench is the one above turned round: the 198 cm window is *configured* with the
+    110 cm profile scaled to it - 22,26 s of run and 4,86 s of slats - while the
+    shutter on the wall is the window itself (21,3 / 4,4, and a closing roll of 2,21).
+    Which of the two the cover really carried on 20 September is not recorded anywhere
+    and is not claimed here; what is certain is that it was **not** the profile it was
+    being given, which is the arrangement that matters. Every run of the thorough
+    calibration is then commanded as a fraction of **22,26 s** while the model that
+    predicts the reading carries **21,3 s**, and that is exactly what the old
+    `expected_cm` got wrong: it read the commanded fraction as a fraction of the
+    model's own curtain time, with no time scale between the two.
+
+    On this bench the screens said two numbers for one run: "about 101 cm are expected"
+    under the field, and 98 cm as the prediction the verdict then judged the tape
+    against. Neither was 3 cm of shutter - it was 3 cm of arithmetic - and nothing
+    stored was ever affected, because the fit and `deviation` have always worked in
+    motor seconds.
+
+    All five readings of the thorough calibration carry a model (the basic level
+    already has one in each direction, so `fits` answers from the first screen of the
+    phase on), which is why the user met the wrong suggestion five times in a row; the
+    check is the one screen where the second number is there to be compared with it.
+    """
+    async with setup_myhome(hass, tmp_path, LIVE_INHERITED_YAML) as (entry, _commands):
+        inherited = derive_cover_from_profile(
+            merged_profiles(yaml_profiles(hass, entry), {})["short"], LIVE_TRAVEL
+        )
+        assert inherited[CONF_CLOSING_TIME] == pytest.approx(22.26, abs=0.01)
+        assert inherited[CONF_SLAT_TIME] == pytest.approx(4.86, abs=0.01)
+        runner = ConfiguredWindow(
+            entity_object(hass, COVER, DEVICE_KEY), inherited, LIVE_WINDOW, LIVE_TRAVEL
+        )
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        async def read_the_tape(snapshot: dict[str, Any]) -> dict[str, Any]:
+            """Hold the tape where the shutter really is, and answer the screen."""
+            direction, commanded = runner.runs[-1]
+            reading = snapshot["reading"]
+            assert reading["direction"] == direction
+            assert reading["fraction"] == pytest.approx(commanded)
+            suggested.append((snapshot["step"], reading, direction, commanded))
+            return await act(
+                hass,
+                session,
+                Act("submit", str(runner.where_the_bar_is(direction, commanded))),
+                freezer=freezer,
+            )
+
+        suggested: list[tuple[str, dict[str, Any], str, float]] = []
+        snapshot = await walk(
+            hass,
+            session,
+            (
+                Act("path_a"),
+                Act("begin"),
+                Act("confirm_closed"),
+                Act("open_start"),
+                Act("lifted_off", tick=LIVE_WINDOW[CONF_SLAT_TIME]),
+                Act("lift_accept"),
+                Act("confirm_closed_again"),
+                Act("open_full_start"),
+                Act("stopped_open", tick=LIVE_WINDOW[CONF_OPENING_TIME]),
+                Act("accept_step"),
+                Act("submit", str(LIVE_TRAVEL)),
+                Act("accept_step"),
+                Act("close_start"),
+                Act("stopped_closed", tick=LIVE_WINDOW[CONF_CLOSING_TIME]),
+                Act("accept_step"),
+                Act("tape_start"),
+            ),
+            freezer=freezer,
+        )
+        # The two readings of the basic level: no model yet, and the wide tolerance.
+        for _ in range(2):
+            assert snapshot["reading"]["tolerance_cm"] == 15.0
+            snapshot = await read_the_tape(snapshot)
+            snapshot = await act(hass, session, Act("accept_step"), freezer=freezer)
+        assert snapshot["step"] == "profile_name"
+
+        # ...and the five of the thorough calibration, every one of them with a model.
+        snapshot = await walk(
+            hass,
+            session,
+            (Act("submit", "live_window"), Act("refine"), Act("tape_start")),
+            freezer=freezer,
+        )
+        strict = 0
+        while snapshot["step"] != "summary_precise":
+            if snapshot["reading"] is not None:
+                strict += snapshot["reading"]["tolerance_cm"] == 4.0
+                snapshot = await read_the_tape(snapshot)
+                continue
+            snapshot = await act(hass, session, Act("accept_step"), freezer=freezer)
+        assert strict == 5
+        assert [step for step, *_ in suggested[2:]] == [
+            "measure_descent",
+            "measure_descent",
+            "measure_ascent",
+            "measure_ascent",
+            "measure_verify",
+        ]
+
+        # The check, which is the screen that prints the second number: one run, one
+        # expectation, whether it is read before the tape or after it.
+        step, reading, direction, commanded = suggested[-1]
+        assert step == "measure_verify"
+        assert direction == DIRECTION_CLOSE
+        assert commanded == pytest.approx(VERIFY_RUN)
+        check = published[-1]["check"]
+        assert check["predicted_cm"] == pytest.approx(reading["expected_cm"])
+        assert f"{reading['expected_cm']:.0f}" == "98"
+
+        # ...and what the screen said until this lot, on the very same run: the model's
+        # own roll asked where 40 % of *its* curtain time ends up, when 40 % of the
+        # cover's is what the motor was given.
+        roll = published[-1]["fit"]["closing"]["roll"]
+        as_it_was = predict_cm(DIRECTION_CLOSE, roll, 1.0, commanded, LIVE_TRAVEL)
+        assert f"{as_it_was:.0f}" == "101"
+        assert as_it_was - reading["expected_cm"] == pytest.approx(2.5, abs=0.1)
         for one in published:
             check_the_snapshot(one)
 

@@ -226,6 +226,20 @@ the panel when it is in the way.
   *Configure → "Calibrate a cover"* is unchanged and still checks the way it always
   has; the difference is deliberate and is written up in
   [docs/guided-calibration.md](docs/guided-calibration.md).
+- **"About N cm are expected" now means the run that was really made.** Under every
+  tape field the panel says where the model thinks the bottom edge is. It used to work
+  that out from the fraction of the run it had *asked* for — which is a fraction of the
+  run times the shutter is configured with — while the model making the prediction
+  carries run times of its own, and the screen that follows the reading has always
+  judged the tape against the **seconds the motor really spent**. On a shutter whose
+  configuration is not the model's the two differed by two or three centimetres, and
+  the user met the wrong one on all five readings of the thorough calibration, one
+  after the other. The panel now asks the same question in both places, so the line
+  under the field and the verdict after it are one number. Nothing that was ever saved
+  was affected: the fit and the gap have always worked in motor seconds. *Configure →
+  "Calibrate a cover"* is unchanged and goes on predicting the fraction it commanded;
+  the difference is deliberate and is written up in
+  [docs/guided-calibration.md](docs/guided-calibration.md).
 
 ### Fixed
 

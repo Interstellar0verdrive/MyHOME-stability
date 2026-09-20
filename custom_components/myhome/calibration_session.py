@@ -3130,10 +3130,17 @@ class CalibrationSession:
     def _expected(self) -> tuple[float | None, float]:
         """`calibration_measure.expected_cm`, in numbers instead of rendered strings.
 
-        The dialog's method answers the two strings its text substitutes; the panel is
-        given the values and formats them itself, so the rule is applied here and the
-        parity with the ported function is a test
-        (`test_the_expected_reading_is_the_dialog_s_own`).
+        The ported function answers the two strings the *dialog's* text substitutes;
+        the panel is given the values and formats them itself, so the rule is applied
+        here and the agreement with the ported function is a test
+        (`test_the_expected_reading_is_the_one_the_verdict_will_use`, which since lot
+        W5 also records where both of them part company with the dialog).
+
+        The one number on these screens the user can check with a tape, and it must be
+        the number the next screen then passes judgement on: both are the model asked
+        where it puts the bar after the seconds the motor really ran
+        (`measure.model_fraction`), never after the fraction of its own run time the
+        cover was commanded. See `expected_cm` for what the two used to be.
         """
         direction, fraction = self._pending or (DIRECTION_CLOSE, HALF_RUN)
         height = self._measured.height
@@ -3159,9 +3166,16 @@ class CalibrationSession:
         if model is not None:
             roll = model[CONF_CLOSING_ROLL if direction == DIRECTION_CLOSE else CONF_OPENING_ROLL]
             tolerance = EXPECTED_TOLERANCE_CM
+            if self._report is not None:
+                fraction = measure.model_fraction(
+                    direction, model=model, motor_seconds=self._report.motor_seconds
+                )
         else:
             from .const import DEFAULT_ROLL_SHUTTER  # noqa: PLC0415 - one constant, one use
 
+            # Nothing to convert the seconds with, and no verdict on the screen after
+            # this one either: the commanded fraction on the default geometry, with the
+            # wider tolerance, is all a courtesy line can say here.
             roll = DEFAULT_ROLL_SHUTTER
             tolerance = ROUGH_TOLERANCE_CM
         return predict_cm(direction, roll, 1.0, fraction, height), tolerance

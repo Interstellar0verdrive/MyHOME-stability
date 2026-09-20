@@ -36,13 +36,15 @@ from custom_components.myhome.calibration import (
     REASON_NO_ECHO,
     REASON_NOT_STOPPED,
     CalibrationError,
+    RunReport,
+    predict_cm,
 )
 from custom_components.myhome.calibration_flow import (
     IDLE_TIMEOUT_SEC,
     MOVED_IDLE_TIMEOUT_SEC,
     PRESS_TIMEOUT_SEC,
 )
-from custom_components.myhome.calibration_measure import expected_cm
+from custom_components.myhome.calibration_measure import expected_cm, model_fraction
 from custom_components.myhome.calibration_session import (
     PRESENCE_SEC,
     CalibrationSession,
@@ -2513,10 +2515,25 @@ async def test_every_transition_is_published_once_in_revision_order(
         await session.async_cancel(CLIENT)
 
 
-async def test_the_expected_reading_is_the_dialog_s_own(
+async def test_the_expected_reading_is_the_one_the_verdict_will_use(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """One arithmetic for the dialog and the panel, down to the number on the screen.
+    """One arithmetic for the suggestion and for the verdict, and one **declared
+    divergence** from the dialog (lot W5).
+
+    Until this lot the sentence under the reading field was the dialog's own, method
+    for method: it predicted the fraction of the run the motor was *commanded*, which
+    is a fraction of the run times the cover is configured with, while the model doing
+    the predicting carries run times of its own. The screen that follows the reading
+    has never worked that way - its gap is the model asked where the **seconds the
+    motor really spent** put the bar - so one run got two expectations, and on the
+    thorough calibration the user met the first of them five times in a row. Nothing
+    stored was affected; it was the sentence alone.
+
+    The panel now asks the second question in both places. The dialog is not touched in
+    0.6.0, so what used to be parity is written down as the divergence it is: the two
+    still answer the same thing wherever there is nothing to convert the seconds with,
+    and part company as soon as there is.
 
     The ported function answers the two *strings* the dialog's sentence substitutes;
     the panel is given values and formats them itself, so the rule is applied in the
@@ -2531,8 +2548,11 @@ async def test_the_expected_reading_is_the_dialog_s_own(
         assert reading["direction"] == DIRECTION_OPEN
         assert reading["fraction"] == 0.5
         assert reading["from_end_stop"] == "closed"
+        # The basic level's first reading has no model yet, so there is nothing to
+        # convert the seconds with and nothing to disagree about: the dialog's method
+        # and the ported function still answer the same two strings.
         expected, tolerance = expected_cm(
-            pending=(DIRECTION_OPEN, 0.5), height=HEIGHT, model=None
+            pending=(DIRECTION_OPEN, 0.5), height=HEIGHT, model=None, report=None
         )
         assert f"{reading['expected_cm']:.0f}" == expected
         assert f"{reading['tolerance_cm']:.0f}" == tolerance
@@ -2548,6 +2568,75 @@ async def test_the_expected_reading_is_the_dialog_s_own(
             snapshot = session.snapshot()
         assert snapshot["reading"]["tolerance_cm"] == float(tolerance)
         check_the_snapshot(snapshot)
+
+        # The first reading of the thorough calibration, where a model does exist.
+        snapshot = await walk(
+            hass,
+            session,
+            (*PATH_A_BASIC[16:], Act("refine"), Act("tape_start")),
+            freezer=freezer,
+        )
+        reading = snapshot["reading"]
+        assert reading["tolerance_cm"] == 4.0
+        direction, commanded = reading["direction"], reading["fraction"]
+        assert direction == DIRECTION_CLOSE
+        model = {
+            CONF_OPENING_TIME: snapshot["fit"]["opening"]["run_time_s"],
+            CONF_CLOSING_TIME: snapshot["fit"]["closing"]["run_time_s"],
+            CONF_SLAT_TIME: snapshot["fit"]["opening"]["slat_time_s"],
+            CONF_OPENING_ROLL: snapshot["fit"]["opening"]["roll"],
+            CONF_CLOSING_ROLL: snapshot["fit"]["closing"]["roll"],
+        }
+        roll = model[CONF_CLOSING_ROLL]
+        spent = commanded * CURTAIN_DOWN
+        assert reading["expected_cm"] == pytest.approx(
+            predict_cm(
+                DIRECTION_CLOSE,
+                roll,
+                1.0,
+                model_fraction(DIRECTION_CLOSE, model=model, motor_seconds=spent),
+                HEIGHT,
+            )
+        )
+        # On *this* bench the two rules land on the same centimetre, and that is a
+        # property of the bench and not of the arithmetic: the fake shutter spends
+        # exactly the seconds the fit recovers, so the fraction it was commanded and
+        # the fraction of the model's curtain time it really ran are one number. The
+        # file's 29 s do not come into it - `FakeRunner` answers as the reference
+        # window whatever the configuration says. Where a real shutter is configured
+        # with times the model does not have, the two part company by centimetres:
+        # `test_calibration_session_paths.py` walks that window, and
+        # `test_calibration_measure.py::test_the_tape` states the divergence from the
+        # dialog case by case.
+        assert model_fraction(
+            DIRECTION_CLOSE, model=model, motor_seconds=spent
+        ) == pytest.approx(commanded)
+
+        # ...and the divergence itself, in one line: the same model, the same screen,
+        # and a motor that ran a tenth longer than it was asked to. `report=None` is
+        # what the function did before this lot and is what the dialog still does - the
+        # fraction it commanded - and the two answers are not the same.
+        stretched = RunReport(
+            motor_start=dt_util.utcnow(),
+            stop_written=dt_util.utcnow(),
+            motor_seconds=spent * 1.1,
+            planned_seconds=spent,
+            fraction=commanded,
+            direction=DIRECTION_CLOSE,
+        )
+        as_the_dialog_does = expected_cm(
+            pending=(DIRECTION_CLOSE, commanded), height=HEIGHT, model=model, report=None
+        )
+        by_the_seconds = expected_cm(
+            pending=(DIRECTION_CLOSE, commanded),
+            height=HEIGHT,
+            model=model,
+            report=stretched,
+        )
+        assert as_the_dialog_does[0] == f"{reading['expected_cm']:.0f}"
+        assert by_the_seconds[0] != as_the_dialog_does[0]
+        assert by_the_seconds[1] == as_the_dialog_does[1]
+
         await session.async_cancel(CLIENT)
 
 
