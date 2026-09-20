@@ -12,7 +12,9 @@
 // carried the version would be stale from that commit onwards, and every release would
 // have to remember to rebuild it or watch CI go red. The panel learns its version at
 // runtime instead, out of the `config` the registration hands it, and the URL it is
-// fetched from carries `?v=<version>` so a browser still cannot serve an old one.
+// fetched from carries `?v=<version>-<fingerprint>` - twelve hex digits of the sha256 of
+// the bundle this script writes, taken at registration - so a browser cannot serve an old
+// one even between two releases that share a version (lot W4, and live finding 30).
 
 import { build, transform } from "esbuild";
 import { mkdir, readFile } from "node:fs/promises";

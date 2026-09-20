@@ -14,7 +14,17 @@
 //
 // Dev-only, like its two neighbours: it loads the committed bundle and nothing imports it.
 
-import { COVER, deep, deepAll, makePending, mount, openDialog } from "./panel-host.mjs";
+import {
+  COVER,
+  deep,
+  deepAll,
+  makePending,
+  mount,
+  openDialog,
+  refuseAStaleBundle,
+} from "./panel-host.mjs";
+
+await refuseAStaleBundle();
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +
@@ -561,6 +571,119 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
     calls.filter((one) => one === "end_other").length === 1 &&
       deep(panel.shadowRoot, "[data-wizard-pick]") !== null,
     calls.join(", "));
+  dom.window.close();
+}
+
+// --- where the calibration has got to (live finding 29, lot W2) -------------------------
+//
+// The stepper's own rule is that it is orientation and not a road back, and that rule is a
+// keyboard rule before it is anything else: a rail of nine rows that all took focus would
+// put nine stops between the heading and the field a reading is typed into. So what is
+// walked here is exactly that - how many of its rows are in the tab order, which one, and
+// what pressing it sends.
+{
+  console.log("\nthe guided calibration, the stepper on an ordinary step");
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, the stepper",
+    state: "session:awaiting_reading_measure_descent",
+    hash: "#/calibrate",
+    expect: "[data-stepper]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const rows = deepAll(panel.shadowRoot, "[data-stepper] li.step");
+  const toggle = deep(panel.shadowRoot, "[data-stepper-toggle]");
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  check(`the stepper draws ${rows.length} rows`, rows.length >= 6, String(rows.length));
+  check("and not one of them is in the tab order",
+    stops.every((one) => !deep(panel.shadowRoot, "[data-stepper]")?.contains(one) ||
+      one.classList?.contains("stepper-toggle")));
+  check("the collapsible row is a button, so Enter and Space open it",
+    toggle?.tagName === "BUTTON", describe(toggle));
+  check("it is in the tab order", stops.includes(toggle));
+  check("and it says whether the list is open", toggle?.getAttribute("aria-expanded") === "false");
+  check("the list it opens is the one it names",
+    toggle?.getAttribute("aria-controls") === deep(panel.shadowRoot, "[data-stepper] ol")?.id);
+  check("the one row in hand is the one marked as the step",
+    deepAll(panel.shadowRoot, '[data-stepper] [aria-current="step"]').length === 1);
+  check("the stepper comes before the step it is about",
+    (deep(panel.shadowRoot, "[data-stepper]")?.compareDocumentPosition(
+      deep(panel.shadowRoot, "h1.screen-title"),
+    ) ?? 0) & 4,
+    "the nav precedes the heading");
+  toggle?.click();
+  await settle();
+  check("opening it says so", 
+    deep(panel.shadowRoot, "[data-stepper-toggle]")?.getAttribute("aria-expanded") === "true");
+  check("and sends nothing at all to the session",
+    !calls.includes("act") && !calls.includes("stop"), calls.join(", "));
+  dom.window.close();
+}
+
+{
+  console.log("\n…and on a reading that has to be done again, where a verb is being offered");
+  const { window, panel, dom, settle, calls } = await mount({
+    name: "the wizard, the stepper with nothing to press",
+    state: "session:awaiting_reading_measure_descent_stale",
+    hash: "#/calibrate",
+    expect: "[data-stepper]",
+  });
+  await settle();
+  const rows = deepAll(panel.shadowRoot, "[data-stepper] .step-still");
+  const before = active(panel);
+  check(`the rail draws ${rows.length} rows`, rows.length >= 6, String(rows.length));
+  check("and not one of them is a control",
+    deepAll(panel.shadowRoot, "[data-stepper] button:not(.stepper-toggle)").length === 0);
+  check("nor has a tabindex that would put it in the way",
+    rows.every((row) => row.getAttribute("tabindex") === null));
+  // Pressed one by one, which is what a finger does to a row that looks like a link.
+  for (const row of rows) {
+    row.click();
+  }
+  await settle();
+  check(`pressing all ${rows.length} of them sends nothing`,
+    !calls.includes("act") && !calls.includes("stop"), calls.join(", "));
+  check("and moves the keyboard nowhere", active(panel) === before, describe(active(panel)));
+  // …and the verb the rail used to duplicate is still offered, once, where it belongs.
+  const secondary = deepAll(panel.shadowRoot, "button.cta.secondary");
+  check("while the step itself still offers the way to repeat the reading",
+    secondary.length >= 1, secondary.map((one) => (one.textContent ?? "").trim()).join(" / "));
+  secondary[0]?.click();
+  await settle();
+  check("and pressing that sends exactly one act",
+    calls.filter((one) => one === "act").length === 1, calls.join(", "));
+  void window;
+  dom.window.close();
+}
+
+{
+  console.log("\n…and on route B's check, which is a run with no operative column");
+  // The one screen where the rail stands beside a single centred column, and the only place
+  // the two lots overlap: lot W3 put this walk back among the ones the server produces.
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, the rail beside a positioning run",
+    state: "session:positioning_verify",
+    hash: "#/calibrate",
+    expect: "[data-stepper]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const inside = stops.filter((one) => deep(panel.shadowRoot, "[data-stepper]")?.contains(one));
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  check("the rail adds one stop at most, and it is the row that opens it",
+    inside.length <= 1 && inside.every((one) => one.classList?.contains("stepper-toggle")),
+    inside.map(describe).join(" → "));
+  check("the one row in hand is the one marked as the step",
+    deepAll(panel.shadowRoot, '[data-stepper] [aria-current="step"]').length === 1);
+  check("the stepper still comes before the step it is about",
+    (deep(panel.shadowRoot, "[data-stepper]")?.compareDocumentPosition(
+      deep(panel.shadowRoot, "h1.screen-title"),
+    ) ?? 0) & 4);
+  check("and the way to stop the shutter is still reachable",
+    stops.some((one) => (one.textContent ?? "").trim().length > 0 &&
+      (one.textContent ?? "").toLowerCase().includes("stop")),
+    stops.map(describe).join(" → "));
+  check("nothing was acted by arriving", !calls.includes("act"), calls.join(", "));
   dom.window.close();
 }
 

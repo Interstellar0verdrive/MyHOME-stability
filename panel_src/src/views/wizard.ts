@@ -65,6 +65,7 @@ import {
   SUBMIT,
   screenModel,
 } from "../wizard/model";
+import { STEPPER, readStepperOpen, writeStepperOpen } from "../wizard/stepper";
 
 // The element has to be referenced so the bundler keeps it: the template below names it as
 // a tag and nothing else imports it.
@@ -185,6 +186,16 @@ export class MyHomeWizard extends LitElement {
   private _showAffected = false;
   /** The signal at the start, as this browser remembers it. */
   private _cue = readCue();
+  /**
+   * Whether the collapsible stepper is open, as this tab remembers it.
+   *
+   * Shut on arrival unless this tab opened it earlier in the same session (live finding 29
+   * and the design's own rule). It is here for the same reason the field and the choice are:
+   * it is this tab's, the session never hears about it, and it survives the step changing -
+   * a reader who opened the list to see where they are does not want it shut again by the
+   * next screen.
+   */
+  private _stepperOpen = readStepperOpen();
   /** This tab's clock minus the server's, measured when the snapshot arrived. */
   private _skewMs = 0;
   private _skewFor = "";
@@ -345,6 +356,7 @@ export class MyHomeWizard extends LitElement {
       cue: this._cue,
       selected: this._chosen,
       profiles: this.state.overview?.profiles ?? [],
+      stepperOpen: this._stepperOpen,
     });
     return html`<div data-wizard>
       ${liveRegion(model.announce ?? "")}${alertRegion(model.alert ?? "")}
@@ -626,6 +638,14 @@ export class MyHomeWizard extends LitElement {
     if (action === CUE) {
       this._cue = value !== "off";
       writeCue(this._cue);
+      this.requestUpdate();
+      return;
+    }
+    if (action === STEPPER) {
+      // Orientation and nothing else: opening the list sends nothing to the session, and
+      // the only thing that changes is this tab's own paint.
+      this._stepperOpen = !this._stepperOpen;
+      writeStepperOpen(this._stepperOpen);
       this.requestUpdate();
       return;
     }

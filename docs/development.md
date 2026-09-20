@@ -100,6 +100,12 @@ npm run session    # the committed bundle against a calibration session that mis
 npm run build      # rebuilds custom_components/myhome/frontend/myhome-panel.js
 ```
 
+**Three of them load the committed bundle and not `src/`** — `a11y`, `keyboard` and
+`session` — which is the point: what is audited is what ships. So a source changed without
+`npm run build` would be audited in its old state, and the three refuse to start when any
+file under `src/` is newer than the bundle, saying so. Run `npm run build` first, or read a
+green that means nothing.
+
 The last one is the only one that writes anything, and the file it writes is
 **committed**: after a change to `panel_src/`, `git diff --exit-code
 custom_components/myhome/frontend` must be clean in the same commit as the sources.

@@ -37,6 +37,7 @@ import {
 } from "../engine/session-contract";
 import { type ProfileRow } from "../engine/ws";
 import { PHASES, PHASE_KEY, STEPS, type StepRow } from "./steps";
+import { currentPhase, stepperModel } from "./stepper";
 import {
   elapsedSince,
   fraction as barFraction,
@@ -76,6 +77,14 @@ export interface WizardContext {
   selected: string | null;
   /** The gateway's profiles, for the second line of a profile choice. */
   profiles: ProfileRow[];
+  /**
+   * Whether the collapsible stepper is open, as this tab has it.
+   *
+   * It belongs to the tab like the field and the choice do: the session never hears about
+   * it, and it is remembered for the session so that a reader who opened it once on a phone
+   * keeps it open from one step to the next (live finding 29).
+   */
+  stepperOpen: boolean;
 }
 
 /** The tokens the screen fires back; `model.ts` writes them, `views/wizard.ts` reads them. */
@@ -173,16 +182,21 @@ export const actionLabel = (
  * Read by `main.ts` for the panel's own toolbar, which is drawn **outside** the wizard's
  * `try`. So it answers `null` for anything it does not recognise instead of throwing: a
  * snapshot that surprises the panel costs the wizard its screen, never the panel its page.
+ *
+ * The phase itself comes from `wizard/stepper.ts` and therefore from the plan, which is
+ * what makes the counter monotone. Read off `steps.ts` alone it was not: that table gives
+ * each step one fixed phase, the curtain travel is a tape reading taken at the top of the
+ * ascent, and route (A) counted 2, 3, **5**, 4, 5, 6. The stepper draws the same six phases
+ * beside this line, so the two must not be able to disagree.
  */
 export const phaseLine = (session: SessionSnapshot | null, i18n: I18n): string | null => {
-  const step = session?.step;
-  const row = step ? STEPS[step] : undefined;
-  if (!row?.phase) {
+  const phase = currentPhase(session);
+  if (phase === null) {
     return null;
   }
   return i18n.t("panel.screen.phase", {
-    phase: i18n.t(PHASE_KEY[row.phase]),
-    index: PHASES.indexOf(row.phase) + 1,
+    phase: i18n.t(PHASE_KEY[phase]),
+    index: PHASES.indexOf(phase) + 1,
     count: PHASES.length,
   });
 };
@@ -258,6 +272,16 @@ export const screenModel = (session: SessionSnapshot, context: WizardContext): S
           ? problemScreen(session, context, row, ph)
           : stepScreen(session, context, row, step, ph);
   decorate(model, session, context);
+  if (row.template !== "esito") {
+    // Every screen that is a step of the work carries it, and no screen that is not: an
+    // outcome is the end of the calibration rather than a place in it, and a problem
+    // interrupted a stage the snapshot does not name (`steps.ts`: the `problem_*` rows have
+    // no phase, so `stepperModel` answers nothing for them of its own accord).
+    const stepper = stepperModel(session, { i18n, open: context.stepperOpen });
+    if (stepper) {
+      model.stepper = stepper;
+    }
+  }
   return model;
 };
 

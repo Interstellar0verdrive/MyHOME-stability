@@ -48,7 +48,9 @@ import { fileURLToPath } from "node:url";
 
 import { JSDOM } from "jsdom";
 
-import { deep, deepAll, forbidFormApis } from "./panel-host.mjs";
+import { deep, deepAll, forbidFormApis, refuseAStaleBundle } from "./panel-host.mjs";
+
+await refuseAStaleBundle();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
@@ -1102,6 +1104,122 @@ console.log("\n…and the same strip when it was an action of 0.4.2 all along");
   );
 }
 
+console.log("\nwhere the calibration has got to");
+{
+  // Live finding 29, lot W2. Three behaviours, and each of them is the reason the stepper
+  // is allowed on a screen a shutter is being measured from:
+  //
+  //  * it never sends anything of its own - opening the list is a repaint and nothing else;
+  //  * it remembers whether it is open **across steps**, because a reader who opened it to
+  //    see where they were should not have to open it again on the next screen;
+  //  * the one row that can be pressed sends the verb the session is offering, once.
+  const bench = gateway({ session: scenario("awaiting_reading_measure_descent") });
+  const { window, find, all, settle } = await mount(bench.connection);
+  checkThat("a step of a measurement carries the stepper", find("[data-stepper]") !== null);
+  check("with one row marked as the step", all('[aria-current="step"]').length, 1);
+  check("and nothing of it is a control but the row that opens it", all("[data-stepper] button").length, 1);
+  const before = bench.sessions("act");
+  find("[data-stepper-toggle]")?.click();
+  await settle(120);
+  check("opening it acts on nothing", bench.sessions("act"), before);
+  check("nor stops anything", bench.sessions("stop"), 0);
+  check("nor starts anything", bench.sessions("start"), 0);
+  check(
+    "and the list says it is open",
+    find("[data-stepper-toggle]")?.getAttribute("aria-expanded"),
+    "true",
+  );
+  check(
+    "which is remembered for the session and not for the browser",
+    window.sessionStorage.getItem("myhome-calibration-stepper"),
+    "open",
+  );
+  // The next step of the same session: a new snapshot, pushed the way the server pushes it.
+  bench.push(scenario("briefing_profile_name"));
+  await settle(160);
+  check(
+    "the next step finds it still open",
+    find("[data-stepper-toggle]")?.getAttribute("aria-expanded"),
+    "true",
+  );
+  checkThat(
+    "and the phase it names has moved on with the session",
+    (find("[data-stepper] .here")?.textContent ?? "").includes(
+      strings.config_panel.wizard.phase.summary,
+    ),
+  );
+}
+
+{
+  // …and the state where the session really is offering the verb that would repeat the stage
+  // in hand. The rail used to carry it on the row; the independent review showed that such a
+  // row is always a second copy of a button already on the screen, and the design says in
+  // three places that no step of the stepper is pressable or focusable. So what is asserted
+  // now is the opposite: the rail is nine labels, pressing every one of them sends nothing,
+  // and the way to repeat the reading is still exactly where the step puts it.
+  const bench = gateway({ session: scenario("awaiting_reading_measure_descent_stale") });
+  const { all, settle } = await mount(bench.connection);
+  const rows = all("[data-stepper] li.step");
+  checkThat(`the rail draws ${rows.length} rows`, rows.length >= 6);
+  check("and not one of them is a control", all("[data-stepper] button:not(.stepper-toggle)").length, 0);
+  check("nothing has been sent by arriving", bench.sessions("act"), 0);
+  for (const row of all("[data-stepper] .step-still")) {
+    row.click();
+  }
+  await settle(120);
+  check(`pressing all ${rows.length} of them sends nothing`, bench.sessions("act"), 0);
+  check("and stops nothing", bench.sessions("stop"), 0);
+  check("and starts nothing", bench.sessions("start"), 0);
+  // The verb is still offered, once, by the step itself.
+  const again = all("button.cta.secondary");
+  checkThat("while the step still offers the way to repeat the reading", again.length >= 1);
+  again[0].click();
+  await settle(160);
+  check("and pressing that sends one act", bench.sessions("act"), 1);
+  check("carrying the verb the session was offering", bench.last("act")?.action, "repeat_tape");
+}
+
+{
+  // Route B's check, which is a positioning run: the one screen with a rail and no operative
+  // column at all. Neither lot saw it - lot W3 put it back among the walks the server really
+  // produces, and it is the only place `.pane.single` and the stepper meet.
+  const bench = gateway({ session: scenario("positioning_verify") });
+  const { find, all } = await mount(bench.connection);
+  checkThat("the run on the way to route B's check draws a rail", find("[data-stepper]") !== null);
+  check("on the one pane that has no operative column",
+    find(".pane")?.classList.contains("single"), true);
+  check("and it is not the pane that goes without a stepper",
+    find(".pane")?.classList.contains("no-stepper"), false);
+  check("the phase in hand is the readings, because that is what the check is",
+    all('[data-stepper] li.step.phase[aria-current="step"], [data-stepper] li.step.sub[aria-current="step"]').length, 1);
+  checkThat("and the progress bar is still there beside it", find('[role="progressbar"]') !== null);
+  check("nothing was acted by drawing it", bench.sessions("act"), 0);
+}
+
+{
+  // …and the strip that says another device is driving carries the same marking the pane
+  // does, which is the other half of BUG-1: the numbers above are only right if the two
+  // elements agree about which of the two maxima they are on.
+  const driven = gateway({ session: scenario("owned_by_other") });
+  const { find } = await mount(driven.connection);
+  const strip = find(".read-only");
+  const pane = find(".pane");
+  checkThat("a calibration somebody else is driving still shows the stepper", find("[data-stepper]") !== null);
+  checkThat("and the strip saying so is on the screen", strip !== null);
+  check(
+    "the strip and the pane agree about which maximum they are on",
+    strip?.classList.contains("no-stepper"),
+    pane?.classList.contains("no-stepper"),
+  );
+  const bare = gateway({ session: scenario("problem_no_echo") });
+  const other = await mount(bare.connection);
+  check(
+    "and on a screen with no stepper they agree about the other one",
+    other.find(".pane")?.classList.contains("no-stepper"),
+    true,
+  );
+}
+
 console.log("\nthe drawings, whole, at both widths");
 {
   // Live findings 10, 14 and 19: three of the five illustrations arrived cropped, top and
@@ -1170,17 +1288,99 @@ console.log("\nthe drawings, whole, at both widths");
   const guard = px(declared(css, ".drawing", "max-height"));
   const narrowMax = px(declared(css, ".screen", "max-width", "first"));
   const narrowPad = px((declared(css, ".pane", "padding", "first") ?? "").split(/\s+/)[1]);
-  const wideMax = px(declared(css, ".pane", "max-width"));
-  const widePad = px((declared(css, ".pane", "padding") ?? "").split(/\s+/)[1]);
-  const operative = px((declared(css, ".pane", "grid-template-columns") ?? "").split(/\s+/).pop());
-  const gap = px((declared(css, ".pane", "gap") ?? "").split(/\s+/).pop());
+  // Two wide layouts since lot W2, not one: two columns from 900 px and three from the
+  // stepper's own breakpoint, where a 250 px rail takes its width out of the text column.
+  //
+  // A media query only restates what it changes - the three-column rule declares the
+  // columns and the maximum and nothing else - so a property is read from the **last rule
+  // that declares it** up to the layout being asked about, which is what a browser does
+  // too. Reading it off the last rule alone is what would make the padding and the gap
+  // disappear the first time somebody added a media query that did not repeat them.
+  const paneRules = splitRules(css).filter((one) => one.selectorText === ".pane");
+  const resolve = (upTo, property) => {
+    for (let at = Math.min(upTo, paneRules.length - 1); at >= 0; at -= 1) {
+      const found = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;}]+)`).exec(
+        paneRules[at].cssText,
+      );
+      if (found) {
+        return found[1].trim();
+      }
+    }
+    return null;
+  };
+  checkThat(`the pane is laid out ${paneRules.length} ways`, paneRules.length === 3);
+  const STEPPER_AT = 1150;
+  const two = { max: px(resolve(1, "max-width")), cols: (resolve(1, "grid-template-columns") ?? "").split(/\s+/) };
+  const three = { max: px(resolve(2, "max-width")), cols: (resolve(2, "grid-template-columns") ?? "").split(/\s+/) };
+  const widePad = px((resolve(1, "padding") ?? "").split(/\s+/)[1]);
+  const gap = px((resolve(1, "gap") ?? "").split(/\s+/).pop());
+  const operative = px(two.cols[two.cols.length - 1]);
+  const rail = px(three.cols[0]);
   const column = (viewport) =>
     viewport < 900
       ? Math.min(viewport, narrowMax) - 2 * narrowPad
-      : Math.min(viewport, wideMax) - 2 * widePad - operative - gap;
+      : viewport < STEPPER_AT
+        ? Math.min(viewport, two.max) - 2 * widePad - operative - gap
+        : Math.min(viewport, three.max) - 2 * widePad - rail - gap - operative - gap;
+  check(
+    "the operative column is the same width with the stepper beside it and without",
+    px(three.cols[three.cols.length - 1]),
+    operative,
+  );
+  check(
+    "and the widest layout is exactly the old one plus the rail and its gap",
+    three.max,
+    two.max + rail + gap,
+  );
+
+  // BUG-1 of the independent review: the strip that says another device is driving is drawn
+  // **above** the pane and not inside it, so nothing lines the two up but their maxima. The
+  // rail raised the pane's and the strip kept the old one, which is 68 px of overhang per
+  // side at 1280 px and 115 px at 1600. Measured the way a browser would: both elements are
+  // centred and both have a maximum, so the left edge of each is (viewport - width) / 2 with
+  // the width capped, and the strip's own `calc(100% - 64px)` is the pane's padding.
+  const strip = (upTo, property) => {
+    const rules = splitRules(css).filter((one) => one.selectorText === ".read-only");
+    for (let at = Math.min(upTo, rules.length - 1); at >= 0; at -= 1) {
+      const found = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;}]+)`).exec(
+        rules[at].cssText,
+      );
+      if (found) {
+        return found[1].trim();
+      }
+    }
+    return null;
+  };
+  const stripless = splitRules(css).filter((one) => one.selectorText === ".read-only.no-stepper");
+  const strippedMax = (property) => {
+    const found = new RegExp(`(?:^|[;{])\\s*${property}\\s*:\\s*([^;}]+)`).exec(
+      stripless[stripless.length - 1]?.cssText ?? "",
+    );
+    return found ? px(found[1].trim()) : null;
+  };
+  // `.read-only` gets its own rule in each of the three layouts too, and the third is the
+  // one the rail introduced.
+  const stripAt = (viewport) =>
+    viewport < 900
+      ? null
+      : px(strip(viewport < STEPPER_AT ? 1 : 2, "max-width"));
+  for (const viewport of [1280, 1600]) {
+    const pane = Math.min(viewport, viewport < STEPPER_AT ? two.max : three.max);
+    check(
+      `the strip and the panel start at the same place at ${viewport} px, with the stepper`,
+      Math.min(viewport, stripAt(viewport) ?? 0),
+      pane,
+    );
+  }
+  check(
+    "and at the old maximum on a screen that has no stepper",
+    strippedMax("max-width"),
+    two.max,
+  );
   checkThat(
-    `the two column widths are read off the stylesheet (${column(1280)} and ${column(390)})`,
-    Number.isFinite(column(1280)) && Number.isFinite(column(390)) && Number.isFinite(guard),
+    "the three column widths are read off the stylesheet " +
+      `(${column(1280)}, ${column(1024)} and ${column(390)})`,
+    [1280, 1024, 390].every((one) => Number.isFinite(column(one))) && Number.isFinite(guard),
   );
 
   // Every screen of the fixture, and the drawing it carries.
@@ -1203,7 +1403,7 @@ console.log("\nthe drawings, whole, at both widths");
       check(`${name}: ${src} is a drawing this integration ships`, false, true);
       continue;
     }
-    for (const viewport of [1280, 390]) {
+    for (const viewport of [1280, 1024, 390]) {
       const wide = column(viewport);
       const tall = (wide * size.height) / size.width;
       check(

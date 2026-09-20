@@ -270,6 +270,13 @@ them:
 npm run session   # the committed bundle in jsdom, against a session that misbehaves
 ```
 
+**It, `npm run a11y` and `npm run keyboard` load the bundle and not `src/`.** That is what
+makes them checks of what ships rather than of what compiles, and it is also a trap: change
+a source, run one of the three without `npm run build`, and it comes back green about code
+that is not being executed. They refuse to start when anything under `src/` is newer than
+the bundle. The comparison is of modification times, so it can only say that the bundle
+*cannot* have been built from those sources, never that it was.
+
 It walks the states none of the other checks can reach: a snapshot the wizard cannot
 draw (the error card appears, the panel goes on repainting when Home Assistant hands it a
 new state, **and** the heartbeats go on arriving - the console line it prints is the panel

@@ -87,6 +87,7 @@ const context = (i18n: I18n, over: Partial<WizardContext> = {}): WizardContext =
   cue: true,
   selected: null,
   profiles: [],
+  stepperOpen: false,
   ...over,
 });
 

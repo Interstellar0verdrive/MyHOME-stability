@@ -8,7 +8,7 @@
 // Dev-only. `jsdom` is a devDependency and nothing under `src/` imports it; what is loaded
 // is the built bundle, so what is checked is what ships.
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +18,41 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const bundle = join(root, "custom_components", "myhome", "frontend", "myhome-panel.js");
 export const axeSource = join(here, "..", "node_modules", "axe-core", "axe.min.js");
+
+/**
+ * Refuse to run against a bundle older than the sources it was built from.
+ *
+ * `a11y`, `keyboard` and `session` load the **committed bundle**, not `src/` - which is the
+ * point, because what is audited is then what ships. The cost is a trap: edit a source, run
+ * one of the three without `npm run build`, and it comes back green about code that is not
+ * being executed. The independent review of lot W2 walked into it, twice: two guards were
+ * deliberately broken and all three tools stayed green until the bundle was rebuilt.
+ *
+ * So the three refuse to start when any file under `src/` is newer than the bundle. It is a
+ * comparison of modification times and nothing more - it cannot tell whether the bundle was
+ * built *from* those sources, only that it cannot have been.
+ */
+export const refuseAStaleBundle = async () => {
+  const newest = async (folder) => {
+    let latest = 0;
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      const path = join(folder, entry.name);
+      const at = entry.isDirectory() ? await newest(path) : (await stat(path)).mtimeMs;
+      latest = Math.max(latest, at);
+    }
+    return latest;
+  };
+  const built = (await stat(bundle)).mtimeMs;
+  const written = await newest(join(here, "..", "src"));
+  if (written <= built) {
+    return;
+  }
+  console.error(
+    "the bundle is older than the sources: this check would audit code that is not running.\n" +
+      "run `npm run build` first.",
+  );
+  process.exit(1);
+};
 
 const fixture = JSON.parse(
   await readFile(join(root, "tests", "fixtures", "panel_overview_example.json"), "utf8"),
@@ -521,6 +556,28 @@ export const WIZARD_SCREENS = [
     name: "the wizard, the question the cross asks",
     drive: pressInWizard("[data-wizard-exit]"),
     expect: "[data-exit-dialog]",
+  }),
+  // The stepper, in the states that are not the ordinary one (live finding 29, lot W2). The
+  // ordinary one is already every wizard screen above, because the stepper is on all of
+  // them: what is added here is a route that skips three of the six phases, a route that
+  // takes no readings at all, a stage that has to be done again - which is the one row that
+  // can be pressed - and the collapsible row opened, which is the phone's whole stepper.
+  wizard("a route that skips three phases", "briefing_verify_offer", { expect: "[data-stepper]" }),
+  wizard("a correction, which takes no readings", "review_correction", { expect: "[data-stepper]" }),
+  wizard("a reading that has to be done again", "awaiting_reading_measure_descent_stale", {
+    expect: "[data-stepper] li.step.error",
+  }),
+  wizard("the stepper opened on a phone", "awaiting_reading_measure_descent", {
+    name: "the wizard, the stepper opened",
+    drive: pressInWizard("[data-stepper-toggle]"),
+    expect: '[data-stepper-toggle][aria-expanded="true"]',
+  }),
+  // The one combination neither lot saw: route B's verification is a positioning run, so
+  // the screen has no operative column at all and the rail stands beside a single centred
+  // one (`.pane.single`, which is a two-column grid from 1150 px up). Lot W3 put it back
+  // among the walks the server really produces, and lot W2 gave it a rail.
+  wizard("the run on the way to route B's check, with the rail beside it", "positioning_verify", {
+    expect: "[data-stepper] li.step.current",
   }),
   // The card of SPEC §5.8. `npm run session` asserts that it appears and that the presence
   // signal goes on arriving; this asks whether it is a card anybody can use - it is the

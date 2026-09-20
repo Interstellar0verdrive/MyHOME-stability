@@ -182,6 +182,21 @@ const pairs = (t) => [
   ["its unit, beside the field", t.soft, t.card, 18],
   ["the buttons of the question the cross asks", ink(t, t.primary), mix(t.primary, t.card, 10), 13.5],
   ["and the one that leaves without saving", ink(t, t.error), mix(t.error, t.card, 14), 13.5],
+  // --- where the calibration has got to (live finding 29, lot W2) ---------------------
+  //
+  // The rail sits on the card below 1150 px and on the page background above it, so every
+  // pair is measured on both grounds. The tick inside a finished mark is the same pair as
+  // the outcome's saved face and the "!" the same as its cancelled one, which is why those
+  // two colours were chosen rather than a new pair nobody had measured.
+  ["the stepper's line on the collapsible row", t.text, t.card, 13.5],
+  ["the name of a phase behind or in hand", t.text, t.card, 13.5],
+  ["the name of a phase ahead, or one this route skips", t.soft, t.card, 13.5],
+  ["what a phase produced, beside its name", t.soft, t.card, 12],
+  ["…and the same on the page background, where the rail is a column", t.soft, t.background, 12],
+  ["the tick inside a finished mark", ink(t, t.success), mix(t.success, t.card, 12), 12],
+  ["the dash inside a mark this route skips", t.soft, t.card, 10],
+  ["the exclamation inside a mark that has to be done again", ink(t, t.error), mix(t.error, t.card, 12), 12],
+  ["a row that has to be done again", ink(t, t.error), t.card, 12],
 ];
 
 /**
@@ -211,6 +226,18 @@ const indicators = (t) => [
   // What sets the advanced note apart from the intro box above it, so it has to be seen.
   ["the advanced note's left rule, on the card", ink(t, t.warning), t.card],
   ["the advanced note's left rule, on its own ground", ink(t, t.warning), mix(t.warning, t.card, 12)],
+  // The stepper's marks are seen and not read: the shape says the state as well as the
+  // colour (a tick, a filled dot, an empty ring, a dashed ring, an exclamation), and 1.4.11
+  // asks 3:1 of each of them against what it sits on - the card below 1150 px, the page
+  // background above it. The two marks that are a pastel disc with a glyph on it are not
+  // here but in the list above: what identifies them is the glyph, which is text and is
+  // held to 4.5:1 against the disc it is on. A divider between the rail and the step is
+  // neither - 1.4.11 is about the boundary of a control, and a rule that separated nothing
+  // would cost the reader nothing.
+  ["the filled mark of the phase in hand", ink(t, t.primary), t.card],
+  ["…and the same on the page background", ink(t, t.primary), t.background],
+  ["the ring of a phase still ahead", mix(t.soft, t.card, 80), t.card],
+  ["the dashed ring of a phase this route skips", t.soft, t.card],
 ];
 
 /** What the panel cannot fix from inside a theme, measured and reported all the same. */
