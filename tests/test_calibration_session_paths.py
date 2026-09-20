@@ -31,10 +31,12 @@ from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.const import CONF_NAME, STATE_OPENING
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.util import dt as dt_util
 
 from custom_components.myhome import calibration_session
-from custom_components.myhome.calibration import REASON_BAD_POINT, CalibrationError
+from custom_components.myhome.calibration import REASON_BAD_POINT, CalibrationError, RunReport
 from custom_components.myhome.calibration_flow import (
+    HALF_RUN,
     PLAN_PRECISE,
     PLAN_PRECISE_TRAVEL,
     PLAN_PROFILE,
@@ -63,9 +65,16 @@ from custom_components.myhome.const import (
     CONF_PROFILE,
     CONF_RAW,
     CONF_SLAT_TIME,
+    DIRECTION_CLOSE,
+)
+from custom_components.myhome.cover import (
+    calibration_ascent_cm,
+    calibration_descent_cm,
+    calibration_run_seconds,
 )
 from custom_components.myhome.panel_data import basic_covers, yaml_profiles
 from custom_components.myhome.panel_write import PanelError
+from custom_components.myhome.validate import derive_cover_from_profile
 
 from .helpers_calibration import (
     CLOSING,
@@ -173,6 +182,111 @@ BUS_COST_YAML = PROFILE_YAML.replace(
     f"      height: {HEIGHT}\n", f"      height: {HEIGHT}\n      stop_latency: 0.35\n"
 )
 
+# --------------------------------------------------------------------------------------
+# The two windows of the live test of 20 September (`ANALYSIS-roll-scaling.md`)
+# --------------------------------------------------------------------------------------
+# A 198 cm window told to follow the profile of a 110 cm one. The scaling law gets the
+# times nearly right and the rolls badly wrong, so `set_cover_position: 50` from closed
+# put the bottom edge at 107 cm instead of 99 - and the check as it stood, half the
+# closing time from the top, reported 3,5 cm and said the profile was fine. This is the
+# case lot W3 exists for, and it is a bench and not an anecdote because every number
+# below was measured on the wall.
+LIVE_TRAVEL = 198.0
+LIVE_WINDOW = {
+    CONF_OPENING_TIME: 22.2,
+    CONF_CLOSING_TIME: 21.3,
+    CONF_SLAT_TIME: 4.4,
+    CONF_OPENING_ROLL: 1.86,
+    CONF_CLOSING_ROLL: 2.21,
+}
+LIVE_YAML = f"""
+gateway:
+  mac: {MAC}
+  cover:
+    {YAML_KEY}:
+      where: '81'
+      name: {COVER_NAME}
+      opening_time: {LIVE_WINDOW[CONF_OPENING_TIME]}
+      closing_time: {LIVE_WINDOW[CONF_CLOSING_TIME]}
+      slat_time: {LIVE_WINDOW[CONF_SLAT_TIME]}
+      opening_roll: {LIVE_WINDOW[CONF_OPENING_ROLL]}
+      closing_roll: {LIVE_WINDOW[CONF_CLOSING_ROLL]}
+  cover_profiles:
+    short:
+      reference_height: 110
+      opening_time: 14.3
+      closing_time: 14.3
+      slat_time: 2.7
+      roll: 2.07
+      opening_roll: 2.07
+      closing_roll: 2.33
+"""
+
+
+class ConfiguredWindow(FakeRunner):
+    """A shutter that runs on the seconds the *entity* is configured with.
+
+    `FakeRunner` answers as the reference window whatever the cover's configuration
+    says, which is exactly right for every walk that measures a window from scratch and
+    exactly wrong for path B's check: there the run is a fraction of the curtain time
+    the cover is configured with today, and the model being questioned is a profile the
+    cover does not follow yet. The two are different windows, and telling them apart is
+    the whole of this lot.
+
+    `where_the_bar_is` is the other half of it: the seconds the motor really spent, put
+    through the model of the window that is really on the wall.
+    """
+
+    def __init__(self, cover: Any, configured: dict[str, float], window: dict[str, float],
+                 travel: float) -> None:
+        super().__init__(cover)
+        self.configured = configured
+        self.window = window
+        self.travel = travel
+
+    def seconds_of(self, direction: str, fraction: float) -> float:
+        return calibration_run_seconds(
+            direction,
+            self.configured[CONF_OPENING_TIME],
+            self.configured[CONF_CLOSING_TIME],
+            self.configured[CONF_SLAT_TIME],
+            fraction,
+        )
+
+    def where_the_bar_is(self, direction: str, fraction: float) -> float:
+        """Centimetres above the closed rest position, on the real window's model."""
+        seconds = self.seconds_of(direction, fraction)
+        if direction == DIRECTION_CLOSE:
+            return calibration_descent_cm(
+                self.window[CONF_CLOSING_ROLL],
+                self.window[CONF_SLAT_TIME],
+                self.travel,
+                self.window[CONF_CLOSING_TIME],
+                seconds,
+            )
+        return calibration_ascent_cm(
+            self.window[CONF_OPENING_ROLL],
+            self.window[CONF_SLAT_TIME],
+            self.travel,
+            self.window[CONF_OPENING_TIME],
+            seconds,
+        )
+
+    async def _run_fraction(self, direction: str, fraction: float) -> RunReport:
+        self._maybe_fail("run")
+        self.runs.append((direction, fraction))
+        self.log.append(("run", direction))
+        seconds = self.seconds_of(direction, fraction)
+        now = dt_util.utcnow()
+        return RunReport(
+            motor_start=now,
+            stop_written=now,
+            motor_seconds=seconds,
+            planned_seconds=seconds,
+            fraction=fraction,
+            direction=direction,
+        )
+
 
 # --------------------------------------------------------------------------------------
 # One conversation, walked by the session and by the dialog
@@ -232,12 +346,16 @@ PATH_B: tuple[Step, ...] = (
     Step("accept_step"),
     Step("skip_verify"),
 )
-# ...and the same with the check taken up. The window really is one of those, so the
-# tape finds the bar exactly where the profile said it would.
+# ...and the same with the check taken up. **Not** a conversation the dialog can be
+# compared against any more: since lot W3 the panel's check is half the TRAVEL, going
+# up from the closed end stop, while the dialog goes on running half the closing time
+# down from the top (live finding 33, decided 20 September). The window really is one
+# of those, so the tape finds the bar exactly at half its travel; the divergence itself
+# has a test of its own, `test_the_panel_s_check_of_a_profile_is_not_the_dialog_s`.
 PATH_B_CHECKED: tuple[Step, ...] = (
     *PATH_B[:-1],
     Step("verify_now"),
-    Step("submit", str(descent_cm(VERIFY_RUN_PROFILE)), field="measured_cm"),
+    Step("submit", str(HEIGHT / 2), field="measured_cm"),
     Step("accept_step"),
 )
 
@@ -534,14 +652,20 @@ async def test_path_b_is_the_profile_the_travel_and_nothing_else(
 async def test_path_b_checks_the_profile_against_the_shutter(
     hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
 ) -> None:
-    """The check: half way down from the top, and a tape held against the model.
+    """The check: up from the closed end stop to half the travel, and a tape (lot W3).
 
-    The window really is one of those, so the bar is exactly where the profile said it
-    would be - and the check says so with the number the field itself offered, which is
-    the one thing that makes a reading checkable while the user is still at the window.
+    The shutter is sent where a `set_cover_position: 50` will send it once the profile
+    is saved, so what the tape should read is **half the curtain travel** - 97,5 cm of
+    195 - and the window really is one of those, so that is what it reads.
+
+    `IN_USE_YAML` and not `PROFILE_YAML`: the run is a fraction of the curtain time the
+    *cover* is configured with, and the bench's shutter answers as the reference window,
+    so the two have to be the same window for the bar to land where the model aimed it.
+    A cover whose configuration is not its shutter is the live case, and it has its own
+    test below.
     """
-    async with setup_myhome(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
-        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+    async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
         published: list[dict[str, Any]] = []
         session.subscribe(published.append)
@@ -550,21 +674,39 @@ async def test_path_b_checks_the_profile_against_the_shutter(
         snapshot = await act(hass, session, Act("verify_now"))
         assert snapshot["plan"] == [*PLAN_PROFILE[:3], "verify_b", "summary"]
         assert snapshot["step"] == "measure_verify"
-        reading = snapshot["reading"]
-        assert reading["fraction"] == VERIFY_RUN_PROFILE
-        assert reading["direction"] == "close"
-        assert reading["from_end_stop"] == "open"
-        # A model of this window exists, so the tolerance is the tight one.
-        assert reading["expected_cm"] == pytest.approx(descent_cm(VERIFY_RUN_PROFILE))
-        assert reading["tolerance_cm"] == 4.0
 
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5))))
+        # Up, from the closed end stop: the ascent is where an inherited profile is most
+        # wrong (the slat phase and the opening roll), and a check made only on the way
+        # down never touches either (analysis of 20 September, §5 d).
+        assert runner.homed[-1] == "close"
+        direction, commanded = runner.runs[-1]
+        assert direction == "open"
+        reading = snapshot["reading"]
+        assert reading["direction"] == "open"
+        assert reading["from_end_stop"] == "closed"
+        assert reading["fraction"] == commanded
+
+        # ...and the run is the model's, not half of anything: with a roll of 2.12 the
+        # bar reaches half the travel at 58,7 % of the ascent's curtain time.
+        assert commanded == pytest.approx(0.58702, abs=1e-4)
+        assert commanded != pytest.approx(HALF_RUN)
+        assert ascent_cm(commanded) == pytest.approx(HEIGHT / 2)
+
+        # The expectation is half the travel, which is a fact about the window and not
+        # an output of the model being questioned: the one number the person holding the
+        # tape can check without believing anything.
+        assert reading["expected_cm"] == pytest.approx(HEIGHT / 2)
+        assert reading["tolerance_cm"] == 4.0
+        # ...and the sentences name the percentage of the TRAVEL, not of the run's time.
+        assert snapshot["placeholders"]["percent"] == 50
+
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2)))
         assert snapshot["state"] == "checking"
         assert snapshot["step"] == "verify_result"
         check = snapshot["check"]
-        assert check["fraction"] == VERIFY_RUN_PROFILE
-        assert check["measured_cm"] == pytest.approx(descent_cm(0.5))
-        assert check["predicted_cm"] == pytest.approx(descent_cm(0.5))
+        assert check["fraction"] == pytest.approx(commanded)
+        assert check["measured_cm"] == pytest.approx(HEIGHT / 2)
+        assert check["predicted_cm"] == pytest.approx(HEIGHT / 2)
         assert check["gap_cm"] == 0.0
         # The threshold, four centimetres since 20 September and the same one in the
         # dialog: it is what the panel's screens are written against ("a basic
@@ -581,7 +723,7 @@ async def test_path_b_checks_the_profile_against_the_shutter(
         snapshot = await act(hass, session, Act("accept_step"))
         assert snapshot["step"] == "summary_short"
         assert snapshot["review"]["accuracy_cm"] == 0.0
-        assert snapshot["review"]["check_fraction"] == VERIFY_RUN_PROFILE
+        assert snapshot["review"]["check_fraction"] == pytest.approx(commanded)
         for one in published:
             check_the_snapshot(one)
 
@@ -599,7 +741,7 @@ async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel
     the same tape, so a correction that asked for it again would be asking the user to
     walk back to the shutter for a number nobody doubts (`async_step_path_c`, :1823).
     """
-    async with setup_myhome(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+    async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
         FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
         published: list[dict[str, Any]] = []
@@ -607,8 +749,8 @@ async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel
 
         await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
         await act(hass, session, Act("verify_now"))
-        # Five centimetres lower than the model said, which is more than the threshold.
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 5.0)))
+        # Five centimetres above half the travel, which is more than the threshold.
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2 + 5.0)))
         assert snapshot["check"]["gap_cm"] == 5.0
         assert snapshot["actions"] == ["path_c", "accept_step", "repeat_tape"]
 
@@ -616,12 +758,12 @@ async def test_a_check_far_enough_out_offers_the_correction_and_keeps_the_travel
         # one behind it: 4.04 cm reads "4,0 cm", and a screen that offered a correction
         # beside that sentence would be arguing with itself over a digit nobody can see.
         await act(hass, session, Act("repeat_tape"))
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 4.04)))
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2 + 4.04)))
         assert snapshot["placeholders"]["deviation"] == 4.0
         assert snapshot["actions"] == ["accept_step", "repeat_tape"]
 
         await act(hass, session, Act("repeat_tape"))
-        await act(hass, session, Act("submit", str(descent_cm(0.5) + 5.0)))
+        await act(hass, session, Act("submit", str(HEIGHT / 2 + 5.0)))
 
         snapshot = await act(hass, session, Act("path_c"))
         assert snapshot["step"] == "path_c"
@@ -744,13 +886,19 @@ async def test_a_verification_can_be_made_again(
     A verification fits nothing, so there is no reading to take back - but the answer
     it gave is about a shutter that is about to be moved again, and a screen that kept
     it would be reporting a gap measured before the run it is describing.
+
+    And the run back to the closed end stop is planned on where the bar **is**. The
+    check left it at half the travel, not at 0.59 of one, and a bar that announced the
+    difference would be the promise of live finding 22 all over again.
     """
-    async with setup_myhome(hass, tmp_path, PROFILE_YAML) as (entry, _commands):
+    async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
         runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
         session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
         await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
         await act(hass, session, Act("verify_now"))
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5) + 4.0)))
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2 + 4.0)))
         assert snapshot["check"]["gap_cm"] == 4.0
         runs = len(runner.runs)
 
@@ -759,7 +907,19 @@ async def test_a_verification_can_be_made_again(
         assert snapshot["check"] is None
         assert len(runner.runs) == runs + 1
 
-        snapshot = await act(hass, session, Act("submit", str(descent_cm(0.5))))
+        # The homing this repetition opened with: half the curtain to run down, plus
+        # the slat phase it closes with. Half of the *time* would have promised 14.7 s
+        # of a movement that takes 13.2.
+        homings = [
+            one["movement"]
+            for one in published
+            if one["step"] == "verify_b" and one["movement"] is not None
+        ]
+        assert homings, "the repetition did not home"
+        assert homings[-1]["direction"] == "close"
+        assert homings[-1]["planned_s"] == pytest.approx((CLOSING - SLAT) * 0.5 + SLAT)
+
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2)))
         assert snapshot["check"]["gap_cm"] == 0.0
         assert snapshot["actions"] == ["accept_step", "repeat_tape"]
         check_the_snapshot(snapshot)
@@ -902,6 +1062,218 @@ async def test_the_check_says_how_well_the_profile_it_questions_was_measured(
         assert snapshot["check"]["profile_level"] == "thorough"
         # A distance, not a direction: the profile's own check was 1.5 cm out.
         assert snapshot["check"]["profile_check_cm"] == 1.5
+        check_the_snapshot(snapshot)
+
+
+async def test_the_check_catches_the_window_of_the_twentieth_of_september(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The case this lot exists for, with the numbers measured on the wall.
+
+    A 198 cm window is told to follow the profile of a 110 cm one. The scaling law gets
+    the run times nearly right and the roll coefficients wrong by 0,8, so the command
+    the user really uses - `set_cover_position: 50` from closed - overshoots by about
+    nine centimetres. The check has one job: to say so before the profile is saved.
+
+    Both checks are computed here on the same bench, and the contrast is the finding:
+
+    * **half the closing time, from the top** (what the dialog does, and what the panel
+      did until this lot): about 3 cm - **under** the four-centimetre threshold, so the
+      profile would have been accepted. That is what happened on 20 September;
+    * **half the travel, going up from closed** (this lot): about 9 cm, twice the
+      threshold, and the correction is offered on the spot.
+
+    The descending check is not merely less sensitive: it compares two outputs of the
+    same wrong model, so part of the error cancels itself - the expectation falls
+    *together with* the place the model thinks it is stopping.
+    """
+    async with setup_myhome(hass, tmp_path, LIVE_YAML) as (entry, _commands):
+        runner = ConfiguredWindow(
+            entity_object(hass, COVER, DEVICE_KEY), LIVE_WINDOW, LIVE_WINDOW, LIVE_TRAVEL
+        )
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await act(hass, session, Act("path_b"))
+        await act(hass, session, Act("submit", "short"))
+        snapshot = await walk(
+            hass,
+            session,
+            (Act("tape_start"), Act("submit", str(LIVE_TRAVEL)), Act("accept_step")),
+            freezer=freezer,
+        )
+        assert snapshot["step"] == "verify_offer"
+
+        snapshot = await act(hass, session, Act("verify_now"))
+        direction, commanded = runner.runs[-1]
+        assert direction == "open"
+        assert runner.seconds_of(direction, commanded) == pytest.approx(15.43, abs=0.05)
+        # Where the bottom edge really ends up: 108,6 cm calculated, 107 cm measured on
+        # the wall on 20 September - the difference is the stop latency, the start delay
+        # and where the tape was held, none of which is modelled here.
+        really = runner.where_the_bar_is(direction, commanded)
+        assert really == pytest.approx(108.6, abs=0.2)
+        assert snapshot["reading"]["expected_cm"] == pytest.approx(LIVE_TRAVEL / 2)
+
+        snapshot = await act(hass, session, Act("submit", str(really)))
+        assert snapshot["check"]["predicted_cm"] == pytest.approx(99.0)
+        assert snapshot["check"]["gap_cm"] == pytest.approx(9.6, abs=0.2)
+        assert snapshot["check"]["gap_cm"] > REFINE_THRESHOLD_CM
+        assert snapshot["actions"] == ["path_c", "accept_step", "repeat_tape"]
+
+        # ...and what the check it replaced would have said about the same window.
+        inherited = derive_cover_from_profile(
+            merged_profiles(yaml_profiles(hass, entry), {})["short"], LIVE_TRAVEL
+        )
+        down = runner.where_the_bar_is(DIRECTION_CLOSE, VERIFY_RUN_PROFILE)
+        was_predicted = calibration_descent_cm(
+            inherited[CONF_CLOSING_ROLL],
+            inherited[CONF_SLAT_TIME],
+            LIVE_TRAVEL,
+            inherited[CONF_CLOSING_TIME],
+            runner.seconds_of(DIRECTION_CLOSE, VERIFY_RUN_PROFILE),
+        )
+        assert abs(down - was_predicted) == pytest.approx(3.2, abs=0.3)
+        assert abs(down - was_predicted) < REFINE_THRESHOLD_CM
+        for one in published:
+            check_the_snapshot(one)
+
+
+async def test_a_check_this_cover_cannot_make_is_a_problem_and_not_a_shorter_run(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The profile wants more seconds than a whole run of this cover has.
+
+    The run primitive is given a fraction of the curtain time the *cover* is configured
+    with, and a fraction above 1 is clamped to a full run: the shutter would go to its
+    end stop and the tape would be held against a check that was never made. A cover
+    configured as a tenth of the window it really is says so instead - `bad_point`, the
+    dialog's own screen for a measurement that cannot be made, with the step on offer
+    again.
+    """
+    # The **cover's** three times and not the profile's, which is why the replacement is
+    # counted: the two blocks carry the same three keys at the same indentation, and the
+    # cover's come first.
+    quick = IN_USE_YAML.replace(
+        f"      opening_time: {OPENING}\n      closing_time: {CLOSING}\n      slat_time: {SLAT}\n",
+        "      opening_time: 2.4\n      closing_time: 2.3\n      slat_time: 0.4\n",
+        1,
+    )
+    async with setup_myhome(hass, tmp_path, quick) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await walk(hass, session, for_the_session(PATH_B[:5]), freezer=freezer)
+        runs = len(runner.runs)
+        snapshot = await act(hass, session, Act("verify_now"))
+        assert snapshot["step"] == "problem_bad_point"
+        assert snapshot["problem"] == {"code": "bad_point"}
+        assert snapshot["actions"] == ["repeat_step"]
+        assert snapshot["check"] is None
+        # Nothing was sent anywhere: the run that could not be made was not made.
+        assert len(runner.runs) == runs
+        for one in published:
+            check_the_snapshot(one)
+        await session.async_cancel(CLIENT)
+
+
+async def test_a_check_that_gives_up_before_its_run_takes_its_answer_with_it(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """A problem screen says a measurement could not be made; it does not give a verdict.
+
+    "Repeat the measurement" on a verification re-enters the stage, and the stage works
+    out where to send the shutter before it sends it anywhere. If the profile went out
+    from under the conversation in between, it gives up there - and the answer of the
+    verification *before* has to go with it, or a second client attaching to the session
+    reads the verdict of a run nobody made.
+
+    The invariant is `check_the_snapshot`'s now, so every walk of every path checks it;
+    this is the one walk that reaches the state.
+    """
+    async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
+        FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        store = the_store(hass, entry)
+        await store.async_set_profile(
+            "stored",
+            {
+                CONF_NAME: "stored",
+                "reference_height": HEIGHT,
+                CONF_OPENING_TIME: OPENING,
+                CONF_CLOSING_TIME: CLOSING,
+                CONF_SLAT_TIME: SLAT,
+                CONF_OPENING_ROLL: ROLL_UP,
+                CONF_CLOSING_ROLL: ROLL_DOWN,
+            },
+        )
+        session = await open_session(hass, entry)
+        published: list[dict[str, Any]] = []
+        session.subscribe(published.append)
+
+        await act(hass, session, Act("path_b"))
+        await act(hass, session, Act("submit", "stored"))
+        await walk(hass, session, for_the_session(PATH_B[2:5]), freezer=freezer)
+        await act(hass, session, Act("verify_now"))
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2 + 5.0)))
+        assert snapshot["check"]["gap_cm"] == 5.0
+
+        await store.async_remove_profile("stored")
+        snapshot = await act(hass, session, Act("repeat_tape"))
+        assert snapshot["step"] == "problem_bad_point"
+        assert snapshot["problem"] == {"code": "bad_point"}
+        assert snapshot["actions"] == ["repeat_step"]
+        # The verdict of the run before it is gone, not carried onto a screen that says
+        # the measurement could not be made at all.
+        assert snapshot["check"] is None
+        assert snapshot["placeholders"].get("deviation") is None
+        for one in published:
+            check_the_snapshot(one)
+        await session.async_cancel(CLIENT)
+
+
+async def test_the_panel_s_check_of_a_profile_is_not_the_dialog_s(
+    hass: HomeAssistant, tmp_path, freezer: FrozenDateTimeFactory
+) -> None:
+    """The one place the two conversations deliberately ask different questions.
+
+    Everywhere else path B stores what the dialog stores, key for key
+    (`test_the_session_stores_what_the_dialog_stores`). Its check does not, and this
+    says exactly how: the dialog runs **down** from the top for half of the closing
+    curtain time and compares the tape with what the profile predicts for the seconds
+    the motor spent; the panel runs **up** from the closed end stop to half the curtain
+    travel and compares the tape with half the travel.
+
+    `calibration_flow.py` is not touched by any of it: the dialog's constants are
+    imported and read, and what changed is which of them the session uses.
+    """
+    async with setup_myhome(hass, tmp_path, IN_USE_YAML) as (entry, _commands):
+        runner = FakeRunner(entity_object(hass, COVER, DEVICE_KEY))
+        session = await open_session(hass, entry)
+        # `PATH_B_CHECKED` is the conversation that left the dialog parity behind, so
+        # this is where it is walked: the same list, minus the reading and what follows.
+        await walk(hass, session, for_the_session(PATH_B_CHECKED[:-2]), freezer=freezer)
+        snapshot = session.snapshot()
+        assert snapshot["step"] == "measure_verify"
+
+        direction, commanded = runner.runs[-1]
+        assert (direction, commanded) != (DIRECTION_CLOSE, VERIFY_RUN_PROFILE)
+        assert direction == "open"
+        # The dialog's own run is still in the dialog's own constants, unchanged.
+        assert VERIFY_RUN_PROFILE == HALF_RUN == 0.5
+        assert snapshot["reading"]["expected_cm"] == pytest.approx(HEIGHT / 2)
+        assert snapshot["reading"]["expected_cm"] != pytest.approx(
+            descent_cm(VERIFY_RUN_PROFILE)
+        )
+
+        # The same tape reading, read by the two rules: half the travel says the window
+        # is right, half the closing time says it is 17 cm out - about a window whose
+        # profile is its own measurements.
+        snapshot = await act(hass, session, Act("submit", str(HEIGHT / 2)))
+        assert snapshot["check"]["gap_cm"] == 0.0
+        assert abs(HEIGHT / 2 - descent_cm(VERIFY_RUN_PROFILE)) > REFINE_THRESHOLD_CM
         check_the_snapshot(snapshot)
 
 
@@ -1190,7 +1562,6 @@ async def test_a_correction_s_stopwatch_starts_from_a_known_end_stop_too(
     ("steps", "target", "yaml_text"),
     [
         (PATH_B, "profile", PROFILE_YAML),
-        (PATH_B_CHECKED, "profile", PROFILE_YAML),
         (PATH_C_TIMES, "cover_only", PROFILE_YAML),
         (PATH_C_ROLLS, "cover_only", PROFILE_YAML),
         (PATH_C_POINTS, "cover_only", IN_USE_YAML),
@@ -1198,7 +1569,6 @@ async def test_a_correction_s_stopwatch_starts_from_a_known_end_stop_too(
     ],
     ids=[
         "path_b",
-        "path_b_checked",
         "times_only",
         "times_and_rolls",
         "points_only",
@@ -1220,6 +1590,12 @@ async def test_the_session_stores_what_the_dialog_stores(
     reached the store - the assignment, `profile_wins`, the values, the source and the
     measurements kept beside them. Only the wall clock and the two keys that say *who*
     wrote it are left out.
+
+    **Path B with its check is not here any more** (lot W3): the two conversations now
+    ask the shutter different questions, so the gap they store is a different number
+    about a different run. The divergence is the point, and it is tested as such in
+    `test_the_panel_s_check_of_a_profile_is_not_the_dialog_s`; path B *without* the
+    check stays, because nothing else about it moved.
     """
     by_the_dialog, profiles_by_the_dialog = await what_the_dialog_stores(
         hass, tmp_path, freezer, yaml_text, steps

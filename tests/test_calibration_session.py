@@ -421,6 +421,11 @@ def check_the_snapshot(snapshot: dict[str, Any]) -> None:
 
     if (check := snapshot["check"]) is not None:
         keys(check, SESSION_CHECK_KEYS, "check")
+        # A screen that says a measurement could not be made carries no verdict about
+        # one (§12.1). Every way to a problem goes through `_show_problem`, which is
+        # where the answer of a verification is dropped; without this, a stage that
+        # gave up before its run would publish the verdict of the run *before* it.
+        assert not str(snapshot["step"]).startswith("problem_"), check
         # How the profile being questioned was itself measured is a level of the
         # contract's own vocabulary and not the store's word for it (`precise`).
         token(check["profile_level"], SESSION_LEVELS, "check.profile_level")

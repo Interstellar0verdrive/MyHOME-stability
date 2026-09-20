@@ -1147,6 +1147,25 @@
         "no_reference": {
           "title": "Non c'era niente con cui confrontare",
           "body": "Il metro ha letto {measured} cm al {percent}% della corsa, ma i valori che {cover} seguiva non ci sono più, quindi non c'è nessuna previsione da confrontare. La lettura non è stata buttata: si può proseguire, e il riepilogo dice che cosa verrebbe salvato."
+        },
+        "half": {
+          "offer": {
+            "title": "Verificare la tapparella?",
+            "body": "La corsa del telo era tutto quello che serviva: la calibrazione si può già salvare così.\n\n**Cos'è la verifica**: la tapparella viene chiusa del tutto, poi riportata a metà della corsa — lo stesso movimento che farà d'ora in poi quando le si chiede di aprirsi a metà. Si misura dove si è fermato il bordo inferiore: dovrebbero essere circa {half} cm. Ci vuole circa un minuto e una lettura col metro."
+          },
+          "reading": {
+            "title": "Verificare {cover} — a metà della corsa",
+            "body": "La tapparella è stata portata a metà della corsa. Misurare dalla base al bordo inferiore, dallo stesso riferimento delle letture precedenti: dovrebbero essere circa {half} cm.\n\nÈ la posizione che la tapparella prenderà d'ora in poi quando le si chiede di aprirsi a metà, quindi la verifica dice davvero se il profilo va bene per questa tapparella."
+          },
+          "within": {
+            "title": "Il profilo va bene per questa tapparella",
+            "body": "**Scarto {gap} cm**: entro i {threshold} cm, quindi il profilo «{profile}» va bene per questa tapparella. Il bordo inferiore doveva fermarsi a {half} cm e si è fermato a {measured} cm.\n\nPer una precisione maggiore si può misurare questa tapparella a parte, dalla sua scheda, con **Correggi…**"
+          },
+          "beyond": {
+            "title": "Questa tapparella non segue il profilo",
+            "body": "**Scarto {gap} cm**: oltre i {threshold} cm. Il bordo inferiore doveva fermarsi a {half} cm e si è fermato a {measured} cm, quindi questa tapparella non si muove come il profilo «{profile}».\n\nConviene misurarla a parte: la correzione tiene la corsa appena misurata e chiede solo quello che manca."
+          },
+          "reviewed": "Precisione verificata: il bordo inferiore si è fermato entro {accuracy} cm da metà della corsa."
         }
       },
       "pick": {

@@ -317,6 +317,13 @@ def deviation(
 
     Ported from `GuidedCalibrationMixin._deviation`. `report` is the verification run
     (`_report`), `height` the travel and `model` what `model_values` answers.
+
+    **Descents only**, as the dialog's method is: the direction is written in, and with
+    it the closing roll and the reading of the motor seconds as pure curtain time. An
+    ascent spends its first `slat_time` seconds on the slats and would need the opening
+    roll, so a verification in the other direction is not this function with a
+    parameter - it is `deviation_cm` called properly, or (path B since lot W3) no model
+    at all, because half the travel is half the travel whichever way the bar got there.
     """
     if report is None or not height or model is None:
         return None
