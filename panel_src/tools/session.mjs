@@ -1180,6 +1180,23 @@ console.log("\nwhere the calibration has got to");
 }
 
 {
+  // Route B's check, which is a positioning run: the one screen with a rail and no operative
+  // column at all. Neither lot saw it - lot W3 put it back among the walks the server really
+  // produces, and it is the only place `.pane.single` and the stepper meet.
+  const bench = gateway({ session: scenario("positioning_verify") });
+  const { find, all } = await mount(bench.connection);
+  checkThat("the run on the way to route B's check draws a rail", find("[data-stepper]") !== null);
+  check("on the one pane that has no operative column",
+    find(".pane")?.classList.contains("single"), true);
+  check("and it is not the pane that goes without a stepper",
+    find(".pane")?.classList.contains("no-stepper"), false);
+  check("the phase in hand is the readings, because that is what the check is",
+    all('[data-stepper] li.step.phase[aria-current="step"], [data-stepper] li.step.sub[aria-current="step"]').length, 1);
+  checkThat("and the progress bar is still there beside it", find('[role="progressbar"]') !== null);
+  check("nothing was acted by drawing it", bench.sessions("act"), 0);
+}
+
+{
   // …and the strip that says another device is driving carries the same marking the pane
   // does, which is the other half of BUG-1: the numbers above are only right if the two
   // elements agree about which of the two maxima they are on.

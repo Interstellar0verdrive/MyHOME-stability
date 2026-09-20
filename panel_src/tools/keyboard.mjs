@@ -656,6 +656,37 @@ for (const [name, hash] of [["cover detail", COVER], ["profile card", "#/profile
   dom.window.close();
 }
 
+{
+  console.log("\n…and on route B's check, which is a run with no operative column");
+  // The one screen where the rail stands beside a single centred column, and the only place
+  // the two lots overlap: lot W3 put this walk back among the ones the server produces.
+  const { panel, dom, settle, calls } = await mount({
+    name: "the wizard, the rail beside a positioning run",
+    state: "session:positioning_verify",
+    hash: "#/calibrate",
+    expect: "[data-stepper]",
+  });
+  await settle();
+  const stops = tabOrder(panel.shadowRoot);
+  const inside = stops.filter((one) => deep(panel.shadowRoot, "[data-stepper]")?.contains(one));
+  console.log(`  tab order (${stops.length}): ${stops.map(describe).join(" → ")}`);
+  check("the rail adds one stop at most, and it is the row that opens it",
+    inside.length <= 1 && inside.every((one) => one.classList?.contains("stepper-toggle")),
+    inside.map(describe).join(" → "));
+  check("the one row in hand is the one marked as the step",
+    deepAll(panel.shadowRoot, '[data-stepper] [aria-current="step"]').length === 1);
+  check("the stepper still comes before the step it is about",
+    (deep(panel.shadowRoot, "[data-stepper]")?.compareDocumentPosition(
+      deep(panel.shadowRoot, "h1.screen-title"),
+    ) ?? 0) & 4);
+  check("and the way to stop the shutter is still reachable",
+    stops.some((one) => (one.textContent ?? "").trim().length > 0 &&
+      (one.textContent ?? "").toLowerCase().includes("stop")),
+    stops.map(describe).join(" → "));
+  check("nothing was acted by arriving", !calls.includes("act"), calls.join(", "));
+  dom.window.close();
+}
+
 const failed = checks.filter((one) => !one.ok);
 console.log(`\n${checks.length} checks, ${failed.length} failed`);
 process.exit(failed.length === 0 ? 0 : 1);

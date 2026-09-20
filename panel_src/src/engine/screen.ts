@@ -442,6 +442,13 @@ export class MyHomeScreen extends LitElement {
         .pane.single {
           display: grid;
           grid-template-columns: 250px minmax(0, 1fr);
+          /*
+           * The heading takes its own height and everything left over goes to the row under
+           * it. Without the second track being flexible, a rail taller than the two rows
+           * together grows the *first* of them - which puts four hundred pixels of nothing
+           * between the heading and the progress bar.
+           */
+          grid-template-rows: max-content 1fr;
           max-width: 854px;
         }
 

@@ -572,6 +572,13 @@ export const WIZARD_SCREENS = [
     drive: pressInWizard("[data-stepper-toggle]"),
     expect: '[data-stepper-toggle][aria-expanded="true"]',
   }),
+  // The one combination neither lot saw: route B's verification is a positioning run, so
+  // the screen has no operative column at all and the rail stands beside a single centred
+  // one (`.pane.single`, which is a two-column grid from 1150 px up). Lot W3 put it back
+  // among the walks the server really produces, and lot W2 gave it a rail.
+  wizard("the run on the way to route B's check, with the rail beside it", "positioning_verify", {
+    expect: "[data-stepper] li.step.current",
+  }),
   // The card of SPEC §5.8. `npm run session` asserts that it appears and that the presence
   // signal goes on arriving; this asks whether it is a card anybody can use - it is the
   // one screen whose whole job is to offer a way on.
