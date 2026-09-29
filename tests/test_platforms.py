@@ -23,7 +23,12 @@ def mock_hass():
     """Create a minimal mock Home Assistant instance."""
     hass = MagicMock()
     hass.data = {}
-    hass.async_create_task = MagicMock()
+    def _create_task(coro, *args, **kwargs):
+        if hasattr(coro, 'close'):
+            coro.close()
+        return MagicMock()
+
+    hass.async_create_task = MagicMock(side_effect=_create_task)
     return hass
 
 
@@ -100,7 +105,7 @@ class TestMyHOMEEntity:
     async def test_entity_lifecycle_hooks(self, mock_hass, mock_gateway):
         with patch("custom_components.myhome.myhome_device.Entity.__init__", return_value=None):
             from custom_components.myhome.myhome_device import MyHOMEEntity
-            mock_gateway.available = True
+            mock_gateway.is_who_available.return_value = True
             mock_gateway.availability_signal = "myhome_test_availability"
             entity = MyHOMEEntity(
                 hass=mock_hass,
@@ -197,7 +202,7 @@ class TestMediaPlayerEntity:
                 entity_name="Audio Zone 1",
                 device_id="1#16",
                 who="16",
-                where="1",
+                where="11",  # amplifier 1 of environment 1 (WHERE table: 01-99)
                 manufacturer="BTicino",
                 model="Audio System",
                 gateway=mock_gateway,
@@ -206,6 +211,7 @@ class TestMediaPlayerEntity:
             p.async_schedule_update_ha_state = MagicMock()
             p.hass = mock_hass
             p.platform = MagicMock()  # added by an EntityPlatform
+            p.platform.config_entry.options = {}
             p.entity_id = "media_player.audio_zone_1"
             return p
 
@@ -214,8 +220,8 @@ class TestMediaPlayerEntity:
         assert player._attr_state == MediaPlayerState.OFF
 
     def test_source_list(self, player):
-        assert len(player._attr_source_list) == 5
-        assert "Source 1" in player._attr_source_list
+        """Without configured source names the legacy labels are offered."""
+        assert player.source_list == ["Source 1", "Source 2", "Source 3", "Source 4"]
 
     def test_handle_event_on(self, player):
         from homeassistant.components.media_player import MediaPlayerState
@@ -230,15 +236,13 @@ class TestMediaPlayerEntity:
         player.handle_event(msg)
         assert player._attr_state == MediaPlayerState.OFF
 
-    def test_handle_event_source_0_routing(self, player):
-        """Routing events update the source label but do NOT force state to ON."""
+    def test_handle_event_source_device_is_ignored(self, player):
+        """A source device switching on says nothing about this zone."""
         from homeassistant.components.media_player import MediaPlayerState
         msg = OWNEvent.parse("*16*3*101##")
         player.handle_event(msg)
-        # Routing events only update the source label, NOT the state
         assert player._attr_state == MediaPlayerState.OFF
-        assert player._attr_source == "Source 0"
-        player.async_schedule_update_ha_state.assert_called()
+        assert player._attr_source is None
 
     def test_handle_event_source_1_routing(self, player):
         """Routing events update the source label but do NOT force state to ON."""
@@ -296,14 +300,18 @@ class TestMediaPlayerEntity:
 
     @pytest.mark.asyncio
     async def test_select_source(self, player):
-        """Source selection is a no-op (MH200 startup scenario handles routing)."""
+        """Selecting a source activates it and routes this zone's environment."""
         await player.async_select_source("Source 3")
-        player._gateway_handler.send.assert_not_called()
+        sent = [str(call.args[0]) for call in player._gateway_handler.send.call_args_list]
+        assert sent == ["*16*3*103##", "*16*3*113##"]
 
     @pytest.mark.asyncio
     async def test_select_source_invalid(self, player):
-        """Invalid source should also be a no-op."""
-        await player.async_select_source("Invalid Source")
+        """An unresolvable source is refused instead of sending a bogus frame."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        with pytest.raises(HomeAssistantError):
+            await player.async_select_source("Invalid Source")
         player._gateway_handler.send.assert_not_called()
 
     def test_handle_event_volume(self, player):
@@ -318,7 +326,7 @@ class TestMediaPlayerEntity:
         # 0.50 * 31.0 = 15.5 -> round to 16
         args, _ = player._gateway_handler.send.call_args
         command = args[0]
-        assert str(command) == "*#16*1*#1*16##"
+        assert str(command) == "*#16*11*#1*16##"
 
     @pytest.mark.asyncio
     async def test_async_mute_volume(self, player):
@@ -327,7 +335,7 @@ class TestMediaPlayerEntity:
         # Should set volume to 0
         args, _ = player._gateway_handler.send.call_args
         command = args[0]
-        assert str(command) == "*#16*1*#1*0##"
+        assert str(command) == "*#16*11*#1*0##"
         assert player._attr_is_volume_muted is True
         assert player._pre_mute_volume == 0.50
 
@@ -335,7 +343,7 @@ class TestMediaPlayerEntity:
         # Should restore volume to 16 HW units (round(0.50 * 31))
         args, _ = player._gateway_handler.send.call_args
         command = args[0]
-        assert str(command) == "*#16*1*#1*16##"
+        assert str(command) == "*#16*11*#1*16##"
         assert player._attr_is_volume_muted is False
 
     @pytest.mark.asyncio

@@ -60,6 +60,14 @@ from .myhome_device import MyHOMEEntity
 PLATFORM = Platform.CLIMATE
 PARALLEL_UPDATES = 0
 
+# WHO 4 dimension 7 zone state (OWNd#60); the values OWNd uses, spelled out
+# here until the OWNd pin exports them.  On MyHomeServer1 + Home+Control
+# plants this is the only frame carrying the zone's mode and setpoint (#429).
+MESSAGE_TYPE_ZONE_STATE = "zone_state"
+_ZONE_CONTEXT_MODES = {"heating": HVACMode.HEAT, "cooling": HVACMode.COOL, "automatic": HVACMode.AUTO}
+_ZONE_STATES_ON = ("setpoint", "comfort", "eco")
+_ZONE_STATES_OFF = ("protection", "off")
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -158,32 +166,48 @@ def _zone_config(configured: dict[str, Any], address: Address, key: str) -> dict
     )
 
 
+def _where_param(message: Any) -> list[str]:
+    return getattr(message, "where_param", None) or getattr(message, "_where_param", None) or []
+
+
+def _bus_zone(message: Any) -> int | None:
+    """OWNd's zone of a frame, or ``None`` where OWNd <= 2.0.0b8 misreads it.
+
+    On an unhashed WHERE ``0#<p>`` OWNd reports ``p`` as the zone, but ``p`` is
+    never one: ``0#<n>`` is actuator ``n`` of zone 0, the pump the zones call
+    with ``*4*4001#<zone>*0#<n>##`` (zones 1, 2, 3, 5 and 6 of one plant all
+    call ``0#3``: #303, #333, #404), and ``0#4#<if>`` is WHERE=0 behind an
+    F422 interface. Taken as zones, pump 2 switched zone 2 (#431) and the F422
+    form became zone 4. ``#0#<n>`` (4-zone central unit) keeps OWNd's zone.
+    """
+    if str(getattr(message, "where", None)) == "0" and _where_param(message):
+        return None
+    zone: int | None = getattr(message, "zone", None)
+    return zone
+
+
 def _calling_zones(message: Any) -> tuple[list[str], str | None]:
     """Zones a heating frame concerns, and the F422 interface it came through."""
     raw_where = getattr(message, "where", None)
-    zone = getattr(message, "zone", None)
+    zone = _bus_zone(message)
     interface = getattr(message, "interface", None)
-    what = getattr(message, "what", None)
+    # OWNHeatingEvent keeps WHAT only as ``_what``; it has no ``what`` property.
+    what = getattr(message, "what", None) or getattr(message, "_what", None)
     what_param = getattr(message, "what_param", None) or getattr(message, "_what_param", None) or []
-    where_param = getattr(message, "where_param", None) or getattr(message, "_where_param", None) or []
+    where_param = _where_param(message)
     if not interface and len(where_param) > 1 and where_param[0] == "4":
         interface = str(where_param[1])
 
     zones: list[str] = []
+    # WHERE ``<zone>#<n>`` names actuator <n> of the zone (``*#4*2#1*20*1##``
+    # = zone 2, actuator 1 is on), never zone <n>: routing it there made zone 1
+    # "heat" whenever any zone's actuator 1 opened (#333), and pump 2 (``0#2``)
+    # switch zone 2 (#431).
     if zone is not None and zone > 0:
         zones.append(str(zone))
     if what in ("4001", "4002", 4001, 4002) and what_param:
         try:
             zones.append(str(int(what_param[0])))
-        except (ValueError, TypeError):
-            pass
-    # WHERE ``<zone>#<n>`` names the zone's actuator (``*#4*2#1*20*1##`` =
-    # zone 2, actuator 1 is on), not another zone: routing it to zone <n>
-    # made zone 1 "heat" whenever any zone's actuator 1 opened (#333). The
-    # parameter is the zone only on a WHERE=0 frame (``*#4*0#5*...``).
-    if where_param and where_param[0] != "4" and str(raw_where) in ("0", ""):
-        try:
-            zones.append(str(int(where_param[0])))
         except (ValueError, TypeError):
             pass
     if not zones and raw_where and raw_where not in ("0", "") and not _is_probe(str(raw_where)):
@@ -202,7 +226,7 @@ def _zone_address(message: Any) -> Address | None:
 def _zone_route_keys(message: Any, address: Address | None) -> list[str]:
     """Every key a heating frame is delivered under: the zone, WHERE, and the calling zones."""
     zones, interface = _calling_zones(message)
-    zone = getattr(message, "zone", None)
+    zone = _bus_zone(message)
     keys = [] if zone is None else [f"#{zone}" if zone == 0 else str(zone)]
     if getattr(message, "where", None):
         keys.append(str(message.where))
@@ -533,6 +557,34 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 )
             )
 
+    def _apply_zone_state(self, message: OWNHeatingEvent) -> None:
+        """Dimension 7: the zone's operating state, and its setpoint in state 'setpoint'.
+
+        Protection and off turn the zone OFF but keep the nominal setpoint, as
+        WHAT 102/202 do (#383).  Comfort and eco carry no temperature.
+        """
+        state = getattr(message, "zone_state", None)
+        if state in _ZONE_STATES_OFF:
+            self._attr_hvac_mode = HVACMode.OFF
+            self._attr_hvac_action = HVACAction.OFF
+            self._actuator_states.clear()
+            return
+        if state not in _ZONE_STATES_ON:
+            return
+        prev_mode = self._attr_hvac_mode
+        mode = _ZONE_CONTEXT_MODES.get(getattr(message, "zone_context", None) or "")
+        if mode is not None and mode in self._attr_hvac_modes:
+            self._attr_hvac_mode = mode
+            if self._attr_hvac_action == HVACAction.OFF:
+                self._attr_hvac_action = HVACAction.IDLE
+        temperature = message.set_temperature if state == "setpoint" else None
+        if temperature is not None:
+            self._target_temperature = temperature
+        if self._attr_hvac_mode != HVACMode.OFF and self._target_temperature is not None and (
+            temperature is not None or prev_mode == HVACMode.OFF
+        ):
+            self._local_target_temperature = self._target_temperature + self._local_offset
+
     @callback
     def handle_event(self, message: OWNHeatingEvent) -> None:
         """Handle an event message."""
@@ -714,6 +766,13 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                     f"myhome_central_mode_{self._gateway_handler.mac}",
                     self._attr_hvac_mode,
                 )
+        elif message.message_type == MESSAGE_TYPE_ZONE_STATE:
+            LOGGER.debug(
+                "%s %s",
+                self._gateway_handler.log_id,
+                message.human_readable_log,
+            )
+            self._apply_zone_state(message)
         elif message.message_type == MESSAGE_TYPE_ACTION:
             LOGGER.debug(
                 "%s %s",

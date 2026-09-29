@@ -36,6 +36,7 @@ from OWNd.message import (
     MESSAGE_TYPE_ILLUMINANCE,
     MESSAGE_TYPE_MAIN_TEMPERATURE,
     MESSAGE_TYPE_SECONDARY_TEMPERATURE,
+    OWNCommand,
     OWNEnergyCommand,
     OWNEnergyEvent,
     OWNHeatingCommand,
@@ -118,6 +119,7 @@ async def async_setup_entry(
         return True
     gateway = runtime.gateway
     entry_mac = str(config_entry.data[CONF_MAC])
+    _migrate_temperature_unique_ids(hass, config_entry.entry_id, gateway.mac, entry_mac)
 
     # Device class of every configured (WHO, WHERE) under each of its spellings
     configured_class: dict[tuple[str, str], str | None] = {}
@@ -299,8 +301,9 @@ async def async_setup_entry(
         primary = normalize_where(where) or normalize_where(clean) or where
         label = normalize_where(clean) or clean
         name = f"Probe {label}" if clean.isdigit() and int(clean) >= 100 else f"Zone {label}"
+        # ``4-<where>``, the id validate.py gives a myhome.yaml probe: one unique id either way (#441)
         sensor = MyHOMETemperatureSensor(
-            hass=hass, device_id=primary, who="4", where=primary, name=name,
+            hass=hass, device_id=f"4-{primary}", who="4", where=primary, name=name,
             device_class=SensorDeviceClass.TEMPERATURE, manufacturer="BTicino", model="Temperature Probe", gateway=gateway,
         )
         sensor.entity_id = entity_id_of(ctx)  # type: ignore[assignment]
@@ -376,6 +379,39 @@ def _migrate_power_unique_id(hass: HomeAssistant, device_id: str) -> None:
         pass
 
 
+def _migrate_temperature_unique_ids(hass: HomeAssistant, entry_id: str, mac: str, entry_mac: str) -> None:
+    """Restored and discovered probes were ``<mac>-<where>-temperature``, a myhome.yaml
+    probe ``<mac>-4-<where>-temperature`` (#441). Move the first form to the second; when
+    both exist, the WHO-less one is the duplicate (``sensor.<name>_2``) and goes.
+    """
+    marker = f"-{SensorDeviceClass.TEMPERATURE}"
+    try:
+        registry = er.async_get(hass)
+        entries = list(er.async_entries_for_config_entry(registry, entry_id))
+    except Exception:  # registry not loaded in some harnesses
+        return
+    for entry in entries:
+        if entry.domain != PLATFORM or not entry.unique_id.endswith(marker):
+            continue
+        prefix = next((f"{m}-" for m in (mac, entry_mac) if entry.unique_id.startswith(f"{m}-")), None)
+        if prefix is None:
+            continue
+        where = entry.unique_id[len(prefix) : -len(marker)]
+        if not where or "-" in where:
+            continue  # already ``4-<where>``
+        target = f"{mac}-4-{where}{marker}"
+        canonical = registry.async_get_entity_id(PLATFORM, DOMAIN, target)
+        try:
+            if canonical is not None:
+                registry.async_remove(entry.entity_id)
+                LOGGER.info("Removed duplicate temperature sensor %s in favor of %s", entry.entity_id, canonical)
+            else:
+                registry.async_update_entity(entry.entity_id, new_unique_id=target)
+                LOGGER.info("Migrated temperature sensor %s to unique id %s", entry.entity_id, target)
+        except ValueError as err:
+            LOGGER.warning("Could not migrate temperature sensor %s: %s", entry.entity_id, err)
+
+
 async def async_unload_entry(hass: HomeAssistant, config_entry: MyHOMEConfigEntry) -> bool:
     runtime = config_entry.runtime_data
 
@@ -425,6 +461,8 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
         )
         self._attr_native_unit_of_measurement = UnitOfPower.WATT
         self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_should_poll = True
+        self._streaming_until: float = 0.0
 
         self._attr_native_value = None
         self._attr_extra_state_attributes = {
@@ -440,18 +478,31 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
         """When entity is removed from hass."""
         self._unregister_entity_ref(str(self._attr_device_class))
 
+    def _is_streaming_active(self) -> bool:
+        """Return True if automatic instant power streaming is active."""
+        return time.monotonic() < self._streaming_until
+
     async def async_update(self) -> None:
         """Update the entity.
 
-        Only used by the generic entity update service.
+        Only used by the generic entity update service or periodic polling.
         """
-        # await self.start_sending_instant_power(255)
+        if self._is_streaming_active():
+            return
+        where = (
+            f"{self._where}#0"
+            if str(self._where).startswith("7") and not str(self._where).endswith("#0")
+            else str(self._where)
+        )
+        cmd = OWNCommand.parse(f"*#18*{where}*1200##")
+        if cmd is not None:
+            await self._gateway_handler.send_status_request(cmd)
 
     @callback
-    def handle_event(self, message: OWNEnergyEvent) -> bool | None:
+    def handle_event(self, message: OWNEnergyEvent) -> None:
         """Handle an event message."""
         if message.message_type not in [MESSAGE_TYPE_ACTIVE_POWER]:
-            return True
+            return True  # type: ignore
 
         LOGGER.debug(
             "%s %s",
@@ -464,6 +515,10 @@ class MyHOMEPowerSensor(MyHOMEEntity, SensorEntity):
 
     async def start_sending_instant_power(self, duration: int) -> None:
         """Request automatic instant power."""
+        if duration > 0:
+            self._streaming_until = time.monotonic() + (duration * 60)
+        else:
+            self._streaming_until = 0.0
         await self._gateway_handler.send(
             OWNEnergyCommand.start_sending_instant_power(self._where, duration)
         )
@@ -552,14 +607,14 @@ class MyHOMEEnergySensor(MyHOMEEntity, SensorEntity):
             )
 
     @callback
-    def handle_event(self, message: OWNEnergyEvent) -> bool | None:
+    def handle_event(self, message: OWNEnergyEvent) -> None:
         """Handle an event message."""
         if message.message_type not in [
             MESSAGE_TYPE_ENERGY_TOTALIZER,
             MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
             MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
         ]:
-            return True
+            return True  # type: ignore
 
         norm_id = self._entity_specific_id.replace("_", "-")
         if (
@@ -680,7 +735,7 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
         await self._gateway_handler.send_status_request(cmd)
 
     @callback
-    def handle_event(self, message: OWNHeatingEvent) -> bool | None:
+    def handle_event(self, message: OWNHeatingEvent) -> None:
         """Handle an event message."""
         val = None
         if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:
@@ -716,7 +771,7 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
                 except (ValueError, TypeError):
                     pass
         else:
-            return True
+            return True  # type: ignore
 
         if val is not None:
             if hasattr(message, "human_readable_log") and message.human_readable_log:
@@ -790,14 +845,14 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
         )
 
     @callback
-    def handle_event(self, message: OWNLightingEvent) -> bool | None:
+    def handle_event(self, message: OWNLightingEvent) -> None:
         """Handle an event message."""
         if (
             getattr(message, "message_type", None) != MESSAGE_TYPE_ILLUMINANCE
             and getattr(message, "dimension", None) != 6
             and not isinstance(getattr(message, "illuminance", None), (int, float))
         ):
-            return True
+            return True  # type: ignore
 
         LOGGER.debug(
             "%s %s",

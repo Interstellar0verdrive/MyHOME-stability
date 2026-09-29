@@ -43,7 +43,7 @@ automation:
       - platform: device
         domain: myhome
         device_id: <device id of the CEN+ module>
-        type: short_press
+        type: pushbutton_short_press
         subtype: button_1
     action:
       - service: light.toggle
@@ -55,7 +55,7 @@ automation:
       - platform: device
         domain: myhome
         device_id: <device id of the CEN+ module>
-        type: long_press
+        type: pushbutton_long_press
         subtype: button_1
     action:
       - service: vacuum.start
@@ -120,12 +120,15 @@ The same service accepts `switch` entities (a socket, a fan).
 
 ## 5. Whole-house multiroom audio with Music Assistant
 
-The F441 / F441M analog matrix plays whatever is on its inputs. Map one or more network decoders (a Squeezelite / Raspberry Pi per input) in the options flow (**Configure → Dynamic Proxy Decoders**, one row per input: decoder entity, source number, pre-gain). Every audio zone then advertises `play_media`, becomes a Music Assistant player, and on playback claims a free decoder, routes the matrix to it and mirrors playback state and metadata.
+The F441 / F441M analog matrix plays whatever is on its inputs. Map one or more network decoders (a Squeezelite, WiiM, or Cambridge Audio DLNA DMR player per input) in the options flow (**Configure**, one row per decoder: entity, source input, pre-gain), and name the sources wired to the matrix. Every audio zone advertises `GROUPING` and (with decoders configured) `PLAY_MEDIA`:
 
-- The wall panels keep working: source 0–4 selection and volume still come from the bus.
-- Two decoders = two different streams at once; a third room gets *All audio matrix inputs are currently in use* until one stops.
+- **Synchronized Multi-Room Grouping**: In Music Assistant, grouping multiple MyHOME zones streams once to the leader, while the integration automatically routes the other rooms' physical matrix environments to the leader's source and powers on their room amplifiers.
+- **Hardware-level zero latency**: Because all grouped rooms listen to the same analog source on the matrix, there is zero audio drift or echo between rooms.
+- **Independent stream isolation**: Two decoders allow two independent streams at once in different environments. Starting a stream or joining a zone in an environment already occupied by another stream is cleanly prevented with an environment isolation error.
+- **Backend Stream Compatibility (DLNA DMR)**: Cambridge Audio streamers (CXN, CXN V2, Edge NQ, Evo, etc.) reject direct HTTP stream URLs when using the native `cambridge_audio` integration. Configure them via Home Assistant's built-in **DLNA Digital Media Renderer** integration for smooth streaming.
+- **Passive Stream & Metadata Tracking**: Start Spotify Connect or internet radio directly in the streamer's mobile app; any zone switched on to that source automatically mirrors track title, artist, album art, and transport state.
 
-Details, the gain-staging notes (why a pre-gain removes the hiss) and the reference frames are in [Sound System](media_player.md).
+Details, gain-staging notes, and protocol reference frames are in [Sound System](media_player.md).
 
 ## 6. Heating with a central unit, controlled from Home Assistant
 

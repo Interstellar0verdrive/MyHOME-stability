@@ -67,6 +67,15 @@ from custom_components.myhome.const import (
 from custom_components.myhome.gateway import MyHOMEGatewayHandler
 from tests.mock_gateway_harness import MockGatewayHarness
 
+# OWNd releases up to and including 2.0.0b8 alias "MH200" to the MH200N profile,
+# which advertises no WHO 16, so startup discovery never asks an MH200 for its
+# amplifiers although a live MH200 answers *#16*0*5## with every one of them.
+# OWNd#53 gives the MH200 its own profile.  The suite stays green against released
+# OWNd and against the OWNd#53 checkout, and strict=True retires the marker once a
+# release ships the fix.
+_OWND_MH200_IS_MH200N = isinstance(get_gateway_profile("MH200"), MH200NProfile)
+_OWND_MH200N_HAS_SOUND = MH200NProfile().supports_who(WHO_SOUND)
+
 # ── 1. GatewayProfile Tests ──────────────────────────────────────────────────
 
 class TestGatewayProfiles:
@@ -112,12 +121,12 @@ class TestGatewayProfiles:
         assert profile.supports_extended_frames is False
         assert profile.max_queue_size == 100
         assert profile.command_queue_delay == 0.15
-        assert profile.supports_audio is False
+        assert profile.supports_audio is _OWND_MH200N_HAS_SOUND
         assert profile.supports_energy_instant_power is False
-        # MH200N does not support audio or energy
+        # OWNd releases up to 2.0.0b8 omit WHO 16 from MH200N; OWNd#63 enables it
         assert profile.supports_who(WHO_LIGHTING) is True
         assert profile.supports_who(WHO_AUTOMATION) is True
-        assert profile.supports_who(WHO_SOUND) is False
+        assert profile.supports_who(WHO_SOUND) is _OWND_MH200N_HAS_SOUND
         assert profile.supports_who(WHO_ENERGY) is False
         assert profile.can_support_workers(1) is True
         assert profile.can_support_workers(2) is False
@@ -166,7 +175,6 @@ class TestGatewayProfiles:
             ("F-454", F454Profile),
             ("F455", F455Profile),
             ("MH200N", MH200NProfile),
-            ("mh200", MH200NProfile),
             ("MH-200-N", MH200NProfile),
             ("MH202", MH202Profile),
             ("MyHomeServer1", MyHomeServer1Profile),
@@ -179,6 +187,17 @@ class TestGatewayProfiles:
     def test_get_gateway_profile_resolution(self, name, expected_cls):
         profile = get_gateway_profile(name)
         assert isinstance(profile, expected_cls)
+
+    @pytest.mark.xfail(
+        _OWND_MH200_IS_MH200N,
+        reason="installed OWNd aliases MH200 to the MH200N profile (OWNd#53)",
+        strict=True,
+    )
+    @pytest.mark.parametrize("name", ["MH200", "mh200", "MH-200"])
+    def test_mh200_profile_advertises_sound(self, name):
+        profile = get_gateway_profile(name)
+        assert profile.model_name == "MH200"
+        assert profile.supports_who(WHO_SOUND) is True
 
     def test_owngateway_profile_integration(self):
         gw = OWNGateway({
@@ -306,10 +325,11 @@ class TestMockGatewayHarness:
                 gw.log_id, cmd,
             )
 
-            # An explicit NACK for status request does NOT retry or warn (logged at DEBUG)
-            status_cmd = OWNCommand.parse("*#16*0##")
+            # An explicit NACK for a status request does not warn (logged at DEBUG).
+            # OWNd <= 2.0.0b8 sends it twice; later OWNd once (OpenWebNet-HA/OWNd#57).
+            status_cmd = OWNCommand.parse("*#16*0*5##")
             assert await session.send(status_cmd, is_status_request=True) is None
-            assert harness.received_messages.count("*#16*0##") == 2
+            assert harness.received_messages.count("*#16*0*5##") in (1, 2)
             mock_logger.debug.assert_any_call(
                 "%s Gateway rejected status request %s (NACK, %s response(s)). Subsystem or device may not be present.",
                 gw.log_id, status_cmd, 0,
@@ -708,7 +728,7 @@ class TestConfigFlowHardening:
             "custom_components.myhome.config_flow.OWNSession.test_connection",
             return_value={"Success": True, "Message": None},
         ), patch("custom_components.myhome.config_flow.OWNGateway.find_from_address") as mock_find, \
-           patch("custom_components.myhome.async_setup_entry", return_value=True):
+           patch.object(hass.config_entries, "async_reload", return_value=True) as mock_reload:
             mock_gw = MagicMock()
             mock_gw.password = "new_password"
             mock_gw.address = "192.0.2.1"
@@ -719,8 +739,10 @@ class TestConfigFlowHardening:
             mock_find.return_value = mock_gw
 
             res2 = await flow.async_step_password(user_input={CONF_PASSWORD: "new_password"})
+            await hass.async_block_till_done()
             assert res2["type"] == "abort"
             assert res2["reason"] == "reauth_successful"
+            assert mock_reload.called
 
             # Verify entry has updated password while retaining existing metadata
             updated = hass.config_entries.async_get_entry(entry.entry_id)

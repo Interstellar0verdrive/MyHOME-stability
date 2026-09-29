@@ -8,7 +8,7 @@ class MyHomeBusCard extends BusMonitorView {
   static getStubConfig() {
     return {
       title: "MyHOME OpenWebNet Bus Monitor",
-      max_frames: 200,
+      max_frames: 500,
     };
   }
 

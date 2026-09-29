@@ -487,7 +487,7 @@ async def ws_cover_calibration_trace(
     mac = dr.format_mac(str(getattr(gw, "mac", "") or ""))
     connection.send_result(
         msg["id"],
-        {"mac": mac, "frames": get_last_calibration_trace(gateway_mac=mac)},
+        {"mac": mac, "frames": get_last_calibration_trace(gateway_mac=mac, hass=hass)},
     )
 
 

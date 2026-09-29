@@ -60,6 +60,8 @@ def _entry(hass: HomeAssistant, *, broadcast_resync: bool = True) -> MockConfigE
 def _handler(hass: HomeAssistant, entry: MockConfigEntry, *, broadcast_resync: bool = True) -> MyHOMEGatewayHandler:
     with patch("custom_components.myhome.gateway.OWNGateway"):
         handler = MyHOMEGatewayHandler(hass, entry, generate_events=False, broadcast_resync=broadcast_resync)
+        # Only the serial: OWNGateway has no `mac`, and setting one on the mock hid
+        # that `_known_light_areas` read it (the listener died on `*1*0*0##` live).
         handler.gateway.serial = MAC
         handler.send_status_request = AsyncMock()
         return handler
@@ -241,11 +243,9 @@ async def test_resync_general(hass: HomeAssistant, handler: MyHOMEGatewayHandler
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("real_gateway", [False, True])
-async def test_known_light_areas_from_registry(hass: HomeAssistant, entry: MockConfigEntry, real_gateway):
+async def test_known_light_areas_from_registry(hass: HomeAssistant, entry: MockConfigEntry):
     """_known_light_areas reads real light registry entries for this config entry."""
-    handler = (MyHOMEGatewayHandler(hass, entry, generate_events=False)
-               if real_gateway else _handler(hass, entry))
+    handler = _handler(hass, entry)
     registry = er.async_get(hass)
     for where in ("12", "0015", "1003", "#6"):
         registry.async_get_or_create(

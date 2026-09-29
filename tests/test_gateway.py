@@ -29,6 +29,7 @@ from custom_components.myhome.const import (
     CONF_DEVICE_TYPE,
     CONF_FIRMWARE,
     CONF_LONG_PRESS,
+    CONF_LONG_PRESS_REPEAT,
     CONF_LONG_RELEASE,
     CONF_MANUFACTURER,
     CONF_MANUFACTURER_URL,
@@ -230,14 +231,17 @@ async def test_gateway_send_and_send_status_request(gateway_handler):
 
 @pytest.mark.asyncio
 async def test_gateway_initial_discovery_queues_sweep(gateway_handler):
-    """The startup sweep queues covers, heating and audio status requests, never *#1*0##."""
+    """The startup sweep queues covers, heating and audio status requests, never *#1*0##.
+
+    WHO 16 goes out as dimension 5 (``*#16*0*5##``): gateways NACK the bare ``*#16*0##``.
+    """
     await gateway_handler.initial_discovery()
     queued = []
     while not gateway_handler.send_buffer.empty():
         item = gateway_handler.send_buffer.get_nowait()
         assert item["is_status_request"] is True
         queued.append(str(item["message"]))
-    assert queued == ["*#2*0##", "*#4*0##", "*#16*0##"]
+    assert queued == ["*#2*0##", "*#4*0##", "*#16*0*5##"]
 
 
 @pytest.mark.asyncio
@@ -314,6 +318,71 @@ async def test_listening_loop_lighting(gateway_handler):
 
 
 @pytest.mark.asyncio
+async def test_listening_loop_lighting_unknown_is_on_skips_event(gateway_handler):
+    """Lighting scope frames with is_on=None (unknown WHAT or motion) must not fire false off events."""
+    with patch("custom_components.myhome.gateway.OWNEventSession") as mock_session_class:
+        mock_session = MagicMock()
+        mock_session.connect = AsyncMock(return_value={"Success": True})
+        mock_session.get_next = AsyncMock()
+
+        # Unknown WHAT on area 1 (*1*19*1##): is_area=True, is_on=None
+        msg_area_unknown = MagicMock(spec=OWNLightingEvent)
+        msg_area_unknown.is_translation = False
+        msg_area_unknown.is_general = False
+        msg_area_unknown.is_area = True
+        msg_area_unknown.is_on = None
+        msg_area_unknown.area = "1"
+        msg_area_unknown.human_readable_log = "Light 1 reports unknown lighting WHAT 19."
+
+        # Unknown WHAT on general (*1*19*0##): is_general=True, is_on=None
+        msg_gen_unknown = MagicMock(spec=OWNLightingEvent)
+        msg_gen_unknown.is_translation = False
+        msg_gen_unknown.is_general = True
+        msg_gen_unknown.is_on = None
+        msg_gen_unknown.human_readable_log = "Light 0 reports unknown lighting WHAT 19."
+
+        # Unknown WHAT on group 5 (*1*19*#5##): is_group=True, is_on=None
+        msg_group_unknown = MagicMock(spec=OWNLightingEvent)
+        msg_group_unknown.is_translation = False
+        msg_group_unknown.is_general = False
+        msg_group_unknown.is_area = False
+        msg_group_unknown.is_group = True
+        msg_group_unknown.is_on = None
+        msg_group_unknown.group = "5"
+        msg_group_unknown.human_readable_log = "Light #5 reports unknown lighting WHAT 19."
+
+        # Motion frame on area 2: is_area=True, is_on=None
+        msg_area_motion = MagicMock(spec=OWNLightingEvent)
+        msg_area_motion.is_translation = False
+        msg_area_motion.is_general = False
+        msg_area_motion.is_area = True
+        msg_area_motion.is_on = None
+        msg_area_motion.area = "2"
+        msg_area_motion.human_readable_log = "Light/motion sensor 2 detected motion"
+
+        mock_session.get_next.side_effect = [
+            msg_area_unknown,
+            msg_gen_unknown,
+            msg_group_unknown,
+            msg_area_motion,
+            asyncio.CancelledError(),
+        ]
+        mock_session_class.return_value = mock_session
+
+        gateway_handler.send_status_request = AsyncMock()
+
+        try:
+            await gateway_handler.listening_loop()
+        except asyncio.CancelledError:
+            pass
+
+        fired_events = [call.args[0] for call in gateway_handler.hass.bus.async_fire.call_args_list]
+        assert "myhome_general_light_event" not in fired_events
+        assert "myhome_area_light_event" not in fired_events
+        assert "myhome_group_light_event" not in fired_events
+
+
+@pytest.mark.asyncio
 async def test_listening_loop_automation(gateway_handler):
     with patch("custom_components.myhome.gateway.OWNEventSession") as mock_session_class:
         mock_session = MagicMock()
@@ -361,9 +430,18 @@ async def test_listening_loop_automation(gateway_handler):
         except asyncio.CancelledError:
             pass
 
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_general_automation_event", {"message": str(msg_gen), "event": "open"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_area_automation_event", {"message": str(msg_area), "area": "2", "event": "close"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_group_automation_event", {"message": str(msg_group), "group": "6", "event": "stop"})
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_general_automation_event",
+            {"message": str(msg_gen), "event": "open", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_area_automation_event",
+            {"message": str(msg_area), "area": "2", "event": "close", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_group_automation_event",
+            {"message": str(msg_group), "group": "6", "event": "stop", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
 
 
 @pytest.mark.asyncio
@@ -445,12 +523,30 @@ async def test_listening_loop_automation_remaining_branches(gateway_handler):
         except asyncio.CancelledError:
             pass
 
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_general_automation_event", {"message": str(msg_gen_close), "event": "close"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_general_automation_event", {"message": str(msg_gen_stop), "event": "stop"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_area_automation_event", {"message": str(msg_area_open), "area": "3", "event": "open"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_area_automation_event", {"message": str(msg_area_stop), "area": "3", "event": "stop"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_group_automation_event", {"message": str(msg_grp_open), "group": "7", "event": "open"})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_group_automation_event", {"message": str(msg_grp_close), "group": "7", "event": "close"})
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_general_automation_event",
+            {"message": str(msg_gen_close), "event": "close", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_general_automation_event",
+            {"message": str(msg_gen_stop), "event": "stop", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_area_automation_event",
+            {"message": str(msg_area_open), "area": "3", "event": "open", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_area_automation_event",
+            {"message": str(msg_area_stop), "area": "3", "event": "stop", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_group_automation_event",
+            {"message": str(msg_grp_open), "group": "7", "event": "open", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_group_automation_event",
+            {"message": str(msg_grp_close), "group": "7", "event": "close", "where": "0", "gateway_mac": gateway_handler.mac},
+        )
 
 
 @pytest.mark.asyncio
@@ -594,7 +690,7 @@ async def test_listening_loop_cen_and_cenplus_variants(gateway_handler):
             pass
 
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 1, "event": CONF_LONG_PRESS, "where": "1", "gateway_mac": gateway_handler.mac})
-        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 2, "event": CONF_LONG_PRESS, "where": "1", "gateway_mac": gateway_handler.mac})
+        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 2, "event": CONF_LONG_PRESS_REPEAT, "where": "1", "gateway_mac": gateway_handler.mac})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 3, "event": CONF_LONG_RELEASE, "where": "1", "gateway_mac": gateway_handler.mac})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 4, "event": None, "where": "1", "gateway_mac": gateway_handler.mac})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 5, "event": CONF_ROTARY_CW_SLOW, "where": "1", "gateway_mac": gateway_handler.mac})
@@ -606,6 +702,32 @@ async def test_listening_loop_cen_and_cenplus_variants(gateway_handler):
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cen_event", {"object": 2, "pushbutton": 2, "event": CONF_SHORT_RELEASE, "where": "2", "gateway_mac": gateway_handler.mac})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cen_event", {"object": 2, "pushbutton": 3, "event": CONF_LONG_RELEASE, "where": "2", "gateway_mac": gateway_handler.mac})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cen_event", {"object": 2, "pushbutton": 4, "event": None, "where": "2", "gateway_mac": gateway_handler.mac})
+
+
+@pytest.mark.asyncio
+async def test_listening_loop_cenplus_hold_fires_long_press_once(gateway_handler):
+    # fedem95's MH201 trace (#418): a 2.18 s hold on button 2 of CEN+ object 1.
+    frames = ["*25*22#2*21##", "*25*23#2*21##", "*25*23#2*21##", "*25*23#2*21##", "*25*23#2*21##", "*25*24#2*21##"]
+    with patch("custom_components.myhome.gateway.OWNEventSession") as mock_session_class:
+        mock_session = MagicMock()
+        mock_session.connect = AsyncMock(return_value={"Success": True})
+        mock_session.get_next = AsyncMock(side_effect=[OWNMessage.parse(f) for f in frames] + [asyncio.CancelledError()])
+        mock_session_class.return_value = mock_session
+        gateway_handler.send_status_request = AsyncMock()
+
+        try:
+            await gateway_handler.listening_loop()
+        except asyncio.CancelledError:
+            pass
+
+    payloads = [
+        c.args[1]
+        for c in gateway_handler.hass.bus.async_fire.call_args_list
+        if c.args[0] == "myhome_cenplus_event"
+    ]
+    assert [p["event"] for p in payloads] == [CONF_LONG_PRESS] + [CONF_LONG_PRESS_REPEAT] * 4 + [CONF_LONG_RELEASE]
+    # WHERE 21 is CEN+ object 1; the button comes from the #2 WHAT parameter.
+    assert {(p["object"], p["pushbutton"], p["where"]) for p in payloads} == {(1, 2, "1")}
 
 
 @pytest.mark.asyncio
@@ -704,6 +826,35 @@ async def test_listening_loop_generate_events_and_clean_termination(gateway_hand
         )
         mock_session.close.assert_called_once()
         assert gateway_handler.is_connected is False
+
+
+@pytest.mark.asyncio
+async def test_listening_loop_closes_event_session_when_cancelled(gateway_handler):
+    """Unloading the entry cancels the listener mid-read: the event session must still close.
+
+    Seen live on an MH200: after an options reload the old session's keepalive went on
+    for minutes, because the close after the loop was skipped by the cancellation.
+    """
+    with patch("custom_components.myhome.gateway.OWNEventSession") as mock_session_class:
+        mock_session = MagicMock()
+        mock_session.connect = AsyncMock(return_value={"Success": True})
+        mock_session.close = AsyncMock()
+        reading = asyncio.Event()
+
+        async def block_forever():
+            reading.set()
+            await asyncio.Event().wait()
+
+        mock_session.get_next = AsyncMock(side_effect=block_forever)
+        mock_session_class.return_value = mock_session
+
+        task = asyncio.create_task(gateway_handler.listening_loop())
+        await reading.wait()
+        task.cancel("Config entry unloading")
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        mock_session.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -1377,7 +1528,7 @@ def test_handle_gateway_diagnostics_dimension_0(gateway_handler, mock_config_ent
 
         create_issue.reset_mock()
 
-        # 2. Dim 0: Valid timezone (+1) resolves issue
+        # 2. Valid timezone (+1) resolves issue
         msg_valid = OWNEvent.parse("*#13**0*23*52*03*001##")
         gateway_handler._handle_gateway_diagnostics(msg_valid)
         create_issue.assert_not_called()
@@ -1415,17 +1566,29 @@ def test_handle_gateway_diagnostics_dimension_0(gateway_handler, mock_config_ent
 
 
 def test_compat_gateway_timezone():
-    """Verify OWNd compatibility timezone patch handles F454 '999' sentinel."""
-    from custom_components.myhome.gateway import _compat_gateway_timezone
+    """Verify native OWNd handles F454 '999' unconfigured timezone frames directly."""
+    import datetime
 
     # 1. Unconfigured F454 timezone sentinel '999'
-    assert _compat_gateway_timezone(["23", "06", "59", "999"]) == ""
+    cmd_999 = OWNCommand.parse("*#13**#0*23*06*59*999##")
+    assert cmd_999 is not None
+    assert cmd_999._timezone == ""
+    assert cmd_999._time == datetime.time(23, 6, 59)
+    assert "23:06:59" in cmd_999.human_readable_log
 
     # 2. Standard timezone offset (001 -> +01:00)
-    assert _compat_gateway_timezone(["23", "06", "59", "001"]) == "+01:00"
+    cmd_valid = OWNCommand.parse("*#13**#0*23*06*59*001##")
+    assert cmd_valid is not None
+    assert cmd_valid._timezone == "+01:00"
+    assert cmd_valid._time == datetime.time(
+        23, 6, 59, tzinfo=datetime.timezone(datetime.timedelta(hours=1))
+    )
 
     # 3. Short values list without timezone element
-    assert _compat_gateway_timezone(["23", "06", "59"]) == ""
+    cmd_short = OWNCommand.parse("*#13**#0*23*06*59##")
+    assert cmd_short is not None
+    assert cmd_short._timezone == ""
+    assert cmd_short._time == datetime.time(23, 6, 59)
 
 
 def test_status_request_log_filter():

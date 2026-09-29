@@ -8,6 +8,7 @@ import pytest
 from homeassistant.components.light import ColorMode
 from homeassistant.core import State
 from OWNd.message import OWNEvent, OWNHeatingEvent, OWNLightingEvent
+from OWNd.profiles import GatewayProfile, MH200NProfile, get_gateway_profile
 
 from custom_components.myhome.const import DOMAIN
 from custom_components.myhome.gateway import MyHOMEGatewayHandler
@@ -244,20 +245,61 @@ async def test_brightness_restore_does_not_downgrade_color_light(hass, mock_gate
     assert light.color_mode == ColorMode.HS
 
 
-# ── Startup discovery honours the gateway profile (MH200N NACKs *#16*0##) ──
+# ── Startup discovery honours the gateway profile ──
+
+
+# OWNd up to 2.0.0b8 omits WHO 16 from the MH200N profile; OWNd#63 enables it.
+_OWND_MH200N_HAS_SOUND = MH200NProfile().supports_who(16)
 
 
 async def test_discovery_skips_unsupported_who(gateway_handler):
-    """An MH200N profile (no audio) must not be asked *#16*0## at startup."""
-    from OWNd.profiles import get_gateway_profile
-
-    gateway_handler.gateway.profile = get_gateway_profile("MH200N")
+    """A profile without WHO 16 must not be asked *#16*0*5## at startup."""
+    gateway_handler.gateway.profile = GatewayProfile(
+        model_name="NoAudioGateway",
+        supported_who=(2, 4),
+    )
     await gateway_handler.initial_discovery()
 
     queued = []
     while not gateway_handler.send_buffer.empty():
         queued.append(str(gateway_handler.send_buffer.get_nowait()["message"]))
     assert queued == ["*#2*0##", "*#4*0##"]
+
+
+@pytest.mark.skipif(
+    not _OWND_MH200N_HAS_SOUND,
+    reason="installed OWNd omits WHO 16 from MH200N (OWNd#63)",
+)
+async def test_discovery_asks_an_mh200n_for_its_amplifiers(gateway_handler):
+    """A live MH200N answers *#16*0*5## with every amplifier and source (OWNd#63)."""
+    gateway_handler.gateway.profile = get_gateway_profile("MH200N")
+    await gateway_handler.initial_discovery()
+
+    queued = []
+    while not gateway_handler.send_buffer.empty():
+        queued.append(str(gateway_handler.send_buffer.get_nowait()["message"]))
+    assert queued == ["*#2*0##", "*#4*0##", "*#16*0*5##"]
+
+
+# OWNd up to 2.0.0b8 gives the MH200 the MH200N profile, which advertises no WHO 16.
+# OWNd#53 gives it its own; strict=True retires the marker once a release ships it.
+_OWND_MH200_IS_MH200N = isinstance(get_gateway_profile("MH200"), MH200NProfile)
+
+
+@pytest.mark.xfail(
+    _OWND_MH200_IS_MH200N,
+    reason="installed OWNd aliases MH200 to the MH200N profile (OWNd#53)",
+    strict=True,
+)
+async def test_discovery_asks_an_mh200_for_its_amplifiers(gateway_handler):
+    """A live MH200 answers *#16*0*5## with every amplifier and source (OWNd#53)."""
+    gateway_handler.gateway.profile = get_gateway_profile("MH200")
+    await gateway_handler.initial_discovery()
+
+    queued = []
+    while not gateway_handler.send_buffer.empty():
+        queued.append(str(gateway_handler.send_buffer.get_nowait()["message"]))
+    assert queued == ["*#2*0##", "*#4*0##", "*#16*0*5##"]
 
 
 def test_profile_supports_who_defaults_to_true_without_profile(gateway_handler):

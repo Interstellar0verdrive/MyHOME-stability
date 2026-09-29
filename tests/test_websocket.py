@@ -673,5 +673,5 @@ async def test_ws_cover_calibration_trace(hass: HomeAssistant, mock_ws_connectio
     with patch("custom_components.myhome.cover.get_last_calibration_trace", return_value=[{"raw": "*2*1*21##"}]) as trace:
         ws_cover_calibration_trace(hass, mock_ws_connection, {"id": 77, "type": "myhome/cover/calibration_trace"})
         await hass.async_block_till_done()
-    trace.assert_called_once_with(gateway_mac="00:03:50:aa:bb:cc")
+    trace.assert_called_once_with(gateway_mac="00:03:50:aa:bb:cc", hass=hass)
     mock_ws_connection.send_result.assert_called_once_with(77, {"mac": "00:03:50:aa:bb:cc", "frames": [{"raw": "*2*1*21##"}]})

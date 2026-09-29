@@ -32,12 +32,14 @@ const WHO_CATALOG = {
   "1013": { name: "Gateway Diagnostics", short: "Diag Gateway", class: "who-diag" },
 };
 
+const DEFAULT_MAX_FRAMES = 500;
+
 export class BusMonitorView extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
     this._frames = [];
-    this._maxDisplayFrames = 200;
+    this._maxDisplayFrames = DEFAULT_MAX_FRAMES;
     this._isPaused = false;
     this._filterWho = "all";
     this._filterWhere = "";
@@ -54,6 +56,8 @@ export class BusMonitorView extends HTMLElement {
     this._sendArmed = false;
     this._helpOpen = false;
     this._unsub = null;
+    this._watchedConnection = null;
+    this._onConnectionReady = null;
     this._stats = { captured: 0, total_rx: 0, total_tx: 0 };
     this._gatewayInfo = {};
     this._connectionStatus = "connecting"; // "connecting" | "connected" | "disconnected" | "paused"
@@ -81,12 +85,12 @@ export class BusMonitorView extends HTMLElement {
     this._config = Object.assign(
       {
         title: "MyHOME OpenWebNet Bus Monitor",
-        max_frames: 200,
+        max_frames: DEFAULT_MAX_FRAMES,
         mac: null,
       },
       config
     );
-    this._maxDisplayFrames = this._config.max_frames || 200;
+    this._maxDisplayFrames = this._config.max_frames || DEFAULT_MAX_FRAMES;
     this._render();
     if (changedGateway) this._subscribeStream();
   }
@@ -158,6 +162,7 @@ export class BusMonitorView extends HTMLElement {
 
   disconnectedCallback() {
     this._subscriptionGeneration++;
+    this._unwatchReconnect();
     for (const timer of this._timers) clearTimeout(timer);
     this._timers.clear();
     if (this._retryTimeout) {
@@ -189,6 +194,25 @@ export class BusMonitorView extends HTMLElement {
     return timer;
   }
 
+  _watchReconnect(connection) {
+    if (this._watchedConnection === connection) return;
+    this._unwatchReconnect();
+    if (!connection || typeof connection.addEventListener !== "function") return;
+    this._onConnectionReady = () => {
+      if (!this._isPaused && this.isConnected !== false) this._loadHistory();
+    };
+    connection.addEventListener("ready", this._onConnectionReady);
+    this._watchedConnection = connection;
+  }
+
+  _unwatchReconnect() {
+    if (this._watchedConnection && this._onConnectionReady) {
+      try { this._watchedConnection.removeEventListener("ready", this._onConnectionReady); } catch (e) {}
+    }
+    this._watchedConnection = null;
+    this._onConnectionReady = null;
+  }
+
   _wsPayload(type, extra = {}) {
     const payload = Object.assign({ type }, extra);
     if (this._config && this._config.mac != null && String(this._config.mac).trim() !== "") {
@@ -203,7 +227,7 @@ export class BusMonitorView extends HTMLElement {
     const bufferRevision = this._bufferRevision;
     try {
       const res = await this._hass.callWS(
-        this._wsPayload("myhome/bus_monitor/history", { limit: 50 })
+        this._wsPayload("myhome/bus_monitor/history", { limit: this._maxDisplayFrames })
       );
       if (generation !== this._subscriptionGeneration || bufferRevision !== this._bufferRevision) return;
       if (res && res.frames) {
@@ -216,7 +240,9 @@ export class BusMonitorView extends HTMLElement {
         for (const f of newHistory) {
           if (f.who != null) this._ensureWhoRegistered(f.who);
         }
-        this._frames = newHistory.concat(this._frames);
+        this._frames = newHistory.concat(this._frames).sort(
+          (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
+        );
         if (this._frames.length > this._maxDisplayFrames) {
           this._frames = this._frames.slice(-this._maxDisplayFrames);
         }
@@ -231,7 +257,7 @@ export class BusMonitorView extends HTMLElement {
   }
 
   async _subscribeStream() {
-    if (!this.isConnected || !this._hass || this._unsub || this._isSubscribing) return;
+    if (this.isConnected === false || !this._hass || this._unsub || this._isSubscribing) return;
     const generation = ++this._subscriptionGeneration;
     this._isSubscribing = true;
     this._updateConnectionStatus("connecting");
@@ -243,7 +269,7 @@ export class BusMonitorView extends HTMLElement {
         },
         this._wsPayload("myhome/bus_monitor/stream")
       );
-      if (!this.isConnected || generation !== this._subscriptionGeneration) {
+      if (this.isConnected === false || generation !== this._subscriptionGeneration) {
         await unsubscribe();
         return;
       }
@@ -251,9 +277,10 @@ export class BusMonitorView extends HTMLElement {
       this._isSubscribing = false;
       this._retryDelay = 1000;
       this._updateConnectionStatus("connected");
+      this._watchReconnect(this._hass.connection);
       this._loadHistory();
     } catch (err) {
-      if (!this.isConnected || generation !== this._subscriptionGeneration) return;
+      if (this.isConnected === false || generation !== this._subscriptionGeneration) return;
       this._isSubscribing = false;
       console.warn(`MyHOME Bus Monitor: Failed to subscribe to stream, retrying in ${this._retryDelay / 1000}s`, err);
       this._updateConnectionStatus("disconnected");
