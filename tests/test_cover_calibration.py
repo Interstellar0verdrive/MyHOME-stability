@@ -1414,8 +1414,8 @@ async def test_concurrent_two_gateway_async_calibrate(hass):
 
     cover_a = _make_cover(hass, gw_a, name="Cover A", device_id="11", where="11")
     cover_b = _make_cover(hass, gw_b, name="Cover B", device_id="22", where="22")
-    cover_a._persist_calibration = MagicMock()
-    cover_b._persist_calibration = MagicMock()
+    cover_a._persist_calibration = AsyncMock()
+    cover_b._persist_calibration = AsyncMock()
 
     # Mock _calibration_run to simulate hardware runs and record trace frames
     async def mock_run_a(direction):

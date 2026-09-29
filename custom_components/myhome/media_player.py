@@ -2011,7 +2011,11 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
 
     async def async_update(self) -> None:
         """Request a status update from the gateway."""
-        await self._gateway_handler.send_status_request(OWNSoundCommand.status(self._where))
+        # WHO=16 zone state uses the extended *5 status request. The library's
+        # generic status() omits it, so ask explicitly for this zone's state.
+        await self._gateway_handler.send_status_request(
+            OWNSoundCommand.parse(f"*#16*{self._where}*5##")
+        )
 
     def _is_wake_echo(self) -> bool:
         """Return ``True`` while an OFF frame is most likely our wake sequence's own.

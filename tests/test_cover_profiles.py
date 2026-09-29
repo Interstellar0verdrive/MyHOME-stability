@@ -55,6 +55,7 @@ async def plant(hass):
         entries.append(entry)
         gateway = SimpleNamespace(mac=mac, unique_id=mac, available=True,
                                   device_registry_id=None, send=AsyncMock(), log_id="test")
+        gateway.is_who_available = lambda who, gateway=gateway: gateway.available
         gateways.append(gateway)
         for address in (["11", "12"] if index == 0 else ["11"]):
             cover = MyHOMECover(hass, "Test cover", "Test cover", address, "2", address,

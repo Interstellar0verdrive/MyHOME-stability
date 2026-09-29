@@ -5,6 +5,7 @@ import pytest
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.myhome import cover as native
+from custom_components.myhome.const import CONF_COVER_TRAVEL_TIMES
 from custom_components.myhome.cover_calibration import ready_cover
 from custom_components.myhome.cover_profiles import (
     ProfileError,
@@ -21,7 +22,7 @@ plant = plant_fixture
 async def test_panel_assignment_restores_native_directional_times_on_reset(hass, plant):
     cover, entry, gateway = plant.covers[0], plant.entries[0], plant.gateways[0]
     gateway.config_entry = entry
-    hass.config_entries.async_update_entry(entry, options={native.CONF_COVER_TRAVEL_TIMES: {
+    hass.config_entries.async_update_entry(entry, options={CONF_COVER_TRAVEL_TIMES: {
         cover._device_id: {"up": 24.5, "down": 18.5, "source": "manual", "measured_at": "2026-09-16T12:00:00+00:00"},
     }})
     # Recreate the store to exercise first-load migration of the seeded native options.
@@ -49,9 +50,11 @@ async def test_panel_assignment_restores_native_directional_times_on_reset(hass,
 @pytest.mark.parametrize("queued", [False, True])
 async def test_native_calibration_blocks_panel_measurement_and_profile_writes(hass, plant, monkeypatch, queued):
     cover = plant.covers[0]
-    key = native._gateway_key(cover._gateway_handler)
-    monkeypatch.setitem(native._CALIBRATION_QUEUED if queued else native._CALIBRATION_ACTIVE,
-                        key, {cover} if queued else cover)
+    hub = cover.calibration_hub
+    if queued:
+        monkeypatch.setattr(hub, "_queued_covers", {cover})
+    else:
+        monkeypatch.setattr(hub, "_active_cover", cover)
     store = get_store(hass, plant.entries[0].entry_id)
     with pytest.raises(ProfileError, match="calibration_busy"):
         ready_cover(hass, store, plant.entries[0].entry_id, cover.entity_id)
