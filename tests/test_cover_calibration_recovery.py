@@ -11,6 +11,8 @@ from pytest_socket import socket_enabled  # noqa: F401
 
 from custom_components.myhome.cover_calibration import (
     IDLE_LEASE_SECONDS,
+    LEASE_SECONDS,
+    MOVED_LEASE_SECONDS,
     PRESENCE_SECONDS,
     WS_ACTION,
     WS_START,
@@ -317,3 +319,298 @@ async def test_close_releases_all_ownership_even_if_stop_queue_unexpectedly_fail
     assert session.closed and not session.listener and session.lease.cancelled()
     assert session.store.calibration is None and cal.cover._calibration is None
 
+
+# ---------------------------------------------------------------------------------
+# Ownership per tab, presence and lease (maintainer decisions of 30 September).
+# ---------------------------------------------------------------------------------
+async def test_attach_only_reads_and_ownership_moves_only_on_an_explicit_claim(hass, recovering):
+    """Decision 1: another tab reads; a verb is refused until it claims."""
+    cal, session = recovering, recovering.session
+    other = reader(cal, "second-tab")
+    assert not other.claimed and session.owner == "first-controller"
+    for action, extra in (("open", {}), ("cancel", {}), ("save", {"name": "Other"}), ("preview_save", {"save_mode": "shared"})):
+        assert await call(hass, cal, other.connection, other.token, action, **extra) == "calibration_owned"
+    assert cal.queue == [] and session.phase == "confirm_closed"
+    # Presence lapsing does not hand the session over either.
+    cal.clock[0] += PRESENCE_SECONDS + 1
+    assert not session.present()
+    assert await call(hass, cal, other.connection, other.token, "open") == "calibration_owned"
+    stale = reader(cal, "second-tab", 89, claim=True, sequence=session.sequence - 1)
+    assert not stale.claimed and session.owner == "first-controller"
+    sequence = session.sequence
+    claimant = MagicMock(subscriptions={}, user=SimpleNamespace(is_admin=True))
+    ws_resume(hass, claimant, {"id": 90, "entry_id": session.entry_id, "session_id": session.id,
+                               "client_id": "second-tab", "claim": True, "sequence": sequence})
+    await hass.async_block_till_done()
+    assert session.owner == "second-tab" and session.sequence == sequence + 1
+    old_owner = cal.connection.send_event.call_args.args[1]
+    assert old_owner["read_only"] and not old_owner["owner"]
+    new_owner = claimant.send_event.call_args.args[1]
+    assert new_owner["owner"] and not new_owner["read_only"]
+    assert await call(hass, cal, cal.connection, session.attachment, "open") == "calibration_owned"
+    result = await call(hass, cal, claimant, new_owner["attachment"], "open")
+    assert result["phase"] == "starting_open" and len(cal.queue) == 1
+
+
+async def test_replayed_subscription_with_an_old_sequence_never_takes_control(hass, recovering):
+    """Decision 1: a reconnection replays `resume {claim}` with the sequence it last read."""
+    cal, session = recovering, recovering.session
+    first = reader(cal, "second-tab", claim=True, sequence=session.sequence)
+    assert first.claimed
+    session.emit()
+    back = reader(cal, "first-controller", 91, claim=True, sequence=session.sequence - 1)
+    assert not back.claimed and session.owner == "second-tab"
+    # Nor does the first tab's replayed start.
+    assert await begin(hass, cal.connection, cal.request) is session
+    assert session.owner == "second-tab"
+
+
+@pytest.mark.parametrize("checkpoint", ["initial", "starting", "running", "review"])
+async def test_attach_claim_and_replay_never_send_a_command(hass, recovering, checkpoint):
+    """Decision 2: after attach, claim or reconnection nothing reaches the bus by itself."""
+    cal, session = recovering, recovering.session
+    if checkpoint == "starting":
+        await act(cal, "open")
+    elif checkpoint == "running":
+        await running(cal)
+    elif checkpoint == "review":
+        await measured(cal)
+    before = len(cal.queue)
+    phase = session.phase
+    disconnect(cal)
+    assert await begin(hass, cal.connection, cal.request) is session
+    ws_resume(hass, cal.connection, {"id": 92, "entry_id": session.entry_id, "session_id": session.id,
+                                     "client_id": "second-tab"})
+    await hass.async_block_till_done()
+    ws_resume(hass, cal.connection, {"id": 93, "entry_id": session.entry_id, "session_id": session.id,
+                                     "client_id": "second-tab", "claim": True, "sequence": session.sequence})
+    await hass.async_block_till_done()
+    assert session.owner == "second-tab"
+    assert len(cal.queue) == before and session.phase == phase
+
+
+async def test_stop_is_accepted_from_every_reader_and_nothing_else_is(hass, recovering):
+    """Decision 3: Stop is a safety control; its behaviour is still #374's (L2 changes it)."""
+    cal, session = recovering, recovering.session
+    await running(cal)
+    other = reader(cal, "second-tab")
+    for action in ("endpoint", "cancel", "save"):
+        assert await call(hass, cal, other.connection, other.token, action) == "calibration_owned"
+    count = len(cal.queue)
+    result = await call(hass, cal, other.connection, other.token, "stop")
+    assert result["phase"] == "interrupted" and result["reason"] == "stopped" and result["read_only"]
+    assert len(cal.queue) == count + 1 and str(cal.queue[-1][0]) == "*2*0*11##"
+    assert session.owner == "first-controller"  # Stop did not take the session.
+
+
+async def test_heartbeat_never_takes_the_session_and_moves_nothing(hass, recovering):
+    """Fork test_a_heartbeat_never_takes_the_session_over, and the lease is not renewed."""
+    cal, session = recovering, recovering.session
+    other = reader(cal, "second-tab")
+    cal.clock[0] += PRESENCE_SECONDS + 5
+    lease, sequence = session.lease, session.sequence
+    for _ in range(3):
+        beat = await call(hass, cal, other.connection, other.token, "heartbeat")
+        assert beat["owner"] is False and beat["read_only"] is True
+    assert session.owner == "first-controller" and not session.present()
+    beat = await call(hass, cal, cal.connection, session.attachment, "heartbeat")
+    assert beat["owner"] is True and session.present()
+    assert session.lease is lease and session.sequence == sequence
+
+
+async def test_presence_lapsing_during_a_run_stops_nothing_and_the_same_tab_carries_on(hass, recovering):
+    """Acceptance: 120 s without heartbeat during a run; no Stop; the same tab records it."""
+    cal, session = recovering, recovering.session
+    await running(cal)
+    count = len(cal.queue)
+    disconnect(cal)
+    cal.clock[0] += 120
+    assert session.phase == "opening" and not session.closed and len(cal.queue) == count
+    other = reader(cal, "second-tab")
+    assert await call(hass, cal, other.connection, other.token, "endpoint") == "calibration_owned"
+    again = reader(cal, "first-controller", 94)
+    result = await call(hass, cal, again.connection, again.token, "endpoint")
+    assert result["owner"] and result["values"] == {"opening_time": 120}
+    assert len(cal.queue) == count + 1  # The Stop that ends every guided run, sent by the verb.
+
+
+async def test_lease_is_half_an_hour_idle_and_ten_minutes_after_a_movement(hass, recovering):
+    """Fork test_the_lease_is_the_dialog_s_watchdog_and_gives_the_shutter_back."""
+    cal, session = recovering, recovering.session
+    view = session.view()
+    assert view["recovery_seconds"] == IDLE_LEASE_SECONDS == 1800
+    assert session.lease.when() - hass.loop.time() == pytest.approx(IDLE_LEASE_SECONDS, abs=1)
+    assert view["idle_expires_at"] is not None
+    await act(cal, "open")
+    assert session.view()["recovery_seconds"] == MOVED_LEASE_SECONDS == 600
+    assert session.lease.when() - hass.loop.time() == pytest.approx(MOVED_LEASE_SECONDS, abs=1)
+    fire(session.lease)
+    view = session.view()
+    assert session.closed and view["reason"] == "expired" and view["idle_expires_at"] is None
+    assert not view["recoverable"] and not view["attached"]
+
+
+@pytest.mark.parametrize("state", ["untouched", "measured_and_stopped", "moving"])
+async def test_lease_expiry_writes_stop_only_while_a_movement_may_run(recovering, state):
+    """Fork test_the_lease_stops_a_shutter_that_is_still_running_when_it_runs_out."""
+    cal, session = recovering, recovering.session
+    if state == "moving":
+        await running(cal)
+    elif state == "measured_and_stopped":
+        await running(cal)
+        cal.clock[0] += 22
+        await act(cal, "endpoint")
+        bus(cal, "*2*0*11##")
+        assert not session.reservation.pending
+    count = len(cal.queue)
+    fire(session.lease)
+    assert session.closed and session.reason == "expired"
+    assert len(cal.queue) == count + (state == "moving")
+    if state == "moving":
+        assert str(cal.queue[-1][0]) == "*2*0*11##"
+    assert (session.store.calibration is None) is (state != "moving")
+
+
+async def test_every_transition_moves_the_sequence_and_rearms_the_lease_and_reads_move_neither(hass, recovering):
+    """Fork test_every_transition_moves_the_revision_and_restarts_the_lease."""
+    cal, session = recovering, recovering.session
+    token = session.attachment
+
+    async def movement_feedback():
+        assert cal.queue[-1][1]()
+        bus(cal, "*2*1*11##")
+
+    for step in (lambda: call(hass, cal, cal.connection, token, "open"), movement_feedback,
+                 lambda: call(hass, cal, cal.connection, token, "endpoint")):
+        lease, sequence = session.lease, session.sequence
+        await step()
+        assert session.sequence == sequence + 1 and session.lease is not lease and lease.cancelled()
+    lease, sequence = session.lease, session.sequence
+    await call(hass, cal, cal.connection, token, "heartbeat")
+    other = reader(cal, "second-tab")
+    await call(hass, cal, other.connection, other.token, "heartbeat")
+    assert await begin(hass, cal.connection, cal.request) is session
+    await read_profile(hass, session.entry_id, cal.cover.entity_id)
+    assert session.lease is lease and session.sequence == sequence
+
+
+async def test_leave_from_a_reader_that_is_not_the_owner_does_nothing(hass, recovering):
+    """Fork test_leave_from_a_client_that_is_not_the_owner_does_nothing."""
+    cal, session = recovering, recovering.session
+    other = reader(cal, "second-tab")
+    result = await call(hass, cal, other.connection, other.token, "detach")
+    assert result["attached"] is False and not session.closed and session.owner == "first-controller"
+    cal.clock[0] += PRESENCE_SECONDS + 1
+    late = reader(cal, "second-tab", 95)
+    await call(hass, cal, late.connection, late.token, "detach")
+    assert not session.closed and session.owner == "first-controller" and cal.queue == []
+
+
+@pytest.mark.parametrize("moved", [False, True])
+async def test_owner_leaving_ends_an_untouched_session_and_keeps_a_measured_one(hass, recovering, moved):
+    cal, session = recovering, recovering.session
+    if moved:
+        await running(cal)
+        cal.clock[0] += 22
+        await act(cal, "endpoint")
+    count = len(cal.queue)
+    result = await call(hass, cal, cal.connection, session.attachment, "detach")
+    assert result["attached"] is False and len(cal.queue) == count
+    if not moved:
+        assert session.closed and session.reason == "left" and session.store.calibration is None
+        return
+    assert not session.closed and session.owner == "first-controller" and not session.present()
+    assert session.values == {"opening_time": 22}
+    again = reader(cal, "first-controller", 96)
+    assert (await call(hass, cal, again.connection, again.token, "heartbeat"))["owner"] is True
+
+
+async def test_owner_leaving_an_interrupted_session_releases_it_without_stop(hass, recovering):
+    cal, session = recovering, recovering.session
+    await running(cal)
+    bus(cal, "*2*2*11##")  # Unexpected movement: the #374 interruption, unchanged.
+    assert session.phase == "interrupted"
+    count = len(cal.queue)
+    await call(hass, cal, cal.connection, session.attachment, "detach")
+    assert session.closed and session.reason == "left" and len(cal.queue) == count
+
+
+async def test_clients_without_client_id_keep_the_original_contract(hass, calibration):
+    """Decision 4: no owner keys, heartbeat lease, and `detach` or a lost socket cancels."""
+    cal, session = calibration, calibration.session
+    assert {"owner", "read_only", "idle_expires_at", "recoverable"}.isdisjoint(session.view())
+    assert session.lease.when() - hass.loop.time() == pytest.approx(LEASE_SECONDS, abs=1)
+    await act(cal, "open")
+    assert cal.queue[-1][1]()
+    bus(cal, "*2*1*11##")
+    ws_action(hass, cal.connection, {"id": 2, "entry_id": session.entry_id, "session_id": "stale", "action": "detach"})
+    await hass.async_block_till_done()
+    assert cal.connection.send_error.call_args.args[1] == "calibration_expired" and not session.closed
+    ws_action(hass, cal.connection, {"id": 3, "entry_id": session.entry_id, "session_id": session.id, "action": "detach"})
+    await hass.async_block_till_done()
+    assert session.closed and session.reason == "disconnected"
+    assert str(cal.queue[-1][0]) == "*2*0*11##"
+    count = len(cal.queue)
+    session.detach(session.attachment, "heartbeat_timeout")  # A late lease cannot close it twice.
+    assert session.reason == "disconnected" and len(cal.queue) == count
+
+
+async def test_real_websockets_two_tabs_one_owner_and_a_lost_socket(hass, plant, hass_ws_client):
+    """Fork websocket tests 906 and 978: every reader is told who holds the session; a socket closing ends nothing."""
+    register_api(hass)
+    queue = []
+    plant.gateways[0].async_queue_calibration = lambda *args: queue.append(args)
+    entry_id = plant.entries[0].entry_id
+    start = {"type": WS_START, "entry_id": entry_id, "entity_id": plant.records[0].entity_id,
+             "revision": 0, "client_id": "tab-one"}
+
+    async def answer(client, message_id):
+        while (message := await client.receive_json())["id"] != message_id or message["type"] != "result":
+            pass
+        return message
+
+    async def event(client, subscription):
+        while (message := await client.receive_json())["id"] != subscription or message["type"] != "event":
+            pass
+        return message["event"]
+
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        one = await hass_ws_client(hass)
+        await one.send_json({"id": 1, **start})
+        assert (await answer(one, 1))["success"]
+        state = await event(one, 1)
+        two = await hass_ws_client(hass)
+        await two.send_json({"id": 1, "type": WS_RESUME, "entry_id": entry_id, "session_id": state["session_id"],
+                             "client_id": "tab-two"})
+        assert (await answer(two, 1))["success"]
+        seen = await event(two, 1)
+        assert seen["read_only"] and seen["sequence"] == state["sequence"]
+        act_one = {"type": WS_ACTION, "entry_id": entry_id, "session_id": state["session_id"],
+                   "attachment": state["attachment"]}
+        await one.send_json({"id": 2, **act_one, "action": "open", "sequence": state["sequence"]})
+        assert (await answer(one, 2))["result"]["owner"] is True
+        moved = await event(two, 1)
+        assert moved["phase"] == "starting_open" and moved["read_only"]
+        await two.send_json({"id": 2, "type": WS_RESUME, "entry_id": entry_id, "session_id": state["session_id"],
+                             "client_id": "tab-two", "claim": True, "sequence": moved["sequence"]})
+        assert (await answer(two, 2))["success"]
+        taken = await event(one, 1)
+        assert taken["read_only"] and not taken["owner"] and taken["sequence"] == moved["sequence"] + 1
+        await one.send_json({"id": 3, **act_one, "action": "cancel"})
+        assert (await answer(one, 3))["error"]["code"] == "calibration_owned"
+        await one.send_json({"id": 4, **act_one, "action": "stop"})
+        assert (await answer(one, 4))["result"]["reason"] == "stopped"
+        session = get_store(hass, entry_id).calibration
+        count = len(queue)
+        await two.close()
+        await hass.async_block_till_done()
+        assert not session.closed and session.owner == "tab-two" and len(queue) == count
+        # Home Assistant replays the first tab's start after its own reconnection.
+        three = await hass_ws_client(hass)
+        await three.send_json({"id": 1, **start})
+        assert (await answer(three, 1))["success"]
+        replayed = await event(three, 1)
+        assert replayed["read_only"] and replayed["sequence"] == session.sequence and len(queue) == count
+        await one.close()
+        await three.close()
+        session.close()
