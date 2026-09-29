@@ -1,4 +1,4 @@
-"""Recover safe checkpoints without resurrecting motion or an old controller."""
+"""Sessions read from several tabs: one owner, a lost socket changes nothing, no replayed motion."""
 import copy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,6 +10,8 @@ from homeassistant.exceptions import Unauthorized
 from pytest_socket import socket_enabled  # noqa: F401
 
 from custom_components.myhome.cover_calibration import (
+    IDLE_LEASE_SECONDS,
+    PRESENCE_SECONDS,
     WS_ACTION,
     WS_START,
     begin,
@@ -56,8 +58,35 @@ def fire(handle):
     callback(*args)
 
 
+def reader(cal, client_id, subscription_id=88, *, claim=False, sequence=None):
+    """A second tab or socket subscribing with `resume`; returns its connection and token."""
+    connection = MagicMock(subscriptions={}, user=SimpleNamespace(is_admin=True))
+    subscriber, claimed = cal.session.attach(connection, subscription_id, client_id, claim=claim, sequence=sequence)
+    return SimpleNamespace(connection=connection, token=subscriber.token, claimed=claimed)
+
+
+async def call(hass, cal, connection, token, action, **extra):
+    """One `action` over the websocket handler; returns the result or the error code."""
+    connection.send_result.reset_mock()
+    connection.send_error.reset_mock()
+    ws_action(hass, connection, {"id": 9, "entry_id": cal.session.entry_id, "session_id": cal.session.id,
+                                 "attachment": token, "action": action, "sequence": cal.session.sequence, **extra})
+    await hass.async_block_till_done()
+    if connection.send_error.called:
+        return connection.send_error.call_args.args[1]
+    return connection.send_result.call_args.args[1]
+
+
+async def running(cal):
+    """The owner has started a movement and the bus reports it."""
+    await act(cal, "open")
+    assert cal.queue[-1][1]()
+    bus(cal, "*2*1*11##")
+    assert cal.session.phase == "opening" and cal.session.reservation.pending
+
+
 @pytest.mark.parametrize("checkpoint", ["initial", "half", "review"])
-async def test_recovery_preserves_safe_checkpoint_and_evidence_without_commands(hass, recovering, checkpoint):
+async def test_lost_socket_keeps_checkpoint_owner_and_evidence_without_commands(hass, recovering, checkpoint):
     cal, session = recovering, recovering.session
     if checkpoint == "review":
         await measured(cal)
@@ -68,78 +97,76 @@ async def test_recovery_preserves_safe_checkpoint_and_evidence_without_commands(
         cal.clock[0] += 22
         await act(cal, "endpoint")
     phase, values, evidence = session.phase, dict(session.values), copy.deepcopy(session.provenance)
-    before = len(cal.queue)
+    before, sequence = len(cal.queue), session.sequence
+    assert (await call(hass, cal, cal.connection, session.attachment, "heartbeat"))["owner"] is True
     old_cleanup = cal.connection.subscriptions[77]
     old_token = session.attachment
     disconnect(cal)
-    retention = session.retention
-    assert session.store.calibration is session and not session.listener
+    assert session.store.calibration is session and session.subscribers == {}
+    assert (session.phase, session.values, session.provenance, session.sequence) == (phase, values, evidence, sequence)
     assert len(cal.queue) == before
     view = await read_profile(hass, session.entry_id, cal.cover.entity_id)
     assert view["calibration"]["session_id"] == session.id
-    assert not view["calibration"]["attached"]
+    assert view["calibration"]["attached"]  # The owner is still present for 45 s.
     assert "attachment" not in view["calibration"]
-    # Same HA websocket, new editor: old unsubscribe/action must be powerless.
-    session.attach(cal.connection, 88, "second-controller")
+    cal.clock[0] += PRESENCE_SECONDS + 1
+    view = await read_profile(hass, session.entry_id, cal.cover.entity_id)
+    assert not view["calibration"]["attached"] and view["calibration"]["recoverable"]
+    # The same tab on a new socket: still the owner, and the old token is powerless.
+    again = reader(cal, "first-controller", 88)
+    assert not again.claimed and session.owner == "first-controller" and session.present()
     old_cleanup()
-    assert session.listener and retention.cancelled()
-    assert session.attachment != old_token
-    assert (session.phase, session.values, session.provenance) == (phase, values, evidence)
-    assert len(cal.queue) == before
+    assert again.token in session.subscribers
     for action in ("heartbeat", "stop", "cancel", "detach"):
-        ws_action(hass, cal.connection, {"id": 9, "entry_id": session.entry_id,
-            "session_id": session.id, "attachment": old_token, "action": action})
-        await hass.async_block_till_done()
-        assert cal.connection.send_error.call_args.args[1] == "calibration_expired"
-    assert session.listener and len(cal.queue) == before
+        assert await call(hass, cal, cal.connection, old_token, action) == "calibration_expired"
+    assert len(cal.queue) == before and session.sequence == sequence
     if checkpoint == "review":
-        await act(cal, "save", name="Recovered")
+        result = await call(hass, cal, again.connection, again.token, "save", name="Recovered")
+        assert result["phase"] == "saved" and result["owner"] is True
         assert session.store.data["revision"] == 1
 
 
 @pytest.mark.parametrize("phase", ["starting_open", "opening", "closing", "settling", "between_covers"])
-async def test_detaching_during_cycle_discards_measurement_and_invalidates_queued_motion(recovering, phase):
+async def test_lost_socket_during_cycle_keeps_measurement_and_writes_no_stop(recovering, phase):
     cal, session = recovering, recovering.session
     await act(cal, "open")
     guard = cal.queue[-1][1]
     session.phase = phase
     session.values["opening_time"] = 22
     session.settle = session.hass.loop.call_later(100, lambda: None)
-    disconnect(cal)
-    assert session.phase == "interrupted" and session.values == session.provenance == {}
-    assert session.settle.cancelled() and session.deadline.cancelled()
-    assert not guard()
-    assert str(cal.queue[-1][0]) == "*2*0*11##"
     count = len(cal.queue)
-    session.attach(cal.connection, 78, "recover")
-    assert len(cal.queue) == count
-    with pytest.raises(ProfileError, match="calibration_step"):
-        await act(cal, "save", name="Cannot save interrupted")
-
-
-async def test_heartbeat_detaches_once_and_retention_expires_without_motion(recovering):
-    cal, session = recovering, recovering.session
-    fire(session.lease)
-    assert not session.listener and session.phase == "confirm_closed"
-    assert cal.connection.send_event.call_args.args[1]["attached"] is False
-    retention = session.retention
     disconnect(cal)
-    assert session.retention is retention  # Stale cleanup cannot extend recovery.
-    fire(retention)
+    assert guard() is (phase == "starting_open")  # The queued Open is still the owner's.
+    cal.clock[0] += 120  # Well past presence: nothing depends on it.
+    assert session.phase == phase and session.values == {"opening_time": 22}
+    assert not session.settle.cancelled() and not session.deadline.cancelled()
+    assert len(cal.queue) == count and not session.closed
+    session.attach(cal.connection, 78, "first-controller")
+    assert len(cal.queue) == count
+    session.settle.cancel()
+
+
+async def test_idle_lease_ends_session_without_stop_when_nothing_moves(recovering):
+    cal, session = recovering, recovering.session
+    lease = session.lease
+    assert session.lease_seconds == IDLE_LEASE_SECONDS
+    disconnect(cal)
+    assert session.lease is lease  # A lost socket does not touch the lease.
+    fire(lease)
+    assert session.closed and session.reason == "expired" and cal.queue == []
     assert session.store.calibration is None and cal.cover._calibration is None
-    assert session.closed and cal.queue == []
     with pytest.raises(ProfileError, match="calibration_expired"):
         session.attach(cal.connection, 90, "too-late")
 
 
 @pytest.mark.parametrize("cleanup", ["cancel", "unload", "shutdown", "remove"])
-async def test_detached_session_releases_gateway_on_explicit_lifecycle_end(hass, recovering, cleanup):
+async def test_unattended_session_releases_gateway_on_explicit_lifecycle_end(hass, recovering, cleanup):
     cal, session = recovering, recovering.session
     disconnect(cal)
-    retention = session.retention
+    lease = session.lease
     if cleanup == "cancel":
-        session.attach(cal.connection, 80, "cancel")
-        await act(cal, "cancel")
+        again = reader(cal, "first-controller", 80)
+        assert (await call(hass, cal, again.connection, again.token, "cancel"))["phase"] == "cancelled"
     elif cleanup == "unload":
         with patch("custom_components.myhome.myhome_device.MyHOMEEntity.async_will_remove_from_hass", new=AsyncMock()):
             await cal.cover.async_will_remove_from_hass()
@@ -149,11 +176,11 @@ async def test_detached_session_releases_gateway_on_explicit_lifecycle_end(hass,
         hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
         await hass.async_block_till_done()
     session.close()
-    assert session.closed and retention.cancelled()
+    assert session.closed and lease.cancelled()
     assert session.store.calibration is None and cal.cover._calibration is None
 
 
-async def test_detached_review_save_failure_remains_recoverable(hass, recovering):
+async def test_review_save_failure_after_lost_socket_remains_recoverable(hass, recovering):
     cal, session = recovering, recovering.session
     await measured(cal)
     values = dict(session.values)
@@ -163,13 +190,13 @@ async def test_detached_review_save_failure_remains_recoverable(hass, recovering
     with patch.object(session.store.store, "async_save", side_effect=fail):
         with pytest.raises(OSError):
             await act(cal, "save", name="Retry")
-    assert session.phase == "review" and session.values == values and not session.listener
-    session.attach(cal.connection, 80, "retry")
-    await act(cal, "save", name="Retry")
+    assert session.phase == "review" and session.values == values and session.subscribers == {}
+    again = reader(cal, "first-controller", 80)
+    assert (await call(hass, cal, again.connection, again.token, "save", name="Retry"))["phase"] == "saved"
     assert session.store.data["revision"] == 1
 
 
-async def test_accepted_save_completes_after_detach(recovering):
+async def test_accepted_save_completes_after_lost_socket(recovering):
     cal, session = recovering, recovering.session
     await measured(cal)
     original = session.store.store.async_save
@@ -178,19 +205,27 @@ async def test_accepted_save_completes_after_detach(recovering):
         await original(data)
     with patch.object(session.store.store, "async_save", side_effect=save):
         await act(cal, "save", name="Accepted")
-    assert session.closed and session.phase == "saved" and session.retention.cancelled()
+    assert session.closed and session.phase == "saved" and session.lease.cancelled()
     assert session.store.data["revision"] == 1 and session.store.calibration is None
 
 
-async def test_replayed_start_recovers_only_its_detached_session(hass, recovering):
+async def test_replayed_start_reads_its_session_and_never_takes_it(hass, recovering):
     cal, session = recovering, recovering.session
-    with pytest.raises(ProfileError, match="calibration_busy"):
-        await begin(hass, cal.connection, cal.request)
-    disconnect(cal)
-    with pytest.raises(ProfileError, match="calibration_busy"):
-        await begin(hass, cal.connection, {**cal.request, "client_id": "other"})
+    await running(cal)
+    count, sequence = len(cal.queue), session.sequence
+    claimed = reader(cal, "second-tab", claim=True, sequence=session.sequence)
+    assert claimed.claimed and session.owner == "second-tab"
+    sequence = session.sequence
+    # Home Assistant replays the first tab's start after a reconnection.
     assert await begin(hass, cal.connection, cal.request) is session
-    assert cal.queue == [] and session.listener
+    assert session.owner == "second-tab" and session.sequence == sequence
+    for changes in ({"client_id": "other"}, {"mode": "automatic"}, {"direction": "opening"},
+                    {"entity_id": cal.plant.records[1].entity_id}):
+        with pytest.raises(ProfileError, match="calibration_busy"):
+            await begin(hass, cal.connection, {**cal.request, **changes})
+    disconnect(cal)
+    assert await begin(hass, cal.connection, cal.request) is session
+    assert len(cal.queue) == count and session.phase == "opening"
 
 
 async def test_batch_review_survives_recovery_and_replay(hass, batch):
@@ -208,13 +243,20 @@ async def test_batch_review_survives_recovery_and_replay(hass, batch):
     assert batch.session.store.data["revision"] == 2
 
 
-async def test_resume_endpoint_rejects_missing_stale_legacy_and_live_sessions(hass, recovering):
+async def test_resume_endpoint_reads_live_sessions_and_rejects_missing_stale_and_legacy(hass, recovering):
     cal, session = recovering, recovering.session
     request = {"id": 90, "entry_id": session.entry_id, "session_id": session.id, "client_id": "resume"}
-    for changes in ({"entry_id": "missing"}, {"session_id": "stale"}, {}):
+    for changes in ({"entry_id": "missing"}, {"session_id": "stale"}):
         ws_resume(hass, cal.connection, {**request, **changes})
         await hass.async_block_till_done()
-        assert cal.connection.send_error.call_args.args[1] == ("calibration_busy" if not changes else "calibration_expired")
+        assert cal.connection.send_error.call_args.args[1] == "calibration_expired"
+    sequence = session.sequence
+    ws_resume(hass, cal.connection, request)
+    await hass.async_block_till_done()
+    cal.connection.send_result.assert_called_with(90)
+    event = cal.connection.send_event.call_args.args
+    assert event[0] == 90 and event[1]["read_only"] and not event[1]["owner"]
+    assert session.owner == "first-controller" and session.sequence == sequence
     session.client_id = None
     with pytest.raises(ProfileError, match="calibration_expired"):
         session.attach(cal.connection, 90, "legacy")
@@ -229,7 +271,7 @@ def test_resume_requires_admin(hass):
         ws_resume(hass, MagicMock(user=SimpleNamespace(is_admin=False)), {"id": 1})
 
 
-async def test_real_websocket_disconnect_resume_and_attachment_authorization(hass, plant, hass_ws_client):
+async def test_real_websocket_lost_socket_read_only_resume_and_attachment_authorization(hass, plant, hass_ws_client):
     register_api(hass)
     queue = []
     plant.gateways[0].async_queue_calibration = lambda *args: queue.append(args)
@@ -240,24 +282,28 @@ async def test_real_websocket_disconnect_resume_and_attachment_authorization(has
             "entity_id": plant.records[0].entity_id, "revision": 0, "client_id": "browser-one"})
         assert (await first.receive_json())["success"]
         state = (await first.receive_json())["event"]
+        assert state["owner"] and not state["read_only"] and state["attached"]
         await first.close()
         await hass.async_block_till_done()
         session = get_store(hass, entry_id).calibration
-        assert session and not session.listener
+        assert session and not session.closed and session.subscribers == {} and session.owner == "browser-one"
         second = await hass_ws_client(hass)
         await second.send_json({"id": 1, "type": WS_RESUME, "entry_id": entry_id,
             "session_id": state["session_id"], "client_id": "browser-two"})
         assert (await second.receive_json())["success"]
         resumed = (await second.receive_json())["event"]
         assert resumed["phase"] == state["phase"] and resumed["attachment"] != state["attachment"]
+        assert resumed["read_only"] and not resumed["owner"] and resumed["sequence"] == state["sequence"]
         action = {"type": WS_ACTION, "entry_id": entry_id, "session_id": session.id, "action": "heartbeat"}
         await second.send_json({"id": 2, **action})
         assert (await second.receive_json())["error"]["code"] == "calibration_expired"
         await second.send_json({"id": 3, **action, "attachment": resumed["attachment"]})
-        assert (await second.receive_json())["success"]
+        answer = await second.receive_json()
+        assert answer["success"] and answer["result"]["owner"] is False
         await second.send_json({"id": 4, **action, "action": "detach", "attachment": resumed["attachment"]})
-        assert not (await second.receive_json())["event"]["attached"]
-        assert (await second.receive_json())["success"]
+        answer = await second.receive_json()
+        assert answer["id"] == 4 and answer["result"]["attached"] is False
+        assert not session.closed and session.owner == "browser-one"
         await second.close()
         assert queue == []
         session.close()
@@ -270,3 +316,4 @@ async def test_close_releases_all_ownership_even_if_stop_queue_unexpectedly_fail
             session.close()
     assert session.closed and not session.listener and session.lease.cancelled()
     assert session.store.calibration is None and cal.cover._calibration is None
+

@@ -10,6 +10,8 @@ import collections
 import copy
 import logging
 import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from time import monotonic as monotonic
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
@@ -49,16 +51,33 @@ LOGGER = logging.getLogger(__name__)
 
 WS_START = "myhome/cover_calibration/start"
 WS_ACTION = "myhome/cover_calibration/action"
+# A client that sends no client_id keeps the original contract: a heartbeat lease,
+# and cancellation when its subscription ends.
 LEASE_SECONDS = 20
-RECOVERY_SECONDS = 600
+# A client that sends client_id (one per browser tab) is recognised on every socket.
+# Presence only tells the other readers whether the owner is still there; the lease
+# hands the cover back after inactivity and is never renewed by a heartbeat.
+PRESENCE_SECONDS = 45
+IDLE_LEASE_SECONDS = 1800
+MOVED_LEASE_SECONDS = 600
 START_SECONDS = 10
 MAX_TRAVEL_SECONDS = 600
 STOP_QUEUE_SECONDS = 30
 TERMINAL = {"interrupted", "cancelled", "saved"}
 
 
+@dataclass(eq=False)
+class Subscriber:
+    """One subscription reading a session whose clients identify themselves."""
+
+    connection: Any
+    subscription_id: Any
+    client_id: str
+    token: str = field(default_factory=lambda: uuid4().hex)
+
+
 class CalibrationSession:
-    """One live controller; transient measurements never survive restart."""
+    """One owner, any number of readers; transient measurements never survive restart."""
 
     mode = "guided"
     travel_seconds = MAX_TRAVEL_SECONDS
@@ -93,7 +112,14 @@ class CalibrationSession:
         self.closed = False
         self.client_id = client_id
         self.attachment = uuid4().hex
-        self.retention: asyncio.TimerHandle | None = None
+        # Used only when the client identifies itself (client_id).
+        self.owner = client_id
+        self.owner_seen = monotonic()
+        self.known: set[str] = {client_id} if client_id else set()
+        self.subscribers: dict[str, Subscriber] = {}
+        self.moved = False
+        self.lease_seconds = IDLE_LEASE_SECONDS
+        self.lease_expires_at: datetime | None = None
         self.lease: asyncio.TimerHandle | None = None
         self.deadline: asyncio.TimerHandle | None = None
         self.settle: asyncio.TimerHandle | None = None
@@ -121,57 +147,144 @@ class CalibrationSession:
                 "travel_cm": self.store.data["covers"].get(self.cover.unique_id, {}).get("travel_cm"),
                 "reference_travel_cm": (self.store.profile(self.cover.unique_id) or {}).get("reference_travel_cm"),
                 "waiting_for_stop": self.closed and self.reservation.pending,
-                **({"recoverable": not self.closed, "attached": self.listener and not self.closed, "attachment": self.attachment,
-                    "recovery_seconds": RECOVERY_SECONDS} if self.client_id else {}),
+                **({"recoverable": not self.closed, "attached": self.present() and not self.closed, "attachment": None,
+                    "recovery_seconds": self.lease_seconds, "owner": False, "read_only": True,
+                    "idle_expires_at": None if self.closed or self.lease_expires_at is None
+                    else self.lease_expires_at.isoformat()} if self.client_id else {}),
                 "save_modes": ["new", "cover", "shared"] if self.store.profile(self.cover.unique_id) else ["new", "cover"],
                 **({"direction": self.direction} if self.direction else {})}
 
+    def present(self) -> bool:
+        """The owner sent a heartbeat or a verb recently. Nothing depends on it but the view."""
+        return self.owner is not None and monotonic() - self.owner_seen < PRESENCE_SECONDS
+
+    def overlay(self, subscriber: Subscriber, attached: bool = True) -> dict[str, Any]:
+        """What differs between readers: who owns the session and their own token."""
+        owner = subscriber.client_id == self.owner
+        return {"owner": owner, "read_only": not owner, "attachment": subscriber.token,
+                "attached": attached and not self.closed}
+
+    def send_to(self, subscriber: Subscriber) -> None:
+        subscriber.connection.send_event(subscriber.subscription_id, {**self.view(), **self.overlay(subscriber)})
+
     def emit(self) -> None:
+        """The only door of a transition: sequence, lease and every reader move together."""
         self.sequence += 1
-        if self.listener:
-            self.connection.send_event(self.subscription_id, self.view())
+        if not self.client_id:
+            if self.listener:
+                self.connection.send_event(self.subscription_id, self.view())
+            return
+        self.touch()
+        for subscriber in list(self.subscribers.values()):
+            self.send_to(subscriber)
+
+    def announce(self, connection: Any, subscription_id: Any) -> None:
+        """A new session's first view is a transition; a replayed subscription only reads it."""
+        if self.sequence == 0:
+            self.emit()
+            return
+        self.send_to(next(item for item in self.subscribers.values()
+                          if item.connection is connection and item.subscription_id == subscription_id))
 
     def touch(self) -> None:
+        """Legacy clients: the heartbeat lease. Identified clients: the inactivity lease."""
+        if self.client_id and self.closed:
+            return
         if self.lease:
             self.lease.cancel()
-        self.lease = self.hass.loop.call_later(LEASE_SECONDS, self.detach, self.attachment, "heartbeat_timeout")
+        if not self.client_id:
+            self.lease = self.hass.loop.call_later(LEASE_SECONDS, self.detach, self.attachment, "heartbeat_timeout")
+            return
+        self.lease_seconds = MOVED_LEASE_SECONDS if self.moved else IDLE_LEASE_SECONDS
+        self.lease_expires_at = dt_util.utcnow() + timedelta(seconds=self.lease_seconds)
+        self.lease = self.hass.loop.call_later(self.lease_seconds, self.expire)
+
+    def expire(self) -> None:
+        """Hand the cover back after inactivity; write Stop only while a movement may run."""
+        self.close("expired", send_stop=self.reservation.pending)
 
     def subscribe(self) -> None:
         """Bind cleanup to this attachment, never to a later controller."""
-        token = self.attachment
-        self.connection.subscriptions[self.subscription_id] = (lambda: self.detach(token)) if self.client_id else self.close
+        if not self.client_id:
+            self.connection.subscriptions[self.subscription_id] = self.close
+            return
+        self.add_subscriber(self.connection, self.subscription_id, self.client_id, self.attachment)
+
+    def add_subscriber(self, connection: Any, subscription_id: Any, client_id: str, token: str | None = None) -> Subscriber:
+        subscriber = Subscriber(connection, subscription_id, client_id, token or uuid4().hex)
+        self.subscribers[subscriber.token] = subscriber
+        self.known.add(client_id)
+        connection.subscriptions[subscription_id] = lambda: self.drop(subscriber.token)
+        return subscriber
+
+    def drop(self, token: str) -> None:
+        """A lost socket or an unsubscribe takes the reader away and changes nothing else."""
+        self.subscribers.pop(token, None)
 
     def detach(self, token: str, reason: str="disconnected") -> None:
-        """Retain safe checkpoints; invalidate any unattended movement immediately."""
+        """Legacy clients end with their subscription; identified clients only stop reading."""
+        if self.client_id:
+            self.drop(token)
+            return
         if self.closed or not self.listener or token != self.attachment:
             return
-        if not self.client_id:
-            self.close(reason)
-            return
-        if self.phase not in self.safe_phases:
-            self.interrupt(reason)
-        self.listener = False
-        # Notify a still-open socket when its heartbeat lease expires.
-        self.sequence += 1
-        self.connection.send_event(self.subscription_id, self.view())
-        if self.lease:
-            self.lease.cancel()
-        self.retention = self.hass.loop.call_later(RECOVERY_SECONDS, self.close, "recovery_expired")
+        self.close(reason)
 
-    def attach(self, connection: Any, subscription_id: Any, client_id: str) -> None:
-        """Claim a detached session without running or replaying any movement."""
+    def attach(self, connection: Any, subscription_id: Any, client_id: str, *,
+               claim: bool = False, sequence: int | None = None) -> tuple[Subscriber, bool]:
+        """Add a reader; ownership moves only on a claim made against the current sequence.
+
+        A subscription replayed after a reconnection carries an older sequence, so it
+        never takes the session from its owner. Nothing is sent to the bus here.
+        """
         if self.closed or not self.client_id:
             raise ProfileError("calibration_expired")
-        if self.listener:
-            raise ProfileError("calibration_busy")
-        self.connection, self.subscription_id = connection, subscription_id
-        self.client_id, self.attachment = client_id, uuid4().hex
-        self.listener = True
-        if self.retention:
-            self.retention.cancel()
-            self.retention = None
+        subscriber = self.add_subscriber(connection, subscription_id, client_id)
+        changed = claim and sequence == self.sequence and client_id != self.owner
+        if changed:
+            self.owner = client_id
+        if client_id == self.owner:
+            self.owner_seen = monotonic()
+        return subscriber, changed
+
+    def same_request(self, msg: dict[str, Any]) -> bool:
+        """A replayed start names the same target, mode and direction as this session."""
+        return bool(msg.get("entity_id") == self.cover.entity_id and msg.get("mode", "guided") == self.mode
+                    and msg.get("direction") == self.direction)
+
+    def leave(self, subscriber: Subscriber) -> None:
+        """A reader goes away. The owner ends the session only if nothing has moved yet."""
+        self.drop(subscriber.token)
+        if subscriber.client_id != self.owner:
+            return
+        if not self.active or (not self.moved and self.phase in self.safe_phases):
+            self.close("left", send_stop=False)
+        else:
+            self.owner_seen = float("-inf")
+
+    async def perform(self, subscriber: Subscriber, msg: dict[str, Any]) -> Any:
+        """Who may send what, for identified clients. The verbs themselves are unchanged.
+
+        Stop is accepted from every reader: it is a safety control. Every other verb,
+        Save included, belongs to the owner. A heartbeat never takes ownership and never
+        renews the lease; an accepted verb of the owner does.
+        """
+        action = msg["action"]
+        owner = subscriber.client_id == self.owner
+        if action == "heartbeat":
+            if owner:
+                self.owner_seen = monotonic()
+            return {**self.view(), **self.overlay(subscriber)}
+        if action == "detach":
+            self.leave(subscriber)
+            return {**self.view(), **self.overlay(subscriber, attached=False)}
+        if not owner and action != "stop":
+            raise ProfileError("calibration_owned")
+        if owner:
+            self.owner_seen = monotonic()
+        result = await self.action(msg)
         self.touch()
-        self.subscribe()
+        return {**result, **self.overlay(subscriber)}
 
     def arm_deadline(self, seconds: Any, reason: str) -> None:
         if self.deadline:
@@ -213,25 +326,23 @@ class CalibrationSession:
             self.queue_stop()
         self.emit()
 
-    def close(self, reason: str="cancelled") -> None:
+    def close(self, reason: str="cancelled", *, send_stop: bool=True) -> None:
         if self.closed:
             return
         self.closed = True
         try:
             # Invalidate queued motion before releasing the socket/store ownership.
-            self.interrupt(reason, send_stop=reason != "recovery_expired")
+            self.interrupt(reason, send_stop=send_stop)
             if self.phase != "saved":
                 self.phase, self.reason = "cancelled", reason
             self.emit()
         finally:
             self.listener = False
-
+            self.subscribers.clear()
             if self.lease:
                 self.lease.cancel()
             if self.deadline:
                 self.deadline.cancel()
-            if self.retention:
-                self.retention.cancel()
             if not self.reservation.pending:
                 self.release()
 
@@ -256,6 +367,7 @@ class CalibrationSession:
     def queue_move(self, direction: Any) -> Any:
         """Use the same guarded queue for guided and automatic movements."""
         token = self._motion_token = object()
+        self.moved = True
         self.reservation.generation += 1
         self.phase = f"starting_{direction}"
         self.armed = False
@@ -433,14 +545,24 @@ def ready_cover(hass: Any, store: Any, entry_id: str, entity_id: str) -> Any:
     return cover
 
 
+def replay(store: Any, connection: Any, msg: dict[str, Any]) -> Any:
+    """A client repeating its own start reads its live session; no command is sent."""
+    session = store.calibration
+    if (session is None or session.closed or msg.get("client_id") not in session.known
+            or not session.same_request(msg)):
+        return None
+    session.attach(connection, msg["id"], msg["client_id"])
+    return session
+
+
 async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
     entry, entity = target(hass, msg["entry_id"], msg["entity_id"])
     store = get_store(hass, entry.entry_id)
     async with store.lock:
         await store.load()
-        if store.calibration is not None and not store.calibration.closed and msg.get("client_id") == store.calibration.client_id and msg.get("client_id"):
-            store.calibration.attach(connection, msg["id"], msg["client_id"])
-            return store.calibration
+        replayed = replay(store, connection, msg)
+        if replayed is not None:
+            return replayed
         if store.calibration is not None:
             raise ProfileError("calibration_busy")
         cover = ready_cover(hass, store, entry.entry_id, msg["entity_id"])
@@ -499,7 +621,7 @@ async def ws_start(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
         send_error(connection, msg, error)
         return
     connection.send_result(msg["id"])
-    session.emit()
+    session.announce(connection, msg["id"])
 
 
 def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
@@ -524,12 +646,19 @@ def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
 async def ws_action(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     store = hass.data.get(DATA_KEY, {}).get(msg["entry_id"])
     session = store.calibration if store else None
-    if (session is None or session.id != msg["session_id"] or session.connection is not connection
-            or not session.listener or (session.client_id and msg.get("attachment") != session.attachment)):
+    subscriber: Subscriber | None = None
+    if session is None or session.id != msg["session_id"]:
+        valid = False
+    elif session.client_id:
+        subscriber = session.subscribers.get(msg.get("attachment", ""))
+        valid = subscriber is not None and subscriber.connection is connection
+    else:
+        valid = session.connection is connection and session.listener
+    if session is None or not valid:
         connection.send_error(msg["id"], "calibration_expired", "Calibration session is not owned by this connection")
         return
     try:
-        result = await session.action(msg)
+        result = await (session.perform(subscriber, msg) if subscriber else session.action(msg))
     except (ProfileError, vol.Invalid, OSError) as error:
         send_error(connection, msg, error)
     else:
