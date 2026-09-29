@@ -1,4 +1,4 @@
-/** Backend-owned measurement with one attached controller and explicit recovery. */
+/** Backend-owned measurement: one owner per browser tab, read-only readers, explicit recovery. */
 const url = new URL("panel-dom.js", import.meta.url);
 url.search = new URL(import.meta.url).search;
 const { escapeHtml: esc } = await import(url.href);
@@ -6,18 +6,41 @@ const visualUrl = new URL("panel-calibration-visual.js", import.meta.url);
 visualUrl.search = new URL(import.meta.url).search;
 const { visualMarkup, renderCalibrationVisual } = await import(visualUrl.href);
 
+// Presence on the backend lapses after three missed heartbeats (45 s).
+const HEARTBEAT_MS = 15000;
+const CLIENT_KEY = "myhome-calibration-client";
+let memoryClient = null;
+
+/** One identity per browser tab, kept across reopenings so the backend recognises its owner. */
+export function calibrationClient() {
+  const fresh = () => globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
+  try {
+    const storage = globalThis.sessionStorage;
+    const stored = storage.getItem(CLIENT_KEY);
+    if (/^\d+-\d+-\d+-\d+$/.test(stored || "")) return stored;
+    const created = fresh();
+    storage.setItem(CLIENT_KEY, created);
+    return created;
+  } catch {
+    memoryClient ||= fresh();
+    return memoryClient;
+  }
+}
+
 export class CoverCalibration {
   constructor() { this._generation = 0; }
 
-  close({ cancel = false } = {}) {
+  close({ cancel = false, leave = true } = {}) {
     this._generation++;
     clearInterval(this._heartbeat);
     this._heartbeat = null;
     const state = this._state;
-    const operation = state && !["saved", "cancelled"].includes(state.phase)
+    // A read-only tab never cancels the owner's session: it only stops reading it.
+    const action = !state?.recoverable || (cancel && !state.read_only) ? "cancel" : "detach";
+    const operation = state && !["saved", "cancelled"].includes(state.phase) && (leave || action === "cancel")
       ? this._context.hass.callWS({ type: "myhome/cover_calibration/action", entry_id: state.entry_id,
         session_id: state.session_id, ...(state.attachment ? { attachment: state.attachment } : {}),
-        action: cancel || !state.recoverable ? "cancel" : "detach" }).catch(() => {}) : Promise.resolve();
+        action }).catch(() => {}) : Promise.resolve();
     const unsubscribe = this._unsubscribe;
     const done = operation.then(() => unsubscribe?.()).catch(() => {});
     this._unsubscribe = null;
@@ -26,7 +49,8 @@ export class CoverCalibration {
   }
 
   async open(context) {
-    this.close();
+    // Reopening the same session swaps the subscription without leaving it.
+    this.close({ leave: !context.resume || context.resume.session_id !== this._state?.session_id });
     if (context.resume) context = { ...context, mode: context.resume.mode, direction: context.resume.direction,
       entity_ids: context.resume.batch ? context.resume.targets.map((item) => item.entity_id) : undefined };
     this._context = context;
@@ -36,7 +60,7 @@ export class CoverCalibration {
     this._renderedPreview = null;
     const generation = this._generation;
     const { host, hass, entity, revision, t } = context;
-    const client_id = globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
+    const client_id = calibrationClient();
     const automatic = context.mode === "automatic";
     const quick = context.direction;
     const geometry = context.mode === "geometry";
@@ -62,6 +86,8 @@ export class CoverCalibration {
       <p id="cal-lift-repeat" class="notice" role="status" hidden></p>
       <p id="cal-reason" class="error" role="alert" hidden></p>
       <button type="button" id="cal-reconnect" hidden>${esc(t("calResume"))}</button>
+      <p id="cal-read-only" class="notice" hidden>${esc(t("calReadOnly"))}</p>
+      <button type="button" id="cal-take-control" hidden>${esc(t("calTakeControl"))}</button>
       <div class="actions cal-actions">
         <button type="button" class="primary" data-cal-action="run" hidden>${esc(t("calAutomaticStart"))}</button>
         <button type="button" class="primary" data-cal-action="open" hidden><ha-icon icon="mdi:arrow-up-bold" aria-hidden="true"></ha-icon><span>${esc(t("calOpen"))}</span></button>
@@ -104,7 +130,8 @@ export class CoverCalibration {
       await this.close({ cancel: true });
       if (this._generation === generation + 1 && host.isConnected) context.onCancel();
     };
-    host.querySelector("#cal-reconnect").onclick = () => this.open({ ...context, resume: this._state });
+    host.querySelector("#cal-reconnect").onclick = () => this.open({ ...context, claim: false, resume: this._state });
+    host.querySelector("#cal-take-control").onclick = () => this.open({ ...context, claim: true, resume: this._state });
     host.querySelector("#cal-save-mode").onchange = () => {
       this._savePreview = null;
       if (this._state) this._render();
@@ -128,13 +155,14 @@ export class CoverCalibration {
         if (!this._current(generation)) return;
         this._accept(state);
       }, context.resume
-        ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id }
+        ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id,
+          ...(context.claim ? { claim: true, sequence: context.resume.sequence } : {}) }
         : context.entity_ids
           ? { type: "myhome/cover_calibration/batch_start", entry_id: entity.entry_id, entity_ids: context.entity_ids, revision, client_id }
           : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}), ...(geometry && context.slats === false ? { slats: false } : {}) });
       if (!this._current(generation)) { Promise.resolve(unsubscribe()).catch(() => {}); return; }
       this._unsubscribe = unsubscribe;
-      this._heartbeat = setInterval(() => this._perform("heartbeat"), 5000);
+      this._heartbeat = setInterval(() => this._perform("heartbeat"), HEARTBEAT_MS);
     } catch (error) {
       if (this._current(generation)) {
         this._error(error);
@@ -144,6 +172,9 @@ export class CoverCalibration {
   }
 
   _current(generation) { return generation === this._generation && this._context.host.isConnected; }
+
+  /** Movement, readings and Save wait for a response, a connection and ownership; Stop never does. */
+  _locked() { return this._busy || this._lost || !!this._state?.read_only; }
 
   _accept(state) {
     if (this._state && state.sequence < this._state.sequence) return;
@@ -167,7 +198,14 @@ export class CoverCalibration {
     const { host, t } = this._context;
     const state = this._state;
     host.querySelector("#cal-reconnect").hidden = !this._lost || !state.recoverable;
-    host.querySelector("#cal-cancel").disabled = false;
+    const readOnly = !!state.read_only, ended = ["saved", "cancelled"].includes(state.phase);
+    host.querySelector("#cal-read-only").hidden = !readOnly || ended;
+    const take = host.querySelector("#cal-take-control");
+    take.hidden = !readOnly || ended || this._lost;
+    take.disabled = this._busy;
+    const cancel = host.querySelector("#cal-cancel");
+    cancel.disabled = false;
+    cancel.textContent = t(readOnly ? "close" : "calCancel");
     host.querySelector(".cal-panel").dataset.phase = state.phase;
     const automatic = state.mode === "automatic";
     const geometry = state.mode === "geometry";
@@ -185,7 +223,7 @@ export class CoverCalibration {
       const button = host.querySelector(`[data-cal-action="${action}"]`);
       button.hidden = geometry ? action !== "endpoint" || !["opening", "closing"].includes(state.phase) || !["home", "reset", "opening", "closing", "top"].includes(state.step) : action === "run" ? !automatic || state.phase !== "confirm_automatic" : automatic || (action === "open" ? state.phase !== "confirm_closed" : action === "close"
         ? state.phase !== "confirm_open" : !["opening", "closing"].includes(state.phase));
-      button.disabled = this._busy || this._lost;
+      button.disabled = this._locked();
     }
     host.querySelector('[data-cal-action="endpoint"]').textContent = t(state.phase === "opening" ? "calEndpointOpen" : "calEndpointClose");
     host.querySelector("#cal-stop").disabled = ["saved", "cancelled"].includes(state.phase);
@@ -216,7 +254,7 @@ export class CoverCalibration {
 
   _renderGeometry(enabled) {
     const { host, t } = this._context, state = this._state;
-    const disabled = this._busy || this._lost;
+    const disabled = this._locked();
     for (const [action, visible] of [["next", state.phase === "briefing"], ["lift", state.step === "lift" && state.phase === "opening"]]) {
       const button = host.querySelector(`[data-cal-action="${action}"]`);
       button.hidden = !enabled || !visible;
@@ -272,7 +310,7 @@ export class CoverCalibration {
     const modes = state.save_modes || ["new"];
     for (const option of selector.options) option.disabled = !modes.includes(option.value);
     if (!modes.includes(selector.value)) { selector.value = "new"; this._savePreview = null; }
-    selector.disabled = this._busy || this._lost;
+    selector.disabled = this._locked();
     const mode = selector.value;
     host.querySelector("#cal-name-label").hidden = !!state.batch || mode !== "new";
     form.elements.profile_name.disabled = !!state.batch || mode !== "new";
@@ -281,7 +319,7 @@ export class CoverCalibration {
     if (!state.batch && mode === "new" && state.travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.travel_cm, "cm")} cm.`;
     if (mode === "shared" && state.reference_travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.reference_travel_cm, "cm")} cm. ${t("calReferenceNormalization")}`;
     const button = form.querySelector('button[type="submit"]');
-    button.disabled = this._busy || this._lost;
+    button.disabled = this._locked();
     button.textContent = t(state.batch ? "calBatchSave" : mode === "new" ? "calSave" : mode === "cover" ? "calSaveCover" : this._savePreview ? "calConfirmShared" : "calPreviewShared");
     const box = host.querySelector("#cal-save-impact");
     box.hidden = !this._savePreview;
