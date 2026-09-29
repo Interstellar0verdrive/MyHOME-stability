@@ -969,6 +969,8 @@ async def test_options_flow_update_gateway_model(hass: HomeAssistant) -> None:
     )
     entry.add_to_hass(hass)
 
+    from custom_components.myhome.config_flow import MyhomeOptionsFlowHandler
+
     opt_flow = MyhomeOptionsFlowHandler(entry)
     opt_flow.hass = hass
     menu = await opt_flow.async_step_init()
@@ -1996,4 +1998,3 @@ async def test_options_flow_update_delegated_whos_self_skip(hass: HomeAssistant)
             },
         )
         assert result["type"] == FlowResultType.CREATE_ENTRY
-

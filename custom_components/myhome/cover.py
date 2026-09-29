@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import voluptuous as vol
 from homeassistant.components.cover import (
@@ -42,7 +42,6 @@ from .const import (
     CALIBRATION_RUN_TIMEOUT,
     CALIBRATION_SETTLE,
     CONF_ADVANCED_SHUTTER,
-    CONF_COVER_TRAVEL_TIMES,
     CONF_DEVICE_MODEL,
     CONF_ENTITY_NAME,
     CONF_MANUFACTURER,
@@ -896,7 +895,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
                     },
                 )
 
-        result = {"down": round(float(down), 2), "up": round(typing.cast(float, up), 2),
+        result = {"down": round(float(down), 2), "up": round(cast(float, up), 2),
                   "measured_at": dt_util.utcnow().isoformat(timespec="seconds"),
                   "source": "copied" if copied_from else "manual"}
         if copied_from:

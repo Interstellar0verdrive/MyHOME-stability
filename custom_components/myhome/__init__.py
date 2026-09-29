@@ -362,8 +362,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: MyHOMEConfigEntry) -> N
     await decoder_pool_store(hass, entry.entry_id).async_remove()
     async_check_primary_links(hass, removed=entry.entry_id)
 
-    from .panel import async_remove_panel_if_last_entry
     from .cover_profiles import remove_entry
+    from .panel import async_remove_panel_if_last_entry
 
     async_remove_panel_if_last_entry(hass, entry)
     await remove_entry(hass, entry.entry_id)

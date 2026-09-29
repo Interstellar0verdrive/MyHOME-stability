@@ -23,7 +23,7 @@ async def test_worker_uses_installed_ownd_send(gateway_handler, status_request):
     session.close = AsyncMock()
     session._read_command_response = AsyncMock(return_value=(OWNMessage.parse("*#*1##"), []))
     command = OWNCommand.parse("*#2*71##" if status_request else "*2*1*71##")
-    written = await gateway_handler._enqueue(command, is_status_request=status_request)
+    written = await gateway_handler._command_pool._enqueue(command, is_status_request=status_request)
     gateway_handler._event_session_ready.set()
     gateway_handler.send_buffer.put_nowait(None)
     with patch("custom_components.myhome.gateway.OWNCommandSession", return_value=session):
