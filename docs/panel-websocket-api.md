@@ -165,47 +165,71 @@ the backend, never recalculated from the displayed profile. Missing runtime valu
 are shown as unknown. No new endpoint, persisted field or write operation is added.
 See [behavior and scope](sidepanel.md#shared-profile-view-0250).
 
-## Session recovery (0.24.0)
+## Session recovery (0.24.0) and ownership per tab (0.39.0)
 
 `start` and `batch_start` accept optional `client_id` (nonempty string, at most
-64 characters). Panel 0.24.0 generates a fresh random ID per controller. Supplying
-it opts into [bounded recovery](sidepanel.md#session-recovery-0240); omitting it
-preserves legacy cancellation-on-disconnect behavior. Replaying the same start
-subscription after a websocket reconnect reattaches its detached session. It
-cannot replace an active controller. If the session has expired, a replayed start
-creates a fresh confirmation step, never a movement.
+64 characters). Omitting it preserves the legacy contract unchanged: one
+controller bound to its websocket, a 20 s heartbeat lease, and cancellation
+(with Stop) when the subscription ends. Everything below applies only to
+clients that send `client_id`.
 
-`cover_profiles/read` includes `calibration`: null, or the gateway session view
-without its controller `attachment` token. It describes the current target, phase,
-values, mode/direction and batch targets/results where applicable. `attached`
-indicates whether it is controlled; this transient view does not increment the
-persisted profile revision. The editor can refresh it without replacing drafts.
+**Identity.** Since panel 0.39.0 the `client_id` is kept per browser tab in
+`sessionStorage`, so the same tab is recognised after a reconnection or when the
+view is reopened. The client that starts a session owns it.
 
-To claim a retained session, an administrator subscribes to:
+**Readers.** Any number of subscriptions can read one session: the owner's, a
+replayed one after a reconnection, and other tabs. Each subscription receives
+its own `attachment` token. `sequence` grows only at transitions of the session
+(including a change of owner), never at a subscription, a heartbeat or a read.
+
+**A lost socket changes nothing.** When a subscription ends (socket closed,
+unsubscribe), that reader is removed. No movement is interrupted, no Stop is
+written and no value is discarded.
+
+**Presence and lease.** The owner is *present* while its last heartbeat or
+action is less than 45 s old; the panel sends a heartbeat every 15 s. Presence
+only tells readers whether the owner is still there. The *lease* ends the
+session as `expired` after 1800 s without a transition or an accepted action
+of the owner, or 600 s once a movement has been sent; Stop is written at that
+moment only while a movement may still be running. A heartbeat never renews the
+lease and never takes ownership.
+
+**Ownership changes only on an explicit claim.** A replayed `start`/`batch_start`
+from a known `client_id`, for the same target, mode and direction, and a
+`resume` without `claim`, only add a reader: an owner is never displaced by a
+reconnection or a repeated subscription. To take control, a client subscribes
+with:
 
 ```json
 {"id": 50, "type": "myhome/cover_calibration/resume", "entry_id": "ENTRY",
- "session_id": "SESSION", "client_id": "NEW-RANDOM-CONTROLLER-ID"}
+ "session_id": "SESSION", "client_id": "TAB-ID", "claim": true, "sequence": 12}
 ```
 
-The result acknowledges the subscription, followed by the current authoritative
-view. `calibration_busy` rejects a live owner; `calibration_expired` rejects an
-absent, ended or legacy session. Resume does not accept browser timings or issue
-movement commands. It can also reconnect to interrupted status for Stop/Cancel.
+The claim takes effect only when `sequence` is the current one, so an automatic
+replay of an older claim cannot take the session back. The result acknowledges
+the subscription, followed by the view (after a claim, a transition sent to every
+reader). `calibration_expired` rejects an absent, ended or legacy session.
+Neither `resume`, a claim nor a replayed start sends any command to the bus: a
+recovered session never restarts a movement by itself.
 
-Recoverable subscription views add `recoverable: true`, `attached`,
-`recovery_seconds: 600` and `attachment`. Every `action`, including heartbeat,
-Stop, Cancel and the new `detach`, must provide that attachment token in addition
-to the session ID and use the owning websocket. The token rotates on each attach;
-old actions and old unsubscribe callbacks cannot affect the new controller.
-Existing sequence validation still applies to state-changing steps and saves.
-Sequence remains monotonic across detach and attach notifications.
+**Actions.** Every `action` must carry the `attachment` of a subscription on the
+same websocket. `stop` is accepted from every reader, read-only included: it is
+a safety control, and its effect is unchanged. Every other action, `save`
+included, is refused with `calibration_owned` unless it comes from the owner.
+`heartbeat` answers the view and refreshes presence only for the owner. `detach`
+removes that reader; from the owner it ends the session as `left` (without Stop)
+when nothing has moved yet or the session was interrupted, and otherwise keeps
+the owner and the measurements.
 
-`detach` and unsubscribe retain safe checkpoints for 600 seconds, or interrupt
-and discard an in-progress cycle before requesting Stop. Neither detachment nor
-reattachment changes the measurement provenance. Cancel releases ownership
-immediately. Storage v5 and export v3 are unchanged; transient sessions are not
-included in export or restored after HA restart.
+**Views.** Subscription and action views add `owner` (this reader owns the
+session), `read_only`, `attachment`, `attached` (this subscription is live) and
+`idle_expires_at` (ISO time the lease will run out, `null` when closed);
+`recoverable` and `recovery_seconds` (the current lease length) remain.
+`cover_profiles/read` includes `calibration`: null, or the same view without
+`attachment`, where `attached` means the owner is present and `owner` is false.
+This transient view does not increment the persisted profile revision. Storage
+v5 and export v3 are unchanged; transient sessions are not included in export or
+restored after HA restart.
 
 ## Measurement destinations (0.23.0)
 
