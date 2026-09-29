@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, afterEach, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { CoverCalibration } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
+import { CoverCalibration, calibrationClient } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
 import { calibrationScene } from "../../custom_components/myhome/frontend/panel/panel-calibration-visual.js";
 import { shown } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
@@ -812,3 +812,80 @@ for (const mode of ["geometry", "guided", "automatic"]) {
     }
   });
 }
+
+function withStorage(storage, run) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: () => {
+    if (storage instanceof Error) throw storage;
+    return storage;
+  } });
+  const restore = () => original ? Object.defineProperty(globalThis, "sessionStorage", original) : delete globalThis.sessionStorage;
+  return Promise.resolve().then(run).finally(restore);
+}
+
+test("one client_id per browser tab survives reopening and a storage failure", async () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  await withStorage(storage, async () => {
+    const first = await mount(), second = await mount({ direction: "opening" });
+    assert.match(first.starts[0].client_id, /^\d+-\d+-\d+-\d+$/);
+    assert.equal(second.starts[0].client_id, first.starts[0].client_id);
+    assert.equal(values.get("myhome-calibration-client"), first.starts[0].client_id);
+    await first.controller.open({ ...first.controller._context, resume: { session_id: "again", mode: "guided" } });
+    assert.equal(first.starts.at(-1).client_id, first.starts[0].client_id);
+  });
+  await withStorage(new Error("storage blocked"), () => {
+    const id = calibrationClient();
+    assert.match(id, /^\d+-\d+-\d+-\d+$/);
+    assert.equal(calibrationClient(), id);
+  });
+});
+
+test("a read-only tab keeps Stop, cannot move or save, and takes control only on request", async () => {
+  const { host, push, calls, starts, controller, counts } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false,
+    phase: "review", save_modes: ["new"], values: { opening_time: 20, closing_time: 30 } });
+  assert.equal(host.querySelector("#cal-read-only").hidden, false);
+  assert.match(host.querySelector("#cal-read-only").textContent, /Un altro dispositivo/);
+  assert.equal(host.querySelector('#cal-save button[type="submit"]').disabled, true);
+  assert.equal(host.querySelector("#cal-save-mode").disabled, true);
+  assert.equal(host.querySelector("#cal-stop").disabled, false);
+  assert.equal(host.querySelector("#cal-cancel").textContent, "Chiudi");
+  host.querySelector("#cal-stop").click(); await tick();
+  assert.deepEqual(calls.at(-1), { type: "myhome/cover_calibration/action", entry_id: "one", session_id: "session-one",
+    sequence: 2, attachment: "reader", action: "stop" });
+  const sequence = controller._state.sequence;
+  host.querySelector("#cal-take-control").click(); await tick();
+  assert.equal(calls.length, 1, "taking control sends no action and no movement");
+  assert.deepEqual(starts.at(-1), { type: "myhome/cover_calibration/resume", entry_id: "one", session_id: "session-one",
+    client_id: starts[0].client_id, claim: true, sequence });
+  assert.equal(counts().stopped, 1, "the reading subscription is replaced, not left");
+  push({ read_only: false, owner: true, attachment: "owner" });
+  assert.equal(host.querySelector("#cal-read-only").hidden, true);
+  assert.equal(host.querySelector("#cal-take-control").hidden, true);
+  assert.equal(host.querySelector('#cal-save button[type="submit"]').disabled, false);
+  assert.equal(host.querySelector("#cal-cancel").textContent, "Annulla misurazione");
+});
+
+test("closing a read-only tab detaches instead of cancelling the owner's session", async () => {
+  const { host, push, calls, counts } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, phase: "opening" });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(calls.at(-1).action, "detach");
+  assert.equal(calls.at(-1).attachment, "reader");
+  assert.equal(counts().cancelled, 1);
+});
+
+test("reconnecting to the same session swaps the subscription without leaving it or claiming", async () => {
+  const { host, push, calls, starts } = await mount({ call: (message) => {
+    if (message.action === "heartbeat") throw { code: "calibration_expired" };
+    return {};
+  } });
+  push({ recoverable: true, attached: true, attachment: "owner", read_only: false });
+  await instances.at(-1)._perform("heartbeat");
+  assert.equal(host.querySelector("#cal-reconnect").hidden, false);
+  host.querySelector("#cal-reconnect").click(); await tick();
+  assert.equal(calls.filter((call) => call.action !== "heartbeat").length, 0);
+  assert.equal(starts.at(-1).type, "myhome/cover_calibration/resume");
+  assert.equal("claim" in starts.at(-1), false);
+});
