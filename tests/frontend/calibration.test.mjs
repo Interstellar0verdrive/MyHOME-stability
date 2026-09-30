@@ -846,7 +846,7 @@ test("a read-only tab keeps Stop, cannot move or save, and takes control only on
   push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false,
     phase: "review", save_modes: ["new"], values: { opening_time: 20, closing_time: 30 } });
   assert.equal(host.querySelector("#cal-read-only").hidden, false);
-  assert.match(host.querySelector("#cal-read-only").textContent, /Un altro dispositivo/);
+  assert.match(host.querySelector("#cal-read-only").textContent, /Un’altra scheda o un altro dispositivo/);
   assert.equal(host.querySelector('#cal-save button[type="submit"]').disabled, true);
   assert.equal(host.querySelector("#cal-save-mode").disabled, true);
   assert.equal(host.querySelector("#cal-stop").disabled, false);
@@ -888,4 +888,64 @@ test("reconnecting to the same session swaps the subscription without leaving it
   assert.equal(calls.filter((call) => call.action !== "heartbeat").length, 0);
   assert.equal(starts.at(-1).type, "myhome/cover_calibration/resume");
   assert.equal("claim" in starts.at(-1), false);
+});
+
+test("a reader is told whether the owner is present and Take control stands out when nobody guides", async () => {
+  const { host, push, calls } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false, owner_present: true, phase: "opening" });
+  const notice = host.querySelector("#cal-read-only"), take = host.querySelector("#cal-take-control");
+  assert.equal(notice.textContent, translations.it.calReadOnly);
+  assert.equal(take.hidden, false);
+  assert.equal(take.classList.contains("primary"), false);
+  push({ owner_present: false });
+  assert.equal(notice.textContent, translations.it.calReadOnlyAway);
+  assert.equal(take.hidden, false);
+  assert.equal(take.classList.contains("primary"), true);
+  assert.equal(host.querySelector("#cal-reconnect").hidden, true, "this tab's own subscription is still live");
+  assert.equal(calls.length, 0);
+});
+
+test("sequences are compared within one session only; a new session is always shown", async () => {
+  const { push, controller } = await mount();
+  push({ recoverable: true, attached: true, attachment: "first", phase: "opening" });
+  push({ phase: "confirm_open" });
+  push({ sequence: 1, phase: "closing" });
+  assert.equal(controller._state.phase, "confirm_open", "an older view of the same session is ignored");
+  push({ session_id: "session-two", sequence: 1, attachment: "second", phase: "confirm_closed" });
+  assert.equal(controller._state.session_id, "session-two");
+  assert.equal(controller._state.phase, "confirm_closed");
+});
+
+test("a start replayed after the connection drops names its session; a deliberate start does not", async () => {
+  const { controller, starts } = await mount();
+  const listeners = new Map(), connection = controller._context.hass.connection;
+  Object.assign(connection, { addEventListener: (type, callback) => listeners.set(type, callback),
+    removeEventListener: (type, callback) => { if (listeners.get(type) === callback) listeners.delete(type); } });
+  await controller.open({ ...controller._context });
+  const start = starts.at(-1);
+  assert.equal(start.type, "myhome/cover_calibration/start");
+  assert.equal("session_id" in start, false);
+  listeners.get("disconnected")();
+  assert.equal(start.session_id, "session-one", "Home Assistant replays this object after reconnecting");
+  await controller.open({ ...controller._context });
+  assert.equal("session_id" in starts.at(-1), false);
+  assert.equal(listeners.size, 1, "the closed view stopped listening");
+  await controller.open({ ...controller._context, resume: controller._state });
+  assert.equal(starts.at(-1).type, "myhome/cover_calibration/resume");
+  assert.equal(listeners.size, 0, "a resume already names its session");
+  assert.equal(starts.at(-2).session_id, "session-one", "closing a view pins its start too");
+});
+
+test("a claim made against an old sequence warns and invites to try again", async () => {
+  const { host, push, controller } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false, phase: "opening" });
+  host.querySelector("#cal-take-control").click(); await tick();
+  const reason = host.querySelector("#cal-reason");
+  assert.equal(controller._state.read_only, true);
+  assert.equal(reason.hidden, false);
+  assert.equal(reason.textContent, translations.it.calClaimStale);
+  push({ read_only: false, owner: true, attachment: "owner" });
+  await controller.open({ ...controller._context, claim: true, resume: controller._state });
+  assert.equal(controller._state.owner, true);
+  assert.equal(host.querySelector("#cal-reason").hidden, true);
 });

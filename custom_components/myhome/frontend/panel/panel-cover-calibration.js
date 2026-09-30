@@ -32,6 +32,8 @@ export class CoverCalibration {
 
   close({ cancel = false, leave = true } = {}) {
     this._generation++;
+    this._pin?.();
+    this._pin = null;
     clearInterval(this._heartbeat);
     this._heartbeat = null;
     const state = this._state;
@@ -56,6 +58,7 @@ export class CoverCalibration {
     this._context = context;
     this._lost = false;
     this._busy = false;
+    this._claiming = !!context.claim;
     this._savePreview = null;
     this._renderedPreview = null;
     const generation = this._generation;
@@ -150,16 +153,25 @@ export class CoverCalibration {
         ...(save_mode === "new" ? { name: form.elements.profile_name.value.trim() } : {}),
         ...(save_mode === "shared" ? { confirmation: this._savePreview.confirmation } : {}) });
     };
+    const message = context.resume
+      ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id,
+        ...(context.claim ? { claim: true, sequence: context.resume.sequence } : {}) }
+      : context.entity_ids
+        ? { type: "myhome/cover_calibration/batch_start", entry_id: entity.entry_id, entity_ids: context.entity_ids, revision, client_id }
+        : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}), ...(geometry && context.slats === false ? { slats: false } : {}) };
+    if (!context.resume) {
+      // Home Assistant replays this same message object after a reconnection. Once the
+      // connection drops, or this view closes, it names the session on screen: the replay
+      // then reads that session and never starts another one if it has ended meanwhile.
+      const pin = () => { if (this._state?.session_id) message.session_id ??= this._state.session_id; };
+      hass.connection.addEventListener?.("disconnected", pin);
+      this._pin = () => { pin(); hass.connection.removeEventListener?.("disconnected", pin); };
+    }
     try {
       const unsubscribe = await hass.connection.subscribeMessage((state) => {
         if (!this._current(generation)) return;
         this._accept(state);
-      }, context.resume
-        ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id,
-          ...(context.claim ? { claim: true, sequence: context.resume.sequence } : {}) }
-        : context.entity_ids
-          ? { type: "myhome/cover_calibration/batch_start", entry_id: entity.entry_id, entity_ids: context.entity_ids, revision, client_id }
-          : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}), ...(geometry && context.slats === false ? { slats: false } : {}) });
+      }, message);
       if (!this._current(generation)) { Promise.resolve(unsubscribe()).catch(() => {}); return; }
       this._unsubscribe = unsubscribe;
       this._heartbeat = setInterval(() => this._perform("heartbeat"), HEARTBEAT_MS);
@@ -177,8 +189,9 @@ export class CoverCalibration {
   _locked() { return this._busy || this._lost || !!this._state?.read_only; }
 
   _accept(state) {
-    if (this._state && state.sequence < this._state.sequence) return;
-    if (state.recoverable && state.attachment !== this._state?.attachment) {
+    // Sequences are ordered within one session only.
+    if (this._state && state.session_id === this._state.session_id && state.sequence < this._state.sequence) return;
+    if (state.session_id !== this._state?.session_id || (state.recoverable && state.attachment !== this._state?.attachment)) {
       this._busy = false;
       this._savePreview = null;
       this._context.host.querySelector("#cal-reason").hidden = true;
@@ -188,6 +201,15 @@ export class CoverCalibration {
     if (state.phase !== "review") this._savePreview = null;
     else if (state.save_preview && this._context.host.querySelector("#cal-save-mode").value === "shared") this._savePreview = state.save_preview;
     this._render();
+    if (this._claiming) {
+      // A claim against a sequence that has moved on only reads: say so instead of doing nothing.
+      this._claiming = false;
+      if (state.read_only) {
+        const box = this._context.host.querySelector("#cal-reason");
+        box.textContent = this._context.t("calClaimStale");
+        box.hidden = false;
+      }
+    }
     if (state.phase === "saved") {
       this.close();
       this._context.onSaved();
@@ -199,10 +221,15 @@ export class CoverCalibration {
     const state = this._state;
     host.querySelector("#cal-reconnect").hidden = !this._lost || !state.recoverable;
     const readOnly = !!state.read_only, ended = ["saved", "cancelled"].includes(state.phase);
-    host.querySelector("#cal-read-only").hidden = !readOnly || ended;
+    const notice = host.querySelector("#cal-read-only");
+    notice.hidden = !readOnly || ended;
+    // Presence of the owner comes from the backend; this tab's own link is `attached`.
+    const ownerAway = state.owner_present === false;
+    notice.textContent = t(ownerAway ? "calReadOnlyAway" : "calReadOnly");
     const take = host.querySelector("#cal-take-control");
     take.hidden = !readOnly || ended || this._lost;
     take.disabled = this._busy;
+    take.classList.toggle("primary", ownerAway);
     const cancel = host.querySelector("#cal-cancel");
     cancel.disabled = false;
     cancel.textContent = t(readOnly ? "close" : "calCancel");

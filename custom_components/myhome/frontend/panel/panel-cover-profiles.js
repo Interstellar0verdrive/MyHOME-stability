@@ -198,9 +198,11 @@ export class CoverProfileEditor {
     this.dialog.querySelector("#profile-pending").hidden = !data.pending;
     const box = this.dialog.querySelector("#cal-recovery");
     box.hidden = !session;
-    box.querySelector("p").textContent = session ? `${session.entity_id} · ${t(session.waiting_for_stop ? "calWaitingForStop" : session.attached ? "calAttachedElsewhere" : "calDetached")}` : "";
+    // Resume is offered to an observer once the owner is no longer present.
+    const guided = session?.owner_present ?? session?.attached;
+    box.querySelector("p").textContent = session ? `${session.entity_id} · ${t(session.waiting_for_stop ? "calWaitingForStop" : guided ? "calAttachedElsewhere" : "calDetached")}` : "";
     const resume = box.querySelector("#cal-resume");
-    resume.hidden = !session || session.attached || session.waiting_for_stop || session.recoverable === false;
+    resume.hidden = !session || guided || session.waiting_for_stop || session.recoverable === false;
     resume.onclick = () => {
       this._calibrating = true;
       const context = this._context;

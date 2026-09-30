@@ -1433,6 +1433,19 @@ test("existing calibration section discovers a detached session and resumes it w
   assert.equal(root.querySelector("#cal-save").hidden, false);
 });
 
+test("the profile dialog offers Resume from the owner's presence, not from any subscription", async () => {
+  let owner_present = true;
+  const { root } = await mountProfiles({ read: () => coverProfileData({ calibration: {
+    entry_id: "one", entity_id: "cover.other", session_id: "retained", recoverable: true, attached: true, owner_present } }) });
+  openProfile(root); await tick();
+  assert.equal(root.querySelector("#cal-resume").hidden, true);
+  assert.match(root.querySelector("#cal-recovery p").textContent, /Un’altra scheda o un altro dispositivo/);
+  owner_present = false;
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.equal(root.querySelector("#cal-resume").hidden, false);
+  assert.match(root.querySelector("#cal-recovery p").textContent, /nessuna scheda/);
+});
+
 test("refreshing session availability preserves a profile draft at the same revision", async () => {
   let attached = true;
   const { root } = await mountProfiles({ read: () => coverProfileData({ calibration: {
