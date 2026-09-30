@@ -1288,6 +1288,34 @@ test("profile editor passes the selected automatic mode without starting movemen
 });
 
 
+test("the no-slats switch belongs to the slat and roll measurement and is sent with its start", async () => {
+  const { root, hass, calls } = await mountProfiles();
+  let request;
+  hass.connection.subscribeMessage = async (_callback, message) => { request = message; return () => {}; };
+  openProfile(root); await tick();
+  const field = root.querySelector("#cal-slats-field"), help = root.querySelector("#cal-no-slats-help");
+  assert.equal(field.hidden, true);
+  assert.equal(help.hidden, true);
+  change(root.querySelector("#cal-mode"), "geometry");
+  assert.equal(field.hidden, false);
+  assert.equal(help.hidden, false);
+  assert.match(field.textContent, /Questa tapparella non ha lamelle/);
+  root.querySelector("#cal-no-slats").checked = true;
+  change(root.querySelector("#cal-mode"), "automatic");
+  assert.equal(field.hidden, true);
+  root.querySelector("#profile-calibrate").click(); await tick();
+  assert.equal(request.mode, "automatic");
+  assert.equal("slats" in request, false, "a hidden choice is never sent");
+  openProfile(root); await tick();
+  change(root.querySelector("#cal-mode"), "geometry");
+  root.querySelector("#cal-no-slats").checked = true;
+  root.querySelector("#profile-calibrate").click(); await tick();
+  assert.equal(request.mode, "geometry");
+  assert.equal(request.slats, false);
+  assert.equal(calls.filter((c) => c.type === "myhome/cover_calibration/action").length, 0);
+});
+
+
 test("batch selector is explicit, gateway-scoped, bounded and submits only chosen eligible covers", async () => {
   const { root, hass, calls } = await mountProfiles({ targets: () => ({ revision: 8, max_batch: 1,
     targets: [ { entity_id: "cover.one", name: "Kitchen", reason: null },

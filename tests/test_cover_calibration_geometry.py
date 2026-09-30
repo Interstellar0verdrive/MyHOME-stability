@@ -6,18 +6,34 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import voluptuous as vol
+from aiohttp.resolver import ThreadedResolver
+from pytest_socket import socket_enabled  # noqa: F401
 
-from custom_components.myhome.cover_calibration import CalibrationSession, begin
-from custom_components.myhome.cover_calibration_fit import closing_fit, opening_fit, winding
-from custom_components.myhome.cover_profiles import ProfileError, read_profile
+from custom_components.myhome import cover_calibration_geometry
+from custom_components.myhome.cover_calibration import (
+    WS_START,
+    CalibrationSession,
+    begin,
+    register_api,
+)
+from custom_components.myhome.cover_calibration_fit import (
+    closing_fit,
+    opening_fit,
+    opening_roll_fit,
+    winding,
+)
+from custom_components.myhome.cover_profiles import ProfileError, get_store, read_profile
 from tests.test_cover_profiles import plant as plant_fixture
 from tests.test_panel_cover_calibration import act, bus
 
 plant = plant_fixture
+# A real lift-off gap, and the lift-off time it gives for a 2 s slat phase and roll 2 on 200 cm.
+GAP = 2.0
+LIFT = 2 + 20 * winding(GAP / 200, 2)
 
 
 @pytest.fixture
-async def geometry(hass, plant):
+async def geometry(hass, plant, request):
     queue = []
 
     def enqueue(message, guard, lock):
@@ -28,12 +44,12 @@ async def geometry(hass, plant):
     plant.gateways[0].async_queue_calibration = enqueue
     clock = [100.0]
     connection = MagicMock(subscriptions={})
-    request = {"id": 12, "entry_id": plant.entries[0].entry_id, "entity_id": plant.records[0].entity_id,
-               "revision": 0, "mode": "geometry", "client_id": "owner"}
+    message = {"id": 12, "entry_id": plant.entries[0].entry_id, "entity_id": plant.records[0].entity_id,
+               "revision": 0, "mode": "geometry", "client_id": "owner", **getattr(request, "param", {})}
     with patch("custom_components.myhome.cover_calibration.monotonic", side_effect=lambda: clock[0]):
-        session = await begin(hass, connection, request)
+        session = await begin(hass, connection, message)
         cal = SimpleNamespace(session=session, cover=plant.covers[0], queue=queue, clock=clock, plant=plant,
-                              connection=connection, request=request)
+                              connection=connection, request=message)
         yield cal
         session.close()
         session.reservation.completed()
@@ -73,10 +89,10 @@ async def lift(cal, *, echo_first=False):
     await endpoint(cal, 9)  # Home: deliberately never recorded as a timing.
     assert cal.session.step == "lift"
     await start(cal)
-    cal.clock[0] += 1.5
+    cal.clock[0] += LIFT - .5
     await act(cal, "lift")
     await stopped(cal, elapsed=.5, echo_first=echo_first)
-    assert cal.session.samples["lift"] == 2
+    assert cal.session.samples["lift"] == pytest.approx(LIFT)
     assert cal.session.phase == "reading"
 
 
@@ -93,7 +109,7 @@ async def half(cal, seconds):
 
 async def until_open_reading(cal):
     await lift(cal)
-    await act(cal, "reading", reading_cm=0)
+    await act(cal, "reading", reading_cm=GAP)
     await endpoint(cal, 8)  # Reset before timing; not part of the opening time.
     await endpoint(cal, 22)
     await act(cal, "reading", reading_cm=200)
@@ -139,7 +155,7 @@ async def test_basic_measurement_atomic_save_runtime_provenance_and_no_accuracy(
 
 async def test_lift_waits_for_both_write_and_stop_even_when_echo_arrives_first(geometry):
     await lift(geometry, echo_first=True)
-    assert geometry.session.samples["lift"] == 2
+    assert geometry.session.samples["lift"] == pytest.approx(LIFT)
     await act(geometry, "repeat")
     assert geometry.session.step == "reset" and geometry.session.after_position == "lift"
     await endpoint(geometry, 3)
@@ -322,9 +338,181 @@ async def test_repeat_closing_keeps_opening_and_rehomes_at_top(geometry):
 async def test_impossibly_short_endpoint_interrupts_instead_of_storing(geometry):
     cal = geometry
     await lift(cal)
-    await act(cal, "reading", reading_cm=0)
+    await act(cal, "reading", reading_cm=GAP)
     await endpoint(cal, 4)
     await start(cal)
     with pytest.raises(ProfileError, match="invalid_profile"):
         await act(cal, "endpoint")
     assert cal.session.phase == "interrupted" and not cal.session.values
+
+
+def steps(cal):
+    """Every step the session has shown to its subscriber."""
+    return [call.args[1]["step"] for call in cal.connection.send_event.call_args_list]
+
+
+@pytest.mark.parametrize("reading", [0, .9])
+async def test_edge_still_resting_discards_the_lift_off_run_and_repeats_it(geometry, reading):
+    cal = geometry
+    await lift(cal)
+    assert cal.session.view()["lift_attempts"] == 1 and not cal.session.view()["still_resting"]
+    commands = len(cal.queue)
+    await act(cal, "reading", reading_cm=reading)
+    view = cal.session.view()
+    assert (view["phase"], view["step"], cal.session.after_position) == ("briefing", "reset", "lift")
+    assert view["samples"] == {} and view["readings"] == {}
+    assert view["lift_attempts"] == 2 and view["still_resting"] is True
+    assert (view["touching_cm"], view["max_gap_cm"], view["lift_repeat"]) == (1.0, 50.0, True)
+    assert len(cal.queue) == commands  # The repeat waits for its own briefing.
+    await endpoint(cal, 4)
+    assert cal.session.step == "lift"
+    await start(cal)
+    cal.clock[0] += LIFT - .5
+    await act(cal, "lift")
+    await stopped(cal, elapsed=.5)
+    await act(cal, "reading", reading_cm=reading)
+    assert cal.session.view()["lift_attempts"] == 3
+    await endpoint(cal, 4)
+    await start(cal)
+    cal.clock[0] += LIFT - .5
+    await act(cal, "lift")
+    await stopped(cal, elapsed=.5)
+    assert cal.session.still_resting  # Still explained while the repeated run is read.
+    await act(cal, "reading", reading_cm=GAP)
+    assert cal.session.readings == {"gap": GAP} and cal.session.samples == {"lift": pytest.approx(LIFT)}
+    assert (cal.session.step, cal.session.after_position) == ("reset", "opening")
+    assert cal.session.view()["lift_attempts"] == 3 and cal.session.view()["still_resting"] is False
+
+
+@pytest.mark.parametrize("reading", [0, .9])
+async def test_edge_still_resting_is_refused_on_the_field_when_repeat_is_off(geometry, reading):
+    cal = geometry
+    await lift(cal)
+    with patch.object(cover_calibration_geometry, "LIFT_REPEAT_BELOW_TOUCHING", False):
+        assert cal.session.view()["lift_repeat"] is False
+        with pytest.raises(ProfileError, match="invalid_gap"):
+            await act(cal, "reading", reading_cm=reading)
+        assert cal.session.phase == "reading" and cal.session.samples["lift"] == pytest.approx(LIFT)
+        assert cal.session.view()["lift_attempts"] == 1
+        await act(cal, "reading", reading_cm=1.0)
+    assert cal.session.readings == {"gap": 1.0}
+
+
+@pytest.mark.parametrize(("reading", "error"), [(1, None), (1.0, None), (50.0, None), (50.1, "invalid_gap"),
+                                                (-.1, "invalid_reading"), (float("nan"), "invalid_reading"),
+                                                (float("inf"), "invalid_reading"), (True, "invalid_reading")])
+async def test_lift_off_gap_limits(geometry, reading, error):
+    cal = geometry
+    await lift(cal)
+    if error is None:
+        await act(cal, "reading", reading_cm=reading)
+        assert cal.session.readings == {"gap": reading} and cal.session.view()["lift_attempts"] == 1
+        return
+    with pytest.raises(ProfileError, match=error):
+        await act(cal, "reading", reading_cm=reading)
+    assert cal.session.phase == "reading" and cal.session.view()["lift_attempts"] == 1
+    assert cal.session.readings == {} and "lift" in cal.session.samples
+
+
+async def test_manual_repeat_or_interruption_ends_the_still_resting_notice(geometry):
+    cal = geometry
+    await lift(cal)
+    await act(cal, "reading", reading_cm=0)
+    await endpoint(cal, 4)
+    await start(cal)
+    cal.clock[0] += LIFT - .5
+    await act(cal, "lift")
+    await stopped(cal, elapsed=.5)
+    await act(cal, "repeat")
+    assert cal.session.view()["still_resting"] is False and cal.session.view()["lift_attempts"] == 2
+    cal.session.still_resting = True
+    cal.session.interrupt("stopped")
+    assert cal.session.view()["still_resting"] is False
+
+
+@pytest.mark.parametrize("geometry", [{"slats": False}], indirect=True)
+async def test_without_slats_no_lift_off_and_a_zero_slat_time_is_saved(hass, geometry):
+    cal = geometry
+    assert cal.session.view()["slats"] is False
+    await endpoint(cal, 9)
+    assert cal.session.step == "opening"
+    await endpoint(cal, 22)
+    await act(cal, "reading", reading_cm=200)
+    await endpoint(cal, 20)
+    assert cal.session.step == "half_open"
+    await start(cal)
+    # Halfway through the ascent: no lift-off time to add.
+    assert cal.session.deadline.when() - hass.loop.time() == pytest.approx(11, abs=.1)
+    cal.clock[0] += 11 - .2
+    callback = cal.session.deadline._callback
+    cal.session.deadline.cancel()
+    callback()
+    await stopped(cal, elapsed=.2)
+    await act(cal, "reading", reading_cm=200 * (2 * .5 + .5 ** 2) / 3)
+    await endpoint(cal, 7)
+    await half(cal, 10)
+    await act(cal, "reading", reading_cm=200 * (2 * .5 + 2 * .5 ** 2) / 4)
+    assert cal.session.phase == "review"
+    assert cal.session.geometry == pytest.approx({"slat_time_s": 0, "opening_roll": 2, "closing_roll": 3})
+    assert cal.session.geometry["slat_time_s"] == 0
+    assert "lift" not in cal.session.samples and "gap" not in cal.session.readings
+    assert not {"lift", "reset"} & set(steps(cal))
+    await act(cal, "save", name="Plain roll")
+    profile = (await read_profile(hass, cal.session.entry_id, cal.cover.entity_id))["profiles"][0]
+    assert profile["geometry"] == pytest.approx({"slat_time_s": 0, "opening_roll": 2, "closing_roll": 3})
+
+
+@pytest.mark.parametrize("geometry", [{"slats": False}], indirect=True)
+async def test_without_slats_repeat_returns_to_the_bottom_without_a_reset_step(geometry):
+    cal = geometry
+    await endpoint(cal, 9)
+    await endpoint(cal, 22)
+    with pytest.raises(ProfileError, match="calibration_step"):
+        await act(cal, "lift")
+    await act(cal, "repeat")
+    assert (cal.session.step, cal.session.after_position) == ("home", "opening")
+    await endpoint(cal, 5)
+    assert cal.session.step == "opening"
+    assert "reset" not in steps(cal)
+
+
+@pytest.mark.parametrize("roll", [1, 1.3, 2, 4.9, 5])
+def test_opening_roll_fit_mirrors_closing_fit(roll):
+    height, travel, total = 88.0, 200.0, 22.0
+    closing = total * (1 - winding(height / travel, roll))
+    # Without slats an ascent to a height mirrors the descent from the top to the same height.
+    assert opening_roll_fit(total, 0, total - closing, height, travel) == pytest.approx(closing_fit(total, 0, closing, height, travel))
+    assert opening_roll_fit(total, 0, total - closing, height, travel) == pytest.approx(roll)
+    assert opening_roll_fit(total, 2, 2 + (total - 2) * winding(height / travel, roll), height, travel) == pytest.approx(roll)
+
+
+@pytest.mark.parametrize(("args", "error"), [
+    ((20, 20, 21, 75, 200), "Inconsistent"), ((20, 2, 2, 75, 200), "Inconsistent"), ((20, 2, 1, 75, 200), "Inconsistent"),
+    ((20, 0, 20, 75, 200), "Inconsistent"), ((20, 0, 9, 0, 200), "Inconsistent"), ((20, 0, 9, 200, 200), "Inconsistent"),
+    ((20, 0, 10, 190, 200), "roll range"), ((20, 0, 10, 1, 200), "roll range")])
+def test_opening_roll_fit_rejects_inconsistent_measurements(args, error):
+    with pytest.raises(vol.Invalid, match=error):
+        opening_roll_fit(*args)
+
+
+async def test_start_takes_slats_only_for_geometry_and_only_as_a_boolean(hass, plant, hass_ws_client):
+    queued = []
+    plant.gateways[0].async_queue_calibration = lambda *args: queued.append(args)
+    request = {"entry_id": plant.entries[0].entry_id, "entity_id": plant.records[0].entity_id, "revision": 0}
+    with pytest.raises(ProfileError, match="invalid_profile"):
+        await begin(hass, MagicMock(subscriptions={}), {"id": 1, **request, "slats": True})
+    assert get_store(hass, request["entry_id"]).calibration is None
+    register_api(hass)
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        client = await hass_ws_client(hass)
+        try:
+            await client.send_json({"id": 1, "type": WS_START, **request, "mode": "geometry", "slats": "no"})
+            assert (await client.receive_json())["error"]["code"] == "invalid_format"
+            await client.send_json({"id": 2, "type": WS_START, **request, "mode": "geometry", "slats": False})
+            assert (await client.receive_json())["success"]
+            event = (await client.receive_json())["event"]
+            assert (event["slats"], event["step"], event["lift_attempts"], event["still_resting"]) == (False, "home", 1, False)
+        finally:
+            await client.close()
+    await hass.async_block_till_done()
+    assert [str(args[0]) for args in queued] == ["*2*0*11##"]  # Only the Stop of the closed legacy socket.
