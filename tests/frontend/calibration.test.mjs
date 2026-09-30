@@ -972,14 +972,70 @@ test("a Cancel that does not reach Home Assistant keeps the view and is sent fir
   assert.equal(counts().stopped, 1);
 });
 
-test("a Cancel refused twice as expired on the same subscription closes the view", async () => {
-  const { host, push, calls, counts } = await mount({ call: () => { throw { code: "calibration_expired" }; } });
+/** Answers the panel's `resume` check before closing: the session lives unless `gone()` says otherwise. */
+function probing(controller, gone) {
+  const connection = controller._context.hass.connection, subscribe = connection.subscribeMessage, probes = [];
+  connection.subscribeMessage = async (callback, request) => {
+    if (request.type !== "myhome/cover_calibration/resume") return subscribe(callback, request);
+    probes.push(request);
+    if (gone()) throw { code: "calibration_expired" };
+    return () => {};
+  };
+  return probes;
+}
+
+test("Cancel pressed again while reconnecting keeps the view of a live session until the Cancel arrives", async () => {
+  let network = "down";
+  const { host, push, calls, counts, controller } = await mount({ call: (message, state) => {
+    if (network === "down") throw 3; // ERR_CONNECTION_LOST.
+    if (message.attachment === "before") throw { code: "calibration_expired" }; // Token of the dead socket.
+    return { ...state, sequence: state.sequence + 1, phase: message.action === "cancel" ? "cancelled" : state.phase };
+  } });
+  const probes = probing(controller, () => false);
+  push({ recoverable: true, attached: true, attachment: "before", owner: true, read_only: false, phase: "opening" });
+  host.querySelector("#cal-cancel").click(); await tick();
+  network = "reconnecting";
+  host.querySelector("#cal-cancel").click(); await tick(); // Queued with the old token, sent first.
+  assert.equal(probes.length, 1);
+  assert.equal("claim" in probes[0], false);
+  assert.equal(counts().cancelled, 0, "the session lives: the view stays");
+  assert.equal(host.querySelector("#cal-reason").textContent, translations.it.calCancelFailed);
+  push({ attachment: "after", attached: true }); await tick(); // The replayed subscription.
+  assert.deepEqual(calls.filter((call) => call.attachment === "after").map((call) => call.action), ["cancel"]);
+  assert.equal(counts().cancelled, 1);
+});
+
+test("a Cancel refused as expired closes the view once the session is confirmed gone", async () => {
+  const { host, push, counts, controller } = await mount({ call: () => { throw { code: "calibration_expired" }; } });
+  const probes = probing(controller, () => true);
   push({ recoverable: true, attached: true, attachment: "gone", owner: true, read_only: false });
   host.querySelector("#cal-cancel").click(); await tick();
-  assert.equal(counts().cancelled, 0);
-  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(probes.length, 1);
   assert.equal(counts().cancelled, 1);
-  assert.ok(calls.filter((call) => call.action === "cancel").length >= 2);
+});
+
+test("a failed check of the session keeps the view and the pending Cancel", async () => {
+  const { host, push, counts, controller } = await mount({ call: () => { throw { code: "calibration_expired" }; } });
+  const connection = controller._context.hass.connection, subscribe = connection.subscribeMessage;
+  connection.subscribeMessage = async (callback, request) => {
+    if (request.type === "myhome/cover_calibration/resume") throw 3;
+    return subscribe(callback, request);
+  };
+  push({ recoverable: true, attached: true, attachment: "unknown", owner: true, read_only: false });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(counts().cancelled, 0);
+  assert.equal(host.querySelector("#cal-reason").hidden, false);
+});
+
+test("a reconnected owner does not beat before a Cancel still in flight", async () => {
+  let release;
+  const { host, push, calls, controller } = await mount({ call: (message) =>
+    message.action === "cancel" ? new Promise((resolve) => { release = resolve; }) : {} });
+  push({ recoverable: true, attached: true, attachment: "first", owner: true, read_only: false });
+  host.querySelector("#cal-cancel").click(); await tick();
+  push({ attachment: "second" }); await tick();
+  assert.equal(calls.some((call) => call.action === "heartbeat"), false);
+  release({ ...controller._state, phase: "cancelled" }); await tick();
 });
 
 test("an owner's replayed subscription renews presence at once; a reader's does not", async () => {

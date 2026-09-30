@@ -216,7 +216,7 @@ export class CoverCalibration {
     // first; otherwise presence is renewed at once rather than at the next heartbeat.
     if (previous?.attachment && state.owner && state.session_id === previous.session_id && state.attachment !== previous.attachment) {
       if (this._cancelPending) this._cancel(this._generation);
-      else this._perform("heartbeat");
+      else if (!this._cancelling) this._perform("heartbeat");
     }
     if (state.phase === "saved") {
       this.close();
@@ -414,8 +414,11 @@ export class CoverCalibration {
         if (this._current(generation)) this._accept(result);
       } catch (error) {
         if (!this._current(generation)) return;
-        // The same refusal twice on one subscription means the session is gone: close as before.
-        if (error?.code !== "calibration_expired" || this._cancelPending !== state.attachment) {
+        // `calibration_expired` may only mean that this token died with its socket: close as
+        // before only once Home Assistant confirms that the session itself is gone.
+        const gone = error?.code === "calibration_expired" && await this._ended(state);
+        if (!this._current(generation)) return;
+        if (!gone) {
           this._cancelPending = state.attachment;
           const box = host.querySelector("#cal-reason");
           box.textContent = t("calCancelFailed");
@@ -431,6 +434,18 @@ export class CoverCalibration {
     if (!this._current(generation)) return;
     await this.close({ cancel: true });
     if (this._generation === generation + 1 && host.isConnected) onCancel();
+  }
+
+  /** A `resume` without claim reads the session and sends nothing to the bus; its refusal is final. */
+  async _ended(state) {
+    try {
+      const unsubscribe = await this._context.hass.connection.subscribeMessage(() => {}, { type: "myhome/cover_calibration/resume",
+        entry_id: state.entry_id, session_id: state.session_id, client_id: calibrationClient() });
+      Promise.resolve(unsubscribe()).catch(() => {});
+      return false;
+    } catch (error) {
+      return error?.code === "calibration_expired";
+    }
   }
 
   async _perform(action, extra = {}) {
