@@ -42,7 +42,18 @@ def closing_fit(total: float, slat: float, elapsed: float, height: float, travel
     """One closing point fixes one roll; the full motor time stays unchanged."""
     if not 0 <= slat < total or not 0 < elapsed < total - slat or not 0 < height < travel:
         raise vol.Invalid("Inconsistent closing reading")
-    fraction = 1 - elapsed / (total - slat)
+    return _roll(1 - elapsed / (total - slat), height, travel)
+
+
+def opening_roll_fit(total: float, slat: float, elapsed: float, height: float, travel: float) -> float:
+    """Mirror of closing_fit for an ascent after a known slat phase (0 without slats)."""
+    if not 0 <= slat < total or not slat < elapsed < total or not 0 < height < travel:
+        raise vol.Invalid("Inconsistent opening reading")
+    return _roll((elapsed - slat) / (total - slat), height, travel)
+
+
+def _roll(fraction: float, height: float, travel: float) -> float:
+    """Invert winding(): the roll that puts this motor fraction at this height."""
     h = height / travel
     denominator = h - fraction * fraction
     if denominator <= 0:
