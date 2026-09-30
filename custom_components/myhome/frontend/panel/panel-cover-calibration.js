@@ -230,10 +230,10 @@ export class CoverCalibration {
     if (!enabled) return;
     const noSlats = state.slats === false;
     const notice = host.querySelector("#cal-lift-repeat");
-    notice.hidden = !state.still_resting;
     // Assigned only when it changes, so heartbeats do not repeat the announcement.
-    const repeated = state.still_resting ? fill(t("calLiftRepeated"), state) : "";
-    if (notice.textContent !== repeated) notice.textContent = repeated;
+    const lift = state.still_resting ? fill(t("calLiftRepeated"), state) : state.gap_warning ? fill(t("calGapWarning"), state) : "";
+    notice.hidden = !lift;
+    if (notice.textContent !== lift) notice.textContent = lift;
     if (["briefing", "opening", "closing", "reading", "geometry_wait_stop"].includes(state.phase)) {
       const key = state.phase === "briefing" ? `calBrief_${state.step}${noSlats && ["home", "closing"].includes(state.step) ? "_no_slats" : ""}`
         : state.phase === "geometry_wait_stop" ? "calGeometryWaitStop"
