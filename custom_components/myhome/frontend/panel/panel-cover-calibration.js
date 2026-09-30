@@ -71,7 +71,7 @@ export class CoverCalibration {
         <button type="button" class="primary" data-cal-action="lift" hidden>${esc(t("calLift"))}</button>
       </div>
       <form id="cal-reading" hidden>
-        <label><span id="cal-reading-label"></span><input name="reading_cm" type="number" step="any" min="0" max="10000" required inputmode="decimal"></label>
+        <label><span id="cal-reading-label"></span><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" required></label>
         <p id="cal-expected" class="muted"></p>
         <button type="submit" class="primary">${esc(t("calReadingAccept"))}</button>
       </form>
@@ -95,7 +95,7 @@ export class CoverCalibration {
     host.querySelector("#cal-repeat").onclick = () => this._perform("repeat");
     host.querySelector("#cal-reading").onsubmit = (event) => {
       event.preventDefault();
-      if (event.currentTarget.reportValidity()) this._perform("reading", { reading_cm: Number(event.currentTarget.elements.reading_cm.value) });
+      this._submitReading(event.currentTarget.elements.reading_cm);
     };
     host.querySelector("#cal-stop").onclick = () => this._perform("stop");
     host.querySelector("#cal-cancel").onclick = async () => {
@@ -283,6 +283,21 @@ export class CoverCalibration {
         }).join("<br>")}</li>`).join("")}</ul>`;
     }
     this._renderedPreview = this._savePreview;
+  }
+
+  /** A tape reading with a comma or a point; an empty or partial number is never sent as 0. */
+  _submitReading(input) {
+    const text = input.value.trim().replace(",", ".");
+    const reading_cm = /^-?(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
+    input.setAttribute("aria-invalid", String(!Number.isFinite(reading_cm)));
+    if (Number.isFinite(reading_cm)) {
+      this._perform("reading", { reading_cm });
+      return;
+    }
+    const box = this._context.host.querySelector("#cal-reason");
+    box.textContent = this._context.t("calReadingNumber");
+    box.hidden = false;
+    input.focus();
   }
 
   _error(error) {
