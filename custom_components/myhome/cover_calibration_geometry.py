@@ -15,8 +15,11 @@ from .cover_settings import centimetres
 
 # Lift-off gap limits in cm. A reading below TOUCHING_CM means the edge still
 # rests on its sill; the 1 cm rule is to be validated on real installations.
+# The joint fit loses precision as the gap grows: from GAP_WARN_CM a reading is
+# accepted with a warning, above MAX_GAP_CM it is refused.
 TOUCHING_CM = 1.0
-MAX_GAP_CM = 50.0
+GAP_WARN_CM = 10.0
+MAX_GAP_CM = 20.0
 # True: such a reading discards the lift-off run and repeats it. False: refuse it.
 LIFT_REPEAT_BELOW_TOUCHING = True
 
@@ -35,6 +38,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         self.after_position = "lift" if slats else "opening"
         self.lift_attempts = 1
         self.still_resting = False
+        self.gap_warning = False
         self.after_stop = "briefing"
         self.stop_written = False
         self.samples: dict[str, float] = {}
@@ -47,11 +51,13 @@ class GeometryCalibrationSession(guided.CalibrationSession):
                 "travel_cm": self.measured_travel, "geometry": dict(self.geometry),
                 "readings": dict(self.readings), "samples": dict(self.samples),
                 "accuracy": None, "independent_check": False,
-                "can_repeat": self.phase in {"reading", "review"} or (self.phase == "briefing" and self.step == "half_open"),
+                "can_repeat": self.phase in {"reading", "review"} or (self.phase == "briefing" and self.step == "half_open")
+                or self.gap_warning,
                 "reading_kind": "travel" if self.step == "opening" else self.step,
                 "expected_cm": self.measured_travel / 2 if self.measured_travel and self.step.startswith("half_") else None,
                 "slats": self.slats, "lift_attempts": self.lift_attempts, "still_resting": self.still_resting,
-                "touching_cm": TOUCHING_CM, "max_gap_cm": MAX_GAP_CM, "lift_repeat": LIFT_REPEAT_BELOW_TOUCHING}
+                "touching_cm": TOUCHING_CM, "max_gap_cm": MAX_GAP_CM, "lift_repeat": LIFT_REPEAT_BELOW_TOUCHING,
+                "gap_warn_cm": GAP_WARN_CM, "gap_warning": self.gap_warning}
 
     def interrupt(self, reason: str, send_stop: Any = True) -> None:
         if not self.active or self.phase == "saving":
@@ -61,12 +67,13 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         self.samples.clear()
         self.readings.clear()
         self.measured_travel = None
-        self.still_resting = False
+        self.still_resting = self.gap_warning = False
         super().interrupt(reason, send_stop)
 
     def geometry_action(self, msg: dict[str, Any]) -> None:
         action = msg["action"]
         if action == "next" and self.phase == "briefing":
+            self.gap_warning = False  # Moving on accepts the wide gap.
             direction = "close" if self.step in {"home", "reset", "closing", "half_close"} else "open"
             written = self.queue_move(direction)
             written.add_done_callback(self._movement_delivered)
@@ -181,6 +188,8 @@ class GeometryCalibrationSession(guided.CalibrationSession):
                 self.lift_attempts += 1
             else:
                 self.readings["gap"] = number
+            # A wide gap is kept, and the lift-off run may still be repeated before moving on.
+            self.gap_warning = number >= GAP_WARN_CM
             self.step, self.after_position = "reset", "lift" if self.still_resting else "opening"
         elif self.step == "opening":
             if number <= self.readings.get("gap", 0.0):
@@ -213,13 +222,15 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         self.emit()
 
     def _repeat(self) -> None:
-        target = "closing" if self.phase == "briefing" and self.step == "half_open" else self.step
+        target = "lift" if self.gap_warning else "closing" if self.phase == "briefing" and self.step == "half_open" else self.step
         # Without slats the return to the bottom is the same close as the first one.
         self.step = "top" if target in {"half_close", "closing"} else "reset" if self.slats else "home"
         self.after_position = target
-        if target == "lift":  # A lift-off run repeated on request is one more attempt as well.
+        if target == "lift":  # A lift-off run repeated on request is one more attempt, and keeps nothing.
             self.lift_attempts += 1
-        self.still_resting = False
+            self.samples.pop("lift", None)
+            self.readings.pop("gap", None)
+        self.still_resting = self.gap_warning = False
         self.phase = "briefing"
         self.emit()
 
