@@ -752,6 +752,29 @@ test("review values are displayed rounded while the view keeps full precision", 
   assert.match(batch.host.querySelector("#cal-batch-review").textContent, /14\.5 \/ 14\.5 s/);
 });
 
+test("positioning runs show what to confirm and no elapsed time; measured runs keep it", async () => {
+  const { host, push } = await mount({ mode: "geometry" });
+  const phase = host.querySelector("#cal-phase"), elapsed = host.querySelector("#cal-elapsed");
+  push({ phase: "briefing", step: "home", save_modes: ["new"], can_repeat: false });
+  for (const [state, text] of [[{ phase: "closing", step: "home" }, "calPositionClose"], [{ phase: "closing", step: "reset" }, "calPositionClose"],
+    [{ phase: "opening", step: "top" }, "calPositionOpen"], [{ phase: "closing", step: "home", slats: false }, "calPositionClose_no_slats"]]) {
+    push({ ...state, elapsed: 3.5 });
+    assert.equal(elapsed.hidden, true, `${state.step} measures nothing`);
+    assert.equal(phase.textContent, t(text));
+  }
+  for (const [state, text] of [[{ phase: "opening", step: "opening" }, "calEndpointRunning"], [{ phase: "closing", step: "closing" }, "calEndpointRunning"],
+    [{ phase: "opening", step: "lift" }, "calLiftRunning"], [{ phase: "opening", step: "half_open" }, "calHalfRunning"], [{ phase: "closing", step: "half_close" }, "calHalfRunning"]]) {
+    push({ ...state, slats: true, elapsed: 3.5 });
+    assert.equal(elapsed.hidden, false, `${state.step} is measured`);
+    assert.match(elapsed.textContent, /3\.5 s/);
+    assert.equal(phase.textContent, t(text));
+  }
+  assert.doesNotMatch(translations.en.calPositionClose_no_slats + translations.it.calPositionClose_no_slats, /slat|lamell/i);
+  const guided = await mount();
+  guided.push({ phase: "closing", elapsed: 3.5 });
+  assert.equal(guided.host.querySelector("#cal-elapsed").hidden, false, "other modes are unchanged");
+});
+
 for (const mode of ["geometry", "guided", "automatic"]) {
   test(`${mode} renders with HA's non-iterable scoped form controls`, async () => {
     // @webcomponents/scoped-custom-element-registry supplies named/indexed form
