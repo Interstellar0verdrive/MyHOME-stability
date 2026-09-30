@@ -416,6 +416,7 @@ async def test_attach_only_reads_and_ownership_moves_only_on_an_explicit_claim(h
                                "client_id": "second-tab", "claim": True, "sequence": sequence})
     await hass.async_block_till_done()
     assert session.owner == "second-tab" and session.sequence == sequence + 1
+    assert session.present()  # A successful claim is an explicit act of the new owner.
     old_owner = cal.connection.send_event.call_args.args[1]
     assert old_owner["read_only"] and not old_owner["owner"]
     new_owner = claimant.send_event.call_args.args[1]
