@@ -59,6 +59,7 @@ export class CoverCalibration {
         <p id="cal-elapsed" class="cal-elapsed"></p>
       </div>
       <p id="cal-stop-status" class="notice" hidden>${esc(t("calStopRequested"))}</p>
+      <p id="cal-lift-repeat" class="notice" role="status" hidden></p>
       <p id="cal-reason" class="error" role="alert" hidden></p>
       <button type="button" id="cal-reconnect" hidden>${esc(t("calResume"))}</button>
       <div class="actions cal-actions">
@@ -128,7 +129,7 @@ export class CoverCalibration {
         ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id }
         : context.entity_ids
           ? { type: "myhome/cover_calibration/batch_start", entry_id: entity.entry_id, entity_ids: context.entity_ids, revision, client_id }
-          : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}) });
+          : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}), ...(geometry && context.slats === false ? { slats: false } : {}) });
       if (!this._current(generation)) { Promise.resolve(unsubscribe()).catch(() => {}); return; }
       this._unsubscribe = unsubscribe;
       this._heartbeat = setInterval(() => this._perform("heartbeat"), 5000);
@@ -227,20 +228,27 @@ export class CoverCalibration {
     repeat.hidden = !enabled || !state.can_repeat;
     repeat.disabled = disabled;
     if (!enabled) return;
+    const noSlats = state.slats === false;
+    const notice = host.querySelector("#cal-lift-repeat");
+    notice.hidden = !state.still_resting;
+    notice.textContent = state.still_resting ? `${t("calLiftRepeated")} (${t("calLiftAttempt")} ${state.lift_attempts})` : "";
     if (["briefing", "opening", "closing", "reading", "geometry_wait_stop"].includes(state.phase)) {
-      const key = state.phase === "briefing" ? `calBrief_${state.step}` : state.phase === "geometry_wait_stop" ? "calGeometryWaitStop"
-        : state.phase === "reading" ? `calReading_${state.reading_kind}` : state.step === "lift" ? "calLiftRunning"
-          : state.step.startsWith("half_") ? "calHalfRunning" : "calEndpointRunning";
-      host.querySelector("#cal-phase").textContent = t(key);
+      const key = state.phase === "briefing" ? `calBrief_${state.step}${noSlats && ["home", "closing"].includes(state.step) ? "_no_slats" : ""}`
+        : state.phase === "geometry_wait_stop" ? "calGeometryWaitStop"
+          : state.phase === "reading" ? `calReading_${state.reading_kind}${state.reading_kind === "lift" && state.lift_repeat === false ? "_refused" : ""}`
+            : state.step === "lift" ? "calLiftRunning" : state.step.startsWith("half_") ? "calHalfRunning" : "calEndpointRunning";
+      host.querySelector("#cal-phase").textContent = fill(t(key), state);
     }
     if (form.dataset.step !== state.step) { form.elements.reading_cm.value = ""; form.dataset.step = state.step; }
     form.elements.reading_cm.min = state.step === "lift" ? "0" : "0.1";
     host.querySelector("#cal-reading-label").textContent = t(state.step === "opening" ? "profileCoverTravel" : "calHeightCm");
     host.querySelector("#cal-expected").textContent = state.expected_cm == null ? "" : `${t("calExpectedRough")}: ${Number(state.expected_cm.toFixed(1))} cm. ${t("calExpectedHelp")}`;
     if (state.phase === "review") {
+      // Without slats the summary says so instead of showing a zero slat time.
+      const keys = noSlats ? ["opening_roll", "closing_roll"] : ["slat_time_s", "opening_roll", "closing_roll"];
       host.querySelector("#cal-values").textContent += ` · ${t("profileCoverTravel")}: ${state.travel_cm} cm · ` +
-        ["slat_time_s", "opening_roll", "closing_roll"].map((key) => `${t(`calGeometry_${key}`)}: ${Number(state.geometry[key].toFixed(4))}`).join(" · ");
-      host.querySelector("#cal-save-help").textContent = t("calGeometryReview");
+        [...(noSlats ? [t("calGeometryNoSlats")] : []), ...keys.map((key) => `${t(`calGeometry_${key}`)}: ${Number(state.geometry[key].toFixed(4))}`)].join(" · ");
+      host.querySelector("#cal-save-help").textContent = t(noSlats ? "calGeometryReviewNoSlats" : "calGeometryReview");
     }
   }
 
@@ -279,7 +287,7 @@ export class CoverCalibration {
     const { host, t } = this._context;
     const key = `profileError_${error.code}`;
     const box = host.querySelector("#cal-reason");
-    box.textContent = t(key) === key ? t("calConnectionError") : t(key);
+    box.textContent = t(key) === key ? t("calConnectionError") : fill(t(key), this._state);
     box.hidden = false;
   }
 
@@ -309,4 +317,9 @@ export class CoverCalibration {
       if (current()) { if (ownsBusy) this._busy = false; this._render(); }
     }
   }
+}
+
+/** Limits such as {touching_cm} come from the session view, never from the text. */
+function fill(text, state) {
+  return text.replace(/\{(\w+)\}/g, (match, key) => state?.[key] == null ? match : `${Number(state[key])}`);
 }
