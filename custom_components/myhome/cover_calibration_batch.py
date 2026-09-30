@@ -176,7 +176,7 @@ async def ws_targets(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     vol.Required("type"): WS_BATCH_START, vol.Required("entry_id"): str,
     vol.Required("entity_ids"): SELECTION, vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
-    vol.Optional("session_id"): str,
+    vol.Optional("session_id"): vol.All(str, vol.Length(min=1, max=64)),
 })
 @require_admin
 @async_response

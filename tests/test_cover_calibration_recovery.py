@@ -20,7 +20,7 @@ from custom_components.myhome.cover_calibration import (
     register_api,
     ws_action,
 )
-from custom_components.myhome.cover_calibration_batch import BatchCalibrationSession, begin_batch
+from custom_components.myhome.cover_calibration_batch import begin_batch
 from custom_components.myhome.cover_calibration_recovery import WS_RESUME, ws_resume
 from custom_components.myhome.cover_profiles import (
     ProfileError,
@@ -29,6 +29,7 @@ from custom_components.myhome.cover_profiles import (
     remove_entry,
 )
 from tests.test_cover_calibration_batch import action as batch_action
+from tests.test_cover_calibration_batch import advance as batch_advance
 from tests.test_cover_calibration_batch import batch as batch_fixture
 from tests.test_cover_calibration_batch import measure
 from tests.test_cover_calibration_batch import run as batch_run
@@ -54,6 +55,22 @@ async def recovering(hass, calibration):
 
 def disconnect(cal):
     cal.connection.subscriptions[77]()
+
+
+def heartbeat(session):
+    """The owner's heartbeat through `perform`, delivered between two synchronous bus events."""
+    owner = next(item for item in session.subscribers.values() if item.client_id == session.owner)
+    beat = session.perform(owner, {"action": "heartbeat"})
+    with pytest.raises(StopIteration):
+        beat.send(None)  # A heartbeat completes without awaiting anything.
+
+
+def beating(advance):
+    """The panel beats every 15 s: before each pause of a cycle ends, the owner has been seen."""
+    def step(batch):
+        heartbeat(batch.session)
+        advance(batch)
+    return step
 
 
 def fire(handle):
@@ -118,7 +135,8 @@ async def test_lost_socket_keeps_checkpoint_owner_and_evidence_without_commands(
     assert not view["calibration"]["attached"] and view["calibration"]["recoverable"]
     # The same tab on a new socket: still the owner, and the old token is powerless.
     again = reader(cal, "first-controller", 88)
-    assert not again.claimed and session.owner == "first-controller" and session.present()
+    assert not again.claimed and session.owner == "first-controller" and not session.present()
+    assert (await call(hass, cal, again.connection, again.token, "heartbeat"))["owner_present"] is True
     old_cleanup()
     assert again.token in session.subscribers
     for action in ("heartbeat", "stop", "cancel", "detach"):
@@ -150,17 +168,25 @@ async def test_lost_socket_during_cycle_keeps_measurement_and_writes_no_stop(rec
 
 
 @pytest.mark.parametrize("calibration", ["automatic"], indirect=True)
-@pytest.mark.parametrize("owner", ["absent", "back"])
+@pytest.mark.parametrize("owner", ["absent", "replayed", "back"])
 async def test_without_its_owner_an_automatic_cycle_starts_no_new_movement(hass, recovering, owner):
-    """The maintainer's invariant: with nobody guiding, the pause never ends in a new run."""
+    """The maintainer's invariant: with nobody guiding, the pause never ends in a new run.
+
+    A start replayed after a reconnection (for instance, after a Cancel pressed offline was
+    lost) only reads the session: it does not make the owner present again.
+    """
     cal, session = recovering, recovering.session
     await call(hass, cal, cal.connection, session.attachment, "run")
     assert cal.queue[-1][1]()
     bus(cal, "*2*1*11##")
     disconnect(cal)
     cal.clock[0] += PRESENCE_SECONDS + 5
-    if owner == "back":
-        reader(cal, "first-controller", 88)  # The same tab on a new socket.
+    if owner == "replayed":
+        assert await begin(hass, cal.connection, {**cal.request, "session_id": session.id}) is session
+        assert not session.present()
+    elif owner == "back":
+        again = reader(cal, "first-controller", 88)  # The same tab on a new socket, beating again.
+        await call(hass, cal, again.connection, again.token, "heartbeat")
     bus(cal, "*2*0*11##")  # The run under way reaches its end, as before.
     assert session.phase == "settling" and not session.reservation.pending
     count = len(cal.queue)
@@ -280,8 +306,8 @@ async def test_batch_review_survives_recovery_and_replay(hass, batch):
     batch.queue.clear()
     batch.request["client_id"] = "batch-controller"
     batch.session = await begin_batch(hass, batch.connection, batch.request)
-    # measure() drives only the bus; the owner's tab keeps beating every 15 s meanwhile.
-    with patch.object(BatchCalibrationSession, "present", return_value=True):
+    # measure() drives only the bus; the owner's tab sends its heartbeat meanwhile.
+    with patch("tests.test_cover_calibration_batch.advance", beating(batch_advance)):
         await measure(batch)
     results = copy.deepcopy(batch.session.results)
     disconnect(batch)
@@ -686,7 +712,9 @@ async def test_every_reader_is_told_whether_the_owner_is_present(hass, recoverin
     assert other.connection.send_event.call_args.args[1]["owner_present"] is False
     view = (await read_profile(hass, session.entry_id, cal.cover.entity_id))["calibration"]
     assert view["owner_present"] is False and view["attached"] is False
-    reader(cal, "first-controller", 96)
+    back = reader(cal, "first-controller", 96)
+    assert (await call(hass, cal, other.connection, other.token, "heartbeat"))["owner_present"] is False
+    await call(hass, cal, back.connection, back.token, "heartbeat")
     assert (await call(hass, cal, other.connection, other.token, "heartbeat"))["owner_present"] is True
     session.close()
     assert session.view()["owner_present"] is False
@@ -745,3 +773,51 @@ async def test_a_claim_from_the_current_owner_changes_nothing(hass, recovering):
     again = reader(cal, "first-controller", 97, claim=True, sequence=sequence)
     assert not again.claimed and session.owner == "first-controller" and session.sequence == sequence
     other.connection.send_event.assert_not_called()
+
+
+@pytest.mark.parametrize("calibration", ["automatic"], indirect=True)
+async def test_an_unattended_step_writes_stop_while_a_movement_may_still_run(hass, recovering):
+    """At the end of a run nothing is pending; if feedback says otherwise, Stop is written."""
+    cal, session = recovering, recovering.session
+    await call(hass, cal, cal.connection, session.attachment, "run")
+    assert cal.queue[-1][1]()
+    bus(cal, "*2*1*11##")
+    cal.clock[0] += 5
+    bus(cal, "*2*0*11##")
+    session.reservation.dispatched()  # A movement the gateway may still be carrying out.
+    cal.clock[0] += PRESENCE_SECONDS
+    count = len(cal.queue)
+    fire(session.settle)
+    assert session.reason == "owner_absent" and len(cal.queue) == count + 1
+    assert str(cal.queue[-1][0]) == "*2*0*11##"
+
+
+@pytest.mark.parametrize("calibration", ["automatic"], indirect=True)
+async def test_a_socket_lost_during_the_pause_does_not_stop_a_present_owner(hass, recovering):
+    cal, session = recovering, recovering.session
+    await call(hass, cal, cal.connection, session.attachment, "run")
+    assert cal.queue[-1][1]()
+    bus(cal, "*2*1*11##")
+    cal.clock[0] += 5
+    await call(hass, cal, cal.connection, session.attachment, "heartbeat")
+    bus(cal, "*2*0*11##")
+    assert session.phase == "settling"
+    disconnect(cal)  # Exactly in the pause; the tab comes back within the second.
+    reader(cal, "first-controller", 88)
+    count = len(cal.queue)
+    fire(session.settle)
+    assert session.phase == "starting_close" and len(cal.queue) == count + 1
+
+
+async def test_with_its_owner_present_a_batch_moves_to_the_next_cover(hass, batch):
+    batch.session.close()
+    batch.queue.clear()
+    batch.request["client_id"] = "batch-controller"
+    session = batch.session = await begin_batch(hass, batch.connection, batch.request)
+    await batch_action(batch, "run")
+    for direction, duration in (("open", 5), ("close", 22), ("open", PRESENCE_SECONDS)):
+        batch_run(batch, direction, duration)
+        heartbeat(session)
+        fire(session.settle)
+    assert session.cover_index == 1 and session.phase == "starting_open" and len(session.results) == 1
+    assert str(batch.queue[-1][0]) == "*2*1*12##"

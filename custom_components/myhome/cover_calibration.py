@@ -250,16 +250,15 @@ class CalibrationSession:
         """Add a reader; ownership moves only on a claim made against the current sequence.
 
         A subscription replayed after a reconnection carries an older sequence, so it
-        never takes the session from its owner. Nothing is sent to the bus here.
+        never takes the session from its owner, and it does not make the owner present:
+        only a heartbeat, a verb or a claim does. Nothing is sent to the bus here.
         """
         if self.closed or not self.client_id:
             raise ProfileError("calibration_expired")
         subscriber = self.add_subscriber(connection, subscription_id, client_id)
         changed = claim and sequence == self.sequence and client_id != self.owner
         if changed:
-            self.owner = client_id
-        if client_id == self.owner:
-            self.owner_seen = monotonic()
+            self.owner, self.owner_seen = client_id, monotonic()
         return subscriber, changed
 
     def same_request(self, msg: dict[str, Any]) -> bool:
@@ -631,7 +630,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
     vol.Optional("direction"): vol.In(["opening", "closing"]),
     vol.Optional("slats"): bool,
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
-    vol.Optional("session_id"): str,
+    vol.Optional("session_id"): vol.All(str, vol.Length(min=1, max=64)),
 })
 @require_admin
 @async_response
