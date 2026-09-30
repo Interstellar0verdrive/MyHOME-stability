@@ -615,7 +615,7 @@ test("the lift-off reading states its limit from the session and a repeat says w
     return state;
   } });
   const phase = host.querySelector("#cal-phase"), notice = host.querySelector("#cal-lift-repeat");
-  const limits = { touching_cm: 1, max_gap_cm: 50, lift_repeat: true, lift_attempts: 1, still_resting: false };
+  const limits = { touching_cm: 1, gap_warn_cm: 10, max_gap_cm: 20, lift_repeat: true, lift_attempts: 1, still_resting: false, gap_warning: false };
   push({ phase: "reading", step: "lift", reading_kind: "lift", can_repeat: true, save_modes: ["new"], ...limits });
   assert.equal(phase.textContent, "Misura in cm il distacco del bordo inferiore dalla base. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.");
   assert.equal(notice.hidden, true);
@@ -627,7 +627,7 @@ test("the lift-off reading states its limit from the session and a repeat says w
   form.elements.reading_cm.value = "60";
   form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
   assert.equal(calls.at(-1).reading_cm, 60);
-  assert.equal(host.querySelector("#cal-reason").textContent, "Inserisci un distacco fra 1 e 50 cm, misurato dalla base al bordo inferiore. Se il bordo è salito di più, usa Ripeti.");
+  assert.equal(host.querySelector("#cal-reason").textContent, "Inserisci un distacco fra 1 e 20 cm, misurato dalla base al bordo inferiore. Se il bordo è salito di più, usa Ripeti.");
   push({ phase: "briefing", step: "reset", lift_repeat: true, lift_attempts: 2, still_resting: true });
   assert.equal(notice.hidden, false);
   assert.equal(notice.textContent, "Il bordo era ancora appoggiato: la corsa di distacco si ripete (tentativo 2)");
@@ -641,6 +641,25 @@ test("the lift-off reading states its limit from the session and a repeat says w
   assert.equal(notice.textContent, "");
   assert.equal(translations.en.calLiftRepeated.replace("{lift_attempts}", "2"), "The edge was still resting: the lift-off run is repeated (attempt 2)");
   assert.match(translations.en.profileError_invalid_gap, /If the edge rose further, use Repeat\.$/);
+});
+
+test("a wide lift-off gap is accepted with a warning that offers Repeat and goes away with it", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const notice = host.querySelector("#cal-lift-repeat"), repeat = host.querySelector("#cal-repeat");
+  const limits = { touching_cm: 1, gap_warn_cm: 10, max_gap_cm: 20, lift_repeat: true, lift_attempts: 1, still_resting: false };
+  push({ phase: "briefing", step: "reset", save_modes: ["new"], can_repeat: false, gap_warning: false, ...limits });
+  assert.equal(notice.hidden, true);
+  push({ can_repeat: true, gap_warning: true });
+  assert.equal(notice.hidden, false);
+  assert.equal(notice.textContent, "Il bordo si è sollevato di 10 cm o più prima dell’arresto: il tempo lamelle sarà meno preciso. Ripeti la corsa di distacco per un risultato migliore, oppure continua.");
+  assert.equal(host.querySelector('[data-cal-action="next"]').hidden, false, "continuing stays possible");
+  assert.equal(repeat.hidden, false);
+  repeat.click(); await tick();
+  assert.equal(calls.at(-1).action, "repeat");
+  push({ can_repeat: false, gap_warning: false, lift_attempts: 2 });
+  assert.equal(notice.hidden, true);
+  assert.equal(notice.textContent, "");
+  assert.match(translations.en.calGapWarning, /^The edge rose \{gap_warn_cm\} cm or more before the stop/);
 });
 
 for (const mode of ["geometry", "guided", "automatic"]) {

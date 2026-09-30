@@ -362,7 +362,8 @@ async def test_edge_still_resting_discards_the_lift_off_run_and_repeats_it(geome
     assert (view["phase"], view["step"], cal.session.after_position) == ("briefing", "reset", "lift")
     assert view["samples"] == {} and view["readings"] == {}
     assert view["lift_attempts"] == 2 and view["still_resting"] is True
-    assert (view["touching_cm"], view["max_gap_cm"], view["lift_repeat"]) == (1.0, 50.0, True)
+    assert (view["touching_cm"], view["gap_warn_cm"], view["max_gap_cm"], view["lift_repeat"]) == (1.0, 10.0, 20.0, True)
+    assert view["gap_warning"] is False
     assert len(cal.queue) == commands  # The repeat waits for its own briefing.
     await endpoint(cal, 4)
     assert cal.session.step == "lift"
@@ -398,20 +399,52 @@ async def test_edge_still_resting_is_refused_on_the_field_when_repeat_is_off(geo
     assert cal.session.readings == {"gap": 1.0}
 
 
-@pytest.mark.parametrize(("reading", "error"), [(1, None), (1.0, None), (50.0, None), (50.1, "invalid_gap"),
-                                                (-.1, "invalid_reading"), (float("nan"), "invalid_reading"),
-                                                (float("inf"), "invalid_reading"), (True, "invalid_reading")])
+@pytest.mark.parametrize(("reading", "error"), [(1, None), (1.0, None), (9.9, None), (10.0, "warning"),
+                                                (19.9, "warning"), (20.0, "warning"), (20.1, "invalid_gap"),
+                                                (50.0, "invalid_gap"), (-.1, "invalid_reading"),
+                                                (float("nan"), "invalid_reading"), (float("inf"), "invalid_reading"),
+                                                (True, "invalid_reading")])
 async def test_lift_off_gap_limits(geometry, reading, error):
     cal = geometry
     await lift(cal)
-    if error is None:
+    if error in {None, "warning"}:
         await act(cal, "reading", reading_cm=reading)
-        assert cal.session.readings == {"gap": reading} and cal.session.view()["lift_attempts"] == 1
+        view = cal.session.view()
+        assert view["readings"] == {"gap": reading} and view["lift_attempts"] == 1
+        assert (view["phase"], view["step"], cal.session.after_position) == ("briefing", "reset", "opening")
+        # From 10 cm the gap is kept with a warning, and the lift-off run may still be repeated.
+        assert view["gap_warning"] is (error == "warning") and view["can_repeat"] is (error == "warning")
         return
     with pytest.raises(ProfileError, match=error):
         await act(cal, "reading", reading_cm=reading)
     assert cal.session.phase == "reading" and cal.session.view()["lift_attempts"] == 1
     assert cal.session.readings == {} and "lift" in cal.session.samples
+
+
+async def test_wide_gap_warning_ends_on_repeat_next_or_interruption(geometry):
+    cal = geometry
+    await lift(cal)
+    await act(cal, "reading", reading_cm=12)
+    commands = len(cal.queue)
+    await act(cal, "repeat")
+    # The repeat keeps nothing of the wide run and returns to the bottom before lifting off again.
+    view = cal.session.view()
+    assert (view["step"], cal.session.after_position, view["lift_attempts"]) == ("reset", "lift", 2)
+    assert view["samples"] == {} and view["readings"] == {} and view["gap_warning"] is False
+    assert len(cal.queue) == commands
+    await endpoint(cal, 4)
+    await start(cal)
+    cal.clock[0] += LIFT - .5
+    await act(cal, "lift")
+    await stopped(cal, elapsed=.5)
+    await act(cal, "reading", reading_cm=15)
+    assert cal.session.view()["gap_warning"] is True
+    await act(cal, "next")  # Continuing accepts the wide gap.
+    assert cal.session.view()["gap_warning"] is False and cal.session.readings == {"gap": 15}
+    assert not cal.session.view()["can_repeat"]
+    cal.session.gap_warning = True
+    cal.session.interrupt("stopped")
+    assert cal.session.view()["gap_warning"] is False
 
 
 async def test_manual_repeat_counts_an_attempt_and_it_or_interruption_ends_the_notice(geometry):
