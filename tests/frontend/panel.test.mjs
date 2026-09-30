@@ -1443,7 +1443,7 @@ test("the profile dialog offers Resume from the owner's presence, not from any s
   owner_present = false;
   root.querySelector("#cal-refresh").click(); await tick();
   assert.equal(root.querySelector("#cal-resume").hidden, false);
-  assert.match(root.querySelector("#cal-recovery p").textContent, /nessuna scheda/);
+  assert.match(root.querySelector("#cal-recovery p").textContent, /non riceve segnali recenti/);
 });
 
 test("refreshing session availability preserves a profile draft at the same revision", async () => {

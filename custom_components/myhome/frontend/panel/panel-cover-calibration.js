@@ -59,6 +59,9 @@ export class CoverCalibration {
     this._lost = false;
     this._busy = false;
     this._claiming = !!context.claim;
+    this._cancelPending = null;
+    this._cancelling = false;
+    this._expired = false;
     this._savePreview = null;
     this._renderedPreview = null;
     const generation = this._generation;
@@ -129,10 +132,7 @@ export class CoverCalibration {
     };
     host.querySelector("#cal-reading").oninput = (event) => this._checkRange(event.currentTarget);
     host.querySelector("#cal-stop").onclick = () => this._perform("stop");
-    host.querySelector("#cal-cancel").onclick = async () => {
-      await this.close({ cancel: true });
-      if (this._generation === generation + 1 && host.isConnected) context.onCancel();
-    };
+    host.querySelector("#cal-cancel").onclick = () => this._cancel(generation);
     host.querySelector("#cal-reconnect").onclick = () => this.open({ ...context, claim: false, resume: this._state });
     host.querySelector("#cal-take-control").onclick = () => this.open({ ...context, claim: true, resume: this._state });
     host.querySelector("#cal-save-mode").onchange = () => {
@@ -189,10 +189,12 @@ export class CoverCalibration {
   _locked() { return this._busy || this._lost || !!this._state?.read_only; }
 
   _accept(state) {
+    const previous = this._state;
     // Sequences are ordered within one session only.
-    if (this._state && state.session_id === this._state.session_id && state.sequence < this._state.sequence) return;
-    if (state.session_id !== this._state?.session_id || (state.recoverable && state.attachment !== this._state?.attachment)) {
+    if (previous && state.session_id === previous.session_id && state.sequence < previous.sequence) return;
+    if (state.session_id !== previous?.session_id || (state.recoverable && state.attachment !== previous?.attachment)) {
       this._busy = false;
+      this._expired = false;
       this._savePreview = null;
       this._context.host.querySelector("#cal-reason").hidden = true;
     }
@@ -210,6 +212,12 @@ export class CoverCalibration {
         box.hidden = false;
       }
     }
+    // The owner's subscription replayed after a reconnection: a Cancel that did not arrive goes
+    // first; otherwise presence is renewed at once rather than at the next heartbeat.
+    if (previous?.attachment && state.owner && state.session_id === previous.session_id && state.attachment !== previous.attachment) {
+      if (this._cancelPending) this._cancel(this._generation);
+      else this._perform("heartbeat");
+    }
     if (state.phase === "saved") {
       this.close();
       this._context.onSaved();
@@ -219,7 +227,8 @@ export class CoverCalibration {
   _render() {
     const { host, t } = this._context;
     const state = this._state;
-    host.querySelector("#cal-reconnect").hidden = !this._lost || !state.recoverable;
+    // Once Home Assistant says the session has ended, resuming it can only fail again.
+    host.querySelector("#cal-reconnect").hidden = !this._lost || !state.recoverable || this._expired;
     const readOnly = !!state.read_only, ended = ["saved", "cancelled"].includes(state.phase);
     const notice = host.querySelector("#cal-read-only");
     notice.hidden = !readOnly || ended;
@@ -393,6 +402,37 @@ export class CoverCalibration {
     box.hidden = false;
   }
 
+  /** The owner's Cancel must reach Home Assistant: until it does, the view stays and says so. */
+  async _cancel(generation) {
+    const { host, hass, t, onCancel } = this._context, state = this._state;
+    if (!this._current(generation) || this._cancelling) return;
+    if (state?.recoverable && !state.read_only && !["saved", "cancelled"].includes(state.phase)) {
+      this._cancelling = true;
+      try {
+        const result = await hass.callWS({ type: "myhome/cover_calibration/action", entry_id: state.entry_id,
+          session_id: state.session_id, attachment: state.attachment, action: "cancel" });
+        if (this._current(generation)) this._accept(result);
+      } catch (error) {
+        if (!this._current(generation)) return;
+        // The same refusal twice on one subscription means the session is gone: close as before.
+        if (error?.code !== "calibration_expired" || this._cancelPending !== state.attachment) {
+          this._cancelPending = state.attachment;
+          const box = host.querySelector("#cal-reason");
+          box.textContent = t("calCancelFailed");
+          box.hidden = false;
+          // A subscription replayed meanwhile can deliver it now.
+          if (this._state.attachment !== state.attachment) queueMicrotask(() => this._cancel(generation));
+          return;
+        }
+      } finally {
+        this._cancelling = false;
+      }
+    }
+    if (!this._current(generation)) return;
+    await this.close({ cancel: true });
+    if (this._generation === generation + 1 && host.isConnected) onCancel();
+  }
+
   async _perform(action, extra = {}) {
     if (!this._state || (this._busy && !["stop", "heartbeat"].includes(action))) return;
     const generation = this._generation;
@@ -412,7 +452,10 @@ export class CoverCalibration {
       if (current()) this._accept(result);
     } catch (error) {
       if (!current()) return;
-      if (action === "heartbeat") this._lost = true;
+      if (action === "heartbeat") {
+        this._lost = true;
+        this._expired = error?.code === "calibration_expired";
+      }
       if (action === "save" || action === "preview_save") this._savePreview = null;
       this._error(error);
     } finally {

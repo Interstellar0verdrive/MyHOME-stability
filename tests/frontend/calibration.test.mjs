@@ -878,7 +878,7 @@ test("closing a read-only tab detaches instead of cancelling the owner's session
 
 test("reconnecting to the same session swaps the subscription without leaving it or claiming", async () => {
   const { host, push, calls, starts } = await mount({ call: (message) => {
-    if (message.action === "heartbeat") throw { code: "calibration_expired" };
+    if (message.action === "heartbeat") throw { code: "disconnected" };
     return {};
   } });
   push({ recoverable: true, attached: true, attachment: "owner", read_only: false });
@@ -948,4 +948,58 @@ test("a claim made against an old sequence warns and invites to try again", asyn
   await controller.open({ ...controller._context, claim: true, resume: controller._state });
   assert.equal(controller._state.owner, true);
   assert.equal(host.querySelector("#cal-reason").hidden, true);
+  push({ read_only: true, owner: false }); // Another tab takes control later: that is no stale claim.
+  assert.equal(host.querySelector("#cal-reason").hidden, true);
+  assert.equal(host.querySelector("#cal-read-only").hidden, false);
+});
+
+test("a Cancel that does not reach Home Assistant keeps the view and is sent first after the reconnection", async () => {
+  let online = false;
+  const { host, push, calls, counts } = await mount({ call: (message, state) => {
+    if (!online) throw 3; // ERR_CONNECTION_LOST from home-assistant-js-websocket.
+    return { ...state, sequence: state.sequence + 1, phase: message.action === "cancel" ? "cancelled" : state.phase };
+  } });
+  push({ recoverable: true, attached: true, attachment: "before", owner: true, read_only: false, phase: "settling" });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(counts().cancelled, 0, "the view is not closed in silence");
+  assert.equal(host.querySelector("#cal-reason").hidden, false);
+  assert.equal(host.querySelector("#cal-reason").textContent, translations.it.calCancelFailed);
+  online = true;
+  push({ attachment: "after", attached: true }); await tick(); // Home Assistant replays the subscription.
+  const sent = calls.filter((call) => call.attachment === "after");
+  assert.deepEqual(sent.map((call) => call.action), ["cancel"], "no heartbeat before the Cancel");
+  assert.equal(counts().cancelled, 1);
+  assert.equal(counts().stopped, 1);
+});
+
+test("a Cancel refused twice as expired on the same subscription closes the view", async () => {
+  const { host, push, calls, counts } = await mount({ call: () => { throw { code: "calibration_expired" }; } });
+  push({ recoverable: true, attached: true, attachment: "gone", owner: true, read_only: false });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(counts().cancelled, 0);
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(counts().cancelled, 1);
+  assert.ok(calls.filter((call) => call.action === "cancel").length >= 2);
+});
+
+test("an owner's replayed subscription renews presence at once; a reader's does not", async () => {
+  const { push, calls } = await mount();
+  push({ recoverable: true, attached: true, attachment: "first", owner: true, read_only: false });
+  assert.equal(calls.length, 0);
+  push({ attachment: "second" }); await tick();
+  assert.deepEqual(calls.map((call) => [call.action, call.attachment]), [["heartbeat", "second"]]);
+  push({ attachment: "third", owner: false, read_only: true }); await tick();
+  assert.equal(calls.length, 1);
+});
+
+test("after Home Assistant reports the session ended, Resume is not offered", async () => {
+  const { host, push, controller } = await mount({ call: (message) => {
+    if (message.action === "heartbeat") throw { code: "calibration_expired" };
+    return {};
+  } });
+  push({ recoverable: true, attached: true, attachment: "owner", owner: true, read_only: false });
+  await controller._perform("heartbeat");
+  assert.equal(host.querySelector("#cal-reason").textContent, translations.it.profileError_calibration_expired);
+  assert.equal(host.querySelector("#cal-reconnect").hidden, true);
+  assert.equal(host.querySelector('[data-cal-action="open"]').disabled, true);
 });
