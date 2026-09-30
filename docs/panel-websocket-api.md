@@ -1,6 +1,6 @@
 # MyHOME panel API: implemented reference
 
-> Panel 0.38.3 changes the [lift-off gap rule and adds covers without slats](#guided-geometry-lift-off-gap-and-covers-without-slats-0383) to guided slat/roll measurement.
+> Panel 0.38.4 changes the [lift-off gap rule and adds covers without slats](#guided-geometry-lift-off-gap-and-covers-without-slats-0384) to guided slat/roll measurement.
 
 > Panel 0.31.0 adds [guided slat/roll measurement](cover-guided-geometry.md): basic new-profile path, backend tape fitting and atomic review/save.
 
@@ -20,7 +20,7 @@
 > Existing endpoints remain available; native writes use the shared store and revision. Earlier release descriptions below remain historical where superseded.
 
 
-## Guided geometry: lift-off gap and covers without slats (0.38.3)
+## Guided geometry: lift-off gap and covers without slats (0.38.4)
 
 `start` with `mode: "geometry"` accepts an optional `slats` boolean, `true` by
 default. With any other mode, `slats` is refused with `invalid_profile`; a value
@@ -36,6 +36,7 @@ lift-off gap rule below applies to it as well.
 | `touching_cm`, `max_gap_cm` | Lift-off gap limits in cm, `1.0` and `20.0` |
 | `gap_warn_cm` | Gap from which a reading is accepted with a warning, `10.0` |
 | `gap_warning` | `true` after a gap from `gap_warn_cm` to `max_gap_cm` is accepted, until `next`, Repeat or an interruption |
+| `saved_travel_cm` | The travel already saved for the cover, or `null`; `travel_cm` stays the travel measured in this session |
 | `lift_repeat` | `true` when a gap below `touching_cm` repeats the lift-off run, `false` when it is refused |
 
 **Lift-off gap.** The `reading` that follows the lift-off run is the gap between the
@@ -53,7 +54,7 @@ attempts; Cancel ends the session. Above `max_gap_cm` the reading is refused wit
 new error `invalid_gap` and the step does not change; if the edge really rose
 further, Repeat is the only way on and runs the lift-off again. Negative or non-finite readings, a missing reading and
 a boolean keep `invalid_reading`; a string is still refused by the message schema
-(`invalid_format`). Before 0.38.3 a reading of 0 meant "just
+(`invalid_format`). Before 0.38.4 a reading of 0 meant "just
 lifted, no measurable gap"; it now means "still resting".
 
 The limits and the repeat are constants in `cover_calibration_geometry.py`:
@@ -71,15 +72,21 @@ to the bottom through the `home` briefing; repeating the full descent, the
 intermediate descent or the review still goes through `top`. Review and save carry `slat_time_s: 0`. The joint lift-off fit used with
 slats is unchanged. Storage and export formats are unchanged.
 
-Panel 0.38.3 shows a "This cover has no slats" switch in the calibration section
+Panel 0.38.4 shows a "This cover has no slats" switch in the calibration section
 when **Slats and roll — guided** is selected, and sends `slats: false` only when it is
 on. The lift-off text takes its limit from `touching_cm`, a status line gives the
 attempt after an automatic repeat or a non-blocking warning after a wide gap, with
 the values from the view, `invalid_gap` names both limits and points to Repeat, the briefings and illustration captions of a cover without slats do not
-mention slats, and the review shows "No slats" instead of a slat time. From 0.38.3 the
+mention slats, and the review shows "No slats" instead of a slat time. From 0.38.4 the
 tape reading field is a text field with a decimal keypad: it takes a comma or a point
 as decimal separator, and an empty or non-numeric entry is never sent; the field is
-marked invalid and a message asks for a number.
+marked invalid and a message asks for a number. From 0.38.4 the lift-off text says to
+enter 0 when the edge did not rise at least `touching_cm`; a lift-off gap outside 0 to
+`max_gap_cm` keeps "Use this reading" disabled and shows the `invalid_gap` text under
+the field before anything is sent (Home Assistant still validates every reading); the
+travel reading is prefilled with `saved_travel_cm` when known, and is sent only when
+confirmed; review values are displayed rounded, tenths of a second and of a
+centimetre and rolls to two decimals, while stored and sent values keep full precision.
 
 ## Multi-cover profile assignment (0.27.0)
 
