@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, afterEach, test } from "node:test";
+import { after, afterEach, mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { CoverCalibration, calibrationClient } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
@@ -1058,4 +1058,61 @@ test("after Home Assistant reports the session ended, Resume is not offered", as
   assert.equal(host.querySelector("#cal-reason").textContent, translations.it.profileError_calibration_expired);
   assert.equal(host.querySelector("#cal-reconnect").hidden, true);
   assert.equal(host.querySelector('[data-cal-action="open"]').disabled, true);
+});
+
+/** Fake intervals and a fake monotonic clock, advanced together. */
+function fakeClock() {
+  let now = 1000;
+  mock.timers.enable({ apis: ["setInterval"] });
+  mock.method(performance, "now", () => now);
+  return { tick: (ms) => { now += ms; mock.timers.tick(ms); },
+    restore: () => { mock.timers.reset(); mock.restoreAll(); } };
+}
+
+test("the elapsed time advances every second between two views and realigns to each view", async () => {
+  const clock = fakeClock();
+  try {
+    const { host, push } = await mount();
+    const shown = () => host.querySelector("#cal-elapsed").textContent;
+    push({ phase: "opening", elapsed: 9.9 });
+    assert.match(shown(), /: 9\.9 s$/);
+    clock.tick(999);
+    assert.match(shown(), /: 9\.9 s$/);
+    clock.tick(1);
+    assert.match(shown(), /: 10\.9 s$/);
+    clock.tick(3000);
+    assert.match(shown(), /: 13\.9 s$/);
+    push({ elapsed: 12.25 }); // The next view wins over the local count.
+    assert.match(shown(), /: 12\.25 s$/);
+    clock.tick(1000);
+    assert.match(shown(), /: 13\.25 s$/);
+    push({ phase: "confirm_open", elapsed: null }); // End of the run.
+    assert.equal(shown(), "");
+    clock.tick(5000);
+    assert.equal(shown(), "");
+  } finally {
+    clock.restore();
+  }
+});
+
+test("no elapsed timer survives a closed view or a lost connection", async () => {
+  const clock = fakeClock();
+  try {
+    const { host, push, controller } = await mount({ call: (message) => {
+      if (message.action === "heartbeat") throw { code: "disconnected" };
+      return {};
+    } });
+    push({ phase: "closing", elapsed: 4 });
+    await controller._perform("heartbeat");
+    assert.equal(controller._ticker, null);
+    assert.equal(host.querySelector("#cal-elapsed").textContent, "");
+    push({ recoverable: true, attached: true, attachment: "again", phase: "closing", elapsed: 6 });
+    assert.notEqual(controller._ticker, null);
+    controller.close();
+    assert.equal(controller._ticker, null);
+    clock.tick(3000);
+    assert.equal(host.querySelector("#cal-elapsed").textContent, `${translations.it.calElapsed}: 6 s`);
+  } finally {
+    clock.restore();
+  }
 });

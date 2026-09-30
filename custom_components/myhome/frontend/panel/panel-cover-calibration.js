@@ -36,6 +36,7 @@ export class CoverCalibration {
     this._pin = null;
     clearInterval(this._heartbeat);
     this._heartbeat = null;
+    this._clock(null);
     const state = this._state;
     // A read-only tab never cancels the owner's session: it only stops reading it.
     const action = !state?.recoverable || (cancel && !state.read_only) ? "cancel" : "detach";
@@ -200,6 +201,7 @@ export class CoverCalibration {
     }
     this._state = state;
     if (state.recoverable) this._lost = !state.attached;
+    this._clock(this._lost ? null : state.elapsed);
     if (state.phase !== "review") this._savePreview = null;
     else if (state.save_preview && this._context.host.querySelector("#cal-save-mode").value === "shared") this._savePreview = state.save_preview;
     this._render();
@@ -248,7 +250,7 @@ export class CoverCalibration {
     host.querySelector("#cal-phase").textContent = automatic && ["starting_open", "starting_close", "opening", "closing", "settling"].includes(state.phase)
       ? `${t("calAutomaticRun")} ${state.run_index + 1}/3 · ${t(`calAutoPhase_${state.phase}`)}`
       : t(state.direction && state.phase === "review" ? "calQuickReview" : `calPhase_${state.phase}`);
-    host.querySelector("#cal-elapsed").textContent = state.elapsed == null ? "" : `${t("calElapsed")}: ${state.elapsed} s`;
+    this._renderElapsed();
     host.querySelector("#cal-stop-status").hidden = !state.stop_requested;
     const reason = host.querySelector("#cal-reason");
     if (state.reason) {
@@ -286,6 +288,21 @@ export class CoverCalibration {
           <span class="muted">${esc(t("profileName"))}</span><input data-batch-name="${result.index}" required maxlength="64" value="${esc(state.targets[result.index].name.slice(0, 64))}"></label>`).join("");
       }
     }
+  }
+
+  /** Between two views the elapsed time advances here once a second from the last value received. */
+  _clock(elapsed) {
+    clearInterval(this._ticker);
+    this._ticker = null;
+    this._elapsed = elapsed == null ? null : { value: elapsed, since: performance.now() };
+    if (this._elapsed) this._ticker = setInterval(() => this._renderElapsed(), 1000);
+  }
+
+  _renderElapsed() {
+    const { host, t } = this._context, elapsed = this._elapsed;
+    // Whole seconds are added to the received value, so it keeps the precision Home Assistant sent.
+    const value = elapsed && Math.round((elapsed.value + Math.floor((performance.now() - elapsed.since) / 1000)) * 100) / 100;
+    host.querySelector("#cal-elapsed").textContent = elapsed ? `${t("calElapsed")}: ${value} s` : "";
   }
 
   _renderGeometry(enabled) {
@@ -469,6 +486,8 @@ export class CoverCalibration {
       if (!current()) return;
       if (action === "heartbeat") {
         this._lost = true;
+        // No view is arriving: the local count stops too.
+        this._clock(null);
         this._expired = error?.code === "calibration_expired";
       }
       if (action === "save" || action === "preview_save") this._savePreview = null;
