@@ -634,7 +634,7 @@ test("the lift-off reading states its limit from the session and a repeat says w
   const announced = notice.firstChild;
   push({});  // A heartbeat or an unchanged view does not announce it again.
   assert.equal(notice.firstChild, announced);
-  push({ phase: "opening", step: "lift", lift_attempts: 3 });
+  push({ lift_attempts: 3 });  // Another run still resting, back at the same briefing.
   assert.match(notice.textContent, /\(tentativo 3\)$/);
   push({ phase: "briefing", step: "reset", still_resting: false });
   assert.equal(notice.hidden, true);
@@ -660,6 +660,34 @@ test("a wide lift-off gap is accepted with a warning that offers Repeat and goes
   assert.equal(notice.hidden, true);
   assert.equal(notice.textContent, "");
   assert.match(translations.en.calGapWarning, /^The edge rose \{gap_warn_cm\} cm or more before the stop/);
+});
+
+test("tape readings take a comma or a point and never send an empty or partial number", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm, reason = host.querySelector("#cal-reason");
+  assert.equal(input.type, "text");
+  assert.equal(input.inputMode, "decimal");
+  const submit = async (value) => {
+    input.value = value;
+    form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  };
+  for (const [step, reading_kind] of [["lift", "lift"], ["opening", "travel"], ["half_open", "half_open"]]) {
+    push({ phase: "reading", step, reading_kind, can_repeat: true, save_modes: ["new"] });
+    for (const [value, expected] of [["2,8", 2.8], ["2.8", 2.8], [" 12,5 ", 12.5], ["0", 0], [",5", .5]]) {
+      await submit(value);
+      assert.equal(calls.at(-1).action, "reading");
+      assert.equal(calls.at(-1).reading_cm, expected, `${step} ${value}`);
+      assert.equal(input.getAttribute("aria-invalid"), "false");
+    }
+    for (const value of ["", "   ", "abc", "2,8 cm", "1e3", "0x10", "1,2,3", "-"]) {
+      const sent = calls.length;
+      await submit(value);
+      assert.equal(calls.length, sent, `${step} "${value}" must not be sent`);
+      assert.equal(input.getAttribute("aria-invalid"), "true");
+      assert.equal(reason.hidden, false);
+      assert.equal(reason.textContent, "Inserisci la lettura in cm come numero; i decimali possono seguire una virgola o un punto.");
+    }
+  }
 });
 
 for (const mode of ["geometry", "guided", "automatic"]) {

@@ -365,8 +365,14 @@ async def test_edge_still_resting_discards_the_lift_off_run_and_repeats_it(geome
     assert (view["touching_cm"], view["gap_warn_cm"], view["max_gap_cm"], view["lift_repeat"]) == (1.0, 10.0, 20.0, True)
     assert view["gap_warning"] is False
     assert len(cal.queue) == commands  # The repeat waits for its own briefing.
-    await endpoint(cal, 4)
-    assert cal.session.step == "lift"
+    await start(cal)
+    # The notice belongs to the briefing of the return to the bottom only.
+    assert cal.session.phase == "closing" and cal.session.step == "reset"
+    assert cal.session.view()["still_resting"] is False and cal.session.view()["lift_attempts"] == 2
+    cal.clock[0] += 4
+    await act(cal, "endpoint")
+    await stopped(cal, elapsed=.4)
+    assert cal.session.step == "lift" and cal.session.still_resting is False
     await start(cal)
     cal.clock[0] += LIFT - .5
     await act(cal, "lift")
@@ -378,7 +384,7 @@ async def test_edge_still_resting_discards_the_lift_off_run_and_repeats_it(geome
     cal.clock[0] += LIFT - .5
     await act(cal, "lift")
     await stopped(cal, elapsed=.5)
-    assert cal.session.still_resting  # Still explained while the repeated run is read.
+    assert not cal.session.still_resting  # Not repeated during the new lift-off run or its reading.
     await act(cal, "reading", reading_cm=GAP)
     assert cal.session.readings == {"gap": GAP} and cal.session.samples == {"lift": pytest.approx(LIFT)}
     assert (cal.session.step, cal.session.after_position) == ("reset", "opening")
