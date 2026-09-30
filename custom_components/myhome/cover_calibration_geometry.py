@@ -73,7 +73,8 @@ class GeometryCalibrationSession(guided.CalibrationSession):
     def geometry_action(self, msg: dict[str, Any]) -> None:
         action = msg["action"]
         if action == "next" and self.phase == "briefing":
-            self.gap_warning = False  # Moving on accepts the wide gap.
+            # Moving on accepts a wide gap and ends the still-resting notice of the briefing.
+            self.gap_warning = self.still_resting = False
             direction = "close" if self.step in {"home", "reset", "closing", "half_close"} else "open"
             written = self.queue_move(direction)
             written.add_done_callback(self._movement_delivered)
