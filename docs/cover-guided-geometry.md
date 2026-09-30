@@ -13,8 +13,10 @@ movement merely because a reading was submitted or a client reconnected.
 
 1. Close completely and confirm the physical bottom end stop, slats closed.
 2. Start the lift-off ascent. Press the large button as the bottom edge leaves its
-   rest. Wait for Stop feedback. If still resting, repeat; otherwise enter the
-   actual gap above the rest (0 only for a just-lifted, unmeasurable gap).
+   rest. Wait for Stop feedback, then enter the actual gap above the rest. From
+   panel 0.38.0 a gap below 1 cm, 0 included, means the edge is still resting: the
+   run is discarded and repeated from the bottom; above 50 cm the reading is
+   refused (see [the API](panel-websocket-api.md#guided-geometry-lift-off-gap-and-covers-without-slats-0380)).
 3. Return to the bottom, then explicitly start the timed full ascent. Confirm the
    physical top end stop. Measure travel from the rest to the lower curtain edge.
 4. Start the timed full descent and confirm the bottom end stop, slats closed.
@@ -28,6 +30,11 @@ movement merely because a reading was submitted or a client reconnected.
    Explicit Save creates and assigns a new profile, saves this cover's measured
    travel, removes its former timing overrides and records per-key guided evidence
    in one storage transaction. Other profiles and their followers are untouched.
+
+A cover without slats (panel 0.38.0, switch "This cover has no slats") skips step 2
+and the return to the bottom at the start of step 3: the full ascent follows step 1,
+the intermediate ascent is scheduled for half the opening time, and the slat time is
+saved as zero.
 
 Repeat is available after each reading and after the full closing measurement.
 It returns to the required endpoint with an explicit briefing, then repeats the
