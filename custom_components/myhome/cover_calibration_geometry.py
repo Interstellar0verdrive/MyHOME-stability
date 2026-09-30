@@ -100,7 +100,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         starting = self.phase.startswith("starting_")
         super().on_event(event)
         if starting and self.phase in {"opening", "closing"} and self.step.startswith("half_"):
-            seconds = ((self.samples.get("lift", 0.0) + self.values["opening_time"]) / 2 if self.step == "half_open"
+            seconds = (((self.samples["lift"] if self.slats else 0.0) + self.values["opening_time"]) / 2 if self.step == "half_open"
                        else (self.values["closing_time"] - self.geometry["slat_time_s"]) / 2)
             # Reuse the motion deadline: interruption/close already cancels it.
             cast(asyncio.TimerHandle, self.deadline).cancel()
@@ -217,6 +217,8 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         # Without slats the return to the bottom is the same close as the first one.
         self.step = "top" if target in {"half_close", "closing"} else "reset" if self.slats else "home"
         self.after_position = target
+        if target == "lift":  # A lift-off run repeated on request is one more attempt as well.
+            self.lift_attempts += 1
         self.still_resting = False
         self.phase = "briefing"
         self.emit()
