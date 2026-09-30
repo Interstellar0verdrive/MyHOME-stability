@@ -47,7 +47,8 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         self.geometry_provenance: dict[str, Any] = {}
 
     def view(self) -> Any:
-        return {**super().view(), "step": self.step, "save_modes": ["new"],
+        view = super().view()
+        return {**view, "step": self.step, "save_modes": ["new"],
                 "travel_cm": self.measured_travel, "geometry": dict(self.geometry),
                 "readings": dict(self.readings), "samples": dict(self.samples),
                 "accuracy": None, "independent_check": False,
@@ -57,7 +58,9 @@ class GeometryCalibrationSession(guided.CalibrationSession):
                 "expected_cm": self.measured_travel / 2 if self.measured_travel and self.step.startswith("half_") else None,
                 "slats": self.slats, "lift_attempts": self.lift_attempts, "still_resting": self.still_resting,
                 "touching_cm": TOUCHING_CM, "max_gap_cm": MAX_GAP_CM, "lift_repeat": LIFT_REPEAT_BELOW_TOUCHING,
-                "gap_warn_cm": GAP_WARN_CM, "gap_warning": self.gap_warning}
+                "gap_warn_cm": GAP_WARN_CM, "gap_warning": self.gap_warning,
+                # travel_cm is this measurement's; the travel already saved for the cover stays readable.
+                "saved_travel_cm": view["travel_cm"]}
 
     def interrupt(self, reason: str, send_stop: Any = True) -> None:
         if not self.active or self.phase == "saving":
