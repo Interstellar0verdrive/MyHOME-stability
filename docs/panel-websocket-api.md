@@ -24,13 +24,14 @@
 
 `start` with `mode: "geometry"` accepts an optional `slats` boolean, `true` by
 default. With any other mode, `slats` is refused with `invalid_profile`; a value
-that is not a boolean fails schema validation. A client that omits it gets the
-same flow as before, and geometry views only add these keys:
+that is not a boolean fails schema validation. A client that omits it keeps the
+slat path and its steps, and its geometry views only add the keys below; the
+lift-off gap rule below applies to it as well.
 
 | Key | Meaning |
 | --- | --- |
 | `slats` | `false` for a cover measured without slats |
-| `lift_attempts` | Number of the current lift-off attempt, starting at 1 |
+| `lift_attempts` | Number of the current lift-off run, starting at 1: every repeat of the run, automatic or with Repeat, adds one |
 | `still_resting` | `true` once a lift-off run was discarded because the edge was still resting, until a gap is accepted, Repeat is used or the session is interrupted |
 | `touching_cm`, `max_gap_cm` | Lift-off gap limits in cm, `1.0` and `50.0` |
 | `lift_repeat` | `true` when a gap below `touching_cm` repeats the lift-off run, `false` when it is refused |
@@ -43,8 +44,10 @@ grows by one, `still_resting` becomes `true`, and the session returns to the `re
 briefing, which brings the cover back to the bottom before the lift-off run starts
 again. Each of these movements still waits for its own `next`. There is no limit on
 attempts; Cancel ends the session. Above `max_gap_cm` the reading is refused with the
-new error `invalid_gap` and the step does not change; negative, non-finite and
-non-numeric readings keep `invalid_reading`. Before 0.38.0 a reading of 0 meant "just
+new error `invalid_gap` and the step does not change; if the edge really rose
+further, Repeat is the only way on and runs the lift-off again. Negative or non-finite readings, a missing reading and
+a boolean keep `invalid_reading`; a string is still refused by the message schema
+(`invalid_format`). Before 0.38.0 a reading of 0 meant "just
 lifted, no measurable gap"; it now means "still resting".
 
 The limits and the repeat are constants in `cover_calibration_geometry.py`:
@@ -57,15 +60,17 @@ real installations.
 ascent follows the first bottom end stop. The intermediate ascent is scheduled to stop
 at half the opening time, and its reading fits the opening roll alone with a slat phase of zero
 (`opening_roll_fit`, the mirror of the closing fit: same 1–5 roll range, same
-`invalid_reading` refusals). Repeat returns to the bottom through the `home`
-briefing. Review and save carry `slat_time_s: 0`. The joint lift-off fit used with
+`invalid_reading` refusals). Repeating the travel or the intermediate ascent returns
+to the bottom through the `home` briefing; repeating the full descent, the
+intermediate descent or the review still goes through `top`. Review and save carry `slat_time_s: 0`. The joint lift-off fit used with
 slats is unchanged. Storage and export formats are unchanged.
 
 Panel 0.38.0 shows a "This cover has no slats" switch in the calibration section
 when **Slats and roll — guided** is selected, and sends `slats: false` only when it is
 on. The lift-off text takes its limit from `touching_cm`, a status line gives the
-attempt after a repeat, `invalid_gap` names both limits, and the review shows "No
-slats" instead of a slat time.
+attempt after an automatic repeat, `invalid_gap` names both limits and points to
+Repeat, the briefings and illustration captions of a cover without slats do not
+mention slats, and the review shows "No slats" instead of a slat time.
 
 ## Multi-cover profile assignment (0.27.0)
 
