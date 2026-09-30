@@ -55,8 +55,9 @@ WS_ACTION = "myhome/cover_calibration/action"
 # and cancellation when its subscription ends.
 LEASE_SECONDS = 20
 # A client that sends client_id (one per browser tab) is recognised on every socket.
-# Presence only tells the other readers whether the owner is still there; the lease
-# hands the cover back after inactivity and is never renewed by a heartbeat.
+# Presence tells every reader whether the owner is still there (`owner_present`), and
+# an automatic step starts a new movement only while it holds. The lease hands the
+# cover back after inactivity and is never renewed by a heartbeat.
 PRESENCE_SECONDS = 45
 IDLE_LEASE_SECONDS = 1800
 MOVED_LEASE_SECONDS = 600
@@ -148,6 +149,7 @@ class CalibrationSession:
                 "reference_travel_cm": (self.store.profile(self.cover.unique_id) or {}).get("reference_travel_cm"),
                 "waiting_for_stop": self.closed and self.reservation.pending,
                 **({"recoverable": not self.closed, "attached": self.present() and not self.closed, "attachment": None,
+                    "owner_present": self.present() and not self.closed,
                     "recovery_seconds": self.lease_seconds, "owner": False, "read_only": True,
                     "idle_expires_at": None if self.closed or self.lease_expires_at is None
                     else self.lease_expires_at.isoformat()} if self.client_id else {}),
@@ -155,11 +157,24 @@ class CalibrationSession:
                 **({"direction": self.direction} if self.direction else {})}
 
     def present(self) -> bool:
-        """The owner sent a heartbeat or a verb recently. Nothing depends on it but the view."""
+        """The owner sent a heartbeat or a verb recently. It never decides who may act."""
         return self.owner is not None and monotonic() - self.owner_seen < PRESENCE_SECONDS
 
+    def unattended(self) -> bool:
+        """An automatic step starts a new movement only while an identified owner is present.
+
+        Otherwise the session ends as interrupted; Stop is written only while a movement may run.
+        """
+        if not self.client_id or self.present():
+            return False
+        self.interrupt("owner_absent", send_stop=self.reservation.pending)
+        return True
+
     def overlay(self, subscriber: Subscriber, attached: bool = True) -> dict[str, Any]:
-        """What differs between readers: who owns the session and their own token."""
+        """What differs between readers: ownership, their token, their live subscription.
+
+        `owner_present` is the same for every reader and stays in the view.
+        """
         owner = subscriber.client_id == self.owner
         return {"owner": owner, "read_only": not owner, "attachment": subscriber.token,
                 "attached": attached and not self.closed}
@@ -267,7 +282,7 @@ class CalibrationSession:
 
         Stop is accepted from every reader: it is a safety control. Every other verb,
         Save included, belongs to the owner. A heartbeat never takes ownership and never
-        renews the lease; an accepted verb of the owner does.
+        renews the lease; every accepted verb does, Stop from a reader included.
         """
         action = msg["action"]
         owner = subscriber.client_id == self.owner
@@ -546,10 +561,15 @@ def ready_cover(hass: Any, store: Any, entry_id: str, entity_id: str) -> Any:
 
 
 def replay(store: Any, connection: Any, msg: dict[str, Any]) -> Any:
-    """A client repeating its own start reads its live session; no command is sent."""
+    """A client repeating its own start reads its live session; no command is sent.
+
+    A replay that names its session (`session_id`) never creates another one.
+    """
     session = store.calibration
     if (session is None or session.closed or msg.get("client_id") not in session.known
-            or not session.same_request(msg)):
+            or not session.same_request(msg) or msg.get("session_id", session.id) != session.id):
+        if "session_id" in msg:
+            raise ProfileError("calibration_expired")
         return None
     session.attach(connection, msg["id"], msg["client_id"])
     return session
@@ -611,6 +631,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
     vol.Optional("direction"): vol.In(["opening", "closing"]),
     vol.Optional("slats"): bool,
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Optional("session_id"): str,
 })
 @require_admin
 @async_response

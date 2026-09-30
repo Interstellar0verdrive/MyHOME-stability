@@ -86,7 +86,7 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
 
     def next_cover(self) -> None:
         self.settle = None
-        if self.phase != "between_covers" or self.store.calibration is not self:
+        if self.phase != "between_covers" or self.store.calibration is not self or self.unattended():
             return
         following = self.covers[self.cover_index + 1]
         try:
@@ -176,6 +176,7 @@ async def ws_targets(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     vol.Required("type"): WS_BATCH_START, vol.Required("entry_id"): str,
     vol.Required("entity_ids"): SELECTION, vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Optional("session_id"): str,
 })
 @require_admin
 @async_response
