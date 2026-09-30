@@ -187,8 +187,13 @@ unsubscribe), that reader is removed. No movement is interrupted, no Stop is
 written and no value is discarded.
 
 **Presence and lease.** The owner is *present* while its last heartbeat or
-action is less than 45 s old; the panel sends a heartbeat every 15 s. Presence
-only tells readers whether the owner is still there. The *lease* ends the
+action is less than 45 s old; the panel sends a heartbeat every 15 s. Every view
+reports it as `owner_present` (panel 0.39.0). Presence never decides who may act,
+but an automatic or batch cycle starts a new movement by itself only while the
+owner is present: when a pause ends (next run, next cover) without the owner, the
+session is interrupted with reason `owner_absent`, the values are discarded, and
+no Stop is written unless a movement may still be running. A movement already
+under way runs to its end whether or not the owner is present. The *lease* ends the
 session as `expired` after 1800 s without a transition or an accepted action
 of the owner, or 600 s once a movement has been sent; Stop is written at that
 moment only while a movement may still be running. A heartbeat never renews the
@@ -197,8 +202,22 @@ lease and never takes ownership.
 **Ownership changes only on an explicit claim.** A replayed `start`/`batch_start`
 from a known `client_id`, for the same target, mode and direction, and a
 `resume` without `claim`, only add a reader: an owner is never displaced by a
-reconnection or a repeated subscription. To take control, a client subscribes
-with:
+reconnection or a repeated subscription.
+
+**Replayed starts.** Home Assistant repeats a subscription message after its
+websocket reconnects. `start` and `batch_start` accept an optional `session_id`:
+with it, the message only reads that live session and is refused with
+`calibration_expired` when the session has ended or another one holds the
+gateway; it never creates a session. Panel 0.39.0 adds `session_id` to its start
+message when the connection drops or the view closes, so a replay after a session
+has ended (lease expiry, Cancel from another tab) shows the error instead of
+starting a new measurement. A replay without `session_id` (for instance, when the
+connection dropped before the first view arrived) behaves as before: it reads the
+live session when there is one, and otherwise creates a fresh confirmation step,
+never a movement. A start sent deliberately by the user carries no `session_id`
+and creates a session as usual.
+
+To take control, a client subscribes with:
 
 ```json
 {"id": 50, "type": "myhome/cover_calibration/resume", "entry_id": "ENTRY",
@@ -222,11 +241,16 @@ when nothing has moved yet or the session was interrupted, and otherwise keeps
 the owner and the measurements.
 
 **Views.** Subscription and action views add `owner` (this reader owns the
-session), `read_only`, `attachment`, `attached` (this subscription is live) and
-`idle_expires_at` (ISO time the lease will run out, `null` when closed);
-`recoverable` and `recovery_seconds` (the current lease length) remain.
+session), `read_only`, `attachment`, `attached` (this subscription is live),
+`owner_present` (the owner is present, the same for every reader; `false` once
+closed) and `idle_expires_at` (ISO time the lease will run out, `null` when
+closed); `recoverable` and `recovery_seconds` (the current lease length) remain.
+A reader learns that presence has lapsed from its own heartbeat answers, since a
+lapse is not a transition. A claim sent with an old `sequence` is answered with
+a read-only view, not an error, so that a replayed claim stays harmless; the
+panel shows that the session changed and invites to try again.
 `cover_profiles/read` includes `calibration`: null, or the same view without
-`attachment`, where `attached` means the owner is present and `owner` is false.
+`attachment`, where `attached` equals `owner_present` and `owner` is false.
 This transient view does not increment the persisted profile revision. Storage
 v5 and export v3 are unchanged; transient sessions are not included in export or
 restored after HA restart.
