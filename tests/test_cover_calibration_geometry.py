@@ -503,6 +503,16 @@ async def test_intermediate_runs_stop_halfway_along_their_timed_travel(hass, geo
     assert cal.session.deadline.when() - hass.loop.time() == pytest.approx(9, abs=.1)
 
 
+async def test_view_keeps_the_saved_travel_next_to_the_measured_one(geometry):
+    cal = geometry
+    covers = cal.session.store.data["covers"]
+    assert cal.session.view()["saved_travel_cm"] == covers.get(cal.cover.unique_id, {}).get("travel_cm")
+    with patch.dict(covers, {cal.cover.unique_id: {**covers.get(cal.cover.unique_id, {}), "travel_cm": 110}}):
+        await until_open_reading(cal)
+        view = cal.session.view()
+        assert (view["saved_travel_cm"], view["travel_cm"]) == (110, 200)
+
+
 @pytest.mark.parametrize("geometry", [{"slats": False}], indirect=True)
 async def test_without_slats_no_lift_off_and_a_zero_slat_time_is_saved(hass, geometry):
     cal = geometry

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, afterEach, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { CoverCalibration } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
+import { CoverCalibration, shown } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
 import { calibrationScene } from "../../custom_components/myhome/frontend/panel/panel-calibration-visual.js";
 
@@ -617,10 +617,10 @@ test("the lift-off reading states its limit from the session and a repeat says w
   const phase = host.querySelector("#cal-phase"), notice = host.querySelector("#cal-lift-repeat");
   const limits = { touching_cm: 1, gap_warn_cm: 10, max_gap_cm: 20, lift_repeat: true, lift_attempts: 1, still_resting: false, gap_warning: false };
   push({ phase: "reading", step: "lift", reading_kind: "lift", can_repeat: true, save_modes: ["new"], ...limits });
-  assert.equal(phase.textContent, "Misura in cm il distacco del bordo inferiore dalla base. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.");
+  assert.equal(phase.textContent, "Misura in cm il distacco del bordo inferiore dalla base. Se il bordo non si è sollevato di almeno 1 cm, inserisci 0: il bordo conta come ancora appoggiato e la corsa si ripete.");
   assert.equal(notice.hidden, true);
   push({ touching_cm: 1.5 });
-  assert.match(phase.textContent, /Sotto 1\.5 cm/);
+  assert.match(phase.textContent, /almeno 1\.5 cm, inserisci 0/);
   push({ touching_cm: 1, lift_repeat: false });
   assert.match(phase.textContent, /Sotto 1 cm il bordo conta come ancora appoggiato: ripeti la misura\./);
   const form = host.querySelector("#cal-reading");
@@ -688,6 +688,67 @@ test("tape readings take a comma or a point and never send an empty or partial n
       assert.equal(reason.textContent, "Inserisci la lettura in cm come numero; i decimali possono seguire una virgola o un punto.");
     }
   }
+});
+
+test("the lift-off gap is checked while typed; the button waits for a value in range", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  const button = form.querySelector('button[type="submit"]'), range = host.querySelector("#cal-reading-range");
+  const type = (value) => { input.value = value; input.dispatchEvent(new dom.window.Event("input", { bubbles: true })); };
+  push({ phase: "reading", step: "lift", reading_kind: "lift", can_repeat: true, save_modes: ["new"], touching_cm: 1, max_gap_cm: 20 });
+  for (const [value, outside] of [["25", true], ["12", false], ["0", false], ["20,0", false], ["20,1", true], ["-1", true], ["", false], ["2,", false]]) {
+    type(value);
+    assert.equal(button.disabled, outside, value);
+    assert.equal(range.hidden, !outside, value);
+    assert.equal(range.textContent, outside ? "Inserisci un distacco fra 1 e 20 cm, misurato dalla base al bordo inferiore. Se il bordo è salito di più, usa Ripeti." : "", value);
+  }
+  type("25");
+  push({});  // A heartbeat keeps the check.
+  assert.equal(button.disabled, true);
+  type("12");
+  push({ recoverable: true, attached: false, attachment: "old" });  // A lost connection still disables it.
+  assert.equal(button.disabled, true);
+  push({ attached: true, attachment: "new" });
+  assert.equal(button.disabled, false);
+  push({ step: "opening", reading_kind: "travel" });
+  type("25");
+  assert.equal(button.disabled, false, "other readings are not range-checked here");
+  assert.equal(range.hidden, true);
+  assert.equal(calls.length, 0);
+});
+
+test("the travel reading offers the travel already saved for the cover, and sends only on confirmation", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  push({ phase: "reading", step: "opening", reading_kind: "travel", can_repeat: true, save_modes: ["new"], saved_travel_cm: 110 });
+  assert.equal(input.value, "110");
+  assert.equal(calls.length, 0, "a prefilled value is never sent by itself");
+  input.value = "112,5";
+  push({});
+  assert.equal(input.value, "112,5");
+  form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  assert.equal(calls.at(-1).reading_cm, 112.5);
+  push({ step: "half_open", reading_kind: "half_open" });
+  assert.equal(input.value, "", "only the travel is prefilled");
+  push({ step: "opening", reading_kind: "travel", saved_travel_cm: null });
+  assert.equal(input.value, "");
+});
+
+test("review values are displayed rounded while the view keeps full precision", async () => {
+  for (const [value, unit, text] of [[14.538674880051985, "s", "14.5"], [14.477566485991701, "s", "14.5"], [20, "s", "20"],
+    [110, "cm", "110"], [49.5, "cm", "49.5"], [42.46, "cm", "42.5"], [2.6638, "s", "2.7"], [1.7397, "roll", "1.74"],
+    [2.6596, "roll", "2.66"], [3, "roll", "3"], [null, "s", "—"], [undefined, "cm", "—"]]) {
+    assert.equal(shown(value, unit), text, `${value} ${unit}`);
+  }
+  const { host, push } = await mount({ mode: "geometry" });
+  push({ phase: "review", step: "half_close", values: { opening_time: 14.538674880051985, closing_time: 14.477566485991701 },
+    geometry: { slat_time_s: 2.6638, opening_roll: 1.7397, closing_roll: 2.6596 }, travel_cm: 112.46, save_modes: ["new"], can_repeat: true });
+  const values = host.querySelector("#cal-values").textContent;
+  assert.match(values, /: 14\.5 · .*: 14\.5 · .*: 112\.5 cm · Tempo lamelle \(s\): 2\.7 · Rullo in apertura: 1\.74 · Rullo in chiusura: 2\.66$/);
+  const batch = await mount({ mode: "automatic", entity_ids: ["cover.one"] });
+  batch.push({ phase: "review", results: [{ index: 0, values: { opening_time: 14.538674880051985, closing_time: 14.477566485991701 } }] });
+  assert.match(batch.host.querySelector("#cal-targets").textContent, /14\.5 \/ 14\.5 s/);
+  assert.match(batch.host.querySelector("#cal-batch-review").textContent, /14\.5 \/ 14\.5 s/);
 });
 
 for (const mode of ["geometry", "guided", "automatic"]) {
