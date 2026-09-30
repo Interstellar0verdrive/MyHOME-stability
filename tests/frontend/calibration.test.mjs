@@ -584,9 +584,20 @@ test("a cover without slats is started as such and never shown slat steps or a s
   assert.equal(figure.querySelector(".cal-visual-label").textContent, t("calVisual_targetClosedNoSlats"));
   push({ step: "closing" });
   assert.equal(phase.textContent, t("calBrief_closing_no_slats"));
+  for (const step of ["home", "closing"]) {
+    push({ phase: "closing", step });
+    assert.equal(figure.querySelector(".cal-visual-label").textContent, t("calVisual_closingNoSlats"));
+  }
+  push({ phase: "closing", step: "home", slats: true });
+  assert.equal(figure.querySelector(".cal-visual-label").textContent, t("calVisual_closing"));
+  push({ phase: "briefing", slats: false });
   push({ step: "half_open" });
   assert.equal(phase.textContent, t("calBrief_half_open"));
-  for (const text of [t("calBrief_home_no_slats"), t("calBrief_closing_no_slats"), t("calVisual_targetClosedNoSlats")]) assert.doesNotMatch(text, /lamell/);
+  for (const language of ["en", "it"]) {
+    for (const key of ["calBrief_home_no_slats", "calBrief_closing_no_slats", "calVisual_targetClosedNoSlats", "calVisual_closingNoSlats"]) {
+      assert.doesNotMatch(translations[language][key], /slat|lamell/i, `${language}.${key}`);
+    }
+  }
   push({ phase: "review", step: "half_close", values: { opening_time: 22, closing_time: 20 },
     geometry: { slat_time_s: 0, opening_roll: 2, closing_roll: 3 }, travel_cm: 200, can_repeat: true });
   const values = host.querySelector("#cal-values").textContent;
@@ -606,7 +617,7 @@ test("the lift-off reading states its limit from the session and a repeat says w
   const phase = host.querySelector("#cal-phase"), notice = host.querySelector("#cal-lift-repeat");
   const limits = { touching_cm: 1, max_gap_cm: 50, lift_repeat: true, lift_attempts: 1, still_resting: false };
   push({ phase: "reading", step: "lift", reading_kind: "lift", can_repeat: true, save_modes: ["new"], ...limits });
-  assert.equal(phase.textContent, "Misura in cm lo spazio fra il bordo inferiore e il suo appoggio. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.");
+  assert.equal(phase.textContent, "Misura in cm il distacco del bordo inferiore dalla base. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.");
   assert.equal(notice.hidden, true);
   push({ touching_cm: 1.5 });
   assert.match(phase.textContent, /Sotto 1\.5 cm/);
@@ -616,16 +627,20 @@ test("the lift-off reading states its limit from the session and a repeat says w
   form.elements.reading_cm.value = "60";
   form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
   assert.equal(calls.at(-1).reading_cm, 60);
-  assert.equal(host.querySelector("#cal-reason").textContent, "Inserisci uno spazio fra 1 e 50 cm, misurato dall’appoggio al bordo inferiore.");
+  assert.equal(host.querySelector("#cal-reason").textContent, "Inserisci un distacco fra 1 e 50 cm, misurato dalla base al bordo inferiore. Se il bordo è salito di più, usa Ripeti.");
   push({ phase: "briefing", step: "reset", lift_repeat: true, lift_attempts: 2, still_resting: true });
   assert.equal(notice.hidden, false);
-  assert.equal(notice.textContent, "Il bordo era ancora appoggiato: la corsa di stacco si ripete (tentativo 2)");
+  assert.equal(notice.textContent, "Il bordo era ancora appoggiato: la corsa di distacco si ripete (tentativo 2)");
+  const announced = notice.firstChild;
+  push({});  // A heartbeat or an unchanged view does not announce it again.
+  assert.equal(notice.firstChild, announced);
   push({ phase: "opening", step: "lift", lift_attempts: 3 });
   assert.match(notice.textContent, /\(tentativo 3\)$/);
   push({ phase: "briefing", step: "reset", still_resting: false });
   assert.equal(notice.hidden, true);
   assert.equal(notice.textContent, "");
-  assert.equal(translations.en.calLiftRepeated + ` (${translations.en.calLiftAttempt} 2)`, "The edge was still resting: the lift-off run is repeated (attempt 2)");
+  assert.equal(translations.en.calLiftRepeated.replace("{lift_attempts}", "2"), "The edge was still resting: the lift-off run is repeated (attempt 2)");
+  assert.match(translations.en.profileError_invalid_gap, /If the edge rose further, use Repeat\.$/);
 });
 
 for (const mode of ["geometry", "guided", "automatic"]) {

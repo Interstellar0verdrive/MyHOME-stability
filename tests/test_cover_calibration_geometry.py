@@ -414,7 +414,7 @@ async def test_lift_off_gap_limits(geometry, reading, error):
     assert cal.session.readings == {} and "lift" in cal.session.samples
 
 
-async def test_manual_repeat_or_interruption_ends_the_still_resting_notice(geometry):
+async def test_manual_repeat_counts_an_attempt_and_it_or_interruption_ends_the_notice(geometry):
     cal = geometry
     await lift(cal)
     await act(cal, "reading", reading_cm=0)
@@ -424,10 +424,44 @@ async def test_manual_repeat_or_interruption_ends_the_still_resting_notice(geome
     await act(cal, "lift")
     await stopped(cal, elapsed=.5)
     await act(cal, "repeat")
-    assert cal.session.view()["still_resting"] is False and cal.session.view()["lift_attempts"] == 2
+    # Third lift-off run: one discarded as still resting, one repeated on request.
+    assert cal.session.view()["still_resting"] is False and cal.session.view()["lift_attempts"] == 3
+    await endpoint(cal, 4)
+    await start(cal)
+    cal.clock[0] += LIFT - .5
+    await act(cal, "lift")
+    await stopped(cal, elapsed=.5)
+    await act(cal, "reading", reading_cm=GAP)
+    await endpoint(cal, 4)
+    await endpoint(cal, 22)
+    await act(cal, "repeat")  # Repeating the travel reading is not a lift-off attempt.
+    assert cal.session.view()["lift_attempts"] == 3
     cal.session.still_resting = True
     cal.session.interrupt("stopped")
     assert cal.session.view()["still_resting"] is False
+
+
+async def test_intermediate_runs_stop_halfway_along_their_timed_travel(hass, geometry):
+    cal = geometry
+    await lift(cal)
+    await act(cal, "reading", reading_cm=GAP)
+    await endpoint(cal, 8)
+    await endpoint(cal, 22)
+    await act(cal, "reading", reading_cm=200)
+    await endpoint(cal, 20)
+    await start(cal)
+    # Halfway between the observed lift-off and the full opening time.
+    assert cal.session.deadline.when() - hass.loop.time() == pytest.approx((LIFT + 22) / 2, abs=.1)
+    cal.clock[0] += 12 - .2
+    callback = cal.session.deadline._callback
+    cal.session.deadline.cancel()
+    callback()
+    await stopped(cal, elapsed=.2)
+    await act(cal, "reading", reading_cm=200 * (2 * .5 + .5 ** 2) / 3)
+    await endpoint(cal, 7)
+    await start(cal)
+    # Half the curtain-only closing time: the fitted 2 s slat phase is left out.
+    assert cal.session.deadline.when() - hass.loop.time() == pytest.approx(9, abs=.1)
 
 
 @pytest.mark.parametrize("geometry", [{"slats": False}], indirect=True)
