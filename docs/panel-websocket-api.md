@@ -229,11 +229,13 @@ and creates a session as usual. Clients without `client_id` never send
 `session_id`; if one did, the start would be refused with `calibration_expired`
 (before this key existed it was refused as unknown).
 
-**Cancel from the panel.** Panel 0.39.0 closes the view on Cancel only after
-Home Assistant has confirmed it. When the connection is down the view stays, says
-that the cancellation did not arrive, and sends it again first as soon as its
-subscription is replayed; a second `calibration_expired` on the same subscription
-means the session is gone and closes the view.
+**Cancel from the panel.** Panel 0.39.0 closes the view on Cancel only once Home
+Assistant confirms it, or confirms that the session no longer exists. When the
+connection is down the view stays, says that the cancellation did not arrive, and
+sends it again first as soon as its subscription is replayed. A
+`calibration_expired` answer may only mean that the token died with its socket, so
+the panel then subscribes with `resume` (no claim, no command) and closes the view
+only if that is refused with `calibration_expired` too.
 
 To take control, a client subscribes with:
 
