@@ -25,6 +25,7 @@ export function calibrationScene(state, lost = false) {
     if (["opening", "closing"].includes(phase) && ["half_open", "half_close"].includes(step)) {
       return scene("middle", "autoStop", phase === "opening" ? "mdi:arrow-up-bold" : "mdi:arrow-down-bold");
     }
+    if (phase === "closing" && state.slats === false) return scene("middle", "closingNoSlats", "mdi:arrow-down-bold");
   }
   if (phase === "confirm_closed") return scene("closed", "confirmClosed");
   if (phase === "confirm_open") return scene("open", "confirmOpen");

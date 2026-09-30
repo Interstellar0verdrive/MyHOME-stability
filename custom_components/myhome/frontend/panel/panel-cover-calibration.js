@@ -231,7 +231,9 @@ export class CoverCalibration {
     const noSlats = state.slats === false;
     const notice = host.querySelector("#cal-lift-repeat");
     notice.hidden = !state.still_resting;
-    notice.textContent = state.still_resting ? `${t("calLiftRepeated")} (${t("calLiftAttempt")} ${state.lift_attempts})` : "";
+    // Assigned only when it changes, so heartbeats do not repeat the announcement.
+    const repeated = state.still_resting ? fill(t("calLiftRepeated"), state) : "";
+    if (notice.textContent !== repeated) notice.textContent = repeated;
     if (["briefing", "opening", "closing", "reading", "geometry_wait_stop"].includes(state.phase)) {
       const key = state.phase === "briefing" ? `calBrief_${state.step}${noSlats && ["home", "closing"].includes(state.step) ? "_no_slats" : ""}`
         : state.phase === "geometry_wait_stop" ? "calGeometryWaitStop"
