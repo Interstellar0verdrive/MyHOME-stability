@@ -290,18 +290,18 @@ export class CoverCalibration {
     }
   }
 
-  /** Between two views the elapsed time advances here once a second from the last value received. */
+  /** Between two views the elapsed time advances here every 100 ms from the last value received. */
   _clock(elapsed) {
     clearInterval(this._ticker);
     this._ticker = null;
     this._elapsed = elapsed == null ? null : { value: elapsed, since: performance.now() };
-    if (this._elapsed) this._ticker = setInterval(() => this._renderElapsed(), 1000);
+    if (this._elapsed) this._ticker = setInterval(() => this._renderElapsed(), 100);
   }
 
   _renderElapsed() {
     const { host, t } = this._context, elapsed = this._elapsed;
-    // Whole seconds are added to the received value, so it keeps the precision Home Assistant sent.
-    const value = elapsed && Math.round((elapsed.value + Math.floor((performance.now() - elapsed.since) / 1000)) * 100) / 100;
+    // Always to a tenth of a second, whatever precision the view carried.
+    const value = elapsed && (elapsed.value + (performance.now() - elapsed.since) / 1000).toFixed(1);
     host.querySelector("#cal-elapsed").textContent = elapsed ? `${t("calElapsed")}: ${value} s` : "";
   }
 

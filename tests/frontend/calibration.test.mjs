@@ -237,7 +237,7 @@ test("wizard starts a gateway-scoped subscription and waits for backend movement
   assert.equal(host.querySelector('[data-cal-action="endpoint"]').hidden, true);
   push({ phase: "opening", elapsed: 12.25 });
   assert.equal(host.querySelector('[data-cal-action="endpoint"]').hidden, false);
-  assert.match(host.querySelector("#cal-elapsed").textContent, /12.25/);
+  assert.match(host.querySelector("#cal-elapsed").textContent, /: 12\.3 s$/); // Shown to a tenth of a second.
   assert.match(host.querySelector('[data-cal-action="endpoint"]').textContent, /Completamente aperta/);
 });
 
@@ -1069,23 +1069,29 @@ function fakeClock() {
     restore: () => { mock.timers.reset(); mock.restoreAll(); } };
 }
 
-test("the elapsed time advances every second between two views and realigns to each view", async () => {
+test("the elapsed time advances by tenths between two views, realigns to each view and always shows one decimal", async () => {
   const clock = fakeClock();
   try {
     const { host, push } = await mount();
-    const shown = () => host.querySelector("#cal-elapsed").textContent;
-    push({ phase: "opening", elapsed: 9.9 });
-    assert.match(shown(), /: 9\.9 s$/);
-    clock.tick(999);
-    assert.match(shown(), /: 9\.9 s$/);
-    clock.tick(1);
-    assert.match(shown(), /: 10\.9 s$/);
-    clock.tick(3000);
-    assert.match(shown(), /: 13\.9 s$/);
-    push({ elapsed: 12.25 }); // The next view wins over the local count.
-    assert.match(shown(), /: 12\.25 s$/);
+    const shown = () => host.querySelector("#cal-elapsed").textContent.replace(`${translations.it.calElapsed}: `, "");
+    push({ phase: "opening", elapsed: 1 });
+    assert.equal(shown(), "1.0 s");
+    clock.tick(100);
+    assert.equal(shown(), "1.1 s");
+    clock.tick(3400);
+    assert.equal(shown(), "4.5 s");
+    push({ elapsed: 4.53 }); // The next view wins over the local count, still to a tenth.
+    assert.equal(shown(), "4.5 s");
     clock.tick(1000);
-    assert.match(shown(), /: 13\.25 s$/);
+    assert.equal(shown(), "5.5 s");
+    push({ elapsed: 10.88 });
+    assert.equal(shown(), "10.9 s");
+    clock.tick(1000);
+    assert.equal(shown(), "11.9 s");
+    for (let step = 0; step < 20; step++) {
+      clock.tick(100);
+      assert.match(shown(), /^\d+\.\d s$/);
+    }
     push({ phase: "confirm_open", elapsed: null }); // End of the run.
     assert.equal(shown(), "");
     clock.tick(5000);
@@ -1111,7 +1117,7 @@ test("no elapsed timer survives a closed view or a lost connection", async () =>
     controller.close();
     assert.equal(controller._ticker, null);
     clock.tick(3000);
-    assert.equal(host.querySelector("#cal-elapsed").textContent, `${translations.it.calElapsed}: 6 s`);
+    assert.equal(host.querySelector("#cal-elapsed").textContent, `${translations.it.calElapsed}: 6.0 s`);
   } finally {
     clock.restore();
   }
