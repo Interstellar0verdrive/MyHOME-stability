@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { after, afterEach, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { CoverCalibration, shown } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
+import { CoverCalibration } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
 import { calibrationScene } from "../../custom_components/myhome/frontend/panel/panel-calibration-visual.js";
+import { shown } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 
 const dom = new JSDOM("<!doctype html><body></body>", { pretendToBeVisual: true });
 const { document } = dom.window;
