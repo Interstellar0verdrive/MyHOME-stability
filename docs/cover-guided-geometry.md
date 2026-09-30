@@ -14,9 +14,10 @@ movement merely because a reading was submitted or a client reconnected.
 1. Close completely and confirm the physical bottom end stop, slats closed.
 2. Start the lift-off ascent. Press the large button as the bottom edge leaves its
    rest. Wait for Stop feedback, then enter the actual gap above the rest. From
-   panel 0.38.1 a gap below 1 cm, 0 included, means the edge is still resting: the
-   run is discarded and repeated from the bottom; above 50 cm the reading is
-   refused (see [the API](panel-websocket-api.md#guided-geometry-lift-off-gap-and-covers-without-slats-0381)).
+   panel 0.38.2 a gap below 1 cm, 0 included, means the edge is still resting: the
+   run is discarded and repeated from the bottom; from 10 cm the gap is accepted
+   with a warning that offers Repeat, since the slat time gets less precise; above
+   20 cm the reading is refused (see [the API](panel-websocket-api.md#guided-geometry-lift-off-gap-and-covers-without-slats-0382)).
 3. Return to the bottom, then explicitly start the timed full ascent. Confirm the
    physical top end stop. Measure travel from the rest to the lower curtain edge.
 4. Start the timed full descent and confirm the bottom end stop, slats closed.
@@ -31,7 +32,7 @@ movement merely because a reading was submitted or a client reconnected.
    travel, removes its former timing overrides and records per-key guided evidence
    in one storage transaction. Other profiles and their followers are untouched.
 
-A cover without slats (panel 0.38.1, switch "This cover has no slats") skips step 2
+A cover without slats (panel 0.38.2, switch "This cover has no slats") skips step 2
 and the return to the bottom at the start of step 3: the full ascent follows step 1,
 the intermediate ascent is scheduled for half the opening time, and the slat time is
 saved as zero.
