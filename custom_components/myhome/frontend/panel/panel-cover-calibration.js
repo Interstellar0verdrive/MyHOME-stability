@@ -558,11 +558,17 @@ export class CoverCalibration {
     box.hidden = false;
   }
 
-  /** The accepted range shown inside its true ends, a tenth of a centimetre at a time, so every value shown is accepted. */
+  /** The accepted range shown inside its true ends, a tenth of a centimetre at a time, so every value shown is accepted.
+   * A range narrower than a tenth is shown to hundredths, and one narrower than that with its exact ends. */
   _rangeValues(reading) {
     const span = this._state?.reading_range, language = this._context.hass.language;
-    return span ? { min_cm: decimal(Math.ceil(span.min_cm * 10) / 10, 1, language), max_cm: decimal(Math.floor(span.max_cm * 10) / 10, 1, language),
-      ...(reading == null ? {} : { reading_cm: decimal(reading, 3, language) }) } : {};
+    if (!span) return {};
+    const inside = (scale) => [Math.ceil(span.min_cm * scale) / scale, Math.floor(span.max_cm * scale) / scale];
+    let [low, high] = inside(10), digits = 1;
+    if (low >= high) [[low, high], digits] = [inside(100), 2];
+    if (low > high) [low, high, digits] = [span.min_cm, span.max_cm, 20];
+    return { min_cm: decimal(low, digits, language), max_cm: decimal(high, digits, language),
+      ...(reading == null ? {} : { reading_cm: decimal(reading, 3, language) }) };
   }
 
   /** The owner's Cancel must reach Home Assistant: until it does, the view stays and says so. */

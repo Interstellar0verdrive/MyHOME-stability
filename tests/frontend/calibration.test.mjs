@@ -727,6 +727,12 @@ test("an intermediate reading shows the range the fit accepts, inside its true e
   push({ reading_range: { min_cm: 110 / 3, max_cm: 55 } });
   assert.equal(hint.textContent, "Per questa tapparella la lettura attesa è fra 36,7 e 55 cm. Scrivi quello che dice il metro.");
   assert.doesNotMatch(hint.textContent, /metà corsa|Riferimento/);
+  // Narrower than a tenth: hundredths, inside the true ends; narrower than a hundredth: the exact ends.
+  for (const [range, text] of [[{ min_cm: 55.02, max_cm: 55.08 }, "fra 55,02 e 55,08 cm"], [{ min_cm: 55.01, max_cm: 55.1 }, "fra 55,01 e 55,1 cm"],
+    [{ min_cm: 55.023, max_cm: 55.027 }, "fra 55,023 e 55,027 cm"], [{ min_cm: 54.95, max_cm: 55.05 }, "fra 54,95 e 55,05 cm"]]) {
+    push({ reading_range: range });
+    assert.match(hint.textContent, new RegExp(text), JSON.stringify(range));
+  }
   push({ reading_range: null });
   assert.equal(hint.textContent, "", "no range, no hint: the old halfway reference is gone");
   push({ step: "lift", reading_kind: "lift" });
