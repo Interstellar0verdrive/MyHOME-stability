@@ -1396,14 +1396,18 @@ test("no elapsed timer survives a closed view or a lost connection", async () =>
   }
 });
 
-// Ten minutes from now: the deadline is shown as a time only, in the browser's time zone.
-const EXPIRES = new Date(Date.now() + 600000).toISOString();
+// Ten minutes after a fixed local noon: the deadline is shown as a time only, in the browser's time zone,
+// as long as the clock reads the same day (the test below fixes it at that noon).
+const NOON = new Date(2026, 9, 1, 12, 0);
+const EXPIRES = new Date(NOON.getTime() + 600000).toISOString();
 const pausedCycle = { mode: "automatic", phase: "paused", reason: "owner_absent", run_index: 2, values: { closing_time: 46 },
   owner: true, read_only: false, owner_present: false, paused_at: "2026-10-01T18:32:00+00:00", idle_expires_at: EXPIRES,
   next_step: { step: "opening", run_index: 2, entity_id: "cover.bedroom" } };
 const at = (iso, options = { timeStyle: "short" }) => new Intl.DateTimeFormat("en", options).format(new Date(iso));
 
-test("a paused cycle opened by its owner says what Continue starts and until when, and sends nothing", async () => {
+test("a paused cycle opened by its owner says what Continue starts and until when, and sends nothing", async (t) => {
+  // Only Date is fixed: timers stay real. A real clock near midnight would put the deadline on the next day.
+  t.mock.timers.enable({ apis: ["Date"], now: NOON });
   const { host, calls, starts } = await mount({ mode: "automatic", resume: pausedCycle });
   assert.equal(starts[0].type, "myhome/cover_calibration/resume");
   assert.equal("claim" in starts[0], false);
