@@ -86,7 +86,9 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
 
     def next_cover(self) -> None:
         self.settle = None
-        if self.phase != "between_covers" or self.store.calibration is not self or self.unattended():
+        if self.phase != "between_covers" or self.store.calibration is not self or self.unattended(
+                {"step": "next_cover", "cover_index": self.cover_index + 1,
+                 "entity_id": self.covers[self.cover_index + 1].entity_id}, self.next_cover):
             return
         following = self.covers[self.cover_index + 1]
         try:
