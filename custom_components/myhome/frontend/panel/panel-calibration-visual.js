@@ -8,6 +8,7 @@ export function calibrationScene(state, lost = false) {
   if (phase === "geometry_wait_stop") return scene("neutral", "waitStop", "mdi:timer-sand");
   if (phase.startsWith("starting_")) return scene("neutral", "starting", "mdi:timer-sand");
   if (["settling", "between_covers"].includes(phase)) return scene("neutral", "wait", "mdi:pause");
+  if (phase === "paused") return scene("neutral", "paused", "mdi:pause-circle-outline");
   if (phase === "confirm_automatic") return scene("neutral", "automatic", "mdi:swap-vertical");
   if (mode === "geometry") {
     if (phase === "reading") {

@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from time import monotonic as monotonic
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 from uuid import uuid4
 
 import voluptuous as vol
@@ -56,7 +56,8 @@ WS_ACTION = "myhome/cover_calibration/action"
 LEASE_SECONDS = 20
 # A client that sends client_id (one per browser tab) is recognised on every socket.
 # Presence tells every reader whether the owner is still there (`owner_present`), and
-# an automatic step starts a new movement only while it holds. The lease hands the
+# an automatic step starts a new movement only while it holds; otherwise the cycle
+# pauses and keeps its measurements until the owner continues it. The lease hands the
 # cover back after inactivity and is never renewed by a heartbeat.
 PRESENCE_SECONDS = 45
 IDLE_LEASE_SECONDS = 1800
@@ -118,6 +119,10 @@ class CalibrationSession:
         self.owner_seen = monotonic()
         self.known: set[str] = {client_id} if client_id else set()
         self.subscribers: dict[str, Subscriber] = {}
+        # A cycle paused without its owner: the step that would have started, and how.
+        self.next_step: dict[str, Any] | None = None
+        self.paused_at: datetime | None = None
+        self.resume_step: tuple[Callable[[], None], Callable[[], None]] | None = None
         self.moved = False
         self.lease_seconds = IDLE_LEASE_SECONDS
         self.lease_expires_at: datetime | None = None
@@ -150,6 +155,8 @@ class CalibrationSession:
                 "waiting_for_stop": self.closed and self.reservation.pending,
                 **({"recoverable": not self.closed, "attached": self.present() and not self.closed, "attachment": None,
                     "owner_present": self.present() and not self.closed,
+                    "next_step": dict(self.next_step) if self.next_step else None,
+                    "paused_at": self.paused_at.isoformat() if self.paused_at else None,
                     "recovery_seconds": self.lease_seconds, "owner": False, "read_only": True,
                     "idle_expires_at": None if self.closed or self.lease_expires_at is None
                     else self.lease_expires_at.isoformat()} if self.client_id else {}),
@@ -160,15 +167,36 @@ class CalibrationSession:
         """The owner sent a heartbeat or a verb recently. It never decides who may act."""
         return self.owner is not None and monotonic() - self.owner_seen < PRESENCE_SECONDS
 
-    def unattended(self) -> bool:
+    def unattended(self, step: dict[str, Any], check: Callable[[], None], start: Callable[[], None]) -> bool:
         """An automatic step starts a new movement only while an identified owner is present.
 
-        Otherwise the session ends as interrupted; Stop is written only while a movement may run.
+        Otherwise the cycle pauses: every measurement is kept, nothing moves, and only the
+        owner's `continue` starts `step` again: `check` raises without changing anything,
+        `start` moves. Stop is written only while a movement may still run. The lease keeps
+        running; when it ends the session expires.
         """
         if not self.client_id or self.present():
             return False
-        self.interrupt("owner_absent", send_stop=self.reservation.pending)
+        self.resume_step = (check, start)
+        self.next_step, self.paused_at = step, dt_util.utcnow()
+        self.phase, self.reason = "paused", "owner_absent"
+        if self.reservation.pending:
+            self.queue_stop()
+        self.emit()
         return True
+
+    def proceed(self) -> None:
+        """`continue`: the owner starts the step a paused cycle stopped before, with its checks.
+
+        A check that fails leaves the pause and its measurements as they are: nothing has moved.
+        """
+        if self.phase != "paused":
+            raise ProfileError("calibration_step")
+        check, start = cast(tuple[Callable[[], None], Callable[[], None]], self.resume_step)
+        check()
+        self.reason = None
+        self.resume_step = self.next_step = self.paused_at = None
+        start()
 
     def overlay(self, subscriber: Subscriber, attached: bool = True) -> dict[str, Any]:
         """What differs between readers: ownership, their token, their live subscription.
@@ -332,6 +360,7 @@ class CalibrationSession:
         self.values.clear()
         self.provenance.clear()
         self.started_at = None
+        self.resume_step = self.next_step = self.paused_at = None
         if self.deadline:
             self.deadline.cancel()
         if self.settle:
@@ -469,8 +498,9 @@ class CalibrationSession:
         if action == "stop":
             # In review the endpoints are fixed by the user's taps: Stop is still written, the
             # completed measurements stay even before the bus confirms the last stop, and
-            # Cancel remains the way to discard them. During a run Stop invalidates it.
-            if self.phase != "review":
+            # Cancel remains the way to discard them. A paused cycle keeps them as well and
+            # stays paused. During a run Stop invalidates it.
+            if self.phase not in {"review", "paused"}:
                 self.interrupt("stopped", send_stop=False)
             self.queue_stop()
             self.emit()
@@ -485,9 +515,13 @@ class CalibrationSession:
             raise ProfileError("calibration_step")
         entry, entity = target(self.hass, self.entry_id, self.cover.entity_id)
         if not snapshot(self.hass, self.store, entry, entity)["writable"]:
-            self.interrupt("cover_unavailable")
+            # A refused `continue` keeps the pause and its measurements: nothing has moved.
+            if action != "continue":
+                self.interrupt("cover_unavailable")
             raise ProfileError("cover_unavailable")
-        if self.mode == "geometry" and action not in {"save", "preview_save"}:
+        if action == "continue":
+            self.proceed()
+        elif self.mode == "geometry" and action not in {"save", "preview_save"}:
             self.geometry_action(msg)
         elif action == "run":
             if self.mode != "automatic" or self.phase != "confirm_automatic":
@@ -656,7 +690,7 @@ def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
 @websocket_command({
     vol.Required("type"): WS_ACTION, vol.Required("entry_id"): str,
     vol.Required("session_id"): str,
-    vol.Required("action"): vol.In(["run", "open", "close", "endpoint", "stop", "cancel", "save", "preview_save", "heartbeat", "detach", "next", "lift", "reading", "repeat"]),
+    vol.Required("action"): vol.In(["run", "open", "close", "endpoint", "stop", "cancel", "save", "preview_save", "heartbeat", "detach", "next", "lift", "reading", "repeat", "continue"]),
     vol.Optional("reading_cm"): vol.Any(int, float),
     vol.Optional("attachment"): str,
     vol.Optional("sequence"): vol.All(int, vol.Range(min=0)),

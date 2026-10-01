@@ -172,8 +172,9 @@ async def test_lost_socket_during_cycle_keeps_measurement_and_writes_no_stop(rec
 async def test_without_its_owner_an_automatic_cycle_starts_no_new_movement(hass, recovering, owner):
     """The maintainer's invariant: with nobody guiding, the pause never ends in a new run.
 
-    A start replayed after a reconnection (for instance, after a Cancel pressed offline was
-    lost) only reads the session: it does not make the owner present again.
+    The cycle waits in `paused` instead, keeping what it measured. A start replayed after a
+    reconnection (for instance, after a Cancel pressed offline was lost) only reads the
+    session: it does not make the owner present again.
     """
     cal, session = recovering, recovering.session
     await call(hass, cal, cal.connection, session.attachment, "run")
@@ -194,9 +195,10 @@ async def test_without_its_owner_an_automatic_cycle_starts_no_new_movement(hass,
     if owner == "back":
         assert session.phase == "starting_close" and len(cal.queue) == count + 1
         return
-    assert session.phase == "interrupted" and session.reason == "owner_absent"
+    assert session.phase == "paused" and session.reason == "owner_absent"
     assert len(cal.queue) == count  # No new movement, and no Stop: nothing is moving.
     assert session.store.calibration is session and session.owner == "first-controller"
+    assert session.settle is None  # Nothing brings the cycle back but an explicit `continue`.
 
 
 async def test_without_its_owner_a_batch_never_moves_to_the_next_cover(hass, batch):
@@ -214,9 +216,9 @@ async def test_without_its_owner_a_batch_never_moves_to_the_next_cover(hass, bat
     assert session.phase == "between_covers" and len(session.results) == 1
     count = len(batch.queue)
     fire(session.settle)
-    assert session.phase == "interrupted" and session.reason == "owner_absent"
-    assert session.results == [] and session.cover_index == 0 and len(batch.queue) == count
-    assert batch.plant.covers[1]._calibration is None
+    assert session.phase == "paused" and session.reason == "owner_absent"
+    assert len(session.results) == 1 and session.cover_index == 0 and len(batch.queue) == count
+    assert session.settle is None
 
 
 async def test_idle_lease_ends_session_without_stop_when_nothing_moves(recovering):

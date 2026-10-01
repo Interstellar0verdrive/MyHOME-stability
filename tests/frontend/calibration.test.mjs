@@ -1322,3 +1322,143 @@ test("no elapsed timer survives a closed view or a lost connection", async () =>
     clock.restore();
   }
 });
+
+// Ten minutes from now: the deadline is shown as a time only, in the browser's time zone.
+const EXPIRES = new Date(Date.now() + 600000).toISOString();
+const pausedCycle = { mode: "automatic", phase: "paused", reason: "owner_absent", run_index: 2, values: { closing_time: 46 },
+  owner: true, read_only: false, owner_present: false, paused_at: "2026-10-01T18:32:00+00:00", idle_expires_at: EXPIRES,
+  next_step: { step: "opening", run_index: 2, entity_id: "cover.bedroom" } };
+const at = (iso, options = { timeStyle: "short" }) => new Intl.DateTimeFormat("en", options).format(new Date(iso));
+
+test("a paused cycle opened by its owner says what Continue starts and until when, and sends nothing", async () => {
+  const { host, calls, starts } = await mount({ mode: "automatic", resume: pausedCycle });
+  assert.equal(starts[0].type, "myhome/cover_calibration/resume");
+  assert.equal("claim" in starts[0], false);
+  assert.equal(calls.length, 0, "opening a paused session sends no command");
+  assert.equal(host.querySelector("#cal-phase").textContent, translations.it.calPhase_paused);
+  const notice = host.querySelector("#cal-paused");
+  assert.equal(notice.hidden, false);
+  assert.equal(notice.textContent, translations.it.calPausedBody
+    .replace("{step}", "la corsa 3 di 3 (apertura)").replace("{expires}", at(EXPIRES)));
+  assert.match(notice.textContent, /Le misure già fatte restano/);
+  assert.equal(host.querySelector("#cal-reason").hidden, true, "the pause explains itself, not as an error");
+  const proceed = host.querySelector('[data-cal-action="continue"]');
+  assert.equal(proceed.hidden, false);
+  assert.equal(proceed.disabled, false);
+  assert.equal(proceed.textContent, translations.it.calContinue);
+  assert.equal(proceed.classList.contains("primary"), true);
+  assert.equal(host.querySelector("#cal-cancel").textContent, translations.it.calPausedCancel);
+  assert.equal(host.querySelector("#cal-stop").disabled, false);
+  assert.equal(host.querySelector('[data-cal-action="run"]').hidden, true);
+  assert.equal(host.querySelector("#cal-read-only").hidden, true);
+  const figure = host.querySelector(".cal-visual");
+  assert.equal(figure.dataset.scene, "neutral");
+  assert.equal(figure.querySelector(".cal-visual-label").textContent, translations.it.calVisual_paused);
+  assert.equal(calls.length, 0);
+});
+
+test("Continue sends one continue with the current sequence, and the view follows the run it starts", async () => {
+  const answer = deferred();
+  const { host, calls, controller } = await mount({ mode: "automatic", resume: pausedCycle,
+    call: (message, state) => message.action === "continue" ? answer.promise.then(() => ({ ...state, sequence: state.sequence + 1,
+      phase: "starting_open", reason: null, next_step: null, paused_at: null })) : state });
+  const proceed = host.querySelector('[data-cal-action="continue"]');
+  const sequence = controller._state.sequence;
+  proceed.click();
+  proceed.click();
+  await tick();
+  assert.deepEqual(calls, [{ type: "myhome/cover_calibration/action", entry_id: "one", session_id: "session-one",
+    sequence, attachment: "new-controller", action: "continue" }]);
+  assert.equal(proceed.disabled, true, "one tap only while Home Assistant answers");
+  answer.resolve(); await tick(); await tick();
+  assert.equal(controller._state.phase, "starting_open");
+  assert.equal(proceed.hidden, true);
+  assert.equal(host.querySelector("#cal-paused").hidden, true);
+  assert.equal(host.querySelector("#cal-cancel").textContent, translations.it.calCancel);
+  assert.match(host.querySelector("#cal-phase").textContent, /3\/3/);
+});
+
+test("a reader of a paused cycle takes control with one tap and then continues it", async () => {
+  const { host, push, calls, starts, controller } = await mount({ mode: "automatic" });
+  push({ ...pausedCycle, recoverable: true, attached: true, attachment: "reader", owner: false, read_only: true });
+  assert.equal(host.querySelector("#cal-paused").hidden, false, "the same information as the owner");
+  assert.equal(host.querySelector("#cal-read-only").textContent, translations.it.calReadOnlyAway);
+  assert.equal(host.querySelector('[data-cal-action="continue"]').hidden, true);
+  assert.equal(host.querySelector("#cal-cancel").textContent, translations.it.close);
+  const take = host.querySelector("#cal-take-control");
+  assert.equal(take.classList.contains("primary"), true);
+  const sequence = controller._state.sequence;
+  take.click(); await tick();
+  assert.deepEqual(starts.at(-1), { type: "myhome/cover_calibration/resume", entry_id: "one", session_id: "session-one",
+    client_id: starts[0].client_id, claim: true, sequence });
+  assert.equal(calls.length, 0, "taking control moves nothing");
+  push({ attachment: "owner-now", owner: true, read_only: false });
+  const proceed = host.querySelector('[data-cal-action="continue"]');
+  assert.equal(proceed.hidden, false);
+  proceed.click(); await tick();
+  const sent = calls.filter((call) => call.action !== "heartbeat");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, "continue");
+  assert.equal(sent[0].attachment, "owner-now");
+});
+
+test("a batch paused before the next cover names it, keeps the results, and Stop keeps the pause", async () => {
+  const { host, push, calls } = await mount({ mode: "automatic", entity_ids: ["cover.one", "cover.two"],
+    call: (message, state) => ({ ...state, sequence: state.sequence + 1, stop_requested: message.action === "stop" }) });
+  push({ ...pausedCycle, recoverable: true, attached: true, attachment: "owner", run_index: 0, values: {},
+    results: [{ index: 0, entity_id: "cover.one", values: { opening_time: 20, closing_time: 22 } }], idle_expires_at: null,
+    next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.two" } });
+  const notice = host.querySelector("#cal-paused");
+  assert.equal(notice.textContent, translations.it.calPausedBody
+    .replace("{step}", "la misura della tapparella successiva, «cover.two»").replace("{expires}", "—"));
+  const targets = host.querySelector("#cal-targets").textContent;
+  assert.match(targets, /cover\.one · 20 \/ 22 s/);
+  assert.doesNotMatch(targets, new RegExp(translations.it.calBatchDiscarded));
+  host.querySelector("#cal-stop").click(); await tick();
+  assert.equal(calls.at(-1).action, "stop");
+  assert.equal(host.querySelector("#cal-stop-status").hidden, false);
+  assert.equal(notice.hidden, false);
+  assert.equal(host.querySelector('[data-cal-action="continue"]').hidden, false);
+});
+
+test("a refused Continue shows why and leaves the pause, its measurements and Continue in place", async () => {
+  const { host, calls, controller } = await mount({ mode: "automatic", resume: pausedCycle, call: (message, state) => {
+    if (message.action === "continue") throw { code: "calibration_moving" };
+    return state;
+  } });
+  const proceed = host.querySelector('[data-cal-action="continue"]');
+  proceed.click(); await tick(); await tick();
+  assert.equal(calls.at(-1).action, "continue");
+  const reason = host.querySelector("#cal-reason");
+  assert.equal(reason.hidden, false);
+  assert.equal(reason.textContent, translations.it.profileError_calibration_moving);
+  assert.equal(controller._state.phase, "paused");
+  assert.equal(host.querySelector("#cal-paused").hidden, false);
+  assert.equal(proceed.hidden, false);
+  assert.equal(proceed.disabled, false, "Continue can be tried again");
+  controller._accept({ ...controller._state });  // A heartbeat view keeps the error on screen.
+  assert.equal(reason.hidden, false);
+});
+
+test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async () => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString();
+  const { host, controller } = await mount({ mode: "automatic", entity_ids: ["cover.one", "cover.two"] });
+  controller._accept({ ...controller._state, ...pausedCycle, sequence: 9, recoverable: true, attached: true, attachment: "owner",
+    targets: [{ entity_id: "cover.one", name: "One" }, { entity_id: "cover.two", name: "Attic $& $' $1" }],
+    results: [], idle_expires_at: tomorrow, next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.two" } });
+  assert.equal(host.querySelector("#cal-paused").textContent, translations.it.calPausedBody
+    .replace("{step}", () => "la misura della tapparella successiva, «Attic $& $' $1»")
+    .replace("{expires}", () => at(tomorrow, { dateStyle: "short", timeStyle: "short" })));
+});
+
+test("a paused cycle has its texts in English and Italian, with the step and the deadline as placeholders", () => {
+  for (const language of ["en", "it"]) {
+    const texts = translations[language];
+    assert.match(texts.calPausedBody, /\{step\}.*\{expires\}/);
+    assert.match(texts.calNextStep_opening, /\{run\}/);
+    assert.match(texts.calNextStep_closing, /\{run\}/);
+    assert.match(texts.calNextStep_next_cover, /\{name\}/);
+    for (const key of ["calPhase_paused", "calContinue", "calPausedCancel", "calPausedBadge", "calVisual_paused"]) assert.ok(texts[key], `${language}.${key}`);
+  }
+  assert.equal(calibrationScene({ phase: "paused" }).icon, "mdi:pause-circle-outline");
+});
