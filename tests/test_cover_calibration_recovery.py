@@ -477,6 +477,43 @@ async def test_stop_is_accepted_from_every_reader_and_nothing_else_is(hass, reco
     assert session.owner == "first-controller"  # Stop did not take the session.
 
 
+async def test_stop_during_review_keeps_the_completed_measurements(hass, recovering):
+    """Behaviour decision: in review nothing moves; Stop is written, the values stay, Cancel discards them."""
+    cal, session = recovering, recovering.session
+    await measured(cal)
+    assert session.phase == "review" and not session.reservation.pending
+    values = dict(session.values)
+    other = reader(cal, "second-tab")
+    for token, connection in ((other.token, other.connection), (session.attachment, cal.connection)):
+        count, sequence = len(cal.queue), session.sequence
+        result = await call(hass, cal, connection, token, "stop")
+        assert result["phase"] == "review" and result["reason"] is None and result["values"] == values
+        assert result["stop_requested"] is True and result["sequence"] == sequence + 1
+        assert len(cal.queue) == count + 1 and str(cal.queue[-1][0]) == "*2*0*11##"
+    assert session.owner == "first-controller"
+    saved = await call(hass, cal, cal.connection, session.attachment, "save", name="Kept after Stop")
+    assert saved["phase"] == "saved" and session.store.data["revision"] == 1
+
+
+async def test_stop_during_review_while_a_movement_may_still_run_discards_as_before(hass, recovering):
+    cal, session = recovering, recovering.session
+    await measured(cal)
+    session.reservation.dispatched()  # The bus has not reported the motor stopped yet.
+    result = await call(hass, cal, cal.connection, session.attachment, "stop")
+    assert result["phase"] == "interrupted" and result["reason"] == "stopped" and result["values"] == {}
+
+
+async def test_stop_during_batch_review_keeps_every_result_until_cancel(hass, batch):
+    await measure(batch)
+    session = batch.session
+    assert session.phase == "review" and len(session.results) == 2
+    count = len(batch.queue)
+    await batch_action(batch, "stop")
+    assert session.phase == "review" and len(session.results) == 2 and len(batch.queue) == count + 1
+    await batch_action(batch, "cancel")
+    assert session.phase == "cancelled" and session.results == []
+
+
 async def test_heartbeat_never_takes_the_session_and_moves_nothing(hass, recovering):
     """Fork test_a_heartbeat_never_takes_the_session_over, and the lease is not renewed."""
     cal, session = recovering, recovering.session

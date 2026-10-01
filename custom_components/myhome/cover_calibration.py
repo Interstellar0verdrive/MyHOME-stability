@@ -467,7 +467,10 @@ class CalibrationSession:
             self.close()
             return self.view()
         if action == "stop":
-            self.interrupt("stopped", send_stop=False)
+            # In review nothing moves: Stop is still written, the completed measurements stay
+            # for review and Cancel remains the way to discard them.
+            if self.phase != "review" or self.reservation.pending:
+                self.interrupt("stopped", send_stop=False)
             self.queue_stop()
             self.emit()
             return self.view()
