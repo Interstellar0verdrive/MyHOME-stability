@@ -275,8 +275,8 @@ the endpoints are already fixed by the user's taps: Stop is still written, and
 the session always stays in `review` with its completed measurements (batch
 results included), also in the short window before the bus confirms the last
 stop; `cancel` is the only way to discard them. This applies to clients without
-`client_id` too. For clients with `client_id` a Stop in `review`, like every
-accepted action, renews the inactivity lease. Every other action except
+`client_id` too. For clients with `client_id` a Stop in `review` or `paused`,
+like every accepted action, renews the inactivity lease. Every other action except
 `heartbeat` and `detach`, `save` and `continue` included, is refused with
 `calibration_owned` unless it comes from the owner.
 `heartbeat` answers the view and refreshes presence only for the owner. `detach`
@@ -327,20 +327,33 @@ start and the session enters the phase **`paused`**. It is not terminal:
   `{"step": "closing" | "opening", "run_index": 1 | 2, "entity_id": ...}` for the
   next run of the current cover (`run_index` zero-based, as in the view), or
   `{"step": "next_cover", "cover_index": n, "entity_id": ...}` for the next
-  cover of a batch. `paused_at` is the ISO time of the pause.
+  cover of a batch (`cover_index` zero-based, as in the view, so `n` is the
+  index of the next cover in `targets`). `paused_at` is the ISO time of the pause.
 - Nothing moves and no timer brings the cycle back. Stop is written at the pause
   only if a movement may still be running, as before.
 - The pause is a transition: `sequence` grows and the lease, unchanged at 600 s
   for a session that has moved, restarts from it. It is not lengthened. When it
   runs out the session ends as `expired`, without Stop since nothing moves, and
-  the values are discarded as for every end.
+  the values are discarded as for every end. Like every accepted action, a Stop
+  in `paused` renews the lease, and so does a successful claim (a transition);
+  a claim replayed after a reconnection carries an old `sequence` and does not.
+- Only the cover named by `next_step.entity_id` can end the pause. In a batch
+  paused between covers the session is bound to the next cover instead of the one
+  just measured, so the top-level `entity_id` of the view is already the next
+  cover while `cover_index`, `values` and `results` still describe what was
+  measured. Movements of covers already measured do not reach the session.
 
 The action **`continue`** (with the current `sequence`) is accepted only from
 the owner and only in `paused`; anywhere else it is refused with
 `calibration_step`, from a reader with `calibration_owned`. It starts the step
 named by `next_step` with the same checks that step always has: the target is
-revalidated, the movement is queued with its guard and start timeout, and a
-failure interrupts the session as before. The answer is the new view
+revalidated (in a batch with the eligibility checks of the next cover:
+available, writable, not moving), then the movement is queued with its guard
+and start timeout. When a check fails nothing has moved: the error code is
+returned (`cover_unavailable`, `calibration_moving`, ...) and the session stays
+`paused` with its measurements, so the owner can try again. Only a full command
+queue (`command_queue_full`), found while queuing the movement, interrupts the
+session as before. The answer is the new view
 (`starting_open` or `starting_close`, `reason`, `next_step` and `paused_at`
 back to `null`). A reader that wants to continue first takes control with
 `resume {claim: true, sequence}`; the owner is absent, so the panel claims with
@@ -349,6 +362,7 @@ one tap.
 | Action in `paused` | From | Effect |
 | --- | --- | --- |
 | `continue` | owner | Starts `next_step`; the cycle goes on as if the pause had ended with the owner present |
+| `continue` | owner, a check fails | The error code; the session stays `paused` with its measurements |
 | `continue` | reader | `calibration_owned`; nothing changes |
 | `heartbeat` | owner | Answers the view; the owner is present again (`owner_present: true`) but nothing resumes |
 | `stop` | any reader | Stop is written; the session stays `paused` with its measurements (`stop_requested: true`) |
@@ -357,15 +371,21 @@ one tap.
 | `run`, `open`, `close`, `endpoint`, `save` | owner | `calibration_step` |
 
 A movement reported by the bus during the pause (a wall switch, an automation)
-interrupts the session as `unexpected_movement`, as it does in every waiting
-phase: Stop is written and the values are discarded. Clients without
+on the cover named by `next_step` interrupts the session as
+`unexpected_movement`, as it does in every waiting phase: Stop is written to that
+cover and the values are discarded. A Home Assistant command on that cover
+interrupts it as `external_command`. As in every phase, a gateway or cover that
+becomes unavailable during the pause interrupts the session as
+`cover_unavailable`; the pause makes that window longer. Clients without
 `client_id` have no presence and never pause; for them the cycle goes on after
 each pause as before, and `continue` is refused with `calibration_step`.
 
 **Panel.** The paused view says that the measurement stopped because no tab was
 following it, that the measurements already taken are kept, what "Continue"
-will start (the run, or the next cover by name) and the local time the lease
-ends. The owner gets "Continue" as the primary button, "Cancel the measurement"
+will start (the run, or the next cover by name) and when the lease ends, in the
+browser's local time (not the time zone chosen in the Home Assistant profile),
+with the date when it falls on another day. A refused `continue` shows its error
+and leaves "Continue" available. The owner gets "Continue" as the primary button, "Cancel the measurement"
 and Stop. A reader sees the same information and "Take control", then
 "Continue". The profile dialog shows that the session is paused and offers
 "Open session". Opening the view sends no command.
