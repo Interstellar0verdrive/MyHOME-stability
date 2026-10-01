@@ -1421,6 +1421,25 @@ test("a batch paused before the next cover names it, keeps the results, and Stop
   assert.equal(host.querySelector('[data-cal-action="continue"]').hidden, false);
 });
 
+test("a refused Continue shows why and leaves the pause, its measurements and Continue in place", async () => {
+  const { host, calls, controller } = await mount({ mode: "automatic", resume: pausedCycle, call: (message, state) => {
+    if (message.action === "continue") throw { code: "calibration_moving" };
+    return state;
+  } });
+  const proceed = host.querySelector('[data-cal-action="continue"]');
+  proceed.click(); await tick(); await tick();
+  assert.equal(calls.at(-1).action, "continue");
+  const reason = host.querySelector("#cal-reason");
+  assert.equal(reason.hidden, false);
+  assert.equal(reason.textContent, translations.it.profileError_calibration_moving);
+  assert.equal(controller._state.phase, "paused");
+  assert.equal(host.querySelector("#cal-paused").hidden, false);
+  assert.equal(proceed.hidden, false);
+  assert.equal(proceed.disabled, false, "Continue can be tried again");
+  controller._accept({ ...controller._state });  // A heartbeat view keeps the error on screen.
+  assert.equal(reason.hidden, false);
+});
+
 test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async () => {
   const tomorrow = new Date(Date.now() + 86400000).toISOString();
   const { host, controller } = await mount({ mode: "automatic", entity_ids: ["cover.one", "cover.two"] });
