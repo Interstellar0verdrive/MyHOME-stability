@@ -76,8 +76,10 @@ clamp to plausible geometry (apart from numerical endpoint rounding).
 
 One point per direction fits the roll; it cannot verify accuracy. The summary
 explicitly says precision is unverified, and the API returns `accuracy: null` and
-`independent_check: false`. The halfway centimetre hint is only a rough reference,
-labelled as neither a target nor a tolerance.
+`independent_check: false`. From panel 0.41.0 an intermediate reading shows the range
+of heights the fit accepts for that stop (`reading_range`, roll 5 to roll 1) instead
+of a halfway reference; it is neither a target nor a tolerance, and a reading outside
+it is refused with `reading_out_of_range` (see [the API](panel-websocket-api.md#guided-geometry-intermediate-reading-range-0410)).
 
 ## Additive WebSocket protocol
 
@@ -95,7 +97,7 @@ Existing stop/cancel/heartbeat/detach/resume/save actions retain their semantics
 provenance or geometry through calibration actions.
 New transient phases are `briefing`, `geometry_wait_stop` and `reading`; existing
 starting/opening/closing/review/saving/terminal phases remain. `step` identifies the
-instruction, and `reading_kind`, `can_repeat`, `expected_cm`, `geometry`, `samples`
+instruction, and `reading_kind`, `can_repeat`, `expected_cm`, `reading_range`, `geometry`, `samples`
 and `readings` let the frontend render backend state without fitting calculations.
 Briefings, readings and review are recoverable stationary checkpoints. Leaving
 while moving or waiting for Stop interrupts and requests Stop; reconnect never

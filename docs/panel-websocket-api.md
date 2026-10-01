@@ -2,6 +2,8 @@
 
 > Panel 0.40.0 [pauses an automatic or batch cycle whose owner is absent](#pause-without-the-owner-0400) and keeps its measurements until the owner sends `continue`.
 
+> Panel 0.41.0 adds the [accepted range of intermediate tape readings](#guided-geometry-intermediate-reading-range-0410) to guided roll measurement, shows profile values rounded and locks the cover's travel and personal values while a measurement runs.
+
 > Panel 0.38.5 changes the [lift-off gap rule and adds covers without slats](#guided-geometry-lift-off-gap-and-covers-without-slats-0385) to guided slat/roll measurement.
 
 > Panel 0.31.0 adds [guided slat/roll measurement](cover-guided-geometry.md): basic new-profile path, backend tape fitting and atomic review/save.
@@ -69,7 +71,8 @@ The limits and the repeat are constants in `cover_calibration_geometry.py`:
 ascent follows the first bottom end stop. The intermediate ascent is scheduled to stop
 at half the opening time, and its reading fits the opening roll alone with a slat phase of zero
 (`opening_roll_fit`, the mirror of the closing fit: same 1–5 roll range, same
-`invalid_reading` refusals). Repeating the travel or the intermediate ascent returns
+refusals; from 0.41.0 a reading outside `reading_range` is refused with
+`reading_out_of_range`). Repeating the travel or the intermediate ascent returns
 to the bottom through the `home` briefing; repeating the full descent, the
 intermediate descent or the review still goes through `top`. Review and save carry `slat_time_s: 0`. The joint lift-off fit used with
 slats is unchanged. Storage and export formats are unchanged.
@@ -91,6 +94,47 @@ confirmed; review values are displayed rounded, tenths of a second and of a
 centimetre and rolls to two decimals, while stored and sent values keep full precision. From 0.38.5 the runs that only bring
 the cover to an end stop (`home`, `reset`, `top`) show no elapsed time, since nothing is
 measured, and their text says which end stop to confirm; the measured runs keep it.
+
+## Guided geometry: intermediate reading range (0.41.0)
+
+While an intermediate reading is asked (`phase: "reading"`, `step` `half_open` or
+`half_close`), geometry views add `reading_range: {"min_cm": …, "max_cm": …}`: the
+heights for which the fit finds a roll from 1 to 5 for the stop just measured.
+`min_cm` is the height with roll 5, `max_cm` the height with roll 1. For the
+intermediate descent and for an ascent without slats the ends invert the winding
+model in closed form; for the ascent with slats (joint lift-off fit) the rolls are
+first limited to those that keep the fitted slat time from 0 to below both full
+times, found by bisection, and the range follows from them. In every other phase
+and step, and when no height fits (timings that contradict each other),
+`reading_range` is `null`.
+
+A reading outside the range is refused with the new error `reading_out_of_range`;
+the step, samples and readings do not change, and Repeat stays available. Readings
+inside the range are fitted as before; a reading that is not a number in cm, or a
+reading for which `reading_range` is `null` and the fit fails, keeps
+`invalid_reading`. `expected_cm` stays in the view for existing clients; panel
+0.41.0 no longer shows it, because it matched the highest accepted reading (roll 1)
+and was refused as soon as the stop did not fall exactly at half the time.
+
+Panel 0.41.0 shows under an intermediate reading "For this cover the reading should
+be between … and … cm. Enter what the tape says.", with the ends rounded to a tenth
+of a centimetre inside the range, so that every value shown is accepted. A reading
+typed outside the range keeps "Use this reading" disabled and shows the
+`reading_out_of_range` text under the field before anything is sent; Home Assistant
+still validates every reading, and its refusal names the reading sent and the same
+range. The intermediate runs and the wait for their Stop show no elapsed time:
+Home Assistant stops the cover at a computed time and nothing is pressed, so the
+panel says that the cover is positioning itself (the runs are still measured).
+
+**Profile dialog (0.41.0).** Times are displayed to a tenth of a second, the slat
+phase to a tenth and the roll ratios to two decimals, with the user's decimal
+separator; the calibration view's rounded values follow the language too. Stored
+values keep full precision: a personal value field shows the rounded value and Save
+sends back the saved value unless the field was edited. While the profile read
+reports a calibration session that is `recoverable`, or `waiting_for_stop`, the
+cover's travel, its personal values and their Save buttons are disabled with a line
+explaining why: `write_profile` refuses those writes with `calibration_busy` until
+the session ends and the gateway is released.
 
 ## Multi-cover profile assignment (0.27.0)
 
