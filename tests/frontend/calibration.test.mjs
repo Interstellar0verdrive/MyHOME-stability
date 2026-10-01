@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { CoverCalibration } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
 import { calibrationScene } from "../../custom_components/myhome/frontend/panel/panel-calibration-visual.js";
+import { shown } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 
 const dom = new JSDOM("<!doctype html><body></body>", { pretendToBeVisual: true });
 const { document } = dom.window;
@@ -88,7 +89,7 @@ test("automatic and interrupted phases never invite endpoint recording or measur
   assert.equal(calls.length, 0);
 });
 
-async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided" } = {}) {
+async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats } = {}) {
   const host = document.createElement("section");
   document.body.append(host);
   const controller = new CoverCalibration();
@@ -113,7 +114,7 @@ async function mount({ call, subscribe, entity_ids, direction, resume, mode = "g
     return { ...state, sequence: state.sequence + (message.action === "heartbeat" ? 0 : 1),
       phase: phases[message.action] || state.phase };
   } };
-  await controller.open({ host, hass, entity: { entry_id: "one", entity_id: "cover.bedroom" }, revision: 4, mode, entity_ids, direction, resume,
+  await controller.open({ host, hass, entity: { entry_id: "one", entity_id: "cover.bedroom" }, revision: 4, mode, entity_ids, direction, resume, slats,
     t, onSaved: () => { saved++; }, onCancel: () => { cancelled++; } });
   return { host, controller, calls, starts, push, counts: () => ({ stopped, saved, cancelled }) };
 }
@@ -571,6 +572,207 @@ test("geometry recovery restores its reading screen without starting any movemen
   assert.equal(host.querySelector("#cal-reading").hidden, false);
   assert.match(host.querySelector("#cal-phase").textContent, /corsa completa/);
   assert.equal(calls.length, 0);
+});
+
+test("a cover without slats is started as such and never shown slat steps or a slat time", async () => {
+  assert.equal("slats" in (await mount({ mode: "geometry" })).starts[0], false, "existing clients keep their start message");
+  assert.equal("slats" in (await mount({ mode: "guided", slats: false })).starts[0], false);
+  const { host, push, starts } = await mount({ mode: "geometry", slats: false });
+  assert.equal(starts[0].slats, false);
+  const phase = host.querySelector("#cal-phase"), figure = host.querySelector(".cal-visual");
+  push({ phase: "briefing", step: "home", slats: false, save_modes: ["new"], can_repeat: false });
+  assert.equal(phase.textContent, t("calBrief_home_no_slats"));
+  assert.equal(figure.querySelector(".cal-visual-label").textContent, t("calVisual_targetClosedNoSlats"));
+  push({ step: "closing" });
+  assert.equal(phase.textContent, t("calBrief_closing_no_slats"));
+  for (const step of ["home", "closing"]) {
+    push({ phase: "closing", step });
+    assert.equal(figure.querySelector(".cal-visual-label").textContent, t("calVisual_closingNoSlats"));
+  }
+  push({ phase: "closing", step: "home", slats: true });
+  assert.equal(figure.querySelector(".cal-visual-label").textContent, t("calVisual_closing"));
+  push({ phase: "briefing", slats: false });
+  push({ step: "half_open" });
+  assert.equal(phase.textContent, t("calBrief_half_open"));
+  for (const language of ["en", "it"]) {
+    for (const key of ["calBrief_home_no_slats", "calBrief_closing_no_slats", "calVisual_targetClosedNoSlats", "calVisual_closingNoSlats"]) {
+      assert.doesNotMatch(translations[language][key], /slat|lamell/i, `${language}.${key}`);
+    }
+  }
+  push({ phase: "review", step: "half_close", values: { opening_time: 22, closing_time: 20 },
+    geometry: { slat_time_s: 0, opening_roll: 2, closing_roll: 3 }, travel_cm: 200, can_repeat: true });
+  const values = host.querySelector("#cal-values").textContent;
+  assert.match(values, /Senza lamelle · Rullo in apertura: 2 · Rullo in chiusura: 3/);
+  assert.doesNotMatch(values, /Tempo lamelle/);
+  assert.equal(host.querySelector("#cal-save-help").textContent, t("calGeometryReviewNoSlats"));
+  push({ slats: true, geometry: { slat_time_s: 2, opening_roll: 2, closing_roll: 3 } });
+  assert.match(host.querySelector("#cal-values").textContent, /Tempo lamelle \(s\): 2 · Rullo/);
+  assert.equal(host.querySelector("#cal-save-help").textContent, t("calGeometryReview"));
+});
+
+test("the lift-off reading states its limit from the session and a repeat says why, with its attempt", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry", call: (message, state) => {
+    if (message.action === "reading") throw { code: "invalid_gap" };
+    return state;
+  } });
+  const phase = host.querySelector("#cal-phase"), notice = host.querySelector("#cal-lift-repeat");
+  const limits = { touching_cm: 1, gap_warn_cm: 10, max_gap_cm: 20, lift_repeat: true, lift_attempts: 1, still_resting: false, gap_warning: false };
+  push({ phase: "reading", step: "lift", reading_kind: "lift", can_repeat: true, save_modes: ["new"], ...limits });
+  assert.equal(phase.textContent, "Misura in cm il distacco del bordo inferiore dalla base. Se il bordo non si è sollevato di almeno 1 cm, inserisci 0: il bordo conta come ancora appoggiato e la corsa si ripete.");
+  assert.equal(notice.hidden, true);
+  push({ touching_cm: 1.5 });
+  assert.match(phase.textContent, /almeno 1\.5 cm, inserisci 0/);
+  push({ touching_cm: 1, lift_repeat: false });
+  assert.match(phase.textContent, /Sotto 1 cm il bordo conta come ancora appoggiato: ripeti la misura\./);
+  const form = host.querySelector("#cal-reading");
+  form.elements.reading_cm.value = "60";
+  form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  assert.equal(calls.at(-1).reading_cm, 60);
+  assert.equal(host.querySelector("#cal-reason").textContent, "Inserisci un distacco fra 1 e 20 cm, misurato dalla base al bordo inferiore. Se il bordo è salito di più, usa Ripeti.");
+  push({ phase: "briefing", step: "reset", lift_repeat: true, lift_attempts: 2, still_resting: true });
+  assert.equal(notice.hidden, false);
+  assert.equal(notice.textContent, "Il bordo era ancora appoggiato: la corsa di distacco si ripete (tentativo 2)");
+  const announced = notice.firstChild;
+  push({});  // A heartbeat or an unchanged view does not announce it again.
+  assert.equal(notice.firstChild, announced);
+  push({ lift_attempts: 3 });  // Another run still resting, back at the same briefing.
+  assert.match(notice.textContent, /\(tentativo 3\)$/);
+  push({ phase: "briefing", step: "reset", still_resting: false });
+  assert.equal(notice.hidden, true);
+  assert.equal(notice.textContent, "");
+  assert.equal(translations.en.calLiftRepeated.replace("{lift_attempts}", "2"), "The edge was still resting: the lift-off run is repeated (attempt 2)");
+  assert.match(translations.en.profileError_invalid_gap, /If the edge rose further, use Repeat\.$/);
+});
+
+test("a wide lift-off gap is accepted with a warning that offers Repeat and goes away with it", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const notice = host.querySelector("#cal-lift-repeat"), repeat = host.querySelector("#cal-repeat");
+  const limits = { touching_cm: 1, gap_warn_cm: 10, max_gap_cm: 20, lift_repeat: true, lift_attempts: 1, still_resting: false };
+  push({ phase: "briefing", step: "reset", save_modes: ["new"], can_repeat: false, gap_warning: false, ...limits });
+  assert.equal(notice.hidden, true);
+  push({ can_repeat: true, gap_warning: true });
+  assert.equal(notice.hidden, false);
+  assert.equal(notice.textContent, "Il bordo si è sollevato di 10 cm o più prima dell’arresto: il tempo lamelle sarà meno preciso. Ripeti la corsa di distacco per un risultato migliore, oppure continua.");
+  assert.equal(host.querySelector('[data-cal-action="next"]').hidden, false, "continuing stays possible");
+  assert.equal(repeat.hidden, false);
+  repeat.click(); await tick();
+  assert.equal(calls.at(-1).action, "repeat");
+  push({ can_repeat: false, gap_warning: false, lift_attempts: 2 });
+  assert.equal(notice.hidden, true);
+  assert.equal(notice.textContent, "");
+  assert.match(translations.en.calGapWarning, /^The edge rose \{gap_warn_cm\} cm or more before the stop/);
+});
+
+test("tape readings take a comma or a point and never send an empty or partial number", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm, reason = host.querySelector("#cal-reason");
+  assert.equal(input.type, "text");
+  assert.equal(input.inputMode, "decimal");
+  const submit = async (value) => {
+    input.value = value;
+    form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  };
+  for (const [step, reading_kind] of [["lift", "lift"], ["opening", "travel"], ["half_open", "half_open"]]) {
+    push({ phase: "reading", step, reading_kind, can_repeat: true, save_modes: ["new"] });
+    for (const [value, expected] of [["2,8", 2.8], ["2.8", 2.8], [" 12,5 ", 12.5], ["0", 0], [",5", .5]]) {
+      await submit(value);
+      assert.equal(calls.at(-1).action, "reading");
+      assert.equal(calls.at(-1).reading_cm, expected, `${step} ${value}`);
+      assert.equal(input.getAttribute("aria-invalid"), "false");
+    }
+    for (const value of ["", "   ", "abc", "2,8 cm", "1e3", "0x10", "1,2,3", "-"]) {
+      const sent = calls.length;
+      await submit(value);
+      assert.equal(calls.length, sent, `${step} "${value}" must not be sent`);
+      assert.equal(input.getAttribute("aria-invalid"), "true");
+      assert.equal(reason.hidden, false);
+      assert.equal(reason.textContent, "Inserisci la lettura in cm come numero; i decimali possono seguire una virgola o un punto.");
+    }
+  }
+});
+
+test("the lift-off gap is checked while typed; the button waits for a value in range", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  const button = form.querySelector('button[type="submit"]'), range = host.querySelector("#cal-reading-range");
+  const type = (value) => { input.value = value; input.dispatchEvent(new dom.window.Event("input", { bubbles: true })); };
+  push({ phase: "reading", step: "lift", reading_kind: "lift", can_repeat: true, save_modes: ["new"], touching_cm: 1, max_gap_cm: 20 });
+  for (const [value, outside] of [["25", true], ["12", false], ["0", false], ["20,0", false], ["20,1", true], ["-1", true], ["", false], ["2,", false]]) {
+    type(value);
+    assert.equal(button.disabled, outside, value);
+    assert.equal(range.hidden, !outside, value);
+    assert.equal(range.textContent, outside ? "Inserisci un distacco fra 1 e 20 cm, misurato dalla base al bordo inferiore. Se il bordo è salito di più, usa Ripeti." : "", value);
+  }
+  type("25");
+  push({});  // A heartbeat keeps the check.
+  assert.equal(button.disabled, true);
+  type("12");
+  push({ recoverable: true, attached: false, attachment: "old" });  // A lost connection still disables it.
+  assert.equal(button.disabled, true);
+  push({ attached: true, attachment: "new" });
+  assert.equal(button.disabled, false);
+  push({ step: "opening", reading_kind: "travel" });
+  type("25");
+  assert.equal(button.disabled, false, "other readings are not range-checked here");
+  assert.equal(range.hidden, true);
+  assert.equal(calls.length, 0);
+});
+
+test("the travel reading offers the travel already saved for the cover, and sends only on confirmation", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  push({ phase: "reading", step: "opening", reading_kind: "travel", can_repeat: true, save_modes: ["new"], saved_travel_cm: 110 });
+  assert.equal(input.value, "110");
+  assert.equal(calls.length, 0, "a prefilled value is never sent by itself");
+  input.value = "112,5";
+  push({});
+  assert.equal(input.value, "112,5");
+  form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  assert.equal(calls.at(-1).reading_cm, 112.5);
+  push({ step: "half_open", reading_kind: "half_open" });
+  assert.equal(input.value, "", "only the travel is prefilled");
+  push({ step: "opening", reading_kind: "travel", saved_travel_cm: null });
+  assert.equal(input.value, "");
+});
+
+test("review values are displayed rounded while the view keeps full precision", async () => {
+  for (const [value, unit, text] of [[14.538674880051985, "s", "14.5"], [14.477566485991701, "s", "14.5"], [20, "s", "20"],
+    [110, "cm", "110"], [49.5, "cm", "49.5"], [42.46, "cm", "42.5"], [2.6638, "s", "2.7"], [1.7397, "roll", "1.74"],
+    [2.6596, "roll", "2.66"], [3, "roll", "3"], [null, "s", "—"], [undefined, "cm", "—"]]) {
+    assert.equal(shown(value, unit), text, `${value} ${unit}`);
+  }
+  const { host, push } = await mount({ mode: "geometry" });
+  push({ phase: "review", step: "half_close", values: { opening_time: 14.538674880051985, closing_time: 14.477566485991701 },
+    geometry: { slat_time_s: 2.6638, opening_roll: 1.7397, closing_roll: 2.6596 }, travel_cm: 112.46, save_modes: ["new"], can_repeat: true });
+  const values = host.querySelector("#cal-values").textContent;
+  assert.match(values, /: 14\.5 · .*: 14\.5 · .*: 112\.5 cm · Tempo lamelle \(s\): 2\.7 · Rullo in apertura: 1\.74 · Rullo in chiusura: 2\.66$/);
+  const batch = await mount({ mode: "automatic", entity_ids: ["cover.one"] });
+  batch.push({ phase: "review", results: [{ index: 0, values: { opening_time: 14.538674880051985, closing_time: 14.477566485991701 } }] });
+  assert.match(batch.host.querySelector("#cal-targets").textContent, /14\.5 \/ 14\.5 s/);
+  assert.match(batch.host.querySelector("#cal-batch-review").textContent, /14\.5 \/ 14\.5 s/);
+});
+
+test("positioning runs show what to confirm and no elapsed time; measured runs keep it", async () => {
+  const { host, push } = await mount({ mode: "geometry" });
+  const phase = host.querySelector("#cal-phase"), elapsed = host.querySelector("#cal-elapsed");
+  push({ phase: "briefing", step: "home", save_modes: ["new"], can_repeat: false });
+  for (const [state, text] of [[{ phase: "closing", step: "home" }, "calPositionClose"], [{ phase: "closing", step: "reset" }, "calPositionClose"],
+    [{ phase: "opening", step: "top" }, "calPositionOpen"], [{ phase: "closing", step: "home", slats: false }, "calPositionClose_no_slats"]]) {
+    push({ ...state, elapsed: 3.5 });
+    assert.equal(elapsed.hidden, true, `${state.step} measures nothing`);
+    assert.equal(phase.textContent, t(text));
+  }
+  for (const [state, text] of [[{ phase: "opening", step: "opening" }, "calEndpointRunning"], [{ phase: "closing", step: "closing" }, "calEndpointRunning"],
+    [{ phase: "opening", step: "lift" }, "calLiftRunning"], [{ phase: "opening", step: "half_open" }, "calHalfRunning"], [{ phase: "closing", step: "half_close" }, "calHalfRunning"]]) {
+    push({ ...state, slats: true, elapsed: 3.5 });
+    assert.equal(elapsed.hidden, false, `${state.step} is measured`);
+    assert.match(elapsed.textContent, /3\.5 s/);
+    assert.equal(phase.textContent, t(text));
+  }
+  assert.doesNotMatch(translations.en.calPositionClose_no_slats + translations.it.calPositionClose_no_slats, /slat|lamell/i);
+  const guided = await mount();
+  guided.push({ phase: "closing", elapsed: 3.5 });
+  assert.equal(guided.host.querySelector("#cal-elapsed").hidden, false, "other modes are unchanged");
 });
 
 for (const mode of ["geometry", "guided", "automatic"]) {

@@ -16,7 +16,7 @@ export function calibrationScene(state, lost = false) {
       if (["half_open", "half_close"].includes(state.reading_kind)) return scene("middle", "measureHeight", "", true);
     }
     if (phase === "briefing") {
-      if (["home", "reset", "closing"].includes(step)) return scene("closed", "targetClosed");
+      if (["home", "reset", "closing"].includes(step)) return scene("closed", state.slats === false ? "targetClosedNoSlats" : "targetClosed");
       if (["opening", "top"].includes(step)) return scene("open", "targetOpen");
       if (step === "lift") return scene("slats", "lift");
       if (["half_open", "half_close"].includes(step)) return scene("middle", "intermediate");
@@ -25,6 +25,7 @@ export function calibrationScene(state, lost = false) {
     if (["opening", "closing"].includes(phase) && ["half_open", "half_close"].includes(step)) {
       return scene("middle", "autoStop", phase === "opening" ? "mdi:arrow-up-bold" : "mdi:arrow-down-bold");
     }
+    if (phase === "closing" && state.slats === false) return scene("middle", "closingNoSlats", "mdi:arrow-down-bold");
   }
   if (phase === "confirm_closed") return scene("closed", "confirmClosed");
   if (phase === "confirm_open") return scene("open", "confirmOpen");

@@ -130,7 +130,8 @@ export class CoverProfileEditor {
       ...geometry.geometryKeys.map((key) => form.elements[key]?.value),
       !form.querySelector("#profile-delete-confirmation").hidden,
       ...["opening", "closing"].map((direction) => form.elements[`use_${direction}`].checked),
-      form.querySelector("#cal-mode").value, form.querySelector("#cal-direction").value, Boolean(this._preview)]) : null;
+      form.querySelector("#cal-mode").value, form.querySelector("#cal-direction").value, form.querySelector("#cal-no-slats").checked,
+      Boolean(this._preview)]) : null;
   }
 
   _markStale(message = this._context.t("profileChanged")) {
@@ -382,6 +383,8 @@ export class CoverProfileEditor {
               <label>${esc(t("calMode"))}<select id="cal-mode" ${disabled}><option value="guided">${esc(t("calGuided"))}</option><option value="automatic">${esc(t("calAutomatic"))}</option><option value="geometry">${esc(t("calGeometry"))}</option></select></label>
               <label>${esc(t("calScope"))}<select id="cal-direction" aria-describedby="cal-scope-help" ${disabled}><option value="">${esc(t("calBothDirections"))}</option><option value="opening">${esc(t("calOnlyOpening"))}</option><option value="closing">${esc(t("calOnlyClosing"))}</option></select></label>
             </div>
+            <label class="profile-override-toggle" id="cal-slats-field" hidden><input type="checkbox" id="cal-no-slats" aria-describedby="cal-no-slats-help" ${disabled}> ${esc(t("calNoSlats"))}</label>
+            <p id="cal-no-slats-help" class="muted" hidden>${esc(t("calNoSlatsHelp"))}</p>
             <button type="button" id="profile-calibrate" class="primary profile-calibrate" ${disabled}><ha-icon icon="mdi:timer-outline" aria-hidden="true"></ha-icon><span id="cal-label">${esc(t("calTitle"))}</span></button>
             <button type="button" id="profile-calibrate-batch" class="ghost profile-calibrate-batch" ${disabled}><ha-icon icon="mdi:select-group" aria-hidden="true"></ha-icon><span>${esc(t("calBatchTitle"))}</span></button>
             <details class="profile-meta calibration-guide" id="profile-calibration-guide"><summary>${esc(t("profileCalibrationGuide"))}</summary>
@@ -457,6 +460,8 @@ export class CoverProfileEditor {
       const scopeLabel = scope.selectedOptions[0]?.textContent || t("calBothDirections");
       host.querySelector("#cal-label").textContent = mode !== "guided" ? t(mode === "geometry" ? "calGeometry" : "calAutomatic") : `${t("calMeasure")}: ${scopeLabel.toLocaleLowerCase()}`;
       host.querySelector("#cal-hint").textContent = `${t(mode === "geometry" ? "calGeometry" : mode === "automatic" ? "calAutomatic" : "calGuided")} · ${scopeLabel.toLocaleLowerCase()}`;
+      // The slat choice is sent with the start of a slat and roll measurement only.
+      for (const id of ["#cal-slats-field", "#cal-no-slats-help"]) host.querySelector(id).hidden = mode !== "geometry";
     };
     host.querySelector("#profile-calibrate-batch").onclick = () => this._selectBatch();
     host.querySelector("#cal-mode").onchange = () => {
@@ -480,7 +485,9 @@ export class CoverProfileEditor {
       const context = this._context;
       const mode = host.querySelector("#cal-mode").value;
       const direction = mode === "guided" ? host.querySelector("#cal-direction").value : "";
-      this._calibration.open({ ...context, mode, direction, host: host.querySelector("#profile-body"), revision: data.revision,
+      // The calibration view sends it only with the slat and roll measurement.
+      const slats = !host.querySelector("#cal-no-slats").checked;
+      this._calibration.open({ ...context, mode, direction, slats, host: host.querySelector("#profile-body"), revision: data.revision,
         onCancel: () => this.open(context), onSaved: () => { context.onSaved(t("saved")); this.open(context); } });
     };
     const form = host.querySelector("#profile-form");

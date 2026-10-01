@@ -1,5 +1,7 @@
 # MyHOME panel API: implemented reference
 
+> Panel 0.38.5 changes the [lift-off gap rule and adds covers without slats](#guided-geometry-lift-off-gap-and-covers-without-slats-0385) to guided slat/roll measurement.
+
 > Panel 0.31.0 adds [guided slat/roll measurement](cover-guided-geometry.md): basic new-profile path, backend tape fitting and atomic review/save.
 
 > Runtime baseline — panel 0.30.0: [optional slat/roll profiles and runtime](cover-nonlinear-runtime.md)
@@ -17,6 +19,76 @@
 > and revision-bound impact confirmation; their complete contract is linked above.
 > Existing endpoints remain available; native writes use the shared store and revision. Earlier release descriptions below remain historical where superseded.
 
+
+## Guided geometry: lift-off gap and covers without slats (0.38.5)
+
+`start` with `mode: "geometry"` accepts an optional `slats` boolean, `true` by
+default. With any other mode, `slats` is refused with `invalid_profile`; a value
+that is not a boolean fails schema validation. A client that omits it keeps the
+slat path and its steps, and its geometry views only add the keys below; the
+lift-off gap rule below applies to it as well.
+
+| Key | Meaning |
+| --- | --- |
+| `slats` | `false` for a cover measured without slats |
+| `lift_attempts` | Number of the current lift-off run, starting at 1: every repeat of the run, automatic or with Repeat, adds one |
+| `still_resting` | `true` in the `reset` briefing that follows a lift-off run discarded because the edge was still resting, until `next` starts the return to the bottom, Repeat is used or the session is interrupted |
+| `touching_cm`, `max_gap_cm` | Lift-off gap limits in cm, `1.0` and `20.0` |
+| `gap_warn_cm` | Gap from which a reading is accepted with a warning, `10.0` |
+| `gap_warning` | `true` after a gap from `gap_warn_cm` to `max_gap_cm` is accepted, until `next`, Repeat or an interruption |
+| `saved_travel_cm` | The travel already saved for the cover, or `null`; `travel_cm` stays the travel measured in this session |
+| `lift_repeat` | `true` when a gap below `touching_cm` repeats the lift-off run, `false` when it is refused |
+
+**Lift-off gap.** The `reading` that follows the lift-off run is the gap between the
+bottom edge and its rest, in cm. From `touching_cm` to `max_gap_cm` it is accepted.
+From `gap_warn_cm` on, the joint fit gives a less precise slat time: the gap is kept,
+`gap_warning` becomes `true` and `can_repeat` is offered at the `reset` briefing that
+follows. Repeat there discards the lift-off run (sample and gap), adds an attempt and
+returns to the bottom before the lift-off runs again; `next` continues with the gap.
+Below `touching_cm`, 0 included, the edge is still resting: the whole lift-off run is
+discarded (`samples.lift` is removed and no `readings.gap` is kept), `lift_attempts`
+grows by one, `still_resting` becomes `true`, and the session returns to the `reset`
+briefing, which brings the cover back to the bottom before the lift-off run starts
+again. Each of these movements still waits for its own `next`. There is no limit on
+attempts; Cancel ends the session. Above `max_gap_cm` the reading is refused with the
+new error `invalid_gap` and the step does not change; if the edge really rose
+further, Repeat is the only way on and runs the lift-off again. Negative or non-finite readings, a missing reading and
+a boolean keep `invalid_reading`; a string is still refused by the message schema
+(`invalid_format`). Before 0.38.5 a reading of 0 meant "just
+lifted, no measurable gap"; it now means "still resting".
+
+The limits and the repeat are constants in `cover_calibration_geometry.py`:
+`TOUCHING_CM`, `GAP_WARN_CM`, `MAX_GAP_CM` and `LIFT_REPEAT_BELOW_TOUCHING`. With
+`LIFT_REPEAT_BELOW_TOUCHING = False`, a reading below `touching_cm` is refused with
+`invalid_gap` and nothing is repeated. The 1 cm limit, the 10 cm warning and the
+20 cm limit are still to be validated on real installations.
+
+**Without slats.** With `slats: false` there is no `lift` and no `reset` step: the full
+ascent follows the first bottom end stop. The intermediate ascent is scheduled to stop
+at half the opening time, and its reading fits the opening roll alone with a slat phase of zero
+(`opening_roll_fit`, the mirror of the closing fit: same 1–5 roll range, same
+`invalid_reading` refusals). Repeating the travel or the intermediate ascent returns
+to the bottom through the `home` briefing; repeating the full descent, the
+intermediate descent or the review still goes through `top`. Review and save carry `slat_time_s: 0`. The joint lift-off fit used with
+slats is unchanged. Storage and export formats are unchanged.
+
+Panel 0.38.5 shows a "This cover has no slats" switch in the calibration section
+when **Slats and roll — guided** is selected, and sends `slats: false` only when it is
+on. The lift-off text takes its limit from `touching_cm`, a status line gives the
+attempt after an automatic repeat or a non-blocking warning after a wide gap, with
+the values from the view, `invalid_gap` names both limits and points to Repeat, the briefings and illustration captions of a cover without slats do not
+mention slats, and the review shows "No slats" instead of a slat time. From 0.38.5 the
+tape reading field is a text field with a decimal keypad: it takes a comma or a point
+as decimal separator, and an empty or non-numeric entry is never sent; the field is
+marked invalid and a message asks for a number. From 0.38.5 the lift-off text says to
+enter 0 when the edge did not rise at least `touching_cm`; a lift-off gap outside 0 to
+`max_gap_cm` keeps "Use this reading" disabled and shows the `invalid_gap` text under
+the field before anything is sent (Home Assistant still validates every reading); the
+travel reading is prefilled with `saved_travel_cm` when known, and is sent only when
+confirmed; review values are displayed rounded, tenths of a second and of a
+centimetre and rolls to two decimals, while stored and sent values keep full precision. From 0.38.5 the runs that only bring
+the cover to an end stop (`home`, `reset`, `top`) show no elapsed time, since nothing is
+measured, and their text says which end stop to confirm; the measured runs keep it.
 
 ## Multi-cover profile assignment (0.27.0)
 

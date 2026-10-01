@@ -473,6 +473,9 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
         if msg.get("mode") == "geometry":
             from .cover_calibration_geometry import GeometryCalibrationSession
             session_type = GeometryCalibrationSession
+            options = {"slats": msg.get("slats", True)}
+        elif "slats" in msg:
+            raise ProfileError("invalid_profile")
         session = session_type(hass, store, entry, cover, connection, msg["id"], client_id=msg.get("client_id"), **options)
         store.calibration = cover._calibration = session
         session.subscribe()
@@ -484,6 +487,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
     vol.Required("entity_id"): str, vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Optional("mode"): vol.In(["guided", "automatic", "geometry"]),
     vol.Optional("direction"): vol.In(["opening", "closing"]),
+    vol.Optional("slats"): bool,
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
 })
 @require_admin
