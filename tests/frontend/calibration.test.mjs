@@ -1517,8 +1517,10 @@ test("a refused Continue shows why and leaves the pause, its measurements and Co
   assert.equal(reason.hidden, false);
 });
 
-test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async () => {
-  const tomorrow = new Date(Date.now() + 86400000).toISOString();
+test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async (t) => {
+  // Fixed day, timers real: "now + 24 h" could stay on the same day around a change of daylight saving time.
+  t.mock.timers.enable({ apis: ["Date"], now: NOON });
+  const tomorrow = new Date(NOON.getTime() + 36 * 3600000).toISOString();
   const { host, controller } = await mount({ mode: "automatic", entity_ids: ["cover.one", "cover.two"] });
   controller._accept({ ...controller._state, ...pausedCycle, sequence: 9, recoverable: true, attached: true, attachment: "owner",
     targets: [{ entity_id: "cover.one", name: "One" }, { entity_id: "cover.two", name: "Attic $& $' $1" }],
