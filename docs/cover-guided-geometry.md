@@ -89,21 +89,29 @@ it is refused with `reading_out_of_range` (see [the API](panel-websocket-api.md#
 ## Check of the measured model
 
 From `review`, `action: "check"` (optional `direction`, `"opening"` by default, and
-`target_cm`, half the measured travel by default) verifies the model just fitted.
-It returns to the bottom end stop through the `home` briefing (or to the top through
-`top` for a downward check), then runs from there for the motor seconds the model
-needs to bring the bottom edge to the target, and stops on time. By default the run
-rises from the bottom, because an ascent crosses the slat phase and the opening roll;
-a descent from the top crosses neither.
+`target_cm`, three quarters of the measured travel by default) verifies the model just
+fitted. It returns to the bottom end stop through the `home` briefing (or to the top
+through `top` for a downward check), then runs from there for the motor seconds the
+model needs to bring the bottom edge to the target, and stops on time. By default the
+run rises from the bottom, because an ascent crosses the slat phase and the opening
+roll, a descent from the top neither; and it aims at three quarters of the travel,
+away from the two intermediate readings, which land near 40 %. A target outside 10 %
+to 90 % of the travel, or a run no longer than the slat time plus 1 s, is refused.
 
-The reading after it is compared with where the model puts the edge after the motor
-seconds really run, to a tenth of a centimetre. The difference is rounded to the
-whole centimetre with ties away from zero, and the check passes within 4 cm
-(`CHECK_THRESHOLD_CM`). The verdict comes back to `review` in the `check` key of the
-view; Save remains available whatever it says, the verdict is not stored, and the
-check reading seeds the runtime position after Save. Repeating a measurement step
-clears the verdict; Stop before the check reading interrupts the session like
-at any other geometry step. Contract: [the API](panel-websocket-api.md#guided-geometry-check-of-the-measured-model).
+The reading after it (from 0.1 cm) is compared with where the model puts the edge
+after the motor seconds really run, to a tenth of a centimetre. The difference is
+rounded to the whole centimetre with ties away from zero, and the check passes within
+4 cm (`CHECK_THRESHOLD_CM`). The verdict comes back to `review` in the `check` key of
+the view and stays there until another check, a repeated measurement step or the end
+of the session; Save remains available whatever it says, the verdict is not stored,
+and the check reading seeds the runtime position after Save.
+
+A check never costs the measurement. Stop in its briefings or at its reading returns
+to `review` with everything, the previous verdict included. Stop while it moves, an
+early stop on the bus or a movement nobody asked for returns to `review` without a
+verdict; Stop is written, and since nobody read where the edge stopped, Save leaves
+the runtime position unknown instead of seeding it. Other interruptions end the
+session as at any other step. Contract: [the API](panel-websocket-api.md#guided-geometry-check-of-the-measured-model).
 
 ## Additive WebSocket protocol
 

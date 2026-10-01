@@ -42,28 +42,53 @@ writability rules as every other verb (`calibration_owned`, `calibration_step`,
 | Key | Meaning |
 | --- | --- |
 | `direction` | `"opening"` (default): from the bottom end stop upwards; `"closing"`: from the top end stop downwards |
-| `target_cm` | Height of the bottom edge above its rest, strictly between 0 and the measured travel; default half the travel |
+| `target_cm` | Height of the bottom edge above its rest; default three quarters of the measured travel |
+
+The default target is three quarters of the travel because the two intermediate
+readings the roll measurement fits land near 40 % of it: a check at half the travel
+would mostly repeat them. The default direction rises from the bottom, so that the
+run crosses the slat phase and the opening roll. The check primitive itself
+(`CalibrationCheck.plan`) aims at half the travel by default, for the check of an
+assigned profile.
 
 A value that is not one of the two directions, or not a number, fails the schema
-(`invalid_format`). A target at or beyond an end stop, or not finite, is refused with
-`invalid_check`: nothing is sent, the session stays in `review`, and a verdict
-already there is kept. Any other mode refuses `check` with `calibration_step`.
+(`invalid_format`). A check that says nothing about the curtain is refused with
+`invalid_check`: a target outside 10 % to 90 % of the travel, not finite, or whose
+planned run lasts no more than the slat time plus 1 s (a descent from the top to
+90 % on a slow motor, for instance). Nothing is sent, the session stays in `review`,
+and a verdict already there is kept. Any other mode refuses `check` with
+`calibration_step`.
 
 The check follows the rules of the measurement. Each movement has its own briefing
 and starts only on `next`: `check` leads to the `home` briefing (upward check) or
 the `top` briefing (downward check), whose run is confirmed with `endpoint`; then the
 `check` briefing, whose run the backend stops after the planned seconds, measured
 from the motor start as for the intermediate runs; then `phase: "reading"` with
-`step` and `reading_kind` `"check"`. The `reading` action takes `reading_cm` from 0
-to the measured travel; anything else is refused with `invalid_reading` and the
-step stays. The reading brings the session back to `review` (`step: "half_close"`)
-with the verdict. Repeat on the check reading runs the same check again, through
-its end stop briefing, keeping nothing of the previous run. Save is offered as
-before, whatever the verdict; the last tape reading, the check's when there is
-one, seeds the runtime position after Save.
+`step` and `reading_kind` `"check"`. The `reading` action takes `reading_cm` from 0.1,
+like every other tape reading, to the measured travel; anything else is refused with
+`invalid_reading` and the step stays. The reading brings the session back to `review`
+(`step: "half_close"`) with the verdict. Repeat on the check reading runs the same
+check again, through its end stop briefing, keeping nothing of the previous run.
+Save is offered as before, whatever the verdict.
 
-Geometry views add `check_threshold_cm` (`4`) and `check`, which is `null` outside
-a check and in every terminal phase:
+**A check that ends early returns to `review`; the measurement is never lost to it.**
+
+- Stop in one of its briefings, or at its reading, returns to `review` with the whole
+  measurement and the verdict there was before the check (`null` if there was none).
+  Stop is written, as Stop in `review` is.
+- Stop while the cover returns to its end stop or runs the check (from the moment the
+  movement is queued), an early stop reported by the bus (`unexpected_stop`) or a
+  movement nobody asked for (`unexpected_movement`, also during a briefing) returns to
+  `review` without a verdict (`check: null`). Stop is written, and the session no
+  longer knows where the bottom edge is: Save then leaves the runtime position unknown,
+  as after a restart, instead of seeding it from an earlier reading.
+- `check_interrupted` gives the reason (`stopped`, `unexpected_stop`,
+  `unexpected_movement`) until the next check or a repeated measurement; it is `null`
+  otherwise and in every terminal phase.
+- Every other interruption (unavailable cover, undelivered command, Stop not
+  confirmed, timeouts, lease) ends the session as in the other geometry steps.
+
+Geometry views add `check_threshold_cm` (`4`), `check_interrupted` and `check`:
 
 | Key of `check` | Meaning |
 | --- | --- |
@@ -74,22 +99,25 @@ a check and in every terminal phase:
 | `deviation_cm` | `measured_cm − expected_cm` rounded to the whole centimetre, ties away from zero (4.5 → 5, −4.5 → −5); positive means above |
 | `passed` | `true` when the absolute value of `deviation_cm` is at most `check_threshold_cm` |
 
-`expected_cm` follows the seconds the motor really ran, so a Stop written late is not
+`check` is `null` until a check is requested. It becomes a new object, without
+results, when a check starts. After the reading it stays filled in `review`, Stop
+there included, until the next check starts, a measurement step is repeated from
+`review` (the model changes), a check is cut short while moving, or the session ends;
+it is `null` in every terminal phase, the saved one included.
+
+`expected_cm` follows the seconds the motor really ran, so a late Stop write is not
 held against the model; `target_cm` is where the run was aimed. The deviation is
 computed from the published `expected_cm`, so the two numbers on a screen never
 disagree. The verdict uses an explicit half-up rounding: Python's `round()` rounds
-half to even and would pass 4.5 cm.
+half to even and would pass 4.5 cm. The verdict is not stored with the profile;
+`accuracy` and `independent_check` keep their values. After a completed check, Save
+seeds the runtime position from the check reading, the last tape observation.
 
-`check` becomes a new object (no results) when a check starts, keeps its verdict in
-`review`, also after Stop there, and becomes `null` when a measurement step is
-repeated from `review` (the model changes), when the session is interrupted or
-cancelled, and once it is saved. Stop at any point of a check before its reading,
-briefings included, and any interruption end the session as during the other
-geometry steps: every value is discarded. The verdict is not stored with the profile; `accuracy` and
-`independent_check` keep their values.
-
-The threshold and the defaults are constants in `cover_calibration_check.py`:
-`CHECK_THRESHOLD_CM`, `DEFAULT_CHECK_DIRECTION` and `DEFAULT_TARGET_FRACTION`.
+The constants are in `cover_calibration_check.py`: `CHECK_THRESHOLD_CM`,
+`DEFAULT_CHECK_DIRECTION`, `GEOMETRY_CHECK_FRACTION` (0.75), `HALF_TRAVEL_FRACTION`
+(0.5), `MIN_TARGET_FRACTION` (0.1), `MAX_TARGET_FRACTION` (0.9),
+`MIN_CURTAIN_SECONDS` (1.0) and `MIN_READING_CM` (0.1); the reasons that return to
+`review` are `CHECK_RETURNS` in `cover_calibration_geometry.py`.
 
 ## Guided geometry: lift-off gap and covers without slats (0.38.5)
 
