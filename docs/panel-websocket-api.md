@@ -4,6 +4,8 @@
 
 > Panel 0.41.0 adds the [accepted range of intermediate tape readings](#guided-geometry-intermediate-reading-range-0410) to guided roll measurement, shows profile values rounded and locks the cover's travel and personal values while a measurement runs.
 
+> The backend adds a [check of the measured model](#guided-geometry-check-of-the-measured-model) to guided slat/roll measurement; the panel does not offer it yet.
+
 > Panel 0.38.5 changes the [lift-off gap rule and adds covers without slats](#guided-geometry-lift-off-gap-and-covers-without-slats-0385) to guided slat/roll measurement.
 
 > Panel 0.31.0 adds [guided slat/roll measurement](cover-guided-geometry.md): basic new-profile path, backend tape fitting and atomic review/save.
@@ -23,6 +25,71 @@
 > and revision-bound impact confirmation; their complete contract is linked above.
 > Existing endpoints remain available; native writes use the shared store and revision. Earlier release descriptions below remain historical where superseded.
 
+
+## Guided geometry: check of the measured model
+
+A check runs the cover from an end stop towards a height for the motor seconds the
+model needs to get there, stops it on time, and compares the tape reading of the
+bottom edge with where the model puts it. In a `mode: "geometry"` session it is
+offered in `review` only: there the measurement is complete and nothing moves. The
+panel does not send it yet; the screens arrive with the profile path that makes it
+mandatory.
+
+`action: "check"` takes two optional keys, with the same owner, `sequence` and
+writability rules as every other verb (`calibration_owned`, `calibration_step`,
+`cover_unavailable`):
+
+| Key | Meaning |
+| --- | --- |
+| `direction` | `"opening"` (default): from the bottom end stop upwards; `"closing"`: from the top end stop downwards |
+| `target_cm` | Height of the bottom edge above its rest, strictly between 0 and the measured travel; default half the travel |
+
+A value that is not one of the two directions, or not a number, fails the schema
+(`invalid_format`). A target at or beyond an end stop, or not finite, is refused with
+`invalid_check`: nothing is sent, the session stays in `review`, and a verdict
+already there is kept. Any other mode refuses `check` with `calibration_step`.
+
+The check follows the rules of the measurement. Each movement has its own briefing
+and starts only on `next`: `check` leads to the `home` briefing (upward check) or
+the `top` briefing (downward check), whose run is confirmed with `endpoint`; then the
+`check` briefing, whose run the backend stops after the planned seconds, measured
+from the motor start as for the intermediate runs; then `phase: "reading"` with
+`step` and `reading_kind` `"check"`. The `reading` action takes `reading_cm` from 0
+to the measured travel; anything else is refused with `invalid_reading` and the
+step stays. The reading brings the session back to `review` (`step: "half_close"`)
+with the verdict. Repeat on the check reading runs the same check again, through
+its end stop briefing, keeping nothing of the previous run. Save is offered as
+before, whatever the verdict; the last tape reading, the check's when there is
+one, seeds the runtime position after Save.
+
+Geometry views add `check_threshold_cm` (`4`) and `check`, which is `null` outside
+a check and in every terminal phase:
+
+| Key of `check` | Meaning |
+| --- | --- |
+| `direction`, `target_cm` | As requested, or the defaults |
+| `check_seconds` | Motor seconds of the check run, from the motor start to the Stop write; `null` until the run has stopped |
+| `expected_cm` | Where the model puts the bottom edge after `check_seconds`, to a tenth of a centimetre; `null` until then |
+| `measured_cm` | The tape reading; `null` until it is entered |
+| `deviation_cm` | `measured_cm − expected_cm` rounded to the whole centimetre, ties away from zero (4.5 → 5, −4.5 → −5); positive means above |
+| `passed` | `true` when the absolute value of `deviation_cm` is at most `check_threshold_cm` |
+
+`expected_cm` follows the seconds the motor really ran, so a Stop written late is not
+held against the model; `target_cm` is where the run was aimed. The deviation is
+computed from the published `expected_cm`, so the two numbers on a screen never
+disagree. The verdict uses an explicit half-up rounding: Python's `round()` rounds
+half to even and would pass 4.5 cm.
+
+`check` becomes a new object (no results) when a check starts, keeps its verdict in
+`review`, also after Stop there, and becomes `null` when a measurement step is
+repeated from `review` (the model changes), when the session is interrupted or
+cancelled, and once it is saved. Stop at any point of a check before its reading,
+briefings included, and any interruption end the session as during the other
+geometry steps: every value is discarded. The verdict is not stored with the profile; `accuracy` and
+`independent_check` keep their values.
+
+The threshold and the defaults are constants in `cover_calibration_check.py`:
+`CHECK_THRESHOLD_CM`, `DEFAULT_CHECK_DIRECTION` and `DEFAULT_TARGET_FRACTION`.
 
 ## Guided geometry: lift-off gap and covers without slats (0.38.5)
 

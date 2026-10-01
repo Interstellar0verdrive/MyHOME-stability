@@ -31,6 +31,11 @@ movement merely because a reading was submitted or a client reconnected.
    Explicit Save creates and assigns a new profile, saves this cover's measured
    travel, removes its former timing overrides and records per-key guided evidence
    in one storage transaction. Other profiles and their followers are untouched.
+8. Optionally, before Save, check the measured model (backend only; the panel does
+   not offer it yet): the cover returns to an end stop, runs towards a height for
+   the seconds the model needs, stops on time, and the tape says whether the edge
+   is within 4 cm of where the model puts it. See
+   [Check of the measured model](#check-of-the-measured-model).
 
 A cover without slats (panel 0.38.5, switch "This cover has no slats") skips step 2
 and the return to the bottom at the start of step 3: the full ascent follows step 1,
@@ -81,6 +86,25 @@ of heights the fit accepts for that stop (`reading_range`, roll 5 to roll 1) ins
 of a halfway reference; it is neither a target nor a tolerance, and a reading outside
 it is refused with `reading_out_of_range` (see [the API](panel-websocket-api.md#guided-geometry-intermediate-reading-range-0410)).
 
+## Check of the measured model
+
+From `review`, `action: "check"` (optional `direction`, `"opening"` by default, and
+`target_cm`, half the measured travel by default) verifies the model just fitted.
+It returns to the bottom end stop through the `home` briefing (or to the top through
+`top` for a downward check), then runs from there for the motor seconds the model
+needs to bring the bottom edge to the target, and stops on time. By default the run
+rises from the bottom, because an ascent crosses the slat phase and the opening roll;
+a descent from the top crosses neither.
+
+The reading after it is compared with where the model puts the edge after the motor
+seconds really run, to a tenth of a centimetre. The difference is rounded to the
+whole centimetre with ties away from zero, and the check passes within 4 cm
+(`CHECK_THRESHOLD_CM`). The verdict comes back to `review` in the `check` key of the
+view; Save remains available whatever it says, the verdict is not stored, and the
+check reading seeds the runtime position after Save. Repeating a measurement step
+clears the verdict; Stop before the check reading interrupts the session like
+at any other geometry step. Contract: [the API](panel-websocket-api.md#guided-geometry-check-of-the-measured-model).
+
 ## Additive WebSocket protocol
 
 Use existing `myhome/cover_calibration/start` with `mode: "geometry"` and no
@@ -91,6 +115,8 @@ single-direction scope. Owned/revision-bound `.../action` adds:
 - `endpoint`: confirm a physical endpoint during a full run or positioning.
 - `reading`, `reading_cm`: one tape observation; backend validates and fits.
 - `repeat`: return through the required positioning briefing.
+- `check`, optional `direction` and `target_cm`: from `review`, check the measured
+  model (see above).
 
 Existing stop/cancel/heartbeat/detach/resume/save actions retain their semantics.
 `save_modes` is only `["new"]` for this mode; clients cannot submit fitted values,
