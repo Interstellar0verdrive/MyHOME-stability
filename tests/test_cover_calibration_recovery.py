@@ -495,10 +495,20 @@ async def test_stop_during_review_keeps_the_completed_measurements(hass, recover
     assert saved["phase"] == "saved" and session.store.data["revision"] == 1
 
 
-async def test_stop_during_review_while_a_movement_may_still_run_discards_as_before(hass, recovering):
+async def test_stop_during_review_keeps_the_measurements_before_the_bus_confirms_the_last_stop(hass, recovering):
     cal, session = recovering, recovering.session
     await measured(cal)
+    values = dict(session.values)
     session.reservation.dispatched()  # The bus has not reported the motor stopped yet.
+    count = len(cal.queue)
+    result = await call(hass, cal, cal.connection, session.attachment, "stop")
+    assert result["phase"] == "review" and result["reason"] is None and result["values"] == values
+    assert len(cal.queue) == count + 1 and str(cal.queue[-1][0]) == "*2*0*11##"
+
+
+async def test_stop_during_a_run_still_invalidates_it(hass, recovering):
+    cal, session = recovering, recovering.session
+    await running(cal)
     result = await call(hass, cal, cal.connection, session.attachment, "stop")
     assert result["phase"] == "interrupted" and result["reason"] == "stopped" and result["values"] == {}
 

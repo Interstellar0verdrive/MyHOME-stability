@@ -262,12 +262,14 @@ recovered session never restarts a movement by itself.
 
 **Actions.** Every `action` must carry the `attachment` of a subscription on the
 same websocket. `stop` is accepted from every reader, read-only included: it is
-a safety control. During a movement, and in every phase but `review`, its effect
-is unchanged: the session is interrupted and its values are discarded. In
-`review`, once the bus has reported the motor stopped, Stop is still written but
-the session stays in `review` with its measurements (batch results included);
-`cancel` remains the way to discard them. This applies to clients without
-`client_id` too. Every other action except
+a safety control. During a run, and in every phase but `review`, its effect is
+unchanged: the session is interrupted and its values are discarded. In `review`
+the endpoints are already fixed by the user's taps: Stop is still written, and
+the session always stays in `review` with its completed measurements (batch
+results included), also in the short window before the bus confirms the last
+stop; `cancel` is the only way to discard them. This applies to clients without
+`client_id` too. For clients with `client_id` a Stop in `review`, like every
+accepted action, renews the inactivity lease. Every other action except
 `heartbeat` and `detach`, `save` included, is refused with `calibration_owned`
 unless it comes from the owner.
 `heartbeat` answers the view and refreshes presence only for the owner. `detach`
