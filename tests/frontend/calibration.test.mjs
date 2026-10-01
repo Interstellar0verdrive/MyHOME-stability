@@ -1323,11 +1323,12 @@ test("no elapsed timer survives a closed view or a lost connection", async () =>
   }
 });
 
-const EXPIRES = "2026-10-01T18:42:00+00:00";
+// Ten minutes from now: the deadline is shown as a time only, in the browser's time zone.
+const EXPIRES = new Date(Date.now() + 600000).toISOString();
 const pausedCycle = { mode: "automatic", phase: "paused", reason: "owner_absent", run_index: 2, values: { closing_time: 46 },
   owner: true, read_only: false, owner_present: false, paused_at: "2026-10-01T18:32:00+00:00", idle_expires_at: EXPIRES,
   next_step: { step: "opening", run_index: 2, entity_id: "cover.bedroom" } };
-const at = (iso) => new Intl.DateTimeFormat("en", { timeStyle: "short" }).format(new Date(iso));
+const at = (iso, options = { timeStyle: "short" }) => new Intl.DateTimeFormat("en", options).format(new Date(iso));
 
 test("a paused cycle opened by its owner says what Continue starts and until when, and sends nothing", async () => {
   const { host, calls, starts } = await mount({ mode: "automatic", resume: pausedCycle });
@@ -1418,6 +1419,17 @@ test("a batch paused before the next cover names it, keeps the results, and Stop
   assert.equal(host.querySelector("#cal-stop-status").hidden, false);
   assert.equal(notice.hidden, false);
   assert.equal(host.querySelector('[data-cal-action="continue"]').hidden, false);
+});
+
+test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async () => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString();
+  const { host, controller } = await mount({ mode: "automatic", entity_ids: ["cover.one", "cover.two"] });
+  controller._accept({ ...controller._state, ...pausedCycle, sequence: 9, recoverable: true, attached: true, attachment: "owner",
+    targets: [{ entity_id: "cover.one", name: "One" }, { entity_id: "cover.two", name: "Attic $& $' $1" }],
+    results: [], idle_expires_at: tomorrow, next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.two" } });
+  assert.equal(host.querySelector("#cal-paused").textContent, translations.it.calPausedBody
+    .replace("{step}", () => "la misura della tapparella successiva, «Attic $& $' $1»")
+    .replace("{expires}", () => at(tomorrow, { dateStyle: "short", timeStyle: "short" })));
 });
 
 test("a paused cycle has its texts in English and Italian, with the step and the deadline as placeholders", () => {

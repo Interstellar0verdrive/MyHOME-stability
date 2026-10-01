@@ -638,14 +638,21 @@ function parseReading(value) {
   return /^-?(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
 }
 
-/** What `continue` will start, and the time the session ends if nobody continues it. */
+/** What `continue` will start, and when the session ends if nobody continues it (browser time, with the date if not today). */
 function pause(state, t, language) {
   const next = state.next_step || {};
-  const name = state.targets?.[next.cover_index]?.name ?? next.entity_id;
-  const step = t(`calNextStep_${next.step}`).replace("{run}", `${(next.run_index ?? 0) + 1}`).replace("{name}", name);
+  const name = `${state.targets?.[next.cover_index]?.name ?? next.entity_id}`;
+  // Replacements are functions, so that a name such as "$&" is shown as it is.
+  const step = t(`calNextStep_${next.step}`).replace("{run}", () => `${(next.run_index ?? 0) + 1}`).replace("{name}", () => name);
   let expires = "—";
-  try { if (state.idle_expires_at) expires = new Intl.DateTimeFormat(language || "en", { timeStyle: "short" }).format(new Date(state.idle_expires_at)); } catch { /* No time to show. */ }
-  return t("calPausedBody").replace("{step}", step).replace("{expires}", expires);
+  try {
+    if (state.idle_expires_at) {
+      const date = new Date(state.idle_expires_at);
+      const today = date.toDateString() === new Date().toDateString();
+      expires = new Intl.DateTimeFormat(language || "en", today ? { timeStyle: "short" } : { dateStyle: "short", timeStyle: "short" }).format(date);
+    }
+  } catch { /* No time to show. */ }
+  return t("calPausedBody").replace("{step}", () => step).replace("{expires}", () => expires);
 }
 
 /** Limits such as {touching_cm} come from the session view, never from the text. */
