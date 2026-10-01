@@ -199,7 +199,7 @@ export class CoverProfileEditor {
     const box = this.dialog.querySelector("#cal-recovery");
     box.hidden = !session;
     const guided = session?.owner_present ?? session?.attached;
-    box.querySelector("p").textContent = session ? `${session.entity_id} · ${t(session.waiting_for_stop ? "calWaitingForStop" : guided ? "calAttachedElsewhere" : "calDetached")}` : "";
+    box.querySelector("p").textContent = session ? `${session.entity_id} · ${t(session.waiting_for_stop ? "calWaitingForStop" : session.phase === "paused" ? "calPausedBadge" : guided ? "calAttachedElsewhere" : "calDetached")}` : "";
     const resume = box.querySelector("#cal-resume");
     // A session that reports its owner's presence can always be opened, present owner or not:
     // the owner's own tab gets its view back at once, any other tab reads it with Stop available.

@@ -183,6 +183,7 @@ export class CoverCalibration {
         <p id="cal-elapsed" class="cal-elapsed"></p>
       </div>
       <p id="cal-stop-status" class="notice" hidden>${esc(t("calStopRequested"))}</p>
+      <p id="cal-paused" class="notice" hidden></p>
       <p id="cal-lift-repeat" class="notice" role="status" hidden></p>
       <p id="cal-reason" class="error" role="alert" hidden></p>
       <button type="button" id="cal-reconnect" hidden>${esc(t("calResume"))}</button>
@@ -191,6 +192,7 @@ export class CoverCalibration {
       <p id="cal-take-consequence" class="muted" hidden>${esc(t("calTakeControlConsequence"))}</p>
       <div class="actions cal-actions">
         <button type="button" class="primary" data-cal-action="run" hidden>${esc(t("calAutomaticStart"))}</button>
+        <button type="button" class="primary" data-cal-action="continue" hidden>${esc(t("calContinue"))}</button>
         <button type="button" class="primary" data-cal-action="open" hidden><ha-icon icon="mdi:arrow-up-bold" aria-hidden="true"></ha-icon><span>${esc(t("calOpen"))}</span></button>
         <button type="button" class="primary" data-cal-action="close" hidden><ha-icon icon="mdi:arrow-down-bold" aria-hidden="true"></ha-icon><span>${esc(t("calClose"))}</span></button>
         <button type="button" class="primary" data-cal-action="endpoint" hidden></button>
@@ -362,7 +364,8 @@ export class CoverCalibration {
     host.querySelector("#cal-take-consequence").hidden = !confirm;
     const cancel = host.querySelector("#cal-cancel");
     cancel.disabled = false;
-    cancel.textContent = t(readOnly ? "close" : "calCancel");
+    const paused = state.phase === "paused";
+    cancel.textContent = t(readOnly ? "close" : paused ? "calPausedCancel" : "calCancel");
     host.querySelector(".cal-panel").dataset.phase = state.phase;
     const automatic = state.mode === "automatic";
     const geometry = state.mode === "geometry";
@@ -371,8 +374,15 @@ export class CoverCalibration {
       : t(state.direction && state.phase === "review" ? "calQuickReview" : `calPhase_${state.phase}`);
     this._renderElapsed();
     host.querySelector("#cal-stop-status").hidden = !state.stop_requested;
+    // A paused cycle explains itself, with the step that will start and until when it waits.
+    const pausedNotice = host.querySelector("#cal-paused"), pausedText = paused ? pause(state, t, this._context.hass.language) : "";
+    pausedNotice.hidden = !paused;
+    if (pausedNotice.textContent !== pausedText) pausedNotice.textContent = pausedText;
+    const proceed = host.querySelector('[data-cal-action="continue"]');
+    proceed.hidden = !paused || readOnly;
+    proceed.disabled = this._locked();
     const reason = host.querySelector("#cal-reason");
-    if (state.reason) {
+    if (state.reason && !(paused && state.reason === "owner_absent")) {
       reason.hidden = false;
       reason.textContent = t(`calReason_${state.reason}`);
     }
@@ -626,6 +636,16 @@ export function shown(value, unit) {
 function parseReading(value) {
   const text = value.trim().replace(",", ".");
   return /^-?(\d+\.?\d*|\.\d+)$/.test(text) ? Number(text) : NaN;
+}
+
+/** What `continue` will start, and the time the session ends if nobody continues it. */
+function pause(state, t, language) {
+  const next = state.next_step || {};
+  const name = state.targets?.[next.cover_index]?.name ?? next.entity_id;
+  const step = t(`calNextStep_${next.step}`).replace("{run}", `${(next.run_index ?? 0) + 1}`).replace("{name}", name);
+  let expires = "—";
+  try { if (state.idle_expires_at) expires = new Intl.DateTimeFormat(language || "en", { timeStyle: "short" }).format(new Date(state.idle_expires_at)); } catch { /* No time to show. */ }
+  return t("calPausedBody").replace("{step}", step).replace("{expires}", expires);
 }
 
 /** Limits such as {touching_cm} come from the session view, never from the text. */
