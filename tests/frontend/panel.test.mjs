@@ -1433,6 +1433,37 @@ test("existing calibration section discovers a detached session and resumes it w
   assert.equal(root.querySelector("#cal-save").hidden, false);
 });
 
+test("the profile dialog offers Open session whether or not the owner is present; another tab reads it with Stop", async () => {
+  let owner_present = true;
+  const session = { entry_id: "one", entity_id: "cover.shutter", session_id: "retained", mode: "guided", phase: "opening",
+    sequence: 4, values: {}, recoverable: true, attached: true };
+  const { root, hass } = await mountProfiles({ read: () => coverProfileData({ calibration: { ...session, owner_present } }) });
+  const requests = [], original = hass.connection.subscribeMessage;
+  hass.connection.subscribeMessage = async (callback, request) => {
+    if (request.type === "myhome/cover_profiles/subscribe") return original(callback, request);
+    // Home Assistant answers another tab with the read-only view.
+    requests.push(request); callback({ ...session, owner_present, attachment: "reader", owner: false, read_only: true }); return () => {};
+  };
+  openProfile(root); await tick();
+  assert.equal(root.querySelector("#cal-resume").hidden, false, "offered while the owner is present");
+  assert.equal(root.querySelector("#cal-resume").textContent, "Apri sessione");
+  assert.match(root.querySelector("#cal-recovery p").textContent, /Una scheda o un dispositivo sta guidando/);
+  owner_present = false;
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.equal(root.querySelector("#cal-resume").hidden, false);
+  assert.match(root.querySelector("#cal-recovery p").textContent, /non riceve segnali recenti/);
+  owner_present = true;
+  root.querySelector("#cal-refresh").click(); await tick();
+  root.querySelector("#cal-resume").click(); await tick();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "myhome/cover_calibration/resume");
+  assert.equal(requests[0].session_id, "retained");
+  assert.equal("claim" in requests[0], false, "opening a session never takes it");
+  assert.equal(root.querySelector("#cal-read-only").hidden, false);
+  assert.equal(root.querySelector("#cal-stop").disabled, false);
+  assert.equal(root.querySelector('[data-cal-action="endpoint"]').disabled, true);
+});
+
 test("refreshing session availability preserves a profile draft at the same revision", async () => {
   let attached = true;
   const { root } = await mountProfiles({ read: () => coverProfileData({ calibration: {
@@ -1568,7 +1599,7 @@ test("geometry calibration stays in the existing cover section and clears a sing
   change(root.querySelector("#cal-mode"), "geometry");
   assert.equal(root.querySelector("#cal-direction").value, "");
   assert.equal(root.querySelectorAll(".profile-details").length, sectionCount);
-  assert.match(root.querySelector("#cal-label").textContent, /Lamelle|Slats/);
+  assert.match(root.querySelector("#cal-label").textContent, /Misura del rullo|Roll measurement/);
   root.querySelector("#profile-calibrate").click(); await tick();
   assert.equal(request.mode, "geometry");
   assert.equal("direction" in request, false);

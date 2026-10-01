@@ -1,4 +1,4 @@
-/** Backend-owned measurement with one attached controller and explicit recovery. */
+/** Backend-owned measurement: one owner per browser tab, read-only readers, explicit recovery. */
 const url = new URL("panel-dom.js", import.meta.url);
 url.search = new URL(import.meta.url).search;
 const { escapeHtml: esc } = await import(url.href);
@@ -6,18 +6,138 @@ const visualUrl = new URL("panel-calibration-visual.js", import.meta.url);
 visualUrl.search = new URL(import.meta.url).search;
 const { visualMarkup, renderCalibrationVisual } = await import(visualUrl.href);
 
-export class CoverCalibration {
-  constructor() { this._generation = 0; }
+// Presence on the backend lapses after three missed heartbeats (45 s).
+const HEARTBEAT_MS = 15000;
+const CLIENT_KEY = "myhome-calibration-client";
+// "Duplicate tab" copies sessionStorage. Before using an identity it did not create, a tab asks
+// the others whether one of them holds it; an answer within this time means it is a copy.
+export const CLIENT_CHECK_MS = 300;
+const CLIENT_FORMAT = /^\d+-\d+-\d+-\d+$/;
+const fresh = () => globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
+const nonce = globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+const held = new Set();
+// Identities kept only because nobody answered in time, with the storage they live in.
+const kept = new Map();
+const checks = new Map();
+const views = new Set();
+let memoryClient = null;
+let channel = null;
+let checking = null;
 
-  close({ cancel = false } = {}) {
+/** One identity per browser tab, kept across reloads; null while a copied one is still being checked. */
+export function calibrationClient() {
+  let storage, stored;
+  try {
+    storage = globalThis.sessionStorage;
+    stored = storage.getItem(CLIENT_KEY);
+  } catch {
+    memoryClient ||= fresh();
+    return memoryClient;
+  }
+  if (!CLIENT_FORMAT.test(stored || "")) return hold(storage, null);
+  return held.has(stored) || !listen() ? stored : null;
+}
+
+/** The identity once checked: a duplicated tab never shares one with the tab it was copied from. */
+export function checkedCalibrationClient() {
+  const known = calibrationClient();
+  if (known) return Promise.resolve(known);
+  const storage = globalThis.sessionStorage, stored = storage.getItem(CLIENT_KEY);
+  if (!checks.has(stored)) {
+    // Nobody answers after a reload of this same tab: the identity, and ownership, carry on.
+    checks.set(stored, inUse(stored).then((used) => {
+      if (!used) kept.set(stored, storage);
+      return hold(storage, used ? null : stored);
+    }));
+  }
+  return checks.get(stored);
+}
+
+function hold(storage, id) {
+  if (!id) {
+    id = fresh();
+    try {
+      storage.setItem(CLIENT_KEY, id);
+    } catch {
+      memoryClient ||= id;
+      id = memoryClient;
+    }
+  }
+  held.add(id);
+  listen();
+  return id;
+}
+
+/** Answer for the identities this tab holds. Two copies checking at once: the lower nonce keeps it. */
+function listen() {
+  if (channel || typeof globalThis.BroadcastChannel !== "function") return channel;
+  try {
+    channel = new globalThis.BroadcastChannel(CLIENT_KEY);
+  } catch {
+    // An opaque origin may refuse the channel: behave as a browser without one.
+    return null;
+  }
+  // Node keeps its process alive while a channel is open; browsers have no such method.
+  channel.unref?.();
+  channel.onmessage = ({ data }) => {
+    const rival = data?.type === "query" && checking?.id === data.id;
+    const answer = data?.type === "answer" && data.to === nonce;
+    if (data?.type === "query" && (held.has(data.id) || (rival && nonce < data.nonce))) {
+      channel.postMessage({ type: "answer", id: data.id, to: data.nonce });
+    } else if (rival || (answer && checking?.id === data.id)) {
+      // Our own query may have gone out before the other copy listened: yielding needs no answer.
+      checking.done(true);
+    } else if (answer && kept.has(data.id)) {
+      yieldLate(data.id);
+    }
+  };
+  return channel;
+}
+
+/** The tab holding the identity answered after the wait: this tab is the copy, and reads from now on. */
+function yieldLate(id) {
+  const storage = kept.get(id);
+  kept.delete(id);
+  held.delete(id);
+  hold(storage, null);
+  for (const view of views) view._reidentify();
+}
+
+function inUse(id) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => done(false), CLIENT_CHECK_MS);
+    const done = (used) => {
+      clearTimeout(timer);
+      checking = null;
+      resolve(used);
+    };
+    checking = { id, done };
+    channel.postMessage({ type: "query", id, nonce });
+  });
+}
+
+export class CoverCalibration {
+  constructor() {
+    this._generation = 0;
+    views.add(this);
+    // Settled as soon as the panel loads, so that a copy of this tab finds it already held.
+    checkedCalibrationClient().catch(() => {});
+  }
+
+  close({ cancel = false, leave = true } = {}) {
     this._generation++;
+    this._pin?.();
+    this._pin = null;
     clearInterval(this._heartbeat);
     this._heartbeat = null;
+    this._clock(null);
     const state = this._state;
-    const operation = state && !["saved", "cancelled"].includes(state.phase)
+    // A read-only tab never cancels the owner's session: it only stops reading it.
+    const action = !state?.recoverable || (cancel && !state.read_only) ? "cancel" : "detach";
+    const operation = state && !["saved", "cancelled"].includes(state.phase) && (leave || action === "cancel")
       ? this._context.hass.callWS({ type: "myhome/cover_calibration/action", entry_id: state.entry_id,
         session_id: state.session_id, ...(state.attachment ? { attachment: state.attachment } : {}),
-        action: cancel || !state.recoverable ? "cancel" : "detach" }).catch(() => {}) : Promise.resolve();
+        action }).catch(() => {}) : Promise.resolve();
     const unsubscribe = this._unsubscribe;
     const done = operation.then(() => unsubscribe?.()).catch(() => {});
     this._unsubscribe = null;
@@ -26,17 +146,21 @@ export class CoverCalibration {
   }
 
   async open(context) {
-    this.close();
+    // Reopening the same session swaps the subscription without leaving it.
+    this.close({ leave: !context.resume || context.resume.session_id !== this._state?.session_id });
     if (context.resume) context = { ...context, mode: context.resume.mode, direction: context.resume.direction,
       entity_ids: context.resume.batch ? context.resume.targets.map((item) => item.entity_id) : undefined };
     this._context = context;
     this._lost = false;
     this._busy = false;
+    this._claiming = !!context.claim;
+    this._cancelPending = null;
+    this._cancelling = false;
+    this._expired = false;
     this._savePreview = null;
     this._renderedPreview = null;
     const generation = this._generation;
     const { host, hass, entity, revision, t } = context;
-    const client_id = globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
     const automatic = context.mode === "automatic";
     const quick = context.direction;
     const geometry = context.mode === "geometry";
@@ -62,6 +186,9 @@ export class CoverCalibration {
       <p id="cal-lift-repeat" class="notice" role="status" hidden></p>
       <p id="cal-reason" class="error" role="alert" hidden></p>
       <button type="button" id="cal-reconnect" hidden>${esc(t("calResume"))}</button>
+      <p id="cal-read-only" class="notice" hidden>${esc(t("calReadOnly"))}</p>
+      <button type="button" id="cal-take-control" hidden>${esc(t("calTakeControl"))}</button>
+      <p id="cal-take-consequence" class="muted" hidden>${esc(t("calTakeControlConsequence"))}</p>
       <div class="actions cal-actions">
         <button type="button" class="primary" data-cal-action="run" hidden>${esc(t("calAutomaticStart"))}</button>
         <button type="button" class="primary" data-cal-action="open" hidden><ha-icon icon="mdi:arrow-up-bold" aria-hidden="true"></ha-icon><span>${esc(t("calOpen"))}</span></button>
@@ -100,11 +227,17 @@ export class CoverCalibration {
     };
     host.querySelector("#cal-reading").oninput = (event) => this._checkRange(event.currentTarget);
     host.querySelector("#cal-stop").onclick = () => this._perform("stop");
-    host.querySelector("#cal-cancel").onclick = async () => {
-      await this.close({ cancel: true });
-      if (this._generation === generation + 1 && host.isConnected) context.onCancel();
+    host.querySelector("#cal-cancel").onclick = () => this._cancel(generation);
+    host.querySelector("#cal-reconnect").onclick = () => this.open({ ...context, claim: false, resume: this._state });
+    host.querySelector("#cal-take-control").onclick = () => {
+      // While the owner is present the first tap only asks for confirmation; nothing is sent.
+      if (this._state?.owner_present === true && !this._confirmTake) {
+        this._confirmTake = true;
+        this._render();
+        return;
+      }
+      this.open({ ...context, claim: true, resume: this._state });
     };
-    host.querySelector("#cal-reconnect").onclick = () => this.open({ ...context, resume: this._state });
     host.querySelector("#cal-save-mode").onchange = () => {
       this._savePreview = null;
       if (this._state) this._render();
@@ -123,18 +256,34 @@ export class CoverCalibration {
         ...(save_mode === "new" ? { name: form.elements.profile_name.value.trim() } : {}),
         ...(save_mode === "shared" ? { confirmation: this._savePreview.confirmation } : {}) });
     };
+    // Known at once except in a tab that still checks whether it is a copy of another one.
+    let client_id = calibrationClient();
+    if (!client_id) {
+      client_id = await checkedCalibrationClient();
+      if (!this._current(generation)) return;
+    }
+    const message = context.resume
+      ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id,
+        ...(context.claim ? { claim: true, sequence: context.resume.sequence } : {}) }
+      : context.entity_ids
+        ? { type: "myhome/cover_calibration/batch_start", entry_id: entity.entry_id, entity_ids: context.entity_ids, revision, client_id }
+        : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}), ...(geometry && context.slats === false ? { slats: false } : {}) };
+    if (!context.resume) {
+      // Home Assistant replays this same message object after a reconnection. Once the
+      // connection drops, or this view closes, it names the session on screen: the replay
+      // then reads that session and never starts another one if it has ended meanwhile.
+      const pin = () => { if (this._state?.session_id) message.session_id ??= this._state.session_id; };
+      hass.connection.addEventListener?.("disconnected", pin);
+      this._pin = () => { pin(); hass.connection.removeEventListener?.("disconnected", pin); };
+    }
     try {
       const unsubscribe = await hass.connection.subscribeMessage((state) => {
         if (!this._current(generation)) return;
         this._accept(state);
-      }, context.resume
-        ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id }
-        : context.entity_ids
-          ? { type: "myhome/cover_calibration/batch_start", entry_id: entity.entry_id, entity_ids: context.entity_ids, revision, client_id }
-          : { type: "myhome/cover_calibration/start", entry_id: entity.entry_id, entity_id: entity.entity_id, revision, client_id, ...(automatic || geometry ? { mode: context.mode } : {}), ...(quick ? { direction: quick } : {}), ...(geometry && context.slats === false ? { slats: false } : {}) });
+      }, message);
       if (!this._current(generation)) { Promise.resolve(unsubscribe()).catch(() => {}); return; }
       this._unsubscribe = unsubscribe;
-      this._heartbeat = setInterval(() => this._perform("heartbeat"), 5000);
+      this._heartbeat = setInterval(() => this._perform("heartbeat"), HEARTBEAT_MS);
     } catch (error) {
       if (this._current(generation)) {
         this._error(error);
@@ -143,20 +292,50 @@ export class CoverCalibration {
     }
   }
 
+  /** Read the open session again under this tab's new identity: read-only, nothing sent to the bus. */
+  _reidentify() {
+    const state = this._state;
+    if (!state?.recoverable || ["saved", "cancelled"].includes(state.phase) || !this._context.host.isConnected) return;
+    this.open({ ...this._context, claim: false, resume: state });
+  }
+
   _current(generation) { return generation === this._generation && this._context.host.isConnected; }
 
+  /** Movement, readings and Save wait for a response, a connection and ownership; Stop never does. */
+  _locked() { return this._busy || this._lost || !!this._state?.read_only; }
+
   _accept(state) {
-    if (this._state && state.sequence < this._state.sequence) return;
-    if (state.recoverable && state.attachment !== this._state?.attachment) {
+    const previous = this._state;
+    // Sequences are ordered within one session only.
+    if (previous && state.session_id === previous.session_id && state.sequence < previous.sequence) return;
+    if (state.session_id !== previous?.session_id || (state.recoverable && state.attachment !== previous?.attachment)) {
       this._busy = false;
+      this._expired = false;
       this._savePreview = null;
       this._context.host.querySelector("#cal-reason").hidden = true;
     }
     this._state = state;
+    if (state.session_id !== previous?.session_id || state.owner_present !== true) this._confirmTake = false;
     if (state.recoverable) this._lost = !state.attached;
+    this._clock(this._lost ? null : state.elapsed);
     if (state.phase !== "review") this._savePreview = null;
     else if (state.save_preview && this._context.host.querySelector("#cal-save-mode").value === "shared") this._savePreview = state.save_preview;
     this._render();
+    if (this._claiming) {
+      // A claim against a sequence that has moved on only reads: say so instead of doing nothing.
+      this._claiming = false;
+      if (state.read_only) {
+        const box = this._context.host.querySelector("#cal-reason");
+        box.textContent = this._context.t("calClaimStale");
+        box.hidden = false;
+      }
+    }
+    // The owner's subscription replayed after a reconnection: a Cancel that did not arrive goes
+    // first; otherwise presence is renewed at once rather than at the next heartbeat.
+    if (previous?.attachment && state.owner && state.session_id === previous.session_id && state.attachment !== previous.attachment) {
+      if (this._cancelPending) this._cancel(this._generation);
+      else if (!this._cancelling) this._perform("heartbeat");
+    }
     if (state.phase === "saved") {
       this.close();
       this._context.onSaved();
@@ -166,15 +345,31 @@ export class CoverCalibration {
   _render() {
     const { host, t } = this._context;
     const state = this._state;
-    host.querySelector("#cal-reconnect").hidden = !this._lost || !state.recoverable;
-    host.querySelector("#cal-cancel").disabled = false;
+    // Once Home Assistant says the session has ended, resuming it can only fail again.
+    host.querySelector("#cal-reconnect").hidden = !this._lost || !state.recoverable || this._expired;
+    const readOnly = !!state.read_only, ended = ["saved", "cancelled"].includes(state.phase);
+    const notice = host.querySelector("#cal-read-only");
+    notice.hidden = !readOnly || ended;
+    // Presence of the owner comes from the backend; this tab's own link is `attached`.
+    const ownerAway = state.owner_present === false;
+    notice.textContent = t(ownerAway ? "calReadOnlyAway" : "calReadOnly");
+    const take = host.querySelector("#cal-take-control");
+    take.hidden = !readOnly || ended || this._lost;
+    take.disabled = this._busy;
+    take.classList.toggle("primary", ownerAway);
+    const confirm = this._confirmTake && !take.hidden;
+    take.textContent = t(confirm ? "calConfirmTakeControl" : "calTakeControl");
+    host.querySelector("#cal-take-consequence").hidden = !confirm;
+    const cancel = host.querySelector("#cal-cancel");
+    cancel.disabled = false;
+    cancel.textContent = t(readOnly ? "close" : "calCancel");
     host.querySelector(".cal-panel").dataset.phase = state.phase;
     const automatic = state.mode === "automatic";
     const geometry = state.mode === "geometry";
     host.querySelector("#cal-phase").textContent = automatic && ["starting_open", "starting_close", "opening", "closing", "settling"].includes(state.phase)
       ? `${t("calAutomaticRun")} ${state.run_index + 1}/3 · ${t(`calAutoPhase_${state.phase}`)}`
       : t(state.direction && state.phase === "review" ? "calQuickReview" : `calPhase_${state.phase}`);
-    host.querySelector("#cal-elapsed").textContent = state.elapsed == null ? "" : `${t("calElapsed")}: ${state.elapsed} s`;
+    this._renderElapsed();
     host.querySelector("#cal-stop-status").hidden = !state.stop_requested;
     const reason = host.querySelector("#cal-reason");
     if (state.reason) {
@@ -185,7 +380,7 @@ export class CoverCalibration {
       const button = host.querySelector(`[data-cal-action="${action}"]`);
       button.hidden = geometry ? action !== "endpoint" || !["opening", "closing"].includes(state.phase) || !["home", "reset", "opening", "closing", "top"].includes(state.step) : action === "run" ? !automatic || state.phase !== "confirm_automatic" : automatic || (action === "open" ? state.phase !== "confirm_closed" : action === "close"
         ? state.phase !== "confirm_open" : !["opening", "closing"].includes(state.phase));
-      button.disabled = this._busy || this._lost;
+      button.disabled = this._locked();
     }
     host.querySelector('[data-cal-action="endpoint"]').textContent = t(state.phase === "opening" ? "calEndpointOpen" : "calEndpointClose");
     host.querySelector("#cal-stop").disabled = ["saved", "cancelled"].includes(state.phase);
@@ -214,9 +409,24 @@ export class CoverCalibration {
     }
   }
 
+  /** Between two views the elapsed time advances here every 100 ms from the last value received. */
+  _clock(elapsed) {
+    clearInterval(this._ticker);
+    this._ticker = null;
+    this._elapsed = elapsed == null ? null : { value: elapsed, since: performance.now() };
+    if (this._elapsed) this._ticker = setInterval(() => this._renderElapsed(), 100);
+  }
+
+  _renderElapsed() {
+    const { host, t } = this._context, elapsed = this._elapsed;
+    // Always to a tenth of a second, whatever precision the view carried.
+    const value = elapsed && (elapsed.value + (performance.now() - elapsed.since) / 1000).toFixed(1);
+    host.querySelector("#cal-elapsed").textContent = elapsed ? `${t("calElapsed")}: ${value} s` : "";
+  }
+
   _renderGeometry(enabled) {
     const { host, t } = this._context, state = this._state;
-    const disabled = this._busy || this._lost;
+    const disabled = this._locked();
     for (const [action, visible] of [["next", state.phase === "briefing"], ["lift", state.step === "lift" && state.phase === "opening"]]) {
       const button = host.querySelector(`[data-cal-action="${action}"]`);
       button.hidden = !enabled || !visible;
@@ -272,7 +482,7 @@ export class CoverCalibration {
     const modes = state.save_modes || ["new"];
     for (const option of selector.options) option.disabled = !modes.includes(option.value);
     if (!modes.includes(selector.value)) { selector.value = "new"; this._savePreview = null; }
-    selector.disabled = this._busy || this._lost;
+    selector.disabled = this._locked();
     const mode = selector.value;
     host.querySelector("#cal-name-label").hidden = !!state.batch || mode !== "new";
     form.elements.profile_name.disabled = !!state.batch || mode !== "new";
@@ -281,7 +491,7 @@ export class CoverCalibration {
     if (!state.batch && mode === "new" && state.travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.travel_cm, "cm")} cm.`;
     if (mode === "shared" && state.reference_travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.reference_travel_cm, "cm")} cm. ${t("calReferenceNormalization")}`;
     const button = form.querySelector('button[type="submit"]');
-    button.disabled = this._busy || this._lost;
+    button.disabled = this._locked();
     button.textContent = t(state.batch ? "calBatchSave" : mode === "new" ? "calSave" : mode === "cover" ? "calSaveCover" : this._savePreview ? "calConfirmShared" : "calPreviewShared");
     const box = host.querySelector("#cal-save-impact");
     box.hidden = !this._savePreview;
@@ -328,6 +538,52 @@ export class CoverCalibration {
     box.hidden = false;
   }
 
+  /** The owner's Cancel must reach Home Assistant: until it does, the view stays and says so. */
+  async _cancel(generation) {
+    const { host, hass, t, onCancel } = this._context, state = this._state;
+    if (!this._current(generation) || this._cancelling) return;
+    if (state?.recoverable && !state.read_only && !["saved", "cancelled"].includes(state.phase)) {
+      this._cancelling = true;
+      try {
+        const result = await hass.callWS({ type: "myhome/cover_calibration/action", entry_id: state.entry_id,
+          session_id: state.session_id, attachment: state.attachment, action: "cancel" });
+        if (this._current(generation)) this._accept(result);
+      } catch (error) {
+        if (!this._current(generation)) return;
+        // `calibration_expired` may only mean that this token died with its socket: close as
+        // before only once Home Assistant confirms that the session itself is gone.
+        const gone = error?.code === "calibration_expired" && await this._ended(state);
+        if (!this._current(generation)) return;
+        if (!gone) {
+          this._cancelPending = state.attachment;
+          const box = host.querySelector("#cal-reason");
+          box.textContent = t("calCancelFailed");
+          box.hidden = false;
+          // A subscription replayed meanwhile can deliver it now.
+          if (this._state.attachment !== state.attachment) queueMicrotask(() => this._cancel(generation));
+          return;
+        }
+      } finally {
+        this._cancelling = false;
+      }
+    }
+    if (!this._current(generation)) return;
+    await this.close({ cancel: true });
+    if (this._generation === generation + 1 && host.isConnected) onCancel();
+  }
+
+  /** A `resume` without claim reads the session and sends nothing to the bus; its refusal is final. */
+  async _ended(state) {
+    try {
+      const unsubscribe = await this._context.hass.connection.subscribeMessage(() => {}, { type: "myhome/cover_calibration/resume",
+        entry_id: state.entry_id, session_id: state.session_id, client_id: calibrationClient() });
+      Promise.resolve(unsubscribe()).catch(() => {});
+      return false;
+    } catch (error) {
+      return error?.code === "calibration_expired";
+    }
+  }
+
   async _perform(action, extra = {}) {
     if (!this._state || (this._busy && !["stop", "heartbeat"].includes(action))) return;
     const generation = this._generation;
@@ -347,7 +603,12 @@ export class CoverCalibration {
       if (current()) this._accept(result);
     } catch (error) {
       if (!current()) return;
-      if (action === "heartbeat") this._lost = true;
+      if (action === "heartbeat") {
+        this._lost = true;
+        // No view is arriving: the local count stops too.
+        this._clock(null);
+        this._expired = error?.code === "calibration_expired";
+      }
       if (action === "save" || action === "preview_save") this._savePreview = null;
       this._error(error);
     } finally {

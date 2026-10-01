@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { after, afterEach, test } from "node:test";
+import { after, afterEach, mock, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { CoverCalibration } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
+import { CoverCalibration, calibrationClient } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
 import { calibrationScene } from "../../custom_components/myhome/frontend/panel/panel-calibration-visual.js";
 import { shown } from "../../custom_components/myhome/frontend/panel/panel-cover-calibration.js";
@@ -89,10 +89,10 @@ test("automatic and interrupted phases never invite endpoint recording or measur
   assert.equal(calls.length, 0);
 });
 
-async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats } = {}) {
+async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats, Calibration = CoverCalibration } = {}) {
   const host = document.createElement("section");
   document.body.append(host);
-  const controller = new CoverCalibration();
+  const controller = new Calibration();
   instances.push(controller);
   const calls = [], starts = [];
   let callback, stopped = 0, saved = 0, cancelled = 0;
@@ -237,7 +237,7 @@ test("wizard starts a gateway-scoped subscription and waits for backend movement
   assert.equal(host.querySelector('[data-cal-action="endpoint"]').hidden, true);
   push({ phase: "opening", elapsed: 12.25 });
   assert.equal(host.querySelector('[data-cal-action="endpoint"]').hidden, false);
-  assert.match(host.querySelector("#cal-elapsed").textContent, /12.25/);
+  assert.match(host.querySelector("#cal-elapsed").textContent, /: 12\.3 s$/); // Shown to a tenth of a second.
   assert.match(host.querySelector('[data-cal-action="endpoint"]').textContent, /Completamente aperta/);
 });
 
@@ -812,3 +812,513 @@ for (const mode of ["geometry", "guided", "automatic"]) {
     }
   });
 }
+
+function withStorage(storage, run) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: () => {
+    if (storage instanceof Error) throw storage;
+    return storage;
+  } });
+  const restore = () => original ? Object.defineProperty(globalThis, "sessionStorage", original) : delete globalThis.sessionStorage;
+  return Promise.resolve().then(run).finally(restore);
+}
+
+test("one client_id per browser tab survives reopening and a storage failure", async () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  await withStorage(storage, async () => {
+    const first = await mount(), second = await mount({ direction: "opening" });
+    assert.match(first.starts[0].client_id, /^\d+-\d+-\d+-\d+$/);
+    assert.equal(second.starts[0].client_id, first.starts[0].client_id);
+    assert.equal(values.get("myhome-calibration-client"), first.starts[0].client_id);
+    await first.controller.open({ ...first.controller._context, resume: { session_id: "again", mode: "guided" } });
+    assert.equal(first.starts.at(-1).client_id, first.starts[0].client_id);
+  });
+  await withStorage(new Error("storage blocked"), () => {
+    const id = calibrationClient();
+    assert.match(id, /^\d+-\d+-\d+-\d+$/);
+    assert.equal(calibrationClient(), id);
+  });
+});
+
+/** Same-origin tabs: what one posts reaches every other open channel of the same name, never itself. */
+class TabChannel {
+  static open = new Set();
+  // A busy or throttled tab: what it posts arrives this many milliseconds later.
+  static delay = new Map();
+  constructor(name) { this.name = name; TabChannel.open.add(this); }
+  postMessage(data) {
+    const delay = TabChannel.delay.get(this);
+    for (const other of TabChannel.open) {
+      if (other === this || other.name !== this.name) continue;
+      const deliver = () => other.onmessage?.({ data: structuredClone(data) });
+      if (delay) setTimeout(deliver, delay); else setImmediate(deliver);
+    }
+  }
+  close() { TabChannel.open.delete(this); }
+}
+
+const tabStorage = (id) => {
+  const values = new Map(id ? [["myhome-calibration-client", id]] : []);
+  return { values, getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+};
+
+/** A browser tab is a fresh copy of the module with its own sessionStorage; `nonce` fixes its tie-break. */
+async function browserTab(name, nonce) {
+  const random = globalThis.crypto.getRandomValues;
+  if (nonce != null) globalThis.crypto.getRandomValues = (array) => array.length === 1 ? array.fill(nonce) : random.call(globalThis.crypto, array);
+  try {
+    return await import(`../../custom_components/myhome/frontend/panel/panel-cover-calibration.js?tab=${name}`);
+  } finally {
+    globalThis.crypto.getRandomValues = random;
+  }
+}
+
+async function withTabs(run) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  Object.defineProperty(globalThis, "BroadcastChannel", { configurable: true, writable: true, value: TabChannel });
+  try {
+    await run();
+  } finally {
+    for (const channel of TabChannel.open) channel.close();
+    TabChannel.delay.clear();
+    if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
+    else delete globalThis.BroadcastChannel;
+  }
+}
+
+test("a duplicated tab takes a new identity and opens the session read-only; the original keeps it", async () => {
+  await withTabs(async () => {
+    const original = await browserTab("original"), first = tabStorage();
+    const id = await withStorage(first, () => original.calibrationClient());
+    assert.match(id, /^\d+-\d+-\d+-\d+$/);
+    // "Duplicate tab" copies sessionStorage, so the copy starts with the same identity.
+    const copy = await browserTab("copy"), copied = tabStorage(id);
+    await withStorage(copied, async () => {
+      assert.equal(copy.calibrationClient(), null, "a copied identity is not used before the check");
+      const own = await copy.checkedCalibrationClient();
+      assert.match(own, /^\d+-\d+-\d+-\d+$/);
+      assert.notEqual(own, id);
+      assert.equal(copied.values.get("myhome-calibration-client"), own, "a reload of the copy keeps its new identity");
+      assert.equal(copy.calibrationClient(), own);
+    });
+    assert.equal(await withStorage(first, () => original.calibrationClient()), id);
+    // The view of a copy waits for the check: its resume carries the new identity, so it only reads.
+    const viewer = await browserTab("viewer");
+    await withStorage(tabStorage(id), async () => {
+      const { starts } = await mount({ Calibration: viewer.CoverCalibration, resume: { session_id: "session-one", mode: "guided" } });
+      assert.equal(starts.length, 1);
+      assert.equal(starts[0].type, "myhome/cover_calibration/resume");
+      assert.match(starts[0].client_id, /^\d+-\d+-\d+-\d+$/);
+      assert.notEqual(starts[0].client_id, id);
+      assert.equal("claim" in starts[0], false);
+    });
+  });
+});
+
+test("a copy whose original answers too late gives the identity up and reads the open session", async () => {
+  await withTabs(async () => {
+    const original = await browserTab("slow-original"), first = tabStorage();
+    const before = new Set(TabChannel.open);
+    const id = await withStorage(first, () => original.calibrationClient());
+    // The original tab is busy: its answer arrives after the copy has stopped waiting.
+    TabChannel.delay.set([...TabChannel.open].find((channel) => !before.has(channel)), original.CLIENT_CHECK_MS + 100);
+    const copy = await browserTab("late-copy"), copied = tabStorage(id);
+    await withStorage(copied, async () => {
+      const { starts, calls, counts, push } = await mount({ Calibration: copy.CoverCalibration });
+      assert.equal(starts[0].client_id, id, "nobody answered in time");
+      // Home Assistant takes the copy for the owner, since it sent the owner's identity.
+      push({ recoverable: true, attached: true, attachment: "owner", owner: true, read_only: false });
+      assert.equal(starts[0].type, "myhome/cover_calibration/start");
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const own = copy.calibrationClient();
+      assert.match(own, /^\d+-\d+-\d+-\d+$/);
+      assert.notEqual(own, id);
+      assert.equal(copied.values.get("myhome-calibration-client"), own);
+      assert.equal(starts.length, 2);
+      assert.equal(starts[1].type, "myhome/cover_calibration/resume");
+      assert.equal(starts[1].session_id, "session-one");
+      assert.equal(starts[1].client_id, own);
+      assert.equal("claim" in starts[1], false, "the copy only reads");
+      assert.equal(counts().stopped, 1, "the old subscription is replaced");
+      assert.equal(calls.length, 0, "nothing is sent: no detach, no cancel, no movement");
+    });
+    assert.equal(await withStorage(first, () => original.calibrationClient()), id);
+  });
+});
+
+test("a channel that cannot be opened leaves the panel as without one", async () => {
+  await withTabs(async () => {
+    globalThis.BroadcastChannel = class { constructor() { throw new Error("SecurityError"); } };
+    const tab = await browserTab("opaque");
+    await withStorage(tabStorage("9-9-9-9"), async () => {
+      const controller = new tab.CoverCalibration();
+      assert.ok(controller);
+      assert.equal(tab.calibrationClient(), "9-9-9-9");
+      assert.equal(await tab.checkedCalibrationClient(), "9-9-9-9");
+    });
+  });
+});
+
+test("a reloaded tab keeps its identity when no other tab holds it, and answers for it once its panel loads", async () => {
+  await withTabs(async () => {
+    const reloaded = await browserTab("reloaded"), storage = tabStorage("11-22-33-44");
+    const started = Date.now();
+    // Building the panel is enough: no calibration view has been opened in this tab yet.
+    await withStorage(storage, () => { new reloaded.CoverCalibration(); });
+    assert.equal(await withStorage(storage, () => reloaded.calibrationClient()), null);
+    await new Promise((resolve) => setTimeout(resolve, reloaded.CLIENT_CHECK_MS + 50));
+    assert.ok(Date.now() - started >= reloaded.CLIENT_CHECK_MS, "the tab waited for an answer");
+    assert.equal(await withStorage(storage, () => reloaded.calibrationClient()), "11-22-33-44");
+    assert.equal(storage.values.get("myhome-calibration-client"), "11-22-33-44");
+    const copy = await browserTab("reloaded-copy");
+    assert.notEqual(await withStorage(tabStorage("11-22-33-44"), () => copy.checkedCalibrationClient()), "11-22-33-44");
+  });
+});
+
+for (const [first, second, keeper, listening] of [[1, 2, "first", false], [2, 1, "second", false], [1, 2, "first", true], [2, 1, "second", true]]) {
+  test(`two copies checking one identity at once: exactly one keeps it (nonces ${first}, ${second}${listening ? ", both listening" : ""})`, async () => {
+    await withTabs(async () => {
+      // Browser session restore can bring back two copies of one tab together.
+      const name = `restored-${first}-${second}-${listening}`;
+      const one = await browserTab(`${name}-a`, first), two = await browserTab(`${name}-b`, second);
+      // Each copy has its own sessionStorage, both restored with the same identity.
+      const stores = [tabStorage("5-6-7-8"), tabStorage("5-6-7-8")];
+      let current = stores[0];
+      const ids = await withStorage(new Error("unused"), async () => {
+        Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: () => current });
+        if (listening) {
+          assert.equal(one.calibrationClient(), null);
+          current = stores[1];
+          assert.equal(two.calibrationClient(), null);
+          current = stores[0];
+        }
+        const checks = [one.checkedCalibrationClient()];
+        // Unless both already listen, the second copy starts only now: the first query reached nobody.
+        current = stores[1];
+        checks.push(two.checkedCalibrationClient());
+        return Promise.all(checks);
+      });
+      const kept = keeper === "first" ? 0 : 1;
+      assert.equal(ids[kept], "5-6-7-8");
+      assert.deepEqual(stores.map((store) => store.values.get("myhome-calibration-client")), ids, "each copy stores its own");
+      assert.notEqual(ids[1 - kept], "5-6-7-8");
+      assert.match(ids[1 - kept], /^\d+-\d+-\d+-\d+$/);
+    });
+  });
+}
+
+test("a read-only tab keeps Stop, cannot move or save, and takes control only on request", async () => {
+  const { host, push, calls, starts, controller, counts } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false,
+    phase: "review", save_modes: ["new"], values: { opening_time: 20, closing_time: 30 } });
+  assert.equal(host.querySelector("#cal-read-only").hidden, false);
+  assert.match(host.querySelector("#cal-read-only").textContent, /Un’altra scheda o un altro dispositivo/);
+  assert.equal(host.querySelector('#cal-save button[type="submit"]').disabled, true);
+  assert.equal(host.querySelector("#cal-save-mode").disabled, true);
+  assert.equal(host.querySelector("#cal-stop").disabled, false);
+  assert.equal(host.querySelector("#cal-cancel").textContent, "Chiudi");
+  host.querySelector("#cal-stop").click(); await tick();
+  assert.deepEqual(calls.at(-1), { type: "myhome/cover_calibration/action", entry_id: "one", session_id: "session-one",
+    sequence: 2, attachment: "reader", action: "stop" });
+  const sequence = controller._state.sequence;
+  host.querySelector("#cal-take-control").click(); await tick();
+  assert.equal(calls.length, 1, "taking control sends no action and no movement");
+  assert.deepEqual(starts.at(-1), { type: "myhome/cover_calibration/resume", entry_id: "one", session_id: "session-one",
+    client_id: starts[0].client_id, claim: true, sequence });
+  assert.equal(counts().stopped, 1, "the reading subscription is replaced, not left");
+  push({ read_only: false, owner: true, attachment: "owner" });
+  assert.equal(host.querySelector("#cal-read-only").hidden, true);
+  assert.equal(host.querySelector("#cal-take-control").hidden, true);
+  assert.equal(host.querySelector('#cal-save button[type="submit"]').disabled, false);
+  assert.equal(host.querySelector("#cal-cancel").textContent, "Annulla misurazione");
+});
+
+test("closing a read-only tab detaches instead of cancelling the owner's session", async () => {
+  const { host, push, calls, counts } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, phase: "opening" });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(calls.at(-1).action, "detach");
+  assert.equal(calls.at(-1).attachment, "reader");
+  assert.equal(counts().cancelled, 1);
+});
+
+test("reconnecting to the same session swaps the subscription without leaving it or claiming", async () => {
+  const { host, push, calls, starts } = await mount({ call: (message) => {
+    if (message.action === "heartbeat") throw { code: "disconnected" };
+    return {};
+  } });
+  push({ recoverable: true, attached: true, attachment: "owner", read_only: false });
+  await instances.at(-1)._perform("heartbeat");
+  assert.equal(host.querySelector("#cal-reconnect").hidden, false);
+  host.querySelector("#cal-reconnect").click(); await tick();
+  assert.equal(calls.filter((call) => call.action !== "heartbeat").length, 0);
+  assert.equal(starts.at(-1).type, "myhome/cover_calibration/resume");
+  assert.equal("claim" in starts.at(-1), false);
+});
+
+test("a reader is told whether the owner is present and Take control stands out when nobody guides", async () => {
+  const { host, push, calls } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false, owner_present: true, phase: "opening" });
+  const notice = host.querySelector("#cal-read-only"), take = host.querySelector("#cal-take-control");
+  assert.equal(notice.textContent, translations.it.calReadOnly);
+  assert.equal(take.hidden, false);
+  assert.equal(take.classList.contains("primary"), false);
+  push({ owner_present: false });
+  assert.equal(notice.textContent, translations.it.calReadOnlyAway);
+  assert.equal(take.hidden, false);
+  assert.equal(take.classList.contains("primary"), true);
+  assert.equal(host.querySelector("#cal-reconnect").hidden, true, "this tab's own subscription is still live");
+  assert.equal(calls.length, 0);
+});
+
+test("Take control asks for confirmation in place while the owner is present, never when it is absent", async () => {
+  const { host, push, calls, starts, controller } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false, owner_present: true, phase: "opening" });
+  const take = host.querySelector("#cal-take-control"), consequence = host.querySelector("#cal-take-consequence");
+  assert.equal(take.textContent, translations.it.calTakeControl);
+  assert.equal(consequence.hidden, true);
+  take.click(); await tick();
+  assert.equal(starts.length, 1, "the first tap sends nothing");
+  assert.equal(calls.length, 0);
+  assert.equal(take.textContent, translations.it.calConfirmTakeControl);
+  assert.equal(consequence.hidden, false);
+  assert.equal(consequence.textContent, translations.it.calTakeControlConsequence);
+  push({});  // A heartbeat view keeps the question open.
+  assert.equal(take.textContent, translations.it.calConfirmTakeControl);
+  const sequence = controller._state.sequence;
+  take.click(); await tick();
+  assert.deepEqual(starts.at(-1), { type: "myhome/cover_calibration/resume", entry_id: "one", session_id: "session-one",
+    client_id: starts[0].client_id, claim: true, sequence });
+  assert.equal(calls.length, 0, "taking control sends no action and no movement");
+  // Reopened read-only, then the owner goes away: one tap is enough again.
+  push({ attachment: "reader-two", read_only: true, owner: false, owner_present: true });
+  assert.equal(host.querySelector("#cal-take-control").textContent, translations.it.calTakeControl, "a new view asks again");
+  host.querySelector("#cal-take-control").click(); await tick();
+  assert.equal(host.querySelector("#cal-take-consequence").hidden, false);
+  push({ owner_present: false });
+  assert.equal(host.querySelector("#cal-take-control").textContent, translations.it.calTakeControl);
+  assert.equal(host.querySelector("#cal-take-consequence").hidden, true);
+  const before = starts.length;
+  host.querySelector("#cal-take-control").click(); await tick();
+  assert.equal(starts.length, before + 1);
+  assert.equal(starts.at(-1).claim, true);
+});
+
+test("sequences are compared within one session only; a new session is always shown", async () => {
+  const { push, controller } = await mount();
+  push({ recoverable: true, attached: true, attachment: "first", phase: "opening" });
+  push({ phase: "confirm_open" });
+  push({ sequence: 1, phase: "closing" });
+  assert.equal(controller._state.phase, "confirm_open", "an older view of the same session is ignored");
+  push({ session_id: "session-two", sequence: 1, attachment: "second", phase: "confirm_closed" });
+  assert.equal(controller._state.session_id, "session-two");
+  assert.equal(controller._state.phase, "confirm_closed");
+});
+
+test("a start replayed after the connection drops names its session; a deliberate start does not", async () => {
+  const { controller, starts } = await mount();
+  const listeners = new Map(), connection = controller._context.hass.connection;
+  Object.assign(connection, { addEventListener: (type, callback) => listeners.set(type, callback),
+    removeEventListener: (type, callback) => { if (listeners.get(type) === callback) listeners.delete(type); } });
+  await controller.open({ ...controller._context });
+  const start = starts.at(-1);
+  assert.equal(start.type, "myhome/cover_calibration/start");
+  assert.equal("session_id" in start, false);
+  listeners.get("disconnected")();
+  assert.equal(start.session_id, "session-one", "Home Assistant replays this object after reconnecting");
+  await controller.open({ ...controller._context });
+  assert.equal("session_id" in starts.at(-1), false);
+  assert.equal(listeners.size, 1, "the closed view stopped listening");
+  await controller.open({ ...controller._context, resume: controller._state });
+  assert.equal(starts.at(-1).type, "myhome/cover_calibration/resume");
+  assert.equal(listeners.size, 0, "a resume already names its session");
+  assert.equal(starts.at(-2).session_id, "session-one", "closing a view pins its start too");
+});
+
+test("a claim made against an old sequence warns and invites to try again", async () => {
+  const { host, push, controller } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false, phase: "opening" });
+  host.querySelector("#cal-take-control").click(); await tick();
+  const reason = host.querySelector("#cal-reason");
+  assert.equal(controller._state.read_only, true);
+  assert.equal(reason.hidden, false);
+  assert.equal(reason.textContent, translations.it.calClaimStale);
+  push({ read_only: false, owner: true, attachment: "owner" });
+  await controller.open({ ...controller._context, claim: true, resume: controller._state });
+  assert.equal(controller._state.owner, true);
+  assert.equal(host.querySelector("#cal-reason").hidden, true);
+  push({ read_only: true, owner: false }); // Another tab takes control later: that is no stale claim.
+  assert.equal(host.querySelector("#cal-reason").hidden, true);
+  assert.equal(host.querySelector("#cal-read-only").hidden, false);
+});
+
+test("a Cancel that does not reach Home Assistant keeps the view and is sent first after the reconnection", async () => {
+  let online = false;
+  const { host, push, calls, counts } = await mount({ call: (message, state) => {
+    if (!online) throw 3; // ERR_CONNECTION_LOST from home-assistant-js-websocket.
+    return { ...state, sequence: state.sequence + 1, phase: message.action === "cancel" ? "cancelled" : state.phase };
+  } });
+  push({ recoverable: true, attached: true, attachment: "before", owner: true, read_only: false, phase: "settling" });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(counts().cancelled, 0, "the view is not closed in silence");
+  assert.equal(host.querySelector("#cal-reason").hidden, false);
+  assert.equal(host.querySelector("#cal-reason").textContent, translations.it.calCancelFailed);
+  online = true;
+  push({ attachment: "after", attached: true }); await tick(); // Home Assistant replays the subscription.
+  const sent = calls.filter((call) => call.attachment === "after");
+  assert.deepEqual(sent.map((call) => call.action), ["cancel"], "no heartbeat before the Cancel");
+  assert.equal(counts().cancelled, 1);
+  assert.equal(counts().stopped, 1);
+});
+
+/** Answers the panel's `resume` check before closing: the session lives unless `gone()` says otherwise. */
+function probing(controller, gone) {
+  const connection = controller._context.hass.connection, subscribe = connection.subscribeMessage, probes = [];
+  connection.subscribeMessage = async (callback, request) => {
+    if (request.type !== "myhome/cover_calibration/resume") return subscribe(callback, request);
+    probes.push(request);
+    if (gone()) throw { code: "calibration_expired" };
+    return () => {};
+  };
+  return probes;
+}
+
+test("Cancel pressed again while reconnecting keeps the view of a live session until the Cancel arrives", async () => {
+  let network = "down";
+  const { host, push, calls, counts, controller } = await mount({ call: (message, state) => {
+    if (network === "down") throw 3; // ERR_CONNECTION_LOST.
+    if (message.attachment === "before") throw { code: "calibration_expired" }; // Token of the dead socket.
+    return { ...state, sequence: state.sequence + 1, phase: message.action === "cancel" ? "cancelled" : state.phase };
+  } });
+  const probes = probing(controller, () => false);
+  push({ recoverable: true, attached: true, attachment: "before", owner: true, read_only: false, phase: "opening" });
+  host.querySelector("#cal-cancel").click(); await tick();
+  network = "reconnecting";
+  host.querySelector("#cal-cancel").click(); await tick(); // Queued with the old token, sent first.
+  assert.equal(probes.length, 1);
+  assert.equal("claim" in probes[0], false);
+  assert.equal(counts().cancelled, 0, "the session lives: the view stays");
+  assert.equal(host.querySelector("#cal-reason").textContent, translations.it.calCancelFailed);
+  push({ attachment: "after", attached: true }); await tick(); // The replayed subscription.
+  assert.deepEqual(calls.filter((call) => call.attachment === "after").map((call) => call.action), ["cancel"]);
+  assert.equal(counts().cancelled, 1);
+});
+
+test("a Cancel refused as expired closes the view once the session is confirmed gone", async () => {
+  const { host, push, counts, controller } = await mount({ call: () => { throw { code: "calibration_expired" }; } });
+  const probes = probing(controller, () => true);
+  push({ recoverable: true, attached: true, attachment: "gone", owner: true, read_only: false });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(probes.length, 1);
+  assert.equal(counts().cancelled, 1);
+});
+
+test("a failed check of the session keeps the view and the pending Cancel", async () => {
+  const { host, push, counts, controller } = await mount({ call: () => { throw { code: "calibration_expired" }; } });
+  const connection = controller._context.hass.connection, subscribe = connection.subscribeMessage;
+  connection.subscribeMessage = async (callback, request) => {
+    if (request.type === "myhome/cover_calibration/resume") throw 3;
+    return subscribe(callback, request);
+  };
+  push({ recoverable: true, attached: true, attachment: "unknown", owner: true, read_only: false });
+  host.querySelector("#cal-cancel").click(); await tick();
+  assert.equal(counts().cancelled, 0);
+  assert.equal(host.querySelector("#cal-reason").hidden, false);
+});
+
+test("a reconnected owner does not beat before a Cancel still in flight", async () => {
+  let release;
+  const { host, push, calls, controller } = await mount({ call: (message) =>
+    message.action === "cancel" ? new Promise((resolve) => { release = resolve; }) : {} });
+  push({ recoverable: true, attached: true, attachment: "first", owner: true, read_only: false });
+  host.querySelector("#cal-cancel").click(); await tick();
+  push({ attachment: "second" }); await tick();
+  assert.equal(calls.some((call) => call.action === "heartbeat"), false);
+  release({ ...controller._state, phase: "cancelled" }); await tick();
+});
+
+test("an owner's replayed subscription renews presence at once; a reader's does not", async () => {
+  const { push, calls } = await mount();
+  push({ recoverable: true, attached: true, attachment: "first", owner: true, read_only: false });
+  assert.equal(calls.length, 0);
+  push({ attachment: "second" }); await tick();
+  assert.deepEqual(calls.map((call) => [call.action, call.attachment]), [["heartbeat", "second"]]);
+  push({ attachment: "third", owner: false, read_only: true }); await tick();
+  assert.equal(calls.length, 1);
+});
+
+test("after Home Assistant reports the session ended, Resume is not offered", async () => {
+  const { host, push, controller } = await mount({ call: (message) => {
+    if (message.action === "heartbeat") throw { code: "calibration_expired" };
+    return {};
+  } });
+  push({ recoverable: true, attached: true, attachment: "owner", owner: true, read_only: false });
+  await controller._perform("heartbeat");
+  assert.equal(host.querySelector("#cal-reason").textContent, translations.it.profileError_calibration_expired);
+  assert.equal(host.querySelector("#cal-reconnect").hidden, true);
+  assert.equal(host.querySelector('[data-cal-action="open"]').disabled, true);
+});
+
+/** Fake intervals and a fake monotonic clock, advanced together. */
+function fakeClock() {
+  let now = 1000;
+  mock.timers.enable({ apis: ["setInterval"] });
+  mock.method(performance, "now", () => now);
+  return { tick: (ms) => { now += ms; mock.timers.tick(ms); },
+    restore: () => { mock.timers.reset(); mock.restoreAll(); } };
+}
+
+test("the elapsed time advances by tenths between two views, realigns to each view and always shows one decimal", async () => {
+  const clock = fakeClock();
+  try {
+    const { host, push } = await mount();
+    const shown = () => host.querySelector("#cal-elapsed").textContent.replace(`${translations.it.calElapsed}: `, "");
+    push({ phase: "opening", elapsed: 1 });
+    assert.equal(shown(), "1.0 s");
+    clock.tick(100);
+    assert.equal(shown(), "1.1 s");
+    clock.tick(3400);
+    assert.equal(shown(), "4.5 s");
+    push({ elapsed: 4.53 }); // The next view wins over the local count, still to a tenth.
+    assert.equal(shown(), "4.5 s");
+    clock.tick(1000);
+    assert.equal(shown(), "5.5 s");
+    push({ elapsed: 10.88 });
+    assert.equal(shown(), "10.9 s");
+    clock.tick(1000);
+    assert.equal(shown(), "11.9 s");
+    for (let step = 0; step < 20; step++) {
+      clock.tick(100);
+      assert.match(shown(), /^\d+\.\d s$/);
+    }
+    push({ phase: "confirm_open", elapsed: null }); // End of the run.
+    assert.equal(shown(), "");
+    clock.tick(5000);
+    assert.equal(shown(), "");
+  } finally {
+    clock.restore();
+  }
+});
+
+test("no elapsed timer survives a closed view or a lost connection", async () => {
+  const clock = fakeClock();
+  try {
+    const { host, push, controller } = await mount({ call: (message) => {
+      if (message.action === "heartbeat") throw { code: "disconnected" };
+      return {};
+    } });
+    push({ phase: "closing", elapsed: 4 });
+    await controller._perform("heartbeat");
+    assert.equal(controller._ticker, null);
+    assert.equal(host.querySelector("#cal-elapsed").textContent, "");
+    push({ recoverable: true, attached: true, attachment: "again", phase: "closing", elapsed: 6 });
+    assert.notEqual(controller._ticker, null);
+    controller.close();
+    assert.equal(controller._ticker, null);
+    clock.tick(3000);
+    assert.equal(host.querySelector("#cal-elapsed").textContent, `${translations.it.calElapsed}: 6.0 s`);
+  } finally {
+    clock.restore();
+  }
+});

@@ -198,9 +198,13 @@ export class CoverProfileEditor {
     this.dialog.querySelector("#profile-pending").hidden = !data.pending;
     const box = this.dialog.querySelector("#cal-recovery");
     box.hidden = !session;
-    box.querySelector("p").textContent = session ? `${session.entity_id} · ${t(session.waiting_for_stop ? "calWaitingForStop" : session.attached ? "calAttachedElsewhere" : "calDetached")}` : "";
+    const guided = session?.owner_present ?? session?.attached;
+    box.querySelector("p").textContent = session ? `${session.entity_id} · ${t(session.waiting_for_stop ? "calWaitingForStop" : guided ? "calAttachedElsewhere" : "calDetached")}` : "";
     const resume = box.querySelector("#cal-resume");
-    resume.hidden = !session || session.attached || session.waiting_for_stop || session.recoverable === false;
+    // A session that reports its owner's presence can always be opened, present owner or not:
+    // the owner's own tab gets its view back at once, any other tab reads it with Stop available.
+    resume.hidden = !session || session.waiting_for_stop || session.recoverable === false
+      || (session.owner_present === undefined && !!session.attached);
     resume.onclick = () => {
       this._calibrating = true;
       const context = this._context;
@@ -376,7 +380,7 @@ export class CoverProfileEditor {
             <p class="muted">${esc(t("profileTravelPrerequisite"))}</p>
             <button type="button" data-profile-action="travel" ${disabled}>${esc(t("profileSaveTravel"))}</button>` : ""}
             <div id="cal-recovery" class="notice" hidden><p></p>
-              <button type="button" id="cal-resume">${esc(t("calResume"))}</button>
+              <button type="button" id="cal-resume">${esc(t("calOpenSession"))}</button>
               <button type="button" id="cal-refresh">${esc(t("calRefresh"))}</button>
             </div>
             <div class="profile-times">

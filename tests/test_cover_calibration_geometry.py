@@ -243,11 +243,12 @@ async def test_endpoint_stop_queue_failure_and_disconnect(geometry):
     assert cal.session.reason == "stop_queue_full"
 
 
-async def test_disconnect_during_motion_stops_discards_and_does_not_resume(geometry):
+async def test_disconnect_during_motion_keeps_the_run_and_writes_no_stop(geometry):
     await start(geometry)
+    count, phase = len(geometry.queue), geometry.session.phase
     geometry.session.detach(geometry.session.attachment)
-    assert geometry.session.phase == "interrupted"
-    assert str(geometry.queue[-1][0]) == "*2*0*11##"
+    assert geometry.session.phase == phase and not geometry.session.closed
+    assert len(geometry.queue) == count
     assert geometry.session.reservation.pending
 
 

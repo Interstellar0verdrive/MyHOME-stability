@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 
 from . import cover_profiles as profiles
 from .const import DOMAIN
-from .cover_calibration import ready_cover, send_error
+from .cover_calibration import ready_cover, replay, send_error
 from .cover_calibration_automatic import SETTLE_SECONDS, AutomaticCalibrationSession
 from .cover_profile_provenance import PROVENANCE
 from .cover_settings import set_overrides
@@ -73,6 +73,9 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
                 "results": [{"index": index, "entity_id": self.covers[index].entity_id,
                              "values": dict(result["values"])} for index, result in enumerate(self.results)]}
 
+    def same_request(self, msg: dict[str, Any]) -> bool:
+        return bool(msg.get("entity_ids") == [cover.entity_id for cover in self.covers])
+
     def finish_measurement(self) -> None:
         self.results.append({"values": dict(self.values), "provenance": copy.deepcopy(self.provenance)})
         if self.cover_index == len(self.covers) - 1:
@@ -83,7 +86,7 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
 
     def next_cover(self) -> None:
         self.settle = None
-        if self.phase != "between_covers" or self.store.calibration is not self:
+        if self.phase != "between_covers" or self.store.calibration is not self or self.unattended():
             return
         following = self.covers[self.cover_index + 1]
         try:
@@ -146,9 +149,9 @@ async def begin_batch(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
         await store.load()
         if gateway(hass, entry.entry_id) is not entry:
             raise profiles.ProfileError("target_not_found")
-        if store.calibration is not None and msg.get("client_id") == store.calibration.client_id and msg.get("client_id"):
-            store.calibration.attach(connection, msg["id"], msg["client_id"])
-            return store.calibration
+        replayed = replay(store, connection, msg)
+        if replayed is not None:
+            return replayed
         if store.calibration is not None:
             raise profiles.ProfileError("calibration_busy")
         if msg["revision"] != store.data["revision"]:
@@ -173,6 +176,7 @@ async def ws_targets(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     vol.Required("type"): WS_BATCH_START, vol.Required("entry_id"): str,
     vol.Required("entity_ids"): SELECTION, vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Optional("session_id"): vol.All(str, vol.Length(min=1, max=64)),
 })
 @require_admin
 @async_response
@@ -183,4 +187,4 @@ async def ws_batch_start(hass: Any, connection: Any, msg: dict[str, Any]) -> Non
         send_error(connection, msg, error)
         return
     connection.send_result(msg["id"])
-    session.emit()
+    session.announce(connection, msg["id"])

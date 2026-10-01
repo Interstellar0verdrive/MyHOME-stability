@@ -67,9 +67,9 @@ class AutomaticCalibrationSession(guided.CalibrationSession):
         self.phase = "review"
 
     def next_run(self) -> None:
-        """Revalidate after the pause; no cancelled or unavailable session can move."""
+        """Revalidate after the pause; no cancelled, unavailable or unattended session can move."""
         self.settle = None
-        if self.phase != "settling" or self.store.calibration is not self:
+        if self.phase != "settling" or self.store.calibration is not self or self.unattended():
             return
         try:
             entry, entity = target(self.hass, self.entry_id, self.cover.entity_id)

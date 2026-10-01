@@ -73,7 +73,7 @@ intermediate descent or the review still goes through `top`. Review and save car
 slats is unchanged. Storage and export formats are unchanged.
 
 Panel 0.38.5 shows a "This cover has no slats" switch in the calibration section
-when **Slats and roll — guided** is selected, and sends `slats: false` only when it is
+when **Roll measurement — guided** is selected, and sends `slats: false` only when it is
 on. The lift-off text takes its limit from `touching_cm`, a status line gives the
 attempt after an automatic repeat or a non-blocking warning after a wide gap, with
 the values from the view, `invalid_gap` names both limits and points to Repeat, the briefings and illustration captions of a cover without slats do not
@@ -165,47 +165,151 @@ the backend, never recalculated from the displayed profile. Missing runtime valu
 are shown as unknown. No new endpoint, persisted field or write operation is added.
 See [behavior and scope](sidepanel.md#shared-profile-view-0250).
 
-## Session recovery (0.24.0)
+## Session recovery (0.24.0) and ownership per tab (0.39.0)
 
 `start` and `batch_start` accept optional `client_id` (nonempty string, at most
-64 characters). Panel 0.24.0 generates a fresh random ID per controller. Supplying
-it opts into [bounded recovery](sidepanel.md#session-recovery-0240); omitting it
-preserves legacy cancellation-on-disconnect behavior. Replaying the same start
-subscription after a websocket reconnect reattaches its detached session. It
-cannot replace an active controller. If the session has expired, a replayed start
-creates a fresh confirmation step, never a movement.
+64 characters). Omitting it preserves the legacy contract unchanged: one
+controller bound to its websocket, a 20 s heartbeat lease, and cancellation
+(with Stop) when the subscription ends. Everything below applies only to
+clients that send `client_id`, except Stop during `review` (see **Actions**).
 
-`cover_profiles/read` includes `calibration`: null, or the gateway session view
-without its controller `attachment` token. It describes the current target, phase,
-values, mode/direction and batch targets/results where applicable. `attached`
-indicates whether it is controlled; this transient view does not increment the
-persisted profile revision. The editor can refresh it without replacing drafts.
+**Identity.** Since panel 0.39.0 the `client_id` is kept per browser tab in
+`sessionStorage`, so the same tab is recognised after a reconnection, a reload
+or when the view is reopened. The client that starts a session owns it. A
+browser's "Duplicate tab" copies `sessionStorage`, so before using an identity
+it did not create the panel asks the other tabs, over a `BroadcastChannel`,
+whether one of them holds it. An answer within 300 ms means the tab is a copy:
+it takes a new `client_id`, so it opens sessions read-only until it takes
+control. No answer means a reload of the same tab: it keeps the identity and
+recovers its sessions as their owner. The check runs when the panel loads, so a
+tab answers for its identity before any calibration view is opened; two copies
+checking at once settle on exactly one keeper. An answer that arrives after the
+wait still counts: the copy then takes a new identity and reads its open session
+again, read-only. Without `BroadcastChannel`, or when it cannot be opened, the
+identity is kept as before. Only a tab running the MyHOME panel answers: if the
+original tab has been closed, frozen by the browser, or reloaded on another page
+of Home Assistant, nobody answers, the copy keeps the identity and ownership
+passes to the copy; the original, once it loads the panel again, finds the
+identity held and takes a new one.
 
-To claim a retained session, an administrator subscribes to:
+**Readers.** Any number of subscriptions can read one session: the owner's, a
+replayed one after a reconnection, and other tabs. Each subscription receives
+its own `attachment` token. `sequence` grows only at transitions of the session
+(including a change of owner), never at a subscription, a heartbeat or a read.
+
+**A lost socket does not interrupt the movement under way.** When a subscription
+ends (socket closed, unsubscribe), that reader is removed: no Stop is written and
+no value is discarded. An automatic or batch cycle still needs its owner present
+to start its next movement (see below).
+
+**Presence and lease.** The owner is *present* while its last heartbeat, action
+or successful claim is less than 45 s old; the panel sends a heartbeat every 15 s,
+and at once when its subscription is replayed after a reconnection. A subscription
+alone (`resume`, a replayed start) never renews presence. Every view reports it as
+`owner_present` (panel 0.39.0). Presence never decides who may act, but an
+automatic or batch cycle starts a new movement by itself only while the owner is
+present: when a pause ends (next run, next cover) without the owner, the session
+is interrupted with reason `owner_absent`; every measured value is discarded,
+results of covers already measured in a batch included, and Stop is written only
+if a movement may still be running. A movement already under way runs to its end
+whether or not the owner is present. The interrupted session stays readable, and
+keeps the gateway, until the 600 s lease runs out or a reader takes control and
+cancels it, as the retention of 0.24.0 did after an interruption, so that whoever
+comes back sees the reason. The Home Assistant frontend closes the websocket of a
+tab hidden for five minutes (unless suspension is turned off), and at once when
+the browser freezes the page, so a cycle left in a background tab ends this way.
+The *lease* ends the
+session as `expired` after 1800 s without a transition or an accepted action
+of the owner, or 600 s once a movement has been sent; Stop is written at that
+moment only while a movement may still be running. A heartbeat never renews the
+lease and never takes ownership.
+
+**Ownership changes only on an explicit claim.** A replayed `start`/`batch_start`
+from a known `client_id`, for the same target, mode and direction, and a
+`resume` without `claim`, only add a reader: an owner is never displaced by a
+reconnection or a repeated subscription.
+
+**Replayed starts.** Home Assistant repeats a subscription message after its
+websocket reconnects. `start` and `batch_start` accept an optional `session_id`
+(1 to 64 characters): with it, the message only reads that live session and is refused with
+`calibration_expired` when the session has ended or another one holds the
+gateway; it never creates a session. Panel 0.39.0 adds `session_id` to its start
+message when the connection drops or the view closes, so a replay after a session
+has ended (lease expiry, Cancel from another tab) shows the error instead of
+starting a new measurement. A replay without `session_id` (for instance, when the
+connection dropped before the first view arrived) behaves as before: it reads the
+live session when there is one, and otherwise creates a fresh confirmation step,
+never a movement. A start sent deliberately by the user carries no `session_id`
+and creates a session as usual. Clients without `client_id` never send
+`session_id`; if one did, the start would be refused with `calibration_expired`
+(before this key existed it was refused as unknown).
+
+**Cancel from the panel.** Panel 0.39.0 closes the view on Cancel only once Home
+Assistant confirms it, or confirms that the session no longer exists. When the
+connection is down the view stays, says that the cancellation did not arrive, and
+sends it again first as soon as its subscription is replayed. A
+`calibration_expired` answer may only mean that the token died with its socket, so
+the panel then subscribes with `resume` (no claim, no command) and closes the view
+only if that is refused with `calibration_expired` too.
+
+To take control, a client subscribes with:
 
 ```json
 {"id": 50, "type": "myhome/cover_calibration/resume", "entry_id": "ENTRY",
- "session_id": "SESSION", "client_id": "NEW-RANDOM-CONTROLLER-ID"}
+ "session_id": "SESSION", "client_id": "TAB-ID", "claim": true, "sequence": 12}
 ```
 
-The result acknowledges the subscription, followed by the current authoritative
-view. `calibration_busy` rejects a live owner; `calibration_expired` rejects an
-absent, ended or legacy session. Resume does not accept browser timings or issue
-movement commands. It can also reconnect to interrupted status for Stop/Cancel.
+The claim takes effect only when `sequence` is the current one, so an automatic
+replay of an older claim cannot take the session back. The result acknowledges
+the subscription, followed by the view (after a claim, a transition sent to every
+reader). `calibration_expired` rejects an absent, ended or legacy session.
+Neither `resume`, a claim nor a replayed start sends any command to the bus: a
+recovered session never restarts a movement by itself.
 
-Recoverable subscription views add `recoverable: true`, `attached`,
-`recovery_seconds: 600` and `attachment`. Every `action`, including heartbeat,
-Stop, Cancel and the new `detach`, must provide that attachment token in addition
-to the session ID and use the owning websocket. The token rotates on each attach;
-old actions and old unsubscribe callbacks cannot affect the new controller.
-Existing sequence validation still applies to state-changing steps and saves.
-Sequence remains monotonic across detach and attach notifications.
+**Actions.** Every `action` must carry the `attachment` of a subscription on the
+same websocket. `stop` is accepted from every reader, read-only included: it is
+a safety control. During a run, and in every phase but `review`, its effect is
+unchanged: the session is interrupted and its values are discarded. In `review`
+the endpoints are already fixed by the user's taps: Stop is still written, and
+the session always stays in `review` with its completed measurements (batch
+results included), also in the short window before the bus confirms the last
+stop; `cancel` is the only way to discard them. This applies to clients without
+`client_id` too. For clients with `client_id` a Stop in `review`, like every
+accepted action, renews the inactivity lease. Every other action except
+`heartbeat` and `detach`, `save` included, is refused with `calibration_owned`
+unless it comes from the owner.
+`heartbeat` answers the view and refreshes presence only for the owner. `detach`
+removes that reader; from the owner it ends the session as `left` (without Stop)
+when nothing has moved yet or the session was interrupted, and otherwise keeps
+the owner and the measurements.
 
-`detach` and unsubscribe retain safe checkpoints for 600 seconds, or interrupt
-and discard an in-progress cycle before requesting Stop. Neither detachment nor
-reattachment changes the measurement provenance. Cancel releases ownership
-immediately. Storage v5 and export v3 are unchanged; transient sessions are not
-included in export or restored after HA restart.
+**Views.** Subscription and action views add `owner` (this reader owns the
+session), `read_only`, `attachment`, `attached` (this subscription is live),
+`owner_present` (the owner is present, the same for every reader; `false` once
+closed) and `idle_expires_at` (ISO time the lease will run out, `null` when
+closed); `recoverable` and `recovery_seconds` (the current lease length) remain.
+A reader learns that presence has lapsed from its own heartbeat answers, since a
+lapse is not a transition. A claim sent with an old `sequence` is answered with
+a read-only view, not an error, so that a replayed claim stays harmless; the
+panel shows that the session changed and asks the user to try again. After a
+`calibration_expired` answer the panel no longer offers to resume the session.
+
+**Panel entry points (0.39.0).** The profile dialog offers "Open session" for
+every session that reports `owner_present`, whether the owner is present or not:
+the subscription is a `resume` without claim, so the owner's tab, after a reload
+for instance, gets its own view back at once, and any other tab gets the
+read-only view with Stop available. In a read-only view, "Take control" claims
+with one tap when the owner is absent; while `owner_present` is true the first
+tap only turns the button into "Confirm take control" and shows what follows
+(the guiding tab becomes read-only; a run under way continues and its endpoint
+is then confirmed from the new owner), and the second tap claims. Nothing is
+sent before that second tap.
+
+`cover_profiles/read` includes `calibration`: null, or the same view without
+`attachment`, where `attached` equals `owner_present` and `owner` is false.
+This transient view does not increment the persisted profile revision. Storage
+v5 and export v3 are unchanged; transient sessions are not included in export or
+restored after HA restart.
 
 ## Measurement destinations (0.23.0)
 

@@ -1,6 +1,6 @@
 # Guided slat and roll measurement — panel 0.31.0
 
-Inside the existing cover **Calibration** section, select **Slats and roll — guided**.
+Inside the existing cover **Calibration** section, select **Roll measurement — guided**.
 The timing-only and automatic paths remain available. This release implements the
 basic new-profile path; it does not implement the thorough continuation, independent
 40% check, personal geometry overrides or measured shared-profile replacement.

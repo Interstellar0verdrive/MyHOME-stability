@@ -1,4 +1,4 @@
-"""Explicit attachment to a retained session; recovery never sends a command."""
+"""Read a live session from another tab or socket; recovery never sends a command."""
 from typing import Any
 
 import voluptuous as vol
@@ -18,6 +18,8 @@ WS_RESUME = "myhome/cover_calibration/resume"
     vol.Required("type"): WS_RESUME, vol.Required("entry_id"): str,
     vol.Required("session_id"): str,
     vol.Required("client_id"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Optional("claim"): bool,
+    vol.Optional("sequence"): vol.All(int, vol.Range(min=0)),
 })
 @require_admin
 @async_response
@@ -31,8 +33,14 @@ async def ws_resume(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
             if session is None or session.id != msg["session_id"]:
                 raise ProfileError("calibration_expired")
             target(hass, session.entry_id, session.cover.entity_id)
-            session.attach(connection, msg["id"], msg["client_id"])
+            # Without a claim, or with a sequence the client did not just read, the
+            # new subscription only reads: an automatic replay cannot take control.
+            subscriber, claimed = session.attach(connection, msg["id"], msg["client_id"],
+                                                 claim=msg.get("claim", False), sequence=msg.get("sequence"))
         connection.send_result(msg["id"])
-        session.emit()
+        if claimed:
+            session.emit()
+        else:
+            session.send_to(subscriber)
     except ProfileError as error:
         send_error(connection, msg, error)
