@@ -802,6 +802,18 @@ test("review values are displayed rounded while the view keeps full precision", 
   assert.match(batch.host.querySelector("#cal-batch-review").textContent, /14\.5 \/ 14\.5 s/);
 });
 
+test("rounded values take a decimal comma in Italian", async () => {
+  for (const [value, unit, text] of [[14.65187786286696, "s", "14,7"], [1.0819, "roll", "1,08"], [112.46, "cm", "112,5"], [110, "cm", "110"], [null, "s", "—"]]) {
+    assert.equal(shown(value, unit, "it"), text, `${value} ${unit}`);
+  }
+  assert.equal(shown(14.65187786286696, "s", "en"), "14.7");
+  assert.equal(shown(14.65187786286696, "s", "not a language"), "14.7");
+  const { host, push } = await mount({ mode: "geometry", language: "it" });
+  push({ phase: "review", step: "half_close", values: { opening_time: 14.538674880051985, closing_time: 14.477566485991701 },
+    geometry: { slat_time_s: 2.6638, opening_roll: 1.7397, closing_roll: 2.6596 }, travel_cm: 112.46, save_modes: ["new"], can_repeat: true });
+  assert.match(host.querySelector("#cal-values").textContent, /: 14,5 · .*: 14,5 · .*: 112,5 cm · Tempo lamelle \(s\): 2,7 · Rullo in apertura: 1,74 · Rullo in chiusura: 2,66$/);
+});
+
 test("positioning runs show what to confirm and no elapsed time; measured runs keep it", async () => {
   const { host, push } = await mount({ mode: "geometry" });
   const phase = host.querySelector("#cal-phase"), elapsed = host.querySelector("#cal-elapsed");

@@ -1,11 +1,10 @@
 /** Display saved profile evidence without deriving it from editable drafts. */
 const url = new URL("panel-dom.js", import.meta.url); url.search = new URL(import.meta.url).search;
-const { escapeHtml: esc } = await import(url.href);
+const { escapeHtml: esc, decimal } = await import(url.href);
 
+/** Display only, to a tenth (a decimal comma in Italian); stored values keep full precision. */
 export function duration(value, language = "en") {
-  if (!Number.isFinite(value)) return "—";
-  try { return new Intl.NumberFormat(language, { maximumFractionDigits: 20, useGrouping: false }).format(value); }
-  catch { return String(value); }
+  return Number.isFinite(value) ? decimal(value, 1, language) : "—";
 }
 
 export function savedEvidence(profile, t, language = "en") {

@@ -1,6 +1,6 @@
 /** Geometry fields and readouts; all physical calculations stay in the backend. */
 const url = new URL("panel-dom.js", import.meta.url); url.search = new URL(import.meta.url).search;
-const { escapeHtml: esc } = await import(url.href);
+const { escapeHtml: esc, decimal } = await import(url.href);
 export const geometryKeys = ["slat_time_s", "opening_roll", "closing_roll"];
 const number = (value) => typeof value === "number" ? Number(value.toFixed(4)) : "—";
 export function scalingText(profile, t) {
@@ -39,9 +39,10 @@ export function validGeometry(form) {
     || geometryKeys.every((key) => form.elements[key].value !== "" && form.elements[key].reportValidity());
 }
 
-export function geometrySummary(settings, t, known = true) {
+/** Display only: slat time to a tenth of a second, rolls to two decimals, in the user's language. */
+export function geometrySummary(settings, t, known = true, language = "en") {
   if (!settings?.slat_time_s) return "";
-  return `${esc(t("profileModel_slat_roll"))} · ${geometryKeys.map((key) => `${esc(t(`profileGeometry_${key}`))}: ${esc(number(settings[key]?.value))}`).join(" · ")}. ${esc(t("profileAccuracyUnknown"))}${known ? "" : ` ${esc(t("profileMotionUnknown"))}`}`;
+  return `${esc(t("profileModel_slat_roll"))} · ${geometryKeys.map((key) => `${esc(t(`profileGeometry_${key}`))}: ${esc(decimal(settings[key]?.value, key === "slat_time_s" ? 1 : 2, language))}`).join(" · ")}. ${esc(t("profileAccuracyUnknown"))}${known ? "" : ` ${esc(t("profileMotionUnknown"))}`}`;
 }
 
 export function geometryImpact(item, t) {

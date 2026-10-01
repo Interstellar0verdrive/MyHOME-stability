@@ -398,10 +398,10 @@ export class CoverCalibration {
     host.querySelector("#cal-stop").disabled = ["saved", "cancelled"].includes(state.phase);
     host.querySelector("#cal-save").hidden = state.phase !== "review";
     this._renderSave();
-    host.querySelector("#cal-values").textContent = `${t("profileOpeningTime")}: ${shown(state.values.opening_time, "s")} · ${t("profileClosingTime")}: ${shown(state.values.closing_time, "s")}`;
+    host.querySelector("#cal-values").textContent = `${t("profileOpeningTime")}: ${this._shown(state.values.opening_time, "s")} · ${t("profileClosingTime")}: ${this._shown(state.values.closing_time, "s")}`;
     if (state.direction) {
       host.querySelector("#cal-values").textContent = ["opening", "closing"].map((direction) =>
-        `${t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime")}: ${shown(state.values[`${direction}_time`], "s")} s · ${t(direction === state.direction ? "calQuickMeasured" : "calQuickRetained")}`).join(" · ");
+        `${t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime")}: ${this._shown(state.values[`${direction}_time`], "s")} s · ${t(direction === state.direction ? "calQuickMeasured" : "calQuickRetained")}`).join(" · ");
     }
     this._renderGeometry(geometry);
     renderCalibrationVisual(host, state, t, this._lost);
@@ -409,17 +409,19 @@ export class CoverCalibration {
     if (state.batch) {
       host.querySelector("#cal-targets").innerHTML = state.targets.map((item, index) => {
         const result = state.results.find((row) => row.index === index);
-        const status = ["interrupted", "cancelled"].includes(state.phase) ? t("calBatchDiscarded") : result ? `${shown(result.values.opening_time, "s")} / ${shown(result.values.closing_time, "s")} s` : t(index === state.cover_index ? "calBatchCurrent" : "calBatchWaiting");
+        const status = ["interrupted", "cancelled"].includes(state.phase) ? t("calBatchDiscarded") : result ? `${this._shown(result.values.opening_time, "s")} / ${this._shown(result.values.closing_time, "s")} s` : t(index === state.cover_index ? "calBatchCurrent" : "calBatchWaiting");
         return `<li>${esc(item.name)} · ${esc(status)}</li>`;
       }).join("");
       const review = host.querySelector("#cal-batch-review");
       if (state.phase === "review" && !review.children.length) {
-        review.innerHTML = state.results.map((result) => `<label>${esc(state.targets[result.index].name)} · ${esc(shown(result.values.opening_time, "s"))} / ${esc(shown(result.values.closing_time, "s"))} s
-          ${state.targets[result.index].travel_cm != null ? `<span class="muted">${esc(t("profileReferenceTravel"))}: ${esc(shown(state.targets[result.index].travel_cm, "cm"))} cm</span>` : ""}
+        review.innerHTML = state.results.map((result) => `<label>${esc(state.targets[result.index].name)} · ${esc(this._shown(result.values.opening_time, "s"))} / ${esc(this._shown(result.values.closing_time, "s"))} s
+          ${state.targets[result.index].travel_cm != null ? `<span class="muted">${esc(t("profileReferenceTravel"))}: ${esc(this._shown(state.targets[result.index].travel_cm, "cm"))} cm</span>` : ""}
           <span class="muted">${esc(t("profileName"))}</span><input data-batch-name="${result.index}" required maxlength="64" value="${esc(state.targets[result.index].name.slice(0, 64))}"></label>`).join("");
       }
     }
   }
+
+  _shown(value, unit) { return shown(value, unit, this._context.hass.language); }
 
   /** Between two views the elapsed time advances here every 100 ms from the last value received. */
   _clock(elapsed) {
@@ -484,8 +486,8 @@ export class CoverCalibration {
     if (state.phase === "review") {
       // Without slats the summary says so instead of showing a zero slat time.
       const keys = noSlats ? ["opening_roll", "closing_roll"] : ["slat_time_s", "opening_roll", "closing_roll"];
-      host.querySelector("#cal-values").textContent += ` · ${t("profileCoverTravel")}: ${shown(state.travel_cm, "cm")} cm · ` +
-        [...(noSlats ? [t("calGeometryNoSlats")] : []), ...keys.map((key) => `${t(`calGeometry_${key}`)}: ${shown(state.geometry[key], key === "slat_time_s" ? "s" : "roll")}`)].join(" · ");
+      host.querySelector("#cal-values").textContent += ` · ${t("profileCoverTravel")}: ${this._shown(state.travel_cm, "cm")} cm · ` +
+        [...(noSlats ? [t("calGeometryNoSlats")] : []), ...keys.map((key) => `${t(`calGeometry_${key}`)}: ${this._shown(state.geometry[key], key === "slat_time_s" ? "s" : "roll")}`)].join(" · ");
       host.querySelector("#cal-save-help").textContent = t(noSlats ? "calGeometryReviewNoSlats" : "calGeometryReview");
     }
   }
@@ -503,8 +505,8 @@ export class CoverCalibration {
     form.elements.profile_name.disabled = !!state.batch || mode !== "new";
     form.elements.profile_name.required = !state.batch && mode === "new";
     host.querySelector("#cal-save-help").textContent = t(mode === "new" ? "calSaveOverrides" : mode === "cover" ? "calSaveCoverHelp" : "calSaveSharedHelp");
-    if (!state.batch && mode === "new" && state.travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.travel_cm, "cm")} cm.`;
-    if (mode === "shared" && state.reference_travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.reference_travel_cm, "cm")} cm. ${t("calReferenceNormalization")}`;
+    if (!state.batch && mode === "new" && state.travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${this._shown(state.travel_cm, "cm")} cm.`;
+    if (mode === "shared" && state.reference_travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${this._shown(state.reference_travel_cm, "cm")} cm. ${t("calReferenceNormalization")}`;
     const button = form.querySelector('button[type="submit"]');
     button.disabled = this._locked();
     button.textContent = t(state.batch ? "calBatchSave" : mode === "new" ? "calSave" : mode === "cover" ? "calSaveCover" : this._savePreview ? "calConfirmShared" : "calPreviewShared");
@@ -515,7 +517,7 @@ export class CoverCalibration {
       box.innerHTML = `<p><strong>${esc(preview.after.name)}</strong> · ${esc(t("calSharedImpact"))}</p><ul>${preview.followers.map((item) =>
         `<li><strong>${esc(item.name || item.entity_id || t("profileMissingCover"))}</strong>${item.available ? "" : ` · ${esc(t("profileUnavailableFollower"))}`}<br>${["opening", "closing"].map((direction) => {
           const change = item.changes[direction];
-          return `${esc(t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime"))}: ${esc(shown(change.before, "s"))} → ${esc(shown(change.after, "s"))} s${change.overridden ? ` · ${esc(t("calPersonalRetained"))}` : change.override_removed ? ` · ${esc(t("calPersonalRemoved"))}` : ""}`;
+          return `${esc(t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime"))}: ${esc(this._shown(change.before, "s"))} → ${esc(this._shown(change.after, "s"))} s${change.overridden ? ` · ${esc(t("calPersonalRetained"))}` : change.override_removed ? ` · ${esc(t("calPersonalRemoved"))}` : ""}`;
         }).join("<br>")}</li>`).join("")}</ul>`;
     }
     this._renderedPreview = this._savePreview;
@@ -642,9 +644,9 @@ export class CoverCalibration {
   }
 }
 
-/** Display only, stored values keep full precision: tenths of a second or centimetre, rolls to two decimals. */
-export function shown(value, unit) {
-  return value == null ? "—" : `${Number(Number(value).toFixed(unit === "roll" ? 2 : 1))}`;
+/** Display only, stored values keep full precision: tenths of a second or centimetre, rolls to two decimals, a decimal comma in Italian. */
+export function shown(value, unit, language) {
+  return decimal(value, unit === "roll" ? 2 : 1, language);
 }
 
 /** A comma or a point before the decimals; anything else, empty included, is not a number. */

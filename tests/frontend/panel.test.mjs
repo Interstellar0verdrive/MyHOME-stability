@@ -1628,3 +1628,41 @@ test("geometry calibration stays in the existing cover section and clears a sing
   assert.equal("direction" in request, false);
   assert.equal(calls.filter((c) => c.type === "myhome/cover_calibration/action").length, 0);
 });
+
+test("the travel profile shows times to a tenth of a second and rolls to two decimals; saved values keep their precision", async () => {
+  const opening = 14.65187786286696, closing = 14.477566485991701;
+  const writes = [];
+  const { panel, root, hass } = await mountProfiles({
+    read: () => coverProfileData({
+      profiles: [{ id: "timed", name: "Misurato", opening_time: opening, closing_time: closing, uses: 1 }],
+      effective_opening_time: opening, effective_closing_time: closing,
+      configured: { opening: { origin: "override", value: opening }, closing: { origin: "profile", value: closing } },
+      effective: { slat_time_s: { value: 2.733 }, opening_roll: { value: 1.0819 }, closing_roll: { value: 1.2426 } },
+    }),
+    write: (message) => { writes.push(message); return coverProfileData({ revision: 4 }); },
+  });
+  openProfile(root); await tick();
+  assert.equal(root.querySelector("#profile-effective-opening").textContent, "14,7");
+  assert.equal(root.querySelector("#profile-effective-closing").textContent, "14,5");
+  assert.equal(root.querySelector("#profile-motion-status").textContent,
+    "Lamelle e rullo · Fase lamelle (s): 2,7 · Rapporto rullo in apertura: 1,08 · Rapporto rullo in chiusura: 1,24. La precisione del posizionamento non è stata misurata.");
+  const form = root.querySelector("#profile-form");
+  assert.match(form.elements.profile.selectedOptions[0].textContent, /Misurato · 14,7 \/ 14,5 s$/);
+  assert.equal(root.querySelector("#edit-hint").textContent, "Misurato · 14,7 / 14,5 s");
+  assert.equal(form.elements.override_opening.value, "14.7");
+  assert.equal(form.elements.override_closing.value, "14.5");
+  // Live timings are rounded the same way.
+  panel.hass = { ...hass, states: { ...hass.states, "cover.shutter": { state: "open",
+    attributes: { opening_time: 14.6094, closing_time: closing, cover_profile_pending: false } } } };
+  assert.equal(root.querySelector("#profile-effective-opening").textContent, "14,6");
+  // Unchanged fields send back the saved values, not the rounded ones.
+  form.elements.use_closing.checked = true;
+  form.elements.use_closing.dispatchEvent(new dom.window.Event("change"));
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(writes.at(-1).overrides, { opening: opening, closing: closing });
+  openProfile(root); await tick();
+  const again = root.querySelector("#profile-form");
+  again.elements.override_opening.value = "15.2";
+  again.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(writes.at(-1).overrides, { opening: 15.2, closing: null });
+});

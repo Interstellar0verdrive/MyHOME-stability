@@ -192,7 +192,7 @@ export class CoverProfileEditor {
     const { t } = this._context, data = this._data, session = data.calibration;
     const scaling = this.dialog.querySelector("#profile-scaling-status");
     const motionStatus = this.dialog.querySelector("#profile-motion-status");
-    if (motionStatus) motionStatus.innerHTML = geometry.geometrySummary(data.effective, t, data.position_known);
+    if (motionStatus) motionStatus.innerHTML = geometry.geometrySummary(data.effective, t, data.position_known, this._context.hass.language);
     if (scaling) scaling.textContent = ["opening", "closing"].map((direction) => `${t(direction === "opening" ? "calStepOpening" : "calStepClosing")}: ${t(data.effective?.[direction]?.origin === "override" ? "profilePersonalValue" : data.effective?.[direction]?.scaled ? "profileScaled" : "profileNotScaled")}`).join(" · ");
     for (const direction of ["opening", "closing"]) this.dialog.querySelector(`#profile-effective-${direction}`).textContent = duration(data[`effective_${direction}_time`] ?? data.effective_travel_time, this._context.hass.language);
     this.dialog.querySelector("#profile-pending").hidden = !data.pending;
@@ -358,7 +358,7 @@ export class CoverProfileEditor {
           <div class="profile-assign-row">
             <label>${esc(t("profileChoose"))}<select name="profile" ${disabled}>
               <option value="">${esc(t("profileDefault"))}</option>
-              ${data.profiles.map((profile) => `<option value="${esc(profile.id)}">${esc(profile.name)} · ${esc(profile.opening_time ?? profile.travel_time)} / ${esc(profile.closing_time ?? profile.travel_time)} s</option>`).join("")}
+              ${data.profiles.map((profile) => `<option value="${esc(profile.id)}">${esc(profile.name)} · ${esc(duration(profile.opening_time ?? profile.travel_time, this._context.hass.language))} / ${esc(duration(profile.closing_time ?? profile.travel_time, this._context.hass.language))} s</option>`).join("")}
             </select></label>
             <button type="button" class="primary" data-profile-action="assign" ${disabled}>${esc(t("profileAssign"))}</button>
           </div>
@@ -368,7 +368,7 @@ export class CoverProfileEditor {
           <div class="profile-summary-evidence"><span class="muted">${esc(t("profileAssignedEvidence"))}</span>${savedEvidence(assigned, t, this._context.hass.language)}</div>
 
         ${data.height_scaling ? `<p class="muted" id="profile-scaling-status">${["opening", "closing"].map((direction) => `${esc(t(direction === "opening" ? "calStepOpening" : "calStepClosing"))}: ${esc(t(data.effective?.[direction]?.origin === "override" ? "profilePersonalValue" : data.effective?.[direction]?.scaled ? "profileScaled" : "profileNotScaled"))}`).join(" · ")}</p>` : ""}
-        <p class="muted" id="profile-motion-status">${geometry.geometrySummary(data.effective, t, data.position_known)}</p>
+        <p class="muted" id="profile-motion-status">${geometry.geometrySummary(data.effective, t, data.position_known, this._context.hass.language)}</p>
         </details>
       </section>
       ${!data.writable ? `<p class="notice">${esc(t(`profileError_${data.reason}`))}</p>` : ""}
@@ -441,8 +441,10 @@ export class CoverProfileEditor {
               ${["opening", "closing"].map((direction) => {
                 const item = data.configured?.[direction];
                 const own = item?.origin === "override";
+                // Shown to a tenth; the saved value is sent back unchanged unless the field is edited.
+                const exact = item?.value ?? data.default_travel_time, rounded = exact == null ? "" : `${Number(Number(exact).toFixed(1))}`;
                 return `<label class="profile-override"><span class="profile-override-toggle"><input type="checkbox" name="use_${direction}" ${own ? "checked" : ""} ${disabled}> ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}</span>
-                  <span class="input-suffix"><input name="override_${direction}" aria-label="${esc(t("profilePersonalValues"))}: ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}" type="number" min="1" max="600" step="any" inputmode="decimal" value="${esc(item?.value ?? data.default_travel_time ?? "")}" ${data.writable && own ? "" : "disabled"}><span>s</span></span></label>`;
+                  <span class="input-suffix"><input name="override_${direction}" aria-label="${esc(t("profilePersonalValues"))}: ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}" type="number" min="1" max="600" step="any" inputmode="decimal" value="${esc(rounded)}" data-exact="${esc(exact ?? "")}" data-shown="${esc(rounded)}" ${data.writable && own ? "" : "disabled"}><span>s</span></span></label>`;
               }).join("")}
               <button type="button" data-profile-action="overrides" ${disabled}>${esc(t("profileSavePersonal"))}</button>
             </fieldset>
@@ -518,7 +520,7 @@ export class CoverProfileEditor {
       }
       this._renderProvenance(profile);
       form.querySelector("#edit-hint").textContent = profile
-        ? `${profile.name} · ${profile.opening_time ?? profile.travel_time} / ${profile.closing_time ?? profile.travel_time} s`
+        ? `${profile.name} · ${duration(profile.opening_time ?? profile.travel_time, this._context.hass.language)} / ${duration(profile.closing_time ?? profile.travel_time, this._context.hass.language)} s`
         : t("profileDefault");
       form.querySelector("#profile-delete-confirmation").hidden = true;
       form.querySelector("#profile-delete").hidden = !data.writable || !profile || profile.uses !== 0;
@@ -657,7 +659,7 @@ export class CoverProfileEditor {
         const input = form.elements[`override_${direction}`];
         const own = form.elements[`use_${direction}`].checked;
         if (own && (!input.value || !input.reportValidity())) return;
-        message.overrides[direction] = own ? Number(input.value) : null;
+        message.overrides[direction] = own ? Number(input.value === input.dataset.shown && input.dataset.exact !== "" ? input.dataset.exact : input.value) : null;
       }
     }
     this._saving = generation;
