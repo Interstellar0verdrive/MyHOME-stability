@@ -1541,3 +1541,20 @@ test("a paused cycle has its texts in English and Italian, with the step and the
   }
   assert.equal(calibrationScene({ phase: "paused" }).icon, "mdi:pause-circle-outline");
 });
+
+test("the tape reading of a check travels as the same reading, with a comma or a point", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry" });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  const check = { direction: "opening", target_cm: 100, check_seconds: 13.6, expected_cm: 100.2, measured_cm: null,
+    deviation_cm: null, passed: null };
+  push({ phase: "reading", step: "check", reading_kind: "check", can_repeat: true, save_modes: ["new"], check, check_threshold_cm: 4 });
+  assert.equal(form.hidden, false);
+  for (const [value, expected] of [["99,5", 99.5], ["99.5", 99.5], ["104", 104]]) {
+    input.value = value;
+    form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+    const { sequence, ...message } = calls.at(-1);
+    assert.equal(typeof sequence, "number");
+    assert.deepEqual(message, { type: "myhome/cover_calibration/action", entry_id: "one", session_id: "session-one",
+      action: "reading", reading_cm: expected }, value);
+  }
+});
