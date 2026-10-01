@@ -807,19 +807,24 @@ test("positioning runs show what to confirm and no elapsed time; measured runs k
   const phase = host.querySelector("#cal-phase"), elapsed = host.querySelector("#cal-elapsed");
   push({ phase: "briefing", step: "home", save_modes: ["new"], can_repeat: false });
   for (const [state, text] of [[{ phase: "closing", step: "home" }, "calPositionClose"], [{ phase: "closing", step: "reset" }, "calPositionClose"],
-    [{ phase: "opening", step: "top" }, "calPositionOpen"], [{ phase: "closing", step: "home", slats: false }, "calPositionClose_no_slats"]]) {
+    [{ phase: "opening", step: "top" }, "calPositionOpen"], [{ phase: "closing", step: "home", slats: false }, "calPositionClose_no_slats"],
+    [{ phase: "opening", step: "half_open" }, "calHalfPositioning"], [{ phase: "closing", step: "half_close" }, "calHalfPositioning"],
+    [{ phase: "opening", step: "half_open", slats: false }, "calHalfPositioning"],
+    [{ phase: "geometry_wait_stop", step: "half_open" }, "calGeometryWaitStop"], [{ phase: "geometry_wait_stop", step: "half_close" }, "calGeometryWaitStop"]]) {
     push({ ...state, elapsed: 3.5 });
     assert.equal(elapsed.hidden, true, `${state.step} measures nothing`);
     assert.equal(phase.textContent, t(text));
   }
   for (const [state, text] of [[{ phase: "opening", step: "opening" }, "calEndpointRunning"], [{ phase: "closing", step: "closing" }, "calEndpointRunning"],
-    [{ phase: "opening", step: "lift" }, "calLiftRunning"], [{ phase: "opening", step: "half_open" }, "calHalfRunning"], [{ phase: "closing", step: "half_close" }, "calHalfRunning"]]) {
+    [{ phase: "opening", step: "lift" }, "calLiftRunning"], [{ phase: "geometry_wait_stop", step: "lift" }, "calGeometryWaitStop"]]) {
     push({ ...state, slats: true, elapsed: 3.5 });
     assert.equal(elapsed.hidden, false, `${state.step} is measured`);
     assert.match(elapsed.textContent, /3\.5 s/);
     assert.equal(phase.textContent, t(text));
   }
   assert.doesNotMatch(translations.en.calPositionClose_no_slats + translations.it.calPositionClose_no_slats, /slat|lamell/i);
+  assert.equal(translations.it.calHalfPositioning, "La tapparella si sta posizionando e si ferma da sola: non c’è nulla da premere. Attendi che si sia fermata prima di avvicinarti con il metro.");
+  assert.doesNotMatch(translations.en.calHalfPositioning + translations.it.calHalfPositioning, /slat|lamell/i);
   const guided = await mount();
   guided.push({ phase: "closing", elapsed: 3.5 });
   assert.equal(guided.host.querySelector("#cal-elapsed").hidden, false, "other modes are unchanged");

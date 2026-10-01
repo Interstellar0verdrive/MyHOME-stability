@@ -455,7 +455,9 @@ export class CoverCalibration {
     const noSlats = state.slats === false;
     // Runs that only bring the cover to an end stop measure nothing: no elapsed time, only what to confirm.
     const positioning = ["opening", "closing"].includes(state.phase) && ["home", "reset", "top"].includes(state.step);
-    host.querySelector("#cal-elapsed").hidden = positioning;
+    // Intermediate runs are stopped by Home Assistant at a computed time: nothing to time or press, so no elapsed time either.
+    const placing = ["opening", "closing", "geometry_wait_stop"].includes(state.phase) && state.step.startsWith("half_");
+    host.querySelector("#cal-elapsed").hidden = positioning || placing;
     const notice = host.querySelector("#cal-lift-repeat");
     // Assigned only when it changes, so heartbeats do not repeat the announcement.
     const lift = state.still_resting ? fill(t("calLiftRepeated"), state) : state.gap_warning ? fill(t("calGapWarning"), state) : "";
@@ -465,7 +467,7 @@ export class CoverCalibration {
       const key = state.phase === "briefing" ? `calBrief_${state.step}${noSlats && ["home", "closing"].includes(state.step) ? "_no_slats" : ""}`
         : state.phase === "geometry_wait_stop" ? "calGeometryWaitStop"
           : state.phase === "reading" ? `calReading_${state.reading_kind}${state.reading_kind === "lift" && state.lift_repeat === false ? "_refused" : ""}`
-            : state.step === "lift" ? "calLiftRunning" : state.step.startsWith("half_") ? "calHalfRunning"
+            : state.step === "lift" ? "calLiftRunning" : state.step.startsWith("half_") ? "calHalfPositioning"
               : !positioning ? "calEndpointRunning" : state.step === "top" ? "calPositionOpen" : `calPositionClose${noSlats ? "_no_slats" : ""}`;
       host.querySelector("#cal-phase").textContent = fill(t(key), state);
     }
