@@ -135,8 +135,9 @@ those writes with `calibration_busy` while a session of the same gateway is acti
 or its Stop is pending. While the profile read reports a calibration session whose
 `phase` is not terminal (`interrupted`, `cancelled`, `saved`), or one that is
 `waiting_for_stop`, the cover's travel, its personal values and their Save buttons
-are disabled with a line explaining why. An interrupted session that is still
-listed, so that it can be opened, does not lock them.
+are disabled with a line explaining why. A `paused` session (0.40.0) is still
+active and locks them too; an interrupted session that is still listed, so that it
+can be opened, does not.
 
 Known limitations of the lock:
 
