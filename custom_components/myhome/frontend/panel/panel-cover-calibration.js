@@ -16,7 +16,10 @@ const CLIENT_FORMAT = /^\d+-\d+-\d+-\d+$/;
 const fresh = () => globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
 const nonce = globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
 const held = new Set();
+// Identities kept only because nobody answered in time, with the storage they live in.
+const kept = new Map();
 const checks = new Map();
+const views = new Set();
 let memoryClient = null;
 let channel = null;
 let checking = null;
@@ -42,7 +45,10 @@ export function checkedCalibrationClient() {
   const storage = globalThis.sessionStorage, stored = storage.getItem(CLIENT_KEY);
   if (!checks.has(stored)) {
     // Nobody answers after a reload of this same tab: the identity, and ownership, carry on.
-    checks.set(stored, inUse(stored).then((used) => hold(storage, used ? null : stored)));
+    checks.set(stored, inUse(stored).then((used) => {
+      if (!used) kept.set(stored, storage);
+      return hold(storage, used ? null : stored);
+    }));
   }
   return checks.get(stored);
 }
@@ -70,14 +76,26 @@ function listen() {
   channel.unref?.();
   channel.onmessage = ({ data }) => {
     const rival = data?.type === "query" && checking?.id === data.id;
+    const answer = data?.type === "answer" && data.to === nonce;
     if (data?.type === "query" && (held.has(data.id) || (rival && nonce < data.nonce))) {
       channel.postMessage({ type: "answer", id: data.id, to: data.nonce });
-    } else if (rival || (data?.type === "answer" && data.to === nonce && checking?.id === data.id)) {
+    } else if (rival || (answer && checking?.id === data.id)) {
       // Our own query may have gone out before the other copy listened: yielding needs no answer.
       checking.done(true);
+    } else if (answer && kept.has(data.id)) {
+      yieldLate(data.id);
     }
   };
   return channel;
+}
+
+/** The tab holding the identity answered after the wait: this tab is the copy, and reads from now on. */
+function yieldLate(id) {
+  const storage = kept.get(id);
+  kept.delete(id);
+  held.delete(id);
+  hold(storage, null);
+  for (const view of views) view._reidentify();
 }
 
 function inUse(id) {
@@ -96,6 +114,7 @@ function inUse(id) {
 export class CoverCalibration {
   constructor() {
     this._generation = 0;
+    views.add(this);
     // Settled as soon as the panel loads, so that a copy of this tab finds it already held.
     checkedCalibrationClient().catch(() => {});
   }
@@ -266,6 +285,13 @@ export class CoverCalibration {
         host.querySelector("#cal-cancel").disabled = false;
       }
     }
+  }
+
+  /** Read the open session again under this tab's new identity: read-only, nothing sent to the bus. */
+  _reidentify() {
+    const state = this._state;
+    if (!state?.recoverable || ["saved", "cancelled"].includes(state.phase) || !this._context.host.isConnected) return;
+    this.open({ ...this._context, claim: false, resume: state });
   }
 
   _current(generation) { return generation === this._generation && this._context.host.isConnected; }

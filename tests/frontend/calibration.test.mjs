@@ -844,10 +844,15 @@ test("one client_id per browser tab survives reopening and a storage failure", a
 /** Same-origin tabs: what one posts reaches every other open channel of the same name, never itself. */
 class TabChannel {
   static open = new Set();
+  // A busy or throttled tab: what it posts arrives this many milliseconds later.
+  static delay = new Map();
   constructor(name) { this.name = name; TabChannel.open.add(this); }
   postMessage(data) {
+    const delay = TabChannel.delay.get(this);
     for (const other of TabChannel.open) {
-      if (other !== this && other.name === this.name) setImmediate(() => other.onmessage?.({ data: structuredClone(data) }));
+      if (other === this || other.name !== this.name) continue;
+      const deliver = () => other.onmessage?.({ data: structuredClone(data) });
+      if (delay) setTimeout(deliver, delay); else setImmediate(deliver);
     }
   }
   close() { TabChannel.open.delete(this); }
@@ -876,6 +881,7 @@ async function withTabs(run) {
     await run();
   } finally {
     for (const channel of TabChannel.open) channel.close();
+    TabChannel.delay.clear();
     if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
     else delete globalThis.BroadcastChannel;
   }
@@ -907,6 +913,37 @@ test("a duplicated tab takes a new identity and opens the session read-only; the
       assert.notEqual(starts[0].client_id, id);
       assert.equal("claim" in starts[0], false);
     });
+  });
+});
+
+test("a copy whose original answers too late gives the identity up and reads the open session", async () => {
+  await withTabs(async () => {
+    const original = await browserTab("slow-original"), first = tabStorage();
+    const before = new Set(TabChannel.open);
+    const id = await withStorage(first, () => original.calibrationClient());
+    // The original tab is busy: its answer arrives after the copy has stopped waiting.
+    TabChannel.delay.set([...TabChannel.open].find((channel) => !before.has(channel)), original.CLIENT_CHECK_MS + 100);
+    const copy = await browserTab("late-copy"), copied = tabStorage(id);
+    await withStorage(copied, async () => {
+      const { starts, calls, counts, push } = await mount({ Calibration: copy.CoverCalibration });
+      assert.equal(starts[0].client_id, id, "nobody answered in time");
+      // Home Assistant takes the copy for the owner, since it sent the owner's identity.
+      push({ recoverable: true, attached: true, attachment: "owner", owner: true, read_only: false });
+      assert.equal(starts[0].type, "myhome/cover_calibration/start");
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const own = copy.calibrationClient();
+      assert.match(own, /^\d+-\d+-\d+-\d+$/);
+      assert.notEqual(own, id);
+      assert.equal(copied.values.get("myhome-calibration-client"), own);
+      assert.equal(starts.length, 2);
+      assert.equal(starts[1].type, "myhome/cover_calibration/resume");
+      assert.equal(starts[1].session_id, "session-one");
+      assert.equal(starts[1].client_id, own);
+      assert.equal("claim" in starts[1], false, "the copy only reads");
+      assert.equal(counts().stopped, 1, "the old subscription is replaced");
+      assert.equal(calls.length, 0, "nothing is sent: no detach, no cancel, no movement");
+    });
+    assert.equal(await withStorage(first, () => original.calibrationClient()), id);
   });
 });
 
