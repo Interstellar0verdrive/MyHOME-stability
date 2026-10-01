@@ -130,11 +130,25 @@ panel says that the cover is positioning itself (the runs are still measured).
 phase to a tenth and the roll ratios to two decimals, with the user's decimal
 separator; the calibration view's rounded values follow the language too. Stored
 values keep full precision: a personal value field shows the rounded value and Save
-sends back the saved value unless the field was edited. While the profile read
-reports a calibration session that is `recoverable`, or `waiting_for_stop`, the
-cover's travel, its personal values and their Save buttons are disabled with a line
-explaining why: `write_profile` refuses those writes with `calibration_busy` until
-the session ends and the gateway is released.
+sends back the saved value unless the field was edited. `write_profile` refuses
+those writes with `calibration_busy` while a session of the same gateway is active
+or its Stop is pending. While the profile read reports a calibration session whose
+`phase` is not terminal (`interrupted`, `cancelled`, `saved`), or one that is
+`waiting_for_stop`, the cover's travel, its personal values and their Save buttons
+are disabled with a line explaining why. An interrupted session that is still
+listed, so that it can be opened, does not lock them.
+
+Known limitations of the lock:
+
+- Sessions started without a `client_id` are not reported by the profile read, and a
+  native calibration (`native_calibration_busy`) is not reported either: the fields
+  stay enabled and Home Assistant still refuses the write with `calibration_busy`.
+- An interrupted session whose Stop is still pending before the session closes is
+  not reported as `waiting_for_stop`; the fields unlock and a write in those seconds
+  is refused the same way.
+- The end of a session changes no revision and is not pushed to the dialog: the
+  fields unlock at the next read, that is "Refresh session status", returning to
+  the browser tab (or the fallback polling), or a new revision.
 
 ## Multi-cover profile assignment (0.27.0)
 
