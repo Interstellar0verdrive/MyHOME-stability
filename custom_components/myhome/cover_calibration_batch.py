@@ -91,6 +91,8 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
         following = self.covers[self.cover_index + 1]
         if self.unattended({"step": "next_cover", "cover_index": self.cover_index + 1,
                             "entity_id": following.entity_id}, self.check_cover, self.start_cover):
+            # Only the cover that moves next can end the pause; those already measured are let go.
+            self.watch(following)
             return
         try:
             self.check_cover()

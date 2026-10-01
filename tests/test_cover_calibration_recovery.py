@@ -218,7 +218,7 @@ async def test_without_its_owner_a_batch_never_moves_to_the_next_cover(hass, bat
     fire(session.settle)
     assert session.phase == "paused" and session.reason == "owner_absent"
     assert len(session.results) == 1 and session.cover_index == 0 and len(batch.queue) == count
-    assert batch.plant.covers[1]._calibration is None and session.settle is None
+    assert session.settle is None
 
 
 async def test_idle_lease_ends_session_without_stop_when_nothing_moves(recovering):

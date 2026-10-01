@@ -259,13 +259,28 @@ async def test_a_batch_paused_between_covers_keeps_its_results_and_goes_on_with_
     second = batch.plant.covers[1]
     assert session.view()["next_step"] == {"step": "next_cover", "cover_index": 1, "entity_id": second.entity_id}
     assert session.view()["results"][0]["values"] == {"closing_time": 22.0, "opening_time": PRESENCE_SECONDS}
-    assert second._calibration is None
+    # The pause watches the cover that moves next; the one already measured is let go.
+    first = batch.plant.covers[0]
+    assert first._calibration is None and second._calibration is session and session.cover is second
     back = reader(batch, "batch-controller", 88)
     count = len(batch.queue)
     result = await call(hass, batch, back.connection, back.token, "continue")
     assert result["phase"] == "starting_open" and result["cover_index"] == 1
     assert len(result["results"]) == 1 and len(batch.queue) == count + 1
     assert str(batch.queue[-1][0]) == "*2*1*12##" and second._calibration is session
+
+
+async def test_in_a_batch_pause_only_the_next_cover_can_end_it(hass, batch):
+    """A wall switch on a cover already measured changes nothing; on the next cover it interrupts."""
+    session = await paused_batch(hass, batch)
+    first, second = batch.plant.covers[0], batch.plant.covers[1]
+    count = len(batch.queue)
+    first.handle_event(OWNMessage.parse(f"*2*2*{first._full_where}##"))
+    first.handle_event(OWNMessage.parse(f"*2*0*{first._full_where}##"))
+    assert session.phase == "paused" and len(session.results) == 1 and len(batch.queue) == count
+    second.handle_event(OWNMessage.parse(f"*2*1*{second._full_where}##"))
+    assert (session.phase, session.reason) == ("interrupted", "unexpected_movement")
+    assert session.results == [] and str(batch.queue[-1][0]) == f"*2*0*{second._full_where}##"
 
 
 async def test_a_batch_continue_refused_while_the_next_cover_moves_keeps_the_group(hass, batch):
@@ -279,6 +294,13 @@ async def test_a_batch_continue_refused_while_the_next_cover_moves_keeps_the_gro
     assert len(batch.queue) == count and session.sequence == sequence
     second._move_start_time = None
     assert (await call(hass, batch, back.connection, back.token, "continue"))["cover_index"] == 1
+
+
+async def test_releasing_a_batch_paused_between_covers_unbinds_the_next_cover(hass, batch):
+    session = await paused_batch(hass, batch)
+    fire(session.lease)
+    assert session.closed and session.reason == "expired"
+    assert all(cover._calibration is None for cover in batch.plant.covers)
 
 
 async def test_a_batch_paused_between_runs_keeps_the_covers_already_measured(hass, batch):
