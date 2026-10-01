@@ -89,10 +89,10 @@ test("automatic and interrupted phases never invite endpoint recording or measur
   assert.equal(calls.length, 0);
 });
 
-async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats } = {}) {
+async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats, Calibration = CoverCalibration } = {}) {
   const host = document.createElement("section");
   document.body.append(host);
-  const controller = new CoverCalibration();
+  const controller = new Calibration();
   instances.push(controller);
   const calls = [], starts = [];
   let callback, stopped = 0, saved = 0, cancelled = 0;
@@ -840,6 +840,112 @@ test("one client_id per browser tab survives reopening and a storage failure", a
     assert.equal(calibrationClient(), id);
   });
 });
+
+/** Same-origin tabs: what one posts reaches every other open channel of the same name, never itself. */
+class TabChannel {
+  static open = new Set();
+  constructor(name) { this.name = name; TabChannel.open.add(this); }
+  postMessage(data) {
+    for (const other of TabChannel.open) {
+      if (other !== this && other.name === this.name) setImmediate(() => other.onmessage?.({ data: structuredClone(data) }));
+    }
+  }
+  close() { TabChannel.open.delete(this); }
+}
+
+const tabStorage = (id) => {
+  const values = new Map(id ? [["myhome-calibration-client", id]] : []);
+  return { values, getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+};
+
+/** A browser tab is a fresh copy of the module with its own sessionStorage; `nonce` fixes its tie-break. */
+async function browserTab(name, nonce) {
+  const random = globalThis.crypto.getRandomValues;
+  if (nonce != null) globalThis.crypto.getRandomValues = (array) => array.length === 1 ? array.fill(nonce) : random.call(globalThis.crypto, array);
+  try {
+    return await import(`../../custom_components/myhome/frontend/panel/panel-cover-calibration.js?tab=${name}`);
+  } finally {
+    globalThis.crypto.getRandomValues = random;
+  }
+}
+
+async function withTabs(run) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  Object.defineProperty(globalThis, "BroadcastChannel", { configurable: true, writable: true, value: TabChannel });
+  try {
+    await run();
+  } finally {
+    for (const channel of TabChannel.open) channel.close();
+    if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
+    else delete globalThis.BroadcastChannel;
+  }
+}
+
+test("a duplicated tab takes a new identity and opens the session read-only; the original keeps it", async () => {
+  await withTabs(async () => {
+    const original = await browserTab("original"), first = tabStorage();
+    const id = await withStorage(first, () => original.calibrationClient());
+    assert.match(id, /^\d+-\d+-\d+-\d+$/);
+    // "Duplicate tab" copies sessionStorage, so the copy starts with the same identity.
+    const copy = await browserTab("copy"), copied = tabStorage(id);
+    await withStorage(copied, async () => {
+      assert.equal(copy.calibrationClient(), null, "a copied identity is not used before the check");
+      const own = await copy.checkedCalibrationClient();
+      assert.match(own, /^\d+-\d+-\d+-\d+$/);
+      assert.notEqual(own, id);
+      assert.equal(copied.values.get("myhome-calibration-client"), own, "a reload of the copy keeps its new identity");
+      assert.equal(copy.calibrationClient(), own);
+    });
+    assert.equal(await withStorage(first, () => original.calibrationClient()), id);
+    // The view of a copy waits for the check: its resume carries the new identity, so it only reads.
+    const viewer = await browserTab("viewer");
+    await withStorage(tabStorage(id), async () => {
+      const { starts } = await mount({ Calibration: viewer.CoverCalibration, resume: { session_id: "session-one", mode: "guided" } });
+      assert.equal(starts.length, 1);
+      assert.equal(starts[0].type, "myhome/cover_calibration/resume");
+      assert.match(starts[0].client_id, /^\d+-\d+-\d+-\d+$/);
+      assert.notEqual(starts[0].client_id, id);
+      assert.equal("claim" in starts[0], false);
+    });
+  });
+});
+
+test("a reloaded tab keeps its identity when no other tab holds it, and answers for it once its panel loads", async () => {
+  await withTabs(async () => {
+    const reloaded = await browserTab("reloaded"), storage = tabStorage("11-22-33-44");
+    const started = Date.now();
+    // Building the panel is enough: no calibration view has been opened in this tab yet.
+    await withStorage(storage, () => { new reloaded.CoverCalibration(); });
+    assert.equal(await withStorage(storage, () => reloaded.calibrationClient()), null);
+    await new Promise((resolve) => setTimeout(resolve, reloaded.CLIENT_CHECK_MS + 50));
+    assert.ok(Date.now() - started >= reloaded.CLIENT_CHECK_MS, "the tab waited for an answer");
+    assert.equal(await withStorage(storage, () => reloaded.calibrationClient()), "11-22-33-44");
+    assert.equal(storage.values.get("myhome-calibration-client"), "11-22-33-44");
+    const copy = await browserTab("reloaded-copy");
+    assert.notEqual(await withStorage(tabStorage("11-22-33-44"), () => copy.checkedCalibrationClient()), "11-22-33-44");
+  });
+});
+
+for (const [first, second, keeper, listening] of [[1, 2, "first", false], [2, 1, "second", false], [1, 2, "first", true], [2, 1, "second", true]]) {
+  test(`two copies checking one identity at once: exactly one keeps it (nonces ${first}, ${second}${listening ? ", both listening" : ""})`, async () => {
+    await withTabs(async () => {
+      // Browser session restore can bring back two copies of one tab together.
+      const name = `restored-${first}-${second}-${listening}`;
+      const one = await browserTab(`${name}-a`, first), two = await browserTab(`${name}-b`, second);
+      const ids = await withStorage(tabStorage("5-6-7-8"), async () => {
+        if (listening) assert.deepEqual([one.calibrationClient(), two.calibrationClient()], [null, null]);
+        const checks = [one.checkedCalibrationClient()];
+        // Unless both already listen, the second copy starts only now: the first query reached nobody.
+        checks.push(two.checkedCalibrationClient());
+        return Promise.all(checks);
+      });
+      const kept = keeper === "first" ? 0 : 1;
+      assert.equal(ids[kept], "5-6-7-8");
+      assert.notEqual(ids[1 - kept], "5-6-7-8");
+      assert.match(ids[1 - kept], /^\d+-\d+-\d+-\d+$/);
+    });
+  });
+}
 
 test("a read-only tab keeps Stop, cannot move or save, and takes control only on request", async () => {
   const { host, push, calls, starts, controller, counts } = await mount();

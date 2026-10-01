@@ -9,26 +9,96 @@ const { visualMarkup, renderCalibrationVisual } = await import(visualUrl.href);
 // Presence on the backend lapses after three missed heartbeats (45 s).
 const HEARTBEAT_MS = 15000;
 const CLIENT_KEY = "myhome-calibration-client";
+// "Duplicate tab" copies sessionStorage. Before using an identity it did not create, a tab asks
+// the others whether one of them holds it; an answer within this time means it is a copy.
+export const CLIENT_CHECK_MS = 300;
+const CLIENT_FORMAT = /^\d+-\d+-\d+-\d+$/;
+const fresh = () => globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
+const nonce = globalThis.crypto.getRandomValues(new Uint32Array(1))[0];
+const held = new Set();
+const checks = new Map();
 let memoryClient = null;
+let channel = null;
+let checking = null;
 
-/** One identity per browser tab, kept across reopenings so the backend recognises its owner. */
+/** One identity per browser tab, kept across reloads; null while a copied one is still being checked. */
 export function calibrationClient() {
-  const fresh = () => globalThis.crypto.getRandomValues(new Uint32Array(4)).join("-");
+  let storage, stored;
   try {
-    const storage = globalThis.sessionStorage;
-    const stored = storage.getItem(CLIENT_KEY);
-    if (/^\d+-\d+-\d+-\d+$/.test(stored || "")) return stored;
-    const created = fresh();
-    storage.setItem(CLIENT_KEY, created);
-    return created;
+    storage = globalThis.sessionStorage;
+    stored = storage.getItem(CLIENT_KEY);
   } catch {
     memoryClient ||= fresh();
     return memoryClient;
   }
+  if (!CLIENT_FORMAT.test(stored || "")) return hold(storage, null);
+  return held.has(stored) || !listen() ? stored : null;
+}
+
+/** The identity once checked: a duplicated tab never shares one with the tab it was copied from. */
+export function checkedCalibrationClient() {
+  const known = calibrationClient();
+  if (known) return Promise.resolve(known);
+  const storage = globalThis.sessionStorage, stored = storage.getItem(CLIENT_KEY);
+  if (!checks.has(stored)) {
+    // Nobody answers after a reload of this same tab: the identity, and ownership, carry on.
+    checks.set(stored, inUse(stored).then((used) => hold(storage, used ? null : stored)));
+  }
+  return checks.get(stored);
+}
+
+function hold(storage, id) {
+  if (!id) {
+    id = fresh();
+    try {
+      storage.setItem(CLIENT_KEY, id);
+    } catch {
+      memoryClient ||= id;
+      id = memoryClient;
+    }
+  }
+  held.add(id);
+  listen();
+  return id;
+}
+
+/** Answer for the identities this tab holds. Two copies checking at once: the lower nonce keeps it. */
+function listen() {
+  if (channel || typeof globalThis.BroadcastChannel !== "function") return channel;
+  channel = new globalThis.BroadcastChannel(CLIENT_KEY);
+  // Node keeps its process alive while a channel is open; browsers have no such method.
+  channel.unref?.();
+  channel.onmessage = ({ data }) => {
+    const rival = data?.type === "query" && checking?.id === data.id;
+    if (data?.type === "query" && (held.has(data.id) || (rival && nonce < data.nonce))) {
+      channel.postMessage({ type: "answer", id: data.id, to: data.nonce });
+    } else if (rival || (data?.type === "answer" && data.to === nonce && checking?.id === data.id)) {
+      // Our own query may have gone out before the other copy listened: yielding needs no answer.
+      checking.done(true);
+    }
+  };
+  return channel;
+}
+
+function inUse(id) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => done(false), CLIENT_CHECK_MS);
+    const done = (used) => {
+      clearTimeout(timer);
+      checking = null;
+      resolve(used);
+    };
+    checking = { id, done };
+    channel.postMessage({ type: "query", id, nonce });
+  });
 }
 
 export class CoverCalibration {
-  constructor() { this._generation = 0; }
+  constructor() {
+    this._generation = 0;
+    // Settled as soon as the panel loads, so that a copy of this tab finds it already held.
+    checkedCalibrationClient().catch(() => {});
+  }
 
   close({ cancel = false, leave = true } = {}) {
     this._generation++;
@@ -67,7 +137,6 @@ export class CoverCalibration {
     this._renderedPreview = null;
     const generation = this._generation;
     const { host, hass, entity, revision, t } = context;
-    const client_id = calibrationClient();
     const automatic = context.mode === "automatic";
     const quick = context.direction;
     const geometry = context.mode === "geometry";
@@ -154,6 +223,12 @@ export class CoverCalibration {
         ...(save_mode === "new" ? { name: form.elements.profile_name.value.trim() } : {}),
         ...(save_mode === "shared" ? { confirmation: this._savePreview.confirmation } : {}) });
     };
+    // Known at once except in a tab that still checks whether it is a copy of another one.
+    let client_id = calibrationClient();
+    if (!client_id) {
+      client_id = await checkedCalibrationClient();
+      if (!this._current(generation)) return;
+    }
     const message = context.resume
       ? { type: "myhome/cover_calibration/resume", entry_id: entity.entry_id, session_id: context.resume.session_id, client_id,
         ...(context.claim ? { claim: true, sequence: context.resume.sequence } : {}) }
