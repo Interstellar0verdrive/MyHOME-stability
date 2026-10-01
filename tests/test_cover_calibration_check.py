@@ -23,7 +23,7 @@ from custom_components.myhome.cover_calibration_check import (
 from custom_components.myhome.cover_calibration_fit import winding
 from custom_components.myhome.cover_geometry import profile_motion
 from custom_components.myhome.cover_motion import CoverMotionModel
-from custom_components.myhome.cover_profiles import ProfileError
+from custom_components.myhome.cover_profiles import ProfileError, read_profile
 from tests.test_cover_calibration_geometry import endpoint, review, start, stopped
 from tests.test_cover_calibration_geometry import geometry as geometry_fixture
 from tests.test_cover_calibration_recovery import call, reader
@@ -304,22 +304,155 @@ async def test_stop_in_review_keeps_the_verdict(geometry):
     assert cal.session.phase == "review" and cal.session.view()["check"] == verdict
 
 
-@pytest.mark.parametrize("moment", ["briefing", "homing", "running", "reading"])
-async def test_stop_during_a_check_interrupts_like_any_run_and_clears_it(geometry, moment):
+async def verdict(cal, reading_offset=0.0):
+    """A first, complete check from review; returns its view."""
+    await review(cal)
+    await checked(cal)
+    await act(cal, "reading", reading_cm=cal.session.check.expected_cm + reading_offset)
+    return cal.session.view()["check"]
+
+
+def position_unknown(cal):
+    cover = cal.cover
+    return cover._motion.position is None and cover._attr_current_cover_position is None and cover.current_cover_position is None
+
+
+async def test_forgetting_the_position_follows_the_restart_convention(geometry):
+    cover = geometry.cover
+    cover._motion.configure(MODEL)
+    geometry.session.confirm_position(40)
+    assert cover.current_cover_position == 40 and cover._attr_current_cover_position == 40
+    cover._attr_is_opening = True
+    geometry.session._forget_position()
+    assert position_unknown(geometry) and cover._motion.model == MODEL
+    assert (cover._attr_is_opening, cover._attr_is_closing, cover._attr_is_closed) == (False, False, False)
+
+
+@pytest.mark.parametrize("moment", ["homing_briefing", "check_briefing", "reading"])
+async def test_stop_where_nothing_moves_returns_to_review_keeping_everything(hass, geometry, moment):
+    cal = geometry
+    before = await verdict(cal, 2)
+    geometry_before = dict(cal.session.geometry)
+    await act(cal, "check")
+    if moment != "homing_briefing":
+        await endpoint(cal, 9)
+    if moment == "reading":
+        await timed(cal)
+    sent = len(cal.queue)
+    await act(cal, "stop")
+    view = cal.session.view()
+    assert (view["phase"], view["step"], view["reason"], view["check_interrupted"]) == ("review", "half_close", None, "stopped")
+    # The verdict there was before the second check, and the whole measurement, are kept.
+    assert view["check"] == before and cal.session.geometry == geometry_before
+    assert view["values"] == {"opening_time": 22, "closing_time": 20} and view["travel_cm"] == TRAVEL
+    assert commands(cal, sent) == [STOP]  # Stop is written, as in review.
+    assert cal.session.checking is False and cal.session.check_before is None
+    await act(cal, "save", name="Kept")
+    if moment == "homing_briefing":  # Still where the first check left it.
+        assert cal.cover._motion.position.height == pytest.approx(before["measured_cm"] / TRAVEL)
+    elif moment == "check_briefing":  # At the bottom end stop the return confirmed.
+        assert cal.cover._motion.position.height == 0 and cal.cover.current_cover_position == 0
+    else:  # The check run moved it and its reading was never entered.
+        assert position_unknown(cal)
+
+
+async def stop_by_user_while_returning(cal):
+    await start(cal)
+    assert (cal.session.phase, cal.session.step) == ("closing", "home")
+    await act(cal, "stop")
+
+
+async def stop_by_user_before_the_run_starts(cal):
+    await endpoint(cal, 9)
+    await act(cal, "next")
+    move = len(cal.queue) - 1
+    await act(cal, "stop")
+    # The run never reaches the bus: its refused delivery belongs to a check that has ended.
+    assert not cal.queue[move][1]()
+    cal.queue[move][3].cancel()
+    await asyncio.sleep(0)
+
+
+async def stop_by_user_during_the_run(cal):
+    await endpoint(cal, 9)
+    await start(cal)
+    assert (cal.session.phase, cal.session.step) == ("opening", "check")
+    await act(cal, "stop")
+
+
+async def stop_by_the_bus_during_the_run(cal):
+    await endpoint(cal, 9)
+    await start(cal)
+    bus(cal, STOP)
+
+
+async def movement_against_the_timed_stop(cal):
+    await endpoint(cal, 9)
+    await start(cal)
+    callback = cal.session.deadline._callback
+    cal.session.deadline.cancel()
+    callback()  # Timed Stop requested; the actuator then reports the opposite direction.
+    written = cal.queue[-1][3]
+    bus(cal, LOWER)
+    written.set_result(cal.clock[0])  # A late acknowledgement changes nothing any more.
+    await asyncio.sleep(0)
+
+
+async def movement_during_a_briefing(cal):
+    bus(cal, RAISE)  # A wall switch, with the cover waiting in the return briefing.
+
+
+@pytest.mark.parametrize(("cause", "reason"), [
+    (stop_by_user_while_returning, "stopped"), (stop_by_user_before_the_run_starts, "stopped"),
+    (stop_by_user_during_the_run, "stopped"), (stop_by_the_bus_during_the_run, "unexpected_stop"),
+    (movement_against_the_timed_stop, "unexpected_movement"), (movement_during_a_briefing, "unexpected_movement")])
+async def test_a_check_cut_short_while_moving_returns_to_review_without_verdict_or_position(hass, geometry, cause, reason):
+    cal = geometry
+    await verdict(cal)
+    geometry_before = dict(cal.session.geometry)
+    await act(cal, "check")
+    await cause(cal)
+    view = cal.session.view()
+    assert (view["phase"], view["step"], view["reason"], view["check_interrupted"]) == ("review", "half_close", None, reason)
+    assert view["check"] is None and cal.session.geometry == geometry_before
+    # The session no longer knows where the edge is; the cover entity keeps tracking the run as in any run.
+    assert commands(cal)[-1] == STOP and cal.session.edge_position is None
+    bus(cal, STOP)  # The motor stopping afterwards changes nothing.
+    assert cal.session.phase == "review"
+    result = await act(cal, "save", name="Kept")
+    assert result["phase"] == "saved" and result["check_interrupted"] is None
+    profile = (await read_profile(hass, cal.session.entry_id, cal.cover.entity_id))["profiles"][0]
+    assert profile["geometry"] == pytest.approx(geometry_before)
+    # Save does not seed a position from an old reading: the cover is not there any more.
+    assert position_unknown(cal)
+
+
+async def test_after_a_check_cut_short_a_new_check_and_repeats_work_as_before(geometry):
     cal = geometry
     await review(cal)
     await act(cal, "check")
-    if moment != "briefing":
-        await start(cal)
-    if moment in {"running", "reading"}:
-        cal.clock[0] += 4
-        await act(cal, "endpoint")
-        await stopped(cal, elapsed=.4)
-        await start(cal) if moment == "running" else await timed(cal)
-    await act(cal, "stop")
+    await stop_by_user_during_the_run(cal)
+    assert cal.session.view()["check_interrupted"] == "stopped"
+    await checked(cal)
+    assert cal.session.view()["check_interrupted"] is None
+    await act(cal, "reading", reading_cm=cal.session.check.expected_cm)
+    assert cal.session.check.passed
+    await act(cal, "check")
+    await stop_by_user_during_the_run(cal)
+    await act(cal, "repeat")
+    assert cal.session.view()["check_interrupted"] is None and cal.session.step == "top"
+
+
+async def test_an_interruption_of_another_kind_during_a_check_still_ends_the_session(geometry):
+    cal = geometry
+    await review(cal)
+    await act(cal, "check")
+    await endpoint(cal, 9)
+    await start(cal)
+    cal.session.interrupt("cover_unavailable")
     view = cal.session.view()
-    assert view["phase"] == "interrupted" and view["check"] is None and cal.session.check is None
-    assert view["geometry"] == {} and view["values"] == {}
+    assert (view["phase"], view["reason"], view["check"], view["check_interrupted"]) == ("interrupted", "cover_unavailable", None, None)
+    assert view["geometry"] == {} and cal.session.checking is False
 
 
 async def test_a_new_check_drops_the_old_verdict_and_an_interruption_before_its_run_leaves_none(geometry):
@@ -336,19 +469,6 @@ async def test_a_new_check_drops_the_old_verdict_and_an_interruption_before_its_
     cal.queue[-1][3].cancel()  # The return to the bottom never reached the bus.
     await asyncio.sleep(0)
     assert cal.session.reason == "not_delivered" and cal.session.view()["check"] is None
-
-
-async def test_a_check_movement_the_bus_contradicts_interrupts(geometry):
-    cal = geometry
-    await review(cal)
-    await act(cal, "check")
-    await endpoint(cal, 9)
-    await start(cal)
-    callback = cal.session.deadline._callback
-    cal.session.deadline.cancel()
-    callback()  # Timed Stop requested; the actuator then reports the opposite direction.
-    bus(cal, LOWER)
-    assert cal.session.reason == "unexpected_movement" and cal.session.view()["check"] is None
 
 
 async def test_a_check_is_offered_only_in_review_to_its_owner_with_the_current_sequence(hass, geometry):
