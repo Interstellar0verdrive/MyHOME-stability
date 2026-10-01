@@ -171,11 +171,20 @@ See [behavior and scope](sidepanel.md#shared-profile-view-0250).
 64 characters). Omitting it preserves the legacy contract unchanged: one
 controller bound to its websocket, a 20 s heartbeat lease, and cancellation
 (with Stop) when the subscription ends. Everything below applies only to
-clients that send `client_id`.
+clients that send `client_id`, except Stop during `review` (see **Actions**).
 
 **Identity.** Since panel 0.39.0 the `client_id` is kept per browser tab in
-`sessionStorage`, so the same tab is recognised after a reconnection or when the
-view is reopened. The client that starts a session owns it.
+`sessionStorage`, so the same tab is recognised after a reconnection, a reload
+or when the view is reopened. The client that starts a session owns it. A
+browser's "Duplicate tab" copies `sessionStorage`, so before using an identity
+it did not create the panel asks the other tabs, over a `BroadcastChannel`,
+whether one of them holds it. An answer within 300 ms means the tab is a copy:
+it takes a new `client_id`, so it opens sessions read-only until it takes
+control. No answer means a reload of the same tab: it keeps the identity and
+recovers its sessions as their owner. The check runs when the panel loads, so a
+tab answers for its identity before any calibration view is opened; two copies
+checking at once settle on exactly one keeper. Without `BroadcastChannel` the
+identity is kept as before. A tab that the browser has frozen cannot answer.
 
 **Readers.** Any number of subscriptions can read one session: the owner's, a
 replayed one after a reconnection, and other tabs. Each subscription receives
@@ -253,7 +262,12 @@ recovered session never restarts a movement by itself.
 
 **Actions.** Every `action` must carry the `attachment` of a subscription on the
 same websocket. `stop` is accepted from every reader, read-only included: it is
-a safety control, and its effect is unchanged. Every other action except
+a safety control. During a movement, and in every phase but `review`, its effect
+is unchanged: the session is interrupted and its values are discarded. In
+`review`, once the bus has reported the motor stopped, Stop is still written but
+the session stays in `review` with its measurements (batch results included);
+`cancel` remains the way to discard them. This applies to clients without
+`client_id` too. Every other action except
 `heartbeat` and `detach`, `save` included, is refused with `calibration_owned`
 unless it comes from the owner.
 `heartbeat` answers the view and refreshes presence only for the owner. `detach`
@@ -271,6 +285,17 @@ lapse is not a transition. A claim sent with an old `sequence` is answered with
 a read-only view, not an error, so that a replayed claim stays harmless; the
 panel shows that the session changed and asks the user to try again. After a
 `calibration_expired` answer the panel no longer offers to resume the session.
+
+**Panel entry points (0.39.0).** The profile dialog offers "Open session" for
+every session that reports `owner_present`, whether the owner is present or not:
+the subscription is a `resume` without claim, so the owner's tab, after a reload
+for instance, gets its own view back at once, and any other tab gets the
+read-only view with Stop available. In a read-only view, "Take control" claims
+with one tap when the owner is absent; while `owner_present` is true the first
+tap only turns the button into "Confirm take control" and shows what follows
+(the guiding tab becomes read-only; a run under way continues and its endpoint
+is then confirmed from the new owner), and the second tap claims. Nothing is
+sent before that second tap.
 `cover_profiles/read` includes `calibration`: null, or the same view without
 `attachment`, where `attached` equals `owner_present` and `owner` is false.
 This transient view does not increment the persisted profile revision. Storage
