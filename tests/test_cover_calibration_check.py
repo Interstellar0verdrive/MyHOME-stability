@@ -26,12 +26,17 @@ from custom_components.myhome.cover_motion import CoverMotionModel
 from custom_components.myhome.cover_profiles import ProfileError, read_profile
 from tests.test_cover_calibration_geometry import endpoint, review, start, stopped
 from tests.test_cover_calibration_geometry import geometry as geometry_fixture
+from tests.test_cover_calibration_pause import automatic, paused_cycle
 from tests.test_cover_calibration_recovery import call, reader
+from tests.test_cover_calibration_recovery import recovering as recovering_fixture
 from tests.test_cover_profiles import plant as plant_fixture
 from tests.test_panel_cover_calibration import act, bus
+from tests.test_panel_cover_calibration import calibration as calibration_fixture
 
 geometry = geometry_fixture
 plant = plant_fixture
+recovering = recovering_fixture
+calibration = calibration_fixture
 
 # The model the geometry tests measure: 22 s up, 20 s down, 2 s of slats, rolls 2 and 3, 200 cm.
 MODEL = CoverMotionModel(opening_time_s=22, closing_time_s=20, slat_time_s=2, opening_roll=2, closing_roll=3)
@@ -551,3 +556,45 @@ async def test_the_websocket_schema_takes_a_direction_and_a_numeric_target(hass,
         finally:
             await client.close()
     await hass.async_block_till_done()
+
+
+# ---------------------------------------------------------------------------------
+# The check and the pause of an automatic cycle live side by side.
+# ---------------------------------------------------------------------------------
+async def test_continue_is_refused_in_every_phase_of_a_check(hass, geometry):
+    """A geometry session never pauses: `continue` has nothing to continue, before, during or after a check."""
+    cal = geometry
+    owner = next(item for item in cal.session.subscribers.values() if item.client_id == "owner")
+
+    async def refused():
+        sent, sequence, check = len(cal.queue), cal.session.sequence, cal.session.view()["check"]
+        assert await call(hass, cal, cal.connection, owner.token, "continue") == "calibration_step"
+        assert (len(cal.queue), cal.session.sequence, cal.session.view()["check"]) == (sent, sequence, check)
+
+    await review(cal)
+    await refused()
+    await act(cal, "check")
+    await refused()
+    await endpoint(cal, 9)
+    await refused()
+    await timed(cal)
+    await refused()
+    await act(cal, "reading", reading_cm=cal.session.check.expected_cm)
+    await refused()
+    assert cal.session.phase == "review" and cal.session.check.passed
+
+
+@automatic
+async def test_check_is_refused_in_a_paused_cycle_which_then_continues(hass, recovering):
+    cal = recovering
+    session = await paused_cycle(hass, cal)
+    back = reader(cal, "first-controller", 88)  # The owner's tab, reopened.
+    sent, sequence = len(cal.queue), session.sequence
+    for extra in ({}, {"direction": "closing", "target_cm": 100}):
+        assert await call(hass, cal, back.connection, back.token, "check", **extra) == "calibration_step"
+    assert (session.phase, session.reason, session.values) == ("paused", "owner_absent", {"closing_time": 46.0})
+    assert (len(cal.queue), session.sequence) == (sent, sequence)
+    assert "check" not in session.view()
+    result = await call(hass, cal, back.connection, back.token, "continue")
+    assert result["phase"] == "starting_open" and str(cal.queue[-1][0]) == RAISE
+
