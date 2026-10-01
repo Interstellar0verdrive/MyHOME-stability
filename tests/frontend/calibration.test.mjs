@@ -947,6 +947,19 @@ test("a copy whose original answers too late gives the identity up and reads the
   });
 });
 
+test("a channel that cannot be opened leaves the panel as without one", async () => {
+  await withTabs(async () => {
+    globalThis.BroadcastChannel = class { constructor() { throw new Error("SecurityError"); } };
+    const tab = await browserTab("opaque");
+    await withStorage(tabStorage("9-9-9-9"), async () => {
+      const controller = new tab.CoverCalibration();
+      assert.ok(controller);
+      assert.equal(tab.calibrationClient(), "9-9-9-9");
+      assert.equal(await tab.checkedCalibrationClient(), "9-9-9-9");
+    });
+  });
+});
+
 test("a reloaded tab keeps its identity when no other tab holds it, and answers for it once its panel loads", async () => {
   await withTabs(async () => {
     const reloaded = await browserTab("reloaded"), storage = tabStorage("11-22-33-44");

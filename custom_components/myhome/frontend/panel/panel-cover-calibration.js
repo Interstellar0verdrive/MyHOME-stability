@@ -71,7 +71,12 @@ function hold(storage, id) {
 /** Answer for the identities this tab holds. Two copies checking at once: the lower nonce keeps it. */
 function listen() {
   if (channel || typeof globalThis.BroadcastChannel !== "function") return channel;
-  channel = new globalThis.BroadcastChannel(CLIENT_KEY);
+  try {
+    channel = new globalThis.BroadcastChannel(CLIENT_KEY);
+  } catch {
+    // An opaque origin may refuse the channel: behave as a browser without one.
+    return null;
+  }
   // Node keeps its process alive while a channel is open; browsers have no such method.
   channel.unref?.();
   channel.onmessage = ({ data }) => {
