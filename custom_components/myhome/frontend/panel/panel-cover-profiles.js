@@ -1,7 +1,7 @@
 /** Single-cover profile editor. Navigation/connection changes invalidate all UI work. */
 const url = new URL("panel-dom.js", import.meta.url);
 url.search = new URL(import.meta.url).search;
-const { escapeHtml: esc } = await import(url.href);
+const { escapeHtml: esc, decimal } = await import(url.href);
 const geometryUrl = new URL("panel-cover-geometry.js", import.meta.url); geometryUrl.search = url.search;
 const geometry = await import(geometryUrl.href);
 const presentationUrl = new URL("panel-profile-presentation.js", import.meta.url); presentationUrl.search = url.search;
@@ -448,8 +448,8 @@ export class CoverProfileEditor {
               ${["opening", "closing"].map((direction) => {
                 const item = data.configured?.[direction];
                 const own = item?.origin === "override";
-                // Shown to a tenth; the saved value is sent back unchanged unless the field is edited.
-                const exact = item?.value ?? data.default_travel_time, rounded = exact == null ? "" : `${Number(Number(exact).toFixed(1))}`;
+                // Shown to a tenth like the summary (a point: it is a number field); the saved value is sent back unchanged unless edited.
+                const exact = item?.value ?? data.default_travel_time, rounded = exact == null ? "" : decimal(exact, 1, "en");
                 return `<label class="profile-override"><span class="profile-override-toggle"><input type="checkbox" name="use_${direction}" ${own ? "checked" : ""} ${disabled}> ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}</span>
                   <span class="input-suffix"><input name="override_${direction}" aria-label="${esc(t("profilePersonalValues"))}: ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}" type="number" min="1" max="600" step="any" inputmode="decimal" value="${esc(rounded)}" data-exact="${esc(exact ?? "")}" data-shown="${esc(rounded)}" ${data.writable && own ? "" : "disabled"}><span>s</span></span></label>`;
               }).join("")}

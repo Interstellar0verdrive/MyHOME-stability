@@ -1718,3 +1718,20 @@ test("a read-only cover keeps its values locked when no measurement runs", async
   }
   for (const line of form.querySelectorAll("[data-profile-busy]")) assert.equal(line.hidden, true);
 });
+
+test("a personal value field rounds like the summary, a halfway value included", async () => {
+  const writes = [];
+  const { root } = await mountProfiles({
+    read: () => coverProfileData({ effective_opening_time: 14.45, effective_closing_time: 1.45,
+      configured: { opening: { origin: "override", value: 14.45 }, closing: { origin: "override", value: 1.45 } } }),
+    write: (message) => { writes.push(message); return coverProfileData({ revision: 4 }); },
+  });
+  openProfile(root); await tick();
+  const form = root.querySelector("#profile-form");
+  assert.equal(root.querySelector("#profile-effective-opening").textContent, "14,5");
+  assert.equal(form.elements.override_opening.value, "14.5");
+  assert.equal(root.querySelector("#profile-effective-closing").textContent, "1,5");
+  assert.equal(form.elements.override_closing.value, "1.5");
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(writes.at(-1).overrides, { opening: 14.45, closing: 1.45 });
+});
