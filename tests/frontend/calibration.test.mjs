@@ -1011,6 +1011,39 @@ test("a reader is told whether the owner is present and Take control stands out 
   assert.equal(calls.length, 0);
 });
 
+test("Take control asks for confirmation in place while the owner is present, never when it is absent", async () => {
+  const { host, push, calls, starts, controller } = await mount();
+  push({ recoverable: true, attached: true, attachment: "reader", read_only: true, owner: false, owner_present: true, phase: "opening" });
+  const take = host.querySelector("#cal-take-control"), consequence = host.querySelector("#cal-take-consequence");
+  assert.equal(take.textContent, translations.it.calTakeControl);
+  assert.equal(consequence.hidden, true);
+  take.click(); await tick();
+  assert.equal(starts.length, 1, "the first tap sends nothing");
+  assert.equal(calls.length, 0);
+  assert.equal(take.textContent, translations.it.calConfirmTakeControl);
+  assert.equal(consequence.hidden, false);
+  assert.equal(consequence.textContent, translations.it.calTakeControlConsequence);
+  push({});  // A heartbeat view keeps the question open.
+  assert.equal(take.textContent, translations.it.calConfirmTakeControl);
+  const sequence = controller._state.sequence;
+  take.click(); await tick();
+  assert.deepEqual(starts.at(-1), { type: "myhome/cover_calibration/resume", entry_id: "one", session_id: "session-one",
+    client_id: starts[0].client_id, claim: true, sequence });
+  assert.equal(calls.length, 0, "taking control sends no action and no movement");
+  // Reopened read-only, then the owner goes away: one tap is enough again.
+  push({ attachment: "reader-two", read_only: true, owner: false, owner_present: true });
+  assert.equal(host.querySelector("#cal-take-control").textContent, translations.it.calTakeControl, "a new view asks again");
+  host.querySelector("#cal-take-control").click(); await tick();
+  assert.equal(host.querySelector("#cal-take-consequence").hidden, false);
+  push({ owner_present: false });
+  assert.equal(host.querySelector("#cal-take-control").textContent, translations.it.calTakeControl);
+  assert.equal(host.querySelector("#cal-take-consequence").hidden, true);
+  const before = starts.length;
+  host.querySelector("#cal-take-control").click(); await tick();
+  assert.equal(starts.length, before + 1);
+  assert.equal(starts.at(-1).claim, true);
+});
+
 test("sequences are compared within one session only; a new session is always shown", async () => {
   const { push, controller } = await mount();
   push({ recoverable: true, attached: true, attachment: "first", phase: "opening" });

@@ -164,6 +164,7 @@ export class CoverCalibration {
       <button type="button" id="cal-reconnect" hidden>${esc(t("calResume"))}</button>
       <p id="cal-read-only" class="notice" hidden>${esc(t("calReadOnly"))}</p>
       <button type="button" id="cal-take-control" hidden>${esc(t("calTakeControl"))}</button>
+      <p id="cal-take-consequence" class="muted" hidden>${esc(t("calTakeControlConsequence"))}</p>
       <div class="actions cal-actions">
         <button type="button" class="primary" data-cal-action="run" hidden>${esc(t("calAutomaticStart"))}</button>
         <button type="button" class="primary" data-cal-action="open" hidden><ha-icon icon="mdi:arrow-up-bold" aria-hidden="true"></ha-icon><span>${esc(t("calOpen"))}</span></button>
@@ -204,7 +205,15 @@ export class CoverCalibration {
     host.querySelector("#cal-stop").onclick = () => this._perform("stop");
     host.querySelector("#cal-cancel").onclick = () => this._cancel(generation);
     host.querySelector("#cal-reconnect").onclick = () => this.open({ ...context, claim: false, resume: this._state });
-    host.querySelector("#cal-take-control").onclick = () => this.open({ ...context, claim: true, resume: this._state });
+    host.querySelector("#cal-take-control").onclick = () => {
+      // While the owner is present the first tap only asks for confirmation; nothing is sent.
+      if (this._state?.owner_present === true && !this._confirmTake) {
+        this._confirmTake = true;
+        this._render();
+        return;
+      }
+      this.open({ ...context, claim: true, resume: this._state });
+    };
     host.querySelector("#cal-save-mode").onchange = () => {
       this._savePreview = null;
       if (this._state) this._render();
@@ -275,6 +284,7 @@ export class CoverCalibration {
       this._context.host.querySelector("#cal-reason").hidden = true;
     }
     this._state = state;
+    if (state.session_id !== previous?.session_id || state.owner_present !== true) this._confirmTake = false;
     if (state.recoverable) this._lost = !state.attached;
     this._clock(this._lost ? null : state.elapsed);
     if (state.phase !== "review") this._savePreview = null;
@@ -316,6 +326,9 @@ export class CoverCalibration {
     take.hidden = !readOnly || ended || this._lost;
     take.disabled = this._busy;
     take.classList.toggle("primary", ownerAway);
+    const confirm = this._confirmTake && !take.hidden;
+    take.textContent = t(confirm ? "calConfirmTakeControl" : "calTakeControl");
+    host.querySelector("#cal-take-consequence").hidden = !confirm;
     const cancel = host.querySelector("#cal-cancel");
     cancel.disabled = false;
     cancel.textContent = t(readOnly ? "close" : "calCancel");
