@@ -213,6 +213,12 @@ export class CoverProfileEditor {
         onCancel: () => this.open(context), onSaved: () => { context.onSaved(t("saved")); this.open(context); } });
     };
     box.querySelector("#cal-refresh").onclick = () => this._refresh(true);
+    // While a measurement holds the gateway Home Assistant refuses these writes (calibration_busy): say so instead.
+    const busy = !!session && (session.recoverable === true || !!session.waiting_for_stop);
+    const form = this.dialog.querySelector("#profile-form");
+    for (const control of form.querySelectorAll('[name="travel_cm"], [data-profile-action="travel"], [data-profile-action="overrides"], [name^="use_"]')) control.disabled = !data.writable || busy;
+    for (const direction of ["opening", "closing"]) form.elements[`override_${direction}`].disabled = !data.writable || busy || !form.elements[`use_${direction}`].checked;
+    for (const line of form.querySelectorAll("[data-profile-busy]")) line.hidden = !busy;
     for (const id of ["profile-calibrate", "profile-calibrate-batch"]) {
       this.dialog.querySelector(`#${id}`).disabled = !!session || !data.writable || this._stale;
     }
@@ -378,7 +384,8 @@ export class CoverProfileEditor {
           <div class="profile-details-body">
           ${data.height_scaling ? `<label>${esc(t("profileCoverTravel"))}<span class="input-suffix"><input name="travel_cm" type="number" min="0.1" max="10000" step="any" inputmode="decimal" value="${esc(data.travel_cm ?? "")}" aria-describedby="profile-travel-help" ${disabled}><span>cm</span></span></label>
             <p class="muted">${esc(t("profileTravelPrerequisite"))}</p>
-            <button type="button" data-profile-action="travel" ${disabled}>${esc(t("profileSaveTravel"))}</button>` : ""}
+            <button type="button" data-profile-action="travel" ${disabled}>${esc(t("profileSaveTravel"))}</button>
+            <p class="notice" data-profile-busy hidden>${esc(t("profileMeasurementBusy"))}</p>` : ""}
             <div id="cal-recovery" class="notice" hidden><p></p>
               <button type="button" id="cal-resume">${esc(t("calOpenSession"))}</button>
               <button type="button" id="cal-refresh">${esc(t("calRefresh"))}</button>
@@ -446,6 +453,7 @@ export class CoverProfileEditor {
                 return `<label class="profile-override"><span class="profile-override-toggle"><input type="checkbox" name="use_${direction}" ${own ? "checked" : ""} ${disabled}> ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}</span>
                   <span class="input-suffix"><input name="override_${direction}" aria-label="${esc(t("profilePersonalValues"))}: ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}" type="number" min="1" max="600" step="any" inputmode="decimal" value="${esc(rounded)}" data-exact="${esc(exact ?? "")}" data-shown="${esc(rounded)}" ${data.writable && own ? "" : "disabled"}><span>s</span></span></label>`;
               }).join("")}
+              <p class="notice" data-profile-busy hidden>${esc(t("profileMeasurementBusy"))}</p>
               <button type="button" data-profile-action="overrides" ${disabled}>${esc(t("profileSavePersonal"))}</button>
             </fieldset>
 

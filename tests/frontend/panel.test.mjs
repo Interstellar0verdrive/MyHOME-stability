@@ -1666,3 +1666,55 @@ test("the travel profile shows times to a tenth of a second and rolls to two dec
   again.querySelector('[data-profile-action="overrides"]').click(); await tick();
   assert.deepEqual(writes.at(-1).overrides, { opening: 15.2, closing: null });
 });
+
+test("travel and personal values are locked with the reason while a measurement holds the gateway", async () => {
+  let calibration = { entry_id: "one", entity_id: "cover.shutter", session_id: "running", mode: "geometry", phase: "briefing",
+    sequence: 4, values: {}, recoverable: true, attached: true, owner_present: true };
+  const { root, calls } = await mountProfiles({ read: () => coverProfileData({ calibration, travel_cm: 110, height_scaling: true,
+    configured: { opening: { origin: "override", value: 20 }, closing: { origin: "profile", value: 25 } } }) });
+  openProfile(root); await tick();
+  const form = root.querySelector("#profile-form");
+  const controls = () => [form.elements.travel_cm, form.querySelector('[data-profile-action="travel"]'), form.elements.use_opening,
+    form.elements.use_closing, form.elements.override_opening, form.elements.override_closing, form.querySelector('[data-profile-action="overrides"]')];
+  const lines = () => [...form.querySelectorAll("[data-profile-busy]")];
+  const locked = (label) => {
+    assert.deepEqual(controls().map((control) => control.disabled), Array(7).fill(true), label);
+    assert.equal(lines().length, 2);
+    for (const line of lines()) {
+      assert.equal(line.hidden, false, label);
+      assert.equal(line.textContent, "Una misurazione è in corso: i valori si possono cambiare quando è finita.");
+    }
+  };
+  locked("session open");
+  assert.equal(form.elements.profile_name.disabled, false, "only the values Home Assistant refuses are locked");
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.equal(calls.filter((call) => call.type.endsWith("/write")).length, 0);
+  calibration = { ...calibration, owner_present: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  locked("owner away");
+  // The session has ended but the gateway still waits for Stop feedback.
+  calibration = { ...calibration, phase: "interrupted", recoverable: false, attached: false, waiting_for_stop: true };
+  root.querySelector("#cal-refresh").click(); await tick();
+  locked("waiting for Stop");
+  calibration = { ...calibration, waiting_for_stop: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.deepEqual(controls().map((control) => control.disabled), [false, false, false, false, false, true, false], "an ended session unlocks; a personal value follows its switch");
+  for (const line of lines()) assert.equal(line.hidden, true);
+  calibration = null;
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.equal(form.elements.override_opening.disabled, false);
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(calls.filter((call) => call.type.endsWith("/write")).at(-1).overrides, { opening: 20, closing: null });
+  assert.match(translations.en.profileMeasurementBusy, /^A measurement is in progress: these values can be changed when it ends\.$/);
+});
+
+test("a read-only cover keeps its values locked when no measurement runs", async () => {
+  const { root } = await mountProfiles({ read: () => coverProfileData({ writable: false, reason: "cover_unavailable", travel_cm: 110, height_scaling: true,
+    configured: { opening: { origin: "override", value: 20 } } }) });
+  openProfile(root); await tick();
+  const form = root.querySelector("#profile-form");
+  for (const control of [form.elements.travel_cm, form.elements.use_opening, form.elements.override_opening, form.querySelector('[data-profile-action="overrides"]')]) {
+    assert.equal(control.disabled, true);
+  }
+  for (const line of form.querySelectorAll("[data-profile-busy]")) assert.equal(line.hidden, true);
+});
