@@ -73,7 +73,7 @@ intermediate descent or the review still goes through `top`. Review and save car
 slats is unchanged. Storage and export formats are unchanged.
 
 Panel 0.38.5 shows a "This cover has no slats" switch in the calibration section
-when **Slats and roll — guided** is selected, and sends `slats: false` only when it is
+when **Roll measurement — guided** is selected, and sends `slats: false` only when it is
 on. The lift-off text takes its limit from `touching_cm`, a status line gives the
 attempt after an automatic repeat or a non-blocking warning after a wide gap, with
 the values from the view, `invalid_gap` names both limits and points to Repeat, the briefings and illustration captions of a cover without slats do not

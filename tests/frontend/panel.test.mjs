@@ -1599,7 +1599,7 @@ test("geometry calibration stays in the existing cover section and clears a sing
   change(root.querySelector("#cal-mode"), "geometry");
   assert.equal(root.querySelector("#cal-direction").value, "");
   assert.equal(root.querySelectorAll(".profile-details").length, sectionCount);
-  assert.match(root.querySelector("#cal-label").textContent, /Lamelle|Slats/);
+  assert.match(root.querySelector("#cal-label").textContent, /Misura del rullo|Roll measurement/);
   root.querySelector("#profile-calibrate").click(); await tick();
   assert.equal(request.mode, "geometry");
   assert.equal("direction" in request, false);
