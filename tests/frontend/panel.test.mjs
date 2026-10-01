@@ -1464,6 +1464,29 @@ test("the profile dialog offers Open session whether or not the owner is present
   assert.equal(root.querySelector('[data-cal-action="endpoint"]').disabled, true);
 });
 
+test("the profile dialog says a session is paused, not guided by another tab, and opens it without a command", async () => {
+  const session = { entry_id: "one", entity_id: "cover.shutter", session_id: "paused", mode: "automatic", phase: "paused",
+    reason: "owner_absent", sequence: 7, values: { closing_time: 46 }, recoverable: true, attached: false, owner_present: false,
+    run_index: 2, next_step: { step: "opening", run_index: 2, entity_id: "cover.shutter" }, idle_expires_at: "2026-10-01T18:42:00+00:00" };
+  const { root, hass } = await mountProfiles({ read: () => coverProfileData({ calibration: session }) });
+  const requests = [], original = hass.connection.subscribeMessage;
+  hass.connection.subscribeMessage = async (callback, request) => {
+    if (request.type === "myhome/cover_profiles/subscribe") return original(callback, request);
+    requests.push(request); callback({ ...session, attachment: "owner", owner: true, read_only: false }); return () => {};
+  };
+  openProfile(root); await tick();
+  const badge = root.querySelector("#cal-recovery p").textContent;
+  assert.equal(badge, `cover.shutter · ${translations.it.calPausedBadge}`);
+  assert.doesNotMatch(badge, /sta guidando|non riceve segnali/);
+  assert.equal(root.querySelector("#cal-resume").hidden, false);
+  root.querySelector("#cal-resume").click(); await tick();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "myhome/cover_calibration/resume");
+  assert.equal("claim" in requests[0], false);
+  assert.equal(root.querySelector("#cal-paused").hidden, false);
+  assert.equal(root.querySelector('[data-cal-action="continue"]').hidden, false);
+});
+
 test("refreshing session availability preserves a profile draft at the same revision", async () => {
   let attached = true;
   const { root } = await mountProfiles({ read: () => coverProfileData({ calibration: {
