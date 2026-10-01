@@ -89,7 +89,7 @@ test("automatic and interrupted phases never invite endpoint recording or measur
   assert.equal(calls.length, 0);
 });
 
-async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats, Calibration = CoverCalibration } = {}) {
+async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats, language, translate = t, Calibration = CoverCalibration } = {}) {
   const host = document.createElement("section");
   document.body.append(host);
   const controller = new Calibration();
@@ -104,7 +104,7 @@ async function mount({ call, subscribe, entity_ids, direction, resume, mode = "g
     targets: entity_ids.map((id) => ({ entity_id: id, name: id })) });
   if (resume) Object.assign(state, resume, { recoverable: true, attached: true, attachment: "new-controller" });
   const push = (extra) => { state = { ...state, sequence: state.sequence + 1, ...extra }; callback(state); };
-  const hass = { connection: { subscribeMessage: async (cb, request) => {
+  const hass = { language, connection: { subscribeMessage: async (cb, request) => {
     callback = cb; starts.push(request); cb(state);
     return subscribe ? subscribe(() => { stopped++; }) : () => { stopped++; };
   } }, callWS: async (message) => {
@@ -115,7 +115,7 @@ async function mount({ call, subscribe, entity_ids, direction, resume, mode = "g
       phase: phases[message.action] || state.phase };
   } };
   await controller.open({ host, hass, entity: { entry_id: "one", entity_id: "cover.bedroom" }, revision: 4, mode, entity_ids, direction, resume, slats,
-    t, onSaved: () => { saved++; }, onCancel: () => { cancelled++; } });
+    t: translate, onSaved: () => { saved++; }, onCancel: () => { cancelled++; } });
   return { host, controller, calls, starts, push, counts: () => ({ stopped, saved, cancelled }) };
 }
 
@@ -540,11 +540,11 @@ test("geometry wizard sends only user observations, waits for Stop, and keeps th
   for (const key of ["geometry", "values", "elapsed", "provenance"]) assert.equal(key in calls.at(-1), false);
   host.querySelector("#cal-repeat").click(); await tick();
   assert.equal(calls.at(-1).action, "repeat");
-  push({ phase: "reading", step: "half_open", reading_kind: "half_open", expected_cm: 100 });
+  push({ phase: "reading", step: "half_open", reading_kind: "half_open", expected_cm: 100, reading_range: { min_cm: 80, max_cm: 100 } });
   assert.equal(form.elements.reading_cm.value, "");
   assert.equal(form.elements.reading_cm.min, "0.1");
-  assert.match(host.querySelector("#cal-expected").textContent, /100 cm/);
-  assert.match(host.querySelector("#cal-expected").textContent, /Non è un obiettivo/);
+  assert.match(host.querySelector("#cal-expected").textContent, /fra 80 e 100 cm/);
+  assert.match(host.querySelector("#cal-expected").textContent, /Scrivi quello che dice il metro/);
 });
 
 test("geometry review exposes all measured values, limits save destinations and names unverified accuracy", async () => {
@@ -716,6 +716,56 @@ test("the lift-off gap is checked while typed; the button waits for a value in r
   assert.equal(button.disabled, false, "other readings are not range-checked here");
   assert.equal(range.hidden, true);
   assert.equal(calls.length, 0);
+});
+
+test("an intermediate reading shows the range the fit accepts, inside its true ends, instead of a halfway reference", async () => {
+  const { host, push } = await mount({ mode: "geometry", language: "it" });
+  const hint = host.querySelector("#cal-expected");
+  const reading = { phase: "reading", reading_kind: "half_close", step: "half_close", can_repeat: true, save_modes: ["new"], expected_cm: 55 };
+  push({ ...reading, reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
+  assert.equal(hint.textContent, "Per questa tapparella la lettura attesa è fra 36,7 e 54,8 cm. Scrivi quello che dice il metro.");
+  push({ reading_range: { min_cm: 110 / 3, max_cm: 55 } });
+  assert.equal(hint.textContent, "Per questa tapparella la lettura attesa è fra 36,7 e 55 cm. Scrivi quello che dice il metro.");
+  assert.doesNotMatch(hint.textContent, /metà corsa|Riferimento/);
+  push({ reading_range: null });
+  assert.equal(hint.textContent, "", "no range, no hint: the old halfway reference is gone");
+  push({ step: "lift", reading_kind: "lift" });
+  assert.equal(hint.textContent, "");
+  const english = await mount({ mode: "geometry", language: "en", translate: (key) => translations.en[key] || key });
+  english.push({ ...reading, step: "half_open", reading_kind: "half_open", reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
+  assert.equal(english.host.querySelector("#cal-expected").textContent, "For this cover the reading should be between 36.7 and 54.8 cm. Enter what the tape says.");
+});
+
+test("an intermediate reading outside the range is held back while typed and the refusal names the range", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry", language: "it",
+    call: (message, state) => { if (message.action === "reading") throw { code: "reading_out_of_range" }; return state; } });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  const button = form.querySelector('button[type="submit"]'), range = host.querySelector("#cal-reading-range");
+  const type = (value) => { input.value = value; input.dispatchEvent(new dom.window.Event("input", { bubbles: true })); };
+  const refusal = (value) => `La lettura (${value} cm) è fuori dall’intervallo ammesso (36,7–54,8 cm). Controlla il riferimento e ripeti il passaggio. Se i tempi misurati prima erano errati, annulla e riparti con la misura guidata.`;
+  push({ phase: "reading", step: "half_open", reading_kind: "half_open", can_repeat: true, save_modes: ["new"],
+    reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
+  for (const [value, outside] of [["55", true], ["54,87", false], ["54,85", false], ["36,6", true], ["36,666666666666664", false],
+    ["45", false], ["120,5", true], ["", false], ["45,", false]]) {
+    type(value);
+    assert.equal(button.disabled, outside, value);
+    assert.equal(range.hidden, !outside, value);
+    assert.equal(range.textContent, outside ? refusal(value) : "", value);
+  }
+  type("55");
+  push({});  // A heartbeat keeps the check.
+  assert.equal(button.disabled, true);
+  type("45");
+  form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  assert.equal(calls.at(-1).reading_cm, 45);
+  // Home Assistant stays the authority: its refusal names the reading sent and the same range.
+  assert.equal(host.querySelector("#cal-reason").hidden, false);
+  assert.equal(host.querySelector("#cal-reason").textContent, refusal("45"));
+  assert.match(translations.en.profileError_reading_out_of_range, /^The reading \({reading_cm} cm\) is outside the accepted range \({min_cm}–{max_cm} cm\)\. Check the measurement reference and repeat the step\./);
+  push({ reading_range: null });
+  type("500");
+  assert.equal(button.disabled, false, "without a range only Home Assistant checks the reading");
+  assert.equal(range.hidden, true);
 });
 
 test("the travel reading offers the travel already saved for the cover, and sends only on confirmation", async () => {

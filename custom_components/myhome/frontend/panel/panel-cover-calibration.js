@@ -1,13 +1,15 @@
 /** Backend-owned measurement: one owner per browser tab, read-only readers, explicit recovery. */
 const url = new URL("panel-dom.js", import.meta.url);
 url.search = new URL(import.meta.url).search;
-const { escapeHtml: esc } = await import(url.href);
+const { escapeHtml: esc, decimal } = await import(url.href);
 const visualUrl = new URL("panel-calibration-visual.js", import.meta.url);
 visualUrl.search = new URL(import.meta.url).search;
 const { visualMarkup, renderCalibrationVisual } = await import(visualUrl.href);
 
 // Presence on the backend lapses after three missed heartbeats (45 s).
 const HEARTBEAT_MS = 15000;
+// The backend accepts readings this close to the ends of their range (floating point only).
+const RANGE_SLACK_CM = 1e-9;
 const CLIENT_KEY = "myhome-calibration-client";
 // "Duplicate tab" copies sessionStorage. Before using an identity it did not create, a tab asks
 // the others whether one of them holds it; an answer within this time means it is a copy.
@@ -475,7 +477,8 @@ export class CoverCalibration {
     this._checkRange(form);
     form.elements.reading_cm.min = state.step === "lift" ? "0" : "0.1";
     host.querySelector("#cal-reading-label").textContent = t(state.step === "opening" ? "profileCoverTravel" : "calHeightCm");
-    host.querySelector("#cal-expected").textContent = state.expected_cm == null ? "" : `${t("calExpectedRough")}: ${shown(state.expected_cm, "cm")} cm. ${t("calExpectedHelp")}`;
+    // The heights the fit accepts for this stop, never a target: what the tape says is entered.
+    host.querySelector("#cal-expected").textContent = state.reading_range ? fill(t("calReadingRange"), this._rangeValues()) : "";
     if (state.phase === "review") {
       // Without slats the summary says so instead of showing a zero slat time.
       const keys = noSlats ? ["opening_roll", "closing_roll"] : ["slat_time_s", "opening_roll", "closing_roll"];
@@ -516,11 +519,14 @@ export class CoverCalibration {
     this._renderedPreview = this._savePreview;
   }
 
-  /** A lift-off gap outside its range keeps the button disabled; Home Assistant still validates it. */
+  /** A lift-off gap or an intermediate reading outside its range keeps the button disabled; Home Assistant still validates it. */
   _checkRange(form) {
-    const state = this._state, reading = parseReading(form.elements.reading_cm.value);
-    const outside = state.step === "lift" && state.max_gap_cm != null && Number.isFinite(reading) && (reading < 0 || reading > state.max_gap_cm);
-    const range = form.querySelector("#cal-reading-range"), text = outside ? fill(this._context.t("profileError_invalid_gap"), state) : "";
+    const state = this._state, reading = parseReading(form.elements.reading_cm.value), span = state.reading_range;
+    const gap = state.step === "lift" && state.max_gap_cm != null && Number.isFinite(reading) && (reading < 0 || reading > state.max_gap_cm);
+    const height = !!span && Number.isFinite(reading) && (reading < span.min_cm - RANGE_SLACK_CM || reading > span.max_cm + RANGE_SLACK_CM);
+    const outside = gap || height, { t } = this._context;
+    const range = form.querySelector("#cal-reading-range");
+    const text = gap ? fill(t("profileError_invalid_gap"), state) : height ? fill(t("profileError_reading_out_of_range"), this._rangeValues(reading)) : "";
     range.hidden = !outside;
     if (range.textContent !== text) range.textContent = text;
     form.querySelector('button[type="submit"]').disabled = form.elements.reading_cm.disabled || outside;
@@ -540,12 +546,19 @@ export class CoverCalibration {
     input.focus();
   }
 
-  _error(error) {
+  _error(error, extra = {}) {
     const { host, t } = this._context;
     const key = `profileError_${error.code}`;
     const box = host.querySelector("#cal-reason");
-    box.textContent = t(key) === key ? t("calConnectionError") : fill(t(key), this._state);
+    box.textContent = t(key) === key ? t("calConnectionError") : fill(t(key), { ...this._state, ...this._rangeValues(extra.reading_cm) });
     box.hidden = false;
+  }
+
+  /** The accepted range shown inside its true ends, a tenth of a centimetre at a time, so every value shown is accepted. */
+  _rangeValues(reading) {
+    const span = this._state?.reading_range, language = this._context.hass.language;
+    return span ? { min_cm: decimal(Math.ceil(span.min_cm * 10) / 10, 1, language), max_cm: decimal(Math.floor(span.max_cm * 10) / 10, 1, language),
+      ...(reading == null ? {} : { reading_cm: decimal(reading, 3, language) }) } : {};
   }
 
   /** The owner's Cancel must reach Home Assistant: until it does, the view stays and says so. */
@@ -620,7 +633,7 @@ export class CoverCalibration {
         this._expired = error?.code === "calibration_expired";
       }
       if (action === "save" || action === "preview_save") this._savePreview = null;
-      this._error(error);
+      this._error(error, extra);
     } finally {
       if (current()) { if (ownsBusy) this._busy = false; this._render(); }
     }
@@ -657,5 +670,6 @@ function pause(state, t, language) {
 
 /** Limits such as {touching_cm} come from the session view, never from the text. */
 function fill(text, state) {
-  return text.replace(/\{(\w+)\}/g, (match, key) => state?.[key] == null ? match : `${Number(state[key])}`);
+  // Text values, such as the ends of a reading range, are already formatted for the language.
+  return text.replace(/\{(\w+)\}/g, (match, key) => state?.[key] == null ? match : typeof state[key] === "string" ? state[key] : `${Number(state[key])}`);
 }
