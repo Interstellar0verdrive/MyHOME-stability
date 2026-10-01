@@ -10,6 +10,8 @@ from pytest_socket import socket_enabled  # noqa: F401
 from custom_components.myhome.cover_calibration import WS_ACTION, WS_START, register_api
 from custom_components.myhome.cover_calibration_check import (
     CHECK_THRESHOLD_CM,
+    GEOMETRY_CHECK_FRACTION,
+    HALF_TRAVEL_FRACTION,
     MAX_TARGET_FRACTION,
     MIN_CURTAIN_SECONDS,
     MIN_TARGET_FRACTION,
@@ -91,6 +93,7 @@ def test_the_verdict_never_rounds_half_to_even_nor_follows_binary_noise():
 
 
 def test_a_check_plans_half_the_travel_upwards_from_the_bottom_by_default():
+    """The default of the primitive: the check of an assigned profile (path B)."""
     check = CalibrationCheck.plan(MODEL, TRAVEL)
     assert (check.direction, check.target_cm, check.opening) == ("opening", 100.0, True)
     assert (check.start.height, check.start.slats) == (0, 0)
@@ -194,7 +197,10 @@ async def test_a_check_from_review_homes_runs_timed_and_returns_the_verdict(hass
     view = cal.session.view()
     # Its own briefing first: nothing moves until `next`.
     assert (view["phase"], view["step"], cal.session.after_position) == ("briefing", "home", "check")
-    assert view["check"]["direction"] == "opening" and view["check"]["target_cm"] == 100.0
+    # Three quarters of the travel by default: away from the two fitted readings, near 40 %.
+    assert (GEOMETRY_CHECK_FRACTION, HALF_TRAVEL_FRACTION) == (.75, .5)
+    assert view["check"]["direction"] == "opening" and view["check"]["target_cm"] == 150.0
+    assert cal.session.readings["half_open"] / TRAVEL < .45 and cal.session.readings["half_close"] / TRAVEL < .45
     assert len(cal.queue) == sent
     # Every reader sees the transition.
     assert cal.connection.send_event.call_args.args[1]["step"] == "home"
@@ -202,7 +208,7 @@ async def test_a_check_from_review_homes_runs_timed_and_returns_the_verdict(hass
     await endpoint(cal, 9)
     assert (cal.session.phase, cal.session.step, cal.session.view()["check"]["expected_cm"]) == ("briefing", "check", None)
     await start(cal)
-    planned = 2 + 20 * winding(.5, 2)
+    planned = 2 + 20 * winding(.75, 2)
     assert cal.session.deadline.when() - hass.loop.time() == pytest.approx(planned, abs=.1)
     cal.clock[0] += planned - .2
     callback = cal.session.deadline._callback
@@ -219,7 +225,7 @@ async def test_a_check_from_review_homes_runs_timed_and_returns_the_verdict(hass
     await act(cal, "reading", reading_cm=expected + 4.5)
     view = cal.session.view()
     assert (view["phase"], view["step"], view["can_repeat"]) == ("review", "half_close", True)
-    assert view["check"] == {"direction": "opening", "target_cm": 100.0, "check_seconds": pytest.approx(planned + .5),
+    assert view["check"] == {"direction": "opening", "target_cm": 150.0, "check_seconds": pytest.approx(planned + .5),
                              "expected_cm": expected, "measured_cm": expected + 4.5, "deviation_cm": 5, "passed": False}
     assert commands(cal, sent) == [LOWER, STOP, RAISE, STOP]
     # The measurement is untouched and Save stays available whatever the verdict.

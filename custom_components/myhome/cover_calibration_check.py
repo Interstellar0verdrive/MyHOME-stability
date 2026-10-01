@@ -26,8 +26,13 @@ CHECK_DIRECTIONS = ("opening", "closing")
 # roll, where an inherited profile is most often wrong; a descent from the top crosses
 # neither and can pass a profile that misplaces the edge by several centimetres.
 DEFAULT_CHECK_DIRECTION = "opening"
-# Half the travel: the one height a person at the window can verify in their head.
-DEFAULT_TARGET_FRACTION = 0.5
+# Half the travel: the one height a person at the window can verify in their head, and
+# the check of an assigned profile (the default of `plan`).
+HALF_TRAVEL_FRACTION = 0.5
+# The check of a model just fitted by the roll measurement aims where nothing was fitted:
+# its two intermediate readings land near 40 % of the travel (37.5 % for a roll of 3,
+# 42 % for 2), so half the travel would mostly repeat them.
+GEOMETRY_CHECK_FRACTION = 0.75
 # A check aims between these fractions of the travel, away from both end stops, and its
 # run must turn the motor at least MIN_CURTAIN_SECONDS beyond the slat phase: a run that
 # barely moves the curtain would pass whatever the model says.
@@ -80,10 +85,10 @@ class CalibrationCheck:
 
     @classmethod
     def plan(cls, model: CoverMotionModel, travel_cm: float, direction: Any = None,
-             target_cm: Any = None) -> CalibrationCheck:
+             target_cm: Any = None, *, fraction: float = HALF_TRAVEL_FRACTION) -> CalibrationCheck:
         """A check the cover can make and that says something about the curtain, or `invalid_check`."""
         direction = DEFAULT_CHECK_DIRECTION if direction is None else direction
-        target = travel_cm * DEFAULT_TARGET_FRACTION if target_cm is None else target_cm
+        target = travel_cm * fraction if target_cm is None else target_cm
         if (direction not in CHECK_DIRECTIONS or not _finite(target)
                 or not MIN_TARGET_FRACTION <= target / travel_cm <= MAX_TARGET_FRACTION):
             raise ProfileError("invalid_check")

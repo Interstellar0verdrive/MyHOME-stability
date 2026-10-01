@@ -8,7 +8,7 @@ from typing import Any, cast
 import voluptuous as vol
 
 from . import cover_calibration as guided
-from .cover_calibration_check import CHECK_THRESHOLD_CM, CalibrationCheck
+from .cover_calibration_check import CHECK_THRESHOLD_CM, GEOMETRY_CHECK_FRACTION, CalibrationCheck
 from .cover_calibration_fit import (
     closing_fit,
     closing_range,
@@ -125,7 +125,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         """Verify the measured model before Save: back to the end stop, then a timed run and a reading."""
         model = profile_motion({**self.values, "geometry": self.geometry})
         self.check = CalibrationCheck.plan(cast(CoverMotionModel, model), cast(float, self.measured_travel),
-                                           msg.get("direction"), msg.get("target_cm"))
+                                           msg.get("direction"), msg.get("target_cm"), fraction=GEOMETRY_CHECK_FRACTION)
         self._home_for_check()
 
     def _home_for_check(self) -> None:
