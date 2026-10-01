@@ -1692,14 +1692,25 @@ test("travel and personal values are locked with the reason while a measurement 
   calibration = { ...calibration, owner_present: false };
   root.querySelector("#cal-refresh").click(); await tick();
   locked("owner away");
-  // The session has ended but the gateway still waits for Stop feedback.
-  calibration = { ...calibration, phase: "interrupted", recoverable: false, attached: false, waiting_for_stop: true };
+  const unlocked = (label) => {
+    assert.deepEqual(controls().map((control) => control.disabled), [false, false, false, false, false, true, false], `${label}; a personal value follows its switch`);
+    for (const line of lines()) assert.equal(line.hidden, true, label);
+  };
+  // Interrupted but still offered by "Open session": Home Assistant accepts the writes again.
+  calibration = { ...calibration, phase: "interrupted", reason: "owner_absent", waiting_for_stop: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.equal(root.querySelector("#cal-resume").hidden, false);
+  unlocked("interrupted session still open");
+  // Closed, but the gateway still waits for Stop feedback.
+  calibration = { ...calibration, recoverable: false, attached: false, waiting_for_stop: true };
   root.querySelector("#cal-refresh").click(); await tick();
   locked("waiting for Stop");
   calibration = { ...calibration, waiting_for_stop: false };
   root.querySelector("#cal-refresh").click(); await tick();
-  assert.deepEqual(controls().map((control) => control.disabled), [false, false, false, false, false, true, false], "an ended session unlocks; a personal value follows its switch");
-  for (const line of lines()) assert.equal(line.hidden, true);
+  unlocked("ended session");
+  calibration = { ...calibration, phase: "paused", recoverable: true, waiting_for_stop: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  locked("a session that is still active, whatever its phase");
   calibration = null;
   root.querySelector("#cal-refresh").click(); await tick();
   assert.equal(form.elements.override_opening.disabled, false);

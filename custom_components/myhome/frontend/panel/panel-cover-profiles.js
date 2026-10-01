@@ -213,8 +213,9 @@ export class CoverProfileEditor {
         onCancel: () => this.open(context), onSaved: () => { context.onSaved(t("saved")); this.open(context); } });
     };
     box.querySelector("#cal-refresh").onclick = () => this._refresh(true);
-    // While a measurement holds the gateway Home Assistant refuses these writes (calibration_busy): say so instead.
-    const busy = !!session && (session.recoverable === true || !!session.waiting_for_stop);
+    // Home Assistant refuses these writes (calibration_busy) while a session is active or its Stop is pending: say so instead.
+    // An interrupted session still listed for "Open session" no longer holds them.
+    const busy = !!session && (!["interrupted", "cancelled", "saved"].includes(session.phase) || !!session.waiting_for_stop);
     const form = this.dialog.querySelector("#profile-form");
     for (const control of form.querySelectorAll('[name="travel_cm"], [data-profile-action="travel"], [data-profile-action="overrides"], [name^="use_"]')) control.disabled = !data.writable || busy;
     for (const direction of ["opening", "closing"]) form.elements[`override_${direction}`].disabled = !data.writable || busy || !form.elements[`use_${direction}`].checked;
