@@ -699,6 +699,69 @@ async def test_real_websockets_two_tabs_one_owner_and_a_lost_socket(hass, plant,
         await four.close()
 
 
+async def test_open_session_reads_for_another_tab_and_gives_a_reloaded_owner_its_view_at_once(
+    hass, plant, hass_ws_client
+):
+    """The panel offers Open session even while the owner is present: `resume` without claim decides by tab."""
+    register_api(hass)
+    queue = []
+    plant.gateways[0].async_queue_calibration = lambda *args: queue.append(args)
+    entry_id = plant.entries[0].entry_id
+
+    async def answer(client, message_id):
+        while (message := await client.receive_json())["id"] != message_id or message["type"] != "result":
+            pass
+        return message
+
+    async def event(client, subscription):
+        while (message := await client.receive_json())["id"] != subscription or message["type"] != "event":
+            pass
+        return message["event"]
+
+    def resume(message_id, session_id, client_id):
+        return {"id": message_id, "type": WS_RESUME, "entry_id": entry_id, "session_id": session_id, "client_id": client_id}
+
+    with patch("aiohttp.connector.DefaultResolver", ThreadedResolver):
+        owner = await hass_ws_client(hass)
+        await owner.send_json({"id": 1, "type": WS_START, "entry_id": entry_id, "entity_id": plant.records[0].entity_id,
+                               "revision": 0, "client_id": "tab-one"})
+        assert (await answer(owner, 1))["success"]
+        state = await event(owner, 1)
+        await owner.send_json({"id": 2, "type": WS_ACTION, "entry_id": entry_id, "session_id": state["session_id"],
+                               "attachment": state["attachment"], "action": "open", "sequence": state["sequence"]})
+        assert (await answer(owner, 2))["result"]["owner_present"] is True
+        session = get_store(hass, entry_id).calibration
+        # A full reload: the socket goes, the same tab opens the session again at once, without a claim.
+        await owner.close()
+        await hass.async_block_till_done()
+        reloaded = await hass_ws_client(hass)
+        await reloaded.send_json(resume(1, session.id, "tab-one"))
+        assert (await answer(reloaded, 1))["success"]
+        back = await event(reloaded, 1)
+        assert back["owner"] is True and back["read_only"] is False and back["owner_present"] is True
+        assert back["sequence"] == session.sequence and session.owner == "tab-one"
+        await reloaded.send_json({"id": 2, "type": WS_ACTION, "entry_id": entry_id, "session_id": session.id,
+                                  "attachment": back["attachment"], "action": "heartbeat"})
+        assert (await answer(reloaded, 2))["result"]["owner"] is True
+        # Another tab opens it while the owner is present: it reads, and Stop is available.
+        other = await hass_ws_client(hass)
+        await other.send_json(resume(1, session.id, "tab-two"))
+        assert (await answer(other, 1))["success"]
+        seen = await event(other, 1)
+        assert seen["read_only"] is True and seen["owner"] is False and seen["owner_present"] is True
+        count = len(queue)
+        act_other = {"type": WS_ACTION, "entry_id": entry_id, "session_id": session.id, "attachment": seen["attachment"]}
+        await other.send_json({"id": 2, **act_other, "action": "cancel"})
+        assert (await answer(other, 2))["error"]["code"] == "calibration_owned"
+        await other.send_json({"id": 3, **act_other, "action": "stop"})
+        stopped = (await answer(other, 3))["result"]
+        assert stopped["reason"] == "stopped" and stopped["read_only"] is True
+        assert len(queue) == count + 1 and session.owner == "tab-one"
+        await reloaded.close()
+        await other.close()
+        session.close()
+
+
 async def test_every_reader_is_told_whether_the_owner_is_present(hass, recovering):
     """`attached` is this reader's own subscription; `owner_present` is the owner's presence."""
     cal, session = recovering, recovering.session

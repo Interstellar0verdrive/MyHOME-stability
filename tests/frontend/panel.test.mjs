@@ -1433,17 +1433,35 @@ test("existing calibration section discovers a detached session and resumes it w
   assert.equal(root.querySelector("#cal-save").hidden, false);
 });
 
-test("the profile dialog offers Resume from the owner's presence, not from any subscription", async () => {
+test("the profile dialog offers Open session whether or not the owner is present; another tab reads it with Stop", async () => {
   let owner_present = true;
-  const { root } = await mountProfiles({ read: () => coverProfileData({ calibration: {
-    entry_id: "one", entity_id: "cover.other", session_id: "retained", recoverable: true, attached: true, owner_present } }) });
+  const session = { entry_id: "one", entity_id: "cover.shutter", session_id: "retained", mode: "guided", phase: "opening",
+    sequence: 4, values: {}, recoverable: true, attached: true };
+  const { root, hass } = await mountProfiles({ read: () => coverProfileData({ calibration: { ...session, owner_present } }) });
+  const requests = [], original = hass.connection.subscribeMessage;
+  hass.connection.subscribeMessage = async (callback, request) => {
+    if (request.type === "myhome/cover_profiles/subscribe") return original(callback, request);
+    // Home Assistant answers another tab with the read-only view.
+    requests.push(request); callback({ ...session, owner_present, attachment: "reader", owner: false, read_only: true }); return () => {};
+  };
   openProfile(root); await tick();
-  assert.equal(root.querySelector("#cal-resume").hidden, true);
-  assert.match(root.querySelector("#cal-recovery p").textContent, /Un’altra scheda o un altro dispositivo/);
+  assert.equal(root.querySelector("#cal-resume").hidden, false, "offered while the owner is present");
+  assert.equal(root.querySelector("#cal-resume").textContent, "Apri sessione");
+  assert.match(root.querySelector("#cal-recovery p").textContent, /Una scheda o un dispositivo sta guidando/);
   owner_present = false;
   root.querySelector("#cal-refresh").click(); await tick();
   assert.equal(root.querySelector("#cal-resume").hidden, false);
   assert.match(root.querySelector("#cal-recovery p").textContent, /non riceve segnali recenti/);
+  owner_present = true;
+  root.querySelector("#cal-refresh").click(); await tick();
+  root.querySelector("#cal-resume").click(); await tick();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "myhome/cover_calibration/resume");
+  assert.equal(requests[0].session_id, "retained");
+  assert.equal("claim" in requests[0], false, "opening a session never takes it");
+  assert.equal(root.querySelector("#cal-read-only").hidden, false);
+  assert.equal(root.querySelector("#cal-stop").disabled, false);
+  assert.equal(root.querySelector('[data-cal-action="endpoint"]').disabled, true);
 });
 
 test("refreshing session availability preserves a profile draft at the same revision", async () => {
