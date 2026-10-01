@@ -28,6 +28,8 @@ CHECK_DIRECTIONS = ("opening", "closing")
 DEFAULT_CHECK_DIRECTION = "opening"
 # Half the travel: the one height a person at the window can verify in their head.
 DEFAULT_TARGET_FRACTION = 0.5
+# The smallest tape reading, as for every other reading of the measurement (`centimetres`).
+MIN_READING_CM = 0.1
 
 
 def _quantize(value: Decimal, step: str) -> Decimal:
@@ -109,7 +111,7 @@ class CalibrationCheck:
         """The tape reading of the bottom edge above its rest, and the verdict."""
         if self.expected_cm is None:
             raise ProfileError("calibration_step")
-        if not _finite(value) or not 0 <= value <= self.travel_cm:
+        if not _finite(value) or not MIN_READING_CM <= value <= self.travel_cm:
             raise vol.Invalid("The reading must lie between the rest and the travel")
         self.measured_cm = float(value)
         self.deviation_cm = deviation_cm(self.measured_cm, self.expected_cm)

@@ -119,11 +119,12 @@ def test_no_run_no_verdict_and_readings_outside_the_travel_are_refused():
     assert check.check_seconds == pytest.approx(check.planned_seconds + .5)
     # The late Stop is not the model's fault: the expectation follows the real motor time.
     assert check.expected_cm == tenth(TRAVEL * height_after(check.planned_seconds + .5)) > 100.4
-    for value in (-.1, TRAVEL + .1, float("nan"), float("inf"), True, None, "100"):
+    for value in (-.1, 0, .09, TRAVEL + .1, float("nan"), float("inf"), True, None, "100"):
         with pytest.raises(vol.Invalid):
             check.read(value)
         assert check.measured_cm is None
-    for value in (0, TRAVEL):
+    # From 0.1 cm, as every other tape reading, up to the travel.
+    for value in (.1, TRAVEL):
         check.read(value)
         assert check.measured_cm == value and check.passed is False
     again = check.again()
@@ -231,7 +232,7 @@ async def test_the_reading_takes_decimals_and_refuses_values_outside_the_travel(
     await review(cal)
     await checked(cal)
     expected = cal.session.check.expected_cm
-    for value in (-.1, TRAVEL + .1, float("nan"), True):
+    for value in (-.1, 0, .05, TRAVEL + .1, float("nan"), True):
         with pytest.raises(ProfileError, match="invalid_reading"):
             await act(cal, "reading", reading_cm=value)
         assert cal.session.phase == "reading" and cal.session.view()["check"]["measured_cm"] is None
