@@ -982,15 +982,26 @@ for (const [first, second, keeper, listening] of [[1, 2, "first", false], [2, 1,
       // Browser session restore can bring back two copies of one tab together.
       const name = `restored-${first}-${second}-${listening}`;
       const one = await browserTab(`${name}-a`, first), two = await browserTab(`${name}-b`, second);
-      const ids = await withStorage(tabStorage("5-6-7-8"), async () => {
-        if (listening) assert.deepEqual([one.calibrationClient(), two.calibrationClient()], [null, null]);
+      // Each copy has its own sessionStorage, both restored with the same identity.
+      const stores = [tabStorage("5-6-7-8"), tabStorage("5-6-7-8")];
+      let current = stores[0];
+      const ids = await withStorage(new Error("unused"), async () => {
+        Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: () => current });
+        if (listening) {
+          assert.equal(one.calibrationClient(), null);
+          current = stores[1];
+          assert.equal(two.calibrationClient(), null);
+          current = stores[0];
+        }
         const checks = [one.checkedCalibrationClient()];
         // Unless both already listen, the second copy starts only now: the first query reached nobody.
+        current = stores[1];
         checks.push(two.checkedCalibrationClient());
         return Promise.all(checks);
       });
       const kept = keeper === "first" ? 0 : 1;
       assert.equal(ids[kept], "5-6-7-8");
+      assert.deepEqual(stores.map((store) => store.values.get("myhome-calibration-client")), ids, "each copy stores its own");
       assert.notEqual(ids[1 - kept], "5-6-7-8");
       assert.match(ids[1 - kept], /^\d+-\d+-\d+-\d+$/);
     });

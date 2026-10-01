@@ -183,8 +183,14 @@ it takes a new `client_id`, so it opens sessions read-only until it takes
 control. No answer means a reload of the same tab: it keeps the identity and
 recovers its sessions as their owner. The check runs when the panel loads, so a
 tab answers for its identity before any calibration view is opened; two copies
-checking at once settle on exactly one keeper. Without `BroadcastChannel` the
-identity is kept as before. A tab that the browser has frozen cannot answer.
+checking at once settle on exactly one keeper. An answer that arrives after the
+wait still counts: the copy then takes a new identity and reads its open session
+again, read-only. Without `BroadcastChannel`, or when it cannot be opened, the
+identity is kept as before. Only a tab running the MyHOME panel answers: if the
+original tab has been closed, frozen by the browser, or reloaded on another page
+of Home Assistant, nobody answers, the copy keeps the identity and ownership
+passes to the copy; the original, once it loads the panel again, finds the
+identity held and takes a new one.
 
 **Readers.** Any number of subscriptions can read one session: the owner's, a
 replayed one after a reconnection, and other tabs. Each subscription receives
@@ -298,6 +304,7 @@ tap only turns the button into "Confirm take control" and shows what follows
 (the guiding tab becomes read-only; a run under way continues and its endpoint
 is then confirmed from the new owner), and the second tap claims. Nothing is
 sent before that second tap.
+
 `cover_profiles/read` includes `calibration`: null, or the same view without
 `attachment`, where `attached` equals `owner_present` and `owner` is false.
 This transient view does not increment the persisted profile revision. Storage
