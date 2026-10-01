@@ -86,24 +86,36 @@ class BatchCalibrationSession(AutomaticCalibrationSession):
 
     def next_cover(self) -> None:
         self.settle = None
-        if self.phase != "between_covers" or self.store.calibration is not self or self.unattended(
-                {"step": "next_cover", "cover_index": self.cover_index + 1,
-                 "entity_id": self.covers[self.cover_index + 1].entity_id}, self.next_cover):
+        if self.phase != "between_covers" or self.store.calibration is not self:
             return
         following = self.covers[self.cover_index + 1]
+        if self.unattended({"step": "next_cover", "cover_index": self.cover_index + 1,
+                            "entity_id": following.entity_id}, self.check_cover, self.start_cover):
+            return
         try:
-            if ready_cover(self.hass, self.store, self.entry_id, following.entity_id) is not following:
-                raise profiles.ProfileError("cover_unavailable")
-            self.cover._calibration = None
-            self.cover = following
-            self.cover._calibration = self
-            self.cover_index += 1
-            self.run_index = 0
-            self.values.clear()
-            self.provenance.clear()
-            self.queue_move("open")
+            self.check_cover()
+            self.start_cover()
         except profiles.ProfileError as error:
             self.interrupt(str(error))
+
+    def watch(self, cover: Any) -> None:
+        """Bind the session to the cover it controls: its events, commands and Stop."""
+        self.cover._calibration = None
+        self.cover = cover
+        cover._calibration = self
+
+    def check_cover(self) -> None:
+        following = self.covers[self.cover_index + 1]
+        if ready_cover(self.hass, self.store, self.entry_id, following.entity_id) is not following:
+            raise profiles.ProfileError("cover_unavailable")
+
+    def start_cover(self) -> None:
+        self.watch(self.covers[self.cover_index + 1])
+        self.cover_index += 1
+        self.run_index = 0
+        self.values.clear()
+        self.provenance.clear()
+        self.queue_move("open")
 
     def interrupt(self, reason: str, send_stop: Any=True) -> None:
         if self.active and self.phase != "saving":

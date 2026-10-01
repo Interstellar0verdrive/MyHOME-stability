@@ -122,7 +122,7 @@ class CalibrationSession:
         # A cycle paused without its owner: the step that would have started, and how.
         self.next_step: dict[str, Any] | None = None
         self.paused_at: datetime | None = None
-        self.resume_step: tuple[str, Callable[[], None]] | None = None
+        self.resume_step: tuple[Callable[[], None], Callable[[], None]] | None = None
         self.moved = False
         self.lease_seconds = IDLE_LEASE_SECONDS
         self.lease_expires_at: datetime | None = None
@@ -167,16 +167,17 @@ class CalibrationSession:
         """The owner sent a heartbeat or a verb recently. It never decides who may act."""
         return self.owner is not None and monotonic() - self.owner_seen < PRESENCE_SECONDS
 
-    def unattended(self, step: dict[str, Any], resume: Callable[[], None]) -> bool:
+    def unattended(self, step: dict[str, Any], check: Callable[[], None], start: Callable[[], None]) -> bool:
         """An automatic step starts a new movement only while an identified owner is present.
 
         Otherwise the cycle pauses: every measurement is kept, nothing moves, and only the
-        owner's `continue` starts `step` again, through `resume`. Stop is written only while
-        a movement may still run. The lease keeps running; when it ends the session expires.
+        owner's `continue` starts `step` again: `check` raises without changing anything,
+        `start` moves. Stop is written only while a movement may still run. The lease keeps
+        running; when it ends the session expires.
         """
         if not self.client_id or self.present():
             return False
-        self.resume_step = (self.phase, resume)
+        self.resume_step = (check, start)
         self.next_step, self.paused_at = step, dt_util.utcnow()
         self.phase, self.reason = "paused", "owner_absent"
         if self.reservation.pending:
@@ -185,12 +186,17 @@ class CalibrationSession:
         return True
 
     def proceed(self) -> None:
-        """`continue`: the owner starts the step a paused cycle stopped before, with its checks."""
+        """`continue`: the owner starts the step a paused cycle stopped before, with its checks.
+
+        A check that fails leaves the pause and its measurements as they are: nothing has moved.
+        """
         if self.phase != "paused":
             raise ProfileError("calibration_step")
-        (self.phase, resume), self.reason = cast(tuple[str, Callable[[], None]], self.resume_step), None
+        check, start = cast(tuple[Callable[[], None], Callable[[], None]], self.resume_step)
+        check()
+        self.reason = None
         self.resume_step = self.next_step = self.paused_at = None
-        resume()
+        start()
 
     def overlay(self, subscriber: Subscriber, attached: bool = True) -> dict[str, Any]:
         """What differs between readers: ownership, their token, their live subscription.
@@ -509,7 +515,9 @@ class CalibrationSession:
             raise ProfileError("calibration_step")
         entry, entity = target(self.hass, self.entry_id, self.cover.entity_id)
         if not snapshot(self.hass, self.store, entry, entity)["writable"]:
-            self.interrupt("cover_unavailable")
+            # A refused `continue` keeps the pause and its measurements: nothing has moved.
+            if action != "continue":
+                self.interrupt("cover_unavailable")
             raise ProfileError("cover_unavailable")
         if action == "continue":
             self.proceed()

@@ -71,13 +71,20 @@ class AutomaticCalibrationSession(guided.CalibrationSession):
         self.settle = None
         if self.phase != "settling" or self.store.calibration is not self or self.unattended(
                 {"step": "closing" if self.run_index == 1 else "opening", "run_index": self.run_index,
-                 "entity_id": self.cover.entity_id}, self.next_run):
+                 "entity_id": self.cover.entity_id}, self.check_run, self.start_run):
             return
         try:
-            entry, entity = target(self.hass, self.entry_id, self.cover.entity_id)
-            if (self.hass.state in (CoreState.stopping, CoreState.final_write, CoreState.stopped)
-                    or not snapshot(self.hass, self.store, entry, entity)["writable"]):
-                raise ProfileError("cover_unavailable")
-            self.queue_move("close" if self.run_index == 1 else "open")
+            self.check_run()
+            self.start_run()
         except ProfileError as error:
             self.interrupt(str(error))
+
+    def check_run(self) -> None:
+        """The cover and Home Assistant can take the next run; nothing changes here."""
+        entry, entity = target(self.hass, self.entry_id, self.cover.entity_id)
+        if (self.hass.state in (CoreState.stopping, CoreState.final_write, CoreState.stopped)
+                or not snapshot(self.hass, self.store, entry, entity)["writable"]):
+            raise ProfileError("cover_unavailable")
+
+    def start_run(self) -> None:
+        self.queue_move("close" if self.run_index == 1 else "open")

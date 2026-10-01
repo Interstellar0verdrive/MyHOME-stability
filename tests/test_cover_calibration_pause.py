@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from aiohttp.resolver import ThreadedResolver
+from homeassistant.core import CoreState
 from OWNd.message import OWNMessage
 from pytest_socket import socket_enabled  # noqa: F401
 
@@ -156,17 +157,30 @@ async def test_continue_belongs_to_the_owner_and_a_claim_hands_it_over(hass, rec
 
 
 @automatic
-async def test_continue_needs_the_current_sequence_and_a_writable_cover(hass, recovering):
+async def test_a_refused_continue_keeps_the_pause_and_its_measurements(hass, recovering):
+    """Nothing has moved: an old sequence or a failed check is answered, and the pause stays."""
     cal = recovering
     session = await paused_cycle(hass, cal)
     back = reader(cal, "first-controller", 88)
-    count = len(cal.queue)
+    count, sequence, step = len(cal.queue), session.sequence, session.view()["next_step"]
+
+    def still_paused():
+        assert (session.phase, session.reason) == ("paused", "owner_absent")
+        assert session.values == {"closing_time": 46.0} and session.view()["next_step"] == step
+        assert len(cal.queue) == count and session.sequence == sequence
+
     assert await call(hass, cal, back.connection, back.token, "continue",
                       sequence=session.sequence - 1) == "calibration_step"
-    assert session.phase == "paused" and len(cal.queue) == count
-    cal.plant.gateways[0].available = False
+    still_paused()
+    cal.plant.gateways[0].available = False  # Seen when the action arrives.
     assert await call(hass, cal, back.connection, back.token, "continue") == "cover_unavailable"
-    assert session.phase == "interrupted" and session.values == {} and session.view()["next_step"] is None
+    still_paused()
+    cal.plant.gateways[0].available = True
+    with patch.object(hass, "state", CoreState.stopping):  # Seen by the check of the next run.
+        assert await call(hass, cal, back.connection, back.token, "continue") == "cover_unavailable"
+    still_paused()
+    result = await call(hass, cal, back.connection, back.token, "continue")
+    assert result["phase"] == "starting_open" and len(cal.queue) == count + 1
 
 
 @automatic
@@ -252,6 +266,19 @@ async def test_a_batch_paused_between_covers_keeps_its_results_and_goes_on_with_
     assert result["phase"] == "starting_open" and result["cover_index"] == 1
     assert len(result["results"]) == 1 and len(batch.queue) == count + 1
     assert str(batch.queue[-1][0]) == "*2*1*12##" and second._calibration is session
+
+
+async def test_a_batch_continue_refused_while_the_next_cover_moves_keeps_the_group(hass, batch):
+    session = await paused_batch(hass, batch)
+    second = batch.plant.covers[1]
+    back = reader(batch, "batch-controller", 88)
+    count, sequence = len(batch.queue), session.sequence
+    second._move_start_time = 1.0  # Moved by Home Assistant without a bus event yet.
+    assert await call(hass, batch, back.connection, back.token, "continue") == "calibration_moving"
+    assert session.phase == "paused" and len(session.results) == 1 and session.cover_index == 0
+    assert len(batch.queue) == count and session.sequence == sequence
+    second._move_start_time = None
+    assert (await call(hass, batch, back.connection, back.token, "continue"))["cover_index"] == 1
 
 
 async def test_a_batch_paused_between_runs_keeps_the_covers_already_measured(hass, batch):
