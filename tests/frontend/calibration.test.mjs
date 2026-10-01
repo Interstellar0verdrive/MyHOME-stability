@@ -746,7 +746,7 @@ test("an intermediate reading outside the range is held back while typed and the
   push({ phase: "reading", step: "half_open", reading_kind: "half_open", can_repeat: true, save_modes: ["new"],
     reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
   for (const [value, outside] of [["55", true], ["54,87", false], ["54,85", false], ["36,6", true], ["36,666666666666664", false],
-    ["45", false], ["120,5", true], ["", false], ["45,", false]]) {
+    ["45", false], ["120,5", true], ["54,95", true], ["", false], ["45,", false]]) {
     type(value);
     assert.equal(button.disabled, outside, value);
     assert.equal(range.hidden, !outside, value);
