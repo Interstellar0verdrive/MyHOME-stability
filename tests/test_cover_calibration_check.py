@@ -10,6 +10,9 @@ from pytest_socket import socket_enabled  # noqa: F401
 from custom_components.myhome.cover_calibration import WS_ACTION, WS_START, register_api
 from custom_components.myhome.cover_calibration_check import (
     CHECK_THRESHOLD_CM,
+    MAX_TARGET_FRACTION,
+    MIN_CURTAIN_SECONDS,
+    MIN_TARGET_FRACTION,
     CalibrationCheck,
     deviation_cm,
     passes,
@@ -102,11 +105,28 @@ def test_a_check_plans_half_the_travel_upwards_from_the_bottom_by_default():
 
 
 @pytest.mark.parametrize(("direction", "target"), [
-    (None, 0), (None, -1), (None, TRAVEL), (None, 250), (None, float("nan")), (None, float("inf")),
-    (None, True), (None, "100"), ("up", None), ("open", 50)])
+    (None, 0), (None, -1), (None, .01), (None, 19.9), (None, 180.1), (None, TRAVEL), (None, 250),
+    (None, float("nan")), (None, float("inf")), (None, True), (None, "100"), ("up", None), ("open", 50)])
 def test_a_check_the_cover_cannot_make_is_refused_rather_than_shortened(direction, target):
     with pytest.raises(ProfileError, match="invalid_check"):
         CalibrationCheck.plan(MODEL, TRAVEL, direction, target)
+
+
+def test_a_check_aims_between_a_tenth_and_nine_tenths_and_moves_the_curtain_past_the_slats():
+    assert (MIN_TARGET_FRACTION, MAX_TARGET_FRACTION, MIN_CURTAIN_SECONDS) == (.1, .9, 1.0)
+    for direction in ("opening", "closing"):
+        assert CalibrationCheck.plan(MODEL, TRAVEL, direction, 20).target_cm == 20
+    assert CalibrationCheck.plan(MODEL, TRAVEL, "opening", 180).target_cm == 180
+    # Down from the top to 90 %: 18 s of curtain times 1 - u(0.9, 3) is about 1.2 s, not more than 2 + 1.
+    assert CalibrationCheck(MODEL, TRAVEL, "closing", 180).planned_seconds < 3
+    with pytest.raises(ProfileError, match="invalid_check"):
+        CalibrationCheck.plan(MODEL, TRAVEL, "closing", 180)
+    # Ten seconds of slats and two of curtain: halfway up is exactly 11 s, not more than 10 + 1.
+    slow_slats = CoverMotionModel(opening_time_s=12, closing_time_s=12, slat_time_s=10)
+    assert CalibrationCheck(slow_slats, TRAVEL, "opening", 100).planned_seconds == 11
+    with pytest.raises(ProfileError, match="invalid_check"):
+        CalibrationCheck.plan(slow_slats, TRAVEL, "opening", 100)
+    assert CalibrationCheck.plan(slow_slats, TRAVEL, "opening", 101).planned_seconds == pytest.approx(11.01)
 
 
 def test_no_run_no_verdict_and_readings_outside_the_travel_are_refused():
@@ -342,8 +362,9 @@ async def test_a_check_is_offered_only_in_review_to_its_owner_with_the_current_s
     assert len(cal.queue) == sent
 
 
-@pytest.mark.parametrize("extra", [{"target_cm": 0}, {"target_cm": 200}, {"target_cm": 250}, {"target_cm": -5},
-                                   {"direction": "sideways"}])
+@pytest.mark.parametrize("extra", [{"target_cm": 0}, {"target_cm": 19}, {"target_cm": 181}, {"target_cm": 200},
+                                   {"target_cm": 250}, {"target_cm": -5}, {"direction": "sideways"},
+                                   {"direction": "closing", "target_cm": 180}])
 async def test_a_check_the_cover_cannot_make_sends_nothing_and_keeps_review(geometry, extra):
     """Fork `test_calibration_session_paths.py:1304`: refused, not clamped into another run."""
     cal = geometry

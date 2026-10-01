@@ -28,6 +28,12 @@ CHECK_DIRECTIONS = ("opening", "closing")
 DEFAULT_CHECK_DIRECTION = "opening"
 # Half the travel: the one height a person at the window can verify in their head.
 DEFAULT_TARGET_FRACTION = 0.5
+# A check aims between these fractions of the travel, away from both end stops, and its
+# run must turn the motor at least MIN_CURTAIN_SECONDS beyond the slat phase: a run that
+# barely moves the curtain would pass whatever the model says.
+MIN_TARGET_FRACTION = 0.1
+MAX_TARGET_FRACTION = 0.9
+MIN_CURTAIN_SECONDS = 1.0
 # The smallest tape reading, as for every other reading of the measurement (`centimetres`).
 MIN_READING_CM = 0.1
 
@@ -75,12 +81,16 @@ class CalibrationCheck:
     @classmethod
     def plan(cls, model: CoverMotionModel, travel_cm: float, direction: Any = None,
              target_cm: Any = None) -> CalibrationCheck:
-        """A check strictly between the two end stops, or `invalid_check`."""
+        """A check the cover can make and that says something about the curtain, or `invalid_check`."""
         direction = DEFAULT_CHECK_DIRECTION if direction is None else direction
         target = travel_cm * DEFAULT_TARGET_FRACTION if target_cm is None else target_cm
-        if direction not in CHECK_DIRECTIONS or not _finite(target) or not 0 < target < travel_cm:
+        if (direction not in CHECK_DIRECTIONS or not _finite(target)
+                or not MIN_TARGET_FRACTION <= target / travel_cm <= MAX_TARGET_FRACTION):
             raise ProfileError("invalid_check")
-        return cls(model, travel_cm, direction, float(target))
+        check = cls(model, travel_cm, direction, float(target))
+        if check.planned_seconds <= model.slat_time_s + MIN_CURTAIN_SECONDS:
+            raise ProfileError("invalid_check")
+        return check
 
     def again(self) -> CalibrationCheck:
         """The same run, with nothing of the previous one."""
