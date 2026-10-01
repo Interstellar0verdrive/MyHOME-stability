@@ -18,8 +18,12 @@ from custom_components.myhome.cover_calibration import (
 )
 from custom_components.myhome.cover_calibration_fit import (
     closing_fit,
+    closing_range,
+    height_at,
     opening_fit,
+    opening_range,
     opening_roll_fit,
+    opening_roll_range,
     winding,
 )
 from custom_components.myhome.cover_profiles import ProfileError, get_store, read_profile
@@ -600,3 +604,128 @@ async def test_start_takes_slats_only_for_geometry_and_only_as_a_boolean(hass, p
             await client.close()
     await hass.async_block_till_done()
     assert [str(args[0]) for args in queued] == ["*2*0*11##"]  # Only the Stop of the closed legacy socket.
+
+
+@pytest.mark.parametrize("roll", [1, 1.3, 2, 4.9, 5])
+def test_height_at_inverts_winding(roll):
+    for fraction in [.05, .3, .5, .9]:
+        assert winding(height_at(fraction, roll), roll) == pytest.approx(fraction)
+
+
+def test_closing_and_opening_roll_ranges_are_what_their_fits_accept():
+    # The case seen live: a stop at half the time on 110 cm is accepted from roll 5 to roll 1, 36.7-55 cm.
+    assert closing_range(20, 0, 10, 110) == pytest.approx((110 / 3, 55))
+    assert opening_roll_range(20, 0, 10, 110) == pytest.approx((110 / 3, 55))
+    for total, slat, elapsed, travel in [(20, 2, 9, 200), (31.5, 0, 12.25, 145), (20, 2.5, 4, 90)]:
+        for span, fit, stop in [(closing_range(total, slat, elapsed, travel), closing_fit, elapsed),
+                                (opening_roll_range(total, slat, slat + elapsed, travel), opening_roll_fit, slat + elapsed)]:
+            low, high = span
+            assert fit(total, slat, stop, low, travel) == pytest.approx(5)
+            assert fit(total, slat, stop, high, travel) == pytest.approx(1)
+            fit(total, slat, stop, (low + high) / 2, travel)
+            for outside in (low - .01, high + .01):
+                with pytest.raises(vol.Invalid, match="roll range"):
+                    fit(total, slat, stop, outside, travel)
+
+
+@pytest.mark.parametrize("args", [(20, 20, 9, 200), (20, 2, 0, 200), (20, 2, 18, 200), (20, 2, 9, 0)])
+def test_closing_range_has_no_heights_for_inconsistent_timings(args):
+    assert closing_range(*args) is None
+
+
+@pytest.mark.parametrize("args", [(20, 20, 21, 200), (20, 2, 2, 200), (20, 2, 20, 200), (20, 0, 9, 0)])
+def test_opening_roll_range_has_no_heights_for_inconsistent_timings(args):
+    assert opening_roll_range(*args) is None
+
+
+def joint_accepts(total, lift_time, gap, travel, elapsed, height, closing):
+    try:
+        slat, _ = opening_fit(total, lift_time, gap, travel, elapsed, height)
+    except vol.Invalid:
+        return False
+    return slat < closing
+
+
+@pytest.mark.parametrize(("lift_time", "closing", "limits"), [
+    (2 + 20 * winding(.01, 2), 20, "rolls 1-5"),
+    # A lift-off this short gives a negative slat time beyond roll 2: the highest rolls are cut.
+    (22 * winding(.01, 2), 20, "slat from 0"),
+    # A full closing barely longer than the slat phase: the lowest rolls are cut.
+    (2 + 20 * winding(.01, 2), 2.05, "slat below closing")])
+def test_opening_range_is_what_the_joint_fit_accepts(lift_time, closing, limits):
+    total, gap, travel = 22.0, GAP, 200.0
+    elapsed = (lift_time + total) / 2
+    low, high = opening_range(total, lift_time, gap, travel, elapsed, closing)
+    assert gap < low < high < travel
+    for step in range(1, 40):
+        assert joint_accepts(total, lift_time, gap, travel, elapsed, low + (high - low) * step / 40, closing), limits
+    for outside in (low - .01, high + .01):
+        assert not joint_accepts(total, lift_time, gap, travel, elapsed, outside, closing), limits
+
+
+@pytest.mark.parametrize("args", [
+    (22, 2.3, 200, 200, 12, 20),  # Gap not below the travel.
+    (22, 12, 2, 200, 12, 20),  # Lift-off not before the stop.
+    (22, .01, 2, 200, 12, 20),  # Lift-off too short for any slat time from 0.
+    (22, 2.3, 2, 200, 12, 1),  # Every roll gives a slat time beyond the full closing.
+])
+def test_opening_range_has_no_heights_for_inconsistent_timings(args):
+    assert opening_range(*args) is None
+
+
+async def test_intermediate_readings_carry_and_enforce_their_accepted_range(geometry):
+    cal = geometry
+    await lift(cal)
+    assert cal.session.view()["reading_range"] is None  # The lift-off gap has its own limits.
+    await act(cal, "reading", reading_cm=GAP)
+    await endpoint(cal, 8)
+    await endpoint(cal, 22)
+    assert cal.session.view()["reading_range"] is None  # Nor has the travel.
+    await act(cal, "reading", reading_cm=200)
+    await endpoint(cal, 20)
+    assert cal.session.view()["reading_range"] is None  # Nothing while briefing or moving.
+    await half(cal, 12)
+    view = cal.session.view()
+    low, high = opening_range(22, LIFT, GAP, 200, cal.session.samples["half_open"], 20)
+    assert view["reading_range"] == {"min_cm": pytest.approx(low), "max_cm": pytest.approx(high)}
+    for outside in (low - .1, high + .1):
+        with pytest.raises(ProfileError, match="reading_out_of_range"):
+            await act(cal, "reading", reading_cm=outside)
+        assert cal.session.phase == "reading" and cal.session.step == "half_open" and not cal.session.geometry
+    with pytest.raises(ProfileError, match="invalid_reading"):
+        await act(cal, "reading", reading_cm="83")
+    await act(cal, "reading", reading_cm=200 * (2 * .5 + .5 ** 2) / 3)
+    await endpoint(cal, 7)
+    await half(cal, 9)
+    low, high = closing_range(20, cal.session.geometry["slat_time_s"], cal.session.samples["half_close"], 200)
+    assert cal.session.view()["reading_range"] == {"min_cm": pytest.approx(low), "max_cm": pytest.approx(high)}
+    with pytest.raises(ProfileError, match="reading_out_of_range"):
+        await act(cal, "reading", reading_cm=high + .1)
+    await act(cal, "reading", reading_cm=high)  # Its ends are accepted.
+    assert cal.session.phase == "review" and cal.session.geometry["closing_roll"] == pytest.approx(1)
+    assert cal.session.view()["reading_range"] is None
+
+
+async def test_intermediate_reading_without_a_fitting_height_keeps_the_fit_refusal(geometry):
+    cal = geometry
+    await until_open_reading(cal)
+    cal.session.values["closing_time"] = 1  # No slat time can be shorter than this closing.
+    assert cal.session.view()["reading_range"] is None
+    with pytest.raises(ProfileError, match="invalid_reading"):
+        await act(cal, "reading", reading_cm=83.3333333333)
+
+
+@pytest.mark.parametrize("geometry", [{"slats": False}], indirect=True)
+async def test_without_slats_the_intermediate_ascent_has_the_mirrored_range(geometry):
+    cal = geometry
+    await endpoint(cal, 9)
+    await endpoint(cal, 22)
+    await act(cal, "reading", reading_cm=200)
+    await endpoint(cal, 20)
+    await half(cal, 11)
+    low, high = opening_roll_range(22, 0, cal.session.samples["half_open"], 200)
+    assert cal.session.view()["reading_range"] == {"min_cm": pytest.approx(low), "max_cm": pytest.approx(high)}
+    with pytest.raises(ProfileError, match="reading_out_of_range"):
+        await act(cal, "reading", reading_cm=low - .1)
+    await act(cal, "reading", reading_cm=low)
+    assert cal.session.geometry["opening_roll"] == pytest.approx(5)
