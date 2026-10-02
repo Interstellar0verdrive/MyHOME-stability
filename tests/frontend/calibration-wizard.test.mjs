@@ -381,3 +381,31 @@ test("screens carry no placeholder or key in either language", () => {
     }
   }
 });
+
+test("the keyboard reaches every step: title focus, Steps sheet, and a dialog that keeps Tab inside", async () => {
+  const { root, wiz, press, startFor, backend } = await mount();
+  await startFor("cover.living_one");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(root.activeElement, wiz().querySelector(".wiz-title"), "a new step moves focus to its title");
+  wiz().querySelector('[data-wiz="steps"]').click(); await tick();
+  const sheet = wiz().querySelector(".wiz-sheet");
+  assert.equal(sheet.hidden, false);
+  assert.equal(root.activeElement, sheet.querySelector('[data-wiz="steps-close"]'));
+  assert.equal(sheet.querySelector('[aria-current="step"] .wiz-step-label').textContent, "Preparation");
+  sheet.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  assert.equal(sheet.hidden, true);
+  assert.equal(root.activeElement, wiz().querySelector('[data-wiz="steps"]'));
+  await press("begin"); await move(backend);
+  wiz().querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
+  const dialog = wiz().querySelector(".wiz-dialog");
+  const buttons = [...dialog.querySelectorAll("button:not([hidden])")];
+  assert.deepEqual(buttons.map((button) => button.dataset.wiz), ["stay", "leave", "stop"]);
+  buttons.at(-1).focus();
+  dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+  assert.equal(root.activeElement, buttons[0], "Tab wraps to the first button");
+  dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
+  assert.equal(root.activeElement, buttons.at(-1), "Shift+Tab wraps to the last one");
+  buttons.at(-1).click(); await tick();
+  assert.equal(dialog.hidden, true, "Stop from the dialog closes it and keeps the wizard");
+  assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1);
+});

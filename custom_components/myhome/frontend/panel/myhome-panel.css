@@ -675,10 +675,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-menu button { justify-content: start; border: 0; background: transparent; }
 .cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
 .cal-badge[data-status="to_measure"] { color: var(--panel-text-2); }
-.cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { background: var(--panel-accent-soft); color: var(--panel-accent-strong); }
+.cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-badge[data-status="verified"] { background: color-mix(in srgb, var(--panel-success) 14%, transparent); color: var(--panel-success); }
 .cal-badge[data-status="running"] { background: color-mix(in srgb, var(--panel-warning) 20%, transparent); color: var(--primary-text-color, #182b37); white-space: normal; }
-.cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent-strong); }
+.cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
 .cal-row-details { padding: 4px 14px 16px; }
 .cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }

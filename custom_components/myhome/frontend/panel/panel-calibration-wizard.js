@@ -274,10 +274,21 @@ export class CalibrationWizard {
   // ---------- events ----------
 
   _keydown(event) {
-    if (event.key !== "Escape") return;
     const dialog = this._frame.querySelector(".wiz-dialog"), sheet = this._frame.querySelector(".wiz-sheet");
-    if (!dialog.hidden) { event.preventDefault(); this._closeDialog(); }
-    else if (!sheet.hidden) { event.preventDefault(); sheet.hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); }
+    const open = !dialog.hidden ? dialog : !sheet.hidden ? sheet : null;
+    if (!open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (open === dialog) this._closeDialog();
+      else { sheet.hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); }
+    } else if (event.key === "Tab") {
+      // A modal keeps the keyboard inside it, as the native dialog would.
+      const focusable = [...open.querySelectorAll("button:not([hidden]):not(:disabled)")];
+      const active = this._root.getRootNode().activeElement, first = focusable[0], last = focusable.at(-1);
+      if (!focusable.includes(active)) { event.preventDefault(); first?.focus(); }
+      else if (event.shiftKey && active === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+    }
   }
 
   _input(event) {

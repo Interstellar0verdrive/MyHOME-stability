@@ -155,6 +155,40 @@ test("the chevron expands a row in place with the values in use, the last measur
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-row-details").hidden, true);
 });
 
+test("every text key the calibration screens use exists in English and Italian", async () => {
+  const { readFileSync } = await import("node:fs");
+  const base = new URL("../../custom_components/myhome/frontend/panel/", import.meta.url);
+  const keys = new Set();
+  for (const file of ["panel-calibration-tab.js", "panel-calibration-wizard.js", "panel-calibration-screens.js"]) {
+    const source = readFileSync(new URL(file, base), "utf8");
+    for (const match of source.matchAll(/\b(?:t|tx)\("([A-Za-z0-9_]+)"/g)) keys.add(match[1]);
+  }
+  // Keys built from a value: every value the views can carry.
+  for (const value of ["all", "to_measure", "calibrated", "profile"]) keys.add(`calTabFilter_${value}`);
+  for (const value of ["to_measure", "times", "rolls"]) keys.add(`calTabStatus_${value}`);
+  for (const value of ["guided", "automatic", "inherited", "none"]) keys.add(`calTabMethod_${value}`);
+  for (const value of ["unexpected_movement", "external_command", "unexpected_stop", "stopped", "not_delivered", "start_timeout",
+    "not_stopped", "stop_queue_full", "invalid_measurement", "travel_timeout", "cover_unavailable"]) keys.add(`calReason_${value}`);
+  assert.ok(keys.size > 150, `${keys.size} keys found`);
+  for (const key of keys) {
+    assert.ok(translations.en[key], `en ${key}`);
+    assert.ok(translations.it[key], `it ${key}`);
+  }
+});
+
+test("row menu items move with the arrow keys", async () => {
+  const { root, tab } = await mount();
+  row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]').click();
+  const items = [...row(tab, "cover.bedroom").querySelectorAll('[role="menuitem"]')];
+  assert.equal(root.activeElement, items[0]);
+  items[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.equal(root.activeElement, items[1]);
+  items[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.equal(root.activeElement, items[0], "the arrows wrap");
+  items[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+  assert.equal(root.activeElement, items[1]);
+});
+
 test("the row menu assigns a profile in the existing dialog and closes with Escape back on its button", async () => {
   const { root, tab, hass } = await mount();
   hass.callWS = ((original) => async (message) => message.type === "myhome/cover_profiles/read" && message.entity_id === "cover.bedroom"

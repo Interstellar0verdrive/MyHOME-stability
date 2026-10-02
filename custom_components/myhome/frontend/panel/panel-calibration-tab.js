@@ -293,7 +293,17 @@ export class CalibrationTab {
   }
 
   _keydown(event) {
-    if (event.key !== "Escape" || this._menu === null) return;
+    if (this._menu === null || this._mode.kind !== "list") return;
+    if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+      // Menu items move with the arrows and wrap, as in Home Assistant's own menus.
+      const items = [...this._context.host.querySelectorAll('.cal-menu:not([hidden]) [role="menuitem"]')];
+      const index = items.indexOf(this._context.host.getRootNode().activeElement);
+      if (!items.length) return;
+      event.preventDefault();
+      items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+      return;
+    }
+    if (event.key !== "Escape") return;
     const key = this._menu;
     this._menu = null;
     this._render();
