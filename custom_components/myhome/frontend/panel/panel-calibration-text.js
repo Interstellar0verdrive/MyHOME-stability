@@ -17,9 +17,11 @@ export function rich(text, values) {
 /** One paragraph, without the wrapping `<p>`: line breaks become `<br>`. */
 export function inline(text, values) {
   const escaped = esc(fill(text, values));
-  // A span may cross a line break (`**text.\n**`): the break stays inside the bold run.
-  return escaped.replace(/\*\*([\s\S]+?)\*\*/g, (match, inner) => inner.trim() ? `<strong>${inner.trim()}</strong>` : "")
-    .replace(/\*\*/g, "").replace(/\n/g, "<br>");
+  // Spaces or a line break just inside the markers (`**text. **Next`, `**text.\n**`) move outside the bold run.
+  return escaped.replace(/\*\*([\s\S]+?)\*\*/g, (match, inner) => {
+    const lead = /^\s/.test(inner) ? " " : "", trail = /\n\s*$/.test(inner) ? "\n" : /\s$/.test(inner) ? " " : "";
+    return inner.trim() ? `${lead}<strong>${inner.trim()}</strong>${trail}` : `${lead}${trail}`;
+  }).replace(/\*\*/g, "").replace(/\n/g, "<br>");
 }
 
 /** A localized number: tenths of a second or centimetre unless `digits` says otherwise. */

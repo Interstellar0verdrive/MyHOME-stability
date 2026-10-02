@@ -1,0 +1,272 @@
+/**
+ * What the calibration wizard talks to. Two implementations of one interface:
+ *
+ * - `LiveCalibrationGateway`: the existing session of Home Assistant (`geometry` and `guided` modes),
+ *   driven through the same `CoverCalibration` engine as the profile dialog, so every message,
+ *   heartbeat, reconnection, claim and Cancel is the one already tested there.
+ * - `PreviewCalibrationGateway`: steps whose backend verbs do not exist yet (fine-tuning, path B,
+ *   tape readings only). Local state only: it sends nothing to Home Assistant or the bus, and the
+ *   wizard says so on screen.
+ *
+ * Interface: `view` (the session view or null), `status` ({busy, lost, expired, error, notice,
+ * cancelPending, confirmTake}), `elapsed()` (seconds or null), `start(options)`, `resume(session)`,
+ * `act(action, extra)`, `stop()`, `claim()`, `reconnect()`, `cancel()`, `save({target, name})`,
+ * `supports(target)` and `close()`. `onChange(kind)` is called with "view", "tick" or "error".
+ */
+const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
+const { CoverCalibration } = await import(asset("panel-cover-calibration.js"));
+
+/** The existing engine, with its DOM replaced by notifications to the wizard. */
+class WizardSession extends CoverCalibration {
+  constructor(listener) { super(); this._listener = listener; this.error = null; this.notice = null; }
+  _render() { this._listener("view"); }
+  _renderElapsed() { this._listener("tick"); }
+  _error(error) { this.error = error || {}; this._listener("error"); }
+  _accept(state) {
+    const claiming = this._claiming;
+    super._accept(state);
+    // A claim against a sequence that moved on only reads: the wizard says so.
+    if (claiming && state.read_only) { this.notice = "calClaimStale"; this._listener("view"); }
+  }
+  _perform(action, extra) {
+    if (action !== "heartbeat") { this.error = null; this.notice = null; }
+    return super._perform(action, extra);
+  }
+}
+
+export const SAVE_TARGETS = ["profile_new", "profile_update", "cover_only"];
+// Path B only: the cover follows a profile with its own travel, nothing measured is written.
+const PREVIEW_TARGETS = [...SAVE_TARGETS, "follow_profile"];
+
+export class LiveCalibrationGateway {
+  constructor({ onChange }) {
+    this.preview = false;
+    this._onChange = onChange;
+    this._engine = new WizardSession((kind) => this._onChange?.(kind));
+  }
+
+  get view() { return this._engine._state || null; }
+  get status() {
+    const engine = this._engine;
+    return { busy: !!engine._busy, lost: !!engine._lost, expired: !!engine._expired, error: engine.error, notice: engine.notice,
+      cancelPending: !!engine._cancelPending, confirmTake: !!engine._confirmTake, locked: !!engine._state && engine._locked() };
+  }
+
+  elapsed() {
+    const elapsed = this._engine._elapsed;
+    return elapsed ? elapsed.value + (performance.now() - elapsed.since) / 1000 : null;
+  }
+
+  /** `mode` is "geometry" (paths A and C, times and rolls) or "guided" (path C, times only). */
+  start({ host, hass, t, entity, revision, mode, slats, onSaved, onCancel }) {
+    this._base = { host, hass, t, entity, revision, onSaved, onCancel };
+    return this._engine.open({ ...this._base, mode, ...(mode === "geometry" ? { slats } : {}) });
+  }
+
+  /** Reads the session: never a claim, never a command to the bus. */
+  resume({ host, hass, t, entity, revision, session, onSaved, onCancel }) {
+    this._base = { host, hass, t, entity, revision, onSaved, onCancel };
+    return this._engine.open({ ...this._base, resume: session });
+  }
+
+  reconnect() { return this._engine.open({ ...this._base, claim: false, resume: this._engine._state }); }
+
+  /** While the owner is present the first call only asks for confirmation, as in the profile dialog. */
+  claim() {
+    const engine = this._engine;
+    if (engine._state?.owner_present === true && !engine._confirmTake) {
+      engine._confirmTake = true;
+      this._onChange?.("view");
+      return Promise.resolve();
+    }
+    return engine.open({ ...this._base, claim: true, resume: engine._state });
+  }
+
+  act(action, extra = {}) { return this._engine._perform(action, extra); }
+  stop() { return this._engine._perform("stop"); }
+  cancel() { return this._engine._cancel(this._engine._generation); }
+
+  supports(target) {
+    const modes = this.view?.save_modes || [];
+    return target === "profile_new" ? modes.includes("new") : target === "cover_only" ? modes.includes("cover") : false;
+  }
+
+  /** The unified Save of the screens, mapped on the existing `save_mode`s (L5a will accept `target`). */
+  save({ target, name }) {
+    if (!this.supports(target)) return Promise.resolve();
+    return this._engine._perform("save", target === "profile_new" ? { save_mode: "new", name } : { save_mode: "cover" });
+  }
+
+  close() { return this._engine.close(); }
+}
+
+/** Half-up to the whole centimetre: 4.5 cm is 5 cm (the threshold of the check is on the integer). */
+export const roundHalfUp = (value) => Math.floor(Math.abs(value) + 0.5);
+export const CHECK_THRESHOLD_CM = 4;
+
+/**
+ * A rough height model for the preview only: the slat phase lifts nothing, then the edge moves
+ * in proportion to time. The real fit belongs to the backend (L5c); these numbers only fill the
+ * screens so they can be tried.
+ */
+export function previewHeight(values, direction, fraction) {
+  const travel = values.travel_cm || 0;
+  if (direction === "up") {
+    const total = values.opening_time || 1, slat = values.slat_time_s || 0;
+    return travel * Math.min(1, Math.max(0, (fraction * total - slat) / Math.max(total - slat, 0.1)));
+  }
+  return travel * Math.min(1, Math.max(0, 1 - fraction));
+}
+
+const READINGS = [
+  { step: "quarter_open", direction: "up", fraction: 0.25, back: "down" },
+  { step: "three_quarter_open", direction: "up", fraction: 0.75, back: "down" },
+  { step: "quarter_close", direction: "down", fraction: 0.25, back: "up" },
+  { step: "three_quarter_close", direction: "down", fraction: 0.75, back: "up" },
+];
+const CHECK = { step: "check", direction: "down", fraction: 0.4, back: "up" };
+
+/**
+ * Simulated sessions with the shape the backend will publish (L5b/L5c): `phase`, `step`,
+ * `stages`, `expected_cm`, `readings`, `check`, `values`. Plans: "refine" (fine-tuning after a
+ * calibration, path A and C), "rolls" (path C, tape readings only) and "profile" (path B).
+ */
+export class PreviewCalibrationGateway {
+  constructor({ onChange, plan, values, stageMs = 1500 }) {
+    this.preview = true;
+    this._onChange = onChange;
+    this._plan = plan;
+    this._stageMs = stageMs;
+    this._timers = new Set();
+    this._view = null;
+    this._seed = { ...values };
+    this._error = null;
+  }
+
+  get view() { return this._view; }
+  get status() { return { busy: false, lost: false, expired: false, error: this._error, notice: null, cancelPending: false, confirmTake: false, locked: false }; }
+  elapsed() { return null; }
+  supports(target) { return PREVIEW_TARGETS.includes(target); }
+  reconnect() { return Promise.resolve(); }
+  claim() { return Promise.resolve(); }
+
+  start() {
+    const base = { preview: true, path: this._plan, owner: true, read_only: false, recoverable: false, sequence: 0,
+      values: { ...this._seed }, travel_cm: this._seed.travel_cm ?? null, readings: {}, check: null, reason: null };
+    this._readings = this._plan === "profile" ? [] : READINGS;
+    this._view = base;
+    if (this._plan === "profile") this._position({ step: "open_full", stages: [{ key: "open_full", seconds: this._seed.opening_time }] }, "travel");
+    else this._next(0);
+    return Promise.resolve();
+  }
+
+  resume() { return this.start(); }
+
+  _emit(patch) {
+    this._view = { ...this._view, ...patch, sequence: this._view.sequence + 1 };
+    this._onChange?.("view");
+  }
+
+  _clear() { for (const timer of this._timers) clearTimeout(timer); this._timers.clear(); }
+
+  _later(callback) {
+    const timer = setTimeout(() => { this._timers.delete(timer); callback(); }, this._stageMs);
+    this._timers.add(timer);
+  }
+
+  /** A positioning in one or two stages, then the reading of `step`. */
+  _position({ step, stages }, reading) {
+    this._clear();
+    this._emit({ phase: "positioning", step, stages, stage_index: 0, expected_cm: null, check_result: null });
+    const advance = (index) => {
+      if (index < stages.length - 1) { this._emit({ stage_index: index + 1 }); this._later(() => advance(index + 1)); return; }
+      this._emit({ phase: "reading", step: reading, stages: [], stage_index: null, expected_cm: this._expected(reading) });
+    };
+    this._later(() => advance(0));
+  }
+
+  _reading(step) { return [...READINGS, CHECK].find((item) => item.step === step); }
+
+  _expected(step) {
+    const values = this._view.values, travel = this._view.travel_cm;
+    if (step === "travel") return null;
+    if (this._plan === "profile" && step === "check") return travel / 2;
+    const reading = this._reading(step);
+    return reading ? previewHeight({ ...values, travel_cm: travel }, reading.direction, reading.fraction) : null;
+  }
+
+  _stages(reading) {
+    const values = this._view.values;
+    if (this._plan === "profile") return [{ key: "bottom", seconds: values.closing_time }, { key: "half_travel", seconds: values.opening_time / 2 }];
+    const back = reading.back === "down" ? { key: "back_down", seconds: values.closing_time } : { key: "back_up", seconds: values.opening_time };
+    const time = reading.direction === "up" ? values.opening_time : values.closing_time;
+    return [back, { key: reading.step, seconds: time * reading.fraction }];
+  }
+
+  _next(index) {
+    const reading = index < this._readings.length ? this._readings[index] : CHECK;
+    this._index = index;
+    this._position({ step: reading.step, stages: this._stages(reading) }, reading.step);
+  }
+
+  _checkResult(measured) {
+    const expected = this._view.expected_cm;
+    const gap = roundHalfUp(measured - expected);
+    const seconds = this._plan === "profile" ? null : this._view.values.closing_time * CHECK.fraction;
+    return { target_cm: expected, predicted_cm: expected, measured_cm: measured, gap_cm: gap, threshold_cm: CHECK_THRESHOLD_CM,
+      check_seconds: seconds, passed: gap <= CHECK_THRESHOLD_CM };
+  }
+
+  act(action, extra = {}) {
+    const view = this._view;
+    this._error = null;
+    if (!view) return Promise.resolve();
+    if (action === "reading" && view.phase === "reading") {
+      const value = Number(extra.reading_cm);
+      const limit = view.step === "travel" ? 500 : (view.travel_cm || 500) + 50;
+      if (!Number.isFinite(value) || value < (view.step === "travel" ? 20 : 0) || value > limit) {
+        this._error = { code: "invalid_reading" };
+        this._onChange?.("error");
+        return Promise.resolve();
+      }
+      if (view.step === "travel") {
+        this._emit({ travel_cm: value, readings: { ...view.readings, travel: value } });
+        this._position({ step: "check", stages: this._stages(CHECK) }, "check");
+      } else if (view.step === "check") {
+        this._emit({ phase: "check_result", readings: { ...view.readings, check: value }, check: this._checkResult(value) });
+      } else {
+        this._emit({ readings: { ...view.readings, [view.step]: value } });
+        this._next(this._index + 1);
+      }
+    } else if (action === "repeat" && view.phase === "reading") {
+      if (view.step === "travel") this._position({ step: "open_full", stages: [{ key: "open_full", seconds: view.values.opening_time }] }, "travel");
+      else if (view.step === "check") this._position({ step: "check", stages: this._stages(CHECK) }, "check");
+      else this._next(this._index);
+    } else if (action === "repeat_check" && view.phase === "check_result") {
+      this._position({ step: "check", stages: this._stages(CHECK) }, "check");
+    } else if (action === "redo_readings" && view.phase === "check_result" && this._plan !== "profile") {
+      this._emit({ readings: {}, check: null });
+      this._next(0);
+    } else if (["accept", "continue_anyway"].includes(action) && view.phase === "check_result") {
+      this._emit({ phase: "review" });
+    } else if (action === "stop") {
+      this._clear();
+      if (view.phase === "positioning") this._emit({ phase: "interrupted", reason: "stopped" });
+    } else if (action === "cancel") {
+      this._clear();
+      this._emit({ phase: "cancelled", reason: "cancelled" });
+    }
+    return Promise.resolve();
+  }
+
+  stop() { return this.act("stop"); }
+  cancel() { return this.act("cancel"); }
+
+  save({ target, name }) {
+    if (this._view?.phase !== "review" || !this.supports(target)) return Promise.resolve();
+    this._emit({ phase: "saved", saved: { target, name: name ?? null } });
+    return Promise.resolve();
+  }
+
+  close() { this._clear(); this._view = null; return Promise.resolve(); }
+}

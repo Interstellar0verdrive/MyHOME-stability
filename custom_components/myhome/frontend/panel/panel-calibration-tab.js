@@ -1,8 +1,8 @@
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibration }] = await Promise.all([
+const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibration }, { CalibrationWizard }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
-  import(asset("panel-cover-calibration.js")),
+  import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")),
 ]);
 const { fill, number, dateText, names } = text;
 
@@ -35,11 +35,11 @@ export class CalibrationTab {
     this._generation = 0; this._rows = new Map(); this._unsubs = []; this._expanded = new Set();
     this._filter = "all"; this._menu = null; this._mode = { kind: "list" }; this._hosts = new WeakSet();
     this._calibration = new CoverCalibration();
-    this._wizard = null;
+    this._wizard = new CalibrationWizard();
   }
 
-  /** Install the wizard: until then the tab lists covers and opens existing sessions and groups only. */
-  useWizard(wizard) { this._wizard = wizard; }
+  /** Replace the wizard (tests use a faster preview); `null` leaves only sessions and groups. */
+  useWizard(wizard) { this._wizard?.close(); this._wizard = wizard; }
 
   clear() {
     this._generation++;
@@ -175,6 +175,7 @@ export class CalibrationTab {
 
   _render() {
     if (!this._context?.host.isConnected || this._mode.kind !== "list") return;
+    if (this._openPendingWizard()) return;
     const { host, t, hass, gateways } = this._context;
     const language = hass.language || "en";
     const loading = gateways.some((entry) => !this._rows.get(entry.entry_id)?.data && !this._rows.get(entry.entry_id)?.error && !this._rows.get(entry.entry_id)?.removed);
@@ -321,6 +322,24 @@ export class CalibrationTab {
     else if (action?.startsWith("cal-tab-")) this._render();
   }
 
+  /** Open the wizard on a cover as soon as the list knows it (the tab may still be loading). */
+  requestWizard(entryId, entityId) {
+    this._pendingWizard = { entryId, entityId };
+    if (this._context) this._render();
+  }
+
+  _openPendingWizard() {
+    const pending = this._pendingWizard;
+    if (!pending || !this._wizard || this._mode.kind !== "list") return false;
+    const row = this._rows.get(pending.entryId);
+    if (!row || (!row.data && !row.error)) return false;
+    this._pendingWizard = null;
+    const item = this._covers().find((entry) => entry.entry.entry_id === pending.entryId && entry.cover.entity_id === pending.entityId);
+    if (!item || row.session) return false;
+    this._openWizard({ start: "path", item });
+    return true;
+  }
+
   /** Back to the list after a wizard, a group or an opened session; the backend is read again. */
   _backToList() {
     this._mode = { kind: "list" };
@@ -334,7 +353,7 @@ export class CalibrationTab {
     if (!this._wizard || !this._context) return;
     this._mode = { kind: "wizard" };
     const { host, hass, t, onOpenCover } = this._context;
-    this._wizard.open({ host, hass, t, covers: this._covers(), ...options,
+    this._wizard.open({ host, hass, t, covers: this._covers(), data: (entryId) => this._rows.get(entryId)?.data, ...options,
       onOpenCover: (entityId) => onOpenCover?.(entityId),
       onClose: () => this._backToList() });
   }
