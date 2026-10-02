@@ -611,7 +611,19 @@ class MyHomePanel extends HTMLElement {
       host: this.shadowRoot.getElementById("dialog-host"), hass: this._hass, entity,
       t: (key) => this._t(key),
       onSaved: (message) => { this.shadowRoot.getElementById("toast").textContent = message; this._refresh(); },
+      onWizard: (target) => this._openCalibrationWizard(target),
     });
+  }
+
+  /** "New guided measurement" in the profile dialog: the Calibration tab, with the wizard on that cover. */
+  _openCalibrationWizard(entity) {
+    if (!this._data) return;
+    this._view = "entities";
+    this._coverView = "calibration";
+    if (this._categoryMode === "single") this._selectedWho = "2";
+    this._calibrationTab.requestWizard(entity.entry_id, entity.entity_id);
+    this._renderContent();
+    this.shadowRoot.getElementById("cover-calibration-tab")?.scrollIntoView?.({ block: "start" });
   }
 
   _onClick(event) {
