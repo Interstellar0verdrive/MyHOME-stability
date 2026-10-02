@@ -1,5 +1,7 @@
 # MyHOME panel API: implemented reference
 
+> Panel 0.41.0 adds the [Calibration view and wizard](panel-calibration-screens.md) on the existing commands; no message or view changes.
+
 > Panel 0.40.0 [pauses an automatic or batch cycle whose owner is absent](#pause-without-the-owner-0400) and keeps its measurements until the owner sends `continue`.
 
 > Panel 0.41.0 adds the [accepted range of intermediate tape readings](#guided-geometry-intermediate-reading-range-0410) to guided roll measurement, shows profile values rounded and locks the cover's travel and personal values while a measurement runs.
