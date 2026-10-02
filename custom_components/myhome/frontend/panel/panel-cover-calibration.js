@@ -147,6 +147,12 @@ export class CoverCalibration {
     return done;
   }
 
+  /** Close, and stop answering for this view when the tab's identity changes: it will not be opened again. */
+  dispose() {
+    views.delete(this);
+    return this.close();
+  }
+
   async open(context) {
     // Reopening the same session swaps the subscription without leaving it.
     this.close({ leave: !context.resume || context.resume.session_id !== this._state?.session_id });

@@ -97,7 +97,7 @@ export class LiveCalibrationGateway {
     return this._engine._perform("save", target === "profile_new" ? { save_mode: "new", name } : { save_mode: "cover" });
   }
 
-  close() { return this._engine.close(); }
+  close() { return this._engine.dispose(); }
 }
 
 /** Half-up to the whole centimetre: 4.5 cm is 5 cm (the threshold of the check is on the integer). */

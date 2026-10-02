@@ -334,6 +334,8 @@ export class CalibrationTab {
 
   /** Open the wizard on a cover as soon as the list knows it (the tab may still be loading). */
   requestWizard(entryId, entityId) {
+    // Never queued behind an open wizard, group or session: it would open by surprise when that closes.
+    if (this._mode.kind !== "list") return;
     this._pendingWizard = { entryId, entityId };
     if (this._context) this._render();
   }
@@ -373,7 +375,8 @@ export class CalibrationTab {
     const row = this._rows.get(entryId), session = row?.session;
     if (!session || !this._context) return;
     const item = this._covers().find((entry) => entry.entry.entry_id === entryId && entry.cover.entity_id === session.entity_id);
-    if (this._wizard?.handles?.(session)) { this._openWizard({ start: "resume", session, item }); return; }
+    // The wizard needs the cover in the list (name, gateway); otherwise the existing view opens it.
+    if (item && this._wizard?.handles?.(session)) { this._openWizard({ start: "resume", session, item }); return; }
     this._mode = { kind: "session" };
     const { host, hass, t } = this._context;
     this._calibration.open({ host, hass, t, entity: { entry_id: entryId, entity_id: session.entity_id }, resume: session,

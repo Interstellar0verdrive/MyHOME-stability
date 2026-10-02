@@ -114,6 +114,9 @@ export class CalibrationWizard {
 
   _render() {
     if (!this._root) return;
+    // While "Close without saving?" is open the screen behind it is not rebuilt: a tap meant for the
+    // dialog never lands on a button that appeared under it. It is redrawn when the dialog closes.
+    if (this._frame.querySelector(".wiz-dialog:not([hidden])")) { this._patch(this._screen()); return; }
     const screen = this._screen();
     this._current = screen;
     const { t } = this._context;
@@ -344,8 +347,9 @@ export class CalibrationWizard {
     if (id.startsWith("run:")) return this._send(id.slice(4));
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
     if (id === "stop") { this._closeDialog(false); return gateway?.stop(); }
-    if (id === "take") return gateway?.claim();
-    if (id === "reconnect") return gateway?.reconnect();
+    // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
+    if (id === "take") { Object.assign(local, { armed: false, begun: false }); return gateway?.claim(); }
+    if (id === "reconnect") { Object.assign(local, { armed: false, begun: false }); return gateway?.reconnect(); }
     if (id === "save" || id === "refine") return this._save(id === "refine");
     if (id === "start-over") {
       // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
@@ -365,6 +369,8 @@ export class CalibrationWizard {
   _send(action, extra = {}) {
     if (!this._gateway) return;
     this._local.armed = true;
+    // The view the user acted on is never acted on again by itself, not even after a refused press.
+    this._local.autoSequence = this._gateway.view?.sequence ?? null;
     // A repeated run is confirmed again on its own screen (A-12, A-15) once measured.
     if (action === "repeat" && this._current?.code.endsWith("-12")) this._local.ackAscent = false;
     if (action === "repeat" && this._current?.code.endsWith("-15")) this._local.ackDescent = false;
@@ -462,6 +468,8 @@ export class CalibrationWizard {
 
   _viewChanged() {
     const view = this._gateway?.view, local = this._local;
+    // A tab that stops owning the session forgets its presses: only a press made as owner arms a movement.
+    if (view && !view.preview && (view.read_only || !view.owner)) Object.assign(local, { armed: false, begun: false });
     if (view?.phase === "review" && !view.preview) {
       local.review = { opening: view.values?.opening_time, closing: view.values?.closing_time, slat: view.geometry?.slat_time_s ?? null,
         travel: view.mode === "geometry" ? view.travel_cm : null, opening_roll: view.geometry?.opening_roll ?? null, closing_roll: view.geometry?.closing_roll ?? null,
@@ -533,6 +541,7 @@ export class CalibrationWizard {
     if (!dialog || dialog.hidden) return;
     dialog.hidden = true;
     this._root.classList.remove("has-dialog");
+    this._render();
     if (focus) this._frame.querySelector('[data-wiz="exit"]')?.focus();
   }
 

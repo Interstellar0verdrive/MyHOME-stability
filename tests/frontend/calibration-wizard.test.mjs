@@ -445,3 +445,59 @@ test("a half run that did not start by itself can be started from its screen, an
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.equal(backend.calls.filter((message) => message.action === "save").length, 1);
 });
+
+const resumed = (extra) => ({ entry_id: "one", entity_id: "cover.living_one", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
+  reason: null, values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 },
+  geometry: {}, travel_cm: 198, stop_requested: false, slats: true, lift_attempts: 1, still_resting: false, gap_warning: false,
+  touching_cm: 1, max_gap_cm: 20, gap_warn_cm: 10, saved_travel_cm: 195, expected_cm: 99, can_repeat: true, save_modes: ["new"], ...extra });
+
+test("a refused press is not sent again by itself and its error stays on screen", async () => {
+  const { backend, tab, wiz, code, press, actions } = await mount({ session: resumed({ phase: "briefing", step: "half_open", reading_kind: "half_open" }) });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "A-15");
+  await press("ack:descent");
+  const original = backend.hass.callWS;
+  let refused = false;
+  backend.hass.callWS = async (message) => {
+    if (message.action === "next" && !refused) { refused = true; backend.calls.push(message); throw Object.assign(new Error("busy"), { code: "cover_unavailable" }); }
+    return original(message);
+  };
+  await press("ack:readings"); await tick(6);
+  assert.deepEqual(actions(), ["next"], "one press, one message");
+  assert.equal(wiz().querySelector(".wiz-notices").textContent, translations.en.profileError_cover_unavailable);
+  assert.equal(code(), "A-17");
+  assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, false, "the run can be started again by hand");
+});
+
+test("taking control moves nothing, even on a step the wizard would otherwise continue by itself", async () => {
+  const { backend, tab, wiz, code, type, actions } = await mount({ session: resumed({ phase: "reading", step: "half_open", reading_kind: "half_open" }) });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  await type("99"); await tick(6);
+  assert.deepEqual(actions(), ["reading", "next"]);
+  // Another device takes the session and leaves it before the return to the top.
+  backend.session.phase = "briefing"; backend.session.step = "top";
+  const view = backend.view;
+  backend.view = (extra = {}) => view({ owner: false, read_only: true, ...extra });
+  backend.emit(); await tick(6);
+  assert.ok(wiz().querySelector(".wiz-readonly"));
+  backend.view = view;
+  wiz().querySelector('[data-wiz="take"]').click(); await tick();
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(8);
+  assert.equal(wiz().querySelector(".wiz-readonly"), null);
+  assert.deepEqual(actions(), ["reading", "next"], "nothing after the claim");
+  assert.equal(code(), "A-09", "a reopened session shows the return to the top as a positioning to start by hand");
+  assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, false);
+});
+
+test("the screen behind an open Discard dialog is not rebuilt until the dialog closes", async () => {
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend);
+  assert.equal(code(), "A-05");
+  wiz().querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
+  const stay = wiz().querySelector('[data-wiz="stay"]');
+  backend.interrupt("unexpected_movement"); await tick();
+  assert.equal(wiz().querySelector('[data-wiz="stay"]'), stay, "the dialog stays where the user is about to tap");
+  stay.click(); await tick();
+  assert.equal(code(), "S-01");
+});
