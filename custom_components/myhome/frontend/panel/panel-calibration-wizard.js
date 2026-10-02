@@ -347,7 +347,11 @@ export class CalibrationWizard {
     if (id === "take") return gateway?.claim();
     if (id === "reconnect") return gateway?.reconnect();
     if (id === "save" || id === "refine") return this._save(id === "refine");
-    if (id === "start-over") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); return this._render(); }
+    if (id === "start-over") {
+      // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
+      if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }
+      this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); return this._render();
+    }
     if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", path: "A", scope: null, saved: null, refining: false, base: null }); return this._render(); }
     if (id === "open-cover") { const entityId = this._item()?.cover.entity_id; const { onOpenCover } = this._context; this._finish(); onOpenCover?.(entityId); return; }
     if (id === "correct") {
@@ -361,6 +365,9 @@ export class CalibrationWizard {
   _send(action, extra = {}) {
     if (!this._gateway) return;
     this._local.armed = true;
+    // A repeated run is confirmed again on its own screen (A-12, A-15) once measured.
+    if (action === "repeat" && this._current?.code.endsWith("-12")) this._local.ackAscent = false;
+    if (action === "repeat" && this._current?.code.endsWith("-15")) this._local.ackDescent = false;
     return this._gateway.act(action, extra);
   }
 

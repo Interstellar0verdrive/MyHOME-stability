@@ -218,7 +218,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const seconds = ((slats ? view.samples?.lift || 0 : 0) + (view.values?.opening_time || 0)) / 2;
     return Object.assign(screen, { code: p("17"), title: t("wiz_T027"), visual: null,
       wait: { text: tx(path === "C" ? "wiz_T205" : "wiz_T080", values), stages: [{ text: tx("wiz_T079", { seconds: n(seconds, 0) }), state: "current" }],
-        progress: progress(view, elapsed, seconds) }, actions: [stop] });
+        progress: progress(view, elapsed, seconds) },
+      // Normally started by the wizard itself; if that did not happen the run can be started here.
+      actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop] : [stop] });
   }
   if (step === "top" && !local.ackReadings) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.

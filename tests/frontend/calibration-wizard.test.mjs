@@ -124,6 +124,14 @@ test("path A runs the live geometry session from the first close to Save, one me
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(code(), "A-15");
+  await press("repeat");
+  assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
+  await move(backend);
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').textContent, "It is fully open, continue");
+  await press("endpoint"); backend.stopped(); await tick();
+  assert.equal(code(), "A-14");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  assert.equal(code(), "A-15", "a repeated descent is confirmed again");
   await press("ack:descent");
   assert.equal(code(), "A-16");
   await press("ack:readings");
@@ -157,7 +165,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-34");
   assert.match(wiz().querySelector(".wiz-body").textContent, /The profile "living_room_shutter_1" was created/);
   assert.deepEqual(actions(), ["next", "endpoint", "next", "lift", "reading", "next", "endpoint", "next", "endpoint", "reading", "next", "endpoint",
-    "next", "reading", "next", "endpoint", "next", "reading", "save"]);
+    "repeat", "next", "endpoint", "next", "endpoint", "next", "reading", "next", "endpoint", "next", "reading", "save"]);
 });
 
 test("without slats the lift-off is skipped and the slat choice is sent", async () => {
@@ -408,4 +416,32 @@ test("the keyboard reaches every step: title focus, Steps sheet, and a dialog th
   buttons.at(-1).click(); await tick();
   assert.equal(dialog.hidden, true, "Stop from the dialog closes it and keeps the wizard");
   assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1);
+});
+
+test("a half run that did not start by itself can be started from its screen, and fine-tuning starts over as a preview", async () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "briefing", step: "half_open", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
+    readings: { gap: 3 }, geometry: {}, travel_cm: 198, slats: true, owner: true, sequence: 4 };
+  const screen = buildScreen({ t, stage: "session", path: "A", view, local: { ackDescent: true, ackReadings: true }, cover: { name: "Living room shutter 1" } });
+  assert.equal(screen.code, "A-17");
+  assert.deepEqual(screen.actions.map((action) => action.id), ["next", "stop"]);
+  const { wiz, code, press, startFor, backend, type } = await mount({ stageMs: 30 });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:ascent"); await type("198");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  await type("97"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await move(backend, { auto: true, stop: true }); await type("101");
+  await press("refine");
+  assert.equal(code(), "A-22");
+  await press("stop");
+  assert.equal(code(), "S-01");
+  await press("start-over");
+  assert.equal(code(), "A-22", "fine-tuning starts over from the saved values, still as a preview");
+  assert.ok(wiz().querySelector(".wiz-preview"));
+  assert.equal(backend.calls.filter((message) => message.action === "save").length, 1);
 });
