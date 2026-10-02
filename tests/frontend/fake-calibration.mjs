@@ -152,7 +152,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         subscriptions.push(message);
         if (message.type === "myhome/cover_profiles/subscribe") return () => {};
         if (message.type === "myhome/cover_calibration/start") {
-          session = message.mode === "guided" ? startGuided(message) : startGeometry(message);
+          // As in Home Assistant, a start without `mode` is the guided measurement.
+          session = message.mode === "geometry" ? startGeometry(message) : startGuided(message);
           refresh();
         } else if (message.type === "myhome/cover_calibration/resume") {
           if (!session || session.session_id !== message.session_id) throw Object.assign(new Error("expired"), { code: "calibration_expired" });

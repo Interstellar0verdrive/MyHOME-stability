@@ -256,16 +256,16 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
   screen.visual = phase === "review" || phase === "saving" ? null : view;
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (["confirm_closed"].includes(phase)) return Object.assign(screen, { code: "C-05", phase: "prep", title: t("wiz_T030"), body: t("calPhase_confirm_closed"),
-    actions: [{ id: "open", label: t("wiz_T045"), kind: "primary" }, stop] });
+    actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary" }, stop] });
   if (["starting_open", "opening"].includes(phase)) return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t("calPhase_opening"),
     stopwatch: runWatch(t, n, view, elapsed),
-    actions: [{ id: "open", label: t("wiz_T045"), kind: "primary", disabled: true },
+    actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: true },
       { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, stop] });
   if (phase === "confirm_open") return Object.assign(screen, { code: "C-12", phase: "descent", title: t("wiz_T058"), body: t("calPhase_confirm_open"),
-    actions: [{ id: "close", label: t("wiz_T045"), kind: "primary" }, stop] });
+    actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary" }, stop] });
   if (["starting_close", "closing"].includes(phase)) return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t("calPhase_closing"),
     stopwatch: runWatch(t, n, view, elapsed),
-    actions: [{ id: "close", label: t("wiz_T045"), kind: "primary", disabled: true },
+    actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: true },
       { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, stop] });
   return Object.assign(screen, { code: "unknown", title: t(`calPhase_${phase}`), actions: [stop] });
 }

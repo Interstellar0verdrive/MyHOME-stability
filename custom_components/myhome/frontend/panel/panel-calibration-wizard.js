@@ -24,8 +24,11 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
 export class CalibrationWizard {
   constructor({ stageMs } = {}) { this._stageMs = stageMs; this._generation = 0; }
 
-  /** Sessions the wizard draws itself: slat and roll measurement, and guided times in both directions. */
-  handles(session) { return session?.mode === "geometry" || (session?.mode === "guided" && !session.direction && !session.batch); }
+  /**
+   * Sessions the wizard draws itself when opened from the list: slat and roll measurement. A guided
+   * session (times only) opens in the existing view, which offers every save mode it was started with.
+   */
+  handles(session) { return session?.mode === "geometry" && !session.batch; }
 
   updateHass(hass) { if (this._context) this._context.hass = hass; }
 
@@ -326,7 +329,9 @@ export class CalibrationWizard {
       return this._render();
     }
     if (id === "reading") return this._reading();
-    if (["next", "lift", "endpoint", "open", "close", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
+    // The guided protocol's own movements ("open", "close") are named apart from closing the wizard.
+    if (id.startsWith("run:")) return this._send(id.slice(4));
+    if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
     if (id === "stop") { this._closeDialog(false); return gateway?.stop(); }
     if (id === "take") return gateway?.claim();
     if (id === "reconnect") return gateway?.reconnect();
@@ -412,7 +417,6 @@ export class CalibrationWizard {
     const local = this._local;
     if (item) local.coverKey = key(item);
     local.path = "A";
-    if (session.mode === "guided") { local.path = "C"; local.scope = "times_only"; }
     Object.assign(local, freshFlags(), { stage: "session" });
     this._newGateway("live").resume({ ...this._liveContext(), session });
   }
@@ -484,6 +488,7 @@ export class CalibrationWizard {
       return;
     }
     local.stage = "saved";
+    if (!local.refining && local.review) local.base = { ...local.review };
     this._dropGateway();
     this._render();
   }
