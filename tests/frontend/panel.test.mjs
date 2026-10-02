@@ -1628,3 +1628,121 @@ test("geometry calibration stays in the existing cover section and clears a sing
   assert.equal("direction" in request, false);
   assert.equal(calls.filter((c) => c.type === "myhome/cover_calibration/action").length, 0);
 });
+
+test("the travel profile shows times to a tenth of a second and rolls to two decimals; saved values keep their precision", async () => {
+  const opening = 14.65187786286696, closing = 14.477566485991701;
+  const writes = [];
+  const { panel, root, hass } = await mountProfiles({
+    read: () => coverProfileData({
+      profiles: [{ id: "timed", name: "Misurato", opening_time: opening, closing_time: closing, uses: 1 }],
+      effective_opening_time: opening, effective_closing_time: closing,
+      configured: { opening: { origin: "override", value: opening }, closing: { origin: "profile", value: closing } },
+      effective: { slat_time_s: { value: 2.733 }, opening_roll: { value: 1.0819 }, closing_roll: { value: 1.2426 } },
+    }),
+    write: (message) => { writes.push(message); return coverProfileData({ revision: 4 }); },
+  });
+  openProfile(root); await tick();
+  assert.equal(root.querySelector("#profile-effective-opening").textContent, "14,7");
+  assert.equal(root.querySelector("#profile-effective-closing").textContent, "14,5");
+  assert.equal(root.querySelector("#profile-motion-status").textContent,
+    "Lamelle e rullo · Fase lamelle (s): 2,7 · Rapporto rullo in apertura: 1,08 · Rapporto rullo in chiusura: 1,24. La precisione del posizionamento non è stata misurata.");
+  const form = root.querySelector("#profile-form");
+  assert.match(form.elements.profile.selectedOptions[0].textContent, /Misurato · 14,7 \/ 14,5 s$/);
+  assert.equal(root.querySelector("#edit-hint").textContent, "Misurato · 14,7 / 14,5 s");
+  assert.equal(form.elements.override_opening.value, "14.7");
+  assert.equal(form.elements.override_closing.value, "14.5");
+  // Live timings are rounded the same way.
+  panel.hass = { ...hass, states: { ...hass.states, "cover.shutter": { state: "open",
+    attributes: { opening_time: 14.6094, closing_time: closing, cover_profile_pending: false } } } };
+  assert.equal(root.querySelector("#profile-effective-opening").textContent, "14,6");
+  // Unchanged fields send back the saved values, not the rounded ones.
+  form.elements.use_closing.checked = true;
+  form.elements.use_closing.dispatchEvent(new dom.window.Event("change"));
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(writes.at(-1).overrides, { opening: opening, closing: closing });
+  openProfile(root); await tick();
+  const again = root.querySelector("#profile-form");
+  again.elements.override_opening.value = "15.2";
+  again.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(writes.at(-1).overrides, { opening: 15.2, closing: null });
+});
+
+test("travel and personal values are locked with the reason while a measurement holds the gateway", async () => {
+  let calibration = { entry_id: "one", entity_id: "cover.shutter", session_id: "running", mode: "geometry", phase: "briefing",
+    sequence: 4, values: {}, recoverable: true, attached: true, owner_present: true };
+  const { root, calls } = await mountProfiles({ read: () => coverProfileData({ calibration, travel_cm: 110, height_scaling: true,
+    configured: { opening: { origin: "override", value: 20 }, closing: { origin: "profile", value: 25 } } }) });
+  openProfile(root); await tick();
+  const form = root.querySelector("#profile-form");
+  const controls = () => [form.elements.travel_cm, form.querySelector('[data-profile-action="travel"]'), form.elements.use_opening,
+    form.elements.use_closing, form.elements.override_opening, form.elements.override_closing, form.querySelector('[data-profile-action="overrides"]')];
+  const lines = () => [...form.querySelectorAll("[data-profile-busy]")];
+  const locked = (label) => {
+    assert.deepEqual(controls().map((control) => control.disabled), Array(7).fill(true), label);
+    assert.equal(lines().length, 2);
+    for (const line of lines()) {
+      assert.equal(line.hidden, false, label);
+      assert.equal(line.textContent, "Una misurazione è in corso: i valori si possono cambiare quando è finita.");
+    }
+  };
+  locked("session open");
+  assert.equal(form.elements.profile_name.disabled, false, "only the values Home Assistant refuses are locked");
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.equal(calls.filter((call) => call.type.endsWith("/write")).length, 0);
+  calibration = { ...calibration, owner_present: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  locked("owner away");
+  const unlocked = (label) => {
+    assert.deepEqual(controls().map((control) => control.disabled), [false, false, false, false, false, true, false], `${label}; a personal value follows its switch`);
+    for (const line of lines()) assert.equal(line.hidden, true, label);
+  };
+  // Interrupted but still offered by "Open session": Home Assistant accepts the writes again.
+  calibration = { ...calibration, phase: "interrupted", reason: "owner_absent", waiting_for_stop: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.equal(root.querySelector("#cal-resume").hidden, false);
+  unlocked("interrupted session still open");
+  // Closed, but the gateway still waits for Stop feedback.
+  calibration = { ...calibration, recoverable: false, attached: false, waiting_for_stop: true };
+  root.querySelector("#cal-refresh").click(); await tick();
+  locked("waiting for Stop");
+  calibration = { ...calibration, waiting_for_stop: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  unlocked("ended session");
+  calibration = { ...calibration, phase: "paused", recoverable: true, waiting_for_stop: false };
+  root.querySelector("#cal-refresh").click(); await tick();
+  locked("a session that is still active, whatever its phase");
+  calibration = null;
+  root.querySelector("#cal-refresh").click(); await tick();
+  assert.equal(form.elements.override_opening.disabled, false);
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(calls.filter((call) => call.type.endsWith("/write")).at(-1).overrides, { opening: 20, closing: null });
+  assert.match(translations.en.profileMeasurementBusy, /^A measurement is in progress: these values can be changed when it ends\.$/);
+});
+
+test("a read-only cover keeps its values locked when no measurement runs", async () => {
+  const { root } = await mountProfiles({ read: () => coverProfileData({ writable: false, reason: "cover_unavailable", travel_cm: 110, height_scaling: true,
+    configured: { opening: { origin: "override", value: 20 } } }) });
+  openProfile(root); await tick();
+  const form = root.querySelector("#profile-form");
+  for (const control of [form.elements.travel_cm, form.elements.use_opening, form.elements.override_opening, form.querySelector('[data-profile-action="overrides"]')]) {
+    assert.equal(control.disabled, true);
+  }
+  for (const line of form.querySelectorAll("[data-profile-busy]")) assert.equal(line.hidden, true);
+});
+
+test("a personal value field rounds like the summary, a halfway value included", async () => {
+  const writes = [];
+  const { root } = await mountProfiles({
+    read: () => coverProfileData({ effective_opening_time: 14.45, effective_closing_time: 1.45,
+      configured: { opening: { origin: "override", value: 14.45 }, closing: { origin: "override", value: 1.45 } } }),
+    write: (message) => { writes.push(message); return coverProfileData({ revision: 4 }); },
+  });
+  openProfile(root); await tick();
+  const form = root.querySelector("#profile-form");
+  assert.equal(root.querySelector("#profile-effective-opening").textContent, "14,5");
+  assert.equal(form.elements.override_opening.value, "14.5");
+  assert.equal(root.querySelector("#profile-effective-closing").textContent, "1,5");
+  assert.equal(form.elements.override_closing.value, "1.5");
+  form.querySelector('[data-profile-action="overrides"]').click(); await tick();
+  assert.deepEqual(writes.at(-1).overrides, { opening: 14.45, closing: 1.45 });
+});

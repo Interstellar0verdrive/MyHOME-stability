@@ -1,7 +1,7 @@
 /** Single-cover profile editor. Navigation/connection changes invalidate all UI work. */
 const url = new URL("panel-dom.js", import.meta.url);
 url.search = new URL(import.meta.url).search;
-const { escapeHtml: esc } = await import(url.href);
+const { escapeHtml: esc, decimal } = await import(url.href);
 const geometryUrl = new URL("panel-cover-geometry.js", import.meta.url); geometryUrl.search = url.search;
 const geometry = await import(geometryUrl.href);
 const presentationUrl = new URL("panel-profile-presentation.js", import.meta.url); presentationUrl.search = url.search;
@@ -192,7 +192,7 @@ export class CoverProfileEditor {
     const { t } = this._context, data = this._data, session = data.calibration;
     const scaling = this.dialog.querySelector("#profile-scaling-status");
     const motionStatus = this.dialog.querySelector("#profile-motion-status");
-    if (motionStatus) motionStatus.innerHTML = geometry.geometrySummary(data.effective, t, data.position_known);
+    if (motionStatus) motionStatus.innerHTML = geometry.geometrySummary(data.effective, t, data.position_known, this._context.hass.language);
     if (scaling) scaling.textContent = ["opening", "closing"].map((direction) => `${t(direction === "opening" ? "calStepOpening" : "calStepClosing")}: ${t(data.effective?.[direction]?.origin === "override" ? "profilePersonalValue" : data.effective?.[direction]?.scaled ? "profileScaled" : "profileNotScaled")}`).join(" · ");
     for (const direction of ["opening", "closing"]) this.dialog.querySelector(`#profile-effective-${direction}`).textContent = duration(data[`effective_${direction}_time`] ?? data.effective_travel_time, this._context.hass.language);
     this.dialog.querySelector("#profile-pending").hidden = !data.pending;
@@ -213,6 +213,13 @@ export class CoverProfileEditor {
         onCancel: () => this.open(context), onSaved: () => { context.onSaved(t("saved")); this.open(context); } });
     };
     box.querySelector("#cal-refresh").onclick = () => this._refresh(true);
+    // Home Assistant refuses these writes (calibration_busy) while a session is active or its Stop is pending: say so instead.
+    // An interrupted session still listed for "Open session" no longer holds them.
+    const busy = !!session && (!["interrupted", "cancelled", "saved"].includes(session.phase) || !!session.waiting_for_stop);
+    const form = this.dialog.querySelector("#profile-form");
+    for (const control of form.querySelectorAll('[name="travel_cm"], [data-profile-action="travel"], [data-profile-action="overrides"], [name^="use_"]')) control.disabled = !data.writable || busy;
+    for (const direction of ["opening", "closing"]) form.elements[`override_${direction}`].disabled = !data.writable || busy || !form.elements[`use_${direction}`].checked;
+    for (const line of form.querySelectorAll("[data-profile-busy]")) line.hidden = !busy;
     for (const id of ["profile-calibrate", "profile-calibrate-batch"]) {
       this.dialog.querySelector(`#${id}`).disabled = !!session || !data.writable || this._stale;
     }
@@ -358,7 +365,7 @@ export class CoverProfileEditor {
           <div class="profile-assign-row">
             <label>${esc(t("profileChoose"))}<select name="profile" ${disabled}>
               <option value="">${esc(t("profileDefault"))}</option>
-              ${data.profiles.map((profile) => `<option value="${esc(profile.id)}">${esc(profile.name)} · ${esc(profile.opening_time ?? profile.travel_time)} / ${esc(profile.closing_time ?? profile.travel_time)} s</option>`).join("")}
+              ${data.profiles.map((profile) => `<option value="${esc(profile.id)}">${esc(profile.name)} · ${esc(duration(profile.opening_time ?? profile.travel_time, this._context.hass.language))} / ${esc(duration(profile.closing_time ?? profile.travel_time, this._context.hass.language))} s</option>`).join("")}
             </select></label>
             <button type="button" class="primary" data-profile-action="assign" ${disabled}>${esc(t("profileAssign"))}</button>
           </div>
@@ -368,7 +375,7 @@ export class CoverProfileEditor {
           <div class="profile-summary-evidence"><span class="muted">${esc(t("profileAssignedEvidence"))}</span>${savedEvidence(assigned, t, this._context.hass.language)}</div>
 
         ${data.height_scaling ? `<p class="muted" id="profile-scaling-status">${["opening", "closing"].map((direction) => `${esc(t(direction === "opening" ? "calStepOpening" : "calStepClosing"))}: ${esc(t(data.effective?.[direction]?.origin === "override" ? "profilePersonalValue" : data.effective?.[direction]?.scaled ? "profileScaled" : "profileNotScaled"))}`).join(" · ")}</p>` : ""}
-        <p class="muted" id="profile-motion-status">${geometry.geometrySummary(data.effective, t, data.position_known)}</p>
+        <p class="muted" id="profile-motion-status">${geometry.geometrySummary(data.effective, t, data.position_known, this._context.hass.language)}</p>
         </details>
       </section>
       ${!data.writable ? `<p class="notice">${esc(t(`profileError_${data.reason}`))}</p>` : ""}
@@ -378,7 +385,8 @@ export class CoverProfileEditor {
           <div class="profile-details-body">
           ${data.height_scaling ? `<label>${esc(t("profileCoverTravel"))}<span class="input-suffix"><input name="travel_cm" type="number" min="0.1" max="10000" step="any" inputmode="decimal" value="${esc(data.travel_cm ?? "")}" aria-describedby="profile-travel-help" ${disabled}><span>cm</span></span></label>
             <p class="muted">${esc(t("profileTravelPrerequisite"))}</p>
-            <button type="button" data-profile-action="travel" ${disabled}>${esc(t("profileSaveTravel"))}</button>` : ""}
+            <button type="button" data-profile-action="travel" ${disabled}>${esc(t("profileSaveTravel"))}</button>
+            <p class="notice" data-profile-busy hidden>${esc(t("profileMeasurementBusy"))}</p>` : ""}
             <div id="cal-recovery" class="notice" hidden><p></p>
               <button type="button" id="cal-resume">${esc(t("calOpenSession"))}</button>
               <button type="button" id="cal-refresh">${esc(t("calRefresh"))}</button>
@@ -441,9 +449,12 @@ export class CoverProfileEditor {
               ${["opening", "closing"].map((direction) => {
                 const item = data.configured?.[direction];
                 const own = item?.origin === "override";
+                // Shown to a tenth like the summary (a point: it is a number field); the saved value is sent back unchanged unless edited.
+                const exact = item?.value ?? data.default_travel_time, rounded = exact == null ? "" : decimal(exact, 1, "en");
                 return `<label class="profile-override"><span class="profile-override-toggle"><input type="checkbox" name="use_${direction}" ${own ? "checked" : ""} ${disabled}> ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}</span>
-                  <span class="input-suffix"><input name="override_${direction}" aria-label="${esc(t("profilePersonalValues"))}: ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}" type="number" min="1" max="600" step="any" inputmode="decimal" value="${esc(item?.value ?? data.default_travel_time ?? "")}" ${data.writable && own ? "" : "disabled"}><span>s</span></span></label>`;
+                  <span class="input-suffix"><input name="override_${direction}" aria-label="${esc(t("profilePersonalValues"))}: ${esc(t(direction === "opening" ? "profileEffectiveOpening" : "profileEffectiveClosing"))}" type="number" min="1" max="600" step="any" inputmode="decimal" value="${esc(rounded)}" data-exact="${esc(exact ?? "")}" data-shown="${esc(rounded)}" ${data.writable && own ? "" : "disabled"}><span>s</span></span></label>`;
               }).join("")}
+              <p class="notice" data-profile-busy hidden>${esc(t("profileMeasurementBusy"))}</p>
               <button type="button" data-profile-action="overrides" ${disabled}>${esc(t("profileSavePersonal"))}</button>
             </fieldset>
 
@@ -518,7 +529,7 @@ export class CoverProfileEditor {
       }
       this._renderProvenance(profile);
       form.querySelector("#edit-hint").textContent = profile
-        ? `${profile.name} · ${profile.opening_time ?? profile.travel_time} / ${profile.closing_time ?? profile.travel_time} s`
+        ? `${profile.name} · ${duration(profile.opening_time ?? profile.travel_time, this._context.hass.language)} / ${duration(profile.closing_time ?? profile.travel_time, this._context.hass.language)} s`
         : t("profileDefault");
       form.querySelector("#profile-delete-confirmation").hidden = true;
       form.querySelector("#profile-delete").hidden = !data.writable || !profile || profile.uses !== 0;
@@ -657,7 +668,7 @@ export class CoverProfileEditor {
         const input = form.elements[`override_${direction}`];
         const own = form.elements[`use_${direction}`].checked;
         if (own && (!input.value || !input.reportValidity())) return;
-        message.overrides[direction] = own ? Number(input.value) : null;
+        message.overrides[direction] = own ? Number(input.value === input.dataset.shown && input.dataset.exact !== "" ? input.dataset.exact : input.value) : null;
       }
     }
     this._saving = generation;

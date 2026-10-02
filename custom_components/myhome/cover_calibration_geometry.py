@@ -8,7 +8,14 @@ from typing import Any, cast
 import voluptuous as vol
 
 from . import cover_calibration as guided
-from .cover_calibration_fit import closing_fit, opening_fit, opening_roll_fit
+from .cover_calibration_fit import (
+    closing_fit,
+    closing_range,
+    opening_fit,
+    opening_range,
+    opening_roll_fit,
+    opening_roll_range,
+)
 from .cover_profile_provenance import evidence
 from .cover_profiles import ProfileError, travel_time, write_profile
 from .cover_settings import centimetres
@@ -22,6 +29,8 @@ GAP_WARN_CM = 10.0
 MAX_GAP_CM = 20.0
 # True: such a reading discards the lift-off run and repeats it. False: refuse it.
 LIFT_REPEAT_BELOW_TOUCHING = True
+# Floating-point slack on the ends of an intermediate reading range, far below any tape.
+RANGE_SLACK_CM = 1e-9
 
 
 class GeometryCalibrationSession(guided.CalibrationSession):
@@ -59,6 +68,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
                 "slats": self.slats, "lift_attempts": self.lift_attempts, "still_resting": self.still_resting,
                 "touching_cm": TOUCHING_CM, "max_gap_cm": MAX_GAP_CM, "lift_repeat": LIFT_REPEAT_BELOW_TOUCHING,
                 "gap_warn_cm": GAP_WARN_CM, "gap_warning": self.gap_warning,
+                "reading_range": self._reading_range(),
                 # travel_cm is this measurement's; the travel already saved for the cover stays readable.
                 "saved_travel_cm": view["travel_cm"]}
 
@@ -182,8 +192,27 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             raise ProfileError("invalid_gap")
         return float(value)
 
+    def _reading_range(self) -> dict[str, float] | None:
+        """The heights the fit accepts for this intermediate stop, or None if no reading can fit."""
+        if self.phase != "reading" or not self.step.startswith("half_"):
+            return None
+        travel = cast(float, self.measured_travel)
+        if self.step == "half_close":
+            span = closing_range(self.values["closing_time"], self.geometry["slat_time_s"],
+                                 self.samples["half_close"], travel)
+        elif self.slats:
+            span = opening_range(self.values["opening_time"], self.samples["lift"], self.readings["gap"], travel,
+                                 self.samples["half_open"], self.values["closing_time"])
+        else:
+            span = opening_roll_range(self.values["opening_time"], 0.0, self.samples["half_open"], travel)
+        return None if span is None else {"min_cm": span[0], "max_cm": span[1]}
+
     def _reading(self, value: Any) -> None:
         number = self._gap(value) if self.step == "lift" else centimetres(value)
+        span = self._reading_range()
+        # Outside the computed range no roll from 1 to 5 fits: say which readings would.
+        if span and not span["min_cm"] - RANGE_SLACK_CM <= number <= span["max_cm"] + RANGE_SLACK_CM:
+            raise ProfileError("reading_out_of_range")
         if self.step == "lift":
             # Still resting: keep nothing of this run, return to the bottom and lift off again.
             self.still_resting = number < TOUCHING_CM

@@ -52,6 +52,67 @@ def opening_roll_fit(total: float, slat: float, elapsed: float, height: float, t
     return _roll((elapsed - slat) / (total - slat), height, travel)
 
 
+def height_at(fraction: float, roll: float) -> float:
+    """Invert winding() for the height: where this motor fraction ends with this roll."""
+    return (2 * fraction + (roll - 1) * fraction * fraction) / (roll + 1)
+
+
+def closing_range(total: float, slat: float, elapsed: float, travel: float) -> tuple[float, float] | None:
+    """The heights closing_fit accepts for this stop: from roll 5 (lowest) to roll 1 (highest)."""
+    if not 0 <= slat < total or not 0 < elapsed < total - slat or not 0 < travel:
+        return None
+    return _span(1 - elapsed / (total - slat), travel)
+
+
+def opening_roll_range(total: float, slat: float, elapsed: float, travel: float) -> tuple[float, float] | None:
+    """The heights opening_roll_fit accepts for this stop."""
+    if not 0 <= slat < total or not slat < elapsed < total or not 0 < travel:
+        return None
+    return _span((elapsed - slat) / (total - slat), travel)
+
+
+def opening_range(total: float, lift: float, gap: float, travel: float, elapsed: float,
+                  closing: float) -> tuple[float, float] | None:
+    """The heights opening_fit accepts, keeping a slat time from 0 to below both full times.
+
+    The fitted slat time falls as the roll grows, so the accepted rolls form one interval;
+    its ends, found by bisection where a slat limit cuts the 1-5 range, bound the height.
+    """
+    if not 0 <= gap < travel or not 0 <= lift < elapsed < total:
+        return None
+
+    def slat(roll: float) -> float:
+        fraction = winding(gap / travel, roll)
+        return (lift - total * fraction) / (1 - fraction)
+
+    def roll_where(limit: float) -> float:
+        low, high = 1.0, 5.0
+        for _ in range(48):
+            middle = (low + high) / 2
+            if slat(middle) >= limit:
+                low = middle
+            else:
+                high = middle
+        return (low + high) / 2
+
+    cap = min(total, closing)
+    if slat(1.0) < 0 or slat(5.0) >= cap:
+        return None
+    lowest = 5.0 if slat(5.0) >= 0 else roll_where(0.0)
+    highest = 1.0 if slat(1.0) < cap else roll_where(cap)
+
+    def height(roll: float) -> float:
+        phase = slat(roll)
+        return travel * height_at((elapsed - phase) / (total - phase), roll)
+
+    # A stop after the lift-off and before the full time is always between the gap and the travel.
+    return height(lowest), height(highest)
+
+
+def _span(fraction: float, travel: float) -> tuple[float, float]:
+    return travel * height_at(fraction, 5.0), travel * height_at(fraction, 1.0)
+
+
 def _roll(fraction: float, height: float, travel: float) -> float:
     """Invert winding(): the roll that puts this motor fraction at this height."""
     h = height / travel

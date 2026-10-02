@@ -1,13 +1,15 @@
 /** Backend-owned measurement: one owner per browser tab, read-only readers, explicit recovery. */
 const url = new URL("panel-dom.js", import.meta.url);
 url.search = new URL(import.meta.url).search;
-const { escapeHtml: esc } = await import(url.href);
+const { escapeHtml: esc, decimal } = await import(url.href);
 const visualUrl = new URL("panel-calibration-visual.js", import.meta.url);
 visualUrl.search = new URL(import.meta.url).search;
 const { visualMarkup, renderCalibrationVisual } = await import(visualUrl.href);
 
 // Presence on the backend lapses after three missed heartbeats (45 s).
 const HEARTBEAT_MS = 15000;
+// The backend accepts readings this close to the ends of their range (floating point only).
+const RANGE_SLACK_CM = 1e-9;
 const CLIENT_KEY = "myhome-calibration-client";
 // "Duplicate tab" copies sessionStorage. Before using an identity it did not create, a tab asks
 // the others whether one of them holds it; an answer within this time means it is a copy.
@@ -396,10 +398,10 @@ export class CoverCalibration {
     host.querySelector("#cal-stop").disabled = ["saved", "cancelled"].includes(state.phase);
     host.querySelector("#cal-save").hidden = state.phase !== "review";
     this._renderSave();
-    host.querySelector("#cal-values").textContent = `${t("profileOpeningTime")}: ${shown(state.values.opening_time, "s")} · ${t("profileClosingTime")}: ${shown(state.values.closing_time, "s")}`;
+    host.querySelector("#cal-values").textContent = `${t("profileOpeningTime")}: ${this._shown(state.values.opening_time, "s")} · ${t("profileClosingTime")}: ${this._shown(state.values.closing_time, "s")}`;
     if (state.direction) {
       host.querySelector("#cal-values").textContent = ["opening", "closing"].map((direction) =>
-        `${t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime")}: ${shown(state.values[`${direction}_time`], "s")} s · ${t(direction === state.direction ? "calQuickMeasured" : "calQuickRetained")}`).join(" · ");
+        `${t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime")}: ${this._shown(state.values[`${direction}_time`], "s")} s · ${t(direction === state.direction ? "calQuickMeasured" : "calQuickRetained")}`).join(" · ");
     }
     this._renderGeometry(geometry);
     renderCalibrationVisual(host, state, t, this._lost);
@@ -407,17 +409,19 @@ export class CoverCalibration {
     if (state.batch) {
       host.querySelector("#cal-targets").innerHTML = state.targets.map((item, index) => {
         const result = state.results.find((row) => row.index === index);
-        const status = ["interrupted", "cancelled"].includes(state.phase) ? t("calBatchDiscarded") : result ? `${shown(result.values.opening_time, "s")} / ${shown(result.values.closing_time, "s")} s` : t(index === state.cover_index ? "calBatchCurrent" : "calBatchWaiting");
+        const status = ["interrupted", "cancelled"].includes(state.phase) ? t("calBatchDiscarded") : result ? `${this._shown(result.values.opening_time, "s")} / ${this._shown(result.values.closing_time, "s")} s` : t(index === state.cover_index ? "calBatchCurrent" : "calBatchWaiting");
         return `<li>${esc(item.name)} · ${esc(status)}</li>`;
       }).join("");
       const review = host.querySelector("#cal-batch-review");
       if (state.phase === "review" && !review.children.length) {
-        review.innerHTML = state.results.map((result) => `<label>${esc(state.targets[result.index].name)} · ${esc(shown(result.values.opening_time, "s"))} / ${esc(shown(result.values.closing_time, "s"))} s
-          ${state.targets[result.index].travel_cm != null ? `<span class="muted">${esc(t("profileReferenceTravel"))}: ${esc(shown(state.targets[result.index].travel_cm, "cm"))} cm</span>` : ""}
+        review.innerHTML = state.results.map((result) => `<label>${esc(state.targets[result.index].name)} · ${esc(this._shown(result.values.opening_time, "s"))} / ${esc(this._shown(result.values.closing_time, "s"))} s
+          ${state.targets[result.index].travel_cm != null ? `<span class="muted">${esc(t("profileReferenceTravel"))}: ${esc(this._shown(state.targets[result.index].travel_cm, "cm"))} cm</span>` : ""}
           <span class="muted">${esc(t("profileName"))}</span><input data-batch-name="${result.index}" required maxlength="64" value="${esc(state.targets[result.index].name.slice(0, 64))}"></label>`).join("");
       }
     }
   }
+
+  _shown(value, unit) { return shown(value, unit, this._context.hass.language); }
 
   /** Between two views the elapsed time advances here every 100 ms from the last value received. */
   _clock(elapsed) {
@@ -453,7 +457,9 @@ export class CoverCalibration {
     const noSlats = state.slats === false;
     // Runs that only bring the cover to an end stop measure nothing: no elapsed time, only what to confirm.
     const positioning = ["opening", "closing"].includes(state.phase) && ["home", "reset", "top"].includes(state.step);
-    host.querySelector("#cal-elapsed").hidden = positioning;
+    // Intermediate runs are stopped by Home Assistant at a computed time: nothing to time or press, so no elapsed time either.
+    const placing = ["opening", "closing", "geometry_wait_stop"].includes(state.phase) && state.step.startsWith("half_");
+    host.querySelector("#cal-elapsed").hidden = positioning || placing;
     const notice = host.querySelector("#cal-lift-repeat");
     // Assigned only when it changes, so heartbeats do not repeat the announcement.
     const lift = state.still_resting ? fill(t("calLiftRepeated"), state) : state.gap_warning ? fill(t("calGapWarning"), state) : "";
@@ -463,7 +469,7 @@ export class CoverCalibration {
       const key = state.phase === "briefing" ? `calBrief_${state.step}${noSlats && ["home", "closing"].includes(state.step) ? "_no_slats" : ""}`
         : state.phase === "geometry_wait_stop" ? "calGeometryWaitStop"
           : state.phase === "reading" ? `calReading_${state.reading_kind}${state.reading_kind === "lift" && state.lift_repeat === false ? "_refused" : ""}`
-            : state.step === "lift" ? "calLiftRunning" : state.step.startsWith("half_") ? "calHalfRunning"
+            : state.step === "lift" ? "calLiftRunning" : state.step.startsWith("half_") ? "calHalfPositioning"
               : !positioning ? "calEndpointRunning" : state.step === "top" ? "calPositionOpen" : `calPositionClose${noSlats ? "_no_slats" : ""}`;
       host.querySelector("#cal-phase").textContent = fill(t(key), state);
     }
@@ -475,12 +481,13 @@ export class CoverCalibration {
     this._checkRange(form);
     form.elements.reading_cm.min = state.step === "lift" ? "0" : "0.1";
     host.querySelector("#cal-reading-label").textContent = t(state.step === "opening" ? "profileCoverTravel" : "calHeightCm");
-    host.querySelector("#cal-expected").textContent = state.expected_cm == null ? "" : `${t("calExpectedRough")}: ${shown(state.expected_cm, "cm")} cm. ${t("calExpectedHelp")}`;
+    // The heights the fit accepts for this stop, never a target: what the tape says is entered.
+    host.querySelector("#cal-expected").textContent = state.reading_range ? fill(t("calReadingRange"), this._rangeValues()) : "";
     if (state.phase === "review") {
       // Without slats the summary says so instead of showing a zero slat time.
       const keys = noSlats ? ["opening_roll", "closing_roll"] : ["slat_time_s", "opening_roll", "closing_roll"];
-      host.querySelector("#cal-values").textContent += ` · ${t("profileCoverTravel")}: ${shown(state.travel_cm, "cm")} cm · ` +
-        [...(noSlats ? [t("calGeometryNoSlats")] : []), ...keys.map((key) => `${t(`calGeometry_${key}`)}: ${shown(state.geometry[key], key === "slat_time_s" ? "s" : "roll")}`)].join(" · ");
+      host.querySelector("#cal-values").textContent += ` · ${t("profileCoverTravel")}: ${this._shown(state.travel_cm, "cm")} cm · ` +
+        [...(noSlats ? [t("calGeometryNoSlats")] : []), ...keys.map((key) => `${t(`calGeometry_${key}`)}: ${this._shown(state.geometry[key], key === "slat_time_s" ? "s" : "roll")}`)].join(" · ");
       host.querySelector("#cal-save-help").textContent = t(noSlats ? "calGeometryReviewNoSlats" : "calGeometryReview");
     }
   }
@@ -498,8 +505,8 @@ export class CoverCalibration {
     form.elements.profile_name.disabled = !!state.batch || mode !== "new";
     form.elements.profile_name.required = !state.batch && mode === "new";
     host.querySelector("#cal-save-help").textContent = t(mode === "new" ? "calSaveOverrides" : mode === "cover" ? "calSaveCoverHelp" : "calSaveSharedHelp");
-    if (!state.batch && mode === "new" && state.travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.travel_cm, "cm")} cm.`;
-    if (mode === "shared" && state.reference_travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${shown(state.reference_travel_cm, "cm")} cm. ${t("calReferenceNormalization")}`;
+    if (!state.batch && mode === "new" && state.travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${this._shown(state.travel_cm, "cm")} cm.`;
+    if (mode === "shared" && state.reference_travel_cm != null) host.querySelector("#cal-save-help").textContent += ` ${t("profileReferenceTravel")}: ${this._shown(state.reference_travel_cm, "cm")} cm. ${t("calReferenceNormalization")}`;
     const button = form.querySelector('button[type="submit"]');
     button.disabled = this._locked();
     button.textContent = t(state.batch ? "calBatchSave" : mode === "new" ? "calSave" : mode === "cover" ? "calSaveCover" : this._savePreview ? "calConfirmShared" : "calPreviewShared");
@@ -510,17 +517,20 @@ export class CoverCalibration {
       box.innerHTML = `<p><strong>${esc(preview.after.name)}</strong> · ${esc(t("calSharedImpact"))}</p><ul>${preview.followers.map((item) =>
         `<li><strong>${esc(item.name || item.entity_id || t("profileMissingCover"))}</strong>${item.available ? "" : ` · ${esc(t("profileUnavailableFollower"))}`}<br>${["opening", "closing"].map((direction) => {
           const change = item.changes[direction];
-          return `${esc(t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime"))}: ${esc(shown(change.before, "s"))} → ${esc(shown(change.after, "s"))} s${change.overridden ? ` · ${esc(t("calPersonalRetained"))}` : change.override_removed ? ` · ${esc(t("calPersonalRemoved"))}` : ""}`;
+          return `${esc(t(direction === "opening" ? "profileOpeningTime" : "profileClosingTime"))}: ${esc(this._shown(change.before, "s"))} → ${esc(this._shown(change.after, "s"))} s${change.overridden ? ` · ${esc(t("calPersonalRetained"))}` : change.override_removed ? ` · ${esc(t("calPersonalRemoved"))}` : ""}`;
         }).join("<br>")}</li>`).join("")}</ul>`;
     }
     this._renderedPreview = this._savePreview;
   }
 
-  /** A lift-off gap outside its range keeps the button disabled; Home Assistant still validates it. */
+  /** A lift-off gap or an intermediate reading outside its range keeps the button disabled; Home Assistant still validates it. */
   _checkRange(form) {
-    const state = this._state, reading = parseReading(form.elements.reading_cm.value);
-    const outside = state.step === "lift" && state.max_gap_cm != null && Number.isFinite(reading) && (reading < 0 || reading > state.max_gap_cm);
-    const range = form.querySelector("#cal-reading-range"), text = outside ? fill(this._context.t("profileError_invalid_gap"), state) : "";
+    const state = this._state, reading = parseReading(form.elements.reading_cm.value), span = state.reading_range;
+    const gap = state.step === "lift" && state.max_gap_cm != null && Number.isFinite(reading) && (reading < 0 || reading > state.max_gap_cm);
+    const height = !!span && Number.isFinite(reading) && (reading < span.min_cm - RANGE_SLACK_CM || reading > span.max_cm + RANGE_SLACK_CM);
+    const outside = gap || height, { t } = this._context;
+    const range = form.querySelector("#cal-reading-range");
+    const text = gap ? fill(t("profileError_invalid_gap"), state) : height ? fill(t("profileError_reading_out_of_range"), this._rangeValues(reading)) : "";
     range.hidden = !outside;
     if (range.textContent !== text) range.textContent = text;
     form.querySelector('button[type="submit"]').disabled = form.elements.reading_cm.disabled || outside;
@@ -540,12 +550,25 @@ export class CoverCalibration {
     input.focus();
   }
 
-  _error(error) {
+  _error(error, extra = {}) {
     const { host, t } = this._context;
     const key = `profileError_${error.code}`;
     const box = host.querySelector("#cal-reason");
-    box.textContent = t(key) === key ? t("calConnectionError") : fill(t(key), this._state);
+    box.textContent = t(key) === key ? t("calConnectionError") : fill(t(key), { ...this._state, ...this._rangeValues(extra.reading_cm) });
     box.hidden = false;
+  }
+
+  /** The accepted range shown inside its true ends, a tenth of a centimetre at a time, so every value shown is accepted.
+   * A range narrower than a tenth is shown to hundredths, and one narrower than that with its exact ends. */
+  _rangeValues(reading) {
+    const span = this._state?.reading_range, language = this._context.hass.language;
+    if (!span) return {};
+    const inside = (scale) => [Math.ceil(span.min_cm * scale) / scale, Math.floor(span.max_cm * scale) / scale];
+    let [low, high] = inside(10), digits = 1;
+    if (low >= high) [[low, high], digits] = [inside(100), 2];
+    if (low > high) [low, high, digits] = [span.min_cm, span.max_cm, 20];
+    return { min_cm: decimal(low, digits, language), max_cm: decimal(high, digits, language),
+      ...(reading == null ? {} : { reading_cm: decimal(reading, 3, language) }) };
   }
 
   /** The owner's Cancel must reach Home Assistant: until it does, the view stays and says so. */
@@ -620,16 +643,16 @@ export class CoverCalibration {
         this._expired = error?.code === "calibration_expired";
       }
       if (action === "save" || action === "preview_save") this._savePreview = null;
-      this._error(error);
+      this._error(error, extra);
     } finally {
       if (current()) { if (ownsBusy) this._busy = false; this._render(); }
     }
   }
 }
 
-/** Display only, stored values keep full precision: tenths of a second or centimetre, rolls to two decimals. */
-export function shown(value, unit) {
-  return value == null ? "—" : `${Number(Number(value).toFixed(unit === "roll" ? 2 : 1))}`;
+/** Display only, stored values keep full precision: tenths of a second or centimetre, rolls to two decimals, a decimal comma in Italian. */
+export function shown(value, unit, language) {
+  return decimal(value, unit === "roll" ? 2 : 1, language);
 }
 
 /** A comma or a point before the decimals; anything else, empty included, is not a number. */
@@ -657,5 +680,6 @@ function pause(state, t, language) {
 
 /** Limits such as {touching_cm} come from the session view, never from the text. */
 function fill(text, state) {
-  return text.replace(/\{(\w+)\}/g, (match, key) => state?.[key] == null ? match : `${Number(state[key])}`);
+  // Text values, such as the ends of a reading range, are already formatted for the language.
+  return text.replace(/\{(\w+)\}/g, (match, key) => state?.[key] == null ? match : typeof state[key] === "string" ? state[key] : `${Number(state[key])}`);
 }

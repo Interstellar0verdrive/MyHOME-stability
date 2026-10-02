@@ -170,7 +170,7 @@ export class CoverProfileList {
         <ul class="shared-profile-followers">${followers.map((item) => this._follower(item)).join("")}</ul></div>` : ""}
       <div id="${esc(id)}-details" class="shared-profile-details" ${this._expanded.has(detailsKey) ? "" : "hidden"}>
         ${this._provenance(profile)}
-        ${profile.geometry ? `<p class="muted">${geometry.geometrySummary(Object.fromEntries(Object.entries(profile.geometry).map(([key, value]) => [key, { value }])), t)}</p>` : ""}
+        ${profile.geometry ? `<p class="muted">${geometry.geometrySummary(Object.fromEntries(Object.entries(profile.geometry).map(([key, value]) => [key, { value }])), t, true, hass.language)}</p>` : ""}
         ${profile.reference_travel_cm != null ? `<p class="muted">${esc(t("profileReferenceTravel"))}: ${esc(duration(profile.reference_travel_cm, hass.language))} cm</p>` : ""}
       </div></section>`;
   }

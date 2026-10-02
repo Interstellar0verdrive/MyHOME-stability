@@ -21,3 +21,11 @@ export function replacePreservingFocus(container, html) {
     focusKey(element) === key && !element.closest("[hidden]"));
   replacement?.focus({ preventScroll: true });
 }
+
+/** A number for display in the user's language (comma in Italian), trailing zeros dropped. */
+export function decimal(value, digits, language) {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  const options = { maximumFractionDigits: digits, useGrouping: false };
+  try { return new Intl.NumberFormat(language || "en", options).format(Number(value)); }
+  catch { return new Intl.NumberFormat("en", options).format(Number(value)); }
+}

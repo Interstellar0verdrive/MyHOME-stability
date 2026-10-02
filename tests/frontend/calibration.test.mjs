@@ -89,7 +89,7 @@ test("automatic and interrupted phases never invite endpoint recording or measur
   assert.equal(calls.length, 0);
 });
 
-async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats, Calibration = CoverCalibration } = {}) {
+async function mount({ call, subscribe, entity_ids, direction, resume, mode = "guided", slats, language, translate = t, Calibration = CoverCalibration } = {}) {
   const host = document.createElement("section");
   document.body.append(host);
   const controller = new Calibration();
@@ -104,7 +104,7 @@ async function mount({ call, subscribe, entity_ids, direction, resume, mode = "g
     targets: entity_ids.map((id) => ({ entity_id: id, name: id })) });
   if (resume) Object.assign(state, resume, { recoverable: true, attached: true, attachment: "new-controller" });
   const push = (extra) => { state = { ...state, sequence: state.sequence + 1, ...extra }; callback(state); };
-  const hass = { connection: { subscribeMessage: async (cb, request) => {
+  const hass = { language, connection: { subscribeMessage: async (cb, request) => {
     callback = cb; starts.push(request); cb(state);
     return subscribe ? subscribe(() => { stopped++; }) : () => { stopped++; };
   } }, callWS: async (message) => {
@@ -115,7 +115,7 @@ async function mount({ call, subscribe, entity_ids, direction, resume, mode = "g
       phase: phases[message.action] || state.phase };
   } };
   await controller.open({ host, hass, entity: { entry_id: "one", entity_id: "cover.bedroom" }, revision: 4, mode, entity_ids, direction, resume, slats,
-    t, onSaved: () => { saved++; }, onCancel: () => { cancelled++; } });
+    t: translate, onSaved: () => { saved++; }, onCancel: () => { cancelled++; } });
   return { host, controller, calls, starts, push, counts: () => ({ stopped, saved, cancelled }) };
 }
 
@@ -540,11 +540,11 @@ test("geometry wizard sends only user observations, waits for Stop, and keeps th
   for (const key of ["geometry", "values", "elapsed", "provenance"]) assert.equal(key in calls.at(-1), false);
   host.querySelector("#cal-repeat").click(); await tick();
   assert.equal(calls.at(-1).action, "repeat");
-  push({ phase: "reading", step: "half_open", reading_kind: "half_open", expected_cm: 100 });
+  push({ phase: "reading", step: "half_open", reading_kind: "half_open", expected_cm: 100, reading_range: { min_cm: 80, max_cm: 100 } });
   assert.equal(form.elements.reading_cm.value, "");
   assert.equal(form.elements.reading_cm.min, "0.1");
-  assert.match(host.querySelector("#cal-expected").textContent, /100 cm/);
-  assert.match(host.querySelector("#cal-expected").textContent, /Non è un obiettivo/);
+  assert.match(host.querySelector("#cal-expected").textContent, /fra 80 e 100 cm/);
+  assert.match(host.querySelector("#cal-expected").textContent, /Scrivi quello che dice il metro/);
 });
 
 test("geometry review exposes all measured values, limits save destinations and names unverified accuracy", async () => {
@@ -718,6 +718,62 @@ test("the lift-off gap is checked while typed; the button waits for a value in r
   assert.equal(calls.length, 0);
 });
 
+test("an intermediate reading shows the range the fit accepts, inside its true ends, instead of a halfway reference", async () => {
+  const { host, push } = await mount({ mode: "geometry", language: "it" });
+  const hint = host.querySelector("#cal-expected");
+  const reading = { phase: "reading", reading_kind: "half_close", step: "half_close", can_repeat: true, save_modes: ["new"], expected_cm: 55 };
+  push({ ...reading, reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
+  assert.equal(hint.textContent, "Per questa tapparella la lettura attesa è fra 36,7 e 54,8 cm. Scrivi quello che dice il metro.");
+  push({ reading_range: { min_cm: 110 / 3, max_cm: 55 } });
+  assert.equal(hint.textContent, "Per questa tapparella la lettura attesa è fra 36,7 e 55 cm. Scrivi quello che dice il metro.");
+  assert.doesNotMatch(hint.textContent, /metà corsa|Riferimento/);
+  // Narrower than a tenth: hundredths, inside the true ends; narrower than a hundredth: the exact ends.
+  for (const [range, text] of [[{ min_cm: 55.02, max_cm: 55.08 }, "fra 55,02 e 55,08 cm"], [{ min_cm: 55.01, max_cm: 55.1 }, "fra 55,01 e 55,1 cm"],
+    [{ min_cm: 55.023, max_cm: 55.027 }, "fra 55,023 e 55,027 cm"], [{ min_cm: 54.95, max_cm: 55.05 }, "fra 54,95 e 55,05 cm"]]) {
+    push({ reading_range: range });
+    assert.match(hint.textContent, new RegExp(text), JSON.stringify(range));
+  }
+  push({ reading_range: null });
+  assert.equal(hint.textContent, "", "no range, no hint: the old halfway reference is gone");
+  push({ step: "lift", reading_kind: "lift" });
+  assert.equal(hint.textContent, "");
+  const english = await mount({ mode: "geometry", language: "en", translate: (key) => translations.en[key] || key });
+  english.push({ ...reading, step: "half_open", reading_kind: "half_open", reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
+  assert.equal(english.host.querySelector("#cal-expected").textContent, "For this cover the reading should be between 36.7 and 54.8 cm. Enter what the tape says.");
+});
+
+test("an intermediate reading outside the range is held back while typed and the refusal names the range", async () => {
+  const { host, push, calls } = await mount({ mode: "geometry", language: "it",
+    call: (message, state) => { if (message.action === "reading") throw { code: "reading_out_of_range" }; return state; } });
+  const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
+  const button = form.querySelector('button[type="submit"]'), range = host.querySelector("#cal-reading-range");
+  const type = (value) => { input.value = value; input.dispatchEvent(new dom.window.Event("input", { bubbles: true })); };
+  const refusal = (value) => `La lettura (${value} cm) è fuori dall’intervallo ammesso (36,7–54,8 cm). Controlla il riferimento e ripeti il passaggio. Se i tempi misurati prima erano errati, annulla e riparti con la misura guidata.`;
+  push({ phase: "reading", step: "half_open", reading_kind: "half_open", can_repeat: true, save_modes: ["new"],
+    reading_range: { min_cm: 36.666666666666664, max_cm: 54.87 } });
+  for (const [value, outside] of [["55", true], ["54,87", false], ["54,85", false], ["36,6", true], ["36,666666666666664", false],
+    ["45", false], ["120,5", true], ["54,95", true], ["", false], ["45,", false]]) {
+    type(value);
+    assert.equal(button.disabled, outside, value);
+    assert.equal(range.hidden, !outside, value);
+    assert.equal(range.textContent, outside ? refusal(value) : "", value);
+  }
+  type("55");
+  push({});  // A heartbeat keeps the check.
+  assert.equal(button.disabled, true);
+  type("45");
+  form.dispatchEvent(new dom.window.Event("submit", { cancelable: true })); await tick();
+  assert.equal(calls.at(-1).reading_cm, 45);
+  // Home Assistant stays the authority: its refusal names the reading sent and the same range.
+  assert.equal(host.querySelector("#cal-reason").hidden, false);
+  assert.equal(host.querySelector("#cal-reason").textContent, refusal("45"));
+  assert.match(translations.en.profileError_reading_out_of_range, /^The reading \({reading_cm} cm\) is outside the accepted range \({min_cm}–{max_cm} cm\)\. Check the measurement reference and repeat the step\./);
+  push({ reading_range: null });
+  type("500");
+  assert.equal(button.disabled, false, "without a range only Home Assistant checks the reading");
+  assert.equal(range.hidden, true);
+});
+
 test("the travel reading offers the travel already saved for the cover, and sends only on confirmation", async () => {
   const { host, push, calls } = await mount({ mode: "geometry" });
   const form = host.querySelector("#cal-reading"), input = form.elements.reading_cm;
@@ -752,24 +808,41 @@ test("review values are displayed rounded while the view keeps full precision", 
   assert.match(batch.host.querySelector("#cal-batch-review").textContent, /14\.5 \/ 14\.5 s/);
 });
 
+test("rounded values take a decimal comma in Italian", async () => {
+  for (const [value, unit, text] of [[14.65187786286696, "s", "14,7"], [1.0819, "roll", "1,08"], [112.46, "cm", "112,5"], [110, "cm", "110"], [null, "s", "—"]]) {
+    assert.equal(shown(value, unit, "it"), text, `${value} ${unit}`);
+  }
+  assert.equal(shown(14.65187786286696, "s", "en"), "14.7");
+  assert.equal(shown(14.65187786286696, "s", "not a language"), "14.7");
+  const { host, push } = await mount({ mode: "geometry", language: "it" });
+  push({ phase: "review", step: "half_close", values: { opening_time: 14.538674880051985, closing_time: 14.477566485991701 },
+    geometry: { slat_time_s: 2.6638, opening_roll: 1.7397, closing_roll: 2.6596 }, travel_cm: 112.46, save_modes: ["new"], can_repeat: true });
+  assert.match(host.querySelector("#cal-values").textContent, /: 14,5 · .*: 14,5 · .*: 112,5 cm · Tempo lamelle \(s\): 2,7 · Rullo in apertura: 1,74 · Rullo in chiusura: 2,66$/);
+});
+
 test("positioning runs show what to confirm and no elapsed time; measured runs keep it", async () => {
   const { host, push } = await mount({ mode: "geometry" });
   const phase = host.querySelector("#cal-phase"), elapsed = host.querySelector("#cal-elapsed");
   push({ phase: "briefing", step: "home", save_modes: ["new"], can_repeat: false });
   for (const [state, text] of [[{ phase: "closing", step: "home" }, "calPositionClose"], [{ phase: "closing", step: "reset" }, "calPositionClose"],
-    [{ phase: "opening", step: "top" }, "calPositionOpen"], [{ phase: "closing", step: "home", slats: false }, "calPositionClose_no_slats"]]) {
+    [{ phase: "opening", step: "top" }, "calPositionOpen"], [{ phase: "closing", step: "home", slats: false }, "calPositionClose_no_slats"],
+    [{ phase: "opening", step: "half_open" }, "calHalfPositioning"], [{ phase: "closing", step: "half_close" }, "calHalfPositioning"],
+    [{ phase: "opening", step: "half_open", slats: false }, "calHalfPositioning"],
+    [{ phase: "geometry_wait_stop", step: "half_open" }, "calGeometryWaitStop"], [{ phase: "geometry_wait_stop", step: "half_close" }, "calGeometryWaitStop"]]) {
     push({ ...state, elapsed: 3.5 });
     assert.equal(elapsed.hidden, true, `${state.step} measures nothing`);
     assert.equal(phase.textContent, t(text));
   }
   for (const [state, text] of [[{ phase: "opening", step: "opening" }, "calEndpointRunning"], [{ phase: "closing", step: "closing" }, "calEndpointRunning"],
-    [{ phase: "opening", step: "lift" }, "calLiftRunning"], [{ phase: "opening", step: "half_open" }, "calHalfRunning"], [{ phase: "closing", step: "half_close" }, "calHalfRunning"]]) {
+    [{ phase: "opening", step: "lift" }, "calLiftRunning"], [{ phase: "geometry_wait_stop", step: "lift" }, "calGeometryWaitStop"]]) {
     push({ ...state, slats: true, elapsed: 3.5 });
     assert.equal(elapsed.hidden, false, `${state.step} is measured`);
     assert.match(elapsed.textContent, /3\.5 s/);
     assert.equal(phase.textContent, t(text));
   }
   assert.doesNotMatch(translations.en.calPositionClose_no_slats + translations.it.calPositionClose_no_slats, /slat|lamell/i);
+  assert.equal(translations.it.calHalfPositioning, "La tapparella si sta posizionando e si ferma da sola: non c’è nulla da premere. Attendi che si sia fermata prima di avvicinarti con il metro.");
+  assert.doesNotMatch(translations.en.calHalfPositioning + translations.it.calHalfPositioning, /slat|lamell/i);
   const guided = await mount();
   guided.push({ phase: "closing", elapsed: 3.5 });
   assert.equal(guided.host.querySelector("#cal-elapsed").hidden, false, "other modes are unchanged");
@@ -1323,14 +1396,18 @@ test("no elapsed timer survives a closed view or a lost connection", async () =>
   }
 });
 
-// Ten minutes from now: the deadline is shown as a time only, in the browser's time zone.
-const EXPIRES = new Date(Date.now() + 600000).toISOString();
+// Ten minutes after a fixed local noon: the deadline is shown as a time only, in the browser's time zone,
+// as long as the clock reads the same day (the test below fixes it at that noon).
+const NOON = new Date(2026, 9, 1, 12, 0);
+const EXPIRES = new Date(NOON.getTime() + 600000).toISOString();
 const pausedCycle = { mode: "automatic", phase: "paused", reason: "owner_absent", run_index: 2, values: { closing_time: 46 },
   owner: true, read_only: false, owner_present: false, paused_at: "2026-10-01T18:32:00+00:00", idle_expires_at: EXPIRES,
   next_step: { step: "opening", run_index: 2, entity_id: "cover.bedroom" } };
 const at = (iso, options = { timeStyle: "short" }) => new Intl.DateTimeFormat("en", options).format(new Date(iso));
 
-test("a paused cycle opened by its owner says what Continue starts and until when, and sends nothing", async () => {
+test("a paused cycle opened by its owner says what Continue starts and until when, and sends nothing", async (t) => {
+  // Only Date is fixed: timers stay real. A real clock near midnight would put the deadline on the next day.
+  t.mock.timers.enable({ apis: ["Date"], now: NOON });
   const { host, calls, starts } = await mount({ mode: "automatic", resume: pausedCycle });
   assert.equal(starts[0].type, "myhome/cover_calibration/resume");
   assert.equal("claim" in starts[0], false);
@@ -1440,8 +1517,10 @@ test("a refused Continue shows why and leaves the pause, its measurements and Co
   assert.equal(reason.hidden, false);
 });
 
-test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async () => {
-  const tomorrow = new Date(Date.now() + 86400000).toISOString();
+test("a deadline on another day carries its date, and a cover name is shown exactly as it is", async (t) => {
+  // Fixed day, timers real: "now + 24 h" could stay on the same day around a change of daylight saving time.
+  t.mock.timers.enable({ apis: ["Date"], now: NOON });
+  const tomorrow = new Date(NOON.getTime() + 36 * 3600000).toISOString();
   const { host, controller } = await mount({ mode: "automatic", entity_ids: ["cover.one", "cover.two"] });
   controller._accept({ ...controller._state, ...pausedCycle, sequence: 9, recoverable: true, attached: true, attachment: "owner",
     targets: [{ entity_id: "cover.one", name: "One" }, { entity_id: "cover.two", name: "Attic $& $' $1" }],
