@@ -634,3 +634,70 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .catalogue-candidate input[type="checkbox"] { width: 22px; height: 22px; min-height: 22px; padding: 0; flex-shrink: 0; accent-color: var(--panel-accent); }
 .catalogue-candidate > span { min-width: 0; }
 .catalogue-candidate p { margin: 4px 0; }
+
+/* ---------- WHO 2 · Calibration tab ---------- */
+.cal-tab { display: grid; gap: 14px; }
+.cal-tab h3 { margin: 0 0 4px; font-size: 18px; }
+.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: start; justify-content: space-between; }
+.cal-tab-intro { flex: 1 1 420px; min-width: 0; }
+.cal-tab-intro p { max-width: 68ch; }
+.cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cal-tab-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.cal-tab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cal-chip { min-height: 34px; padding: 4px 12px; border-radius: 999px; }
+.cal-chip[aria-pressed="true"] { background: var(--panel-accent-soft); color: var(--panel-accent); border-color: var(--panel-accent); }
+.cal-chip .count { background: transparent; padding: 0; color: inherit; }
+.cal-tab .notice { display: flex; gap: 10px; align-items: start; margin: 0; }
+.cal-tab .notice ha-icon { --mdc-icon-size: 18px; flex-shrink: 0; }
+.cal-tab-busy { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 12%, var(--panel-surface)); }
+.cal-tab-help { background: var(--panel-accent-soft); border-color: transparent; }
+.cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
+.cal-list-head { display: none; }
+.cal-row { border-top: 1px solid var(--panel-border); }
+.cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
+.cal-row.is-running { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
+.cal-row.is-expanded { background: color-mix(in srgb, var(--panel-accent) 5%, var(--panel-surface)); }
+.cal-row-main { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 12px 14px; }
+.cal-row-toggle { order: 1; flex: 1 1 60%; justify-content: start; gap: 10px; min-width: 0; padding: 4px; border: 0; background: transparent; text-align: start; font-weight: 400; }
+.cal-row-toggle:hover { background: transparent; }
+.cal-row-chevron { transition: transform var(--panel-ease); color: var(--panel-text-2); }
+.cal-row-toggle[aria-expanded="true"] .cal-row-chevron { transform: rotate(90deg); }
+.cal-row-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; background: var(--panel-accent-soft); color: var(--panel-accent); }
+.cal-row-name { display: grid; gap: 2px; min-width: 0; }
+.cal-row-name strong { font-size: 14px; overflow-wrap: anywhere; }
+.cal-row-status { order: 3; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-inline-start: 4px; }
+.cal-row-profile { order: 4; }
+.cal-row-profile > .muted, .cal-row-last { display: none; }
+.cal-row-actions { order: 2; margin-inline-start: auto; display: flex; gap: 6px; align-items: center; justify-content: end; }
+.cal-row-action { color: var(--panel-accent); font-weight: 600; }
+.cal-menu-wrap { position: relative; }
+.cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
+.cal-menu button { justify-content: start; border: 0; background: transparent; }
+.cal-menu button:hover, .cal-menu button:focus-visible { background: var(--panel-accent-soft); }
+.cal-badge[data-status="to_measure"] { color: var(--panel-text-2); }
+.cal-badge[data-status="times"], .cal-badge[data-status="rolls"] { background: var(--panel-accent-soft); color: var(--panel-accent-strong); }
+.cal-badge[data-status="verified"] { background: color-mix(in srgb, var(--panel-success) 14%, transparent); color: var(--panel-success); }
+.cal-badge[data-status="running"] { background: color-mix(in srgb, var(--panel-warning) 20%, transparent); color: var(--primary-text-color, #182b37); white-space: normal; }
+.cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent-strong); }
+.cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
+.cal-row-details { padding: 4px 14px 16px; }
+.cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.cal-details-grid h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--panel-text-2); }
+.cal-details-grid p { margin: 6px 0 0; font-size: 13px; }
+.cal-facts { display: grid; gap: 4px; margin: 0; font-size: 13px; }
+.cal-facts div { display: flex; justify-content: space-between; gap: 12px; }
+.cal-facts dt { color: var(--panel-text-2); }
+.cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
+.cal-details-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.cal-tab-back { justify-self: start; }
+.cal-batch { display: grid; gap: 12px; }
+@media (min-width: 1024px) {
+  .cal-list-head, .cal-row-main { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; grid-template-areas: none; gap: 12px; align-items: center; }
+  .cal-list-head { padding: 12px 18px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
+  .cal-row-main { padding: 10px 18px; }
+  .cal-row-toggle, .cal-row-status, .cal-row-profile, .cal-row-actions { order: 0; margin: 0; padding: 0; }
+  .cal-row-profile > .muted, .cal-row-last { display: block; font-size: 13px; }
+  .cal-row-last-inline { display: none; }
+  .cal-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; padding-inline-start: 84px; }
+  .cal-details-actions { padding-inline-start: 84px; }
+}

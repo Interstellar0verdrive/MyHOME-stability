@@ -5,11 +5,12 @@ const assetUrl = (name) => {
   url.search = new URL(import.meta.url).search;
   return url.href;
 };
-const [{ translations }, model, { escapeHtml, replacePreservingFocus }, { BusMonitorSection }, { CoverProfileEditor }, { CoverProfileList }, { ProfileCatalogueEditor }] = await Promise.all([
+const [{ translations }, model, { escapeHtml, replacePreservingFocus }, { BusMonitorSection }, { CoverProfileEditor }, { CoverProfileList }, { ProfileCatalogueEditor }, { CalibrationTab }] = await Promise.all([
   import(assetUrl("panel-translations.js")), import(assetUrl("panel-model.js")),
   import(assetUrl("panel-dom.js")), import(assetUrl("panel-bus-monitor.js")),
   import(assetUrl("panel-cover-profiles.js")),
   import(assetUrl("panel-cover-profile-list.js")), import(assetUrl("panel-profile-catalogue-editor.js")),
+  import(assetUrl("panel-calibration-tab.js")),
 ]);
 const SETTINGS_URL = "/config/integrations/integration/myhome";
 const CATEGORY_VIEW_STORAGE_KEY = "myhome-panel-category-view-v1";
@@ -39,6 +40,7 @@ class MyHomePanel extends HTMLElement {
     this._profileEditor = new CoverProfileEditor();
     this._profileList = new CoverProfileList();
     this._catalogueEditor = new ProfileCatalogueEditor();
+    this._calibrationTab = new CalibrationTab();
     this._coverView = "devices";
     this._visibilityChanged = () => this._updatePolling();
     this._locationChanged = () => this._syncGatewayFromUrl();
@@ -122,7 +124,7 @@ class MyHomePanel extends HTMLElement {
 
   _stop() {
     this._profileEditor.close(); this._catalogueEditor.close();
-    this._profileList.clear();
+    this._profileList.clear(); this._calibrationTab.clear();
     this._started = false;
     document.removeEventListener("visibilitychange", this._visibilityChanged);
     window.removeEventListener("popstate", this._locationChanged);
@@ -159,6 +161,7 @@ class MyHomePanel extends HTMLElement {
       }
       if (changed) this._renderInventory();
       this._profileList.refresh();
+      this._calibrationTab.refresh();
     } catch (error) {
       if (session === this._session) this._showError(this._t("loadError"));
     } finally {
@@ -383,10 +386,10 @@ class MyHomePanel extends HTMLElement {
     root.getElementById("discovery-help").hidden = isBus || !this._data.gateways.length;
     root.getElementById("items").hidden = isBus;
     root.getElementById("monitor").hidden = !isBus;
-    if (isBus) { this._profileEditor.close(); this._catalogueEditor.close(); this._profileList.clear(); this._renderMonitor(); return; }
+    if (isBus) { this._profileEditor.close(); this._catalogueEditor.close(); this._profileList.clear(); this._calibrationTab.clear(); this._renderMonitor(); return; }
     this._removeMonitor();
     if (!this._data.gateways.length) {
-      this._profileList.clear();
+      this._profileList.clear(); this._calibrationTab.clear();
       root.getElementById("items").innerHTML = this._empty(this._t("noGateways"), this._t("noGatewaysHelp"));
       return;
     }
@@ -396,8 +399,8 @@ class MyHomePanel extends HTMLElement {
       && !scope.entities.some((entity) => entity.device_id === device.id && entity.entry_id === entryId)),
     })).filter((device) => device.entry_ids.length);
     const groups = model.groupByWho([...scope.entities, ...emptyDevices]);
-    // A selected profile view must also work on gateways without registered covers.
-    if (this._coverView === "profiles" && !groups.some(([who]) => who === "2")) {
+    // A selected profile or calibration view must also work on gateways without registered covers.
+    if (this._coverView !== "devices" && !groups.some(([who]) => who === "2")) {
       groups.push(["2", []]);
       groups.sort(([a], [b]) => a === model.WHO_UNKNOWN ? 1 : b === model.WHO_UNKNOWN ? -1 : Number(a) - Number(b));
     }
@@ -417,13 +420,16 @@ class MyHomePanel extends HTMLElement {
     }
     const previousProfileHost = root.getElementById("cover-profile-list");
     const profileFocus = previousProfileHost?.contains(root.activeElement) ? root.activeElement : null;
+    // The calibration view keeps its element, and with it an open wizard, across inventory renders.
+    const previousCalibrationHost = root.getElementById("cover-calibration-tab");
+    const calibrationFocus = previousCalibrationHost?.contains(root.activeElement) ? root.activeElement : null;
     replacePreservingFocus(root.getElementById("items"), visibleGroups.map(([who, members]) => `
       <section class="who-group" data-who="${escapeHtml(who)}" aria-labelledby="who-title-${escapeHtml(who)}">
         <div class="who-heading"><h2 id="who-title-${escapeHtml(who)}">${escapeHtml(this._whoLabel(who))}</h2>
           <span class="count">${escapeHtml(this._inventoryCount(members))}</span>
           ${who === "2" ? `<nav class="cover-view-tabs" aria-label="${escapeHtml(this._t("profileViewLabel"))}">
-            ${["devices", "profiles"].map((view) => `<button type="button" data-action="cover-view" data-id="${view}" aria-pressed="${this._coverView === view}">${escapeHtml(this._t(view === "devices" ? "devices" : "profileListTitle"))}</button>`).join("")}</nav>` : ""}</div>
-        ${who === "2" && this._coverView === "profiles" ? '<div id="cover-profile-list"></div>' : `<div class="device-groups">${[
+            ${["devices", "profiles", "calibration"].map((view) => `<button type="button" data-action="cover-view" data-id="${view}" aria-pressed="${this._coverView === view}">${escapeHtml(this._t({ devices: "devices", profiles: "profileListTitle", calibration: "calTabTab" }[view]))}</button>`).join("")}</nav>` : ""}</div>
+        ${who === "2" && this._coverView === "profiles" ? '<div id="cover-profile-list"></div>' : who === "2" && this._coverView === "calibration" ? '<div id="cover-calibration-tab" class="cal-tab"></div>' : `<div class="device-groups">${[
           ...model.groupEntitiesByDevice(members.filter((item) => item.entity_id), scope.devices),
           ...members.filter((item) => !item.entity_id).flatMap((device) => device.entry_ids
             .filter((entryId) => scope.gateways.some((gateway) => gateway.entry_id === entryId))
@@ -442,6 +448,16 @@ class MyHomePanel extends HTMLElement {
       inventory: this._data, filters: this._filters, t: (key) => this._t(key),
       addressDetails: (entity) => this._addressDetails(entity) });
     else this._profileList.clear();
+    let calibrationHost = root.getElementById("cover-calibration-tab");
+    if (calibrationHost && previousCalibrationHost) {
+      calibrationHost.replaceWith(previousCalibrationHost);
+      calibrationHost = previousCalibrationHost;
+      calibrationFocus?.focus({ preventScroll: true });
+    }
+    if (calibrationHost) this._calibrationTab.show({ host: calibrationHost, hass: this._hass, gateways: scope.gateways,
+      inventory: this._data, filters: this._filters, t: (key) => this._t(key),
+      addressDetails: (entity) => this._addressDetails(entity), onOpenCover: (entityId) => this._openCoverProfile(entityId) });
+    else this._calibrationTab.clear();
     this._updateStates();
   }
 
@@ -534,6 +550,7 @@ class MyHomePanel extends HTMLElement {
     if (!this._data) return;
     this._profileEditor.updateState(this._hass);
     this._profileList.updateHass(this._hass);
+    this._calibrationTab.updateHass(this._hass);
     for (const element of this.shadowRoot.querySelectorAll("[data-state]")) {
       const entity = this._data.entities.find((item) => item.entity_id === element.dataset.state);
       const state = this._hass?.states?.[element.dataset.state];
