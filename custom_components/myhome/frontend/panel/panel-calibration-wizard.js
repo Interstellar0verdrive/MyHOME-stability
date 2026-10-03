@@ -198,7 +198,7 @@ export class CalibrationWizard {
     }
     const wait = root.querySelector(".wiz-wait");
     if (wait && screen.wait) {
-      const stages = screen.wait.stages.map((stage) => `<li data-state="${stage.state}">${esc(stage.text)}</li>`).join("");
+      const stages = screen.wait.stages.map((stage) => `<li data-step-state="${stage.state}">${esc(stage.text)}</li>`).join("");
       const list = wait.querySelector(".wiz-wait-stages");
       if (list.innerHTML !== stages) list.innerHTML = stages;
       list.hidden = !screen.wait.stages.length;
@@ -251,7 +251,7 @@ export class CalibrationWizard {
 
   _stepperMarkup(screen) {
     return `<p class="wiz-steps-line">${esc(screen.stepper.line)}</p>${screen.caption ? `<p class="wiz-steps-caption muted">${esc(screen.caption)}</p>` : ""}
-      <ol>${screen.stepper.phases.map((phase) => `<li data-state="${phase.state}"${phase.state === "current" ? ' aria-current="step"' : ""}><span class="wiz-step-mark" aria-hidden="true"></span><span class="wiz-step-label">${esc(phase.label)}</span>
+      <ol>${screen.stepper.phases.map((phase) => `<li data-step-state="${phase.state}"${phase.state === "current" ? ' aria-current="step"' : ""}><span class="wiz-step-mark" aria-hidden="true"></span><span class="wiz-step-label">${esc(phase.label)}</span>
         ${phase.substeps.length ? `<ul>${phase.substeps.map((item) => `<li>${esc(item.label)}: ${esc(item.value)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ol>`;
   }
 

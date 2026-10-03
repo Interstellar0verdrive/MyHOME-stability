@@ -56,7 +56,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   await press("path:A");
   assert.equal(code(), "A-03");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Preparation · 2 of 7");
-  assert.equal(wiz().querySelector('.wiz-steps li[data-state="current"] .wiz-step-label').textContent, "Preparation");
+  assert.equal(wiz().querySelector('.wiz-steps li[data-step-state="current"] .wiz-step-label').textContent, "Preparation");
   assert.equal(wiz().querySelector('input[name="slats"][value="yes"]').checked, true);
   assert.equal(backend.calls.filter((message) => message.type.startsWith("myhome/cover_calibration/")).length, 0);
   assert.equal(backend.subscriptions.filter((message) => message.type.startsWith("myhome/cover_calibration/")).length, 0);
@@ -665,4 +665,16 @@ test("the second tap of Take control is held back too, so a double click cannot 
   assert.equal(backend.subscriptions.filter((message) => message.claim).length, 0, "a double click does not claim");
   await new Promise((resolve) => setTimeout(resolve, 720));
   assert.equal(take().disabled, false);
+});
+
+test("the panel's entity states never overwrite the wizard's stepper", async () => {
+  const { panel, wiz, startFor } = await mount();
+  await startFor("cover.living_one");
+  const labels = () => [...wiz().querySelectorAll(".wiz-steps .wiz-step-label")].map((item) => item.textContent);
+  const before = labels();
+  assert.deepEqual(before, ["Introduction", "Preparation", "Ascent", "Descent", "Tape measure readings", "Summary", "Fine-tuning (optional)"]);
+  // Home Assistant pushes a state update: the panel refreshes every [data-state] element it owns.
+  panel.hass = { ...panel.hass, states: { ...panel.hass.states } };
+  assert.deepEqual(labels(), before);
+  assert.equal(wiz().querySelector("[data-state]"), null, "no element of the wizard uses the panel's state attribute");
 });

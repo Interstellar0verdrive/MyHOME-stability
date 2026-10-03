@@ -36,7 +36,7 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   await waitFor(() => code() === "B-04", "B-04");
   await type("196");
   assert.equal(code(), "B-05");
-  const stages = () => [...wiz().querySelectorAll(".wiz-wait-stages li")].map((item) => [item.textContent, item.dataset.state]);
+  const stages = () => [...wiz().querySelectorAll(".wiz-wait-stages li")].map((item) => [item.textContent, item.dataset.stepState]);
   assert.deepEqual(stages(), [["1/2 Descends to the bottom — about 22 s", "current"], ["2/2 Ascends halfway through its travel — about 11 s", "future"]]);
   await waitFor(() => stages()[1]?.[1] === "current", "second stage");
   assert.equal(stages()[0][1], "done");

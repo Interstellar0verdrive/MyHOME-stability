@@ -719,10 +719,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .wiz-steps ol, .wiz-sheet-steps ol { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; }
 .wiz-steps ol > li, .wiz-sheet-steps ol > li { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 8px; padding: 5px 0; font-size: 14px; color: var(--panel-text-2); }
 .wiz-step-mark { width: 14px; height: 14px; margin-top: 3px; border-radius: 50%; border: 1.5px solid var(--panel-border); box-sizing: border-box; }
-li[data-state="done"] > .wiz-step-mark { border-color: var(--panel-accent); background: var(--panel-accent); box-shadow: inset 0 0 0 2px var(--wiz-side); }
-li[data-state="current"] > .wiz-step-mark, .wiz-dot { border: 1.5px solid var(--panel-accent); background: linear-gradient(90deg, var(--panel-accent) 50%, transparent 50%); }
-li[data-state="current"], li[data-state="done"] { color: var(--primary-text-color, #182b37); }
-li[data-state="current"] > .wiz-step-label { font-weight: 600; }
+li[data-step-state="done"] > .wiz-step-mark { border-color: var(--panel-accent); background: var(--panel-accent); box-shadow: inset 0 0 0 2px var(--wiz-side); }
+li[data-step-state="current"] > .wiz-step-mark, .wiz-dot { border: 1.5px solid var(--panel-accent); background: linear-gradient(90deg, var(--panel-accent) 50%, transparent 50%); }
+li[data-step-state="current"], li[data-step-state="done"] { color: var(--primary-text-color, #182b37); }
+li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-steps ul, .wiz-sheet-steps ul { grid-column: 2; list-style: none; margin: 4px 0 2px; padding: 0; font-size: 12px; color: var(--panel-text-2); display: grid; gap: 2px; }
 .wiz-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; padding: 20px; min-width: 0; }
 .wiz-title { margin: 0; font-size: 18px; font-weight: 600; outline: none; }
@@ -736,9 +736,9 @@ li[data-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-wait { display: grid; gap: 10px; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--panel-border); background: var(--panel-surface-2); }
 .wiz-wait p { margin: 0; }
 .wiz-wait-stages { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
-.wiz-wait-stages li[data-state="future"] { color: var(--panel-text-2); }
-.wiz-wait-stages li[data-state="done"] { color: var(--panel-text-2); text-decoration: line-through; }
-.wiz-wait-stages li[data-state="current"] { font-weight: 600; }
+.wiz-wait-stages li[data-step-state="future"] { color: var(--panel-text-2); }
+.wiz-wait-stages li[data-step-state="done"] { color: var(--panel-text-2); text-decoration: line-through; }
+.wiz-wait-stages li[data-step-state="current"] { font-weight: 600; }
 .wiz-progress { height: 6px; border-radius: 999px; background: var(--panel-surface); overflow: hidden; }
 .wiz-progress span { display: block; height: 100%; width: 0; background: var(--primary-text-color, #182b37); transition: width 100ms linear; }
 .wiz-box { padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
