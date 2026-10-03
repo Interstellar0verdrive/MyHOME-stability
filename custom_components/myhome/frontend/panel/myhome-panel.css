@@ -701,7 +701,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-badge[data-status="running"] { background: color-mix(in srgb, var(--panel-warning) 20%, transparent); color: var(--primary-text-color, #182b37); white-space: normal; }
 .cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
-.cal-row-details { padding: 4px 14px 16px; }
+/* Details start 12 px below the row (24 px under the cover icon); the buttons have 20 px above and below. */
+.cal-row-details { padding: 12px 14px 20px; }
 /* Three blocks of at most 360 px, side by side while they fit, then wrapped; label and value stay close. */
 .cal-details-grid { display: flex; flex-wrap: wrap; gap: 16px 40px; }
 .cal-details-grid > section { flex: 1 1 260px; min-width: 0; max-width: 360px; }
@@ -711,7 +712,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-facts div { display: flex; justify-content: space-between; gap: 12px; }
 .cal-facts dt { color: var(--panel-text-2); }
 .cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
-.cal-details-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.cal-details-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
@@ -745,7 +746,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-actions { grid-column: 6; }
   .cal-row-profile > .muted, .cal-row-last { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
-  .cal-row-details { padding-block: 4px 16px; align-items: start; row-gap: 14px; }
+  .cal-row-details { padding-block: 12px 20px; align-items: start; row-gap: 20px; }
   .cal-details-grid { display: contents; }
   .cal-details-grid > section { grid-row: 1; max-width: none; }
   .cal-details-grid > section:nth-child(1) { grid-column: 2; }
