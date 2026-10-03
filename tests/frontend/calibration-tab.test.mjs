@@ -165,6 +165,8 @@ test("the chevron expands a row in place with the values in use, the last measur
     "no Fine-tune without measured rolls");
   assert.deepEqual(blockActions("cover.bedroom"), [[], [["cal-tab-measure-cover", "Measure"]], [["cal-tab-assign", "Assign profile"]]]);
   assert.equal(tab.querySelector(".cal-details-actions"), null, "no shared row of buttons");
+  assert.ok([...tab.querySelectorAll('[data-action="cal-tab-assign"] ha-icon')].every((icon) => icon.getAttribute("icon") === "mdi:link-variant"),
+    "Assign profile shows the link of the profile's covers, not a pencil");
   row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-row-details").hidden, true);
 });
