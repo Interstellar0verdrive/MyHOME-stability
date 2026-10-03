@@ -1,6 +1,6 @@
-# Calibration tab and wizard (panel 0.41.0)
+# Calibration tab and wizard (panel 0.43.0)
 
-Panel 0.41.0 adds a **Calibration** view to WHO 2 covers, next to **Devices** and **Profiles**, and a calibration
+Panel 0.43.0 adds a **Calibration** view to WHO 2 covers, next to **Devices** and **Profiles**, and a calibration
 wizard that opens inside it. The backend is unchanged: every step that exists today runs on the current session
 API ([WebSocket API](panel-websocket-api.md)); the steps whose verbs do not exist yet run as a local **preview**
 that sends nothing to Home Assistant and says so on screen. The profile dialog keeps its calibration section and
@@ -72,12 +72,18 @@ the user acts).
 | A-13 | `reading` · `opening` | T062–T066 | `reading` (travel, 20–500 cm, saved travel offered) |
 | A-14 | `briefing`/`closing` · `closing` | T068–T070 | `next`, `endpoint` |
 | A-15 / A-16 | `briefing` · `half_open` (local) | T071, T072, T060, T061; T074–T076 | `repeat`; `next` |
-| A-17 / A-18 | `opening` · `half_open`; `reading` | T027, T079, T080; T081–T083, T051, T033 | `reading`, `repeat` |
+| A-17 / A-18 | `opening` · `half_open`; `reading` | T027, T079, T080; T081, T082, `calReadingRange`, T051, T033 | `reading`, `repeat` |
 | A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, `wizTopReached` | `next` (auto), `endpoint`, `next` (auto) |
-| A-20 | `reading` · `half_close` | T087, T088, T083 | `reading`, `repeat` |
+| A-20 | `reading` · `half_close` | T087, T088, `calReadingRange` | `reading`, `repeat` |
 | A-21 / A-21c / A-21d | `review` | T091, T092/T107, T093–T106, T108–T112, T280, T281/T289, `wizTable*`, `wizTechnical` | `save` (`save_mode: "new"`, `name`) |
 | A-22…A-33 | preview `refine` | T113–T152 | nothing (preview) |
 | A-34 | after `saved` | T153–T158 | nothing |
+
+The intermediate readings (A-18, A-20) use the session's `reading_range`: the hint gives the heights the fit
+accepts, shown inside their true ends (`calReadingRange`, the text of the profile dialog), a value outside it is
+refused in the field with `profileError_reading_out_of_range` before anything is sent, and the mockups' rough
+expectation (T083) is shown only when the view carries no range. As in the profile dialog, the intermediate runs show
+no elapsed time (Home Assistant stops them); their wait card keeps the stages and a progress bar.
 
 The summary has one **Save** and the switch *Also save as reusable profile*: on for a first cover, off when the cover
 already follows a profile; on with a followed profile offers *Create a new profile* (default) or *Update «…»*. Today a
