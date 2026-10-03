@@ -208,12 +208,12 @@ test("the row menu assigns a profile in the existing dialog and closes with Esca
   assert.ok(root.querySelector(".cover-profile-dialog"), "Assign profile opens the maintainer's dialog");
 });
 
-test("a session in progress marks its cover, blocks new measurements and opens an automatic group in the existing view", async () => {
+test("a session in progress marks its cover, blocks new measurements and opens a sequence in the existing view, in its own dialog", async () => {
   const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "group", mode: "automatic", batch: true, phase: "paused",
     reason: "owner_absent", sequence: 4, values: {}, recoverable: true, attached: false, owner_present: false, cover_index: 0, results: [],
     targets: [{ entity_id: "cover.bedroom", name: "Bedroom" }, { entity_id: "cover.living_one", name: "Living room shutter 1" }],
     next_step: { step: "next_cover", cover_index: 1, entity_id: "cover.living_one" } };
-  const { tab, subscriptions, calls } = await mount({ session });
+  const { root, tab, subscriptions, calls } = await mount({ session });
   assert.match(tab.querySelector(".cal-tab-busy").textContent, /finish or cancel it/);
   assert.equal(tab.querySelector('[data-action="cal-tab-batch"]').disabled, true);
   for (const id of ["cover.bedroom", "cover.living_one"]) {
@@ -228,10 +228,14 @@ test("a session in progress marks its cover, blocks new measurements and opens a
   assert.equal(resume.request.session_id, "group");
   assert.equal("claim" in resume.request, false, "opening never takes control");
   resume.callback({ ...session, attachment: "reader", owner: false, read_only: true });
-  assert.equal(tab.querySelector("#cal-paused").hidden, false);
+  const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.open, true);
+  assert.equal(dialog.querySelector("h2").textContent, "Measurement in sequence");
+  assert.equal(dialog.querySelector("#cal-paused").hidden, false);
+  assert.ok(tab.querySelector(".cal-list"), "the list stays behind the dialog");
   assert.equal(commands(calls).length, 0);
-  tab.querySelector(".cal-tab-back").click(); await tick();
-  assert.ok(tab.querySelector(".cal-list"));
+  dialog.querySelector(".cal-dialog-close").click(); await tick();
+  assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
 test("an empty gateway explains which covers need calibration", async () => {
@@ -243,16 +247,26 @@ test("an empty gateway explains which covers need calibration", async () => {
   assert.equal(tab.querySelector(".cal-list"), null);
 });
 
-test("a group uses the existing selection and starts only after an explicit choice", async () => {
-  const { tab, subscriptions, calls } = await mount({ callWS: (message) => message.type === "myhome/cover_calibration/targets"
-    ? { revision: 7, max_batch: 4, targets: [{ entity_id: "cover.bedroom", name: "Bedroom", reason: null }, { entity_id: "cover.living_one", name: "Living room shutter 1", reason: "cover_unavailable" }] }
+test("several covers in sequence use the existing selection in a dialog, with readable names, and start only after an explicit choice", async () => {
+  const { root, tab, subscriptions, calls } = await mount({ language: "it", callWS: (message) => message.type === "myhome/cover_calibration/targets"
+    ? { revision: 7, max_batch: 4, targets: [{ entity_id: "cover.bedroom", name: "cover_bedroom_raw", reason: null }, { entity_id: "cover.living_one", name: "Living room shutter 1", reason: "cover_unavailable" }] }
     : undefined });
-  tab.querySelector('[data-action="cal-tab-batch"]').click(); await tick();
-  assert.equal(tab.querySelector('input[value="cover.living_one"]').disabled, true);
-  assert.equal(tab.querySelector("#batch-continue").disabled, true);
-  tab.querySelector('input[value="cover.bedroom"]').checked = true;
-  tab.querySelector("#batch-selection").dispatchEvent(new Event("change"));
-  tab.querySelector("#batch-continue").click(); await tick();
+  const button = tab.querySelector('[data-action="cal-tab-batch"]');
+  assert.equal(button.textContent.trim(), "Misura più tapparelle in sequenza");
+  assert.doesNotMatch(tab.textContent, /gruppo/i);
+  button.click(); await tick();
+  const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.querySelector("h2").textContent, "Misurazione in sequenza");
+  const labels = [...dialog.querySelectorAll(".batch-target span")].map((item) => item.firstChild.textContent);
+  assert.deepEqual(labels, ["Bedroom", "Living room shutter 1"], "inventory names, not registry identifiers");
+  assert.doesNotMatch(dialog.textContent, /cover\.bedroom|cover_bedroom_raw/);
+  assert.equal(dialog.querySelector('input[value="cover.living_one"]').disabled, true);
+  assert.equal(dialog.querySelector("#batch-continue").textContent, "Avvia la sequenza");
+  assert.equal(dialog.querySelector("#batch-back").textContent, "Annulla la sequenza");
+  assert.equal(dialog.querySelector("#batch-continue").disabled, true);
+  dialog.querySelector('input[value="cover.bedroom"]').checked = true;
+  dialog.querySelector("#batch-selection").dispatchEvent(new Event("change"));
+  dialog.querySelector("#batch-continue").click(); await tick();
   const start = subscriptions.find((item) => item.request.type === "myhome/cover_calibration/batch_start");
   assert.deepEqual(start.request.entity_ids, ["cover.bedroom"]);
   assert.equal(start.request.revision, 7);

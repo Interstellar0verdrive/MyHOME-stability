@@ -456,7 +456,8 @@ class MyHomePanel extends HTMLElement {
     }
     if (calibrationHost) this._calibrationTab.show({ host: calibrationHost, hass: this._hass, gateways: scope.gateways,
       inventory: this._data, filters: this._filters, t: (key) => this._t(key),
-      addressDetails: (entity) => this._addressDetails(entity), onOpenCover: (entityId) => this._openCoverProfile(entityId) });
+      addressDetails: (entity) => this._addressDetails(entity), onOpenCover: (entityId) => this._openCoverProfile(entityId),
+      dialogHost: root.getElementById("dialog-host") });
     else this._calibrationTab.clear();
     this._updateStates();
   }

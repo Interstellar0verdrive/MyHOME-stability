@@ -45,6 +45,7 @@ export class CalibrationTab {
 
   clear() {
     this._generation++;
+    this._closeDialog();
     for (const unsubscribe of this._unsubs.splice(0)) Promise.resolve(unsubscribe()).catch(() => {});
     this._calibration.close();
     this._wizard?.close();
@@ -204,7 +205,7 @@ export class CalibrationTab {
       // The buttons line up with the introduction, not with the title above it.
       html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3><div class="cal-tab-head"><p class="muted cal-tab-intro">${esc(t("calTabIntro"))}</p>
         <div class="actions cal-tab-actions">
-          <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:select-group" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureGroup"))}</span></button>
+          <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T363"))}</span></button>
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:window-shutter-settings" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}
         </div></div>
         <div class="cal-tab-filters"><div class="cal-tab-chips" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((filter) =>
@@ -394,73 +395,104 @@ export class CalibrationTab {
       onClose: () => this._backToList() });
   }
 
-  /** The gateway's open session: the wizard for its own modes, the existing view for the others. */
+  /** The gateway's open session: the wizard for its own modes, the existing view, in its own dialog, for the others. */
   _openSession(entryId) {
     const row = this._rows.get(entryId), session = row?.session;
     if (!session || !this._context) return;
     const item = this._covers().find((entry) => entry.entry.entry_id === entryId && entry.cover.entity_id === session.entity_id);
     // The wizard needs the cover in the list (name, gateway); otherwise the existing view opens it.
     if (item && this._wizard?.handles?.(session)) { this._openWizard({ start: "resume", session, item }); return; }
-    this._mode = { kind: "session" };
-    const { host, hass, t } = this._context;
-    this._calibration.open({ host, hass, t, entity: { entry_id: entryId, entity_id: session.entity_id }, resume: session,
-      revision: row.data?.revision, onCancel: () => this._backToList(), onSaved: () => this._backToList() });
-    this._appendBack(host);
+    const { hass, t } = this._context;
+    const body = this._openDialog({ title: t(session.batch ? "wiz_T364" : "calTitle"), subtitle: session.batch ? "" : item?.name || session.entity_id,
+      icon: session.batch ? "mdi:format-list-numbered" : "mdi:timer-outline" });
+    this._calibration.open({ host: body, hass, t, entity: { entry_id: entryId, entity_id: session.entity_id }, resume: session,
+      revision: row.data?.revision, onCancel: () => this._dialogDone(), onSaved: () => this._dialogDone() });
   }
 
-  _appendBack(host) {
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "ghost cal-tab-back";
-    back.textContent = `← ${this._context.t("calTabBack")}`;
-    // Leaving the view detaches like closing the profile dialog: the session keeps running in Home Assistant.
-    back.onclick = () => { this._calibration.close(); this._backToList(); };
-    host.prepend(back);
+  /**
+   * A dialog with the look of the maintainer's profile dialog, in the panel's dialog host. Closing it leaves an open
+   * session as closing the profile dialog does: the session keeps running in Home Assistant.
+   */
+  _openDialog({ title, subtitle = "", icon }) {
+    this._closeDialog();
+    const { dialogHost, t } = this._context;
+    dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" aria-labelledby="cal-dialog-title">
+      <header class="dialog-head"><div class="dialog-icon" aria-hidden="true"><ha-icon icon="${esc(icon)}"></ha-icon></div>
+        <div class="dialog-head-text"><h2 id="cal-dialog-title">${esc(title)}</h2>${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ""}</div></header>
+      <div class="cal-dialog-body"></div>
+      <footer class="dialog-foot"><button type="button" class="cal-dialog-close">${esc(t("close"))}</button></footer></dialog>`;
+    const dialog = dialogHost.querySelector("dialog");
+    dialog.querySelector(".cal-dialog-close").onclick = () => this._dialogDone();
+    dialog.oncancel = (event) => { event.preventDefault(); this._dialogDone(); };
+    dialog.showModal();
+    this._dialog = dialog;
+    return dialog.querySelector(".cal-dialog-body");
   }
 
-  /** A group: the existing selection and automatic batch, with the same messages as the profile dialog. */
+  _closeDialog() {
+    this._calibration.close();
+    this._dialog?.close();
+    this._dialog?.remove();
+    this._dialog = null;
+  }
+
+  _dialogDone() {
+    this._closeDialog();
+    this.refresh();
+  }
+
+  /** Several covers in sequence: the existing selection and automatic batch, in a dialog, with readable names. */
   async _selectBatch() {
-    const { host, hass, t, gateways } = this._context;
+    const { hass, t, gateways, inventory } = this._context;
     const generation = this._generation;
-    this._mode = { kind: "batch" };
-    host.innerHTML = `<div class="cal-batch"><h3>${esc(t("calBatchTitle"))}</h3><p>${esc(t("calBatchSelectHelp"))}</p>
+    const body = this._openDialog({ title: t("wiz_T364"), subtitle: gateways.length === 1 ? gateways[0].title : "", icon: "mdi:format-list-numbered" });
+    const dialog = this._dialog;
+    body.innerHTML = `<p class="muted">${esc(t("calBatchSelectHelp"))}</p>
       ${gateways.length > 1 ? `<label>${esc(t("gateway"))}<select id="cal-batch-gateway">${gateways.map((entry) => `<option value="${esc(entry.entry_id)}">${esc(entry.title)}</option>`).join("")}</select></label>` : ""}
-      <p id="batch-error" role="alert"></p><div id="batch-selection">${esc(t("loading"))}</div>
-      <div class="actions"><button type="button" id="batch-continue" class="primary" disabled>${esc(t("calBatchContinue"))}</button>
-      <button type="button" id="batch-back">${esc(t("cancel"))}</button></div></div>`;
-    host.querySelector("#batch-back").onclick = () => this._backToList();
+      <p id="batch-error" class="error" role="alert"></p><div id="batch-selection" class="cal-batch-list">${esc(t("loading"))}</div>
+      <div class="actions"><button type="button" id="batch-continue" class="primary" disabled>${esc(t("wiz_T365"))}</button>
+      <button type="button" id="batch-back">${esc(t("wiz_T366"))}</button></div>`;
+    body.querySelector("#batch-back").onclick = () => this._dialogDone();
+    const current = () => this._current(generation) && this._dialog === dialog;
     const load = async (entryId) => {
-      const list = host.querySelector("#batch-selection"), next = host.querySelector("#batch-continue");
+      const list = body.querySelector("#batch-selection"), next = body.querySelector("#batch-continue");
       next.disabled = true;
       list.textContent = t("loading");
       try {
         const data = await hass.callWS({ type: "myhome/cover_calibration/targets", entry_id: entryId });
-        if (!this._current(generation) || this._mode.kind !== "batch") return;
-        list.innerHTML = data.targets.map((item) => `<label class="batch-target"><input type="checkbox" value="${esc(item.entity_id)}" ${item.reason ? "disabled" : ""}>
-          <span>${esc(item.name)}<small class="muted">${esc(item.entity_id)}${item.reason ? ` · ${esc(t(`profileError_${item.reason}`))}` : ""}</small></span></label>`).join("") || esc(t("calBatchEmpty"));
+        if (!current()) return;
+        // The name and room the panel shows everywhere else, not the registry's technical identifiers.
+        const readable = (item) => {
+          const entity = inventory.entities.find((entry) => entry.entity_id === item.entity_id && entry.entry_id === entryId);
+          const area = entity ? inventory.areas.find((entry) => entry.id === model.effectiveArea(entity, inventory.devices))?.name : "";
+          return { name: entity ? model.entityName(entity, hass) : item.name, area };
+        };
+        list.innerHTML = data.targets.map((item) => {
+          const { name, area } = readable(item);
+          return `<label class="batch-target"><input type="checkbox" value="${esc(item.entity_id)}" ${item.reason ? "disabled" : ""}>
+            <span>${esc(name)}${area || item.reason ? `<small class="muted">${esc([area, item.reason ? t(`profileError_${item.reason}`) : ""].filter(Boolean).join(" · "))}</small>` : ""}</span></label>`;
+        }).join("") || esc(t("calBatchEmpty"));
         const selected = () => [...list.querySelectorAll("input:checked:not(:disabled)")].map((input) => input.value);
         list.onchange = () => {
           const count = selected().length;
           next.disabled = count === 0 || count > data.max_batch;
-          host.querySelector("#batch-error").textContent = count > data.max_batch ? `${t("calBatchLimit")}: ${data.max_batch}` : "";
+          body.querySelector("#batch-error").textContent = count > data.max_batch ? `${t("calBatchLimit")}: ${data.max_batch}` : "";
         };
         next.onclick = () => {
           const ids = selected();
           if (next.disabled || !ids.length || ids.length > data.max_batch) return;
           next.disabled = true;
-          this._mode = { kind: "session" };
-          this._calibration.open({ host, hass, t, entity: { entry_id: entryId }, mode: "automatic", entity_ids: ids, revision: data.revision,
-            onCancel: () => this._backToList(), onSaved: () => this._backToList() });
-          this._appendBack(host);
+          this._calibration.open({ host: body, hass, t, entity: { entry_id: entryId }, mode: "automatic", entity_ids: ids, revision: data.revision,
+            onCancel: () => this._dialogDone(), onSaved: () => this._dialogDone() });
         };
       } catch (error) {
-        if (!this._current(generation)) return;
+        if (!current()) return;
         list.textContent = "";
         const key = `profileError_${error?.code}`;
-        host.querySelector("#batch-error").textContent = t(key) === key ? t("profileError") : t(key);
+        body.querySelector("#batch-error").textContent = t(key) === key ? t("profileError") : t(key);
       }
     };
-    const select = host.querySelector("#cal-batch-gateway");
+    const select = body.querySelector("#cal-batch-gateway");
     if (select) select.onchange = () => load(select.value);
     await load(select?.value || gateways[0].entry_id);
   }

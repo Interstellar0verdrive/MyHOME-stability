@@ -696,7 +696,11 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
 .cal-details-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .cal-tab-back { justify-self: start; }
-.cal-batch { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
+.cal-dialog-body > p { margin: 0; }
+.cal-batch-list { display: grid; border: 1px solid var(--panel-border); border-radius: 12px; padding: 4px 14px; }
+.cal-batch-list .batch-target + .batch-target { border-top: 1px solid var(--panel-border); }
+.cal-batch-list .batch-target small { display: block; }
 @media (min-width: 1024px) {
   .cal-list-head, .cal-row-main { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr) 180px; grid-template-areas: none; gap: 12px; align-items: center; }
   .cal-list-head { padding: 12px 18px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
