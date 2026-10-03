@@ -15,6 +15,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .cover_profiles import ProfileError, get_store, respond
 from .cover_settings import KEYS, native_provenance
+from .typing_compat import as_any
 
 WS_EXPORT = "myhome/cover_profiles/export"
 
@@ -95,7 +96,7 @@ async def export_profiles(hass: Any, entry_id: str) -> Any:
         }
 
 
-@websocket_command({vol.Required("type"): WS_EXPORT, vol.Required("entry_id"): str})
+@websocket_command(as_any({vol.Required("type"): WS_EXPORT, vol.Required("entry_id"): str}))
 @require_admin
 @async_response
 async def ws_export(hass: Any, connection: Any, msg: dict[str, Any]) -> None:

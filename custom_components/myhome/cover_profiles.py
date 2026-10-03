@@ -56,6 +56,7 @@ from .cover_settings import (
     set_overrides,
     validate_scaling,
 )
+from .typing_compat import as_any
 
 DATA_KEY = f"{DOMAIN}_cover_profile_stores"
 WS_READ = "myhome/cover_profiles/read"
@@ -463,14 +464,14 @@ async def respond(hass: Any, connection: Any, msg: dict[str, Any], operation: An
         connection.send_result(msg["id"], result)
 
 
-@websocket_command({vol.Required("type"): WS_READ, **TARGET})
+@websocket_command(as_any({vol.Required("type"): WS_READ, **TARGET}))
 @require_admin
 @async_response
 async def ws_read(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     await respond(hass, connection, msg, read_profile(hass, msg["entry_id"], msg["entity_id"]))
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_WRITE, **TARGET,
     vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Required("action"): vol.In(["assign", "save", "delete", "overrides", "preview", "update_shared", "travel"]),
@@ -480,7 +481,7 @@ async def ws_read(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     vol.Optional("profile"): PROFILE,
     vol.Optional("overrides"): {vol.In(KEYS): vol.Any(None, seconds)},
     vol.Optional("confirmation"): str,
-})
+}))
 @require_admin
 @async_response
 async def ws_write(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
@@ -490,9 +491,9 @@ async def ws_write(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     await respond(hass, connection, msg, write_profile(hass, msg))
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_SUBSCRIBE, vol.Required("entry_id"): str,
-})
+}))
 @require_admin
 @async_response
 async def ws_subscribe(hass: Any, connection: Any, msg: dict[str, Any]) -> None:

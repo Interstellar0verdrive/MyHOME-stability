@@ -67,7 +67,9 @@ async def test_unknown_state_needs_full_run_and_restart_does_not_invent_slat_pos
     with patch('custom_components.myhome.cover.time.monotonic', return_value=200):
         await cover.async_set_cover_position(position=0)
         cover._anchor_run(200)
+        fallback_start = cover._start_position
         cover._freeze_position(205)  # An early Stop is not an endpoint confirmation.
+        assert cover._start_position == fallback_start
         assert cover.current_cover_position is None
         await cover.async_close_cover()
         cover._anchor_run(210)

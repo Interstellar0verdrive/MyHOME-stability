@@ -17,6 +17,7 @@ from .cover_calibration import ready_cover, replay, send_error
 from .cover_calibration_automatic import SETTLE_SECONDS, AutomaticCalibrationSession
 from .cover_profile_provenance import PROVENANCE
 from .cover_settings import set_overrides
+from .typing_compat import as_any
 
 WS_TARGETS = "myhome/cover_calibration/targets"
 WS_BATCH_START = "myhome/cover_calibration/batch_start"
@@ -181,19 +182,19 @@ async def begin_batch(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
         return session
 
 
-@websocket_command({vol.Required("type"): WS_TARGETS, vol.Required("entry_id"): str})
+@websocket_command(as_any({vol.Required("type"): WS_TARGETS, vol.Required("entry_id"): str}))
 @require_admin
 @async_response
 async def ws_targets(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
     await profiles.respond(hass, connection, msg, read_targets(hass, msg["entry_id"]))
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_BATCH_START, vol.Required("entry_id"): str,
     vol.Required("entity_ids"): SELECTION, vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
     vol.Optional("session_id"): vol.All(str, vol.Length(min=1, max=64)),
-})
+}))
 @require_admin
 @async_response
 async def ws_batch_start(hass: Any, connection: Any, msg: dict[str, Any]) -> None:

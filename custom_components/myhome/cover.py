@@ -467,7 +467,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
             frozen = round(position.height * 100) if position else None
         self._attr_current_cover_position = frozen
         if self._move_start_time is not None:
-            self._start_position = frozen
+            if frozen is not None:
+                self._start_position = frozen
             self._move_start_time = None
         self._attr_is_opening = False
         self._attr_is_closing = False

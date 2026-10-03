@@ -28,6 +28,7 @@ from homeassistant.helpers.storage import Store
 from .const import CONF_FIRMWARE, DOMAIN, INTEGRATION_VERSION, is_apl_address
 from .cover_profiles import register_api
 from .data import get_runtime_data
+from .typing_compat import as_any
 
 PANEL_URL = "myhome"
 PANEL_VERSION = "0.41.0"
@@ -253,7 +254,7 @@ def async_panel_inventory(hass: HomeAssistant) -> dict[str, Any]:
     }
 
 
-@websocket_command({vol.Required("type"): WS_INVENTORY})
+@websocket_command(as_any({vol.Required("type"): WS_INVENTORY}))
 @require_admin
 @callback
 def ws_panel_inventory(

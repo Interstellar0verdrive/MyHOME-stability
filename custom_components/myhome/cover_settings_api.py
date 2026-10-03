@@ -16,6 +16,7 @@ from .cover_geometry import NONLINEAR_MODEL, model_name, public_geometry
 from .cover_profile_assignment import assignment_reason
 from .cover_profiles import WS_OVERVIEW, ProfileError, get_store, public_settings, respond
 from .cover_settings import MODEL
+from .typing_compat import as_any
 
 
 async def overview(hass: Any, entry_id: str) -> dict[str, Any]:
@@ -69,7 +70,7 @@ async def overview(hass: Any, entry_id: str) -> dict[str, Any]:
                 "profiles": profiles, "covers": covers}
 
 
-@websocket_command({vol.Required("type"): WS_OVERVIEW, vol.Required("entry_id"): str})
+@websocket_command(as_any({vol.Required("type"): WS_OVERVIEW, vol.Required("entry_id"): str}))
 @require_admin
 @async_response
 async def ws_overview(hass: Any, connection: Any, msg: dict[str, Any]) -> None:

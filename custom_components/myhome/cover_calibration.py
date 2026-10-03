@@ -43,6 +43,7 @@ from .cover_profiles import (
     write_profile,
 )
 from .data import MyHOMERuntimeData
+from .typing_compat import as_any
 
 if TYPE_CHECKING:
     from .gateway import MyHOMEGatewayHandler
@@ -661,7 +662,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
         return session
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_START, vol.Required("entry_id"): str,
     vol.Required("entity_id"): str, vol.Required("revision"): vol.All(int, vol.Range(min=0)),
     vol.Optional("mode"): vol.In(["guided", "automatic", "geometry"]),
@@ -669,7 +670,7 @@ async def begin(hass: Any, connection: Any, msg: dict[str, Any]) -> Any:
     vol.Optional("slats"): bool,
     vol.Optional("client_id"): vol.All(str, vol.Length(min=1, max=64)),
     vol.Optional("session_id"): vol.All(str, vol.Length(min=1, max=64)),
-})
+}))
 @require_admin
 @async_response
 async def ws_start(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
@@ -687,7 +688,7 @@ def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
     connection.send_error(msg["id"], code, code)
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_ACTION, vol.Required("entry_id"): str,
     vol.Required("session_id"): str,
     vol.Required("action"): vol.In(["run", "open", "close", "endpoint", "stop", "cancel", "save", "preview_save", "heartbeat", "detach", "next", "lift", "reading", "repeat", "continue"]),
@@ -698,7 +699,7 @@ def send_error(connection: Any, msg: dict[str, Any], error: Any) -> None:
     vol.Optional("save_mode"): vol.In(["new", "cover", "shared"]),
     vol.Optional("confirmation"): str,
     vol.Optional("names"): vol.All([str], vol.Length(min=1, max=20)),
-})
+}))
 @require_admin
 @async_response
 async def ws_action(hass: Any, connection: Any, msg: dict[str, Any]) -> None:

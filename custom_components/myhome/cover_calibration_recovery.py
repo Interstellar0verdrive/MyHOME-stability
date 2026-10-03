@@ -10,17 +10,18 @@ from homeassistant.components.websocket_api.decorators import (
 
 from .cover_calibration import send_error
 from .cover_profiles import DATA_KEY, ProfileError, target
+from .typing_compat import as_any
 
 WS_RESUME = "myhome/cover_calibration/resume"
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_RESUME, vol.Required("entry_id"): str,
     vol.Required("session_id"): str,
     vol.Required("client_id"): vol.All(str, vol.Length(min=1, max=64)),
     vol.Optional("claim"): bool,
     vol.Optional("sequence"): vol.All(int, vol.Range(min=0)),
-})
+}))
 @require_admin
 @async_response
 async def ws_resume(hass: Any, connection: Any, msg: dict[str, Any]) -> None:

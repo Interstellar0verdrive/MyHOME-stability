@@ -19,6 +19,7 @@ from .cover_profile_mutations import shared_preview
 from .cover_profile_provenance import DIRECTIONS, evidence
 from .cover_profiles import MAX_PROFILES, PROFILE, ProfileError, commit_profiles, get_store, respond
 from .cover_settings import reference_profile
+from .typing_compat import as_any
 
 WS_MANAGE = "myhome/cover_profiles/manage"
 NAME = vol.All(str, vol.Strip, vol.Length(min=1, max=64))
@@ -90,13 +91,13 @@ async def manage_profile(hass: Any, msg: dict[str, Any]) -> dict[str, Any]:
         return {"entry_id": entry.entry_id, "revision": data["revision"], "profile_id": profile_id}
 
 
-@websocket_command({
+@websocket_command(as_any({
     vol.Required("type"): WS_MANAGE, vol.Required("entry_id"): str,
     vol.Required("revision"): vol.All(int, vol.Range(min=0)), vol.Required("profile_id"): str,
     vol.Required("action"): vol.In(["preview", "update", "duplicate", "delete", "preview_assign", "assign"]),
     vol.Optional("entity_ids"): vol.All([str], vol.Length(min=1, max=200), vol.Unique()),
     vol.Optional("profile"): PROFILE, vol.Optional("name"): NAME, vol.Optional("confirmation"): str,
-})
+}))
 @require_admin
 @async_response
 async def ws_manage(hass: Any, connection: Any, msg: dict[str, Any]) -> None:
