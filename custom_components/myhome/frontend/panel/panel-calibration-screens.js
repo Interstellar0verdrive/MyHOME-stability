@@ -6,7 +6,7 @@
  * shared translation sheet (`wiz_T…`); a few screen-only keys are `wiz…`.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const { fill, number } = await import(asset("panel-calibration-text.js"));
+const { fill, number, readingRange, RANGE_SLACK_CM } = await import(asset("panel-calibration-text.js"));
 
 const PHASES = {
   intro: "wiz_T007", prep: "wiz_T008", ascent: "wiz_T009", descent: "wiz_T010", readings: "wiz_T011", summary: "wiz_T012", finetune: "wiz_T013",
@@ -213,8 +213,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "briefing" && !local.ackReadings) return Object.assign(screen, { code: p("16"), title: t("wiz_T074"), body: t("wiz_T075"),
       actions: [{ id: "ack:readings", label: t("wiz_T076"), kind: "primary" }, ...(path === "A" ? [{ id: "exit", label: t("wiz_T025"), kind: "secondary" }] : [])] });
     if (phase === "reading") return Object.assign(screen, { code: p("18"), title: t("wiz_T081"), body: t("wiz_T082"),
-      field: { label: t("wiz_T064"), hint: tx("wiz_T083", { cm: n(view.expected_cm, 0) }), min: 0.1, max: 10000, kind: "height" },
-      actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
+      field: halfField(ctx, tx, n), actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const seconds = ((slats ? view.samples?.lift || 0 : 0) + (view.values?.opening_time || 0)) / 2;
     return Object.assign(screen, { code: p("17"), title: t("wiz_T027"), visual: null,
       wait: { text: tx(path === "C" ? "wiz_T205" : "wiz_T080", values), stages: [{ text: tx("wiz_T079", { seconds: n(seconds, 0) }), state: "current" }],
@@ -232,8 +231,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   }
   if (step === "top" || step === "half_close") {
     if (phase === "reading") return Object.assign(screen, { code: p("20"), title: t("wiz_T087"), body: t("wiz_T088"),
-      field: { label: t("wiz_T064"), hint: tx("wiz_T083", { cm: n(view.expected_cm, 0) }), min: 0.1, max: 10000, kind: "height" },
-      actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
+      field: halfField(ctx, tx, n), actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const down = Math.max(((view.values?.closing_time || 0) - (view.geometry?.slat_time_s || 0)) / 2, 0);
     const first = step === "top";
     Object.assign(screen, { code: p("19"), title: t("wiz_T027"), visual: null,
@@ -480,6 +478,18 @@ function problemScreen(screen, ctx, reason, step = false) {
   return screen;
 }
 
+/**
+ * A reading at half the opening or closing time: with the session's `reading_range` the hint gives the heights
+ * the fit accepts (never a target) and the field refuses the others before sending; otherwise the mockup's rough
+ * expectation (T083).
+ */
+function halfField(ctx, tx, n) {
+  const { t, view, language = "en" } = ctx, span = view.reading_range;
+  if (!span) return { label: t("wiz_T064"), hint: tx("wiz_T083", { cm: n(view.expected_cm, 0) }), min: 0.1, max: 10000, kind: "height" };
+  return { label: t("wiz_T064"), hint: fill(t("calReadingRange"), readingRange(span, language)),
+    min: span.min_cm - RANGE_SLACK_CM, max: span.max_cm + RANGE_SLACK_CM, kind: "height", range: true };
+}
+
 function runWatch(t, n, view, elapsed) {
   if (!MEASURED_RUN(view) || elapsed == null) return null;
   const [label, value] = splitLabel(fill(t("wiz_T044"), { seconds: n(elapsed) }));
@@ -548,7 +558,12 @@ function finalize(screen, ctx) {
   if (status.cancelPending) screen.notices.push({ tone: "error", text: t("calCancelFailed") });
   if (status.error) {
     const key = `profileError_${status.error.code}`;
-    screen.notices.push({ tone: "error", text: t(key) === key ? t(view?.preview ? "calReadingNumber" : "calConnectionError") : fill(t(key), view || {}) });
+    const values = { ...(view || {}), ...(readingRange(view?.reading_range, language, status.error.reading) || {}) };
+    screen.notices.push({ tone: "error", text: t(key) === key ? t(view?.preview ? "calReadingNumber" : "calConnectionError") : fill(t(key), values) });
+  }
+  // A reading refused in the field, before anything is sent.
+  if (local.fieldError != null && screen.field?.range) {
+    screen.notices.push({ tone: "error", text: fill(t("profileError_reading_out_of_range"), readingRange(view.reading_range, language, local.fieldError)) });
   }
   // Movement, readings and Save wait for an answer, a connection and ownership; Stop never does.
   if (status.locked) for (const action of screen.actions) if (!["stop", "reconnect", "close", "start-over"].includes(action.id)) action.disabled = true;

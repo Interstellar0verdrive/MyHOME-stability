@@ -139,8 +139,15 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-17");
   await move(backend, { auto: true, stop: true });
   assert.equal(code(), "A-18");
-  assert.match(wiz().querySelector("#wiz-field-hint").textContent, /^About 99 cm expected/);
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "For this cover the reading should be between 73.6 and 109.1 cm. Enter what the tape says.");
+  const sentBefore = actions().length;
+  await type("120");
+  assert.equal(actions().length, sentBefore, "a reading outside the accepted range is not sent");
+  assert.equal(wiz().querySelector('[name="reading_cm"]').getAttribute("aria-invalid"), "true");
+  assert.equal(wiz().querySelector(".wiz-notices").textContent,
+    "The reading (120 cm) is outside the accepted range (73.6–109.1 cm). Check the measurement reference and repeat the step. If the timings measured earlier were wrong, cancel and restart the guided measurement.");
   await type("97");
+  assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
   assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
   assert.equal(code(), "A-19");
   await move(backend);
@@ -364,6 +371,22 @@ test("a reader keeps Stop while the cover may move, and nothing else", () => {
   assert.deepEqual(screen.actions.map((action) => action.id), ["stop"]);
   assert.equal(screen.readOnly.take, "Take control");
   assert.equal(screen.readOnly.primary, false, "the owner is present: taking control is not the first choice");
+});
+
+test("an intermediate reading names its accepted range in Italian with a decimal comma, and a refusal names the reading", () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", phase: "reading", step: "half_close", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
+    readings: { gap: 3 }, geometry: { slat_time_s: 4 }, travel_cm: 110, slats: true, owner: true, sequence: 3, reading_range: { min_cm: 40.83, max_cm: 60.63 } };
+  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", view, cover: { name: "Cucina 2" },
+    status: { error: { code: "reading_out_of_range", reading: 70.5 } } });
+  assert.equal(screen.code, "A-20");
+  assert.equal(screen.field.hint, "Per questa tapparella la lettura attesa è fra 40,9 e 60,6 cm. Scrivi quello che dice il metro.");
+  assert.match(screen.notices[0].text, /^La lettura \(70,5 cm\) è fuori dall’intervallo ammesso \(40,9–60,6 cm\)/);
+  assert.equal(screen.stopwatch, null, "no time is shown for a reading");
+  const running = buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, phase: "closing", reading_range: null }, elapsed: 3.2,
+    local: { ackReadings: true }, cover: { name: "Cucina 2" } });
+  assert.equal(running.code, "A-19");
+  assert.equal(running.stopwatch, null, "an intermediate run shows no elapsed time: Home Assistant stops it");
 });
 
 test("screens carry no placeholder or key in either language", () => {

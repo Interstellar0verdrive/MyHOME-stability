@@ -21,7 +21,8 @@ class WizardSession extends CoverCalibration {
   constructor(listener) { super(); this._listener = listener; this.error = null; this.notice = null; }
   _render() { this._listener("view"); }
   _renderElapsed() { this._listener("tick"); }
-  _error(error) { this.error = error || {}; this._listener("error"); }
+  // The reading that was refused travels with the error, to name it beside the accepted range.
+  _error(error, extra = {}) { this.error = { ...(error || {}), code: error?.code, reading: extra.reading_cm ?? null }; this._listener("error"); }
   _accept(state) {
     const claiming = this._claiming;
     super._accept(state);

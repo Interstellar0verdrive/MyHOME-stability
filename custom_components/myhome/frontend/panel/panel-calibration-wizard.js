@@ -296,7 +296,10 @@ export class CalibrationWizard {
 
   _input(event) {
     if (event.target.name === "profile_name") { this._local.profileName = event.target.value.trim(); this._patch(this._screen()); }
-    if (event.target.name === "reading_cm") event.target.removeAttribute("aria-invalid");
+    if (event.target.name === "reading_cm") {
+      event.target.removeAttribute("aria-invalid");
+      if (this._local.fieldError != null) { this._local.fieldError = null; this._patch(this._screen()); }
+    }
   }
 
   _change(event) {
@@ -382,10 +385,15 @@ export class CalibrationWizard {
     if (!input) return;
     const value = parseReading(input.value), min = Number(input.dataset.min), max = Number(input.dataset.max);
     if (!Number.isFinite(value) || value < min || value > max) {
-      input.setAttribute("aria-invalid", "true");
-      input.focus();
+      // Outside the accepted range of an intermediate reading the screen names the range; nothing is sent.
+      this._local.fieldError = Number.isFinite(value) ? value : null;
+      this._patch(this._screen());
+      const field = this._frame.querySelector('[name="reading_cm"]');
+      field.setAttribute("aria-invalid", "true");
+      field.focus();
       return;
     }
+    this._local.fieldError = null;
     return this._send("reading", { reading_cm: value });
   }
 
@@ -470,6 +478,8 @@ export class CalibrationWizard {
     const view = this._gateway?.view, local = this._local;
     // A tab that stops owning the session forgets its presses: only a press made as owner arms a movement.
     if (view && !view.preview && (view.read_only || !view.owner)) Object.assign(local, { armed: false, begun: false });
+    // A refused value belongs to the step it was typed for.
+    if (view?.sequence !== local.fieldSequence) { local.fieldError = null; local.fieldSequence = view?.sequence; }
     if (view?.phase === "review" && !view.preview) {
       local.review = { opening: view.values?.opening_time, closing: view.values?.closing_time, slat: view.geometry?.slat_time_s ?? null,
         travel: view.mode === "geometry" ? view.travel_cm : null, opening_roll: view.geometry?.opening_roll ?? null, closing_roll: view.geometry?.closing_roll ?? null,
@@ -566,7 +576,7 @@ function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.enti
 
 function freshFlags() {
   return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, armed: false, begun: false, autoSequence: null,
-    review: null, thenRefine: false, pendingSave: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
+    review: null, thenRefine: false, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
 }
 
 export { slug };

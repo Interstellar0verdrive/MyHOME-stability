@@ -53,7 +53,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       return { ...public_, elapsed: _started == null ? null : Math.round((clock - _started) * 100) / 100,
         owner, read_only: !owner, attachment: "attachment-1", attached: true, owner_present: true, recoverable: !["saved", "cancelled", "interrupted"].includes(session.phase), ...extra };
     },
-    emit() { session.sequence += 1; listener?.(backend.view()); },
+    emit() { if (session.mode === "geometry") refresh(); session.sequence += 1; listener?.(backend.view()); },
     /** The bus confirms the movement asked by `next`, `open` or `close`. */
     started() {
       session.phase = session.phase === "starting_open" ? "opening" : "closing";
@@ -92,6 +92,9 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     session.can_repeat = repeatable();
     session.reading_kind = session.step === "opening" ? "travel" : session.step;
     session.expected_cm = session.travel_cm && session.step?.startsWith("half_") ? session.travel_cm / 2 : null;
+    // As cover_calibration_geometry.py publishes it: the heights a roll from 1 to 5 accepts at this stop.
+    session.reading_range = session.phase === "reading" && session.step?.startsWith("half_") && session.travel_cm
+      ? { min_cm: session.travel_cm * 0.3712345, max_cm: session.travel_cm * 0.5512345 } : null;
   };
 
   function geometryAction(message) {
@@ -116,6 +119,8 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
         session.step = "reset"; session._after_position = session.still_resting ? "lift" : "opening";
       } else if (session.step === "opening") {
         session.travel_cm = number; session.step = "closing";
+      } else if (session.reading_range && (number < session.reading_range.min_cm || number > session.reading_range.max_cm)) {
+        throw Object.assign(new Error("range"), { code: "reading_out_of_range" });
       } else if (session.step === "half_open") {
         session.geometry = { slat_time_s: session.slats ? 4.4 : 0, opening_roll: 1.83 };
         session.readings.half_open = number; session.step = "top"; session._after_position = "half_close";

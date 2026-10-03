@@ -41,6 +41,24 @@ export function dateText(value, language = "en") {
   catch { return new Date(value).toISOString().slice(0, 10); }
 }
 
+/** The backend accepts readings this close to the ends of their range (floating point only). */
+export const RANGE_SLACK_CM = 1e-9;
+
+/**
+ * The accepted heights of an intermediate reading (`reading_range` of the session view), shown inside their
+ * true ends a tenth of a centimetre at a time so that every value shown is accepted; a narrower range is
+ * shown to hundredths, and one narrower than that with its exact ends (as the profile dialog shows it).
+ */
+export function readingRange(span, language = "en", reading = null) {
+  if (!span) return null;
+  const inside = (scale) => [Math.ceil(span.min_cm * scale) / scale, Math.floor(span.max_cm * scale) / scale];
+  let [low, high] = inside(10), digits = 1;
+  if (low >= high) { [low, high] = inside(100); digits = 2; }
+  if (low > high) { low = span.min_cm; high = span.max_cm; digits = 20; }
+  return { min_cm: number(low, language, digits), max_cm: number(high, language, digits),
+    ...(reading == null ? {} : { reading_cm: number(reading, language, 3) }) };
+}
+
 /** A list of names joined the way the language joins them ("A, B and C"). */
 export function names(list, language = "en") {
   try { return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(list); }
