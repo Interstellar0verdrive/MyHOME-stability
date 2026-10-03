@@ -19,6 +19,7 @@ export function parseReading(value) {
   return /^-?(\d+\.?\d*|\.\d+)$/.test(textValue) ? Number(textValue) : NaN;
 }
 
+const STAGE_ICON = { done: "mdi:check-circle", current: "mdi:circle-half-full", future: "mdi:circle-outline" };
 const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "before"];
 /**
  * After every change of screen (or of its buttons) the confirming buttons stay disabled this long, so that a slow
@@ -210,13 +211,20 @@ export class CalibrationWizard {
     }
     const wait = root.querySelector(".wiz-wait");
     if (wait && screen.wait) {
-      const stages = screen.wait.stages.map((stage) => `<li data-step-state="${stage.state}">${esc(stage.text)}</li>`).join("");
+      // Stages done carry ✓, the current one ◐, the next ones an empty circle.
+      const stages = screen.wait.stages.map((stage) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon><span>${esc(stage.text)}</span></li>`).join("");
       const list = wait.querySelector(".wiz-wait-stages");
       if (list.innerHTML !== stages) list.innerHTML = stages;
       list.hidden = !screen.wait.stages.length;
-      const bar = wait.querySelector(".wiz-progress");
-      bar.hidden = screen.wait.progress == null;
-      if (screen.wait.progress != null) bar.querySelector("span").style.width = `${Math.round(screen.wait.progress * 100)}%`;
+      // The bar is always there: the share already run, or moving back and forth while the duration is unknown.
+      const bar = wait.querySelector(".wiz-progress"), share = screen.wait.progress?.value ?? null;
+      bar.classList.toggle("is-indeterminate", share == null);
+      if (share == null) bar.removeAttribute("aria-valuenow");
+      else bar.setAttribute("aria-valuenow", String(Math.round(share * 100)));
+      bar.querySelector("span").style.width = share == null ? "" : `${Math.round(share * 100)}%`;
+      const remaining = wait.querySelector(".wiz-wait-remaining");
+      remaining.textContent = screen.wait.remaining || "";
+      remaining.hidden = !screen.wait.remaining;
     }
     const notices = screen.notices.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${esc(notice.text)}</p>`).join("");
     const box = root.querySelector(".wiz-notices");
@@ -267,8 +275,9 @@ export class CalibrationWizard {
   }
 
   _waitMarkup(wait) {
-    return `<div class="wiz-wait" role="status"><p>${esc(wait.text)}</p><ol class="wiz-wait-stages"></ol>
-      <div class="wiz-progress" hidden><span></span></div></div>`;
+    return `<div class="wiz-wait" role="status">${wait.text ? `<p>${esc(wait.text)}</p>` : ""}<ol class="wiz-wait-stages"></ol>
+      <div class="wiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(this._context.t("wiz_T027"))}"><span></span></div>
+      <p class="wiz-wait-remaining muted" aria-live="off" hidden></p></div>`;
   }
 
   _choiceMarkup(choice) {

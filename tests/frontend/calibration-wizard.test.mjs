@@ -496,6 +496,34 @@ test("the drawing is one figure sized as in Figma, placed by its position, and g
   assert.equal(wiz().querySelector(".wiz-frame .cal-visual"), null, "the maintainer's small scene is not used by the wizard");
 });
 
+test("every wait has its bar: the time left when the duration is known, moving back and forth when it is not", async () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", step: "home", phase: "starting_close", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 1 };
+  const wait = (cover, extra = {}, elapsed = null, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, ...extra },
+    elapsed, local, cover: { name: "Cucina 2", ...cover } }).wait;
+  const never = wait({ effective: { closing: { value: 30, origin: "default" } } });
+  assert.deepEqual(never.progress, { value: null, remaining: null }, "a default time is only a guess: indeterminate");
+  assert.equal(never.remaining, "");
+  const known = wait({ effective: { closing: { value: 21.7, origin: "native_fallback" } } });
+  assert.deepEqual(known.progress, { value: 0, remaining: 22 });
+  assert.equal(known.remaining, "Tempo residuo circa 22 s");
+  // A-19, second leg: 3 s into a half descent of (21 - 4) / 2 s.
+  const half = wait({}, { step: "half_close", phase: "closing", values: { opening_time: 22, closing_time: 21 }, geometry: { slat_time_s: 4 } }, 3, { ackReadings: true });
+  assert.equal(half.stages[0].state, "done");
+  assert.equal(Math.round(half.progress.value * 100), 35);
+  assert.equal(half.remaining, "Tempo residuo circa 6 s");
+  // A-19, first leg: the return to the top lasts the measured opening time.
+  assert.equal(wait({}, { step: "top", phase: "briefing", values: { opening_time: 22, closing_time: 21 } }, null, { ackReadings: true }).remaining, "Tempo residuo circa 22 s");
+
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  assert.equal(code(), "A-04");
+  assert.equal(wiz().querySelector(".wiz-progress").classList.contains("is-indeterminate"), false);
+  assert.equal(wiz().querySelector(".wiz-wait-remaining").textContent, "About 22 s remaining");
+  assert.equal(backend.calls.length > 0, true);
+});
+
 test("screens carry no placeholder or key in either language", () => {
   const view = { mode: "geometry", phase: "reading", step: "half_open", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
     readings: { gap: 3 }, geometry: {}, travel_cm: 198, expected_cm: 99, slats: true, owner: true, sequence: 1 };

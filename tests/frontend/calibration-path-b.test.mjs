@@ -38,8 +38,15 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(code(), "B-05");
   const stages = () => [...wiz().querySelectorAll(".wiz-wait-stages li")].map((item) => [item.textContent, item.dataset.stepState]);
   assert.deepEqual(stages(), [["1/2 Descends to the bottom — about 22 s", "current"], ["2/2 Ascends halfway through its travel — about 11 s", "future"]]);
+  const bar = () => wiz().querySelector(".wiz-progress");
+  assert.equal(bar().getAttribute("aria-valuenow"), "0", "a simulated positioning has its bar from the stages' times");
+  assert.equal(wiz().querySelector(".wiz-wait-remaining").textContent, "About 33 s remaining");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-wait-stages ha-icon")].map((icon) => icon.getAttribute("icon")), ["mdi:circle-half-full", "mdi:circle-outline"]);
   await waitFor(() => stages()[1]?.[1] === "current", "second stage");
   assert.equal(stages()[0][1], "done");
+  assert.equal(wiz().querySelector(".wiz-wait-stages ha-icon").getAttribute("icon"), "mdi:check-circle");
+  assert.equal(bar().getAttribute("aria-valuenow"), "66");
+  assert.equal(wiz().querySelector(".wiz-wait-remaining").textContent, "About 11 s remaining");
   await waitFor(() => code() === "B-06", "B-06");
   assert.equal(title(), "Check the roller shutter");
   assert.match(wiz().querySelector(".wiz-body").textContent, /The expected height is 98 cm, half of its 196 cm travel/);

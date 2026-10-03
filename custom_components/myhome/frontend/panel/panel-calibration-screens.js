@@ -184,8 +184,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const slats = view.slats !== false;
   const elapsed = ctx.elapsed;
   const step = view.step, phase = view.phase;
-  const positioning = (number, text) => Object.assign(screen, { code: p(number), title: t("wiz_T027"),
-    wait: { text, stages: [], progress: null }, actions: [stop] });
+  // A positioning run lasts about the full time of its direction, when that time is known.
+  const positioning = (number, text, seconds = null) => Object.assign(screen, { code: p(number), title: t("wiz_T027"),
+    wait: { text, stages: [], progress: waitBar(view, elapsed, seconds) }, actions: [stop] });
+  const closingTime = knownTime(ctx.cover?.effective?.closing);
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
@@ -193,7 +195,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "next", label: t("wiz_T024"), kind: "primary" }] });
     if (phase === "closing") return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
       actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, stop] });
-    return positioning("04", tx("wiz_T029", values));
+    return positioning("04", tx("wiz_T029", values), closingTime);
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
   if (step === "closing") screen.phase = "descent";
@@ -222,7 +224,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     if (phase === "closing") return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
       actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, stop] });
-    positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values));
+    positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     if (view.still_resting) screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });
     return screen;
@@ -261,13 +263,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     const seconds = ((slats ? view.samples?.lift || 0 : 0) + (view.values?.opening_time || 0)) / 2;
     return Object.assign(screen, { code: p("17"), title: t("wiz_T027"),
       wait: { text: tx(path === "C" ? "wiz_T205" : "wiz_T080", values), stages: [{ text: tx("wiz_T079", { seconds: n(seconds, 0) }), state: "current" }],
-        progress: progress(view, elapsed, seconds) },
+        progress: waitBar(view, elapsed, seconds) },
       // Normally started by the wizard itself; if that did not happen the run can be started here.
       actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop] : [stop] });
   }
   if (step === "top" && !local.ackReadings) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
-    positioning("09", t("wiz_T086"));
+    positioning("09", t("wiz_T086"), view.values?.opening_time);
     // A-09's drawing is the descent to the base: this run goes up, so it has none.
     screen.illustration = false;
     screen.phase = "descent";
@@ -284,7 +286,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       wait: { text: t("wiz_T086"), stages: [
         { text: tx("wiz_T084", { seconds: n(view.values?.opening_time, 0) }), state: first ? "current" : "done" },
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
-      progress: first ? null : progress(view, elapsed, down) }, actions: [stop] });
+      progress: waitBar(view, elapsed, first ? view.values?.opening_time : down) }, actions: [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, stop];
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -339,11 +341,11 @@ function previewScreen(screen, ctx, tx, n, values, stop) {
     quarter_close: "wiz_T129", three_quarter_close: "wiz_T133", check: "wiz_T137", bottom: "wiz_T171", half_travel: "wiz_T172" };
   if (view.phase === "positioning") {
     if (profile && view.step === "open_full") return Object.assign(screen, { code: "B-03", title: t("wiz_T027"),
-      wait: { text: tx("wiz_T170", values), stages: [], progress: null }, actions: [stop] });
+      wait: { text: tx("wiz_T170", values), stages: [], progress: stagesBar(view) }, actions: [stop] });
     const stages = view.stages.map((stage, index) => ({ text: tx(stageText[stage.key], { seconds: n(stage.seconds, 0) }),
       state: index < view.stage_index ? "done" : index === view.stage_index ? "current" : "future" }));
     return Object.assign(screen, { code: profile ? "B-05" : p(readingCodes[view.step][0]), title: t("wiz_T027"),
-      wait: { text: t("wiz_T086"), stages, progress: null }, actions: [stop] });
+      wait: { text: t("wiz_T086"), stages, progress: stagesBar(view) }, actions: [stop] });
   }
   if (view.phase === "reading") {
     if (view.step === "travel") return Object.assign(screen, { code: "B-04", title: t("wiz_T062"), body: t("wiz_T063"),
@@ -567,9 +569,30 @@ export function splitLabel(text) {
   return index < 0 ? ["", text] : [text.slice(0, index), text.slice(index + 2)];
 }
 
-function progress(view, elapsed, seconds) {
-  if (!["opening", "closing"].includes(view.phase) || elapsed == null || !seconds) return null;
-  return Math.min(1, Math.max(0, elapsed / seconds));
+/**
+ * The bar of a wait: the share of `seconds` already run (0 until the movement is under way) and the seconds left.
+ * Without a known duration (a never measured cover) `value` and `remaining` are null: the bar is indeterminate.
+ */
+function waitBar(view, elapsed, seconds) {
+  if (!(seconds > 0)) return { value: null, remaining: null };
+  const done = ["opening", "closing"].includes(view.phase) && elapsed != null ? Math.min(seconds, Math.max(0, elapsed)) : 0;
+  return { value: done / seconds, remaining: secondsLeft(seconds - done) };
+}
+
+/** A simulated positioning advances by stages: the stages done over the whole, the stages left as the time left. */
+function stagesBar(view) {
+  const seconds = (view.stages || []).map((stage) => stage.seconds || 0), total = seconds.reduce((sum, value) => sum + value, 0);
+  if (!(total > 0)) return { value: null, remaining: null };
+  const done = seconds.slice(0, view.stage_index || 0).reduce((sum, value) => sum + value, 0);
+  return { value: done / total, remaining: secondsLeft(total - done) };
+}
+
+/** Whole seconds left, never 0 while the bar is shown (sums of tenths are not exact: 11.000000001 is 11). */
+function secondsLeft(seconds) { return Math.max(1, Math.ceil(seconds - 0.001)); }
+
+/** A time in use counts as known once measured or configured; the integration's default is only a guess. */
+function knownTime(entry) {
+  return entry && entry.value > 0 && entry.origin !== "default" ? entry.value : null;
 }
 
 /**
@@ -600,6 +623,8 @@ function finalize(screen, ctx) {
   // A screen may opt out (false) where its code is shared with a run the drawing does not show.
   screen.illustration = screen.illustration === false ? null : screen.illustration || illustrationFor(screen.code);
   const n = (value, digits = 1) => number(value, language, digits);
+  // Under a wait's bar, the time left when its duration is known.
+  if (screen.wait) screen.wait.remaining = screen.wait.progress?.remaining != null ? fill(t("wiz_T402"), { seconds: n(screen.wait.progress.remaining, 0) }) : "";
   const refining = (view?.preview && view.path === "refine") || local.refining;
   if (["choose", "path"].includes(ctx.stage)) screen.caption = "";
   const phases = phasesFor(path, scope, refining);

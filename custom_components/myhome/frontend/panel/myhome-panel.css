@@ -866,12 +866,17 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-stopwatch-value { color: var(--panel-text-2); }
 .wiz-wait { display: grid; gap: 10px; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--panel-border); background: var(--panel-surface-2); }
 .wiz-wait p { margin: 0; }
-.wiz-wait-stages { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+.wiz-wait-stages { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 13px; }
+.wiz-wait-stages li { display: flex; align-items: center; gap: 8px; }
+.wiz-wait-stages ha-icon { --mdc-icon-size: 16px; flex-shrink: 0; }
 .wiz-wait-stages li[data-step-state="future"] { color: var(--panel-text-2); }
-.wiz-wait-stages li[data-step-state="done"] { color: var(--panel-text-2); text-decoration: line-through; }
-.wiz-wait-stages li[data-step-state="current"] { font-weight: 600; }
 .wiz-progress { height: 6px; border-radius: 999px; background: var(--panel-surface); overflow: hidden; }
 .wiz-progress span { display: block; height: 100%; width: 0; background: var(--primary-text-color, #182b37); transition: width 100ms linear; }
+/* Unknown duration: a short segment sweeps the track instead of a share. */
+.wiz-progress.is-indeterminate span { width: 30%; animation: wiz-progress-sweep 1.6s ease-in-out infinite; }
+@keyframes wiz-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .wiz-progress.is-indeterminate span { animation: none; width: 100%; opacity: .35; } }
+.wiz-wait p.wiz-wait-remaining { font-size: 12px; }
 .wiz-box { padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
 .wiz-box p { margin: 4px 0 0; }
 .wiz-choice { max-width: 420px; }

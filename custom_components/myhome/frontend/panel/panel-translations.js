@@ -324,6 +324,7 @@ export const translations = {
     wiz_T399: "Already calibrated ({status}, {date})",
     wiz_T400: "Recommended",
     wiz_T401: "No saved profile: measure a roller shutter of this type first",
+    wiz_T402: "About {seconds} s remaining",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1112,6 +1113,7 @@ export const translations = {
     wiz_T399: "Già calibrata ({status}, {date})",
     wiz_T400: "Consigliato",
     wiz_T401: "Nessun profilo salvato: misura prima una tapparella di questo tipo",
+    wiz_T402: "Tempo residuo circa {seconds} s",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

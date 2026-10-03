@@ -60,7 +60,10 @@ Desktop (≥ 1024 px): header with the cover name, its address and **Discard cal
 (centre), actions (right). Phone: a full screen with the header and ✕, a one-line stepper with **Steps** (a sheet with
 the whole stepper), the instruction scrolling, the actions anchored at the bottom. The stepper shows the phases of the
 path, the current one half filled, and under each reached phase its measured values. The stopwatch appears only in
-the timed runs; waits show their stages and, in the timed half runs, a progress bar. Every new step moves the focus
+the timed runs. Every wait has a progress bar: its duration comes from the times in use (a positioning from the
+closing or opening time, a half run from the measured times, a simulated step from its stages), with the time left
+under it (T402, provisional); when the duration is unknown (a cover with only the integration's default times) the bar
+moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. Every new step moves the focus
 to its title; the Steps sheet and the Discard dialog keep Tab inside and close with Escape, and closing the dialog
 returns the focus to the screen's confirming button (or its title). After every change of screen or of its buttons the
 confirming buttons stay disabled for `CONFIRM_GUARD_MS` (700 ms), so a slow double tap never confirms an end stop the
