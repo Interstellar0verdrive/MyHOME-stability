@@ -13,7 +13,7 @@ the texts it uses and the message it sends.
 
 | File | Role |
 | --- | --- |
-| `panel-calibration-tab.js` | The Calibration view: list, filters, expanded row, open session, group selection |
+| `panel-calibration-tab.js` | The Calibration view: list, filters, expanded row, row menu, Assign profile, open session, several covers in sequence |
 | `panel-calibration-wizard.js` | The wizard: layout, events, sessions, automatic continuation, leaving |
 | `panel-calibration-screens.js` | `buildScreen()`: which board a moment is, as plain data (no DOM, no messages) |
 | `panel-calibration-gateway.js` | `LiveCalibrationGateway` (the existing session) and `PreviewCalibrationGateway` (local) |
@@ -28,19 +28,23 @@ while the owner is present), Cancel and the per-tab identity are the ones alread
 
 | Board | What is shown | Data | Texts |
 | --- | --- | --- | --- |
-| T-01 list | Timed covers (no position sensor): name, room, status, profile, last measurement; Measure / Fine-tune; ⋮ (Assign profile, Details) | `cover_profiles/overview` per gateway | `calTabTitle`, `calTabIntro`, `calTabCol*`, `calTabStatus_*`, `calTabMeasuredOn` |
-| T-02 filter | All / To measure / Calibrated / With profile, with counts; help line on To measure | same | `calTabFilter_*`, `calTabSummary`, `calTabToMeasureHelp` |
+| T-01 list | Timed covers (no position sensor): name, room and bus address (`Address: 86 · A: 8 · PL: 6`), status, profile, last measurement; Measure / Fine-tune; ⋮ with every secondary action (Fine-tune, Measure or Remeasure, Assign profile, Details); the whole row opens its details | `cover_profiles/overview` per gateway | `calTabTitle`, `calTabIntro`, `calTabCol*`, `calTabStatus_*`, `calTabMeasuredOn`, T363 |
+| T-02 filter | All / To measure / Calibrated / With profile, with counts as grey badges; help note on To measure | same | `calTabFilter_*`, `calTabCount*`, `calTabToMeasureHelp` |
 | T-03 session | The covers of the open session marked In progress (a tab guides it / no tab guides it / paused / waiting for the stop) with Open session; new measurements disabled | `cover_profiles/read` on one cover: its `calibration` is the gateway's single session | `calTabRunning_*`, `calTabBusy`, `calOpenSession` |
 | T-04 empty | No timed cover | overview | `calTabEmpty*`, `calTabHowItWorks*` |
-| T-05 details | Row expanded in place (chevron): values in use, last measurement and method, profile and who else follows it; Fine-tune, Remeasure, Assign profile | overview `effective` values and provenance | `calTabValues`, `calTabSlats*`, `calTabMethod_*`, `calTabFollowers*`, `wiz_T093`, `wiz_T094`, `wiz_T041`, `wiz_T105`, `wiz_T106` |
+| T-05 details | Row expanded in place: three blocks of at most 360 px (values in use, last measurement and method, profile and who else follows it), in columns while they fit; notes in one shared style (`.cal-note`), including where the times of a never measured cover come from (defaults or YAML); Fine-tune, Remeasure, Assign profile | overview `effective` values, origin and provenance | `calTabValues`, `calTabSlats*`, `calTabMethod_*`, `calTabFollowers*`, `wiz_T093`, `wiz_T094`, `wiz_T041`, `wiz_T105`, `wiz_T106`, T377, T378 |
 
 The session is read from one cover (up to three are tried in turn if a read fails); when none answers but the
 overview reports the gateway reserved (`assignment_reason: calibration_busy`), new measurements stay disabled.
 
 Status comes from the saved evidence: **To measure** without a guided or automatic measurement, **Times measured**
-with one, **Times and roll** with roll coefficients. *Measure a group* uses the existing selection
-(`cover_calibration/targets`) and automatic batch (`batch_start`). *Open session* opens the wizard for a `geometry`
-session and the existing view for guided, automatic and group sessions. Above 1024 px the rows are columns, below
+with one, **Times and roll** with roll coefficients. *Measure several covers in sequence* opens a dialog with the look
+of the profile dialog, with the existing selection (`cover_calibration/targets`, covers named as in the panel) and
+automatic run (`batch_start`) (T363–T366). *Assign profile* opens a dialog listing the gateway's profiles as on B-01
+(type with or without slats, where and when measured, reference travel, how many covers follow it) and assigns the
+chosen one with `cover_profiles/write` `assign` (T368–T376); it never opens the Travel profile dialog. *Open session*
+opens the wizard for a `geometry` session and the existing view, in the same dialog, for guided, automatic and
+sequence sessions. Above 1024 px the rows are columns, below
 they are cards. Rendering the view sends no calibration message.
 
 ## Wizard layout
