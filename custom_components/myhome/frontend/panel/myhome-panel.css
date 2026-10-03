@@ -651,9 +651,12 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab .notice { display: flex; gap: 10px; align-items: start; margin: 0; }
 .cal-tab .notice ha-icon { --mdc-icon-size: 18px; flex-shrink: 0; }
 .cal-tab-busy { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 12%, var(--panel-surface)); }
-/* One style for every explanatory note of the Calibration tab: a light block with a bar on the left. */
-.cal-note { margin: 0; padding: 8px 12px; border-inline-start: 3px solid var(--panel-text-2); border-radius: 0 8px 8px 0; background: var(--panel-surface-2); color: var(--panel-text-2); font-size: 13px; line-height: 1.5; }
-.cal-details-grid .cal-note { margin-top: 8px; }
+/* "Nota (calibrazione)": every explanatory note of the Calibration tab and of its expanded details. Accent at 8 %
+   behind, a 3 px bar of accent at 20 % on the left, secondary text; it follows its block (at most 360 px in the details). */
+.cal-note { margin: 0; padding: 8px 12px; border: 0; border-inline-start: 3px solid color-mix(in srgb, var(--panel-accent) 20%, transparent);
+  border-radius: 4px; background: color-mix(in srgb, var(--panel-accent) 8%, transparent); color: var(--panel-text-2);
+  font-size: 13px; line-height: 18px; font-weight: 400; }
+.cal-details-grid .cal-note { margin-top: 8px; max-width: 360px; }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }
 .cal-row { border-top: 1px solid var(--panel-border); }
