@@ -935,8 +935,13 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* Stop alone in a wait: red filled, the geometry of the primary. */
 .wiz-action.danger { border-color: var(--panel-error); background: var(--panel-error); color: #fff; }
 .wiz-action.danger:hover { background: color-mix(in srgb, var(--panel-error) 88%, #000); }
-.wiz-readonly { display: grid; gap: 8px; }
-.wiz-readonly .notice { margin: 0; }
+/* S-07: plain text at the top of the actions column, then Take control (outlined while the owner is present). */
+.wiz-readonly { display: grid; gap: 16px; }
+.wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }
+.wiz-take { width: 100%; min-height: 56px; border-radius: 999px; font-size: 15px; }
+.wiz-take.secondary { border-color: var(--panel-accent); color: var(--panel-accent); background: transparent; }
+/* S-01…S-05: the motor's state as plain lines under the text. */
+.wiz-status p { margin: 0; line-height: 1.55; }
 .wiz-sheet, .wiz-dialog { position: fixed; inset: 0; z-index: 10; display: flex; background: rgb(0 0 0 / 40%); }
 .wiz-sheet { align-items: end; }
 .wiz-sheet-card { position: relative; width: 100%; max-height: 80vh; overflow: auto; padding: 18px 20px 24px; border-radius: 18px 18px 0 0; background: var(--panel-surface); }

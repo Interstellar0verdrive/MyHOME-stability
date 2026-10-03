@@ -68,7 +68,7 @@ export function buildScreen(ctx) {
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
     title: "", subline: "", body: "", stopwatch: null, wait: null, illustration: null, choice: null, field: null, box: null, table: null,
-    technical: null, profileBlock: null, saveInfo: null, precision: null, notices: [], actions: [], readOnly: null, phase: "intro",
+    technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
   };
   const stop = { id: "stop", label: t("wiz_T028"), kind: "stop" };
@@ -543,7 +543,11 @@ function problemScreen(screen, ctx, reason, step = false) {
   } else if (step) {
     // The step alone is repeated: the texts of the mockups describe exactly this.
     screen.body = t(body);
-    screen.stopwatch = { label: "", value: t(code === "S-02" ? "wiz_T246" : code === "S-03" ? "wiz_T250" : code === "S-05" ? "wiz_T256" : "wiz_T242") };
+    // The state of the motor (and, for S-05, of the stopwatch) as plain lines under the text, as in the mockups.
+    // `elapsed_s` is the name expected from L2 for the time the run had when it was cut off; without it the line is left out.
+    const seconds = ctx.view?.problem?.elapsed_s;
+    screen.status = [t(code === "S-02" ? "wiz_T246" : code === "S-03" ? "wiz_T250" : code === "S-05" ? "wiz_T256" : "wiz_T242"),
+      ...(code === "S-05" && seconds != null ? [fill(t("wiz_T257"), { seconds: number(seconds, ctx.language || "en", 1) })] : [])];
     screen.actions = [{ id: "repeat_step", label: t(retry), kind: "primary" }, { id: "stop", label: t("wiz_T028"), kind: "stop" }];
   } else {
     // Today's backend discards the session: say what it says, and offer to start over.
@@ -670,11 +674,10 @@ function finalize(screen, ctx) {
   };
   // A reader sees the step and Stop only; another tab or device guides it.
   if (view?.read_only && !ENDED.includes(view.phase)) {
-    screen.readOnly = { text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
+    // As S-07: the actions column says who guides it (T262, plain text) above the explanation and Take control;
+    // a reader has no reading field to fill.
+    screen.readOnly = { status: t("wiz_T262"), text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
       consequence: status.confirmTake ? t("wiz_T265") : null, primary: view.owner_present === false };
-    // As S-07: a status line says who guides it, and a reader has no reading field to fill.
-    const [label, value] = splitLabel(t("wiz_T262"));
-    screen.stopwatch = { label, value };
     // Stop stays available to every reader while something may move (L1: a safety control).
     screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
     screen.field = null;

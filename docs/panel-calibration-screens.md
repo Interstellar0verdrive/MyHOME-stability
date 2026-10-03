@@ -144,9 +144,9 @@ C-01 (T184–T188) shows what the cover uses (a box with a bold title and one li
 | Board | When | Texts | Actions |
 | --- | --- | --- | --- |
 | S-01…S-05 | the session ended with a reason (`interrupted`) | titles T240, T244, T248, T252, T254 by family; body `calReason_<reason>` | Start over (T261), Close |
-| S-01…S-05 | a published `problem` (future) | T240–T258 | `repeat_step` |
+| S-01…S-05 | a published `problem` (future): the motor state as plain lines under the text, S-05 also the stopped stopwatch (T257, from `problem.elapsed_s` when L2 sends it) | T240–T258 | `repeat_step`, Stop |
 | S-06 | `expired` | T259, T260 | Start over, Close |
-| S-07 | read-only view | T262 (status line), T263–T265, `calConfirmTakeControl`; no reading field | Take control (two taps while the owner is present); Stop while it may move |
+| S-07 | read-only view: in the actions column T262 and T263 as plain text, then Take control (outlined while the owner is present) | T262–T265, `calConfirmTakeControl`; no reading field | Take control (two taps while the owner is present); Stop while it may move |
 | S-08 | Discard during a session: *Exit without saving* as red text on the left, *Continue the calibration* (primary) on the right | T267, T269, T270, `wizExitBodyLive` (live) / T268 (preview) | `cancel`; Stop beside it while it may move |
 
 A session reopened from the list is drawn as path C (remeasure everything) when its cover already follows a profile,

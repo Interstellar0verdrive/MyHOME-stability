@@ -258,11 +258,14 @@ test("a reader sees the step read-only and takes control in two taps while the o
   const resume = backend.subscriptions.find((message) => message.type === "myhome/cover_calibration/resume");
   assert.equal("claim" in resume, false);
   assert.equal(code(), "A-18");
-  assert.equal(wiz().querySelector(".wiz-readonly .notice").textContent, "Another device is guiding this calibration.");
+  // S-07: plain text at the top of the actions column, then the explanation and an outlined Take control.
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-readonly > p")].map((line) => line.textContent),
+    ["Control: another device", "Another device is guiding this calibration."]);
+  assert.equal(wiz().querySelector(".wiz-readonly .notice"), null);
+  assert.equal(wiz().querySelector('[data-wiz="take"]').className, "wiz-take secondary");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.dataset.wiz), [], "nothing moves: no Stop to offer");
   assert.equal(wiz().querySelector('.wiz-frame [name="reading_cm"]'), null, "a reader has no reading field (S-07)");
-  assert.equal(wiz().querySelector(".wiz-stopwatch-label").textContent, "Control");
-  assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "another device");
+  assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, true, "who guides it is no longer in the stopwatch box");
   wiz().querySelector('[data-wiz="take"]').click(); await tick();
   assert.equal(wiz().querySelector('[data-wiz="take"]').textContent, "Confirm take control");
   assert.match(wiz().querySelector(".wiz-readonly").textContent, /this device will guide the calibration/);
@@ -559,6 +562,21 @@ test("radios are plain rows, the advice badge is accent blue, links and Exit wit
   assert.match(rule(".wiz-action.link"), /color: var\(--panel-error\)/);
   assert.match(rule(".wiz-action.danger"), /background: var\(--panel-error\)/);
   assert.match(rule(".wiz-leave"), /margin-inline-end: auto; color: var\(--panel-error\); border: 0/);
+});
+
+test("a step's problem says the motor's state as plain lines under the text, S-05 with the stopwatch, and keeps Stop", () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", phase: "opening", step: "opening", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 5 };
+  const problem = (reason, extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, problem: { reason, ...extra } },
+    cover: { name: "Cucina 2" } });
+  const s05 = problem("travel_timeout", { elapsed_s: 92 });
+  assert.equal(s05.code, "S-05");
+  assert.equal(s05.stopwatch, null, "no light-blue box");
+  assert.deepEqual(s05.status, [translations.it.wiz_T256, "Cronometro: fermo a 92 s"]);
+  assert.deepEqual(problem("travel_timeout").status, [translations.it.wiz_T256], "without the time the second line is left out");
+  const s01 = problem("unexpected_stop");
+  assert.deepEqual([s01.code, s01.status], ["S-01", [translations.it.wiz_T242]]);
+  assert.deepEqual(s01.actions.map((action) => action.id), ["repeat_step", "stop"], "Stop stays until the owner decides otherwise");
 });
 
 test("screens carry no placeholder or key in either language", () => {

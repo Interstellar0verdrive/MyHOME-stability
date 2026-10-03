@@ -144,7 +144,7 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
@@ -171,6 +171,7 @@ export class CalibrationWizard {
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
+            ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${drawing("after-body")}
             ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${screen.choice ? this._choiceMarkup(screen.choice) : ""}
@@ -244,8 +245,8 @@ export class CalibrationWizard {
       this._guard();
       const focused = column.contains(root.getRootNode().activeElement) ? root.getRootNode().activeElement.dataset.wiz : null;
       this._actionsSignature = actions;
-      column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="notice">${esc(screen.readOnly.text)}</p>
-          <button type="button" class="${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : ""}" data-wiz="take">${esc(screen.readOnly.take)}</button>
+      column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="wiz-readonly-status">${esc(screen.readOnly.status)}</p><p>${esc(screen.readOnly.text)}</p>
+          <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(screen.readOnly.take)}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
         ${screen.actions.map((action) => `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
           ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}`;
