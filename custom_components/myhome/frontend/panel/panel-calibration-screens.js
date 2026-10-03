@@ -667,6 +667,8 @@ function finalize(screen, ctx) {
     screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
     screen.field = null;
   }
+  // Alone in a wait, Stop is the red filled button of the mockups; beside a step's buttons it stays a red link.
+  if (screen.wait && screen.actions.length === 1 && screen.actions[0].id === "stop") screen.actions[0] = { ...screen.actions[0], kind: "danger" };
   if (status.lost && !status.expired && view && !ENDED.includes(view.phase)) {
     screen.notices.push({ tone: "error", text: t("calVisual_disconnected") });
     if (view.recoverable) screen.actions.push({ id: "reconnect", label: t("calResume"), kind: "secondary" });

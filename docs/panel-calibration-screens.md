@@ -63,7 +63,9 @@ path, the current one half filled, and under each reached phase its measured val
 the timed runs. Every wait has a progress bar: its duration comes from the times in use (a positioning from the
 closing or opening time, a half run from the measured times, a simulated step from its stages), with the time left
 under it (T402, provisional); when the duration is unknown (a cover with only the integration's default times) the bar
-moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. Every new step moves the focus
+moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. Stop is a red filled
+button when it is a wait's only action and a red text link beside a step's buttons (the timed runs); text actions
+(*Continue anyway*, *Close*) are red text; radios are plain rows and the advised path's badge is accent blue. Every new step moves the focus
 to its title; the Steps sheet and the Discard dialog keep Tab inside and close with Escape, and closing the dialog
 returns the focus to the screen's confirming button (or its title). After every change of screen or of its buttons the
 confirming buttons stay disabled for `CONFIRM_GUARD_MS` (700 ms), so a slow double tap never confirms an end stop the
@@ -144,7 +146,7 @@ C-01 (T184–T188) shows what the cover uses; C-02 (T189–T196) chooses the cas
 | S-01…S-05 | a published `problem` (future) | T240–T258 | `repeat_step` |
 | S-06 | `expired` | T259, T260 | Start over, Close |
 | S-07 | read-only view | T262 (status line), T263–T265, `calConfirmTakeControl`; no reading field | Take control (two taps while the owner is present); Stop while it may move |
-| S-08 | Discard during a session | T267, T269, T270, `wizExitBodyLive` (live) / T268 (preview) | `cancel`; Stop beside it while it may move |
+| S-08 | Discard during a session: *Exit without saving* as red text on the left, *Continue the calibration* (primary) on the right | T267, T269, T270, `wizExitBodyLive` (live) / T268 (preview) | `cancel`; Stop beside it while it may move |
 
 A session reopened from the list is drawn as path C (remeasure everything) when its cover already follows a profile,
 otherwise as path A; its slat choice comes from the view.

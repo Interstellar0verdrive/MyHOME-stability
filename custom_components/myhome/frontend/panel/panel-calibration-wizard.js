@@ -186,9 +186,9 @@ export class CalibrationWizard {
           <div class="wiz-sheet-steps"></div></div></div>
         <div class="wiz-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-dialog-title" aria-describedby="wiz-dialog-body" hidden><div class="wiz-dialog-card">
           <h4 id="wiz-dialog-title">${esc(t("wiz_T267"))}</h4><p id="wiz-dialog-body"></p>
-          <div class="actions"><button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button>
-            <button type="button" class="wiz-leave" data-wiz="leave">${esc(t("wiz_T270"))}</button>
-            <button type="button" class="wiz-dialog-stop" data-wiz="stop" hidden>${esc(t("wiz_T028"))}</button></div></div></div>`;
+          <div class="actions"><button type="button" class="wiz-leave" data-wiz="leave">${esc(t("wiz_T270"))}</button>
+            <button type="button" class="wiz-dialog-stop" data-wiz="stop" hidden>${esc(t("wiz_T028"))}</button>
+            <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
       this._actionsSignature = null;
       if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
     }
@@ -251,7 +251,7 @@ export class CalibrationWizard {
     const guarded = this._guarded();
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
-      if (button) button.disabled = !!action.disabled || (guarded && action.kind !== "stop");
+      if (button) button.disabled = !!action.disabled || (guarded && action.id !== "stop");
     }
     const take = column.querySelector('[data-wiz="take"]');
     if (take) take.disabled = !!this._gateway?.status.busy || guarded;

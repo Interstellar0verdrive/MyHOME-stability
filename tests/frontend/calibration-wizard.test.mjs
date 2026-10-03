@@ -524,6 +524,35 @@ test("every wait has its bar: the time left when the duration is known, moving b
   assert.equal(backend.calls.length > 0, true);
 });
 
+test("Stop alone in a wait is the red filled button; beside a step's buttons it stays a red link", async () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: {}, slats: true, owner: true, sequence: 2 };
+  const kinds = (extra, local = {}) => buildScreen({ t, stage: "session", path: "A", view: { ...view, ...extra }, local, elapsed: 1, cover: { name: "Kitchen shutter 2" } })
+    .actions.map((action) => `${action.id}:${action.kind}`);
+  assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["stop:danger"], "A-04");
+  assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:danger"], "A-17");
+  assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["next:primary", "lift:primary", "stop:stop"], "A-07 keeps the link");
+  assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["endpoint:primary", "stop:stop"], "A-19 with its end stop button");
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  assert.equal(code(), "A-04");
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]').className, "wiz-action danger");
+  await press("stop");
+  assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1, "the red button stops as before");
+});
+
+test("radios are plain rows, the advice badge is accent blue, links and Exit without saving are red text", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+  assert.doesNotMatch(rule(".wiz-radio"), /border|background/, "no card around a radio");
+  assert.doesNotMatch(css, /\.wiz-radio:has\(input:checked\)/, "no tint on the chosen radio");
+  assert.match(rule(".wiz-recommended"), /color: var\(--panel-accent\)/);
+  assert.match(rule(".wiz-action.link"), /color: var\(--panel-error\)/);
+  assert.match(rule(".wiz-action.danger"), /background: var\(--panel-error\)/);
+  assert.match(rule(".wiz-leave"), /margin-inline-end: auto; color: var\(--panel-error\); border: 0/);
+});
+
 test("screens carry no placeholder or key in either language", () => {
   const view = { mode: "geometry", phase: "reading", step: "half_open", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
     readings: { gap: 3 }, geometry: {}, travel_cm: 198, expected_cm: 99, slats: true, owner: true, sequence: 1 };
@@ -565,13 +594,15 @@ test("the keyboard reaches every step: title focus, Steps sheet, and a dialog th
   wiz().querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
   const dialog = wiz().querySelector(".wiz-dialog");
   const buttons = [...dialog.querySelectorAll("button:not([hidden])")];
-  assert.deepEqual(buttons.map((button) => button.dataset.wiz), ["stay", "leave", "stop"]);
+  // S-08: "Exit without saving" as red text on the left, the primary on the right; focus starts on the primary.
+  assert.deepEqual(buttons.map((button) => button.dataset.wiz), ["leave", "stop", "stay"]);
+  assert.equal(root.activeElement, dialog.querySelector('[data-wiz="stay"]'));
   buttons.at(-1).focus();
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   assert.equal(root.activeElement, buttons[0], "Tab wraps to the first button");
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
   assert.equal(root.activeElement, buttons.at(-1), "Shift+Tab wraps to the last one");
-  buttons.at(-1).click(); await tick();
+  dialog.querySelector('[data-wiz="stop"]').click(); await tick();
   assert.equal(dialog.hidden, true, "Stop from the dialog closes it and keeps the wizard");
   assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1);
 });
