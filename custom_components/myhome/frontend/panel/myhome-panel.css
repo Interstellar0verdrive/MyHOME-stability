@@ -713,7 +713,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-facts dt { color: var(--panel-text-2); }
 .cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
 /* Each block's own action, under its content: no bottom space on the content, 20 px above the button. */
-.cal-block-action { display: flex; justify-content: start; padding-top: 20px; }
+.cal-block-action { display: grid; padding-top: 20px; }
+/* As in the design, the action spans the whole width of its block. */
+.cal-block-action > button { width: 100%; justify-content: center; }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
