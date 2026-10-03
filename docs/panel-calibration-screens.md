@@ -34,6 +34,9 @@ while the owner is present), Cancel and the per-tab identity are the ones alread
 | T-04 empty | No timed cover | overview | `calTabEmpty*`, `calTabHowItWorks*` |
 | T-05 details | Row expanded in place (chevron): values in use, last measurement and method, profile and who else follows it; Fine-tune, Remeasure, Assign profile | overview `effective` values and provenance | `calTabValues`, `calTabSlats*`, `calTabMethod_*`, `calTabFollowers*`, `wiz_T093`, `wiz_T094`, `wiz_T041`, `wiz_T105`, `wiz_T106` |
 
+The session is read from one cover (up to three are tried in turn if a read fails); when none answers but the
+overview reports the gateway reserved (`assignment_reason: calibration_busy`), new measurements stay disabled.
+
 Status comes from the saved evidence: **To measure** without a guided or automatic measurement, **Times measured**
 with one, **Times and roll** with roll coefficients. *Measure a group* uses the existing selection
 (`cover_calibration/targets`) and automatic batch (`batch_start`). *Open session* opens the wizard for a `geometry`
@@ -47,14 +50,20 @@ Desktop (≥ 1024 px): header with the cover name, its address and **Discard cal
 the whole stepper), the instruction scrolling, the actions anchored at the bottom. The stepper shows the phases of the
 path, the current one half filled, and under each reached phase its measured values. The stopwatch appears only in
 the timed runs; waits show their stages and, in the timed half runs, a progress bar. Every new step moves the focus
-to its title; the Steps sheet and the Discard dialog keep Tab inside and close with Escape.
+to its title; the Steps sheet and the Discard dialog keep Tab inside and close with Escape, and closing the dialog
+returns the focus to the screen's confirming button (or its title). After every change of screen or of its buttons the
+confirming buttons stay disabled for `CONFIRM_GUARD_MS` (700 ms), so a slow double tap never confirms an end stop the
+cover has not reached nor skips the second tap of *Take control*; Stop is never held back.
 
 ## Path A — first cover of its type
 
 Live: `myhome/cover_calibration/start` with `mode: "geometry"` (and `slats: false` for a cover without slats), then
 `myhome/cover_calibration/action`. "Auto" marks the `next` the wizard sends after the user's previous press, because
-the mockups show that movement without a press (once per view, only by the owner, never on a reopened session until
-the user acts).
+the mockups show that movement without a press. **The rule** (`CalibrationWizard._autoNext`): an automatic verb is
+sent only on the view that immediately follows a press of the user in this tab (through the movement and the stop
+that press started, never past a stop that waits for the user), once per `sequence`, and never after a replayed
+subscription (a new `attachment`: Home Assistant reconnected), a reconnection, a claim, a lost connection, a refused
+verb or a view this tab does not own. When it does not happen, the screen offers the same `next` as a button.
 
 | Board | Session (`phase` / `step`) | Texts | Sent |
 | --- | --- | --- | --- |
@@ -118,8 +127,11 @@ C-01 (T184–T188) shows what the cover uses; C-02 (T189–T196) chooses the cas
 | S-01…S-05 | the session ended with a reason (`interrupted`) | titles T240, T244, T248, T252, T254 by family; body `calReason_<reason>` | Start over (T261), Close |
 | S-01…S-05 | a published `problem` (future) | T240–T258 | `repeat_step` |
 | S-06 | `expired` | T259, T260 | Start over, Close |
-| S-07 | read-only view | T263–T265, `calConfirmTakeControl` | Take control (two taps while the owner is present); Stop while it may move |
+| S-07 | read-only view | T262 (status line), T263–T265, `calConfirmTakeControl`; no reading field | Take control (two taps while the owner is present); Stop while it may move |
 | S-08 | Discard during a session | T267, T269, T270, `wizExitBodyLive` (live) / T268 (preview) | `cancel`; Stop beside it while it may move |
+
+A session reopened from the list is drawn as path C (remeasure everything) when its cover already follows a profile,
+otherwise as path A; its slat choice comes from the view.
 
 ## Preview steps and the backend they wait for
 
@@ -133,6 +145,11 @@ C-01 (T184–T188) shows what the cover uses; C-02 (T189–T196) chooses the cas
 | Verified status, start time | check result stored with its evidence; `started_at` | `coverStatus`, `CalibrationTab._row` |
 | Problems as steps | `problem` + `repeat_step` | already drawn by `buildScreen` |
 
+The preview is announced before it starts: a line (T318) under path B on A-02, under the start of B-02 and C-37, and
+(T319) under *Continue with fine-tuning*, which saves the calibration for real first. The end of a preview is titled
+*Preview of the summary* (T320) and says that nothing was saved (T321) or that only the calibration before the
+fine-tuning was (T322).
+
 The preview check rounds the gap half up to the whole centimetre and passes up to 4 cm (`roundHalfUp`,
 `CHECK_THRESHOLD_CM`); its heights come from a rough linear model only meant to fill the screens.
 
@@ -140,7 +157,9 @@ The preview check rounds the gap half up to the whole centimetre and passes up t
 
 `wiz_T…` keys are generated from the translation sheet (`ui-texts-en.csv`, columns `italian` and `english`): the
 example names and numbers of the mockups become placeholders (`{cover}`, `{profile}`, `{seconds}`, `{cm}`, `{gap}`,
-`{travel}`, …), `**…**` marks bold text, blank lines separate paragraphs. Rows that only describe the mockups (example
+`{travel}`, …), `**…**` marks bold text, blank lines separate paragraphs. Texts with a count have zero and one forms
+(rows T305–T317, chosen by `counted()` in `panel-calibration-screens.js`); the tab summary uses `calTabCount*` and
+`calTabCount*_one`. Rows that only describe the mockups (example
 names, scrims, phone annotations), the phase lines (built from `wizPhaseLine`) and copies of identical texts are
 left out. `calTab…` and the few `wiz…` keys without a `_T` number are screen texts not in the sheet yet.
 
