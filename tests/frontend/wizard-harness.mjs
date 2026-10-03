@@ -59,15 +59,24 @@ export async function mount(options = {}) {
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await tick();
   };
+  /** A-02: tick a path in the radio list, then Continue. */
+  const choosePath = async (path) => {
+    const radio = wiz().querySelector(`input[name="path"][value="${path}"]`);
+    assert.ok(radio && !radio.disabled, `path ${path} can be chosen on ${code()}`);
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+    await tick();
+    await press("path");
+  };
   const startFor = async (entity, path = "A") => {
     tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
     const select = wiz().querySelector('select[name="cover"]');
     select.value = JSON.stringify(["one", entity]);
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await press("choose");
-    await press(`path:${path}`);
+    await choosePath(path);
   };
-  return { backend, panel, root, tab, wiz, code, button, press, type, actions, title, startFor, pickCover };
+  return { backend, panel, root, tab, wiz, code, button, press, type, actions, title, startFor, pickCover, choosePath };
 }
 
 /** Run the backend through one movement: start echo, then the actuator stop when there is one. */

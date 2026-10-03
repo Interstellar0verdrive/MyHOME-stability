@@ -98,6 +98,7 @@ export class CalibrationWizard {
     const followed = this._local.path === "B" ? data?.profiles.find((profile) => profile.id === this._local.profileId) : null;
     const address = item.entity?.address;
     return { name: item.name, entity_id: item.cover.entity_id, effective: item.cover.effective || {}, travel_cm: item.cover.travel_cm ?? null,
+      status: item.status, last: item.last,
       profile: item.profile, followers, followProfile: followed?.name ?? null,
       address: address ? [`${this._context.t("address")}: ${address.raw ?? this._context.t("addressUnknown")}`,
         ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : []), "WHO 2"].join(" · ") : "" };
@@ -160,7 +161,7 @@ export class CalibrationWizard {
           <nav class="wiz-steps" aria-label="${esc(t("wiz_T274"))}"></nav>
           <div class="wiz-main">
             ${screen.preview ? `<p class="wiz-preview" role="note"><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon><span>${esc(t("wizPreview"))}</span></p>` : ""}
-            <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>
+            <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>${screen.subline ? `<p class="muted wiz-subline">${esc(screen.subline)}</p>` : ""}
             <div class="wiz-stopwatch" hidden><span class="wiz-stopwatch-label"></span><span class="wiz-stopwatch-value"></span></div>
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
             ${screen.visual ? visualMarkup() : ""}
@@ -276,8 +277,9 @@ export class CalibrationWizard {
         ${choice.hint ? `<span class="muted wiz-choice-hint">${esc(choice.hint)}</span>` : ""}</label>
         ${choice.note ? `<p class="cal-note wiz-choice-note">${esc(choice.note)}</p>` : ""}`;
     }
-    return `<fieldset class="wiz-choice wiz-radios"><legend>${esc(choice.label)}</legend>${choice.options.map((option) =>
-      `<label class="wiz-radio"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""}><span>${inline(option.label)}</span></label>`).join("")}</fieldset>`;
+    return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.options.map((option) =>
+      `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${inline(option.label)}${option.badge
+        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${option.note ? `<small class="muted">${esc(option.note)}</small>` : ""}</span></label>`).join("")}</fieldset>`;
   }
 
   _fieldMarkup(field) {
@@ -343,6 +345,7 @@ export class CalibrationWizard {
     else if (name === "case") this._local.scope = value;
     else if (name === "cover") { this._local.coverKey = value; this._local.coverPicked = true; this._render(); }
     else if (name === "profile") { this._local.profileId = value; this._render(); }
+    else if (name === "path") { this._local.pathChoice = value; this._render(); }
   }
 
   _click(event) {
@@ -362,9 +365,11 @@ export class CalibrationWizard {
     if (id === "stay") { this._closeDialog(); return; }
     if (id === "leave") { this._leave(); return; }
     if (id === "close") { this._finish(); return; }
-    if (id === "choose") { local.coverKey = this._value("cover") || local.coverKey; local.stage = "path"; return this._render(); }
-    if (id.startsWith("path:")) {
-      local.path = id.slice(5);
+    if (id === "choose") { local.coverKey = this._value("cover") || local.coverKey; local.pathChoice = null; local.stage = "path"; return this._render(); }
+    if (id === "path" || id.startsWith("path:")) {
+      const path = id === "path" ? this._value("path") || local.pathChoice : id.slice(5);
+      if (!["A", "B", "C"].includes(path)) return;
+      local.path = path;
       local.stage = local.path === "A" ? "before" : local.path === "B" ? "profile" : "current";
       if (local.path === "B") local.profileId = this._profiles()[0]?.id;
       return this._render();

@@ -95,6 +95,9 @@ test("without a profile on the gateway, B is disabled and the screen says why", 
   await pickCover();
   await press("choose");
   assert.equal(code(), "A-02");
-  assert.equal(wiz().querySelector('[data-wiz="path:B"]').disabled, true);
-  assert.match(wiz().querySelector(".wiz-notices").textContent, /No profile is saved on this gateway yet/);
+  const b = wiz().querySelector('input[name="path"][value="B"]');
+  assert.equal(b.disabled, true);
+  assert.equal(b.closest(".wiz-radio").querySelector("small").textContent, "No saved profile: measure a roller shutter of this type first");
+  assert.equal(wiz().querySelector(".wiz-subline").textContent, "Already calibrated (times and roll, Sep 29, 2026)");
+  assert.equal(wiz().querySelector(".wiz-radio:has(.wiz-recommended) input").value, "C", "a calibrated cover is advised to C");
 });

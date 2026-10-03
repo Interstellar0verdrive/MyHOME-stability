@@ -32,7 +32,7 @@ test("C-01 shows what the cover uses now and C-02 preselects the case that remea
   await press("current");
   const options = [...wiz().querySelectorAll('input[name="case"]')];
   assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", false], ["times_only", false], ["times_and_rolls", true]]);
-  assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong><br>We will redo only/);
+  assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span class="wiz-radio-text"><span class="wiz-radio-label"><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong><br>We will redo only/);
 });
 
 test("times only runs the existing guided measurement and saves on this cover only", async () => {

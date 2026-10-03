@@ -882,6 +882,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-radio:has(input:checked) { border-color: var(--panel-accent); background: var(--panel-accent-soft); }
 .wiz-radio input { width: auto; min-height: 0; margin-top: 3px; accent-color: var(--panel-accent); }
 .wiz-radio small { display: block; margin-top: 2px; }
+.wiz-radio.is-disabled { cursor: not-allowed; opacity: .6; }
+.wiz-radio-text { display: grid; gap: 2px; min-width: 0; }
+.wiz-radio-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.wiz-recommended { background: color-mix(in srgb, var(--panel-success) 14%, transparent); color: var(--panel-success); font-size: 11px; padding: 1px 8px; }
+.wiz-subline { margin: 2px 0 0; font-size: 13px; }
 .wiz-field { display: grid; gap: 6px; max-width: 320px; }
 .wiz-field input { font-size: 18px; min-height: 52px; }
 .wiz-field input[aria-invalid="true"] { border-color: var(--panel-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-error) 20%, transparent); }

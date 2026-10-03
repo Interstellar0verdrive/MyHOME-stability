@@ -36,7 +36,16 @@ export function counted(t, key, count, values = {}) {
   return fill(t(count === 0 && zero ? zero : count === 1 && one ? one : key), { ...values, count });
 }
 
-/** The wizard's whole state as one screen. */
+/** A-02's line on the chosen cover: the profile it follows, its calibration, or how many profiles it could follow. */
+function pathContext(t, cover, profiles, language) {
+  if (!cover) return "";
+  if (cover.profile?.name) return fill(t("wiz_T395"), { profile: cover.profile.name });
+  if (cover.status && cover.status !== "to_measure") {
+    return fill(t("wiz_T399"), { status: t(`calTabStatus_${cover.status}`).toLocaleLowerCase(language), date: dateText(cover.last, language) || "—" });
+  }
+  return profiles === 0 ? t("wiz_T396") : profiles === 1 ? t("wiz_T398") : fill(t("wiz_T397"), { count: profiles });
+}
+
 /** A cover's state in the A-01 drop-down: "To measure", or "Times measured, Sep 29". */
 function coverState(t, item, language) {
   if (!item.status) return "";
@@ -44,6 +53,7 @@ function coverState(t, item, language) {
   return date ? `${text}, ${date}` : text;
 }
 
+/** The wizard's whole state as one screen. */
 export function buildScreen(ctx) {
   const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false } = ctx;
   const n = (value, digits = 1) => number(value, language, digits);
@@ -52,7 +62,7 @@ export function buildScreen(ctx) {
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
-    title: "", body: "", stopwatch: null, wait: null, visual: null, choice: null, field: null, box: null, table: null,
+    title: "", subline: "", body: "", stopwatch: null, wait: null, visual: null, choice: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
   };
@@ -77,11 +87,22 @@ export function buildScreen(ctx) {
     return finish();
   }
   if (stage === "path") {
-    Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), body: t("wiz_T016"),
-      actions: [{ id: "path:A", label: t("wiz_T017"), kind: "primary" },
-        { id: "path:B", label: t("wiz_T018"), kind: "secondary", disabled: !ctx.profiles?.length, note: t("wiz_T318") },
-        { id: "path:C", label: t("wiz_T019"), kind: "secondary" }] });
-    if (!ctx.profiles?.length) screen.notices.push({ tone: "info", text: t("wizNoProfiles") });
+    // A radio list (A-02 Section A) with Continue in the actions; the advised path carries a badge.
+    const profiles = ctx.profiles?.length || 0, measured = cover?.status && cover.status !== "to_measure";
+    const advised = measured ? "C" : profiles ? "B" : "A";
+    const options = [
+      { value: "A", label: t("wiz_T017") },
+      { value: "B", label: t("wiz_T018"), disabled: !profiles, note: profiles ? t("wiz_T318") : t("wiz_T401") },
+      { value: "C", label: t("wiz_T019") },
+    ].map((option) => ({ ...option, badge: option.value === advised && !option.disabled ? t("wiz_T400") : "" }));
+    // Preselected on the advised path, Continue is ready; another choice is a tap away.
+    const enabled = (value) => options.some((option) => option.value === value && !option.disabled);
+    const chosen = enabled(local.pathChoice) ? local.pathChoice : enabled(advised) ? advised : "";
+    // "If unsure, choose Ⓐ" (the text's last paragraph) is dropped while the advised path is the one chosen.
+    const body = chosen && chosen === advised ? t("wiz_T016").split(/\n\s*\n/).slice(0, -1).join("\n\n") : t("wiz_T016");
+    Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), subline: pathContext(t, cover, profiles, language), body,
+      choice: { name: "path", kind: "radio", label: tx("wiz_T015", { name }), legendHidden: true, value: chosen, options },
+      actions: [{ id: "path", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
     return finish();
   }
   if (stage === "profile") {

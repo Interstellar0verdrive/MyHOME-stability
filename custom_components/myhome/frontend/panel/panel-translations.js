@@ -317,6 +317,13 @@ export const translations = {
     wiz_T392: "No roller shutter selected yet",
     wiz_T393: "Choose a roller shutter…",
     wiz_T394: "This roller shutter is already calibrated ({status}, {date}). A new measurement replaces the values in use; to adjust them, use fine-tuning.",
+    wiz_T395: "Follows the profile \"{profile}\"",
+    wiz_T396: "Never measured · no profile available",
+    wiz_T397: "Never measured · {count} profiles available",
+    wiz_T398: "Never measured · 1 profile available",
+    wiz_T399: "Already calibrated ({status}, {date})",
+    wiz_T400: "Recommended",
+    wiz_T401: "No saved profile: measure a roller shutter of this type first",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1097,6 +1104,13 @@ export const translations = {
     wiz_T392: "Nessuna tapparella selezionata",
     wiz_T393: "Scegli una tapparella…",
     wiz_T394: "Questa tapparella è già calibrata ({status}, {date}). Una nuova misurazione sostituisce i valori in uso; per ritoccarli usa il perfezionamento.",
+    wiz_T395: "Segue il profilo «{profile}»",
+    wiz_T396: "Mai misurata · nessun profilo disponibile",
+    wiz_T397: "Mai misurata · {count} profili disponibili",
+    wiz_T398: "Mai misurata · 1 profilo disponibile",
+    wiz_T399: "Già calibrata ({status}, {date})",
+    wiz_T400: "Consigliato",
+    wiz_T401: "Nessun profilo salvato: misura prima una tapparella di questo tipo",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

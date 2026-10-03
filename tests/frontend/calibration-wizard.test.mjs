@@ -39,7 +39,7 @@ test("every generated screen text is filled in English and Italian", () => {
 });
 
 test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothing", async () => {
-  const { tab, wiz, code, press, title, backend, button, pickCover } = await mount();
+  const { tab, wiz, code, press, title, backend, button, pickCover, choosePath } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.equal(code(), "A-01");
   assert.equal(title(), "Which roller shutter do you want to measure?");
@@ -71,8 +71,25 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(title(), 'How to measure "Kitchen shutter 2"?');
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Kitchen shutter 2");
   assert.match(wiz().querySelector(".wiz-head .muted").textContent, /Address: 91 · A: 9 · PL: 1 · WHO 2/);
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((item) => item.textContent), ["Ⓐ  First roller shutter of this type", "Ⓑ  Like one already measured", "Ⓒ  Has a profile, but stops at the wrong point"]);
-  await press("path:A");
+  assert.equal(wiz().querySelector(".wiz-subline").textContent, 'Follows the profile "tall_two_leaf"');
+  const radios = [...wiz().querySelectorAll('.wiz-radios input[name="path"]')];
+  assert.deepEqual(radios.map((input) => input.closest(".wiz-radio").querySelector(".wiz-radio-label").firstChild.textContent.trim()),
+    ["Ⓐ  First roller shutter of this type", "Ⓑ  Like one already measured", "Ⓒ  Has a profile, but stops at the wrong point"], "a radio list, not three buttons");
+  assert.equal(wiz().querySelectorAll('.wiz-actions [data-wiz^="path:"]').length, 0);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-recommended")].map((badge) => [badge.closest(".wiz-radio").querySelector("input").value, badge.textContent]),
+    [["C", "Recommended"]], "a calibrated cover: C is advised");
+  assert.deepEqual(radios.filter((input) => input.checked).map((input) => input.value), ["C"], "the advised path is preselected");
+  assert.equal(button("path").disabled, false, "Continue is ready on the advised path");
+  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /If unsure/, "no fallback advice while the advised path is chosen");
+  const sent = () => backend.calls.length + backend.subscriptions.length;
+  const before = sent();
+  const a = radios.find((input) => input.value === "A");
+  a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(code(), "A-02", "ticking a radio only changes the choice");
+  assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓐ/, "away from the advice, the fallback line is back");
+  assert.equal(sent(), before, "choosing a path sends nothing");
+  await choosePath("A");
   assert.equal(code(), "A-03");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Preparation · 2 of 7");
   assert.equal(wiz().querySelector('.wiz-steps li[data-step-state="current"] .wiz-step-label').textContent, "Preparation");
@@ -611,7 +628,9 @@ test("after every change of screen the confirming buttons wait 700 ms, Stop neve
   assert.equal(code(), "A-01");
   const select = wiz().querySelector('select[name="cover"]');
   select.value = JSON.stringify(["one", "cover.living_one"]); select.dispatchEvent(new Event("change", { bubbles: true }));
-  await tap("choose"); await tap("path:A"); await tap("begin");
+  await tap("choose");
+  const a = wiz().querySelector('input[name="path"][value="A"]'); a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  await tap("path"); await tap("begin");
   await move(backend);
   assert.equal(code(), "A-05");
   assert.equal(button("endpoint").disabled, true, "an end stop is never confirmed by the tap that started the run");
@@ -636,7 +655,7 @@ test("a reopened slat and roll session of a cover that follows a profile is show
 test("the preview is announced before it starts and its end never says that something was saved", async () => {
   const t = (key) => translations.it[key] || key;
   const screen = buildScreen({ t, language: "it", stage: "path", path: "A", profiles: [{ id: "tall" }], cover: { name: "Cucina 2" } });
-  assert.equal(screen.actions.find((action) => action.id === "path:B").note,
+  assert.equal(screen.choice.options.find((option) => option.value === "B").note,
     "Anteprima: questo percorso non è ancora collegato al backend, nessun movimento e nessun salvataggio.");
   assert.equal(buildScreen({ t, stage: "before", path: "B", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
   assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "points_only", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
@@ -648,14 +667,39 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(saved.title, "Anteprima del riepilogo");
   assert.equal(saved.body, translations.it.wiz_T322);
   assert.equal(saved.preview, true);
-  // On screen the note sits under its button and describes it.
+  // On screen the note sits under its path, inside the radio's label.
   const { tab, wiz, press, pickCover } = await mount({ language: "it" });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   await pickCover();
   await press("choose");
-  const b = wiz().querySelector('.wiz-actions [data-wiz="path:B"]');
-  assert.equal(b.nextElementSibling.textContent, translations.it.wiz_T318);
-  assert.equal(b.getAttribute("aria-describedby"), b.nextElementSibling.id);
+  const b = wiz().querySelector('input[name="path"][value="B"]').closest(".wiz-radio");
+  assert.equal(b.querySelector("small").textContent, translations.it.wiz_T318);
+});
+
+test("A-02 advises a path from the cover and the gateway's profiles, and preselects it", () => {
+  const t = (key) => translations.en[key] || key;
+  const advice = (screen) => screen.choice.options.filter((option) => option.badge).map((option) => [option.value, option.badge]);
+  // Never measured, no profile on the gateway: A is advised, B cannot be chosen and says why.
+  const none = buildScreen({ t, stage: "path", profiles: [], cover: { name: "Kitchen 2", status: "to_measure" } });
+  assert.deepEqual(advice(none), [["A", "Recommended"]]);
+  const b = none.choice.options.find((option) => option.value === "B");
+  assert.equal(b.disabled, true);
+  assert.equal(b.note, translations.en.wiz_T401);
+  assert.equal(none.choice.value, "A");
+  assert.equal(none.actions[0].id, "path");
+  assert.equal(none.actions[0].label, "Continue");
+  assert.equal(none.actions[0].disabled, false);
+  assert.equal(none.subline, "Never measured · no profile available");
+  assert.doesNotMatch(none.body, /If unsure/);
+  // Never measured, profiles available: B is advised; a choice of A brings the fallback line back.
+  const some = buildScreen({ t, stage: "path", profiles: [{ id: "tall" }, { id: "short" }], cover: { name: "Kitchen 2", status: "to_measure" } });
+  assert.deepEqual(advice(some), [["B", "Recommended"]]);
+  assert.equal(some.choice.value, "B");
+  assert.equal(some.subline, "Never measured · 2 profiles available");
+  const picked = buildScreen({ t, stage: "path", local: { pathChoice: "A" }, profiles: [{ id: "tall" }], cover: { name: "Kitchen 2", status: "to_measure" } });
+  assert.equal(picked.choice.value, "A");
+  assert.equal(picked.subline, "Never measured · 1 profile available");
+  assert.match(picked.body, /If unsure, choose Ⓐ\.$/);
 });
 
 test("counts of zero and one use their own forms", () => {
