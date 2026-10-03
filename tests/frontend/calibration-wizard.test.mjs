@@ -524,3 +524,49 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
   stay.click(); await tick();
   assert.equal(code(), "S-01");
 });
+
+test("a subscription replayed after a reconnection never starts a movement, even on a step that would continue by itself", async () => {
+  const { backend, wiz, code, press, type, actions, startFor } = await mount();
+  const callbacks = [];
+  const subscribe = backend.hass.connection.subscribeMessage;
+  backend.hass.connection.subscribeMessage = async (callback, message) => { callbacks.push(callback); return subscribe(callback, message); };
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:ascent"); await type("198");
+  await press("next"); await move(backend, { seconds: 21 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  await type("97");
+  assert.equal(code(), "A-19");
+  await move(backend);
+  await press("endpoint");
+  // The socket drops: the cover stops and the session moves on with nobody listening.
+  const emit = backend.emit;
+  backend.emit = () => { backend.session.sequence += 1; };
+  backend.stopped();
+  backend.emit = emit;
+  assert.equal(backend.session.step, "half_close");
+  const before = actions().length;
+  // Home Assistant reconnects and replays the subscription: same sequence, a new attachment.
+  callbacks.at(-1)(backend.view({ attachment: "attachment-2" }));
+  await tick(8);
+  assert.deepEqual(actions().slice(before), [], "no movement after a replay");
+  assert.equal(code(), "A-19");
+  assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, false, "the run waits for a press");
+});
+
+test("a refusal is forgotten once the session moves to another phase", async () => {
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend);
+  const original = backend.hass.callWS;
+  backend.hass.callWS = async (message) => message.action === "endpoint"
+    ? (backend.calls.push(message), Promise.reject(Object.assign(new Error("range"), { code: "reading_out_of_range" }))) : original(message);
+  await press("endpoint"); await tick(4);
+  backend.interrupt("unexpected_movement"); await tick(4);
+  assert.equal(code(), "S-01");
+  assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no empty placeholder after the phase changed");
+  assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
+});

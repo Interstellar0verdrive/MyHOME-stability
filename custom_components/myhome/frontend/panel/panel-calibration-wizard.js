@@ -20,9 +20,17 @@ export function parseReading(value) {
 }
 
 const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "before"];
+/**
+ * After every change of screen (or of its buttons) the confirming buttons stay disabled this long, so that a slow
+ * double tap never confirms an end stop the cover has not reached, nor skips the second tap of "Take control".
+ * Stop is never held back.
+ */
+export const CONFIRM_GUARD_MS = 700;
+// Phases a press goes through before the cover stops again: the press that started them still counts.
+const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geometry_wait_stop"];
 
 export class CalibrationWizard {
-  constructor({ stageMs } = {}) { this._stageMs = stageMs; this._generation = 0; }
+  constructor({ stageMs, guardMs = CONFIRM_GUARD_MS } = {}) { this._stageMs = stageMs; this._guardMs = guardMs; this._generation = 0; }
 
   /**
    * Sessions the wizard draws itself when opened from the list: slat and roll measurement. A guided
@@ -351,8 +359,8 @@ export class CalibrationWizard {
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
     if (id === "stop") { this._closeDialog(false); return gateway?.stop(); }
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
-    if (id === "take") { Object.assign(local, { armed: false, begun: false }); return gateway?.claim(); }
-    if (id === "reconnect") { Object.assign(local, { armed: false, begun: false }); return gateway?.reconnect(); }
+    if (id === "take") { local.arm = null; return gateway?.claim(); }
+    if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }
     if (id === "save" || id === "refine") return this._save(id === "refine");
     if (id === "start-over") {
       // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
@@ -371,9 +379,7 @@ export class CalibrationWizard {
 
   _send(action, extra = {}) {
     if (!this._gateway) return;
-    this._local.armed = true;
-    // The view the user acted on is never acted on again by itself, not even after a refused press.
-    this._local.autoSequence = this._gateway.view?.sequence ?? null;
+    this._arm(this._gateway.view);
     // A repeated run is confirmed again on its own screen (A-12, A-15) once measured.
     if (action === "repeat" && this._current?.code.endsWith("-12")) this._local.ackAscent = false;
     if (action === "repeat" && this._current?.code.endsWith("-15")) this._local.ackDescent = false;
@@ -405,7 +411,7 @@ export class CalibrationWizard {
     const name = screen.profileBlock?.name?.value;
     // Path B saves no measured value: the cover follows the chosen profile (L5b).
     local.pendingSave = local.path === "B" ? { target: "follow_profile", name: null } : { target: action.target || "profile_new", name };
-    local.armed = true;
+    this._arm(this._gateway.view);
     return this._gateway.save(local.pendingSave);
   }
 
@@ -436,7 +442,8 @@ export class CalibrationWizard {
     const local = this._local, item = this._item();
     if (!item) return;
     this._dropGateway();
-    Object.assign(local, freshFlags(), { stage: "session", begun: true, armed: true });
+    Object.assign(local, freshFlags(), { stage: "session" });
+    this._arm(null, true);
     if (local.path === "B" || (local.path === "C" && local.scope === "points_only")) {
       this._newGateway("preview", local.path === "B" ? "profile" : "rolls", this._baseValues(item)).start();
     } else {
@@ -469,17 +476,16 @@ export class CalibrationWizard {
   _startRefine(base) {
     const local = this._local;
     this._dropGateway();
-    Object.assign(local, freshFlags(), { stage: "session", refining: true, base, armed: true });
+    Object.assign(local, freshFlags(), { stage: "session", refining: true, base });
     this._newGateway("preview", "refine", { opening_time: base.opening, closing_time: base.closing, slat_time_s: base.slat ?? 0,
       opening_roll: base.opening_roll, closing_roll: base.closing_roll, travel_cm: base.travel }).start();
   }
 
   _viewChanged() {
     const view = this._gateway?.view, local = this._local;
-    // A tab that stops owning the session forgets its presses: only a press made as owner arms a movement.
-    if (view && !view.preview && (view.read_only || !view.owner)) Object.assign(local, { armed: false, begun: false });
-    // A refused value belongs to the step it was typed for.
+    // A refused value belongs to the step it was typed for; a refusal from Home Assistant to the phase it came in.
     if (view?.sequence !== local.fieldSequence) { local.fieldError = null; local.fieldSequence = view?.sequence; }
+    if (view && view.phase !== local.errorPhase) { if (local.errorPhase !== undefined) this._gateway.clearError?.(); local.errorPhase = view.phase; }
     if (view?.phase === "review" && !view.preview) {
       local.review = { opening: view.values?.opening_time, closing: view.values?.closing_time, slat: view.geometry?.slat_time_s ?? null,
         travel: view.mode === "geometry" ? view.travel_cm : null, opening_roll: view.geometry?.opening_roll ?? null, closing_roll: view.geometry?.closing_roll ?? null,
@@ -492,19 +498,38 @@ export class CalibrationWizard {
     this._render();
   }
 
+  /** A press of this tab arms one automatic `next`: it remembers the view it was made on and its subscription. */
+  _arm(view, start = false) {
+    this._local.arm = { sequence: view?.sequence ?? -1, attachment: view?.attachment ?? null, start };
+  }
+
   /**
-   * Movements the mockups show as automatic after a press: the return to a known end stop and the
-   * runs of the tape readings. Only after an action of this tab, once per view, never in a read-only
-   * or resumed view: the press that led here is the user's.
+   * Movements the mockups show as automatic after a press: the return to a known end stop and the runs of the tape
+   * readings. THE RULE: an automatic verb is sent only on the view that immediately follows a press of the user in
+   * this tab (through the movement and the stop that press started, never past a stop that waits for the user),
+   * once per `sequence`, and never after a replayed subscription (a new `attachment`: Home Assistant reconnected),
+   * a reconnection, a claim, a lost connection, a refused verb, or a view this tab does not own.
    */
   _autoNext(view) {
-    const local = this._local;
-    if (!view || view.preview || view.mode !== "geometry" || view.phase !== "briefing" || !view.owner || view.read_only || !local.armed) return;
-    if (this._gateway.status.busy || local.autoSequence === view.sequence) return;
-    const due = (view.step === "home" && local.begun) || (view.step === "reset" && !view.gap_warning) || view.step === "top"
+    const local = this._local, arm = local.arm, status = this._gateway?.status || {};
+    if (!arm || !view || view.preview) return;
+    // A start has no view yet: the first one it receives names its subscription.
+    if (arm.start && arm.attachment === null && view.attachment) arm.attachment = view.attachment;
+    const stale = view.mode !== "geometry" || !view.owner || view.read_only || status.lost || status.error
+      || (arm.attachment !== null && view.attachment !== arm.attachment);
+    if (stale) { local.arm = null; return; }
+    if (view.sequence <= arm.sequence) return;
+    if (view.phase !== "briefing") {
+      // Still moving or stopping because of that press; anything else is a stop that waits for the user.
+      if (!TRANSIT.includes(view.phase)) local.arm = null;
+      return;
+    }
+    // The answer to the press arrives while it is still pending: decide once it has settled.
+    if (status.busy) return;
+    local.arm = null;
+    const due = (view.step === "home" && arm.start) || (view.step === "reset" && !view.gap_warning) || view.step === "top"
       || (["half_open", "half_close"].includes(view.step) && local.ackReadings);
     if (!due) return;
-    local.autoSequence = view.sequence;
     queueMicrotask(() => { if (this._gateway?.view === view) this._gateway.act("next"); });
   }
 
@@ -575,7 +600,7 @@ export class CalibrationWizard {
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, armed: false, begun: false, autoSequence: null,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, baseSaved: false,
     review: null, thenRefine: false, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
 }
 

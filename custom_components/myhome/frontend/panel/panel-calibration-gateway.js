@@ -84,6 +84,8 @@ export class LiveCalibrationGateway {
   }
 
   act(action, extra = {}) { return this._engine._perform(action, extra); }
+  /** Forget a refusal once the session has moved to another phase: its values belonged to that phase. */
+  clearError() { this._engine.error = null; }
   stop() { return this._engine._perform("stop"); }
   cancel() { return this._engine._cancel(this._engine._generation); }
 
@@ -150,6 +152,7 @@ export class PreviewCalibrationGateway {
   supports(target) { return PREVIEW_TARGETS.includes(target); }
   reconnect() { return Promise.resolve(); }
   claim() { return Promise.resolve(); }
+  clearError() { this._error = null; }
 
   start() {
     const base = { preview: true, path: this._plan, owner: true, read_only: false, recoverable: false, sequence: 0,

@@ -559,7 +559,9 @@ function finalize(screen, ctx) {
   if (status.error) {
     const key = `profileError_${status.error.code}`;
     const values = { ...(view || {}), ...(readingRange(view?.reading_range, language, status.error.reading) || {}) };
-    screen.notices.push({ tone: "error", text: t(key) === key ? t(view?.preview ? "calReadingNumber" : "calConnectionError") : fill(t(key), values) });
+    const text = t(key) === key ? t(view?.preview ? "calReadingNumber" : "calConnectionError") : fill(t(key), values);
+    // A refusal whose values are gone (the session moved on) is not shown with empty placeholders.
+    if (!/\{\w+\}/.test(text)) screen.notices.push({ tone: "error", text });
   }
   // A reading refused in the field, before anything is sent.
   if (local.fieldError != null && screen.field?.range) {
