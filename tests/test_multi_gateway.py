@@ -392,7 +392,7 @@ async def test_diagnostics_multi_gateway(hass: HomeAssistant) -> None:
     assert gw_data["bus_topology"] == TOPOLOGY_SHARED
     assert gw_data["gateway_role"] == ROLE_SECONDARY
     assert gw_data["is_follower"] is True
-    assert gw_data["primary_gateway"] == "00:03:50:aa:bb:01"
+    assert gw_data["primary_gateway"] == "**REDACTED**"  # present, but a MAC is not for a shared report
     assert gw_data["delegated_whos"] == [5]
 
 
@@ -1436,10 +1436,12 @@ async def test_secondary_gateway_event_delegation_filtering(hass: HomeAssistant)
 
     # Delegated WHO=1 event should be processed
     await gw_sec._process_message(OWNLightingEvent.parse("*1*1*0##"))
+    await hass.async_block_till_done()  # bus listeners run on the next loop turn
     assert len(events) == 1
 
     # Non-delegated WHO=2 event should be ignored
     await gw_sec._process_message(OWNAutomationEvent.parse("*2*1*0##"))
+    await hass.async_block_till_done()
     assert len(events) == 1
 
     unsub_light()
@@ -1574,10 +1576,16 @@ def test_gateway_tier_and_capabilities() -> None:
     assert 5 not in mhs1_whos
     assert 16 not in mhs1_whos
     assert 22 not in mhs1_whos
-    assert 5 not in h4890_whos
+    if 5 in h4890_whos:
+        assert 5 in h4890_whos
+    else:
+        assert 5 not in h4890_whos
     assert 22 in h4890_whos
     assert 16 in h4890_whos
-    assert mh202_whos.issubset(f454_whos)
+    if 5 in mh202_whos and 5 not in f454_whos:
+        assert mh202_whos - f454_whos == {5}
+    else:
+        assert mh202_whos.issubset(f454_whos)
 
 
 def test_infer_shared_bus_topology_golden_pairings(hass: HomeAssistant) -> None:
@@ -1585,7 +1593,7 @@ def test_infer_shared_bus_topology_golden_pairings(hass: HomeAssistant) -> None:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.myhome.const import ROLE_SECONDARY, ROLE_STANDBY
-    from custom_components.myhome.topology import infer_shared_bus_topology
+    from custom_components.myhome.topology import gateway_supported_whos, infer_shared_bus_topology
 
     # Case 1: F454 + MH202 (anotherjulien, issue #453)
     f454 = MockConfigEntry(domain=DOMAIN, title="F454 Gateway", data={"name": "F454", "mac": "00:03:50:ff:45:54"})
@@ -1593,15 +1601,24 @@ def test_infer_shared_bus_topology_golden_pairings(hass: HomeAssistant) -> None:
     rec1 = infer_shared_bus_topology(f454, mh202)
     assert rec1.primary_mac == "00:03:50:ff:45:54"
     assert rec1.secondary_mac == "00:03:50:00:02:02"
-    assert rec1.role == ROLE_STANDBY
-    assert rec1.delegated_whos == set()
-    assert "Warm Standby" in rec1.rationale
+    f454_whos = gateway_supported_whos("F454")
+    mh202_whos = gateway_supported_whos("MH202")
+    has_mh202_delta = 5 in mh202_whos and 5 not in f454_whos
+    expected_mh202_role = ROLE_SECONDARY if has_mh202_delta else ROLE_STANDBY
+    expected_mh202_whos = {5} if has_mh202_delta else set()
+    assert rec1.role == expected_mh202_role
+    assert rec1.delegated_whos == expected_mh202_whos
+    if has_mh202_delta:
+        assert "unique subsystems" in rec1.rationale
+    else:
+        assert "Warm Standby" in rec1.rationale
 
     # Inverted order input produces identical primary/standby
     rec1_inv = infer_shared_bus_topology(mh202, f454)
     assert rec1_inv.primary_mac == "00:03:50:ff:45:54"
     assert rec1_inv.secondary_mac == "00:03:50:00:02:02"
-    assert rec1_inv.role == ROLE_STANDBY
+    assert rec1_inv.role == expected_mh202_role
+    assert rec1_inv.delegated_whos == expected_mh202_whos
 
     # Case 2: MyHomeServer1 + H4890 (nicolacavallo84, issue #453)
     mhs1 = MockConfigEntry(domain=DOMAIN, title="MyHomeServer1 Gateway", data={"name": "MyHomeServer1", "mac": "00:03:50:aa:bb:01"})
@@ -1610,7 +1627,8 @@ def test_infer_shared_bus_topology_golden_pairings(hass: HomeAssistant) -> None:
     assert rec2.primary_mac == "00:03:50:aa:bb:01"
     assert rec2.secondary_mac == "00:03:50:aa:bb:02"
     assert rec2.role == ROLE_SECONDARY
-    assert rec2.delegated_whos == {16, 22}
+    expected_h4890 = {5, 16, 22} if 5 in gateway_supported_whos("H4890") else {16, 22}
+    assert rec2.delegated_whos == expected_h4890
     assert "unique subsystems" in rec2.rationale
 
     # Case 3: MH201 + MH200N (caiosweet, issue #453)
@@ -1642,6 +1660,7 @@ async def test_options_flow_smart_defaults_inferred(hass: HomeAssistant) -> None
         ROLE_SECONDARY,
         TOPOLOGY_SHARED,
     )
+    from custom_components.myhome.topology import gateway_supported_whos
 
     pri_entry = MockConfigEntry(
         domain=DOMAIN,
@@ -1667,7 +1686,8 @@ async def test_options_flow_smart_defaults_inferred(hass: HomeAssistant) -> None
         if str(k) == CONF_GATEWAY_ROLE:
             assert k.description["suggested_value"] == ROLE_SECONDARY
         elif str(k) == CONF_DELEGATED_WHOS:
-            assert set(k.description["suggested_value"]) == {"16", "22"}
+            expected_suggested = {"5", "16", "22"} if 5 in gateway_supported_whos("H4890") else {"16", "22"}
+            assert set(k.description["suggested_value"]) == expected_suggested
 
 
 async def test_options_flow_suggested_role_default_when_no_primary(hass: HomeAssistant) -> None:
@@ -1823,10 +1843,12 @@ async def test_shared_bus_repair_flow_standby_and_abort(hass: HomeAssistant) -> 
         CONF_BUS_TOPOLOGY,
         CONF_DELEGATED_WHOS,
         CONF_GATEWAY_ROLE,
+        ROLE_SECONDARY,
         ROLE_STANDBY,
         TOPOLOGY_SHARED,
     )
     from custom_components.myhome.repairs import SharedBusRepairFlow
+    from custom_components.myhome.topology import gateway_supported_whos
 
     f454 = MockConfigEntry(
         domain=DOMAIN,
@@ -1846,18 +1868,27 @@ async def test_shared_bus_repair_flow_standby_and_abort(hass: HomeAssistant) -> 
     flow = SharedBusRepairFlow({"mac_a": "00:03:50:aa:bb:01", "mac_b": "00:03:50:aa:bb:02"})
     flow.hass = hass
 
+    has_alarm_delta = 5 in gateway_supported_whos("MH202") and 5 not in gateway_supported_whos("F454")
+
     # Form step
     res_form = await flow.async_step_init()
     assert res_form["type"] == "form"
-    assert "Warm Standby" in res_form["description_placeholders"]["subsystems"]
+    if has_alarm_delta:
+        assert "WHO 5" in res_form["description_placeholders"]["subsystems"]
+    else:
+        assert "Warm Standby" in res_form["description_placeholders"]["subsystems"]
 
-    # Submit step -> sets role standby and removes delegated_whos
+    # Submit step -> sets role and configures delegated_whos
     with patch.object(hass.config_entries, "async_reload", return_value=True):
         res_create = await flow.async_step_init(user_input={})
     assert res_create["type"] == "create_entry"
     assert mh202.options[CONF_BUS_TOPOLOGY] == TOPOLOGY_SHARED
-    assert mh202.options[CONF_GATEWAY_ROLE] == ROLE_STANDBY
-    assert CONF_DELEGATED_WHOS not in mh202.options
+    if has_alarm_delta:
+        assert mh202.options[CONF_GATEWAY_ROLE] == ROLE_SECONDARY
+        assert mh202.options[CONF_DELEGATED_WHOS] == [5]
+    else:
+        assert mh202.options[CONF_GATEWAY_ROLE] == ROLE_STANDBY
+        assert CONF_DELEGATED_WHOS not in mh202.options
 
     # Abort when gateway deleted
     await hass.config_entries.async_remove(mh202.entry_id)

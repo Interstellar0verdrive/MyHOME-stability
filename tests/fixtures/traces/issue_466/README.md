@@ -397,6 +397,105 @@ Verbatim bus traces contributed by **@TheDarkWizard** on [#466 (comment 58556904
 - **WHO 25 (CEN+ / Pushbutton Scenarios)**: KW8011 3-position device short-press events on addresses 21, 22, and 23 (`*25*21#1*21##`, `*25*21#1*22##`, `*25*21#1*23##`), plus extended press lifecycle: short press (`*25*21#1*21##`), long press start (`*25*22#1*21##`), and long release (`*25*24#1*21##`) across multiple hold durations without intermediate hold repeats.
 - **WHO 1001 (Physical Layer Diagnostics)**: Diagnostic announcements (`*1001*9#...`), identity object model 119, firmware 1.3.8, slot objects, and indexed configuration registers (Dimension 35).
 
+---
 
+# #466 MyHomeServer1 Mixed Bus Capture (Lighting, Dimmer Level Reads, Thermoregulation)
 
+Verbatim bus trace contributed by **@gdluck** on [#466 (comment 5895736715)](https://github.com/OpenWebNet-HA/MyHOME/issues/466#issuecomment-5895736715), exported from the bus card (HA 2026.9.4, integration 2.0.0b13, OWNd 2.0.0b8, gateway firmware 3.87.13).
+
+| File | Type | Description |
+|---|---|---|
+| `myhome_trace_MyHomeServer1_all_2026-09-29T17-57-37.json` | Bus Card Export (200 frames, buffer truncated) | Startup light-state sweep (`*1*0*WHERE##` on 10-15), grouped on/off of points 24, 27, 28, 33, 36, dimmer level reads on point 66 (`*#1*66*#1*WHERE*0##` answered by `*#1*66*1*WHERE*2##`), WHO 1 command `*1*1000#0*0415##` and thermoregulation actuator/valve traffic (`*4*4002#NN*0#Z##`, `*#4*60/61*...`) with the gateway's `*#13` clock frames.
+
+The file is in the tree because its 200 frames include the probe reading `*#4*169*0*...##` (probe 1 of zone 69) beside zones 35-70; the replay in `tests/test_probe_frames_not_zones.py` checks that no such frame names a heating zone (#549).
+
+---
+
+# #466 MyHomeServer1 Guided Cover Calibration Runs (WHERE 91 & Interleaved Energy Telemetry)
+
+Verbatim bus trace contributed by **@Interstellar0verdrive** on [#466 (comment 5927373969)](https://github.com/OpenWebNet-HA/MyHOME/issues/466#issuecomment-5927373969), exported from the bus monitor (HA 2026.9.2, integration 2.0.0b13, OWNd 2.0.0b8, gateway firmware 2.87.13).
+
+## Hardware Profile
+
+- **Gateway Model**: BTicino MyHomeServer1
+- **Firmware**: 2.87.13
+- **Actuator Model**: BTicino F411 (as reported by contributor; on-wire frame identifies WHERE `91`)
+- **Actuator Address**: WHERE `91`
+- **Connection**: TCP OpenWebNet (Port 20000)
+
+## Contributed Files
+
+| File | Type | Description |
+|---|---|---|
+| `myhome_trace_MyHomeServer1_all_2026-10-01T07-59-11.json` | Bus Monitor Trace (159 frames) | Guided cover calibration runs: eight timed movements on cover WHERE `91` started and stopped by the calibration wizard, with gateway translation frames (`*2*1000#x*`) and basic status replies, interleaved with WHO 18 Dimension 113 and Dimension 1200 telemetry on meters 51, 52, and 53. |
+
+## Sequence of Actions Recorded & Subsystems Verified
+
+1. **Cover Calibration Runs (WHO 2 - Eight Timed Movements)**:
+   - Eight start/stop runs on WHERE `91`, four down and four up:
+
+| Run | Start | Stop | Direction | Duration |
+|---|---|---|---|---|
+| 1 | 07:49:47 | 07:50:03 | down | ~16.0 s |
+| 2 | 07:50:05 | 07:50:08 | up | ~3.5 s |
+| 3 | 07:50:15 | 07:50:20 | down | ~5.4 s |
+| 4 | 07:50:22 | 07:50:37 | up | ~15.2 s |
+| 5 | 07:50:41 | 07:50:56 | down | ~15.0 s |
+| 6 | 07:50:58 | 07:51:08 | up | ~9.4 s |
+| 7 | 07:51:13 | 07:51:20 | up | ~6.5 s |
+| 8 | 07:51:21 | 07:51:27 | down | ~6.4 s |
+
+   - **Start Movement Sequence (Leading Idle Echo)**:
+     Every directional TX command (`*2*1*91##` for UP, `*2*2*91##` for DOWN) triggers a distinctive 4-frame response pattern:
+     1. TX `*2*dir*91##` (command write)
+     2. RX `*2*1000#0*91##` then RX `*2*0*91##` ~50 ms later — a **leading idle/stopped status report** emitted before the motor begins moving. A naive cover state machine could mishandle this by staying stopped.
+     3. RX `*2*1000#dir*91##` (moving translation frame)
+     4. RX `*2*dir*91##` (basic moving status frame, ~450 ms after the leading idle)
+   - **Stop Movement Sequence**:
+     Every stop TX command (`*2*0*91##`) is answered strictly by `*2*1000#0*91##` and `*2*0*91##`.
+
+2. **Energy Management (WHO 18)**:
+   - **Dimension 113 (Active Power)**: 86 frames recording instantaneous active power on meters 51, 52, and 53 (`*#18*51*113*WATT##`). Meter 51 climbs from ~367 W to 526 W during cover motion; meters 52 and 53 remain steady at ~6 W and ~1 W.
+   - **Dimension 1200 (Power Threshold)**: 9 frames total:
+     - 3 threshold telemetry responses: `*#18*51*1200#1*125##`, `*#18*52*1200#1*125##`, `*#18*53*1200#1*125##` at 07:50:34.
+     - 6 poll requests across 2 periodic rounds (5-minute interval): meters 51, 52, 53 queried at 07:52:39 and 07:57:39 (`*#18*METER*1200##`).
+
+## Subsystems Verified (MyHomeServer1)
+
+- **WHO 2 (Automation / Covers)**: WHERE `91` cover movement, eight start/stop cycles, leading idle frame transition handling (`*2*1000#0*` + `*2*0*` followed by `*2*1000#dir*` + `*2*dir*`), and clean stop transitions.
+- **WHO 18 (Energy Management)**: Real-time Dimension 113 power readings on meters 51, 52, and 53, and Dimension 1200 periodic threshold polling and reports.
+
+---
+
+# #466 F455 Basic Gateway Traces (Bus Sweep, Dimmer Telemetry & Pushbuttons)
+
+Verbatim bus trace contributed by **@lionelser** on [#466 (comment 5938596974)](https://github.com/OpenWebNet-HA/MyHOME/issues/466#issuecomment-5938596974), exported from Home Assistant diagnostics (HA 2026.9.4, integration 2.0.0b14, OWNd 2.0.0b9, gateway firmware 1.0.86).
+
+## Hardware Profile
+
+- **Gateway Model**: Legrand F455 ("Basic gateway", single SCS bus)
+- **Firmware**: 1.0.86
+- **WHO 13 Device Type Code**: `200`
+- **Connection**: TCP OpenWebNet (Port 20000)
+
+## Contributed Files
+
+| File | Type | Description |
+|---|---|---|
+| `config_entry-myhome_F455.json` | HA Diagnostic Download (80 frames: 42 rx / 38 tx) | Full diagnostic export with bus monitor capture during `myhome.sweep_bus`, physical dimmer queries (WHERE 11–17), physical pushbutton presses, and gateway identity replies. |
+
+## Sequence of Actions Recorded & Subsystems Verified
+
+1. **Gateway Identity & Diagnostics (WHO 13)**:
+   - Device type `*#13**15##` -> `*#13**15*200##` (corroborating modern gateway family alongside F454, MH202, F461, H4890, MyHomeServer1).
+   - Firmware version `*#13**16##` -> `*#13**16*1*0*86##` (firmware 1.0.86).
+   - Gateway clock `*#13**0##` -> `*#13**0*20*40*21*##`.
+
+2. **Lighting & Physical Dimmer Telemetry (WHO 1)**:
+   - **Dimension 4 (Physical Dimmer Level Reports)**: WHERE `13` and WHERE `15` report Dimension 4 status (`*#1*13*4*100*2##` and `*#1*15*4*100*2##`), confirming physical modular dimmer telemetry on F455.
+   - **Dimension 1 (Standard Level Reports)**: WHERE `11`, `12`, `14`, `16`, and `17` report Dimension 1 status (`*#1*12*1*134*5##`, `*#1*17*1*175*1##`, `*#1*16*1*200*5##`, `*#1*14*1*175*5##`, `*#1*11*1*200*5##`).
+   - **Command Translation Pushbuttons**: Pushbutton press (`*1*1000#1*<where>##`) and release (`*1*1000#0*<where>##`) captured across WHERE `12`, `13`, and `17`.
+
+3. **Subsystem Scans**:
+   - Outbound queries for automation (`*#2*0##`), thermoregulation (`*#4*0##`), sound (`*#16*0*5##`), burglar alarm (`*#5*0##`), energy (`*#18*51*51##`...`*#18*59*51##`), and diagnostic identity (`*#1013*0*1##`).
 

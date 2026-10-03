@@ -5,6 +5,7 @@
     "step": {
       "user": {
         "title": "Pick your \"MyHome\" gateway",
+        "description": "MyHOME keeps one permanent event connection plus one connection per command worker (default 1) open to the gateway. A gateway only accepts a handful of simultaneous OpenWebNet connections (5 on an F455, fewer on an MH200N), shared with everything else that talks to it: the Legrand/BTicino Home+Project app, other Home Assistant instances, other integrations. If the connections run out, either MyHOME or the other client gets refused or dropped. Close other clients you do not need, and keep the command worker count low.",
         "data": {
           "host": "IP address"
         }
@@ -25,7 +26,7 @@
       },
       "custom": {
         "title": "Manual gateway entry",
-        "description": "Enter the gateway IP address and port. The MAC address and model will be auto-discovered.",
+        "description": "Enter the gateway IP address and port. The MAC address and model will be auto-discovered.\n\nMyHOME keeps one permanent event connection plus one connection per command worker (default 1) open to the gateway. A gateway only accepts a handful of simultaneous OpenWebNet connections (5 on an F455, fewer on an MH200N), shared with everything else that talks to it: the Legrand/BTicino Home+Project app, other Home Assistant instances, other integrations. If the connections run out, either MyHOME or the other client gets refused or dropped. Close other clients you do not need, and keep the command worker count low.",
         "data": {
           "address": "IP address",
           "port": "Port"
@@ -41,7 +42,7 @@
       },
       "discovery_confirm": {
         "title": "Discovered MyHOME gateway",
-        "description": "Do you want to set up the {name} gateway ({host})?"
+        "description": "Do you want to set up the {name} gateway ({host})?\n\nMyHOME keeps one permanent event connection plus one connection per command worker (default 1) open to the gateway. A gateway only accepts a handful of simultaneous OpenWebNet connections (5 on an F455, fewer on an MH200N), shared with everything else that talks to it: the Legrand/BTicino Home+Project app, other Home Assistant instances, other integrations. If the connections run out, either MyHOME or the other client gets refused or dropped. Close other clients you do not need, and keep the command worker count low."
       },
       "serial": {
         "title": "USB / Serial Gateway",
@@ -90,11 +91,18 @@
       "multiple_standbys": "This primary gateway already has a standby configured. Only one standby is allowed per primary."
     },
     "abort": {
-      "discover_timeout": "Unable to discover MyHome gateways",
+      "discovery_timeout": "Unable to discover MyHome gateways",
       "no_gateways": "No MyHome gateways discovered",
       "all_configured": "All MyHome gateways are already configured",
       "unknown": "An unknown error occured",
       "cannot_connect": "Cannot connect to the gateway",
+      "connection_closed": "The gateway closed the connection during setup. It may be busy, out of session slots, require a reboot, or have IP address restrictions enabled.",
+      "connection_refused": "The gateway refused the connection request.",
+      "connection_error": "Communication error while connecting to the gateway.",
+      "negotiation_timeout": "The gateway did not answer the session negotiation in time.",
+      "negotiation_failed": "Session negotiation with the gateway failed.",
+      "negotiation_refused": "The gateway refused session negotiation.",
+      "negotiation_error": "Gateway authentication negotiation error.",
       "already_configured": "This gateway is already configured",
       "already_in_progress": "The configuration of this gateway is already in progress",
       "reauth_successful": "Password change successful",
@@ -125,15 +133,19 @@
           "decoder_1_entity": "Decoder 1 — Media player entity (e.g. media_player.cambridge_audio_cxn)",
           "decoder_1_source": "Decoder 1 — BTicino source input number (1–4)",
           "decoder_1_pre_gain": "Decoder 1 — Pre-gain offset % (0 = Pre-Amp OFF, 20 = squeezelite, 100 = lock source volume at 100%)",
+          "decoder_1_companion": "Decoder 1 — Streaming companion (optional; leave empty to auto-detect)",
           "decoder_2_entity": "Decoder 2 — Media player entity",
           "decoder_2_source": "Decoder 2 — BTicino source input number (1–4)",
           "decoder_2_pre_gain": "Decoder 2 — Pre-gain offset %",
+          "decoder_2_companion": "Decoder 2 — Streaming companion (optional; leave empty to auto-detect)",
           "decoder_3_entity": "Decoder 3 — Media player entity",
           "decoder_3_source": "Decoder 3 — BTicino source input number (1–4)",
           "decoder_3_pre_gain": "Decoder 3 — Pre-gain offset %",
+          "decoder_3_companion": "Decoder 3 — Streaming companion (optional; leave empty to auto-detect)",
           "decoder_4_entity": "Decoder 4 — Media player entity",
           "decoder_4_source": "Decoder 4 — BTicino source input number (1–4)",
           "decoder_4_pre_gain": "Decoder 4 — Pre-gain offset %",
+          "decoder_4_companion": "Decoder 4 — Streaming companion (optional; leave empty to auto-detect)",
           "default_source_env_1": "Default source for environment 1 — used when a zone in that room is turned on from Home Assistant",
           "default_source_env_2": "Default source for environment 2 — used when a zone in that room is turned on from Home Assistant",
           "default_source_env_3": "Default source for environment 3 — used when a zone in that room is turned on from Home Assistant",
@@ -146,11 +158,14 @@
           "bus_topology": "Bus topology",
           "gateway_role": "Gateway role",
           "primary_gateway": "Primary gateway",
-          "delegated_whos": "Delegated subsystems"
+          "delegated_whos": "Delegated subsystems",
+          "auto_join_streaming": "Auto-join streaming groups"
         },
         "data_description": {
           "decoder_1_pre_gain": "Calibrate against the hardware, not a guess: if this decoder's line-out feeds a BTicino Ingresso RCA (L/N/NT4560) or Controllo Stereo (L4561) module, raise Pre-Gain while playing until that module's signal LED blinks orange — not steady green (signal too low) or steady red/orange (clipping). Always wire the decoder's fixed line-out ('OUT'), never a variable headphone/AUX output — a second uncontrolled gain stage there causes the same distortion BTicino's own troubleshooting guide warns about.",
-          "delegated_whos": "Secondary role only: subsystems whose new devices this gateway discovers. Devices the primary already has stay on the primary."
+          "delegated_whos": "Secondary role only: subsystems whose new devices this gateway discovers. Devices the primary already has stay on the primary.",
+          "auto_join_streaming": "Automatically join an active streaming group when turning on a room or adjusting volume from a physical wall control.",
+          "command_worker_count": "Recommended for the {model}: {session_default}. It accepts at most {session_limit} command session(s), and each one plus the event session uses one of its few connections, which the Legrand/BTicino app and other clients need too. Raise it only if commands queue up."
         }
       },
       "init": {
@@ -176,6 +191,8 @@
       "invalid_password": "Invalid password",
       "password_error": "Invalid password",
       "not_a_media_player": "Must be a media_player entity (e.g. media_player.cambridge_audio_cxn)",
+      "companion_same_as_decoder": "The streaming companion must be a different entity than the decoder itself.",
+      "companion_without_decoder": "A streaming companion can only be configured for a slot that has a decoder entity.",
       "mass_entity_not_allowed": "Infinite Loop Protection: Do not select Music Assistant clones! Select the original hardware entity instead.",
       "myhome_entity_not_allowed": "Do not select MyHOME sound zones as decoders! Select the underlying physical streaming player instead.",
       "primary_gateway_required": "A primary gateway must be selected for secondary or standby roles on a shared bus.",
@@ -322,6 +339,22 @@
     }
   },
   "issues": {
+    "invalid_decoder": {
+      "title": "Decoder {decoder} is a {platform} entity and is ignored",
+      "description": "The decoder slot points at `{decoder}`, which belongs to the `{platform}` integration. A decoder must be the physical streamer plugged into the matrix; a MyHOME zone or a Music Assistant player would route audio back into itself, so MyHOME leaves this slot out.\n\nOpen Configure on the gateway and pick the real hardware entity (Squeezelite, WiiM, Cambridge Audio, Cast, ...)."
+    },
+    "ambiguous_companion": {
+      "title": "Several streaming companions found for {decoder}",
+      "description": "`{decoder}` needs a DLNA / UPnP / Cast renderer of the same box to accept stream URLs, but more than one device matched: {candidates}.\n\nMyHOME does not guess. Open Configure on the gateway and set the *streaming companion* of this decoder slot to the right entity."
+    },
+    "multiple_audio_gateways": {
+      "title": "More than one gateway serves sound zones",
+      "description": "Sound zones are configured on several gateways ({gateways}). Sound addressing does not carry the bus interface yet, so zones of two audio matrices can collide on the same room number, entity and environment (issue #426).\n\nKeep the audio matrix on one gateway until this is resolved."
+    },
+    "unresponsive_zone": {
+      "title": "Heating zone {device} no longer answers ({gateway})",
+      "description": "The heating zone {device} on {gateway} did not answer its status request on two restarts in a row, so MyHOME stopped asking for it at startup (each unanswered request costs the gateway's command queue several seconds). If the zone no longer exists, remove its device or entity in Home Assistant. If it does exist, this clears as soon as it sends any frame, and it is asked again after a week."
+    },
     "gateway_authentication_failed": {
       "title": "Authentication failed for MyHOME gateway {gateway}",
       "description": "The MyHOME gateway refused the configured OpenWebNet password or HMAC negotiation. Please check your credentials using the reconfigure flow."
@@ -333,6 +366,14 @@
     "unknown_gateway_model": {
       "title": "Unknown gateway device type code ({code})",
       "description": "The gateway reported a hardware model code ({code}) that is unknown to the MyHOME integration (WHO=13 device type, or WHO=1013 OBJECT_MODEL when prefixed 1013-1-). Please click 'Learn More' to open a GitHub issue and attach a diagnostic trace so we can add support for this model."
+    },
+    "unmapped_device_status": {
+      "title": "{device} reports an undocumented status",
+      "description": "{device} (WHO {who}, address `{where}`) reported status code WHAT {code}, which is not in the published OpenWebNet table for this subsystem, so the received status does not allow Home Assistant to determine the current state of the device.\n\nThis has been seen from a lighting actuator that was in a fault state. Check the device on site: its status LED, the load connected to it and the wiring of that load. If the device works normally, please report the code so it can be mapped.\n\nThis clears by itself when an on, off or brightness-level status for this address is seen on the bus. A command from a wall button or from Home Assistant produces the same frame, so it can clear early and come back at the next status request while the fault remains."
+    },
+    "unmapped_device_status_autodiag": {
+      "title": "{device} reports an undocumented status",
+      "description": "{device} (WHO {who}, address `{where}`) reported status code WHAT {code}, which is not in the published OpenWebNet table for this subsystem, so the received status does not allow Home Assistant to determine the current state of the device.\n\nThis has been seen from a lighting actuator that was in a fault state. Check the device on site: its status LED, the load connected to it and the wiring of that load. If the device works normally, please report the code so it can be mapped.\n\nThis clears by itself when an on, off or brightness-level status for this address is seen on the bus. A command from a wall button or from Home Assistant produces the same frame, so it can clear early and come back at the next status request while the fault remains.\n\nThe device also sent an autodiagnostic report. Its bits are not documented, so it is shown as received: `{evidence}`."
     },
     "bus_collision_storm": {
       "title": "High SCS bus collision rate detected ({count} NACKs)",
@@ -440,7 +481,7 @@
       "message": "{entity_id}: unknown source \"{source}\""
     },
     "environment_busy": {
-      "message": "{entity_id}: {owner} is already streaming in environment {environment}; zones in one environment share a matrix input"
+      "message": "{entity_id}: {owner_name} is already streaming in environment {environment}; zones in one environment share a matrix input (also on it: {rooms})"
     },
     "routing_unsupported": {
       "message": "{entity_id}: amplifier {where} has no matrix routing address (environment 0, or not a two-digit amplifier); switch its source at a wall panel"
@@ -543,6 +584,40 @@
       "centralized_shutter_open": "Centralized shutter OPEN command received",
       "centralized_shutter_close": "Centralized shutter CLOSE command received",
       "centralized_shutter_stop": "Centralized shutter STOP command received"
+    },
+    "trigger_subtype": {
+      "button_0": "Button 0",
+      "button_1": "Button 1",
+      "button_2": "Button 2",
+      "button_3": "Button 3",
+      "button_4": "Button 4",
+      "button_5": "Button 5",
+      "button_6": "Button 6",
+      "button_7": "Button 7",
+      "button_8": "Button 8",
+      "button_9": "Button 9",
+      "button_10": "Button 10",
+      "button_11": "Button 11",
+      "button_12": "Button 12",
+      "button_13": "Button 13",
+      "button_14": "Button 14",
+      "button_15": "Button 15",
+      "button_16": "Button 16",
+      "button_17": "Button 17",
+      "button_18": "Button 18",
+      "button_19": "Button 19",
+      "button_20": "Button 20",
+      "button_21": "Button 21",
+      "button_22": "Button 22",
+      "button_23": "Button 23",
+      "button_24": "Button 24",
+      "button_25": "Button 25",
+      "button_26": "Button 26",
+      "button_27": "Button 27",
+      "button_28": "Button 28",
+      "button_29": "Button 29",
+      "button_30": "Button 30",
+      "button_31": "Button 31"
     }
   }
 }

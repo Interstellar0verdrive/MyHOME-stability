@@ -118,13 +118,17 @@ class DecoderPool:
     # HA states that mean "this decoder is available for claiming".
     # UNAVAILABLE is intentionally excluded: treat an offline Cambridge as busy
     # rather than risking a claim on a device that cannot actually play.
+    # ON counts as idle: it means "powered, not known to be playing" (the audio
+    # decoder sits in it for good after its first stream and reports playing
+    # when it plays); a decoder that is busy says playing, buffering or paused.
     _IDLE_STATES: frozenset[MediaPlayerState | str | None] = frozenset({
         MediaPlayerState.IDLE,
         MediaPlayerState.OFF,
         MediaPlayerState.PAUSED,
-        MediaPlayerState.STANDBY,
+        MediaPlayerState.ON,
         "idle",
         "off",
+        "on",
         "paused",
         "standby",
         None,  # entity not yet registered / state unknown
@@ -836,6 +840,15 @@ class DecoderPool:
                     return dec_id
         return None
 
+    def books(self) -> dict[str, Any]:
+        """Return a copy of the books (assignments, sources, groups, environments), as saved."""
+        return self._snapshot()
+
+    @property
+    def unconfirmed(self) -> frozenset[str]:
+        """Return the restored zones the bus has not reported on yet."""
+        return frozenset(self._unconfirmed)
+
     def get_assignment(self, zone_entity_id: str) -> str | None:
         """Return the decoder entity_id assigned to *zone_entity_id*, or ``None``.
 
@@ -889,6 +902,10 @@ class DecoderPool:
             if src == source_num:
                 return dec_id
         return None
+
+    def get_decoder_owner(self, decoder_entity_id: str) -> str | None:
+        """Return the zone entity ID that directly owns decoder_entity_id, or None."""
+        return self._assignments.get(decoder_entity_id)
 
     def decoder_source(self, decoder_entity_id: str) -> int | None:
         """Return the physical source number (1–4) for *decoder_entity_id*, or ``None``."""

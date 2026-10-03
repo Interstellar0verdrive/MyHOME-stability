@@ -1185,3 +1185,35 @@ async def test_zones_the_bus_never_reports_are_dropped(hass):
     store.async_delay_save.assert_called_once()
 
     assert await pool.drop_unconfirmed() == []
+
+
+@pytest.mark.asyncio
+async def test_a_decoder_that_is_powered_on_but_not_playing_can_be_claimed(hass):
+    """Found live: the Audio Decoder stays in "on" after a stream and reports "playing" when it plays."""
+    pool = DecoderPool(hass, {"media_player.dec": 1})
+    hass.states.async_set("media_player.dec", "on")
+    assert await pool.claim("media_player.zone_22") == ("media_player.dec", 1)
+
+
+@pytest.mark.asyncio
+async def test_a_playing_decoder_is_still_busy(hass):
+    pool = DecoderPool(hass, {"media_player.dec": 1})
+    hass.states.async_set("media_player.dec", "playing")
+    assert await pool.claim("media_player.zone_22") is None
+
+
+@pytest.mark.asyncio
+async def test_get_decoder_owner(hass):
+    pool = DecoderPool(hass, {"media_player.dec": 1, "media_player.dec2": 2})
+    hass.states.async_set("media_player.dec", "off")
+    hass.states.async_set("media_player.dec2", "off")
+
+    assert pool.get_decoder_owner("media_player.dec") is None
+    assert pool.get_decoder_owner("media_player.nonexistent") is None
+
+    await pool.claim("media_player.zone_22")
+    assert pool.get_decoder_owner("media_player.dec") == "media_player.zone_22"
+    assert pool.get_decoder_owner("media_player.dec2") is None
+
+    await pool.release("media_player.zone_22")
+    assert pool.get_decoder_owner("media_player.dec") is None

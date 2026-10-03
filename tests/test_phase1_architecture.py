@@ -75,6 +75,9 @@ from tests.mock_gateway_harness import MockGatewayHarness
 # release ships the fix.
 _OWND_MH200_IS_MH200N = isinstance(get_gateway_profile("MH200"), MH200NProfile)
 _OWND_MH200N_HAS_SOUND = MH200NProfile().supports_who(WHO_SOUND)
+# OWNd releases up to and including 2.0.0b8 gave F455 audio support by default;
+# OWNd#74 aligns F455 with single-bus hardware constraints (MyHOME#466).
+_OWND_F455_HAS_SOUND = F455Profile().supports_who(WHO_SOUND)
 
 # ── 1. GatewayProfile Tests ──────────────────────────────────────────────────
 
@@ -106,11 +109,10 @@ class TestGatewayProfiles:
         assert profile.model_name == "F455"
         assert profile.max_workers == 4
         assert profile.max_command_workers == 4
-        # OWNd#74/#76 drop audio from the single-bus F455; older OWNd still
-        # reports it. Either way the audio flag and WHO 16 must agree.
-        assert profile.supports_audio is profile.supports_who(WHO_SOUND)
+        assert profile.supports_audio is _OWND_F455_HAS_SOUND
         assert profile.supports_extended_frames is True
         assert profile.command_queue_delay == 0.05
+        assert profile.supports_who(WHO_SOUND) is _OWND_F455_HAS_SOUND
 
     def test_mh200n_profile(self):
         profile = MH200NProfile()

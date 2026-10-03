@@ -99,6 +99,68 @@ The gateway rejected the OpenWebNet password or HMAC SHA-negotiation credentials
 
 ---
 
+## Heating Zone No Longer Answers
+
+**Repair Key**: `unresponsive_zone`  
+**Severity**: `WARNING`  
+**Auto-Resolving**: Yes
+
+### What it means
+A heating zone (or its central unit) did not answer its startup status request on two restarts in a row, so MyHOME stopped asking for it at startup. A request for a zone that is not on the bus keeps the command queue waiting (about 6 s per request in a MyHomeServer1 capture), and the queue is serial, so a few such zones delay every light command sent during startup.
+
+### How to resolve
+If the zone no longer exists (for example a leftover entity), remove its device or entity in Home Assistant; the issue disappears with it. If it exists, no action is needed: the issue clears as soon as the zone sends any frame, and the zone is asked again after a week.
+
+---
+
+## Unmapped Device Status
+
+**Repair Key**: `unmapped_device_status`  
+**Repair Key**: `unmapped_device_status_autodiag` (when an autodiagnostic report came with the status)  
+**Severity**: `WARNING`  
+**Auto-Resolving**: Yes  
+**Fixable via UI**: No
+
+### What it means
+A lighting actuator (a light or a switch) answered with a status code (`WHAT`) that is not in the published WHO 1 table (`WHAT 0..10, 11..18, 20..31`). Three statuses outside that table are documented as events (ZigBee OpenWebNet spec: `32` Toggle, `34` movement detected, `39` end of movement detected); they say nothing about the state and never raise or clear this issue. The received status does not allow Home Assistant to determine the current device state. A light entity keeps whatever state it had before, and carries the code in its `unknown_state` attribute.
+
+The issue is raised for every address on the bus, including addresses with no entity in Home Assistant, and names the device once its entity exists. If you remove the device's entity, the issue goes with it, but the next odd status frame from that address raises it again.
+
+The only code seen so far is `WHAT 19`, from an actuator on an MH200 that was in a fault state ([#456](https://github.com/OpenWebNet-HA/MyHOME/issues/456); evidence record `EVID-MH200-WHAT19-FAULT` in the OpenWebNet Encyclopedia). It arrived together with a `WHO 1001` autodiagnostic frame:
+
+```text
+*1*19*74##
+*#1001*74*11*111110111111111111110111##
+```
+
+`WHO 1001` dimensions 7 and 11 carry a 24-bit autodiagnostic mask. No source documents what the individual bits mean, so the integration does not decode the mask: when one arrives within 10 seconds of the status (before or after it), it is shown in the issue exactly as received, as evidence for whoever looks at the device.
+
+### How to resolve
+1. Find the actuator in the electrical cabinet (the issue gives its address).
+2. Look at its status LED.
+3. Check the load connected to it and the wiring of that load.
+4. If the device works normally, the code may be a status this integration does not know yet: open an issue with a diagnostics download attached, so it can be mapped.
+
+### If the actuator will not be repaired soon
+You can leave a faulty actuator in the cabinet and stop seeing it in Home Assistant, without touching the installation. What each step does and does not do:
+
+| Goal | What to do | What to expect |
+| --- | --- | --- |
+| Remove it from cards and dashboards | Open the device's entity settings and **disable** the entity. Do not delete it. | A disabled entity is kept in the entity registry, so discovery treats the address as known and does not create it again. A *deleted* entity is created again by the next frame from that address. |
+| Stop the repair issue for now | Use **Ignore** on the repair. | Only temporary. The ignore is forgotten when the issue clears (any on, off or level frame for the address, for example a wall-button press) and at every restart or reload, and the next odd status raises the issue again. |
+| Stop the repair issue for good | Not possible yet. | The tracker watches every address on the bus, including addresses without an entity, so disabling or deleting the entity does not stop the issue from coming back while the actuator keeps reporting the code. |
+
+Disabling the entity is the part that lasts. Until the actuator is repaired or replaced, the repair can come back: a disabled entity's status is no longer requested at startup, so after a restart it returns only when the actuator sends the code by itself or a bus sweep queries it. It clears itself as soon as an on, off or level frame for the address is seen (see *How it clears* below), so no cleanup is needed after the repair.
+
+### How it clears
+Automatically, as soon as an on, off or brightness-level frame for this address is seen on the bus. The bus cannot tell the actuator's own status from a command sent by a wall button or by Home Assistant, which produces the same frame: on a faulty actuator a command can clear the issue early, and the next status request raises it again.
+
+It also disappears when you remove the device's entity (see above). After a restart or reload it is raised again if the device still reports the code, which is guaranteed only for addresses that have an entity (their status is requested at startup); for any other address it comes back the next time the device sends a frame by itself, or when a bus sweep queries it.
+
+With a warm standby gateway, the primary's config entry owns the issue: the standby hands what it sees on the bus to the primary's tracker while the primary is offline, so a recovery seen during a failover or after the failback clears it.
+
+---
+
 ## High SCS Bus Collision Rate
 
 **Repair Key**: `bus_collision_storm`  
@@ -218,3 +280,57 @@ A gateway configured as **Secondary** or **Warm Standby** points at a primary ga
 ### How to resolve
 1. Navigate to **Settings → Devices & Services → MyHOME** and click **Configure** on the gateway named in the issue.
 2. Either select another gateway (configured as **Shared** / **Primary**) under **Primary Gateway**, or set **Bus Topology** to `standalone` if it is now the only gateway on its bus.
+
+---
+
+## Decoder Is A MyHOME Or Music Assistant Entity
+
+**Repair Key**: `invalid_decoder`  
+**Severity**: `WARNING`  
+**Auto-Resolving**: Yes  
+**Fixable via UI**: No
+
+### What it means
+A decoder slot points at a `myhome` zone or a Music Assistant (`mass`) player. Routing a zone back into itself would loop the audio, so MyHOME leaves that slot out of the decoder pool. The options flow already refuses these entities; this issue catches a slot saved before that check, imported, or whose entity later changed platform.
+
+### How to resolve
+Open **Settings → Devices & Services → MyHOME → Configure** and pick the physical streamer that is plugged into the matrix (Squeezelite, WiiM, Cambridge Audio, Cast, ...).
+
+### How it clears
+Automatically, on the next reload after the slot points at a hardware entity or is emptied.
+
+---
+
+## Several Streaming Companions Found
+
+**Repair Key**: `ambiguous_companion`  
+**Severity**: `WARNING`  
+**Auto-Resolving**: Yes  
+**Fixable via UI**: No
+
+### What it means
+A decoder whose integration refuses stream URLs (Cambridge Audio) needs a DLNA / UPnP / Cast renderer of the same box, and more than one device matched at the same detection step. MyHOME does not guess, because gluing the wrong streamer to the wrong box plays the wrong room. Until you choose, the decoder does not take streams.
+
+### How to resolve
+Open **Settings → Devices & Services → MyHOME → Configure** and set **Streaming companion** for that decoder slot to the right entity.
+
+### How it clears
+Automatically, once the slot has an explicit companion or detection finds a single candidate.
+
+---
+
+## More Than One Gateway Serves Sound Zones
+
+**Repair Key**: `multiple_audio_gateways`  
+**Severity**: `WARNING`  
+**Auto-Resolving**: Yes  
+**Fixable via UI**: No
+
+### What it means
+Sound zones exist on several gateways. Sound addressing does not yet carry the bus interface (issue [#426](https://github.com/OpenWebNet-HA/MyHOME/issues/426)), so zones of two audio matrices can collide on the same room number, entity and environment.
+
+### How to resolve
+Keep the audio matrix on one gateway until #426 is fixed, and remove the sound zones of the other gateway.
+
+### How it clears
+Automatically, when only one gateway has sound zones.

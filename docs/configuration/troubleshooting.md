@@ -72,6 +72,14 @@ Devices are discovered from bus traffic. Deleting is meant for devices that are 
 
 Log: `Could not send message *#4*<ZPP>*15##`. Probe addresses (`WHERE ≥ 100`) refuse the explicit poll. Probes are receive-only and are only polled when no reading arrived in the last interval (fixed after 2.0.0b12, issue #308); if you still see it, update the integration.
 
+### "Heating zone unresponsive" repair alert on central unit (3550 / 4695) or phantom "Climate Zone 99"
+
+- **Central Unit (`#0` / `#0#1`) false-positive**: Central units were previously polled with Dimension 14 status requests (`*#4*#0*14##`), which central units and gateways reject with NACK because OpenWebNet specifies Dimension 14 status reads only for subordinate zone addresses `1..99`. Central units receive their setpoints and modes via commands (`*#4*#0*#14*T*M##`), autonomous broadcast events, or restored state, but do not answer point-to-point status queries. This triggered a false-positive `"unresponsive zone"` repair alert. Central units are now exempt from point-to-point status polling and any stale repair alert is cleared on startup.
+- **"Centrale termoregolazione 99 zone" vs "Climate Zone 99" / "Climate Zone 0"**: The BTicino 3550 is commercially marketed as the *"Centrale termoregolazione 99 zone"* because it can manage up to 99 subordinate zones, but its OpenWebNet central unit address is strictly `#0`.
+  - **Ghost Zone 99**: If a user configured `zone: 99` or `zone: "99"` in `myhome.yaml` based on the commercial product name, Home Assistant created and persisted `<mac>-4-99` in the Entity Registry. Because zone 99 does not physically exist on that bus, its Dimension 14 query (`*#4*99*14##`) failed, raising an `unresponsive_zone` repair alert.
+  - **Resolution**: Delete the phantom entity in **Settings → Devices & services → Entities**. Removing the entity deletes its entry from Home Assistant's Entity Registry; Home Assistant then invokes `async_will_remove_from_hass()`, which confirms the registry entry is gone and permanently clears the repair issue from the Issue Registry. Because physical 3550 traffic is addressed to `#0`, bus sweeps will never resurrect or invent Zone 99. (If an installation physically contains a 99th zone thermostat, genuine traffic addressed to zone 99 will discover and manage it normally).
+  - **YAML & Bus Coalescing**: When configured in `myhome.yaml` (e.g. `zone: "#0"` named `Centrale termoregolazione`), the YAML device and bus discovery coalesce cleanly on address `#0`, routing all broadcast traffic to the configured entity without creating a duplicate `Climate Zone 0` entity.
+
 ### Cover position is wrong
 
 Timed covers estimate position from the travel time. Calibrate it (`myhome.calibrate_cover` or the device's **Calibrate travel time** button) or measure it with a stopwatch and save it with `myhome.set_cover_travel_time`. A full open or close resynchronises the estimate. Position-reporting actuators (dimension 10) are exact; if yours reports position but the entity does not follow, set `advanced_shutter: true` in `myhome.yaml`.
@@ -82,11 +90,35 @@ The actuator did not report its stop within 180 s, or an MH200 / MH200N delayed 
 
 ### Music Assistant does not offer the audio zone as a player
 
-The zone only advertises `play_media` when at least one decoder is mapped in the options flow (**Configure → Dynamic Proxy Decoders**). After saving, the zone re-publishes its features; reload Music Assistant's player list. See [Sound System](media_player.md).
+Two conditions must be met for a MyHOME room to appear and accept playback in Music Assistant:
+
+1. **Home Assistant Player Provider in Music Assistant:** Music Assistant does not expose Home Assistant media players automatically. In Music Assistant, navigate to **Settings → Providers → Add Provider → Home Assistant (Player Provider)**, connect to your Home Assistant instance, and ensure the MyHOME room amplifier entities (`media_player.<room>`) are selected and enabled.
+2. **Dynamic Proxy Decoders mapped in MyHOME:** A MyHOME room entity only advertises `play_media` (streaming support) when at least one streaming decoder is mapped in the integration options (**Settings → Devices & Services → MyHOME → Configure → Decoders**). Without a decoder, zones operate in standalone WHO 16 mode (power, volume, source only). After mapping a decoder, reload Music Assistant's player list. See [Sound System](media_player.md).
+
+### Playing music to a room vs. backend streamer (Why you should never group them)
+
+- **Question / Misconception:** *"The streamer plugged into the matrix is `Livingroom 1_3519`, but I want to hear music in `Bathroom`. Should I create a group containing `Livingroom 1_3519` and `Bathroom` so both play?"*
+- **Solution:** **No! Never group your backend streamer with a destination room.**
+  - Map `Livingroom 1_3519` as a **Decoder** in MyHOME options (**Configure → Decoders**).
+  - In Music Assistant, target and play directly to **`Bathroom`**.
+  - Behind the scenes, MyHOME automatically claims the streamer from the pool, wakes the Bathroom amplifier, routes the F441/F441M matrix to that input, and forwards the stream URL to the streamer.
+  - Grouping the streamer and the room causes Music Assistant to stream to both the physical streamer and the virtual proxy at the same time, leading to stream collisions, desynchronization, or audio loops.
+  - Groups in Music Assistant are **only** for multi-room playback across **multiple destination rooms** (e.g., Bathroom + Living Room). Never add the backend streamer to that group.
+
+### How can you have stereo with only 2 wires? / Do I need an L4561N interface?
+
+- **The 2-wire SCS bus carries both control and audio.** In BTicino MyHOME *Diffusion Sonore 2 Fils*, the 2-wire SCS bus simultaneously carries 27V DC power, OpenWebNet digital control frames (WHO 16: power, volume, input routing), and high-frequency modulated stereo audio over the same pair of conductors. There is no separate analog audio cabling running to room amplifiers.
+- **Why you need an audio source interface for external streamers.** External streamers, DACs, or phones output standard baseband analog stereo line-level audio (via RCA or 3.5mm jack). They cannot connect directly to SCS bus terminals. An audio source interface module—such as the Legrand / BTicino **L4561N** (4 DIN stereo source interface with RCA inputs and IR control), **L4560 / HS4560 / N4560 / NT4560 / HC4560** (modular flush-mount RCA sockets), or **3482** (auxiliary line preamplifier)—is required to modulate the line-level audio onto the 2-wire SCS bus into one of the matrix source inputs (S1–S4).
+- **Ground isolation (art. 3495):** When connecting external Class I (earthed) equipment or multiple audio sources, install the **3495** source isolator between the streamer and the interface to provide 1500 Vrms galvanic isolation, preserving SELV bus compliance and eliminating ground hum.
+- **Stereo vs. mono:** The F441/F441M matrix and L4561N interface support true stereo (L/R) distribution. Whether you hear stereo in a given room depends on the amplifier installed in that room (e.g. H4562, F502, or 3484/3487 stereo amplifiers) and whether two speakers (L + R) are wired to it. See the [official wiring schematic in the Sound System Guide](media_player.md#official-bticino-2-wire-sound-system-wiring-schematic).
 
 ### "All audio matrix inputs are currently in use"
 
 Every playing zone claims one decoder; map more decoders or stop playback in another room.
+
+### Reporting an audio problem
+
+Download the MyHOME diagnostics (*Devices & services → MyHOME → ⋮ → Download diagnostics*) and attach it to the issue; its `audio` block shows every zone, decoder and group without room names. Add the Music Assistant log only if the problem is on the Music Assistant side. See [Reporting an audio problem](media_player.md#reporting-an-audio-problem).
 
 ## Bus and gateway behaviour
 

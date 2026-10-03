@@ -1,5 +1,5 @@
 """Test decoder companion resolution and discovery."""
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -95,6 +95,52 @@ async def test_find_streaming_companion_by_mac_address(hass: HomeAssistant) -> N
 
 
 @pytest.mark.asyncio
+async def test_find_streaming_companion_mac_step_skips_child_devices(hass: HomeAssistant) -> None:
+    """A child device has no connections of its own, so the MAC step cannot match it.
+
+    Reading ``connections`` on one is deprecated in HA 2026.9 and an error from 2027.9;
+    the lookup must skip it rather than touch the attribute.
+    """
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+
+    cam_entry = MockConfigEntry(domain="cambridge_audio")
+    cam_entry.add_to_hass(hass)
+    dlna_entry = MockConfigEntry(domain="dlna_dmr")
+    dlna_entry.add_to_hass(hass)
+
+    device1 = dev_reg.async_get_or_create(
+        config_entry_id=cam_entry.entry_id,
+        connections={(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")},
+        identifiers={("cambridge_audio", "id1")},
+    )
+    device2 = dev_reg.async_get_or_create(
+        config_entry_id=dlna_entry.entry_id,
+        connections={(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")},
+        identifiers={("dlna_dmr", "id2")},
+    )
+    ent_reg.async_get_or_create(
+        "media_player", "cambridge_audio", "cambridge_unique",
+        device_id=device1.id, suggested_object_id="cambridge_streamer",
+    )
+    ent_reg.async_get_or_create(
+        "media_player", "dlna_dmr", "dlna_unique",
+        device_id=device2.id, suggested_object_id="cambridge_dlna",
+    )
+
+    child = MagicMock(spec=dr.ChildDeviceEntry)
+    child.name = None
+    child.name_by_user = None
+    real_async_get = dr.DeviceRegistry.async_get
+
+    def async_get(self, device_id, **kwargs):
+        return child if device_id == device2.id else real_async_get(self, device_id, **kwargs)
+
+    with patch.object(dr.DeviceRegistry, "async_get", async_get):
+        assert async_find_streaming_companion(hass, "media_player.cambridge_streamer") is None
+
+
+@pytest.mark.asyncio
 async def test_find_streaming_companion_by_host(hass: HomeAssistant) -> None:
     """Test finding a streaming companion sharing the same host/IP address."""
     ent_reg = er.async_get(hass)
@@ -117,21 +163,21 @@ async def test_find_streaming_companion_by_host(hass: HomeAssistant) -> None:
     ent_reg.async_get_or_create(
         "media_player",
         "cambridge_audio",
-        "pnl_cam_unique",
+        "decoder_cam_unique",
         config_entry=cam_entry,
         device_id=dev_cam.id,
-        suggested_object_id="pnl_audio",
+        suggested_object_id="audio_decoder",
     )
     ent_reg.async_get_or_create(
         "media_player",
         "cast",
-        "pnl_cast_unique",
+        "decoder_cast_unique",
         config_entry=cast_entry,
         device_id=dev_cast.id,
         suggested_object_id="mxn10_f1",
     )
 
-    companion = async_find_streaming_companion(hass, "media_player.pnl_audio")
+    companion = async_find_streaming_companion(hass, "media_player.audio_decoder")
     assert companion == "media_player.mxn10_f1"
 
 
@@ -149,12 +195,12 @@ async def test_find_streaming_companion_by_name(hass: HomeAssistant) -> None:
     dev_cam = dev_reg.async_get_or_create(
         config_entry_id=cam_entry.entry_id,
         identifiers={("cambridge_audio", "cam_id_2")},
-        name="PNL Audio",
+        name="Audio Decoder",
     )
     dev_cast = dev_reg.async_get_or_create(
         config_entry_id=cast_entry.entry_id,
         identifiers={("cast", "cast_id_2")},
-        name="PNL Audio",
+        name="Audio Decoder",
     )
 
     ent_reg.async_get_or_create(

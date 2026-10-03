@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, cast
 
 import voluptuous as vol
-from homeassistant.components.light import (
+from homeassistant.components.light import (  # type: ignore[attr-defined, unused-ignore]
     ATTR_BRIGHTNESS,
     ATTR_BRIGHTNESS_PCT,
     ATTR_COLOR_TEMP_KELVIN,
@@ -75,6 +75,7 @@ from .light_dali import DaliFeatureLock
 from .light_fade import SoftwareFadeEngine
 from .light_group import MyHOMELightGroup, _color_modes_from_flags
 from .myhome_device import MyHOMEEntity
+from .typing_compat import as_any
 
 PARALLEL_UPDATES = 0
 
@@ -212,7 +213,7 @@ async def async_setup_entry(
     if platform is not None:
         platform.async_register_entity_service(
             SERVICE_TURN_ON_TIMED,
-            {
+            as_any({
                 vol.Optional("duration"): vol.Coerce(float),
                 vol.Optional("hours", default=0): vol.All(
                     vol.Coerce(int), vol.Range(min=0, max=255)
@@ -223,7 +224,7 @@ async def async_setup_entry(
                 vol.Optional("seconds", default=0): vol.All(
                     vol.Coerce(float), vol.Range(min=0, max=59)
                 ),
-            },
+            }),
             "async_turn_on_timed",
         )
 
@@ -809,6 +810,8 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                     if ATTR_BRIGHTNESS_PCT in kwargs
                     else eight_bits_to_percent(int(kwargs[ATTR_BRIGHTNESS]))
                 )
+                if target_pct == 0 and int(kwargs.get(ATTR_BRIGHTNESS, 0)) > 0:
+                    target_pct = 1  # brightness 1..2 of 255 is "on at minimum", not off
 
                 if target_pct == 0:
                     await self.async_turn_off(**kwargs)
@@ -1071,6 +1074,10 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                 self._attr_brightness = percent_to_eight_bits(message.brightness)
                 if message.brightness > 0:
                     self._last_brightness_pct = message.brightness
+        elif has_level and message.brightness is None and isinstance(message.brightness_preset, int) and not is_fading:
+            # WHAT 2..10 is "ON at 20 %..100 %": the preset is the level, not just
+            # a hint that the actuator can dim.
+            self._apply_brightness_state(max(0, min(100, message.brightness_preset * 10)))
 
         if self._off_icon is not None and self._on_icon is not None:
             self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon

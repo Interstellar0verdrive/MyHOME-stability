@@ -452,7 +452,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
             self._run_started_at = None
             self._motion_started_at = None
             self._refresh_travel_attributes()
-        frozen = compute_freeze_position(
+        frozen: int | None = compute_freeze_position(
             self._start_position,
             self._move_start_time,
             at,

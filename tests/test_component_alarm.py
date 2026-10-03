@@ -371,19 +371,42 @@ class TestMyHOMEAlarmEntity:
         assert alarm_central.extra_state_attributes["raw_state"] == "deactivation"
         assert alarm_central.extra_state_attributes["state_code"] == 2
 
-        # Armed away event (*5*1*0## - activation)
-        msg_away = OWNEvent.parse("*5*1*0##")
-        alarm_central.handle_event(msg_away)
-        assert alarm_central.alarm_state == STATE_ARMED_AWAY
+        # Activation (*5*1*0##) is "system operational", not armed: the F454
+        # trace (#311) sends it on every disarm (*5*2*0## -> *5*1*0## -> *5*9*0##).
+        # OWNd <= 2.0.0b9 still reads it as armed_away; OWNd#66 does not.
+        msg_activation = OWNEvent.parse("*5*1*0##")
+        alarm_central.handle_event(msg_activation)
+        assert alarm_central.alarm_state == (STATE_ARMED_AWAY if msg_activation.is_armed_away else STATE_DISARMED)
         assert alarm_central.extra_state_attributes["raw_state"] == "activation"
         assert alarm_central.extra_state_attributes["state_code"] == 1
+
+        # Armed away event (*5*8*0## - engage)
+        msg_away = OWNEvent.parse("*5*8*0##")
+        alarm_central.handle_event(msg_away)
+        assert alarm_central.alarm_state == STATE_ARMED_AWAY
+        assert alarm_central.extra_state_attributes["raw_state"] == "engage"
+        assert alarm_central.extra_state_attributes["state_code"] == 8
 
         # Armed home event (*5*11*0## - active zone)
         msg_home = OWNEvent.parse("*5*11*0##")
         alarm_central.handle_event(msg_home)
-        assert alarm_central.alarm_state == STATE_ARMED_HOME
+        # Accepts both legacy OWNd (which mapped system WHAT 11 to armed_home)
+        # and OWNd#66+ (which treats WHAT 11 as zone-only, leaving panel state unchanged)
+        assert alarm_central.alarm_state in (STATE_ARMED_HOME, STATE_ARMED_AWAY)
         assert alarm_central.extra_state_attributes["raw_state"] == "active zone"
         assert alarm_central.extra_state_attributes["state_code"] == 11
+
+        # Explicitly exercise is_armed_home branch for OWNd versions where is_armed_home is False on the wire
+        msg_home_explicit = MagicMock()
+        msg_home_explicit.human_readable_log = "Armed home"
+        msg_home_explicit.is_alarm = False
+        msg_home_explicit.is_armed_away = False
+        msg_home_explicit.is_armed_home = True
+        msg_home_explicit.is_disarmed = False
+        msg_home_explicit.state_name = "armed home"
+        msg_home_explicit.state_code = 11
+        alarm_central.handle_event(msg_home_explicit)
+        assert alarm_central.alarm_state == STATE_ARMED_HOME
 
         # Triggered event (*5*15*0## - intrusion alarm)
         msg_alarm = OWNEvent.parse("*5*15*0##")

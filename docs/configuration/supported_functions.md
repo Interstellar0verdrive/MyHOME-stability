@@ -63,7 +63,7 @@ Legend: ✅ supported · 👁️ read-only · ⚙️ via a service, not an entit
 | Target temperature | ✅ | Manual set-point. |
 | HVAC modes | ✅ | `heat`, `cool`, `auto`, `off`; heating / cooling support per zone from YAML. |
 | Fan speed (3-speed fancoil) | ✅ | `fan: true`. |
-| Central unit modes | ✅ | Central unit 3550 (`#0`) and 4695 (`#0#1`) as `central: true` zones; seasonal propagation. |
+| Central unit modes | ✅ | Central unit 3550 (`#0`) and 4695 (`#0#1`) as `central: true` zones; seasonal propagation. Central units operate via autonomous events and are exempt from point-to-point status polling. |
 | Weekly programs / scenarios | ❌ | Program selection frames (`*4*11xx*#0##`) can be sent with `myhome.send_message`. |
 | Temperature-only probes | 👁️ | `sensor` platform (see below). |
 
@@ -108,7 +108,7 @@ Legend: ✅ supported · 👁️ read-only · ⚙️ via a service, not an entit
 | On / off, volume, mute, source 0–4 | ✅ | Per zone / amplifier. |
 | Streaming (play, pause, next, previous) | ✅ | Only when decoders are mapped in the options flow: the zone becomes a Music Assistant / Spotify target and routes the matrix to a free decoder. |
 | Media metadata | 👁️ | Mirrored from the decoder while a stream is active. |
-| Speaker groups | ❌ | Use Home Assistant / Music Assistant grouping on the decoders. |
+| Speaker groups | ✅ | Home Assistant `join` / `unjoin` and Music Assistant sync groups: rooms of a group share one decoder and one source. See [Multi-Room Audio Grouping](media_player.md#multi-room-audio-grouping-music-assistant-home-assistant). |
 
 ### Device triggers (WHO 15 / 25)
 
