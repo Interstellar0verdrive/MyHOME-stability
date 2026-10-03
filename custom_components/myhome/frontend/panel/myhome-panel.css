@@ -687,7 +687,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
 .cal-row-details { padding: 4px 14px 16px; }
-.cal-details-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+/* Three blocks of at most 360 px, side by side while they fit, then wrapped; label and value stay close. */
+.cal-details-grid { display: flex; flex-wrap: wrap; gap: 16px 40px; }
+.cal-details-grid > section { flex: 1 1 260px; min-width: 0; max-width: 360px; }
 .cal-details-grid h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--panel-text-2); }
 .cal-details-grid p { margin: 6px 0 0; font-size: 13px; }
 .cal-facts { display: grid; gap: 4px; margin: 0; font-size: 13px; }
@@ -708,7 +710,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-toggle, .cal-row-status, .cal-row-profile, .cal-row-actions { grid-area: auto; padding: 0; }
   .cal-row-profile > .muted, .cal-row-last { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
-  .cal-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; padding-inline-start: 84px; }
+  .cal-details-grid { padding-inline-start: 84px; }
   .cal-details-actions { padding-inline-start: 84px; }
 }
 
