@@ -39,25 +39,28 @@ test("every generated screen text is filled in English and Italian", () => {
 });
 
 test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothing", async () => {
-  const { tab, wiz, code, press, title, backend, button } = await mount();
+  const { tab, wiz, code, press, title, backend, button, pickCover } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.equal(code(), "A-01");
   assert.equal(title(), "Which roller shutter do you want to measure?");
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a roller shutter");
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>from travel times<\/strong>/);
   const options = [...wiz().querySelectorAll('select[name="cover"] option')].map((option) => option.textContent);
-  assert.deepEqual(options, ["Kitchen shutter 2 · Kitchen · Address: 91 · A: 9 · PL: 1", "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1",
+  assert.deepEqual(options, ["Choose a roller shutter…", "Kitchen shutter 2 · Kitchen · Address: 91 · A: 9 · PL: 1", "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1",
     "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1"]);
   const subtitle = () => wiz().querySelector(".wiz-head .muted");
   assert.equal(subtitle().textContent, "No roller shutter selected yet", "a placeholder until a cover is picked");
   assert.ok(subtitle().classList.contains("wiz-head-placeholder"));
-  const select = wiz().querySelector('select[name="cover"]');
-  select.value = select.options[1].value; select.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector('select[name="cover"]').value, "", "opened from the tab's button, the drop-down starts empty");
+  assert.equal(wiz().querySelector('select[name="cover"] option').disabled, true, "the placeholder cannot be chosen");
+  assert.equal(button("choose").disabled, true, "Continue waits for a choice");
+  await pickCover(1);
   assert.equal(subtitle().textContent, "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1", "the picked cover, as in the drop-down");
   assert.equal(subtitle().classList.contains("wiz-head-placeholder"), false);
-  assert.equal(wiz().querySelector('select[name="cover"]').value, select.options[1].value, "the choice survives the redraw");
-  const again = wiz().querySelector('select[name="cover"]');
-  again.value = again.options[0].value; again.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector('select[name="cover"]').value, JSON.stringify(["one", "cover.living_one"]), "the choice survives the redraw");
+  assert.equal(wiz().querySelector('select[name="cover"] option').textContent.startsWith("Kitchen"), true, "the placeholder leaves once a cover is chosen");
+  assert.equal(button("choose").disabled, false);
+  await pickCover(0);
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to measure "Kitchen shutter 2"?');
@@ -641,8 +644,9 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(saved.body, translations.it.wiz_T322);
   assert.equal(saved.preview, true);
   // On screen the note sits under its button and describes it.
-  const { tab, wiz, press } = await mount({ language: "it" });
+  const { tab, wiz, press, pickCover } = await mount({ language: "it" });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  await pickCover();
   await press("choose");
   const b = wiz().querySelector('.wiz-actions [data-wiz="path:B"]');
   assert.equal(b.nextElementSibling.textContent, translations.it.wiz_T318);
@@ -713,5 +717,23 @@ test("the panel's entity states never overwrite the wizard's stepper", async () 
 test("the drop-down names the bus address with the Italian label too", async () => {
   const { tab, wiz } = await mount({ language: "it" });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
-  assert.equal(wiz().querySelector('select[name="cover"] option').textContent, "Kitchen shutter 2 · Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
+  assert.equal(wiz().querySelector('select[name="cover"] option').textContent, "Scegli una tapparella…");
+  assert.equal(wiz().querySelector('select[name="cover"] option:not([disabled])').textContent, "Kitchen shutter 2 · Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
+});
+
+test("opened on a given cover, the wizard already has it chosen; from the tab's button it starts empty", async () => {
+  const { panel, tab, wiz, code, button } = await mount();
+  // From a row: Measure goes straight to the path choice on that cover.
+  tab().querySelector('.cal-row[data-entity="cover.living_one"] [data-action="cal-tab-measure-cover"]').click(); await tick();
+  assert.equal(code(), "A-02");
+  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1");
+  button("exit").click(); await tick();
+  // Back on A-01 with a given cover (as after a cover-specific entry), the drop-down sits on it and the subtitle names it.
+  const tabView = panel._calibrationTab;
+  tabView._openWizard({ start: "choose", item: tabView._covers().find((item) => item.cover.entity_id === "cover.living_three") }); await tick();
+  assert.equal(code(), "A-01");
+  assert.equal(wiz().querySelector('select[name="cover"]').value, JSON.stringify(["one", "cover.living_three"]));
+  assert.equal(wiz().querySelector('select[name="cover"] option[disabled]'), null, "no placeholder entry");
+  assert.equal(wiz().querySelector(".wiz-head .muted").textContent, "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1");
+  assert.equal(button("choose").disabled, false);
 });

@@ -55,9 +55,11 @@ export function buildScreen(ctx) {
   // ---- Before any session: choices that stay in the browser. ----
   if (stage === "choose") {
     Object.assign(screen, { code: "A-01", phase: "intro", title: t("wiz_T003"), body: t("wiz_T004"),
-      choice: { name: "cover", kind: "select", label: t("wiz_T005"), value: local.coverKey ?? ctx.covers?.[0]?.key ?? "",
-        options: (ctx.covers || []).map((item) => ({ value: item.key, label: item.label })) },
-      actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length }] });
+      // Empty with a placeholder entry until a cover is chosen; Continue waits for it.
+      choice: { name: "cover", kind: "select", label: t("wiz_T005"), value: local.coverKey || "",
+        options: [...(local.coverKey ? [] : [{ value: "", label: t("wiz_T393"), disabled: true }]),
+          ...(ctx.covers || []).map((item) => ({ value: item.key, label: item.label }))] },
+      actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length || !local.coverKey }] });
     // Until a cover is picked the subtitle says so; then it names the cover as the drop-down does.
     const picked = local.coverPicked ? (ctx.covers || []).find((item) => item.key === local.coverKey) : null;
     screen.header = { title: t("wiz_T001"), subtitle: picked ? picked.label : t("wiz_T392"), placeholder: !picked };

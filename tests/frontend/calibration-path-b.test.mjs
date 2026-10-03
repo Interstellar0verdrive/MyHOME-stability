@@ -90,8 +90,9 @@ test("without a profile on the gateway, B is disabled and the screen says why", 
   const overview = sampleOverview();
   overview.profiles = [];
   for (const cover of overview.covers) cover.profile_id = null;
-  const { tab, wiz, code, press } = await mount({ overview });
+  const { tab, wiz, code, press, pickCover } = await mount({ overview });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  await pickCover();
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(wiz().querySelector('[data-wiz="path:B"]').disabled, true);

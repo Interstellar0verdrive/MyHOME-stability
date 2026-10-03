@@ -56,7 +56,8 @@ export class CalibrationWizard {
   open({ host, hass, t, covers, data, start = "choose", item = null, session = null, onOpenCover, onClose }) {
     this.close();
     this._context = { host, hass, t, covers, data, onOpenCover, onClose };
-    this._local = { stage: "choose", path: "A", scope: null, coverKey: item ? key(item) : covers[0] ? key(covers[0]) : "" };
+    // Opened on a given cover, the choice is made; from the tab's generic button it starts empty.
+    this._local = { stage: "choose", path: "A", scope: null, coverKey: item ? key(item) : "", coverPicked: !!item };
     host.innerHTML = "";
     this._root = document.createElement("section");
     this._root.className = "wiz";
@@ -271,7 +272,7 @@ export class CalibrationWizard {
   _choiceMarkup(choice) {
     if (choice.kind === "select") {
       return `<label class="wiz-choice">${esc(choice.label)}<select name="${esc(choice.name)}">${choice.options.map((option) =>
-        `<option value="${esc(option.value)}" ${option.value === choice.value ? "selected" : ""}>${esc(option.label)}</option>`).join("")}</select>
+        `<option value="${esc(option.value)}" ${option.value === choice.value ? "selected" : ""} ${option.disabled ? "disabled" : ""}>${esc(option.label)}</option>`).join("")}</select>
         ${choice.hint ? `<span class="muted wiz-choice-hint">${esc(choice.hint)}</span>` : ""}</label>`;
     }
     return `<fieldset class="wiz-choice wiz-radios"><legend>${esc(choice.label)}</legend>${choice.options.map((option) =>
@@ -390,7 +391,7 @@ export class CalibrationWizard {
       if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }
       this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); return this._render();
     }
-    if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", path: "A", scope: null, saved: null, refining: false, base: null }); return this._render(); }
+    if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", path: "A", scope: null, saved: null, refining: false, base: null, coverKey: "", coverPicked: false }); return this._render(); }
     if (id === "open-cover") { const entityId = this._item()?.cover.entity_id; const { onOpenCover } = this._context; this._finish(); onOpenCover?.(entityId); return; }
     if (id === "correct") {
       // B → C: the cover is measured on its own; nothing of the preview was written.

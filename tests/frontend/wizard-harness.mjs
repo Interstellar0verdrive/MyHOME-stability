@@ -52,6 +52,13 @@ export async function mount(options = {}) {
   };
   const actions = () => backend.calls.filter((message) => message.type === "myhome/cover_calibration/action" && message.action !== "heartbeat").map((message) => message.action);
   const title = () => wiz().querySelector(".wiz-title").textContent;
+  /** A-01 starts empty: pick a cover by its position in the drop-down (0 = the first cover). */
+  const pickCover = async (index = 0) => {
+    const select = wiz().querySelector('select[name="cover"]');
+    select.value = [...select.options].filter((option) => !option.disabled)[index].value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await tick();
+  };
   const startFor = async (entity, path = "A") => {
     tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
     const select = wiz().querySelector('select[name="cover"]');
@@ -60,7 +67,7 @@ export async function mount(options = {}) {
     await press("choose");
     await press(`path:${path}`);
   };
-  return { backend, panel, root, tab, wiz, code, button, press, type, actions, title, startFor };
+  return { backend, panel, root, tab, wiz, code, button, press, type, actions, title, startFor, pickCover };
 }
 
 /** Run the backend through one movement: start echo, then the actuator stop when there is one. */
