@@ -172,7 +172,7 @@ export class CalibrationWizard {
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${drawing("after-body")}
-            ${screen.box ? `<div class="wiz-box"><span class="muted">${esc(screen.box.label)}</span><p>${esc(screen.box.text)}</p></div>` : ""}
+            ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${screen.choice ? this._choiceMarkup(screen.choice) : ""}
             ${screen.field ? this._fieldMarkup(screen.field) : ""}
             ${screen.precision ? `<p class="wiz-precision">${inline(screen.precision)}</p>` : ""}
@@ -291,7 +291,7 @@ export class CalibrationWizard {
         ${choice.note ? `<p class="cal-note wiz-choice-note">${esc(choice.note)}</p>` : ""}`;
     }
     return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.options.map((option) =>
-      `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${inline(option.label)}${option.badge
+      `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${option.plain ? esc(option.label) : inline(option.label)}${option.badge
         ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${option.note ? `<small class="muted">${esc(option.note)}</small>` : ""}</span></label>`).join("")}</fieldset>`;
   }
 

@@ -36,6 +36,11 @@ export function counted(t, key, count, values = {}) {
   return fill(t(count === 0 && zero ? zero : count === 1 && one ? one : key), { ...values, count });
 }
 
+/** "Measured on…" in the middle of a line: "measured on…" (the language's own lower case). */
+function lowerFirst(text, language) {
+  return text ? text[0].toLocaleLowerCase(language) + text.slice(1) : text;
+}
+
 /** A-02's line on the chosen cover: the profile it follows, its calibration, or how many profiles it could follow. */
 function pathContext(t, cover, profiles, language) {
   if (!cover) return "";
@@ -107,10 +112,11 @@ export function buildScreen(ctx) {
   }
   if (stage === "profile") {
     const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || ctx.profiles?.[0];
+    // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1 · 3 shutters follow it".
+    const about = (item) => counted(t, "wiz_T165", item.followers, { cover: item.measuredOn || "—" });
     Object.assign(screen, { code: "B-01", phase: "intro", title: t("wiz_T161"), body: t("wiz_T162"),
-      choice: { name: "profile", kind: "select", label: t("wiz_T163"), value: chosen?.id ?? "",
-        hint: chosen ? counted(t, "wiz_T165", chosen.followers, { cover: chosen.measuredOn || "—" }) : "",
-        options: (ctx.profiles || []).map((item) => ({ value: item.id, label: item.name })) },
+      choice: { name: "profile", kind: "radio", label: t("wiz_T163"), value: chosen?.id ?? "",
+        options: (ctx.profiles || []).map((item) => ({ value: item.id, label: `${item.name} · ${lowerFirst(about(item), language)}`, plain: true })) },
       actions: [{ id: "profile", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
     return finish();
   }
@@ -118,8 +124,9 @@ export function buildScreen(ctx) {
     const effective = cover?.effective || {};
     Object.assign(screen, { code: "C-01", phase: "intro", title: t("wiz_T184"),
       body: cover?.profile ? tx("wiz_T185", { ...values, travel: n(cover.travel_cm) }) : tx("wizNoProfileBody", values),
-      box: { label: t("wiz_T186"), text: tx("wiz_T188", { profile: cover?.profile?.name ?? "—", travel: n(cover?.travel_cm),
-        opening: n(effective.opening?.value), closing: n(effective.closing?.value), slat: n(effective.slat_time_s?.value) }) },
+      // A bold title and one line per value: the sheet's single line (T188) split at its separators.
+      box: { label: t("wiz_T186"), lines: tx("wiz_T188", { profile: cover?.profile?.name ?? "—", travel: n(cover?.travel_cm),
+        opening: n(effective.opening?.value), closing: n(effective.closing?.value), slat: n(effective.slat_time_s?.value) }).split(" · ") },
       actions: [{ id: "current", label: t("wiz_T006"), kind: "primary" }] });
     return finish();
   }

@@ -122,7 +122,7 @@ already follows a profile; on with a followed profile offers *Create a new profi
 
 | Board | Preview state | Texts |
 | --- | --- | --- |
-| B-01 | before | T161–T165 (profile drop-down, where it was measured and who follows it) |
+| B-01 | before | T161–T165 (one radio row per profile: name · where it was measured · how many covers follow it) |
 | B-02 | before | T167, T168, T076 |
 | B-03 / B-04 | `positioning` · `open_full`; `reading` · `travel` | T027, T170; T062–T066 |
 | B-05 / B-06 | `positioning` · `check`; `reading` · `check` | T171, T172, T086; T138, T173, T123 |
@@ -131,7 +131,7 @@ already follows a profile; on with a followed profile offers *Create a new profi
 
 ## Path C — has a profile but stops at the wrong point
 
-C-01 (T184–T188) shows what the cover uses; C-02 (T189–T196) chooses the case:
+C-01 (T184–T188) shows what the cover uses (a box with a bold title and one line per value); C-02 (T189–T196) chooses the case:
 
 | Case | Runs on | Boards | Save |
 | --- | --- | --- | --- |

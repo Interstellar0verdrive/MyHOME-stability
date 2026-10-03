@@ -832,10 +832,10 @@ test("counts of zero and one use their own forms", () => {
   assert.equal(a21d([]).choice.options.find((option) => option.value === "update").description, "Nessun’altra tapparella lo segue.");
   assert.equal(a21d([]).name.line, "Questa tapparella passa a seguirlo; nessun’altra tapparella segue «alte».");
   assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
-  const b01 = (followers) => buildScreen({ t, stage: "profile", path: "B", cover: cover([]), local: {}, profiles: [{ id: "p", name: "alte", followers, measuredOn: "Sala 1" }] }).choice.hint;
-  assert.equal(b01(0), "Misurato su Sala 1 · nessuna tapparella lo segue");
-  assert.equal(b01(1), "Misurato su Sala 1 · 1 tapparella lo segue");
-  assert.equal(b01(3), "Misurato su Sala 1 · 3 tapparelle lo seguono");
+  const b01 = (followers) => buildScreen({ t, stage: "profile", path: "B", cover: cover([]), local: {}, profiles: [{ id: "p", name: "alte", followers, measuredOn: "Sala 1" }] }).choice.options[0].label;
+  assert.equal(b01(0), "alte · misurato su Sala 1 · nessuna tapparella lo segue");
+  assert.equal(b01(1), "alte · misurato su Sala 1 · 1 tapparella lo segue");
+  assert.equal(b01(3), "alte · misurato su Sala 1 · 3 tapparelle lo seguono");
 });
 
 test("a refusal is forgotten once the session moves to another phase", async () => {

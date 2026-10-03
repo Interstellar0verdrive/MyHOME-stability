@@ -27,8 +27,9 @@ test("C-01 shows what the cover uses now and C-02 preselects the case that remea
   assert.equal(code(), "C-01");
   assert.equal(title(), "What this roller shutter currently uses");
   assert.match(wiz().querySelector(".wiz-body").textContent, /^Kitchen shutter 2 follows profile "tall_two_leaf", adapted to its 110 cm curtain travel/);
-  assert.equal(wiz().querySelector(".wiz-box p").textContent,
-    "Profile: tall_two_leaf · Curtain travel: 110 cm · Opening time: 12.3 s · Closing time: 12.1 s · Slat time: 2.4 s");
+  assert.equal(wiz().querySelector(".wiz-box strong").textContent, "Currently in use");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-box p")].map((line) => line.textContent),
+    ["Profile: tall_two_leaf", "Curtain travel: 110 cm", "Opening time: 12.3 s", "Closing time: 12.1 s", "Slat time: 2.4 s"]);
   await press("current");
   const options = [...wiz().querySelectorAll('input[name="case"]')];
   assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", false], ["times_only", false], ["times_and_rolls", true]]);

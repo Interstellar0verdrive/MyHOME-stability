@@ -15,8 +15,12 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
   await startFor("cover.living_one", "B");
   assert.equal(code(), "B-01");
   assert.equal(title(), "Which profile does this roller shutter follow?");
-  assert.deepEqual([...wiz().querySelectorAll('select[name="profile"] option')].map((option) => option.textContent), ["tall_two_leaf"]);
-  assert.equal(wiz().querySelector(".wiz-choice-hint").textContent, "Measured on Living room shutter 1 · 2 shutters follow it");
+  // A radio list, one row per profile, as in the mockup (no drop-down).
+  assert.equal(wiz().querySelector('select[name="profile"]'), null);
+  assert.equal(wiz().querySelector(".wiz-radios legend").textContent, "Profile to follow");
+  const rows = [...wiz().querySelectorAll('input[name="profile"]')];
+  assert.deepEqual(rows.map((input) => [input.value, input.checked, input.closest(".wiz-radio").textContent.trim()]),
+    [["tall", true, "tall_two_leaf · measured on Living room shutter 1 · 2 shutters follow it"]]);
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Introduction · 1 of 3");
   assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, 'Ⓑ like "tall_two_leaf"');
   await press("profile");

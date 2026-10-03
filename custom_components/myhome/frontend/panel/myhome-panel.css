@@ -876,8 +876,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 @keyframes wiz-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 @media (prefers-reduced-motion: reduce) { .wiz-progress.is-indeterminate span { animation: none; width: 100%; opacity: .35; } }
 .wiz-wait p.wiz-wait-remaining { font-size: 12px; }
-.wiz-box { padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
-.wiz-box p { margin: 4px 0 0; }
+.wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
+.wiz-box p { margin: 0; }
 .wiz-choice { max-width: 420px; }
 .wiz-choice-hint { font-weight: 400; }
 .wiz-radios { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: none; }
