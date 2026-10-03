@@ -598,3 +598,73 @@ async def test_check_is_refused_in_a_paused_cycle_which_then_continues(hass, rec
     result = await call(hass, cal, back.connection, back.token, "continue")
     assert result["phase"] == "starting_open" and str(cal.queue[-1][0]) == RAISE
 
+
+
+# ---------------------------------------------------------------------------------
+# Delivery callbacks belong to the movement that queued them.
+# ---------------------------------------------------------------------------------
+async def test_a_late_refusal_of_a_stopped_check_run_does_not_end_the_next_check(geometry):
+    """The old run's delivery is cancelled only after a new check has started: it changes nothing."""
+    cal = geometry
+    await review(cal)
+    geometry_before, values_before = dict(cal.session.geometry), dict(cal.session.values)
+    await act(cal, "check")
+    await endpoint(cal, 9)
+    await act(cal, "next")  # The check run is queued...
+    old = cal.queue[-1]
+    await act(cal, "stop")  # ...and stopped before the gateway wrote it.
+    assert cal.session.phase == "review"
+    await act(cal, "check")  # A new check, in its briefing.
+    assert not old[1]()  # The worker refuses the superseded run and cancels its delivery now.
+    old[3].cancel()
+    await asyncio.sleep(0)
+    assert (cal.session.phase, cal.session.step, cal.session.reason) == ("briefing", "home", None)
+    assert cal.session.geometry == geometry_before and cal.session.values == values_before
+    await endpoint(cal, 9)
+    await timed(cal)
+    await act(cal, "reading", reading_cm=cal.session.check.expected_cm)
+    assert cal.session.check.passed and cal.session.phase == "review"
+
+
+async def test_a_late_refusal_of_an_endpoint_stop_does_not_end_the_next_step(geometry):
+    """The actuator stops at the end stop before Home Assistant writes the endpoint Stop; the next run is queued."""
+    cal = geometry
+    await start(cal)
+    cal.clock[0] += 9
+    await act(cal, "endpoint")
+    old = cal.queue[-1]  # The endpoint Stop, still waiting in the queue.
+    bus(cal, STOP)  # The motor stopped on its own at the end stop.
+    assert (cal.session.phase, cal.session.step) == ("briefing", "lift")
+    await act(cal, "next")  # The lift-off run supersedes the endpoint Stop...
+    assert not old[1]()  # ...whose guard now refuses it.
+    old[3].cancel()
+    await asyncio.sleep(0)
+    assert (cal.session.phase, cal.session.reason) == ("starting_open", None)
+
+
+async def test_a_late_stop_write_of_a_cut_short_check_is_not_measured_in_the_next_one(geometry):
+    cal = geometry
+    await review(cal)
+    await act(cal, "check")
+    await endpoint(cal, 9)
+    await start(cal)
+    callback = cal.session.deadline._callback
+    cal.session.deadline.cancel()
+    callback()  # The timed Stop of the first check is queued.
+    old = cal.queue[-1]
+    await act(cal, "stop")
+    assert cal.session.phase == "review" and cal.session.check is None
+    await act(cal, "check")
+    await endpoint(cal, 9)
+    await start(cal)
+    planned = cal.session.check.planned_seconds
+    cal.clock[0] += planned
+    callback = cal.session.deadline._callback
+    cal.session.deadline.cancel()
+    callback()
+    assert cal.session.phase == "geometry_wait_stop"
+    old[3].set_result(cal.clock[0] - 30)  # The first check's Stop is acknowledged now: not this run's time.
+    await asyncio.sleep(0)
+    assert cal.session.check.check_seconds is None and cal.session.phase == "geometry_wait_stop"
+    await stopped(cal)
+    assert cal.session.check.check_seconds == pytest.approx(planned)

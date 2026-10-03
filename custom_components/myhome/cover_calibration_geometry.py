@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import Callable
 from typing import Any, cast
 
 import voluptuous as vol
@@ -114,7 +115,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             direction = "open" if self._rising() else "close"
             written = self.queue_move(direction)
             self.edge_position = None
-            written.add_done_callback(self._movement_delivered)
+            written.add_done_callback(self._bound(self._movement_delivered))
         elif action == "lift" and self.step == "lift" and self.phase == "opening":
             self._sample_stop()
         elif action == "endpoint" and self.phase in {"opening", "closing"} and self.step in {"home", "reset", "opening", "closing", "top"}:
@@ -163,6 +164,9 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         self.check_interrupted = reason
         self.step = self.after_position = "half_close"
         self.phase = "review"
+        # Whatever the check queued is superseded: a run still in the queue is never written,
+        # and its delivery, or that of its Stop, no longer speaks for this session.
+        self._motion_token = object()
         if not keep:  # Moved by the check, by a wall switch or by a scenario: nobody read where it stopped.
             self.edge_position = None
         if send_stop:
@@ -181,9 +185,21 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         cover._attr_is_closed = False
         cover.async_write_ha_state()
 
+    def _bound(self, callback: Callable[[asyncio.Future[float]], None]) -> Callable[[asyncio.Future[float]], None]:
+        """Deliver to `callback` only while the movement that queued the frame is still the current one.
+
+        A frame refused or acknowledged after a later movement was queued (a new step, a new
+        check, or a check cut short) belongs to a movement that is over, in every phase.
+        """
+        token = self._motion_token
+
+        def deliver(future: asyncio.Future[float]) -> None:
+            if self._motion_token is token:
+                callback(future)
+        return deliver
+
     def _movement_delivered(self, future: asyncio.Future[float]) -> None:
-        # In review nothing waits for a delivery: a movement refused there belonged to a check that ended.
-        if future.cancelled() and self.active and not self.closed and self.phase != "review":
+        if future.cancelled() and self.active and not self.closed:
             self.interrupt("not_delivered")
 
     def on_event(self, event: Any) -> None:
@@ -211,7 +227,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if written is None:
             self.interrupt("stop_queue_full", send_stop=False)
             return
-        written.add_done_callback(self._sample_written)
+        written.add_done_callback(self._bound(self._sample_written))
         self.emit()
 
     def _sample_written(self, future: asyncio.Future[float]) -> None:
@@ -254,7 +270,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if written is None:
             self.interrupt("stop_queue_full", send_stop=False)
             return
-        written.add_done_callback(self._movement_delivered)
+        written.add_done_callback(self._bound(self._movement_delivered))
         self.emit()
 
     def _stopped(self) -> None:
