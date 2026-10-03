@@ -697,8 +697,11 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-row-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-inline-start: 4px; }
 .cal-row-profile { grid-area: profile; }
 .cal-row-profile > .muted { display: none; }
-.cal-row-actions { grid-area: actions; display: flex; gap: 6px; align-items: center; justify-content: end; }
-.cal-row-action { color: var(--panel-accent); font-weight: 600; }
+/* Row actions as the maintainer's outlined buttons: 40 px, divider border, radius 10, text colour; ⋮ a 40 px square. */
+.cal-row-actions { grid-area: actions; display: flex; gap: 8px; align-items: center; justify-content: end; }
+.cal-row-action { min-height: 40px; padding-inline: 14px; background: transparent; font-weight: 600; }
+.cal-row-actions .icon-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border-color: var(--panel-border); background: transparent; color: var(--panel-text-2); }
+.cal-row-actions .icon-button:hover { border-color: var(--panel-accent); background: var(--panel-accent-soft); color: var(--panel-text-2); }
 .cal-menu-wrap { position: relative; }
 .cal-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 3; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .cal-menu button { justify-content: start; border: 0; background: transparent; }

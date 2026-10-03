@@ -323,8 +323,8 @@ export class CalibrationTab {
     const profile = item.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>` : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
     const last = item.last ? fill(t("calTabMeasuredOn"), { date: dateText(item.last, language) }) : "";
     const action = session
-      ? (session.waiting_for_stop || session.recoverable === false ? "" : `<button type="button" class="ghost cal-row-action" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button>`)
-      : this._wizard ? `<button type="button" class="ghost cal-row-action" data-action="cal-tab-${item.rolls ? "refine" : "measure-cover"}" data-id="${esc(key)}" ${busy ? "disabled" : ""}>${esc(t(item.rolls ? "calTabActionRefine" : "calTabActionMeasure"))}</button>` : "";
+      ? (session.waiting_for_stop || session.recoverable === false ? "" : `<button type="button" class="cal-row-action" data-action="cal-tab-session" data-id="${esc(item.entry.entry_id)}">${esc(t("calOpenSession"))}</button>`)
+      : this._wizard ? `<button type="button" class="cal-row-action" data-action="cal-tab-${item.rolls ? "refine" : "measure-cover"}" data-id="${esc(key)}" ${busy ? "disabled" : ""}>${esc(t(item.rolls ? "calTabActionRefine" : "calTabActionMeasure"))}</button>` : "";
     const menuOpen = this._menu === key;
     return `<div class="cal-row${session ? " is-running" : ""}${expanded ? " is-expanded" : ""}" role="listitem" data-entity="${esc(item.cover.entity_id)}" data-entry="${esc(item.entry.entry_id)}">
       <div class="cal-row-main">
@@ -336,7 +336,7 @@ export class CalibrationTab {
         <span class="cal-row-actions">${action}
           <span class="cal-menu-wrap"><button type="button" class="icon-button" data-action="cal-tab-menu" data-id="${esc(key)}" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-label="${esc(t("calTabMore"))}: ${esc(item.name)}" title="${esc(t("calTabMore"))}"><ha-icon icon="mdi:dots-vertical" aria-hidden="true"></ha-icon></button>
           <span class="cal-menu" role="menu" ${menuOpen ? "" : "hidden"}>
-            ${!session && this._wizard && item.rolls ? `<button type="button" role="menuitem" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
+            ${!session && this._wizard && item.rolls ? `<button type="button" role="menuitem" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:target" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
             ${!session && this._wizard ? `<button type="button" role="menuitem" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
             <button type="button" role="menuitem" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
             <button type="button" role="menuitem" data-action="cal-tab-toggle" data-id="${esc(key)}"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon>${esc(t("calTabDetails"))}</button>
@@ -376,7 +376,7 @@ export class CalibrationTab {
     const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
     // Each block ends with its own action, left-aligned under its content.
     const action = (button) => button ? `<div class="cal-block-action">${button}</div>` : "";
-    const refine = this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : "";
+    const refine = this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:target" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : "";
     const measure = this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : "";
     const assign = `<button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>`;
     return `<div class="cal-details-grid">
