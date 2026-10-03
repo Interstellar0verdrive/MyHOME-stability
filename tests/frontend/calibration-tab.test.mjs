@@ -153,8 +153,19 @@ test("the chevron expands a row in place with the values in use, the last measur
     "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: "Sep 29, 2026", Method: "From the profile" });
   assert.match(details.textContent, /Also followed by Kitchen shutter 2\./);
   assert.match(details.textContent, /adapted to the curtain travel of this roller shutter/);
-  assert.ok(details.querySelector('[data-action="cal-tab-assign"]'));
-  expanded.querySelector('[data-action="cal-tab-toggle"]').click();
+  const blockActions = (entity) => {
+    const toggle = row(tab, entity).querySelector('[data-action="cal-tab-toggle"]');
+    if (toggle.getAttribute("aria-expanded") !== "true") toggle.click();
+    return [...row(tab, entity).querySelectorAll(".cal-details-grid > section")]
+      .map((section) => [...section.querySelectorAll(".cal-block-action button")].map((button) => [button.dataset.action, button.textContent.trim()]));
+  };
+  assert.deepEqual(blockActions("cover.living_two"), [[["cal-tab-refine", "Fine-tune"]], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Assign profile"]]],
+    "each block ends with its own action");
+  assert.deepEqual(blockActions("cover.living_one"), [[], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Assign profile"]]],
+    "no Fine-tune without measured rolls");
+  assert.deepEqual(blockActions("cover.bedroom"), [[], [["cal-tab-measure-cover", "Measure"]], [["cal-tab-assign", "Assign profile"]]]);
+  assert.equal(tab.querySelector(".cal-details-actions"), null, "no shared row of buttons");
+  row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-row-details").hidden, true);
 });
 

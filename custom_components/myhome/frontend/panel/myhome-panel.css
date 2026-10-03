@@ -701,7 +701,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-badge[data-status="running"] { background: color-mix(in srgb, var(--panel-warning) 20%, transparent); color: var(--primary-text-color, #182b37); white-space: normal; }
 .cal-profile-chip { background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-profile-chip ha-icon { --mdc-icon-size: 8px; }
-/* Details start 12 px below the row (24 px under the cover icon); the buttons have 20 px above and below. */
+/* Details start 12 px below the row (24 px under the cover icon) and end 20 px under the lowest block action. */
 .cal-row-details { padding: 12px 14px 20px; }
 /* Three blocks of at most 360 px, side by side while they fit, then wrapped; label and value stay close. */
 .cal-details-grid { display: flex; flex-wrap: wrap; gap: 16px 40px; }
@@ -712,7 +712,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-facts div { display: flex; justify-content: space-between; gap: 12px; }
 .cal-facts dt { color: var(--panel-text-2); }
 .cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
-.cal-details-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+/* Each block's own action, under its content: no bottom space on the content, 20 px above the button. */
+.cal-block-action { display: flex; justify-content: start; padding-top: 20px; }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
@@ -745,14 +746,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-row-actions { grid-column: 5; }
   .cal-row-profile > .muted { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
-  .cal-row-details { padding-block: 12px 20px; align-items: start; row-gap: 20px; }
+  .cal-row-details { padding-block: 12px 20px; align-items: start; }
   .cal-details-grid { display: contents; }
   .cal-details-grid > section { grid-row: 1; max-width: none; }
   .cal-details-grid > section:nth-child(1) { grid-column: 2; }
   .cal-details-grid > section:nth-child(2) { grid-column: 3; }
   .cal-details-grid > section:nth-child(3) { grid-column: 4; }
   .cal-details-grid .cal-note { max-width: none; }
-  .cal-details-actions { grid-column: 2 / -1; grid-row: 2; margin: 0; padding: 0; }
 }
 @media (min-width: 1280px) {
   /* Room and bus address on one line under the cover name. */

@@ -291,19 +291,19 @@ export class CalibrationTab {
     const scaled = ["opening", "closing"].some((direction) => effective[direction]?.origin === "profile");
     const list = (items) => `<dl class="cal-facts">${items.map(([label, shown]) => `<div><dt>${esc(label)}</dt><dd>${esc(shown)}</dd></div>`).join("")}</dl>`;
     const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
+    // Each block ends with its own action, left-aligned under its content.
+    const action = (button) => button ? `<div class="cal-block-action">${button}</div>` : "";
+    const refine = this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : "";
+    const measure = this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : "";
+    const assign = `<button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>`;
     return `<div class="cal-details-grid">
-        <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}</section>
+        <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}${action(refine)}</section>
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language) : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
-          ${item.profile && scaled ? `<p class="cal-note">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}</section>
+          ${item.profile && scaled ? `<p class="cal-note">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p><span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span></p>
           <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
-          <p class="cal-note">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}</section>
-      </div>
-      <div class="actions cal-details-actions">
-        ${this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
-        ${this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
-        <button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
+          <p class="cal-note">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}${action(assign)}</section>
       </div>`;
   }
 
