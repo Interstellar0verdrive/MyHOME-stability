@@ -96,6 +96,9 @@ test("tape readings only run as a preview with four readings and the check, save
   assert.match(wiz().querySelector(".wiz-body").textContent, /Gap of about 0 cm after 4\.8 s of descent/);
   await press("accept");
   assert.equal(code(), "C-38");
+  const before = [...wiz().querySelectorAll(".wiz-main > .wiz-table tbody td:nth-of-type(1)")];
+  assert.ok(before.length === 4 && before.every((cell) => cell.classList.contains("muted")), "Before in grey");
+  assert.equal(wiz().querySelector(".wiz-save-info").open, true);
   assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, translations.en.wiz_T239);
   assert.match(wiz().querySelector(".wiz-precision").textContent, /after 4\.8 s of descent/);
   await press("save");

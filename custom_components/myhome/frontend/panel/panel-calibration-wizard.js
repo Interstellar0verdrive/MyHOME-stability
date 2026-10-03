@@ -147,6 +147,9 @@ export class CalibrationWizard {
       screen.saveInfo, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
+      // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
+      const info = this._frame.querySelector(".wiz-save-info");
+      this._local.saveInfoOpen = info ? info.open : true;
       this._signature = signature;
       this._renderedCode = screen.code;
       this._root.dataset.code = screen.code;
@@ -176,7 +179,7 @@ export class CalibrationWizard {
             ${screen.table ? this._tableMarkup(screen.table) : ""}
             ${screen.technical ? this._technicalMarkup(screen.technical) : ""}
             ${screen.profileBlock ? this._profileMarkup(screen.profileBlock) : ""}
-            ${screen.saveInfo ? `<details class="wiz-accordion"><summary>${esc(screen.saveInfo.title)}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></summary>${rich(screen.saveInfo.body)}</details>` : ""}
+            ${screen.saveInfo ? `<details class="wiz-accordion wiz-save-info"${this._local.saveInfoOpen ? " open" : ""}><summary>${esc(screen.saveInfo.title)}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></summary>${rich(screen.saveInfo.body)}</details>` : ""}
             <div class="wiz-notices" aria-live="polite"></div>
           </div>
           <div class="wiz-actions"></div>
@@ -300,7 +303,7 @@ export class CalibrationWizard {
 
   _tableMarkup(table) {
     return `<table class="wiz-table"><thead><tr>${table.headers.map((header) => `<th scope="col">${esc(header)}</th>`).join("")}</tr></thead>
-      <tbody>${table.rows.map((row) => `<tr><th scope="row">${esc(row.label)}</th><td>${row.changed ? `<s>${esc(row.before)}</s>` : esc(row.before)}</td><td>${esc(row.after)}</td></tr>`).join("")}</tbody></table>`;
+      <tbody>${table.rows.map((row) => `<tr><th scope="row">${esc(row.label)}</th><td${table.mutedBefore ? ' class="muted"' : ""}>${row.changed ? `<s>${esc(row.before)}</s>` : esc(row.before)}</td><td>${esc(row.after)}</td></tr>`).join("")}</tbody></table>`;
   }
 
   _technicalMarkup(technical) {

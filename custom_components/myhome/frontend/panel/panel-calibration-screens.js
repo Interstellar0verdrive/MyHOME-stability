@@ -434,6 +434,8 @@ function summaryScreen(screen, ctx, tx, n, values) {
     return withSupport(screen, ctx, "cover_only");
   }
   if (points) {
+    // C-38 shows the values in use in grey: only the rolls change.
+    screen.table.mutedBefore = true;
     Object.assign(screen, { code: "C-38", title: t("wiz_T149"), body: t("wiz_T238"), precision,
       saveInfo: follows ? saveInfo("wiz_T288") : saveInfo("wizSaveCoverOnly"), actions: [{ ...save, target: "cover_only" }] });
     return screen;
@@ -459,8 +461,9 @@ function profileBlock(ctx, tx, pathC) {
   const follows = !!cover?.profile;
   const on = local.saveProfile ?? (!follows && !pathC);
   const choice = on && follows ? { name: "save_choice", value: local.saveChoice || "new",
-    options: [{ value: "new", label: t("wiz_T111") }, { value: "update", label: tx("wiz_T109", { profile: cover.profile.name }),
-      description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }] } : null;
+    // Listed as in A-21d: update first, then a new profile (still the default choice, §9.10).
+    options: [{ value: "update", label: tx("wiz_T109", { profile: cover.profile.name }),
+      description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }, { value: "new", label: t("wiz_T111") }] } : null;
   const creating = on && (!follows || choice.value === "new");
   const nameValue = local.profileName ?? slug(cover?.name || "");
   const block = { switchLabel: t("wiz_T096"), on, explanation: follows ? tx("wiz_T108", { profile: cover.profile.name }) : t("wiz_T097"), choice,

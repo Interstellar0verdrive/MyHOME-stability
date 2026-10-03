@@ -327,6 +327,8 @@ test("a cover that follows a profile saves only on itself by default, which wait
   await type("54"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("56");
   assert.equal(code(), "A-21c");
+  assert.equal(wiz().querySelector(".wiz-save-info").open, true, "What happens when I save? starts open");
+  wiz().querySelector(".wiz-save-info").open = false;
   assert.equal(wiz().querySelector('[name="save_profile"]').checked, false);
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /follows the profile "tall_two_leaf"/);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true);
@@ -334,6 +336,8 @@ test("a cover that follows a profile saves only on itself by default, which wait
   const toggle = wiz().querySelector('[name="save_profile"]');
   toggle.checked = true; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(code(), "A-21d");
+  assert.equal(wiz().querySelector(".wiz-save-info").open, false, "closed by the user, it stays closed while the summary changes");
+  assert.deepEqual([...wiz().querySelectorAll('[name="save_choice"]')].map((input) => input.value), ["update", "new"], "listed as in A-21d");
   assert.equal(wiz().querySelector('[name="save_choice"][value="new"]').checked, true);
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 shutter: Living room shutter 3\./);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false);
@@ -825,9 +829,9 @@ test("counts of zero and one use their own forms", () => {
   assert.match(review(["Sala 2", "Sala 3"]).saveInfo.body, /e le altre 2 tapparelle che lo seguono resteranno come sono\./);
   const a21d = (followers) => buildScreen({ t, language: "it", stage: "session", path: "A", cover: cover(followers), view, local: { saveProfile: true },
     followerNames: followers.join(" e ") }).profileBlock;
-  assert.equal(a21d([]).choice.options[1].description, "Nessun’altra tapparella lo segue.");
+  assert.equal(a21d([]).choice.options.find((option) => option.value === "update").description, "Nessun’altra tapparella lo segue.");
   assert.equal(a21d([]).name.line, "Questa tapparella passa a seguirlo; nessun’altra tapparella segue «alte».");
-  assert.equal(a21d(["Sala 3"]).choice.options[1].description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
+  assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
   const b01 = (followers) => buildScreen({ t, stage: "profile", path: "B", cover: cover([]), local: {}, profiles: [{ id: "p", name: "alte", followers, measuredOn: "Sala 1" }] }).choice.hint;
   assert.equal(b01(0), "Misurato su Sala 1 · nessuna tapparella lo segue");
   assert.equal(b01(1), "Misurato su Sala 1 · 1 tapparella lo segue");
