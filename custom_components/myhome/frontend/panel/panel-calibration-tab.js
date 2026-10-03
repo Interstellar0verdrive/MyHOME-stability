@@ -159,8 +159,10 @@ export class CalibrationTab {
       return timedCovers(row.data).map((cover) => {
         const entity = inventory.entities.find((item) => item.entity_id === cover.entity_id && item.entry_id === entry.entry_id);
         const profile = row.data.profiles.find((item) => item.id === cover.profile_id) || null;
+        const areaId = entity ? model.effectiveArea(entity, inventory.devices) : "";
         return { entry, cover, entity, profile, revision: row.data.revision, session: row.session,
-          name: entity ? model.entityName(entity, hass) : cover.name, ...coverStatus(cover) };
+          name: entity ? model.entityName(entity, hass) : cover.name, area: inventory.areas.find((area) => area.id === areaId)?.name || "",
+          ...coverStatus(cover) };
       });
     }).sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -270,11 +272,7 @@ export class CalibrationTab {
     return `<span class="cal-row-address"> · ${fields.map(([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`).join(" ")}</span>`;
   }
 
-  _area(item) {
-    const { inventory } = this._context;
-    const id = item.entity ? model.effectiveArea(item.entity, inventory.devices) : "";
-    return inventory.areas.find((area) => area.id === id)?.name || "";
-  }
+  _area(item) { return item.area; }
 
   _details(item, busy, language) {
     const { t, inventory, hass } = this._context;

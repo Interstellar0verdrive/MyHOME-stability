@@ -46,7 +46,8 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a roller shutter");
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>from travel times<\/strong>/);
   const options = [...wiz().querySelectorAll('select[name="cover"] option')].map((option) => option.textContent);
-  assert.deepEqual(options, ["Kitchen shutter 2", "Living room shutter 1", "Living room shutter 3"]);
+  assert.deepEqual(options, ["Kitchen shutter 2 · Kitchen · Address 91 A 9 PL 1", "Living room shutter 1 · Living room · Address 91 A 9 PL 1",
+    "Living room shutter 3 · Living room · Address 91 A 9 PL 1"]);
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to measure "Kitchen shutter 2"?');

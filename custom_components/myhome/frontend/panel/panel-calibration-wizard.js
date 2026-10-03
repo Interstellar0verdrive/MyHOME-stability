@@ -102,6 +102,14 @@ export class CalibrationWizard {
         ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : []), "WHO 2"].join(" · ") : "" };
   }
 
+  /** A drop-down entry: "Name · Room · Address 86 A 8 PL 6", and the gateway when there are several. */
+  _coverLabel(item) {
+    const { t, covers } = this._context, address = item.entity?.address;
+    const bus = address?.raw ? [`${t("address")} ${address.raw}`, ...(address.a != null && address.pl != null ? [`A ${address.a}`, `PL ${address.pl}`] : [])].join(" ") : "";
+    const gateway = new Set(covers.map((entry) => entry.entry.entry_id)).size > 1 ? item.entry.title : "";
+    return [item.name, item.area, bus, gateway].filter(Boolean).join(" · ");
+  }
+
   _profiles() {
     const data = this._gatewayData();
     return (data?.profiles || []).map((profile) => ({ id: profile.id, name: profile.name, followers: profile.assigned_to.length,
@@ -113,7 +121,7 @@ export class CalibrationWizard {
     const cover = this._cover(), language = hass.language || "en";
     const followed = local.path === "B" ? this._gatewayData()?.profiles.find((profile) => profile.id === local.profileId) : null;
     return buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
-      covers: this._context.covers.map((item) => ({ key: key(item), label: item.name + (new Set(this._context.covers.map((entry) => entry.entry.entry_id)).size > 1 ? ` · ${item.entry.title}` : "") })),
+      covers: this._context.covers.map((item) => ({ key: key(item), label: this._coverLabel(item) })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
       view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null,
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
