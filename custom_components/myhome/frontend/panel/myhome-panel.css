@@ -705,6 +705,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-list { display: grid; border: 1px solid var(--panel-border); border-radius: 12px; padding: 4px 14px; }
 .cal-batch-list .batch-target + .batch-target { border-top: 1px solid var(--panel-border); }
 .cal-batch-list .batch-target small { display: block; }
+.cal-batch-list > p { margin: 8px 0; }
 @media (min-width: 1024px) {
   .cal-list-head, .cal-row-main { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr) 180px; grid-template-areas: none; gap: 12px; align-items: center; }
   .cal-list-head { padding: 12px 18px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }

@@ -536,7 +536,7 @@ export class CalibrationTab {
           const { name, area } = readable(item);
           return `<label class="batch-target"><input type="checkbox" value="${esc(item.entity_id)}" ${item.reason ? "disabled" : ""}>
             <span>${esc(name)}${area || item.reason ? `<small class="muted">${esc([area, item.reason ? t(`profileError_${item.reason}`) : ""].filter(Boolean).join(" · "))}</small>` : ""}</span></label>`;
-        }).join("") || esc(t("calBatchEmpty"));
+        }).join("") || `<p class="muted">${esc(t("calBatchEmpty"))}</p>`;
         const selected = () => [...list.querySelectorAll("input:checked:not(:disabled)")].map((input) => input.value);
         list.onchange = () => {
           const count = selected().length;
