@@ -545,10 +545,12 @@ function finalize(screen, ctx) {
   if (view?.read_only && !ENDED.includes(view.phase)) {
     screen.readOnly = { text: t("wiz_T263"), take: t(status.confirmTake ? "calConfirmTakeControl" : "wiz_T264"),
       consequence: status.confirmTake ? t("wiz_T265") : null, primary: view.owner_present === false };
-    screen.stopwatch = screen.stopwatch || null;
+    // As S-07: a status line says who guides it, and a reader has no reading field to fill.
+    const [label, value] = splitLabel(t("wiz_T262"));
+    screen.stopwatch = { label, value };
     // Stop stays available to every reader while something may move (L1: a safety control).
     screen.actions = MOVING(view) ? [{ id: "stop", label: t("wiz_T028"), kind: "stop" }] : [];
-    if (screen.field) screen.field = { ...screen.field, disabled: true };
+    screen.field = null;
   }
   if (status.lost && !status.expired && view && !ENDED.includes(view.phase)) {
     screen.notices.push({ tone: "error", text: t("calVisual_disconnected") });

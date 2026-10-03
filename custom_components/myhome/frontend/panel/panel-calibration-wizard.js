@@ -43,6 +43,7 @@ export class CalibrationWizard {
   close() {
     this._generation++;
     clearInterval(this._ticker);
+    clearTimeout(this._guardTimer);
     this._gateway?.close();
     this._gateway = null;
     this._root?.remove();
@@ -215,24 +216,38 @@ export class CalibrationWizard {
     const line = root.querySelector(".wiz-name-line");
     if (line && block && line.textContent !== block.line) line.textContent = block.line;
     root.querySelector(".wiz-name-input")?.setAttribute("aria-invalid", String(block ? !block.valid : false));
-    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind]), screen.readOnly]);
+    const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly]);
     const column = root.querySelector(".wiz-actions");
     if (actions !== this._actionsSignature) {
+      this._guard();
       const focused = column.contains(root.getRootNode().activeElement) ? root.getRootNode().activeElement.dataset.wiz : null;
       this._actionsSignature = actions;
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="notice">${esc(screen.readOnly.text)}</p>
           <button type="button" class="${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : ""}" data-wiz="take">${esc(screen.readOnly.take)}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
-        ${screen.actions.map((action) => `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}">${esc(action.label)}</button>`).join("")}`;
+        ${screen.actions.map((action) => `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
+          ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}`;
       if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus();
     }
+    const guarded = this._guarded();
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
-      if (button) button.disabled = !!action.disabled;
+      if (button) button.disabled = !!action.disabled || (guarded && action.kind !== "stop");
     }
     const take = column.querySelector('[data-wiz="take"]');
-    if (take) take.disabled = !!this._gateway?.status.busy;
+    if (take) take.disabled = !!this._gateway?.status.busy || guarded;
   }
+
+  /** Hold the confirming buttons for CONFIRM_GUARD_MS, then draw them enabled again. */
+  _guard() {
+    if (!this._guardMs) return;
+    this._guardUntil = performance.now() + this._guardMs;
+    clearTimeout(this._guardTimer);
+    const generation = this._generation;
+    this._guardTimer = setTimeout(() => { if (generation === this._generation && this._frame) this._patch(this._screen()); }, this._guardMs + 10);
+  }
+
+  _guarded() { return !!this._guardMs && performance.now() < (this._guardUntil || 0); }
 
   _stepperMarkup(screen) {
     return `<p class="wiz-steps-line">${esc(screen.stepper.line)}</p>${screen.caption ? `<p class="wiz-steps-caption muted">${esc(screen.caption)}</p>` : ""}
@@ -455,8 +470,11 @@ export class CalibrationWizard {
   _resume(session, item) {
     const local = this._local;
     if (item) local.coverKey = key(item);
-    local.path = "A";
-    Object.assign(local, freshFlags(), { stage: "session" });
+    // The view has no path: a slat and roll measurement of a cover that already follows a profile is the
+    // correction "remeasure everything" (C), of any other cover the first of its type (A).
+    const correction = session.mode === "geometry" && !!item?.profile;
+    Object.assign(local, freshFlags(), { stage: "session", path: correction ? "C" : "A", scope: correction ? "times_and_rolls" : null,
+      slats: session.slats !== false });
     this._newGateway("live").resume({ ...this._liveContext(), session });
   }
 
@@ -577,7 +595,8 @@ export class CalibrationWizard {
     dialog.hidden = true;
     this._root.classList.remove("has-dialog");
     this._render();
-    if (focus) this._frame.querySelector('[data-wiz="exit"]')?.focus();
+    // Back to something visible on every width: the screen's first enabled confirming button, or its title.
+    if (focus) (this._frame.querySelector(".wiz-actions .wiz-action.primary:not(:disabled)") || this._frame.querySelector(".wiz-title"))?.focus();
   }
 
   /** "Exit without saving": Cancel must reach Home Assistant; the view closes only once it has. */

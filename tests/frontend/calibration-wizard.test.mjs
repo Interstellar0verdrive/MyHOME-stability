@@ -220,7 +220,9 @@ test("a reader sees the step read-only and takes control in two taps while the o
   assert.equal(code(), "A-18");
   assert.equal(wiz().querySelector(".wiz-readonly .notice").textContent, "Another device is guiding this calibration.");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.dataset.wiz), [], "nothing moves: no Stop to offer");
-  assert.equal(wiz().querySelector('[name="reading_cm"]').disabled, true);
+  assert.equal(wiz().querySelector('.wiz-frame [name="reading_cm"]'), null, "a reader has no reading field (S-07)");
+  assert.equal(wiz().querySelector(".wiz-stopwatch-label").textContent, "Control");
+  assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "another device");
   wiz().querySelector('[data-wiz="take"]').click(); await tick();
   assert.equal(wiz().querySelector('[data-wiz="take"]').textContent, "Confirm take control");
   assert.match(wiz().querySelector(".wiz-readonly").textContent, /this device will guide the calibration/);
@@ -263,7 +265,7 @@ test("Discard asks first, closes with Escape, and leaves only once Cancel reache
   assert.equal(root.activeElement, dialog.querySelector('[data-wiz="stay"]'));
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await tick();
   assert.equal(dialog.hidden, true);
-  assert.equal(root.activeElement, wiz().querySelector('.wiz-head [data-wiz="exit"]'));
+  assert.equal(root.activeElement, wiz().querySelector('.wiz-actions [data-wiz="endpoint"]'), "focus returns to the screen's confirming button, visible at every width");
   wiz().querySelector('.wiz-head [data-wiz="exit"]').click(); await tick();
   wiz().querySelector('[data-wiz="leave"]').click(); await tick(6);
   assert.equal(actions().at(-1), "cancel");
@@ -569,4 +571,54 @@ test("a refusal is forgotten once the session moves to another phase", async () 
   assert.equal(code(), "S-01");
   assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no empty placeholder after the phase changed");
   assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
+});
+
+test("after every change of screen the confirming buttons wait 700 ms, Stop never does", async () => {
+  const { backend, tab, wiz, code } = await mount({ guardMs: 700 });
+  const { CONFIRM_GUARD_MS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js");
+  assert.equal(CONFIRM_GUARD_MS, 700);
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const button = (id) => wiz().querySelector(`.wiz-actions [data-wiz="${id}"]`);
+  const tap = async (id) => { await wait(720); assert.equal(button(id).disabled, false, id); button(id).click(); await tick(); };
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  assert.equal(button("choose").disabled, true, "a tap landing right after the change does nothing");
+  button("choose").click(); await tick();
+  assert.equal(code(), "A-01");
+  const select = wiz().querySelector('select[name="cover"]');
+  select.value = JSON.stringify(["one", "cover.living_one"]); select.dispatchEvent(new Event("change", { bubbles: true }));
+  await tap("choose"); await tap("path:A"); await tap("begin");
+  await move(backend);
+  assert.equal(code(), "A-05");
+  assert.equal(button("endpoint").disabled, true, "an end stop is never confirmed by the tap that started the run");
+  assert.equal(button("stop").disabled, false, "Stop is always available");
+  await tap("endpoint");
+  assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, 1);
+});
+
+test("the second tap of Take control is held back too, so a double click cannot skip the confirmation", async () => {
+  const session = resumed({ phase: "reading", step: "half_open", reading_kind: "half_open" });
+  const { backend, tab, wiz } = await mount({ session, owner: false, guardMs: 700 });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  await new Promise((resolve) => setTimeout(resolve, 720));
+  const take = () => wiz().querySelector('[data-wiz="take"]');
+  take().click(); await tick();
+  assert.equal(take().textContent, "Confirm take control");
+  assert.equal(take().disabled, true);
+  take().click(); await tick();
+  assert.equal(backend.subscriptions.filter((message) => message.claim).length, 0, "a double click does not claim");
+  await new Promise((resolve) => setTimeout(resolve, 720));
+  assert.equal(take().disabled, false);
+});
+
+test("a reopened slat and roll session of a cover that follows a profile is shown as path C", async () => {
+  const session = { entry_id: "one", entity_id: "cover.kitchen_two", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
+    phase: "briefing", step: "lift", reason: null, values: {}, samples: {}, readings: {}, geometry: {}, travel_cm: null, stop_requested: false,
+    slats: true, lift_attempts: 1, still_resting: false, gap_warning: false, touching_cm: 1, max_gap_cm: 20, gap_warn_cm: 10,
+    saved_travel_cm: 110, expected_cm: null, can_repeat: false, save_modes: ["new"], reading_kind: "lift" };
+  const { backend, tab, wiz, code, actions } = await mount({ session });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "C-06");
+  assert.equal(wiz().querySelector(".wiz-steps-caption").textContent, "Ⓒ remeasure all");
+  assert.deepEqual(actions(), [], "reopening moves nothing");
+  void backend;
 });
