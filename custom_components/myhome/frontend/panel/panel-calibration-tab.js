@@ -221,7 +221,7 @@ export class CalibrationTab {
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
         ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
         ${visible.length ? `<div class="cal-list" role="list">
-          <div class="cal-list-head" aria-hidden="true"><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span><span>${esc(t("calTabColLast"))}</span><span></span></div>
+          <div class="cal-list-head" aria-hidden="true"><span></span><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span><span>${esc(t("calTabColLast"))}</span><span></span></div>
           ${visible.map((item) => this._row(item, busy, language)).join("")}</div>` : ""}`;
     }
     if (host.innerHTML !== html) replacePreservingFocus(host, html);
@@ -246,7 +246,7 @@ export class CalibrationTab {
     return `<div class="cal-row${session ? " is-running" : ""}${expanded ? " is-expanded" : ""}" role="listitem" data-entity="${esc(item.cover.entity_id)}" data-entry="${esc(item.entry.entry_id)}">
       <div class="cal-row-main">
         <button type="button" class="cal-row-toggle" data-action="cal-tab-toggle" data-id="${esc(key)}" aria-expanded="${expanded}" aria-controls="${esc(id)}">
-          <ha-icon class="cal-row-chevron" icon="mdi:chevron-right" aria-hidden="true"></ha-icon><span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span>
+          <span class="cal-row-lead" aria-hidden="true"><ha-icon class="cal-row-chevron" icon="mdi:chevron-right"></ha-icon><span class="cal-row-icon"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
           <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}${this._address(item)}<span class="cal-row-last-inline"> · ${esc(last || t("calTabNeverMeasured"))}</span></span></span></button>
         <span class="cal-row-status">${badge}</span>
         <span class="cal-row-profile">${profile}</span>
