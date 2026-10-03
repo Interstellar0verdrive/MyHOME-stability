@@ -644,10 +644,16 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cal-tab-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
 .cal-tab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cal-chip { min-height: 34px; padding: 4px 12px; border-radius: 999px; }
+/* Filter chips with a count (Figma chip 509:23167): the count badge takes the chip's colour at 12 %. The maintainer's
+   category chips are left as they are. */
+.cal-chip { gap: 6px; min-height: 0; padding: 6px 10px; border: 1px solid var(--panel-border); border-radius: 16px;
+  background: var(--panel-surface); color: var(--panel-text-2); font-size: 12px; font-weight: 500; line-height: 16px; }
 .cal-chip[aria-pressed="true"] { background: var(--panel-accent-soft); color: var(--panel-accent); border-color: var(--panel-accent); }
-/* The same count badge as the maintainer's category chips ("Covers · WHO 2 [48]"). */
-.cal-chip .count { padding: 1px 5px; border-radius: 5px; background: var(--panel-surface-2); color: var(--panel-text-2); }
+.cal-chip .count { padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 14px;
+  background: color-mix(in srgb, var(--panel-text-2) 12%, transparent); color: var(--panel-text-2); }
+/* The dark accent of the mockup (about rgb(0, 131, 169) in light) mixed towards the text colour, so it darkens on a
+   light theme and stays readable on a dark one, where darkening with black would lose contrast. */
+.cal-chip[aria-pressed="true"] .count { background: var(--panel-accent-soft); color: color-mix(in srgb, var(--panel-accent) 70%, var(--primary-text-color, #182b37)); }
 .cal-tab .notice { display: flex; gap: 10px; align-items: start; margin: 0; }
 .cal-tab .notice ha-icon { --mdc-icon-size: 18px; flex-shrink: 0; }
 .cal-tab-busy { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 12%, var(--panel-surface)); }
