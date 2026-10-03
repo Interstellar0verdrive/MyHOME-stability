@@ -718,8 +718,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 @media (min-width: 1024px) {
   /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile (equal widths) |
      last measurement | actions. The details' three blocks sit under the cover, status and profile columns. */
-  .cal-list { --cal-lead: 68px; --cal-gap: 16px;
-    --cal-cols: var(--cal-lead) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(170px, 0.9fr); }
+  /* Cover, status and profile equally wide, each about one and a half times the last measurement; the actions column
+     has a fixed width so that every row (each its own grid) keeps the same columns. */
+  .cal-list { --cal-lead: 68px; --cal-gap: 32px;
+    --cal-cols: var(--cal-lead) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr) 180px; }
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 18px; }
   .cal-list-head, .cal-row-main { align-items: center; }
@@ -743,6 +745,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-details-grid > section:nth-child(3) { grid-column: 4; }
   .cal-details-grid .cal-note { max-width: none; }
   .cal-details-actions { grid-column: 2 / -1; grid-row: 2; margin: 0; padding: 0; }
+}
+@media (min-width: 1280px) {
+  /* Room and bus address on one line under the cover name. */
+  .cal-row-name > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* ---------- Calibration wizard (stepper · instruction · actions) ---------- */
