@@ -46,8 +46,8 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a roller shutter");
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>from travel times<\/strong>/);
   const options = [...wiz().querySelectorAll('select[name="cover"] option')].map((option) => option.textContent);
-  assert.deepEqual(options, ["Kitchen shutter 2 · Kitchen · Address 91 A 9 PL 1", "Living room shutter 1 · Living room · Address 91 A 9 PL 1",
-    "Living room shutter 3 · Living room · Address 91 A 9 PL 1"]);
+  assert.deepEqual(options, ["Kitchen shutter 2 · Kitchen · Address: 91 · A: 9 · PL: 1", "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1",
+    "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1"]);
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to measure "Kitchen shutter 2"?');
@@ -678,4 +678,10 @@ test("the panel's entity states never overwrite the wizard's stepper", async () 
   panel.hass = { ...panel.hass, states: { ...panel.hass.states } };
   assert.deepEqual(labels(), before);
   assert.equal(wiz().querySelector("[data-state]"), null, "no element of the wizard uses the panel's state attribute");
+});
+
+test("the drop-down names the bus address with the Italian label too", async () => {
+  const { tab, wiz } = await mount({ language: "it" });
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  assert.equal(wiz().querySelector('select[name="cover"] option').textContent, "Kitchen shutter 2 · Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
 });

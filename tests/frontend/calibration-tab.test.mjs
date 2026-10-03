@@ -352,7 +352,7 @@ test("a click anywhere on a row opens and closes its details, never from its but
 test("each row names its room and bus address as the device cards do", async () => {
   const { tab } = await mount({ language: "it" });
   const address = row(tab, "cover.living_one").querySelector(".cal-row-address");
-  assert.equal(address.textContent.replace(/\s+/g, " ").trim(), "· Indirizzo: 91 A: 9 PL: 1");
+  assert.equal(address.textContent.replace(/\s+/g, " ").trim(), "· Indirizzo: 91 · A: 9 · PL: 1");
   assert.deepEqual([...address.querySelectorAll(".cal-row-address-label")].map((item) => item.textContent), ["Indirizzo:", "A:", "PL:"]);
   assert.match(row(tab, "cover.living_one").querySelector(".cal-row-name .muted").textContent, /^Living room · Indirizzo/);
 });

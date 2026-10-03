@@ -102,10 +102,10 @@ export class CalibrationWizard {
         ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : []), "WHO 2"].join(" · ") : "" };
   }
 
-  /** A drop-down entry: "Name · Room · Address 86 A 8 PL 6", and the gateway when there are several. */
+  /** A drop-down entry: "Name · Room · Address: 86 · A: 8 · PL: 6", and the gateway when there are several. */
   _coverLabel(item) {
     const { t, covers } = this._context, address = item.entity?.address;
-    const bus = address?.raw ? [`${t("address")} ${address.raw}`, ...(address.a != null && address.pl != null ? [`A ${address.a}`, `PL ${address.pl}`] : [])].join(" ") : "";
+    const bus = address?.raw ? [`${t("address")}: ${address.raw}`, ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : [])].join(" · ") : "";
     const gateway = new Set(covers.map((entry) => entry.entry.entry_id)).size > 1 ? item.entry.title : "";
     return [item.name, item.area, bus, gateway].filter(Boolean).join(" · ");
   }

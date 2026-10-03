@@ -264,12 +264,12 @@ export class CalibrationTab {
     </div>`;
   }
 
-  /** "· Address: 86  A: 8  PL: 6" as the device cards show it: grey labels, dark values. */
+  /** "· Address: 86 · A: 8 · PL: 6" with the device cards' style: grey labels, dark values. */
   _address(item) {
     const address = item.entity?.address, { t } = this._context;
     if (!address?.raw) return "";
     const fields = [[t("address"), address.raw], ...(address.a != null && address.pl != null ? [["A", address.a], ["PL", address.pl]] : [])];
-    return `<span class="cal-row-address"> · ${fields.map(([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`).join(" ")}</span>`;
+    return `<span class="cal-row-address"> · ${fields.map(([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`).join(" · ")}</span>`;
   }
 
   _area(item) { return item.area; }

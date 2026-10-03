@@ -670,7 +670,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-row-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; background: var(--panel-accent-soft); color: var(--panel-accent); }
 .cal-row-name { display: grid; gap: 2px; min-width: 0; }
 .cal-row-name strong { font-size: 14px; overflow-wrap: anywhere; }
-.cal-row-address span + span { margin-inline-start: 6px; }
 .cal-row-address-label { color: var(--panel-text-2); }
 .cal-row-address-value { color: var(--primary-text-color, #182b37); font-weight: 500; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
 .cal-row-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-inline-start: 4px; }
