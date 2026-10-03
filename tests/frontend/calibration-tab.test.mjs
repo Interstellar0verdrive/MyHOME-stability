@@ -150,7 +150,7 @@ test("the chevron expands a row in place with the values in use, the last measur
     "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: "Sep 29, 2026", Method: "From the profile" });
   assert.match(details.textContent, /Also followed by Kitchen shutter 2\./);
   assert.match(details.textContent, /adapted to the curtain travel of this roller shutter/);
-  assert.ok(details.querySelector('[data-action="cover-profile"][data-id="cover.living_two"]'));
+  assert.ok(details.querySelector('[data-action="cal-tab-assign"]'));
   expanded.querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-row-details").hidden, true);
 });
@@ -189,11 +189,8 @@ test("row menu items move with the arrow keys", async () => {
   assert.equal(root.activeElement, items[1]);
 });
 
-test("the row menu assigns a profile in the existing dialog and closes with Escape back on its button", async () => {
-  const { root, tab, hass } = await mount();
-  hass.callWS = ((original) => async (message) => message.type === "myhome/cover_profiles/read" && message.entity_id === "cover.bedroom"
-    ? { revision: 7, profiles: [], assigned_profile_id: null, writable: true, effective_opening_time: 30, effective_closing_time: 30, calibration: null }
-    : original(message))(hass.callWS);
+test("the row menu closes with Escape back on its button", async () => {
+  const { root, tab } = await mount();
   const menuButton = row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]');
   menuButton.click();
   const menu = row(tab, "cover.bedroom").querySelector(".cal-menu");
@@ -202,10 +199,34 @@ test("the row menu assigns a profile in the existing dialog and closes with Esca
   menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   assert.equal(row(tab, "cover.bedroom").querySelector(".cal-menu").hidden, true);
   assert.equal(root.activeElement, row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]'));
+});
+
+test("Assign profile lists the saved profiles as B-01 does and assigns with the existing write, never through the profile dialog", async () => {
+  const data = overview();
+  data.profiles[0].provenance.opening.origin_name = "Living room shutter 1";
+  data.profiles[0].reference_travel_cm = 198;
+  data.profiles[0].geometry = { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 };
+  data.profiles.push({ id: "low", name: "low_one_leaf", opening_time: 12, closing_time: 11, assigned_to: [], provenance: {} });
+  const { root, tab, calls } = await mount({ data, callWS: (message) => message.type === "myhome/cover_profiles/write" ? { revision: 8 } : undefined });
   row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]').click();
-  row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cover-profile"]').click();
-  await tick();
-  assert.ok(root.querySelector(".cover-profile-dialog"), "Assign profile opens the maintainer's dialog");
+  row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); await tick();
+  assert.equal(root.querySelector(".cover-profile-dialog:not(.cal-dialog)"), null, "not the maintainer's Travel profile dialog");
+  const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.querySelector("h2").textContent, "Assign profile");
+  assert.equal(dialog.querySelector(".dialog-head .muted").textContent, "Bedroom");
+  const options = [...dialog.querySelectorAll(".wiz-radio")].map((label) => [...label.querySelectorAll("strong, small")].map((item) => item.textContent));
+  assert.deepEqual(options, [
+    ["low_one_leaf", "Times only", "No cover follows it"],
+    ["tall_two_leaf", "With slats · Reference travel 198 cm", "Measured on Living room shutter 1 on Sep 29, 2026 · 2 covers follow it"]]);
+  const assign = dialog.querySelector("[data-assign]");
+  assert.equal(assign.disabled, true);
+  const tall = dialog.querySelector('input[value="tall"]');
+  tall.checked = true; tall.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.equal(assign.disabled, false);
+  assign.click(); await tick(4);
+  const write = calls.find((message) => message.type === "myhome/cover_profiles/write");
+  assert.deepEqual(write, { type: "myhome/cover_profiles/write", entry_id: "one", entity_id: "cover.bedroom", revision: 7, action: "assign", profile_id: "tall" });
+  assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
 test("a session in progress marks its cover, blocks new measurements and opens a sequence in the existing view, in its own dialog", async () => {

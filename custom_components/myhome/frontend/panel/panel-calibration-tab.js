@@ -252,7 +252,7 @@ export class CalibrationTab {
         <span class="cal-row-actions">${action}
           <span class="cal-menu-wrap"><button type="button" class="icon-button" data-action="cal-tab-menu" data-id="${esc(key)}" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-label="${esc(t("calTabMore"))}: ${esc(item.name)}" title="${esc(t("calTabMore"))}"><ha-icon icon="mdi:dots-vertical" aria-hidden="true"></ha-icon></button>
           <span class="cal-menu" role="menu" ${menuOpen ? "" : "hidden"}>
-            <button type="button" role="menuitem" data-action="cover-profile" data-id="${esc(item.cover.entity_id)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
+            <button type="button" role="menuitem" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
             <button type="button" role="menuitem" data-action="cal-tab-toggle" data-id="${esc(key)}"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon>${esc(t("calTabDetails"))}</button>
           </span></span></span>
       </div>
@@ -304,7 +304,7 @@ export class CalibrationTab {
       <div class="actions cal-details-actions">
         ${this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
         ${this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
-        <button type="button" data-action="cover-profile" data-id="${esc(item.cover.entity_id)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
+        <button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
       </div>`;
   }
 
@@ -354,6 +354,7 @@ export class CalibrationTab {
     else if (action === "cal-tab-measure") this._openWizard({ start: "choose" });
     else if (action === "cal-tab-measure-cover") { const item = this._item(id); if (item) this._openWizard({ start: "path", item }); }
     else if (action === "cal-tab-refine") { const item = this._item(id); if (item) this._openWizard({ start: "refine", item }); }
+    else if (action === "cal-tab-assign") { const item = this._item(id); if (item) this._assignProfile(item); }
     else if (action?.startsWith("cal-tab-")) this._render();
   }
 
@@ -439,6 +440,61 @@ export class CalibrationTab {
   _dialogDone() {
     this._closeDialog();
     this.refresh();
+  }
+
+  /**
+   * "Assign profile": the gateway's saved profiles as on B-01 (type, where and when measured, reference travel, who
+   * follows it), one to choose, then the existing `assign` write. Nothing moves; the profile dialog stays the
+   * maintainer's.
+   */
+  _assignProfile(item) {
+    const { hass, t } = this._context, language = hass.language || "en";
+    const data = this._rows.get(item.entry.entry_id)?.data;
+    if (!data) return;
+    const body = this._openDialog({ title: t("calTabAssign"), subtitle: item.name, icon: "mdi:link-variant" });
+    const dialog = this._dialog, generation = this._generation;
+    const profiles = [...data.profiles].sort((a, b) => a.name.localeCompare(b.name));
+    const followers = (count) => fill(t(count === 0 ? "wiz_T374" : count === 1 ? "wiz_T375" : "wiz_T376"), { count });
+    const describe = (profile) => {
+      const slat = profile.geometry?.slat_time_s;
+      const origin = profile.provenance?.opening;
+      return [
+        [t(slat == null ? "wiz_T370" : slat > 0 ? "wiz_T368" : "wiz_T369"),
+          profile.reference_travel_cm != null ? fill(t("wiz_T372"), { cm: number(profile.reference_travel_cm, language) }) : ""].filter(Boolean).join(" · "),
+        [origin?.origin_name && origin?.recorded_at ? fill(t("wiz_T371"), { cover: origin.origin_name, date: dateText(origin.recorded_at, language) }) : "",
+          followers(profile.assigned_to.filter(Boolean).length)].filter(Boolean).join(" · "),
+      ];
+    };
+    body.innerHTML = profiles.length ? `<fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${profiles.map((profile) => {
+      const [type, measured] = describe(profile);
+      return `<label class="wiz-radio"><input type="radio" name="assign_profile" value="${esc(profile.id)}" ${profile.id === item.cover.profile_id ? "checked" : ""}>
+        <span><strong>${esc(profile.name)}</strong><small class="muted">${esc(type)}</small><small class="muted">${esc(measured)}</small></span></label>`;
+    }).join("")}</fieldset>
+      <p class="error" role="alert" hidden></p>
+      <div class="actions"><button type="button" class="primary" data-assign disabled>${esc(t("wiz_T373"))}</button></div>`
+      : `<p class="muted">${esc(t("profileListEmpty"))}</p>`;
+    const button = body.querySelector("[data-assign]");
+    if (!button) return;
+    const chosen = () => body.querySelector('input[name="assign_profile"]:checked')?.value;
+    body.onchange = () => { button.disabled = !chosen() || chosen() === item.cover.profile_id; };
+    button.onclick = async () => {
+      const profileId = chosen();
+      if (!profileId || button.disabled) return;
+      button.disabled = true;
+      const box = body.querySelector(".error");
+      box.hidden = true;
+      try {
+        await hass.callWS({ type: "myhome/cover_profiles/write", entry_id: item.entry.entry_id, entity_id: item.cover.entity_id,
+          revision: data.revision, action: "assign", profile_id: profileId });
+        if (generation === this._generation && this._dialog === dialog) this._dialogDone();
+      } catch (error) {
+        if (generation !== this._generation || this._dialog !== dialog) return;
+        const key = `profileError_${error?.code}`;
+        box.textContent = t(key) === key ? t("profileError") : t(key);
+        box.hidden = false;
+        button.disabled = false;
+      }
+    };
   }
 
   /** Several covers in sequence: the existing selection and automatic batch, in a dialog, with readable names. */
