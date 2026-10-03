@@ -4,7 +4,7 @@
 
 > Panel 0.41.0 adds the [accepted range of intermediate tape readings](#guided-geometry-intermediate-reading-range-0410) to guided roll measurement, shows profile values rounded and locks the cover's travel and personal values while a measurement runs.
 
-> The backend adds a [check of the measured model](#guided-geometry-check-of-the-measured-model) to guided slat/roll measurement; the panel does not offer it yet.
+> Panel 0.42.0: the backend adds a [check of the measured model](#guided-geometry-check-of-the-measured-model) to guided slat/roll measurement; the panel does not offer it yet, and shows a check run like an intermediate run.
 
 > Panel 0.38.5 changes the [lift-off gap rule and adds covers without slats](#guided-geometry-lift-off-gap-and-covers-without-slats-0385) to guided slat/roll measurement.
 
@@ -33,7 +33,10 @@ model needs to get there, stops it on time, and compares the tape reading of the
 bottom edge with where the model puts it. In a `mode: "geometry"` session it is
 offered in `review` only: there the measurement is complete and nothing moves. The
 panel does not send it yet; the screens arrive with the profile path that makes it
-mandatory.
+mandatory. From panel 0.42.0 a session that reaches a check is shown like an
+intermediate run: no elapsed time during the check run, the positioning text and the
+automatic Stop illustration, and the height illustration at its reading. The check's
+own briefing and reading texts are not written yet.
 
 `action: "check"` takes two optional keys, with the same owner, `sequence` and
 writability rules as every other verb (`calibration_owned`, `calibration_step`,
