@@ -376,6 +376,26 @@ test("a reader keeps Stop while the cover may move, and nothing else", () => {
   assert.equal(screen.readOnly.primary, false, "the owner is present: taking control is not the first choice");
 });
 
+test("a check run is shown like an intermediate run, without elapsed time, then asks for its tape reading", () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "opening", step: "check", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },
+    readings: {}, travel_cm: 110, slats: true, owner: true, sequence: 9, check: { direction: "opening", target_cm: 82.5, check_seconds: null } };
+  const screen = (extra) => buildScreen({ t, stage: "session", path: "A", view: { ...view, ...extra }, elapsed: 6.4, local: { ackReadings: true }, cover: { name: "Kitchen shutter 2" } });
+  const running = screen({});
+  assert.equal(running.code, "A-30");
+  assert.equal(running.stopwatch, null, "Home Assistant stops the check run: no elapsed time");
+  assert.equal(running.visual, null);
+  assert.deepEqual(running.actions.map((action) => action.id), ["stop"]);
+  assert.deepEqual(screen({ phase: "briefing" }).actions.map((action) => action.id), ["next", "stop"]);
+  assert.equal(screen({ phase: "geometry_wait_stop" }).stopwatch, null);
+  const reading = screen({ phase: "reading", reading_kind: "check" });
+  assert.equal(reading.code, "A-31");
+  assert.equal(reading.title, "Check the roller shutter");
+  assert.deepEqual([reading.field.min, reading.field.max], [0.1, 110]);
+  assert.match(reading.field.hint, /^About 83 cm expected/);
+  assert.deepEqual(reading.actions.map((action) => action.id), ["reading", "repeat"]);
+});
+
 test("an intermediate reading names its accepted range in Italian with a decimal comma, and a refusal names the reading", () => {
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "reading", step: "half_close", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 },

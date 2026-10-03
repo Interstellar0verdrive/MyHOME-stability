@@ -255,6 +255,17 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
+  if (step === "check") {
+    // A check of the measured model (the wizard does not offer one yet): its run is stopped by Home Assistant like the
+    // intermediate runs, so no elapsed time; then the tape reading, from 0.1 cm to the measured travel.
+    screen.phase = "readings";
+    if (phase === "reading") return Object.assign(screen, { code: p("31"), title: t("wiz_T138"), body: t("wiz_T139"),
+      field: { label: t("wiz_T064"), hint: tx("wiz_T123", { cm: n(view.check?.target_cm, 0) }), min: 0.1, max: view.travel_cm ?? 10000, kind: "height" },
+      actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
+    positioning("30", t("wiz_T086"));
+    if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
+    return screen;
+  }
   if (phase === "geometry_wait_stop") return positioning("04", "");
   return Object.assign(screen, { code: "unknown", title: t(`calPhase_${phase}`), actions: [stop] });
 }
