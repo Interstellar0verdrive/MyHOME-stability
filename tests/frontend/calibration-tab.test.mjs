@@ -307,8 +307,11 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.equal(tab.querySelector(".cal-batch-back").textContent.trim(), "Torna all'elenco");
   const note = tab.querySelector(".cal-batch-note");
   assert.deepEqual([...note.querySelectorAll("p")].map((paragraph) => paragraph.textContent.split(" ").slice(0, 2).join(" ")),
-    ["La sequenza", "Servono attuatori", "Annulla o"], "three paragraphs");
-  assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent), ["misurazione automatica", "misurazione guidata"]);
+    ["La sequenza", "Servono attuatori"], "two paragraphs");
+  assert.match(note.querySelectorAll("p")[1].textContent, /una tapparella alla volta\. Annulla o un errore di misura scartano l'intera sequenza non salvata\.$/);
+  assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent),
+    ["misurazione automatica", "Servono attuatori che segnalino l'arresto reale", "misurazione guidata"]);
+  assert.ok(note.classList.contains("is-warning"), "the warning variant of the note, as in T-06");
   assert.doesNotMatch(note.textContent, /\*\*/);
   assert.deepEqual([...tab.querySelectorAll(".cal-batch-row .cal-row-name strong")].map((item) => item.textContent),
     ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
@@ -362,7 +365,10 @@ test("the action bar stays at the bottom of the window, after the list", async (
   const bar = tab.querySelector(".cal-batch-bar");
   assert.equal(tab.querySelector(".cal-batch").lastElementChild, bar, "the bar closes the view, so it can stick to the window's bottom");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.cal-batch-bar \{ position: sticky; bottom: 0;/);
+  assert.match(css, /\.cal-batch-bar \{ position: fixed; bottom: 0;/, "fixed to the window: a sticky bar follows the panel's box, which does not scroll inside Home Assistant");
+  assert.match(bar.style.left, /^-?\d+px$/, "placed over the view by the tab");
+  assert.match(bar.style.width, /^\d+px$/);
+  assert.ok(tab.querySelector(".cal-batch-spacer"), "a spacer keeps the last row clear of the bar");
   assert.match(css, /\.cal-batch-bar\.has-more::before \{ opacity: 1; \}/);
   assert.ok(tab.querySelector('.cal-batch-bar [data-action="cal-tab-batch-back"]'));
 });

@@ -43,8 +43,9 @@ selection view T-06 (no dialog): *Back to the list*, the note on the automatic c
 the gateway's `cover_calibration/targets` as the list's rows (checkbox, place in the sequence, icon, name, room and
 address, status, profile), sorted by the headers as the list (same stored choice, *Sort by* bar on phones), with the backend's `max_batch`;
 covers run in the order they are ticked, whatever the order of the rows.
-An action bar sticks to the bottom of the window (summary, Cancel, *Start the sequence*), with a fade above it while
-the list continues. Start sends `batch_start` once, with that order and the targets' revision; the run itself is, for
+An action bar is fixed to the bottom of the window over the width of the view (summary, Cancel, *Start the sequence*;
+`position: fixed`, placed from the view's box, since inside Home Assistant the panel's own box is not the one that
+scrolls), with a fade above it while the list continues. The note is the warning variant of `.cal-note`. Start sends `batch_start` once, with that order and the targets' revision; the run itself is, for
 now, the existing view in a dialog (T-07/T-08 next) (T363–T366, T383–T391). *Assign profile* opens a dialog listing the gateway's profiles as on B-01
 (type with or without slats, where and when measured, reference travel, how many covers follow it) and assigns the
 chosen one with `cover_profiles/write` `assign` (T368–T376); it never opens the Travel profile dialog. *Open session*

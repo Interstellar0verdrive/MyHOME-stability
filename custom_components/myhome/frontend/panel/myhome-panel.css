@@ -663,6 +663,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   border-radius: 4px; background: color-mix(in srgb, var(--panel-accent) 8%, transparent); color: var(--panel-text-2);
   font-size: 13px; line-height: 18px; font-weight: 400; }
 .cal-details-grid .cal-note { margin-top: 8px; max-width: 360px; }
+/* The warning variant (T-06): the same shape in the theme's warning colours, text in the text colour. */
+.cal-note.is-warning { border-inline-start-color: color-mix(in srgb, var(--panel-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--panel-warning) 8%, transparent); color: var(--primary-text-color, #182b37); }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }
 .cal-list-rows { display: contents; }
@@ -760,9 +763,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cal-batch-profile { display: none; }
 .cal-batch-limit:empty { display: none; }
+.cal-batch .cal-tab-intro { flex: none; max-width: 72ch; }
 .cal-batch-sentinel { display: block; height: 1px; margin-top: -14px; }
-.cal-batch-bar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px;
-  border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); box-shadow: 0 -6px 18px -14px rgb(0 0 0 / 45%); }
+/* Fixed to the window's bottom (left and width from the view, set by the tab); the spacer keeps the last row clear. */
+.cal-batch-spacer { display: block; height: 72px; margin-top: -14px; }
+.cal-batch-bar { position: fixed; bottom: 0; left: 0; width: 100%; box-sizing: border-box; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 12px; border: 1px solid var(--panel-border); border-bottom: 0; border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+  background: var(--panel-surface); box-shadow: 0 -6px 18px -14px rgb(0 0 0 / 45%); }
 .cal-batch-bar::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
   background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
 .cal-batch-bar.has-more::before { opacity: 1; }

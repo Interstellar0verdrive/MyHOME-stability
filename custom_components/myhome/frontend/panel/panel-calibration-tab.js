@@ -65,7 +65,7 @@ export class CalibrationTab {
     this._rows.clear();
     this._mode = { kind: "list" };
     this._batch = null;
-    this._barObserver?.disconnect();
+    this._unwatchBar();
     this._menu = null;
     this._context = null;
     this._key = null;
@@ -661,7 +661,7 @@ export class CalibrationTab {
       <button type="button" class="link cal-batch-back" data-action="cal-tab-batch-back"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon>${esc(t("wiz_T390"))}</button>
       <h3 class="cal-tab-title">${esc(t("wiz_T364"))}</h3>
       <p class="muted cal-tab-intro">${esc(t("wiz_T387"))}</p>
-      <div class="cal-note cal-batch-note">${rich(t("wiz_T388"))}</div>
+      <div class="cal-note is-warning cal-batch-note">${rich(t("wiz_T388"))}</div>
       ${gateways.length > 1 ? `<label class="cal-batch-gateway">${esc(t("gateway"))}<select data-batch="gateway">${gateways.map((entry) => `<option value="${esc(entry.entry_id)}" ${entry.entry_id === batch.entryId ? "selected" : ""}>${esc(entry.title)}</option>`).join("")}</select></label>` : ""}
       ${batch.error ? `<p class="notice error" role="alert">${esc(batch.error)}</p>` : ""}
       ${batch.loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
@@ -677,6 +677,7 @@ export class CalibrationTab {
           <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
         <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
       <span class="cal-batch-sentinel" aria-hidden="true"></span>
+      <span class="cal-batch-spacer" aria-hidden="true"></span>
       <div class="cal-batch-bar"><p class="cal-batch-summary" role="status">${esc(summary)}</p>
         <div class="cal-batch-actions"><button type="button" class="cal-batch-cancel" data-action="cal-tab-batch-back">${esc(t("cancel"))}</button>
         <button type="button" class="primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon>${esc(t("wiz_T365"))}</button></div></div>
@@ -685,14 +686,42 @@ export class CalibrationTab {
     this._watchBar();
   }
 
-  /** The fade above the bar shows while the list continues below the window's edge. */
+  /**
+   * The action bar is fixed to the bottom of the window, over the width of the view: a sticky bar would follow the
+   * panel's own scroll box, which inside Home Assistant is not the box that scrolls. A spacer of its height ends the
+   * view so the last row is never hidden; the fade shows while the end of the list is below the window's edge.
+   */
   _watchBar() {
     const { host } = this._context;
-    const sentinel = host.querySelector(".cal-batch-sentinel"), bar = host.querySelector(".cal-batch-bar");
+    const view = host.querySelector(".cal-batch"), sentinel = host.querySelector(".cal-batch-sentinel");
+    if (!view || !host.querySelector(".cal-batch-bar")) return;
+    if (this._barView !== view) {
+      this._unwatchBar();
+      this._barView = view;
+      const place = () => {
+        const box = view.getBoundingClientRect(), bar = host.querySelector(".cal-batch-bar"), spacer = host.querySelector(".cal-batch-spacer");
+        if (!bar) return;
+        bar.style.left = `${Math.round(box.left)}px`;
+        bar.style.width = `${Math.round(box.width)}px`;
+        if (spacer) spacer.style.height = `${Math.ceil(bar.getBoundingClientRect().height)}px`;
+      };
+      this._barPlace = place;
+      window.addEventListener("resize", place);
+      if (typeof ResizeObserver === "function") { this._barResize = new ResizeObserver(place); this._barResize.observe(view); }
+    }
+    this._barPlace();
     this._barObserver?.disconnect();
-    if (!sentinel || !bar || typeof IntersectionObserver !== "function") return;
-    this._barObserver = new IntersectionObserver(([entry]) => bar.classList.toggle("has-more", !entry.isIntersecting), { threshold: 0 });
+    if (!sentinel || typeof IntersectionObserver !== "function") return;
+    this._barObserver = new IntersectionObserver(([entry]) => host.querySelector(".cal-batch-bar")?.classList.toggle("has-more", !entry.isIntersecting),
+      { threshold: 0 });
     this._barObserver.observe(sentinel);
+  }
+
+  _unwatchBar() {
+    this._barObserver?.disconnect();
+    this._barResize?.disconnect();
+    if (this._barPlace) window.removeEventListener("resize", this._barPlace);
+    this._barObserver = this._barResize = this._barPlace = this._barView = null;
   }
 
   _batchToggle(entityId, checked) {
@@ -717,7 +746,7 @@ export class CalibrationTab {
     const { hass, t } = this._context;
     this._mode = { kind: "list" };
     this._batch = null;
-    this._barObserver?.disconnect();
+    this._unwatchBar();
     this._context.host.innerHTML = "";
     this._render();
     const body = this._openDialog({ title: t("wiz_T364"), icon: "mdi:format-list-numbered" });
@@ -727,7 +756,7 @@ export class CalibrationTab {
 
   _batchBack() {
     this._batch = null;
-    this._barObserver?.disconnect();
+    this._unwatchBar();
     this._backToList();
   }
 }
