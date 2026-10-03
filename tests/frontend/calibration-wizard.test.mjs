@@ -46,8 +46,10 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a roller shutter");
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>from travel times<\/strong>/);
   const options = [...wiz().querySelectorAll('select[name="cover"] option')].map((option) => option.textContent);
-  assert.deepEqual(options, ["Choose a roller shutter…", "Kitchen shutter 2 · Kitchen · Address: 91 · A: 9 · PL: 1", "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1",
-    "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1"]);
+  assert.deepEqual(options, ["Choose a roller shutter…", "Kitchen shutter 2 · Kitchen · Address: 91 · A: 9 · PL: 1 · Times and roll, Sep 29",
+    "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1 · To measure", "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1 · Times measured, Sep 29"],
+    "each cover names its state after the address");
+  assert.equal(wiz().querySelector(".wiz-choice-note"), null, "no note before a choice");
   const subtitle = () => wiz().querySelector(".wiz-head .muted");
   assert.equal(subtitle().textContent, "No roller shutter selected yet", "a placeholder until a cover is picked");
   assert.ok(subtitle().classList.contains("wiz-head-placeholder"));
@@ -57,10 +59,13 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   await pickCover(1);
   assert.equal(subtitle().textContent, "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1", "the picked cover, as in the drop-down");
   assert.equal(subtitle().classList.contains("wiz-head-placeholder"), false);
+  assert.equal(wiz().querySelector(".wiz-choice-note"), null, "a never measured cover has no note");
   assert.equal(wiz().querySelector('select[name="cover"]').value, JSON.stringify(["one", "cover.living_one"]), "the choice survives the redraw");
   assert.equal(wiz().querySelector('select[name="cover"] option').textContent.startsWith("Kitchen"), true, "the placeholder leaves once a cover is chosen");
   assert.equal(button("choose").disabled, false);
   await pickCover(0);
+  assert.equal(wiz().querySelector(".wiz-choice-note.cal-note").textContent,
+    "This roller shutter is already calibrated (times and roll, Sep 29, 2026). A new measurement replaces the values in use; to adjust them, use fine-tuning.");
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to measure "Kitchen shutter 2"?');
@@ -715,10 +720,13 @@ test("the panel's entity states never overwrite the wizard's stepper", async () 
 });
 
 test("the drop-down names the bus address with the Italian label too", async () => {
-  const { tab, wiz } = await mount({ language: "it" });
+  const { tab, wiz, pickCover } = await mount({ language: "it" });
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.equal(wiz().querySelector('select[name="cover"] option').textContent, "Scegli una tapparella…");
-  assert.equal(wiz().querySelector('select[name="cover"] option:not([disabled])').textContent, "Kitchen shutter 2 · Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
+  assert.equal(wiz().querySelector('select[name="cover"] option:not([disabled])').textContent, "Kitchen shutter 2 · Kitchen · Indirizzo: 91 · A: 9 · PL: 1 · Tempi e rullo, 29 set");
+  await pickCover(0);
+  assert.equal(wiz().querySelector(".wiz-choice-note").textContent,
+    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026). Una nuova misurazione sostituisce i valori in uso; per ritoccarli usa il perfezionamento.");
 });
 
 test("opened on a given cover, the wizard already has it chosen; from the tab's button it starts empty", async () => {

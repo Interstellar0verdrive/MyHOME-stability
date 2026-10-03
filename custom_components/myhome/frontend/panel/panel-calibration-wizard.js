@@ -122,7 +122,7 @@ export class CalibrationWizard {
     const cover = this._cover(), language = hass.language || "en";
     const followed = local.path === "B" ? this._gatewayData()?.profiles.find((profile) => profile.id === local.profileId) : null;
     return buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
-      covers: this._context.covers.map((item) => ({ key: key(item), label: this._coverLabel(item) })),
+      covers: this._context.covers.map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
       view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null,
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
@@ -273,7 +273,8 @@ export class CalibrationWizard {
     if (choice.kind === "select") {
       return `<label class="wiz-choice">${esc(choice.label)}<select name="${esc(choice.name)}">${choice.options.map((option) =>
         `<option value="${esc(option.value)}" ${option.value === choice.value ? "selected" : ""} ${option.disabled ? "disabled" : ""}>${esc(option.label)}</option>`).join("")}</select>
-        ${choice.hint ? `<span class="muted wiz-choice-hint">${esc(choice.hint)}</span>` : ""}</label>`;
+        ${choice.hint ? `<span class="muted wiz-choice-hint">${esc(choice.hint)}</span>` : ""}</label>
+        ${choice.note ? `<p class="cal-note wiz-choice-note">${esc(choice.note)}</p>` : ""}`;
     }
     return `<fieldset class="wiz-choice wiz-radios"><legend>${esc(choice.label)}</legend>${choice.options.map((option) =>
       `<label class="wiz-radio"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""}><span>${inline(option.label)}</span></label>`).join("")}</fieldset>`;

@@ -316,6 +316,7 @@ export const translations = {
     wiz_T391: "None",
     wiz_T392: "No roller shutter selected yet",
     wiz_T393: "Choose a roller shutter…",
+    wiz_T394: "This roller shutter is already calibrated ({status}, {date}). A new measurement replaces the values in use; to adjust them, use fine-tuning.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1095,6 +1096,7 @@ export const translations = {
     wiz_T391: "Nessuna",
     wiz_T392: "Nessuna tapparella selezionata",
     wiz_T393: "Scegli una tapparella…",
+    wiz_T394: "Questa tapparella è già calibrata ({status}, {date}). Una nuova misurazione sostituisce i valori in uso; per ritoccarli usa il perfezionamento.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

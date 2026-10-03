@@ -6,7 +6,7 @@
  * shared translation sheet (`wiz_T…`); a few screen-only keys are `wiz…`.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const { fill, number, readingRange, RANGE_SLACK_CM } = await import(asset("panel-calibration-text.js"));
+const { fill, number, readingRange, RANGE_SLACK_CM, dateText, shortDate } = await import(asset("panel-calibration-text.js"));
 
 const PHASES = {
   intro: "wiz_T007", prep: "wiz_T008", ascent: "wiz_T009", descent: "wiz_T010", readings: "wiz_T011", summary: "wiz_T012", finetune: "wiz_T013",
@@ -37,6 +37,13 @@ export function counted(t, key, count, values = {}) {
 }
 
 /** The wizard's whole state as one screen. */
+/** A cover's state in the A-01 drop-down: "To measure", or "Times measured, Sep 29". */
+function coverState(t, item, language) {
+  if (!item.status) return "";
+  const text = t(`calTabStatus_${item.status}`), date = item.status === "to_measure" ? "" : shortDate(item.last, language);
+  return date ? `${text}, ${date}` : text;
+}
+
 export function buildScreen(ctx) {
   const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false } = ctx;
   const n = (value, digits = 1) => number(value, language, digits);
@@ -58,11 +65,15 @@ export function buildScreen(ctx) {
       // Empty with a placeholder entry until a cover is chosen; Continue waits for it.
       choice: { name: "cover", kind: "select", label: t("wiz_T005"), value: local.coverKey || "",
         options: [...(local.coverKey ? [] : [{ value: "", label: t("wiz_T393"), disabled: true }]),
-          ...(ctx.covers || []).map((item) => ({ value: item.key, label: item.label }))] },
+          ...(ctx.covers || []).map((item) => ({ value: item.key, label: [item.label, coverState(t, item, language)].filter(Boolean).join(" · ") }))] },
       actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length || !local.coverKey }] });
     // Until a cover is picked the subtitle says so; then it names the cover as the drop-down does.
     const picked = local.coverPicked ? (ctx.covers || []).find((item) => item.key === local.coverKey) : null;
     screen.header = { title: t("wiz_T001"), subtitle: picked ? picked.label : t("wiz_T392"), placeholder: !picked };
+    // A calibrated cover: a new measurement replaces its values; fine-tuning is the way to adjust them.
+    if (picked?.status && picked.status !== "to_measure") {
+      screen.choice.note = fill(t("wiz_T394"), { status: t(`calTabStatus_${picked.status}`).toLocaleLowerCase(language), date: dateText(picked.last, language) || "—" });
+    }
     return finish();
   }
   if (stage === "path") {

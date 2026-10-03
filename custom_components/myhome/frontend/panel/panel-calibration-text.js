@@ -41,6 +41,13 @@ export function dateText(value, language = "en") {
   catch { return new Date(value).toISOString().slice(0, 10); }
 }
 
+/** Day and short month ("29 set", "Sep 29"), for compact labels. */
+export function shortDate(value, language = "en") {
+  if (!value || Number.isNaN(Date.parse(value))) return "";
+  try { return new Intl.DateTimeFormat(language, { day: "numeric", month: "short" }).format(new Date(value)); }
+  catch { return new Date(value).toISOString().slice(5, 10); }
+}
+
 /** The backend accepts readings this close to the ends of their range (floating point only). */
 export const RANGE_SLACK_CM = 1e-9;
 
