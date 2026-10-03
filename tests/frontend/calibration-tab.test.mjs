@@ -267,6 +267,34 @@ test("Italian texts of the tab carry no placeholder", async () => {
   assert.match(tab.querySelector(".cal-tab-summary").textContent, /^4 tapparelle · 3 calibrate · 1 da misurare$/);
 });
 
+test("a gateway whose session cannot be read but is reserved keeps new measurements off; a failed read tries the next cover", async () => {
+  const data = overview();
+  for (const cover of data.covers) cover.assignment_reason = "calibration_busy";
+  let reads = 0;
+  const { tab, calls } = await mount({ data, callWS: (message) => {
+    if (message.type === "myhome/cover_profiles/read") { reads++; throw Object.assign(new Error("x"), { code: "storage_error" }); }
+    return undefined;
+  } });
+  assert.equal(reads, 3, "three covers are tried before giving up for this refresh");
+  assert.match(tab.querySelector(".cal-tab-busy").textContent, /finish or cancel it/);
+  assert.equal(tab.querySelector('[data-action="cal-tab-measure"]').disabled, true);
+  assert.equal(tab.querySelector('[data-action="cal-tab-batch"]').disabled, true);
+  assert.ok([...tab.querySelectorAll('[data-action="cal-tab-measure-cover"]')].every((button) => button.disabled));
+  assert.equal(calls.filter((message) => message.type.startsWith("myhome/cover_calibration/")).length, 0);
+});
+
+test("the second read finds the session when the first one fails", async () => {
+  let reads = 0;
+  const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s", mode: "geometry", phase: "briefing", step: "home", sequence: 2,
+    values: {}, recoverable: true, attached: true, owner_present: true };
+  const { tab } = await mount({ callWS: (message) => {
+    if (message.type === "myhome/cover_profiles/read") { reads++; if (reads === 1) throw new Error("lost"); return { revision: 7, calibration: session }; }
+    return undefined;
+  } });
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-badge").dataset.status, "running");
+  assert.ok(tab.querySelector(".cal-tab-busy"));
+});
+
 test("the summary uses singular forms for one cover", async () => {
   const data = overview();
   data.covers = [data.covers[0], data.covers[4]];

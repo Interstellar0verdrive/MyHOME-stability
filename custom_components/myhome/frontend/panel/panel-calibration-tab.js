@@ -8,6 +8,8 @@ const { fill, number, dateText, names } = text;
 
 const MEASURED = ["guided", "automatic"];
 export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
+// Covers read in turn to find the gateway's session when a read fails.
+const SESSION_PROBES = 3;
 
 /** What a cover uses, read from the backend view; nothing is estimated in the browser. */
 export function coverStatus(cover) {
@@ -121,15 +123,21 @@ export class CalibrationTab {
       if (data.entry_id !== entryId) throw new Error("Wrong gateway");
       if (!row.data || data.revision >= row.data.revision) row.data = data;
       row.error = false;
-      // The overview carries no session: one cover read gives the gateway's session (one at a time).
-      const probe = timedCovers(row.data)[0];
-      if (probe) {
+      // The overview carries no session: a cover read gives the gateway's session (one at a time). If a read
+      // fails the next cover is tried; the overview still says when the gateway is reserved (calibration_busy).
+      row.reserved = row.data.covers.some((cover) => cover.assignment_reason === "calibration_busy");
+      row.session = null;
+      row.sessionKnown = false;
+      for (const probe of timedCovers(row.data).slice(0, SESSION_PROBES)) {
         try {
           const snapshot = await hass.callWS({ type: "myhome/cover_profiles/read", entry_id: entryId, entity_id: probe.entity_id });
           if (!this._current(generation)) return;
           row.session = snapshot.calibration && !["saved", "cancelled"].includes(snapshot.calibration.phase) ? snapshot.calibration : null;
-        } catch { /* The list stays usable; the session is read again at the next refresh. */ }
-      } else row.session = null;
+          row.sessionKnown = true;
+          break;
+        } catch { /* Try the next cover; the session is read again at the next refresh. */ }
+      }
+      if (!timedCovers(row.data).length) row.sessionKnown = true;
     } catch {
       if (this._current(generation)) row.error = true;
     } finally {
@@ -185,7 +193,9 @@ export class CalibrationTab {
       calibrated: all.filter((item) => item.status !== "to_measure").length, profile: all.filter((item) => item.profile).length };
     const visible = all.filter((item) => this._filter === "all" || (this._filter === "to_measure" ? item.status === "to_measure"
       : this._filter === "calibrated" ? item.status !== "to_measure" : !!item.profile));
-    const busy = gateways.map((entry) => this._rows.get(entry.entry_id)?.session).find(Boolean);
+    // A live session, or a gateway the overview reports reserved while its session could not be read: no new measurement.
+    const rows = gateways.map((entry) => this._rows.get(entry.entry_id)).filter(Boolean);
+    const busy = rows.map((row) => row.session).find(Boolean) || (rows.some((row) => row.data && row.reserved && !row.sessionKnown) ? { unknown: true } : null);
     let html;
     if (!loading && !failed.length && !this._covers().length) {
       html = `<div class="empty cal-tab-empty"><h2>${esc(t("calTabEmptyTitle"))}</h2><p class="muted">${esc(t("calTabEmptyBody"))}</p>
@@ -348,7 +358,7 @@ export class CalibrationTab {
     if (!row || (!row.data && !row.error)) return false;
     this._pendingWizard = null;
     const item = this._covers().find((entry) => entry.entry.entry_id === pending.entryId && entry.cover.entity_id === pending.entityId);
-    if (!item || row.session) return false;
+    if (!item || row.session || (row.reserved && !row.sessionKnown)) return false;
     this._openWizard({ start: "path", item });
     return true;
   }
