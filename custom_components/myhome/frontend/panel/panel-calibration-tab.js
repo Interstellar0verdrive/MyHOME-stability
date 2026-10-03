@@ -252,6 +252,8 @@ export class CalibrationTab {
         <span class="cal-row-actions">${action}
           <span class="cal-menu-wrap"><button type="button" class="icon-button" data-action="cal-tab-menu" data-id="${esc(key)}" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-label="${esc(t("calTabMore"))}: ${esc(item.name)}" title="${esc(t("calTabMore"))}"><ha-icon icon="mdi:dots-vertical" aria-hidden="true"></ha-icon></button>
           <span class="cal-menu" role="menu" ${menuOpen ? "" : "hidden"}>
+            ${!session && this._wizard && item.rolls ? `<button type="button" role="menuitem" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
+            ${!session && this._wizard ? `<button type="button" role="menuitem" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
             <button type="button" role="menuitem" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
             <button type="button" role="menuitem" data-action="cal-tab-toggle" data-id="${esc(key)}"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon>${esc(t("calTabDetails"))}</button>
           </span></span></span>

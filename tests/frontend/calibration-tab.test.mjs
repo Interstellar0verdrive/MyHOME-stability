@@ -183,10 +183,12 @@ test("row menu items move with the arrow keys", async () => {
   assert.equal(root.activeElement, items[0]);
   items[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
   assert.equal(root.activeElement, items[1]);
-  items[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-  assert.equal(root.activeElement, items[0], "the arrows wrap");
+  items[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+  assert.equal(root.activeElement, items[0]);
   items[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
-  assert.equal(root.activeElement, items[1]);
+  assert.equal(root.activeElement, items.at(-1), "the arrows wrap");
+  items.at(-1).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.equal(root.activeElement, items[0]);
 });
 
 test("the row menu closes with Escape back on its button", async () => {
@@ -354,3 +356,13 @@ test("each row names its room and bus address as the device cards do", async () 
   assert.deepEqual([...address.querySelectorAll(".cal-row-address-label")].map((item) => item.textContent), ["Indirizzo:", "A:", "PL:"]);
   assert.match(row(tab, "cover.living_one").querySelector(".cal-row-name .muted").textContent, /^Living room · Indirizzo/);
 });
+
+test("the row menu holds every secondary action, the same as the expanded details", async () => {
+  const { tab } = await mount();
+  const menuActions = (id) => [...row(tab, id).querySelectorAll(".cal-menu [role=menuitem]")].map((item) => item.dataset.action);
+  assert.deepEqual(menuActions("cover.living_two"), ["cal-tab-refine", "cal-tab-measure-cover", "cal-tab-assign", "cal-tab-toggle"]);
+  assert.deepEqual(menuActions("cover.living_one"), ["cal-tab-measure-cover", "cal-tab-assign", "cal-tab-toggle"]);
+  assert.match(row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Remeasure/);
+  assert.match(row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Measure/);
+});
+
