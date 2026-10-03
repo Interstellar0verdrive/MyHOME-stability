@@ -665,6 +665,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-details-grid .cal-note { margin-top: 8px; max-width: 360px; }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }
+.cal-list-rows { display: contents; }
+/* Column headers sort the list (desktop); on phones a small "Sort by" bar above the cards does the same. */
+.cal-sort { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 2px 0; border: 0; background: transparent; color: inherit; font: inherit; }
+.cal-sort:hover { background: transparent; color: var(--primary-text-color, #182b37); }
+.cal-sort ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; color: var(--panel-text-2); }
+.cal-sort-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.cal-sort-bar label { display: flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
+.cal-sort-bar select { width: auto; min-height: 36px; padding-block: 4px; padding-inline-end: 32px; font-size: 13px; }
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
@@ -738,6 +746,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 12px; }
   .cal-list-head, .cal-row-main { align-items: center; }
+  .cal-sort-bar { display: none; }
   .cal-list-head { padding-block: 12px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
   .cal-row-main { padding-block: 12px; row-gap: 0; }
   /* The phone layout names grid areas: every cell goes back to row 1 and its own column. */

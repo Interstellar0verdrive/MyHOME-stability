@@ -301,6 +301,10 @@ export const translations = {
     wiz_T376: "{count} covers follow it",
     wiz_T377: "Default values ({seconds} s), never measured on this cover: the estimated position can be far off. Measure it.",
     wiz_T378: "Values from the YAML configuration ({seconds} s), never measured on this cover: the estimated position can be far off. Measure it.",
+    wiz_T379: "Sort by",
+    wiz_T380: "Sort direction",
+    wiz_T381: "Ascending",
+    wiz_T382: "Descending",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1065,6 +1069,10 @@ export const translations = {
     wiz_T376: "{count} tapparelle lo seguono",
     wiz_T377: "Valori predefiniti ({seconds} s), mai misurati su questa tapparella: la posizione stimata può essere molto imprecisa. Misurala.",
     wiz_T378: "Valori dalla configurazione YAML ({seconds} s), mai misurati su questa tapparella: la posizione stimata può essere molto imprecisa. Misurala.",
+    wiz_T379: "Ordina per",
+    wiz_T380: "Verso dell'ordinamento",
+    wiz_T381: "Crescente",
+    wiz_T382: "Decrescente",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

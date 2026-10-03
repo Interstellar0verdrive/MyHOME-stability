@@ -109,8 +109,8 @@ test("the Calibration sub-tab sits next to Devices and Profiles and lists timed 
     [["to_measure", "To measure"], ["times", "Times measured"], ["rolls", "Times and roll"]]);
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-profile-chip").textContent, "tall_two_leaf");
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-profile").textContent.trim(), "—");
-  assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.textContent), ["", "Roller shutter", "Status", "Profile", ""],
-    "no column for the last measurement: its date is in the details");
+  assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.querySelector("button")?.firstChild.textContent ?? cell.textContent),
+    ["", "Roller shutter", "Status", "Profile", ""], "no column for the last measurement: its date is in the details");
   assert.equal(tab.querySelector(".cal-row-last"), null);
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, " · Measured on Oct 1, 2026", "phones show it under the name");
   assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, " · never measured");
@@ -408,4 +408,95 @@ test("a never measured cover says where its times come from", async () => {
   assert.match(row(yaml.tab, "cover.bedroom").querySelector(".cal-origin-note").textContent, /^Values from the YAML configuration \(30 \/ 28 s\), never measured/);
   row(yaml.tab, "cover.living_one").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(yaml.tab, "cover.living_one").querySelector(".cal-origin-note"), null, "a measured cover has no such note");
+});
+
+const order = (tab) => rows(tab).map((item) => item.dataset.entity.replace("cover.", ""));
+const sortBy = (tab, key) => tab.querySelector(`[data-action="cal-tab-sort"][data-id="${key}"]`).click();
+const arrows = (tab) => [...tab.querySelectorAll(".cal-sort")].map((button) => [button.dataset.id, button.getAttribute("aria-pressed"), button.querySelector("ha-icon")?.getAttribute("icon") || null]);
+
+test("the list opens sorted by name, ascending, with the arrow on Roller shutter", async () => {
+  const { tab } = await mount();
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
+  assert.deepEqual(arrows(tab), [["cover", "true", "mdi:arrow-up"], ["status", "false", null], ["profile", "false", null]]);
+  assert.match(tab.querySelector('[data-id="cover"].cal-sort').textContent, /Roller shutter, Ascending/, "readers hear the order");
+  sortBy(tab, "cover");
+  assert.deepEqual(order(tab), ["living_two", "living_one", "kitchen_two", "bedroom"]);
+  assert.deepEqual(arrows(tab)[0], ["cover", "true", "mdi:arrow-down"]);
+  sortBy(tab, "cover");
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"], "a third click goes back to the default order");
+});
+
+test("Status sorts by what needs attention, then reversed, then back to the default order", async () => {
+  const { tab } = await mount();
+  sortBy(tab, "status");
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"], "to measure, times measured (by name), times and roll");
+  assert.deepEqual(arrows(tab), [["cover", "false", null], ["status", "true", "mdi:arrow-up"], ["profile", "false", null]]);
+  sortBy(tab, "status");
+  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"], "reversed rank, ties still by name");
+  assert.equal(arrows(tab)[1][2], "mdi:arrow-down");
+  sortBy(tab, "status");
+  assert.deepEqual(arrows(tab)[0], ["cover", "true", "mdi:arrow-up"]);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem("myhome-panel-calibration-sort-v1")), { key: "cover", dir: "asc" });
+});
+
+test("Profile sorts by profile name in both orders, covers without a profile always last", async () => {
+  const data = overview();
+  data.profiles.push({ id: "attic", name: "attic_one_leaf", opening_time: 20, closing_time: 20, assigned_to: ["cover.living_one"], provenance: {} });
+  data.covers[0].profile_id = "attic";
+  const { tab } = await mount({ data });
+  sortBy(tab, "profile");
+  assert.deepEqual(order(tab), ["living_one", "kitchen_two", "living_two", "bedroom"]);
+  sortBy(tab, "profile");
+  assert.deepEqual(order(tab), ["kitchen_two", "living_two", "living_one", "bedroom"], "the cover without a profile stays at the bottom");
+});
+
+test("the order is kept per browser, restored on opening, and applies with the active filter", async () => {
+  window.localStorage.setItem("myhome-panel-calibration-sort-v1", JSON.stringify({ key: "status", dir: "desc" }));
+  const { tab } = await mount();
+  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
+  assert.deepEqual(arrows(tab)[1], ["status", "true", "mdi:arrow-down"]);
+  tab.querySelector('[data-action="cal-tab-filter"][data-id="calibrated"]').click();
+  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one"]);
+  tab.querySelector('[data-action="cal-tab-filter"][data-id="profile"]').click();
+  assert.deepEqual(order(tab), ["living_two", "kitchen_two"]);
+});
+
+test("a stored order that makes no sense falls back to the default", async () => {
+  window.localStorage.setItem("myhome-panel-calibration-sort-v1", JSON.stringify({ key: "date", dir: "up" }));
+  const { tab } = await mount();
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
+});
+
+test("a running cover stays on top whatever the column and the order", async () => {
+  const session = { entry_id: "one", entity_id: "cover.living_one", session_id: "s", mode: "guided", phase: "paused", reason: "owner_absent",
+    sequence: 2, values: {}, recoverable: true, attached: false, owner_present: false };
+  const { tab } = await mount({ session });
+  assert.equal(order(tab)[0], "living_one");
+  for (const key of ["cover", "status", "status", "profile", "profile"]) {
+    sortBy(tab, key);
+    assert.equal(order(tab)[0], "living_one", `${key} keeps the running cover first`);
+  }
+});
+
+test("on phones the Sort by bar offers the same columns and the order", async () => {
+  const { tab } = await mount({ language: "it" });
+  const [column, direction] = tab.querySelectorAll(".cal-sort-bar select");
+  assert.match(tab.querySelector(".cal-sort-bar").textContent, /Ordina per/);
+  assert.deepEqual([...column.options].map((option) => option.textContent), ["Tapparella", "Stato", "Profilo"]);
+  assert.deepEqual([...direction.options].map((option) => option.textContent), ["Crescente", "Decrescente"]);
+  column.value = "status"; column.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
+  const again = tab.querySelectorAll(".cal-sort-bar select")[1];
+  again.value = "desc"; again.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
+  assert.equal(tab.querySelector('.cal-sort-bar select[data-sort="key"]').value, "status");
+  assert.equal(tab.querySelector('.cal-sort-bar select[data-sort="dir"]').value, "desc");
+});
+
+test("the column headers are buttons reached from the keyboard", async () => {
+  const { tab } = await mount();
+  const head = tab.querySelector(".cal-list-head");
+  assert.equal(head.getAttribute("aria-hidden"), null);
+  assert.equal(head.getAttribute("aria-label"), "Sort by");
+  assert.ok([...head.querySelectorAll(".cal-sort")].every((button) => button.tagName === "BUTTON" && button.type === "button"));
 });

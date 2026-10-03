@@ -10,6 +10,19 @@ const MEASURED = ["guided", "automatic"];
 export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
 // Covers read in turn to find the gateway's session when a read fails.
 const SESSION_PROBES = 3;
+export const SORT_KEYS = ["cover", "status", "profile"];
+export const DEFAULT_SORT = Object.freeze({ key: "cover", dir: "asc" });
+export const SORT_STORAGE_KEY = "myhome-panel-calibration-sort-v1";
+// Status from what needs attention first; a running cover is always on top, whatever the order.
+const STATUS_RANK = { to_measure: 0, times: 1, rolls: 2, verified: 3 };
+
+function savedSort() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SORT_STORAGE_KEY));
+    if (SORT_KEYS.includes(saved?.key) && ["asc", "desc"].includes(saved?.dir)) return { key: saved.key, dir: saved.dir };
+  } catch { /* The default order applies when browser storage is blocked. */ }
+  return { ...DEFAULT_SORT };
+}
 
 /** What a cover uses, read from the backend view; nothing is estimated in the browser. */
 export function coverStatus(cover) {
@@ -35,7 +48,7 @@ export function timedCovers(data) {
 export class CalibrationTab {
   constructor() {
     this._generation = 0; this._rows = new Map(); this._unsubs = []; this._expanded = new Set();
-    this._filter = "all"; this._menu = null; this._mode = { kind: "list" }; this._hosts = new WeakSet();
+    this._filter = "all"; this._sort = savedSort(); this._menu = null; this._mode = { kind: "list" }; this._hosts = new WeakSet();
     this._calibration = new CoverCalibration();
     this._wizard = new CalibrationWizard();
   }
@@ -72,6 +85,7 @@ export class CalibrationTab {
       this._hosts.add(context.host);
       context.host.addEventListener("click", (event) => this._click(event));
       context.host.addEventListener("keydown", (event) => this._keydown(event));
+      context.host.addEventListener("change", (event) => this._change(event));
     }
     if (changed) {
       const generation = this._generation;
@@ -167,6 +181,52 @@ export class CalibrationTab {
     }).sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /** The rows in the chosen order: running covers first, then by the column; ties by name, then room. */
+  _sorted(items, language) {
+    const collator = new Intl.Collator(language, { sensitivity: "base", numeric: true });
+    const { key, dir } = this._sort, sign = dir === "desc" ? -1 : 1;
+    const byName = (a, b) => collator.compare(a.name, b.name) || collator.compare(a.area, b.area);
+    const compare = (a, b) => {
+      const running = Number(this._running(b)) - Number(this._running(a));
+      if (running) return running;
+      if (key === "status") return sign * ((STATUS_RANK[a.status] ?? 0) - (STATUS_RANK[b.status] ?? 0)) || byName(a, b);
+      if (key === "profile") {
+        // Covers without a profile stay at the bottom in both orders.
+        if (!a.profile !== !b.profile) return a.profile ? -1 : 1;
+        return (a.profile ? sign * collator.compare(a.profile.name, b.profile.name) : 0) || byName(a, b);
+      }
+      return sign * byName(a, b);
+    };
+    return [...items].sort(compare);
+  }
+
+  /** Same column: ascending, then descending, then back to the default order; another column starts ascending. */
+  _setSort(key, dir) {
+    if (!SORT_KEYS.includes(key)) return;
+    if (dir) this._sort = { key, dir };
+    else if (this._sort.key !== key) this._sort = { key, dir: "asc" };
+    else if (this._sort.dir === "asc") this._sort = { key, dir: "desc" };
+    else this._sort = { ...DEFAULT_SORT };
+    try { window.localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(this._sort)); } catch { /* Kept for this visit only. */ }
+    this._render();
+  }
+
+  _change(event) {
+    const select = event.target.closest?.("select[data-sort]");
+    if (!select || this._mode.kind !== "list") return;
+    const field = select.dataset.sort;
+    if (field === "key") this._setSort(select.value, this._sort.key === select.value ? this._sort.dir : "asc");
+    else this._setSort(this._sort.key, select.value === "desc" ? "desc" : "asc");
+  }
+
+  /** A column header: a button that sorts by it, with the arrow of the current order. */
+  _sortHead(key, label) {
+    const { t } = this._context;
+    const active = this._sort.key === key, dir = this._sort.dir;
+    return `<span class="cal-sort-cell"><button type="button" class="cal-sort" data-action="cal-tab-sort" data-id="${key}" aria-pressed="${active}">${esc(label)}${active
+      ? `<ha-icon icon="mdi:arrow-${dir === "asc" ? "up" : "down"}" aria-hidden="true"></ha-icon><span class="visually-hidden">, ${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</span>` : ""}</button></span>`;
+  }
+
   _running(item) {
     const session = item.session;
     return !!session && (session.entity_id === item.cover.entity_id || (session.targets || []).some((target) => target.entity_id === item.cover.entity_id));
@@ -194,7 +254,7 @@ export class CalibrationTab {
     const all = this._covers().filter((item) => this._matches(item));
     const counts = { all: all.length, to_measure: all.filter((item) => item.status === "to_measure").length,
       calibrated: all.filter((item) => item.status !== "to_measure").length, profile: all.filter((item) => item.profile).length };
-    const visible = all.filter((item) => this._filter === "all" || (this._filter === "to_measure" ? item.status === "to_measure"
+    const visible = this._sorted(all, language).filter((item) => this._filter === "all" || (this._filter === "to_measure" ? item.status === "to_measure"
       : this._filter === "calibrated" ? item.status !== "to_measure" : !!item.profile));
     // A live session, or a gateway the overview reports reserved while its session could not be read: no new measurement.
     const rows = gateways.map((entry) => this._rows.get(entry.entry_id)).filter(Boolean);
@@ -220,9 +280,12 @@ export class CalibrationTab {
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
         ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
-        ${visible.length ? `<div class="cal-list" role="list">
-          <div class="cal-list-head" aria-hidden="true"><span></span><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span><span></span></div>
-          ${visible.map((item) => this._row(item, busy, language)).join("")}</div>` : ""}`;
+        ${visible.length ? `<div class="cal-sort-bar">
+          <label>${esc(t("wiz_T379"))} <select data-sort="key">${SORT_KEYS.map((key) => `<option value="${key}" ${this._sort.key === key ? "selected" : ""}>${esc(t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]))}</option>`).join("")}</select></label>
+          <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select data-sort="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>
+        <div class="cal-list">
+          <div class="cal-list-head" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"))}${this._sortHead("status", t("calTabColStatus"))}${this._sortHead("profile", t("calTabColProfile"))}<span></span></div>
+          <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}`;
     }
     if (host.innerHTML !== html) replacePreservingFocus(host, html);
   }
@@ -349,6 +412,7 @@ export class CalibrationTab {
     const { action, id } = target.dataset;
     if (action !== "cal-tab-menu" && this._menu !== null) { this._menu = null; if (!action?.startsWith("cal-tab-")) this._render(); }
     if (action === "cal-tab-filter") { this._filter = id; this._render(); }
+    else if (action === "cal-tab-sort") this._setSort(id);
     else if (action === "cal-tab-toggle") {
       if (this._expanded.has(id)) this._expanded.delete(id); else this._expanded.add(id);
       this._render();
