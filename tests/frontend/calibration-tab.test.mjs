@@ -109,8 +109,11 @@ test("the Calibration sub-tab sits next to Devices and Profiles and lists timed 
     [["to_measure", "To measure"], ["times", "Times measured"], ["rolls", "Times and roll"]]);
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-profile-chip").textContent, "tall_two_leaf");
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-profile").textContent.trim(), "—");
-  assert.match(row(tab, "cover.living_one").querySelector(".cal-row-last").textContent, /^Measured on Oct 1, 2026$/);
-  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last").textContent, "—");
+  assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.textContent), ["", "Roller shutter", "Status", "Profile", ""],
+    "no column for the last measurement: its date is in the details");
+  assert.equal(tab.querySelector(".cal-row-last"), null);
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, " · Measured on Oct 1, 2026", "phones show it under the name");
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, " · never measured");
   assert.equal(tab.querySelector(".cal-tab-summary").textContent, "4 roller shutters · 3 calibrated · 1 to measure");
   assert.equal(commands(calls).length, 0, "rendering the list never starts a measurement");
   assert.deepEqual(calls.filter((message) => message.type.startsWith("myhome/cover_profiles/")).map((message) => [message.type, message.entity_id]),
@@ -341,7 +344,7 @@ test("the summary uses singular forms for one cover", async () => {
 
 test("a click anywhere on a row opens and closes its details, never from its buttons", async () => {
   const { tab } = await mount();
-  row(tab, "cover.living_one").querySelector(".cal-row-last").click();
+  row(tab, "cover.living_one").querySelector(".cal-row-profile").click();
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, false);
   row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click();
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, false, "the menu button keeps its own action");

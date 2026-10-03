@@ -688,7 +688,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-row-address-value { color: var(--primary-text-color, #182b37); font-weight: 500; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
 .cal-row-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-inline-start: 4px; }
 .cal-row-profile { grid-area: profile; }
-.cal-row-profile > .muted, .cal-row-last { display: none; }
+.cal-row-profile > .muted { display: none; }
 .cal-row-actions { grid-area: actions; display: flex; gap: 6px; align-items: center; justify-content: end; }
 .cal-row-action { color: var(--panel-accent); font-weight: 600; }
 .cal-menu-wrap { position: relative; }
@@ -721,30 +721,29 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-list .batch-target small { display: block; }
 .cal-batch-list > p { margin: 8px 0; }
 @media (min-width: 1024px) {
-  /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile (equal widths) |
-     last measurement | actions. The details' three blocks sit under the cover, status and profile columns. */
-  /* Cover, status and profile equally wide, each about one and a half times the last measurement; the actions column
-     has a fixed width so that every row (each its own grid) keeps the same columns. */
+  /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile | actions. The
+     details' three blocks sit under the cover, status and profile columns. Equal tracks for cover, status and profile
+     give the design's 350 : 270 : 270 at a 1168 px list (lead and gap included in the first); the actions column has
+     a fixed width so that every row (each its own grid) keeps the same columns. */
   /* Rows have a 12 px padding and the same 12 px between chevron, icon and name: the name starts at
      12 + 18 + 12 + 40 + 12 = 94 px. The first column is narrowed by the difference between the column gap and the
      lead gap, so the lead overflows into the column gap and column 2 starts at the name. */
   .cal-list { --cal-lead-gap: 12px; --cal-lead-box: calc(18px + var(--cal-lead-gap) + 40px); --cal-gap: 32px;
     --cal-lead: calc(var(--cal-lead-box) + var(--cal-lead-gap) - var(--cal-gap));
-    --cal-cols: var(--cal-lead) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr) 180px; }
+    --cal-cols: var(--cal-lead) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 158px; }
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 12px; }
   .cal-list-head, .cal-row-main { align-items: center; }
   .cal-list-head { padding-block: 12px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
   .cal-row-main { padding-block: 12px; row-gap: 0; }
   /* The phone layout names grid areas: every cell goes back to row 1 and its own column. */
-  .cal-row-toggle, .cal-row-status, .cal-row-profile, .cal-row-last, .cal-row-actions { grid-area: auto; grid-row: 1; }
+  .cal-row-toggle, .cal-row-status, .cal-row-profile, .cal-row-actions { grid-area: auto; grid-row: 1; }
   .cal-row-toggle { grid-column: 1 / 3; display: grid; grid-template-columns: var(--cal-lead-box) minmax(0, 1fr); column-gap: var(--cal-lead-gap);
     align-items: center; padding: 0; }
   .cal-row-status { grid-column: 3; padding: 0; }
   .cal-row-profile { grid-column: 4; }
-  .cal-row-last { grid-column: 5; }
-  .cal-row-actions { grid-column: 6; }
-  .cal-row-profile > .muted, .cal-row-last { display: block; font-size: 13px; }
+  .cal-row-actions { grid-column: 5; }
+  .cal-row-profile > .muted { display: block; font-size: 13px; }
   .cal-row-last-inline { display: none; }
   .cal-row-details { padding-block: 12px 20px; align-items: start; row-gap: 20px; }
   .cal-details-grid { display: contents; }

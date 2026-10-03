@@ -28,7 +28,7 @@ while the owner is present), Cancel and the per-tab identity are the ones alread
 
 | Board | What is shown | Data | Texts |
 | --- | --- | --- | --- |
-| T-01 list | Timed covers (no position sensor): name, room and bus address (`Address: 86 · A: 8 · PL: 6`), status, profile, last measurement; Measure / Fine-tune; ⋮ with every secondary action (Fine-tune, Measure or Remeasure, Assign profile, Details); the whole row opens its details | `cover_profiles/overview` per gateway | `calTabTitle`, `calTabIntro`, `calTabCol*`, `calTabStatus_*`, `calTabMeasuredOn`, T363 |
+| T-01 list | Timed covers (no position sensor): name, room and bus address (`Address: 86 · A: 8 · PL: 6`), status, profile (the date of the last measurement is in the details, and on phones under the name); Measure / Fine-tune; ⋮ with every secondary action (Fine-tune, Measure or Remeasure, Assign profile, Details); the whole row opens its details | `cover_profiles/overview` per gateway | `calTabTitle`, `calTabIntro`, `calTabCol*`, `calTabStatus_*`, `calTabMeasuredOn`, T363 |
 | T-02 filter | All / To measure / Calibrated / With profile, with counts as grey badges; help note on To measure | same | `calTabFilter_*`, `calTabCount*`, `calTabToMeasureHelp` |
 | T-03 session | The covers of the open session marked In progress (a tab guides it / no tab guides it / paused / waiting for the stop) with Open session; new measurements disabled | `cover_profiles/read` on one cover: its `calibration` is the gateway's single session | `calTabRunning_*`, `calTabBusy`, `calOpenSession` |
 | T-04 empty | No timed cover | overview | `calTabEmpty*`, `calTabHowItWorks*` |
@@ -44,8 +44,8 @@ automatic run (`batch_start`) (T363–T366). *Assign profile* opens a dialog lis
 (type with or without slats, where and when measured, reference travel, how many covers follow it) and assigns the
 chosen one with `cover_profiles/write` `assign` (T368–T376); it never opens the Travel profile dialog. *Open session*
 opens the wizard for a `geometry` session and the existing view, in the same dialog, for guided, automatic and
-sequence sessions. Above 1024 px the rows are columns, below
-they are cards. Rendering the view sends no calibration message.
+sequence sessions. Above 1024 px the rows are columns (cover, status, profile, actions; the three blocks of the details
+sit under the first three), below they are cards. Rendering the view sends no calibration message.
 
 ## Wizard layout
 

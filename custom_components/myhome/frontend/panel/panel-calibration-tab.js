@@ -221,7 +221,7 @@ export class CalibrationTab {
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
         ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
         ${visible.length ? `<div class="cal-list" role="list">
-          <div class="cal-list-head" aria-hidden="true"><span></span><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span><span>${esc(t("calTabColLast"))}</span><span></span></div>
+          <div class="cal-list-head" aria-hidden="true"><span></span><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span><span></span></div>
           ${visible.map((item) => this._row(item, busy, language)).join("")}</div>` : ""}`;
     }
     if (host.innerHTML !== html) replacePreservingFocus(host, html);
@@ -250,7 +250,6 @@ export class CalibrationTab {
           <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}${this._address(item)}<span class="cal-row-last-inline"> · ${esc(last || t("calTabNeverMeasured"))}</span></span></span></button>
         <span class="cal-row-status">${badge}</span>
         <span class="cal-row-profile">${profile}</span>
-        <span class="cal-row-last muted">${esc(session ? "—" : last || "—")}</span>
         <span class="cal-row-actions">${action}
           <span class="cal-menu-wrap"><button type="button" class="icon-button" data-action="cal-tab-menu" data-id="${esc(key)}" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-label="${esc(t("calTabMore"))}: ${esc(item.name)}" title="${esc(t("calTabMore"))}"><ha-icon icon="mdi:dots-vertical" aria-hidden="true"></ha-icon></button>
           <span class="cal-menu" role="menu" ${menuOpen ? "" : "hidden"}>
