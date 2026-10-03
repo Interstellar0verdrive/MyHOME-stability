@@ -38,9 +38,13 @@ The session is read from one cover (up to three are tried in turn if a read fail
 overview reports the gateway reserved (`assignment_reason: calibration_busy`), new measurements stay disabled.
 
 Status comes from the saved evidence: **To measure** without a guided or automatic measurement, **Times measured**
-with one, **Times and roll** with roll coefficients. *Measure several covers in sequence* opens a dialog with the look
-of the profile dialog, with the existing selection (`cover_calibration/targets`, covers named as in the panel) and
-automatic run (`batch_start`) (T363–T366). *Assign profile* opens a dialog listing the gateway's profiles as on B-01
+with one, **Times and roll** with roll coefficients. *Measure several covers in sequence* replaces the list with the
+selection view T-06 (no dialog): *Back to the list*, the note on the automatic cycle, *Select: All · To measure*,
+the gateway's `cover_calibration/targets` as the list's rows (checkbox, place in the sequence, icon, name, room and
+address, status, profile), sorted by name, with the backend's `max_batch`; covers run in the order they are ticked.
+An action bar sticks to the bottom of the window (summary, Cancel, *Start the sequence*), with a fade above it while
+the list continues. Start sends `batch_start` once, with that order and the targets' revision; the run itself is, for
+now, the existing view in a dialog (T-07/T-08 next) (T363–T366, T383–T390). *Assign profile* opens a dialog listing the gateway's profiles as on B-01
 (type with or without slats, where and when measured, reference travel, how many covers follow it) and assigns the
 chosen one with `cover_profiles/write` `assign` (T368–T376); it never opens the Travel profile dialog. *Open session*
 opens the wizard for a `geometry` session and the existing view, in the same dialog, for guided, automatic and

@@ -286,29 +286,82 @@ test("an empty gateway explains which covers need calibration", async () => {
   assert.equal(tab.querySelector(".cal-list"), null);
 });
 
-test("several covers in sequence use the existing selection in a dialog, with readable names, and start only after an explicit choice", async () => {
-  const { root, tab, subscriptions, calls } = await mount({ language: "it", callWS: (message) => message.type === "myhome/cover_calibration/targets"
-    ? { revision: 7, max_batch: 4, targets: [{ entity_id: "cover.bedroom", name: "cover_bedroom_raw", reason: null }, { entity_id: "cover.living_one", name: "Living room shutter 1", reason: "cover_unavailable" }] }
-    : undefined });
-  const button = tab.querySelector('[data-action="cal-tab-batch"]');
-  assert.equal(button.textContent.trim(), "Misura più tapparelle in sequenza");
-  assert.doesNotMatch(tab.textContent, /gruppo/i);
-  button.click(); await tick();
-  const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
-  assert.equal(dialog.querySelector("h2").textContent, "Misurazione in sequenza");
-  const labels = [...dialog.querySelectorAll(".batch-target span")].map((item) => item.firstChild.textContent);
-  assert.deepEqual(labels, ["Bedroom", "Living room shutter 1"], "inventory names, not registry identifiers");
-  assert.doesNotMatch(dialog.textContent, /cover\.bedroom|cover_bedroom_raw/);
-  assert.equal(dialog.querySelector('input[value="cover.living_one"]').disabled, true);
-  assert.equal(dialog.querySelector("#batch-continue").textContent, "Avvia la sequenza");
-  assert.equal(dialog.querySelector("#batch-back").textContent, "Annulla la sequenza");
-  assert.equal(dialog.querySelector("#batch-continue").disabled, true);
-  dialog.querySelector('input[value="cover.bedroom"]').checked = true;
-  dialog.querySelector("#batch-selection").dispatchEvent(new Event("change"));
-  dialog.querySelector("#batch-continue").click(); await tick();
-  const start = subscriptions.find((item) => item.request.type === "myhome/cover_calibration/batch_start");
-  assert.deepEqual(start.request.entity_ids, ["cover.bedroom"]);
-  assert.equal(start.request.revision, 7);
+const targets = (extra = {}) => ({ revision: 7, max_batch: 20, targets: [
+  { entity_id: "cover.living_two", name: "living_two_raw", reason: null }, { entity_id: "cover.bedroom", name: "cover_bedroom_raw", reason: null },
+  { entity_id: "cover.living_one", name: "Living room shutter 1", reason: "cover_unavailable" }, { entity_id: "cover.kitchen_two", name: "k", reason: null }], ...extra });
+const openBatch = async (options = {}) => {
+  const mounted = await mount({ language: "it", ...options, callWS: (message) => message.type === "myhome/cover_calibration/targets" ? targets(options.targets) : undefined });
+  mounted.tab.querySelector('[data-action="cal-tab-batch"]').click(); await tick();
+  return mounted;
+};
+const tick_ = (tab, id) => { const box = tab.querySelector(`.cal-batch-row input[value="${id}"]`); box.checked = !box.checked; box.dispatchEvent(new Event("change", { bubbles: true })); };
+const places = (tab) => [...tab.querySelectorAll(".cal-batch-row")].map((item) => [item.dataset.entity.replace("cover.", ""), item.querySelector(".cal-batch-order").textContent]);
+
+test("several covers in sequence are chosen in a view of the tab, not a dialog, with the list's names, rooms and status", async () => {
+  const { root, tab } = await openBatch();
+  assert.equal(root.querySelector("#dialog-host dialog"), null, "no dialog");
+  assert.equal(tab.querySelector(".cal-list-rows"), null, "the selection replaces the list");
+  assert.equal(tab.querySelector(".cal-batch h3").textContent, "Misurazione in sequenza");
+  assert.equal(tab.querySelector(".cal-batch-back").textContent.trim(), "Torna all'elenco");
+  assert.match(tab.querySelector(".cal-batch-note").innerHTML, /<strong>Serve un attuatore che segnali l'arresto reale<\/strong>/);
+  assert.deepEqual([...tab.querySelectorAll(".cal-batch-row .cal-row-name strong")].map((item) => item.textContent),
+    ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
+  assert.doesNotMatch(tab.textContent, /cover\.bedroom|cover_bedroom_raw|living_two_raw|gruppo/i);
+  assert.match(tab.querySelector('.cal-batch-row[data-entity="cover.kitchen_two"]').textContent, /Kitchen · Indirizzo: 91 · A: 9 · PL: 1/);
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent, "Tempi e rullo");
+  assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-profile-chip').textContent, "tall_two_leaf");
+  assert.equal(tab.querySelector('.cal-batch-row input[value="cover.living_one"]').disabled, true);
+  assert.equal(tab.querySelector(".cal-batch-capacity").textContent, "4 tapparelle a tempo · massimo 20 per sequenza");
+  tab.querySelector(".cal-batch-back").click(); await tick();
+  assert.ok(tab.querySelector(".cal-list-rows"), "back to the list");
+});
+
+test("covers run in the order they are ticked, shortcuts pick all or those to measure, and the limit is the backend's", async () => {
+  const { tab } = await openBatch();
+  const start = () => tab.querySelector('[data-action="cal-tab-batch-start"]');
+  assert.equal(start().disabled, true);
+  assert.equal(tab.querySelector(".cal-batch-summary").textContent, "Nessuna tapparella selezionata");
+  tick_(tab, "cover.living_two"); tick_(tab, "cover.bedroom");
+  assert.deepEqual(places(tab), [["bedroom", "2"], ["kitchen_two", ""], ["living_one", ""], ["living_two", "1"]]);
+  assert.equal(tab.querySelector(".cal-batch-summary").textContent, "2 tapparelle selezionate");
+  tick_(tab, "cover.living_two");
+  assert.deepEqual(places(tab).map(([, place]) => place), ["1", "", "", ""], "unticking renumbers");
+  assert.equal(tab.querySelector(".cal-batch-summary").textContent, "1 tapparella selezionata");
+  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
+  assert.deepEqual(places(tab).map(([, place]) => place), ["1", "2", "", "3"], "all, in list order, never the unavailable one");
+  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="to_measure"]').click();
+  assert.deepEqual(places(tab).map(([, place]) => place), ["1", "", "", ""]);
+  assert.equal(start().disabled, false);
+});
+
+test("more covers than the backend allows keep Start off and say the limit", async () => {
+  const { tab } = await openBatch({ targets: { max_batch: 2 } });
+  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
+  assert.equal(tab.querySelector('[data-action="cal-tab-batch-start"]').disabled, true);
+  assert.match(tab.querySelector(".cal-batch-limit").textContent, /: 2$/);
+});
+
+test("the action bar stays at the bottom of the window, after the list", async () => {
+  const { tab } = await openBatch();
+  const bar = tab.querySelector(".cal-batch-bar");
+  assert.equal(tab.querySelector(".cal-batch").lastElementChild, bar, "the bar closes the view, so it can stick to the window's bottom");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-batch-bar \{ position: sticky; bottom: 0;/);
+  assert.match(css, /\.cal-batch-bar\.has-more::before \{ opacity: 1; \}/);
+  assert.ok(tab.querySelector('.cal-batch-bar [data-action="cal-tab-batch-back"]'));
+});
+
+test("Start sends batch_start once, with the chosen order and the targets' revision", async () => {
+  const { root, tab, subscriptions, calls } = await openBatch();
+  tick_(tab, "cover.kitchen_two"); tick_(tab, "cover.bedroom");
+  const start = tab.querySelector('[data-action="cal-tab-batch-start"]');
+  start.click(); start.click(); await tick();
+  const starts = subscriptions.filter((item) => item.request.type === "myhome/cover_calibration/batch_start");
+  assert.equal(starts.length, 1);
+  assert.deepEqual(starts[0].request.entity_ids, ["cover.kitchen_two", "cover.bedroom"]);
+  assert.equal(starts[0].request.revision, 7);
+  assert.ok(root.querySelector("#dialog-host dialog.cal-dialog"), "the existing view runs the sequence, for now in its dialog");
+  assert.ok(tab.querySelector(".cal-list-rows"), "the tab is back on the list behind it");
   assert.equal(commands(calls).filter((message) => message.type === "myhome/cover_calibration/action").length, 0);
 });
 

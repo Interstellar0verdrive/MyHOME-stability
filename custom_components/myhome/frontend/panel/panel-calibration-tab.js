@@ -4,7 +4,7 @@ const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibrat
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")),
 ]);
-const { fill, number, dateText, names } = text;
+const { fill, rich, number, dateText, names } = text;
 
 const MEASURED = ["guided", "automatic"];
 export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
@@ -64,6 +64,8 @@ export class CalibrationTab {
     this._wizard?.close();
     this._rows.clear();
     this._mode = { kind: "list" };
+    this._batch = null;
+    this._barObserver?.disconnect();
     this._menu = null;
     this._context = null;
     this._key = null;
@@ -212,6 +214,12 @@ export class CalibrationTab {
   }
 
   _change(event) {
+    if (this._mode.kind === "batch") {
+      const input = event.target.closest?.(".cal-batch-row input[type=checkbox]");
+      if (input) this._batchToggle(input.value, input.checked);
+      else if (event.target.matches?.('select[data-batch="gateway"]')) this._loadBatch(event.target.value);
+      return;
+    }
     const select = event.target.closest?.("select[data-sort]");
     if (!select || this._mode.kind !== "list") return;
     const field = select.dataset.sort;
@@ -245,6 +253,7 @@ export class CalibrationTab {
   }
 
   _render() {
+    if (this._context?.host.isConnected && this._mode.kind === "batch") { this._renderBatch(); return; }
     if (!this._context?.host.isConnected || this._mode.kind !== "list") return;
     if (this._openPendingWizard()) return;
     const { host, t, hass, gateways } = this._context;
@@ -403,6 +412,15 @@ export class CalibrationTab {
   }
 
   _click(event) {
+    if (this._mode.kind === "batch") {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const { action, id } = button.dataset;
+      if (action === "cal-tab-batch-back") this._batchBack();
+      else if (action === "cal-tab-batch-pick") this._batchPick(id);
+      else if (action === "cal-tab-batch-start") this._batchStart();
+      return;
+    }
     if (this._mode.kind !== "list") return;
     const target = event.target.closest("button");
     // The whole row opens and closes its details, as the maintainer's device cards do; its buttons keep their own action.
@@ -570,58 +588,131 @@ export class CalibrationTab {
   }
 
   /** Several covers in sequence: the existing selection and automatic batch, in a dialog, with readable names. */
+  /** Sequence selection (T-06): a view in the tab, in place of the list, with our own rows. */
   async _selectBatch() {
-    const { hass, t, gateways, inventory } = this._context;
-    const generation = this._generation;
-    const body = this._openDialog({ title: t("wiz_T364"), subtitle: gateways.length === 1 ? gateways[0].title : "", icon: "mdi:format-list-numbered" });
-    const dialog = this._dialog;
-    body.innerHTML = `<p class="muted">${esc(t("calBatchSelectHelp"))}</p>
-      ${gateways.length > 1 ? `<label>${esc(t("gateway"))}<select id="cal-batch-gateway">${gateways.map((entry) => `<option value="${esc(entry.entry_id)}">${esc(entry.title)}</option>`).join("")}</select></label>` : ""}
-      <p id="batch-error" class="error" role="alert"></p><div id="batch-selection" class="cal-batch-list">${esc(t("loading"))}</div>
-      <div class="actions"><button type="button" id="batch-continue" class="primary" disabled>${esc(t("wiz_T365"))}</button>
-      <button type="button" id="batch-back">${esc(t("wiz_T366"))}</button></div>`;
-    body.querySelector("#batch-back").onclick = () => this._dialogDone();
-    const current = () => this._current(generation) && this._dialog === dialog;
-    const load = async (entryId) => {
-      const list = body.querySelector("#batch-selection"), next = body.querySelector("#batch-continue");
-      next.disabled = true;
-      list.textContent = t("loading");
-      try {
-        const data = await hass.callWS({ type: "myhome/cover_calibration/targets", entry_id: entryId });
-        if (!current()) return;
-        // The name and room the panel shows everywhere else, not the registry's technical identifiers.
-        const readable = (item) => {
-          const entity = inventory.entities.find((entry) => entry.entity_id === item.entity_id && entry.entry_id === entryId);
-          const area = entity ? inventory.areas.find((entry) => entry.id === model.effectiveArea(entity, inventory.devices))?.name : "";
-          return { name: entity ? model.entityName(entity, hass) : item.name, area };
-        };
-        list.innerHTML = data.targets.map((item) => {
-          const { name, area } = readable(item);
-          return `<label class="batch-target"><input type="checkbox" value="${esc(item.entity_id)}" ${item.reason ? "disabled" : ""}>
-            <span>${esc(name)}${area || item.reason ? `<small class="muted">${esc([area, item.reason ? t(`profileError_${item.reason}`) : ""].filter(Boolean).join(" · "))}</small>` : ""}</span></label>`;
-        }).join("") || `<p class="muted">${esc(t("calBatchEmpty"))}</p>`;
-        const selected = () => [...list.querySelectorAll("input:checked:not(:disabled)")].map((input) => input.value);
-        list.onchange = () => {
-          const count = selected().length;
-          next.disabled = count === 0 || count > data.max_batch;
-          body.querySelector("#batch-error").textContent = count > data.max_batch ? `${t("calBatchLimit")}: ${data.max_batch}` : "";
-        };
-        next.onclick = () => {
-          const ids = selected();
-          if (next.disabled || !ids.length || ids.length > data.max_batch) return;
-          next.disabled = true;
-          this._calibration.open({ host: body, hass, t, entity: { entry_id: entryId }, mode: "automatic", entity_ids: ids, revision: data.revision,
-            onCancel: () => this._dialogDone(), onSaved: () => this._dialogDone() });
-        };
-      } catch (error) {
-        if (!current()) return;
-        list.textContent = "";
-        const key = `profileError_${error?.code}`;
-        body.querySelector("#batch-error").textContent = t(key) === key ? t("profileError") : t(key);
-      }
-    };
-    const select = body.querySelector("#cal-batch-gateway");
-    if (select) select.onchange = () => load(select.value);
-    await load(select?.value || gateways[0].entry_id);
+    const { gateways } = this._context;
+    this._menu = null;
+    this._mode = { kind: "batch" };
+    this._batch = { entryId: gateways[0].entry_id, data: null, order: [], error: "", loading: true };
+    this._context.host.innerHTML = "";
+    await this._loadBatch(this._batch.entryId);
+  }
+
+  async _loadBatch(entryId) {
+    const { hass } = this._context, generation = this._generation;
+    const batch = this._batch = { entryId, data: null, order: [], error: "", loading: true };
+    this._render();
+    try {
+      batch.data = await hass.callWS({ type: "myhome/cover_calibration/targets", entry_id: entryId });
+    } catch (error) {
+      const key = `profileError_${error?.code}`, { t } = this._context;
+      batch.error = t(key) === key ? t("profileError") : t(key);
+    }
+    if (!this._current(generation) || this._batch !== batch) return;
+    batch.loading = false;
+    this._render();
+  }
+
+  /** The gateway's targets with the names, rooms, addresses, status and profile the list shows; sorted by name. */
+  _batchTargets() {
+    const batch = this._batch, { inventory, hass } = this._context;
+    const language = hass.language || "en";
+    const covers = new Map(this._covers().filter((item) => item.entry.entry_id === batch.entryId).map((item) => [item.cover.entity_id, item]));
+    const collator = new Intl.Collator(language, { sensitivity: "base", numeric: true });
+    return (batch.data?.targets || []).map((target) => {
+      const item = covers.get(target.entity_id);
+      const entity = item?.entity || inventory.entities.find((entry) => entry.entity_id === target.entity_id && entry.entry_id === batch.entryId);
+      const area = item?.area ?? (entity ? inventory.areas.find((entry) => entry.id === model.effectiveArea(entity, inventory.devices))?.name || "" : "");
+      return { ...target, item, entity, area, name: item?.name || (entity ? model.entityName(entity, hass) : target.name) };
+    }).sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.area, b.area));
+  }
+
+  _renderBatch() {
+    const { host, t, gateways } = this._context;
+    const batch = this._batch, max = batch.data?.max_batch ?? 0, count = batch.order.length;
+    const targets = this._batchTargets();
+    const statusBadge = (item) => item ? `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>` : "";
+    const profile = (item) => item?.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>`
+      : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
+    const rows = targets.map((target) => {
+      const place = batch.order.indexOf(target.entity_id);
+      return `<label class="cal-batch-row${place >= 0 ? " is-selected" : ""}" data-entity="${esc(target.entity_id)}">
+        <span class="cal-batch-lead"><input type="checkbox" value="${esc(target.entity_id)}" ${place >= 0 ? "checked" : ""} ${target.reason ? "disabled" : ""}>
+          <span class="cal-batch-order" aria-hidden="true">${place >= 0 ? place + 1 : ""}</span>
+          <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
+        <span class="cal-row-name"><strong>${esc(target.name)}</strong><span class="muted">${esc(target.area)}${this._address({ entity: target.entity })}${target.reason ? ` · ${esc(t(`profileError_${target.reason}`))}` : ""}</span></span>
+        <span class="cal-batch-status">${statusBadge(target.item)}</span>
+        <span class="cal-batch-profile">${profile(target.item)}</span></label>`;
+    }).join("");
+    const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });
+    const html = `<div class="cal-batch">
+      <button type="button" class="link cal-batch-back" data-action="cal-tab-batch-back"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon>${esc(t("wiz_T390"))}</button>
+      <h3 class="cal-tab-title">${esc(t("wiz_T364"))}</h3>
+      <p class="muted cal-tab-intro">${esc(t("wiz_T387"))}</p>
+      <div class="cal-note cal-batch-note">${rich(t("wiz_T388"))}</div>
+      ${gateways.length > 1 ? `<label class="cal-batch-gateway">${esc(t("gateway"))}<select data-batch="gateway">${gateways.map((entry) => `<option value="${esc(entry.entry_id)}" ${entry.entry_id === batch.entryId ? "selected" : ""}>${esc(entry.title)}</option>`).join("")}</select></label>` : ""}
+      ${batch.error ? `<p class="notice error" role="alert">${esc(batch.error)}</p>` : ""}
+      ${batch.loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
+      ${!batch.loading && !batch.error && !targets.length ? `<p class="muted">${esc(t("calBatchEmpty"))}</p>` : ""}
+      ${targets.length ? `<div class="cal-batch-tools"><p class="cal-batch-shortcuts"><span class="muted">${esc(t("wiz_T383"))}</span>
+          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="all">${esc(t("calTabFilter_all"))}</button>
+          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="to_measure">${esc(t("calTabFilter_to_measure"))}</button></p>
+          <p class="muted cal-batch-capacity">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
+        <div class="cal-list cal-batch-list">
+          <div class="cal-list-head cal-batch-head" aria-hidden="true"><span></span><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span></div>
+          <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
+        <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
+      <span class="cal-batch-sentinel" aria-hidden="true"></span>
+      <div class="cal-batch-bar"><p class="cal-batch-summary" role="status">${esc(summary)}</p>
+        <div class="cal-batch-actions"><button type="button" class="cal-batch-cancel" data-action="cal-tab-batch-back">${esc(t("cancel"))}</button>
+        <button type="button" class="primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon>${esc(t("wiz_T365"))}</button></div></div>
+    </div>`;
+    if (host.innerHTML !== html) replacePreservingFocus(host, html);
+    this._watchBar();
+  }
+
+  /** The fade above the bar shows while the list continues below the window's edge. */
+  _watchBar() {
+    const { host } = this._context;
+    const sentinel = host.querySelector(".cal-batch-sentinel"), bar = host.querySelector(".cal-batch-bar");
+    this._barObserver?.disconnect();
+    if (!sentinel || !bar || typeof IntersectionObserver !== "function") return;
+    this._barObserver = new IntersectionObserver(([entry]) => bar.classList.toggle("has-more", !entry.isIntersecting), { threshold: 0 });
+    this._barObserver.observe(sentinel);
+  }
+
+  _batchToggle(entityId, checked) {
+    const batch = this._batch;
+    batch.order = batch.order.filter((id) => id !== entityId);
+    if (checked) batch.order.push(entityId);
+    this._render();
+  }
+
+  _batchPick(kind) {
+    this._batch.order = this._batchTargets().filter((target) => !target.reason && (kind === "all" || target.item?.status === "to_measure"))
+      .map((target) => target.entity_id);
+    this._render();
+  }
+
+  /** Start: `batch_start` with the chosen order, once; the existing view runs it in a dialog for now. */
+  _batchStart() {
+    const batch = this._batch, ids = [...batch.order];
+    if (batch.starting || !ids.length || ids.length > (batch.data?.max_batch ?? 0)) return;
+    batch.starting = true;
+    const { hass, t } = this._context;
+    this._mode = { kind: "list" };
+    this._batch = null;
+    this._barObserver?.disconnect();
+    this._context.host.innerHTML = "";
+    this._render();
+    const body = this._openDialog({ title: t("wiz_T364"), icon: "mdi:format-list-numbered" });
+    this._calibration.open({ host: body, hass, t, entity: { entry_id: batch.entryId }, mode: "automatic", entity_ids: ids, revision: batch.data.revision,
+      onCancel: () => this._dialogDone(), onSaved: () => this._dialogDone() });
+  }
+
+  _batchBack() {
+    this._batch = null;
+    this._barObserver?.disconnect();
+    this._backToList();
   }
 }

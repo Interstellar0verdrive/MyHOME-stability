@@ -305,6 +305,14 @@ export const translations = {
     wiz_T380: "Sort direction",
     wiz_T381: "Ascending",
     wiz_T382: "Descending",
+    wiz_T383: "Select:",
+    wiz_T384: "{count} roller shutters selected",
+    wiz_T385: "1 roller shutter selected",
+    wiz_T386: "No roller shutter selected",
+    wiz_T387: "Choose the roller shutters to measure: they are measured one after the other, in the order you select them, with nothing to press during the runs.",
+    wiz_T388: "The sequence uses the automatic measurement: each roller shutter opens, closes and opens again by itself, and the times are read from the stop reported by the actuator. **It needs an actuator that reports the real stop**: if yours does not, use the guided measurement, one roller shutter at a time.\nCancel or a measurement error discards the whole unsaved sequence.",
+    wiz_T389: "{count} timed roller shutters · at most {max} per sequence",
+    wiz_T390: "Back to the list",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1073,6 +1081,14 @@ export const translations = {
     wiz_T380: "Verso dell'ordinamento",
     wiz_T381: "Crescente",
     wiz_T382: "Decrescente",
+    wiz_T383: "Seleziona:",
+    wiz_T384: "{count} tapparelle selezionate",
+    wiz_T385: "1 tapparella selezionata",
+    wiz_T386: "Nessuna tapparella selezionata",
+    wiz_T387: "Scegli le tapparelle da misurare: si misurano una dopo l'altra, nell'ordine in cui le selezioni, senza niente da premere durante le corse.",
+    wiz_T388: "La sequenza usa la misura automatica: ogni tapparella si apre, si chiude e si riapre da sola, e i tempi si leggono dall'arresto segnalato dall'attuatore. **Serve un attuatore che segnali l'arresto reale**: se non lo fa, usa la misurazione guidata, una tapparella per volta.\nAnnulla o un errore di misura scartano l'intera sequenza non salvata.",
+    wiz_T389: "{count} tapparelle a tempo · massimo {max} per sequenza",
+    wiz_T390: "Torna all'elenco",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

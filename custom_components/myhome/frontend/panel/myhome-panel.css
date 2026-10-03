@@ -728,10 +728,50 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }
-.cal-batch-list { display: grid; border: 1px solid var(--panel-border); border-radius: 12px; padding: 4px 14px; }
-.cal-batch-list .batch-target + .batch-target { border-top: 1px solid var(--panel-border); }
-.cal-batch-list .batch-target small { display: block; }
-.cal-batch-list > p { margin: 8px 0; }
+/* Sequence selection (T-06): a view in the tab with the list's rows, a checkbox and the place of each ticked cover,
+   and an action bar held at the bottom of the window, with a fade while the list continues below it. */
+.cal-batch { display: grid; gap: 14px; }
+.cal-batch > * { margin: 0; }
+.cal-batch-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 4px 0; border: 0; background: transparent; color: var(--panel-accent); font-weight: 500; }
+.cal-batch-back:hover { background: transparent; text-decoration: underline; }
+.cal-batch-back ha-icon { --mdc-icon-size: 18px; }
+.cal-batch-note p { margin: 0; }
+.cal-batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.cal-batch-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 12px; }
+.cal-batch-capacity { margin: 0; font-size: 12px; }
+.cal-batch-rows { display: grid; }
+.cal-batch-row { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "lead name" "lead status"; align-items: center; gap: 4px 12px;
+  min-height: 48px; padding: 8px 12px; border-top: 1px solid var(--panel-border); cursor: pointer; font-size: 13px; font-weight: 400; color: inherit; }
+.cal-batch-row:first-child { border-top: 0; }
+.cal-batch-row:hover { background: var(--panel-accent-soft); }
+.cal-batch-row.is-selected { background: color-mix(in srgb, var(--panel-accent) 6%, transparent); }
+.cal-batch-lead { grid-area: lead; display: inline-flex; align-items: center; gap: 12px; }
+.cal-batch-lead input { width: 20px; height: 20px; min-height: 0; margin: 0; padding: 0; accent-color: var(--panel-accent); }
+.cal-batch-lead .cal-row-icon { width: 32px; height: 32px; border-radius: 8px; }
+.cal-batch-lead .cal-row-icon ha-icon { --mdc-icon-size: 20px; }
+.cal-batch-order { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 600;
+  background: var(--panel-accent); color: var(--text-primary-color, #fff); font-variant-numeric: tabular-nums; }
+.cal-batch-order:empty { visibility: hidden; }
+.cal-batch-row .cal-row-name { grid-area: name; }
+.cal-batch-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cal-batch-profile { display: none; }
+.cal-batch-limit:empty { display: none; }
+.cal-batch-sentinel { display: block; height: 1px; margin-top: -14px; }
+.cal-batch-bar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px;
+  border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); box-shadow: 0 -6px 18px -14px rgb(0 0 0 / 45%); }
+.cal-batch-bar::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
+  background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
+.cal-batch-bar.has-more::before { opacity: 1; }
+.cal-batch-summary { margin: 0 auto 0 0; font-size: 13px; font-weight: 500; }
+.cal-batch-actions { display: flex; gap: 12px; }
+@media (max-width: 1023px) {
+  /* T-06 M: summary centred, a full-width Start and Cancel as a link under it. */
+  .cal-batch-bar { flex-direction: column; align-items: stretch; text-align: center; border-radius: var(--panel-radius) var(--panel-radius) 0 0; }
+  .cal-batch-summary { margin: 0; }
+  .cal-batch-actions { flex-direction: column-reverse; gap: 6px; }
+  .cal-batch-actions .primary { width: 100%; justify-content: center; min-height: 48px; }
+  .cal-batch-cancel { border: 0; background: transparent; color: var(--panel-accent); }
+}
 @media (min-width: 1024px) {
   /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile | actions. The
      details' three blocks sit under the cover, status and profile columns. Equal tracks for cover, status and profile
@@ -767,6 +807,15 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-details-grid > section:nth-child(2) { grid-column: 3; }
   .cal-details-grid > section:nth-child(3) { grid-column: 4; }
   .cal-details-grid .cal-note { max-width: none; }
+  /* The sequence list keeps the list's columns; its lead holds checkbox, place and a 32 px icon (12 px apart). */
+  .cal-batch-list { --cal-lead-box: calc(20px + 24px + 32px + 2 * var(--cal-lead-gap)); }
+  .cal-batch-head { grid-template-columns: var(--cal-cols); }
+  .cal-batch-row { grid-template-columns: var(--cal-cols); grid-template-areas: none; column-gap: var(--cal-gap); padding-inline: 12px; }
+  /* As in the list, the lead overflows its narrowed column into the gap, so the name starts 12 px after the icon. */
+  .cal-batch-lead { grid-area: auto; grid-column: 1; grid-row: 1; display: grid; grid-template-columns: 20px 24px 32px; column-gap: var(--cal-lead-gap); width: var(--cal-lead-box); }
+  .cal-batch-row .cal-row-name { grid-area: auto; grid-column: 2; grid-row: 1; }
+  .cal-batch-status { grid-area: auto; grid-column: 3; grid-row: 1; }
+  .cal-batch-profile { display: block; grid-column: 4; grid-row: 1; font-size: 13px; }
 }
 @media (min-width: 1280px) {
   /* Room and bus address on one line under the cover name. */
