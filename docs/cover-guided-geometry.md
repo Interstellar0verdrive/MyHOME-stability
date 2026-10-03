@@ -53,7 +53,9 @@ The final tape reading seeds the new runtime position after successful Save.
 The motor start anchor is the actuator's moving status after the guarded command
 is dispatched. This path requires movement and Stop feedback: absent feedback
 interrupts rather than fabricating a duration or assuming a safe stationary state.
-Direction delivery failures also interrupt. Existing one-session gateway ownership,
+Direction delivery failures also interrupt, but only for the movement still current:
+a frame refused or acknowledged after a later movement was queued (the next step, a new
+check, or a check cut short) is ignored. Existing one-session gateway ownership,
 lease, reservation, shutdown, guard and recovery rules apply.
 
 A lift-off or intermediate stop measures from the motor anchor to the worker's

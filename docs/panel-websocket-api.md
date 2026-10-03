@@ -90,6 +90,9 @@ Save is offered as before, whatever the verdict.
   otherwise and in every terminal phase.
 - Every other interruption (unavailable cover, undelivered command, Stop not
   confirmed, timeouts, lease) ends the session as in the other geometry steps.
+- Deliveries belong to their movement: a frame of the check (its run or its Stop)
+  refused or acknowledged after the check ended, or after a later movement was queued,
+  changes nothing, in any phase.
 
 Geometry views add `check_threshold_cm` (`4`), `check_interrupted` and `check`:
 
