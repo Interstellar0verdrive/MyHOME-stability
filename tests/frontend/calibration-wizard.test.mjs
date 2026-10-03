@@ -295,7 +295,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   toggle.checked = true; toggle.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(code(), "A-21d");
   assert.equal(wiz().querySelector('[name="save_choice"][value="new"]').checked, true);
-  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 shutters: Living room shutter 3\./);
+  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 shutter: Living room shutter 3\./);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false);
   const name = wiz().querySelector('[name="profile_name"]');
   name.value = "bad name"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
@@ -559,20 +559,6 @@ test("a subscription replayed after a reconnection never starts a movement, even
   assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, false, "the run waits for a press");
 });
 
-test("a refusal is forgotten once the session moves to another phase", async () => {
-  const { backend, wiz, code, press, startFor } = await mount();
-  await startFor("cover.living_one");
-  await press("begin"); await move(backend);
-  const original = backend.hass.callWS;
-  backend.hass.callWS = async (message) => message.action === "endpoint"
-    ? (backend.calls.push(message), Promise.reject(Object.assign(new Error("range"), { code: "reading_out_of_range" }))) : original(message);
-  await press("endpoint"); await tick(4);
-  backend.interrupt("unexpected_movement"); await tick(4);
-  assert.equal(code(), "S-01");
-  assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no empty placeholder after the phase changed");
-  assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
-});
-
 test("after every change of screen the confirming buttons wait 700 ms, Stop never does", async () => {
   const { backend, tab, wiz, code } = await mount({ guardMs: 700 });
   const { CONFIRM_GUARD_MS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-wizard.js");
@@ -595,6 +581,77 @@ test("after every change of screen the confirming buttons wait 700 ms, Stop neve
   assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, 1);
 });
 
+test("a reopened slat and roll session of a cover that follows a profile is shown as path C", async () => {
+  const session = { entry_id: "one", entity_id: "cover.kitchen_two", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
+    phase: "briefing", step: "lift", reason: null, values: {}, samples: {}, readings: {}, geometry: {}, travel_cm: null, stop_requested: false,
+    slats: true, lift_attempts: 1, still_resting: false, gap_warning: false, touching_cm: 1, max_gap_cm: 20, gap_warn_cm: 10,
+    saved_travel_cm: 110, expected_cm: null, can_repeat: false, save_modes: ["new"], reading_kind: "lift" };
+  const { backend, tab, wiz, code, actions } = await mount({ session });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.equal(code(), "C-06");
+  assert.equal(wiz().querySelector(".wiz-steps-caption").textContent, "Ⓒ remeasure all");
+  assert.deepEqual(actions(), [], "reopening moves nothing");
+  void backend;
+});
+
+test("the preview is announced before it starts and its end never says that something was saved", async () => {
+  const t = (key) => translations.it[key] || key;
+  const screen = buildScreen({ t, language: "it", stage: "path", path: "A", profiles: [{ id: "tall" }], cover: { name: "Cucina 2" } });
+  assert.equal(screen.actions.find((action) => action.id === "path:B").note,
+    "Anteprima: questo percorso non è ancora collegato al backend, nessun movimento e nessun salvataggio.");
+  assert.equal(buildScreen({ t, stage: "before", path: "B", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
+  assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "points_only", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
+  assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Cucina 2" } }).actions[0].note, undefined, "times only is live");
+  const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
+    view: { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2 } });
+  assert.equal(review.actions.find((action) => action.id === "refine").note, translations.it.wiz_T319);
+  const saved = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { preview: true }, baseSaved: true, refining: true } });
+  assert.equal(saved.title, "Anteprima del riepilogo");
+  assert.equal(saved.body, translations.it.wiz_T322);
+  assert.equal(saved.preview, true);
+  // On screen the note sits under its button and describes it.
+  const { tab, wiz, press } = await mount({ language: "it" });
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  await press("choose");
+  const b = wiz().querySelector('.wiz-actions [data-wiz="path:B"]');
+  assert.equal(b.nextElementSibling.textContent, translations.it.wiz_T318);
+  assert.equal(b.getAttribute("aria-describedby"), b.nextElementSibling.id);
+});
+
+test("counts of zero and one use their own forms", () => {
+  const t = (key) => translations.it[key] || key;
+  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };
+  const cover = (followers) => ({ name: "Cucina 2", profile: { name: "alte" }, followers, effective: {} });
+  const review = (followers, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_only", cover: cover(followers),
+    view: { ...view, mode: "guided" }, local });
+  assert.match(review([]).saveInfo.body, /Il profilo «alte» non cambierà\.\n/);
+  assert.match(review(["Sala 3"]).saveInfo.body, /e l’altra tapparella che lo segue resterà com’è\./);
+  assert.match(review(["Sala 2", "Sala 3"]).saveInfo.body, /e le altre 2 tapparelle che lo seguono resteranno come sono\./);
+  const a21d = (followers) => buildScreen({ t, language: "it", stage: "session", path: "A", cover: cover(followers), view, local: { saveProfile: true },
+    followerNames: followers.join(" e ") }).profileBlock;
+  assert.equal(a21d([]).choice.options[1].description, "Nessun’altra tapparella lo segue.");
+  assert.equal(a21d([]).name.line, "Questa tapparella passa a seguirlo; nessun’altra tapparella segue «alte».");
+  assert.equal(a21d(["Sala 3"]).choice.options[1].description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
+  const b01 = (followers) => buildScreen({ t, stage: "profile", path: "B", cover: cover([]), local: {}, profiles: [{ id: "p", name: "alte", followers, measuredOn: "Sala 1" }] }).choice.hint;
+  assert.equal(b01(0), "Misurato su Sala 1 · nessuna tapparella lo segue");
+  assert.equal(b01(1), "Misurato su Sala 1 · 1 tapparella lo segue");
+  assert.equal(b01(3), "Misurato su Sala 1 · 3 tapparelle lo seguono");
+});
+
+test("a refusal is forgotten once the session moves to another phase", async () => {
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend);
+  const original = backend.hass.callWS;
+  backend.hass.callWS = async (message) => message.action === "endpoint"
+    ? (backend.calls.push(message), Promise.reject(Object.assign(new Error("range"), { code: "reading_out_of_range" }))) : original(message);
+  await press("endpoint"); await tick(4);
+  backend.interrupt("unexpected_movement"); await tick(4);
+  assert.equal(code(), "S-01");
+  assert.doesNotMatch(wiz().textContent, /\{\w+\}/, "no empty placeholder after the phase changed");
+  assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
+});
+
 test("the second tap of Take control is held back too, so a double click cannot skip the confirmation", async () => {
   const session = resumed({ phase: "reading", step: "half_open", reading_kind: "half_open" });
   const { backend, tab, wiz } = await mount({ session, owner: false, guardMs: 700 });
@@ -608,17 +665,4 @@ test("the second tap of Take control is held back too, so a double click cannot 
   assert.equal(backend.subscriptions.filter((message) => message.claim).length, 0, "a double click does not claim");
   await new Promise((resolve) => setTimeout(resolve, 720));
   assert.equal(take().disabled, false);
-});
-
-test("a reopened slat and roll session of a cover that follows a profile is shown as path C", async () => {
-  const session = { entry_id: "one", entity_id: "cover.kitchen_two", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
-    phase: "briefing", step: "lift", reason: null, values: {}, samples: {}, readings: {}, geometry: {}, travel_cm: null, stop_requested: false,
-    slats: true, lift_attempts: 1, still_resting: false, gap_warning: false, touching_cm: 1, max_gap_cm: 20, gap_warn_cm: 10,
-    saved_travel_cm: 110, expected_cm: null, can_repeat: false, save_modes: ["new"], reading_kind: "lift" };
-  const { backend, tab, wiz, code, actions } = await mount({ session });
-  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
-  assert.equal(code(), "C-06");
-  assert.equal(wiz().querySelector(".wiz-steps-caption").textContent, "Ⓒ remeasure all");
-  assert.deepEqual(actions(), [], "reopening moves nothing");
-  void backend;
 });

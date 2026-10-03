@@ -28,6 +28,14 @@ export const MOVING = (view) => !!view && (["opening", "closing", "geometry_wait
 
 const ENDED = ["interrupted", "cancelled", "expired"];
 
+/** Texts with a count: the zero and one forms of the sheet's plural texts (PROVVISORIO rows T305–T317). */
+const PLURALS = { wiz_T110: ["wiz_T305", "wiz_T306"], wiz_T112: ["wiz_T307", null], wiz_T165: ["wiz_T308", "wiz_T309"],
+  wiz_T285: ["wiz_T310", "wiz_T311"], wiz_T286: ["wiz_T312", "wiz_T313"], wiz_T287: ["wiz_T314", "wiz_T315"], wiz_T288: ["wiz_T316", "wiz_T317"] };
+export function counted(t, key, count, values = {}) {
+  const [zero, one] = PLURALS[key] || [];
+  return fill(t(count === 0 && zero ? zero : count === 1 && one ? one : key), { ...values, count });
+}
+
 /** The wizard's whole state as one screen. */
 export function buildScreen(ctx) {
   const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false } = ctx;
@@ -56,7 +64,7 @@ export function buildScreen(ctx) {
   if (stage === "path") {
     Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), body: t("wiz_T016"),
       actions: [{ id: "path:A", label: t("wiz_T017"), kind: "primary" },
-        { id: "path:B", label: t("wiz_T018"), kind: "secondary", disabled: !ctx.profiles?.length },
+        { id: "path:B", label: t("wiz_T018"), kind: "secondary", disabled: !ctx.profiles?.length, note: t("wiz_T318") },
         { id: "path:C", label: t("wiz_T019"), kind: "secondary" }] });
     if (!ctx.profiles?.length) screen.notices.push({ tone: "info", text: t("wizNoProfiles") });
     return finish();
@@ -65,7 +73,7 @@ export function buildScreen(ctx) {
     const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || ctx.profiles?.[0];
     Object.assign(screen, { code: "B-01", phase: "intro", title: t("wiz_T161"), body: t("wiz_T162"),
       choice: { name: "profile", kind: "select", label: t("wiz_T163"), value: chosen?.id ?? "",
-        hint: chosen ? tx("wiz_T165", { cover: chosen.measuredOn || "—", count: chosen.followers }) : "",
+        hint: chosen ? counted(t, "wiz_T165", chosen.followers, { cover: chosen.measuredOn || "—" }) : "",
         options: (ctx.profiles || []).map((item) => ({ value: item.id, label: item.name })) },
       actions: [{ id: "profile", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
     return finish();
@@ -91,7 +99,7 @@ export function buildScreen(ctx) {
     const bModel = path === "B";
     if (bModel) {
       Object.assign(screen, { code: "B-02", phase: "readings", title: t("wiz_T167"), body: t("wiz_T168"),
-        actions: [{ id: "begin", label: t("wiz_T076"), kind: "primary" }] });
+        actions: [{ id: "begin", label: t("wiz_T076"), kind: "primary", note: t("wiz_T318") }] });
       return finish();
     }
     Object.assign(screen, {
@@ -101,7 +109,9 @@ export function buildScreen(ctx) {
       // Guided times only has no lift-off: the backend does not use the slat choice there.
       choice: pointsOnly || timesOnly ? null : { name: "slats", kind: "radio", label: t("wiz_T023"), value: local.slats === false ? "no" : "yes",
         options: [{ value: "yes", label: t("wiz_T198") }, { value: "no", label: t("wiz_T199") }] },
-      actions: [{ id: "begin", label: t("wiz_T024"), kind: "primary" }, ...(path === "A" ? [{ id: "exit", label: t("wiz_T025"), kind: "secondary" }] : [])] });
+      // Readings only run as a preview: said before it starts.
+      actions: [{ id: "begin", label: t("wiz_T024"), kind: "primary", ...(pointsOnly ? { note: t("wiz_T318") } : {}) },
+        ...(path === "A" ? [{ id: "exit", label: t("wiz_T025"), kind: "secondary" }] : [])] });
     return finish();
   }
   if (stage === "saved") return finish(savedScreen(screen, ctx, tx, values));
@@ -362,7 +372,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
     code: profileB || timesOnly ? "" : ["slat_time_s", "opening_roll", "closing_roll"].map((key) => `${key}: ${after[key === "slat_time_s" ? "slat" : key] == null ? "—" : n(after[key === "slat_time_s" ? "slat" : key], key === "slat_time_s" ? 1 : 2)}`).join("\n") };
   if (timesOnly && after.opening_roll == null) screen.technical = null;
   const precision = view.check ? tx("wiz_T151", { gap: view.check.gap_cm, seconds: n(view.check.check_seconds) }) : null;
-  const saveInfo = (key) => ({ title: t("wiz_T280"), body: tx(key, { ...values, count: cover?.followers?.length ?? 0 }) });
+  const saveInfo = (key) => ({ title: t("wiz_T280"), body: counted(t, key, cover?.followers?.length ?? 0, values) });
   const save = { id: "save", label: t("wiz_T102"), kind: "primary" };
   if (profileB) {
     const followed = ctx.cover?.followProfile ?? "";
@@ -391,7 +401,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
     precision, profileBlock: block,
     saveInfo: c ? (follows ? saveInfo(refine ? "wiz_T286" : "wiz_T285") : saveInfo("wizSaveCoverOnly"))
       : saveInfo(refine ? (follows ? "wiz_T283" : "wiz_T282") : (follows ? "wiz_T281" : "wiz_T289")),
-    actions: [{ ...save, target }, ...(refine ? [] : [{ id: "refine", label: t("wiz_T103"), kind: "secondary", target }])] });
+    actions: [{ ...save, target }, ...(refine ? [] : [{ id: "refine", label: t("wiz_T103"), kind: "secondary", target, note: t("wiz_T319") }])] });
   return withSupport(screen, ctx, target);
 }
 
@@ -402,12 +412,12 @@ function profileBlock(ctx, tx, pathC) {
   const on = local.saveProfile ?? (!follows && !pathC);
   const choice = on && follows ? { name: "save_choice", value: local.saveChoice || "new",
     options: [{ value: "new", label: t("wiz_T111") }, { value: "update", label: tx("wiz_T109", { profile: cover.profile.name }),
-      description: tx("wiz_T110", { count: cover.followers?.length ?? 0, names: ctx.followerNames || "—" }) }] } : null;
+      description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }] } : null;
   const creating = on && (!follows || choice.value === "new");
   const nameValue = local.profileName ?? slug(cover?.name || "");
   const block = { switchLabel: t("wiz_T096"), on, explanation: follows ? tx("wiz_T108", { profile: cover.profile.name }) : t("wiz_T097"), choice,
     name: creating ? { label: t("wiz_T098"), value: nameValue, hint: t("wiz_T100"),
-      line: follows ? tx("wiz_T112", { profile: cover.profile.name, names: ctx.followerNames || "—" }) : tx("wiz_T101", { name: nameValue }),
+      line: follows ? counted(t, "wiz_T112", cover.followers?.length ?? 0, { profile: cover.profile.name, names: ctx.followerNames || "—" }) : tx("wiz_T101", { name: nameValue }),
       valid: /^[A-Za-z0-9_]{1,64}$/.test(nameValue) } : null,
     target: !on ? "cover_only" : creating ? "profile_new" : "profile_update" };
   return block;
@@ -436,6 +446,13 @@ function savedScreen(screen, ctx, tx, values) {
   screen.discard = false;
   screen.phase = "done";
   screen.preview = !!saved.preview;
+  // The end of a preview never says that something was saved: what was saved for real is said as such.
+  if (saved.preview) {
+    return Object.assign(screen, { code: path === "B" ? "B-09" : path === "C" ? "C-34" : "A-34", title: t("wiz_T320"),
+      body: local.baseSaved ? t("wiz_T322") : tx("wiz_T321", values),
+      actions: path === "B" ? [{ id: "close", label: t("wiz_T158"), kind: "primary" }]
+        : [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, { id: "close", label: t("wiz_T158"), kind: "link" }] });
+  }
   if (path === "B") return Object.assign(screen, { code: "B-09", title: t("wiz_T154"),
     body: tx("wiz_T182", { ...values, profile: ctx.cover?.followProfile ?? "", travel: number(saved.travel_cm, ctx.language, 0) }),
     actions: [{ id: "close", label: t("wiz_T158"), kind: "primary" }] });

@@ -266,3 +266,10 @@ test("Italian texts of the tab carry no placeholder", async () => {
   assert.match(tab.textContent, /Tempi e rullo/);
   assert.match(tab.querySelector(".cal-tab-summary").textContent, /^4 tapparelle · 3 calibrate · 1 da misurare$/);
 });
+
+test("the summary uses singular forms for one cover", async () => {
+  const data = overview();
+  data.covers = [data.covers[0], data.covers[4]];
+  const { tab } = await mount({ data, language: "it" });
+  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "1 tapparella · 1 calibrata · 0 da misurare");
+});

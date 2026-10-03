@@ -58,7 +58,8 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.match(wiz().querySelector(".wiz-main > .wiz-accordion:not(.wiz-technical)").innerHTML, /<strong>this shutter will follow profile "tall_two_leaf"<\/strong>/);
   await press("save");
   assert.equal(code(), "B-09");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /^Living room shutter 1 now follows profile "tall_two_leaf" and uses it immediately\. .*196 cm curtain travel/);
+  assert.equal(wiz().querySelector(".wiz-title").textContent, "Preview of the summary", "a preview never says it saved");
+  assert.equal(wiz().querySelector(".wiz-body").textContent, "End of the preview: nothing has been saved and Living room shutter 1 keeps the values it used before.");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.textContent), ["Close"]);
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.deepEqual(calibrationTraffic(backend), [], "the preview sends nothing to Home Assistant");

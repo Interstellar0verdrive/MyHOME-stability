@@ -66,7 +66,7 @@ test("times only runs the existing guided measurement and saves on this cover on
   assert.deepEqual(rows, [["Opening time", "12.3 s", "12.6 s"], ["Closing time", "12.1 s", "12.2 s"], ["Slat time", "2.4 s", "="], ["Curtain travel", "110 cm", "="]]);
   assert.equal(wiz().querySelector(".wiz-profile-block"), null);
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null);
-  assert.match(wiz().querySelector(".wiz-main > .wiz-accordion:not(.wiz-technical)").textContent, /Profile "tall_two_leaf" will not change, nor will the other 1 shutters following it/);
+  assert.match(wiz().querySelector(".wiz-main > .wiz-accordion:not(.wiz-technical)").textContent, /Profile "tall_two_leaf" will not change, nor will the other shutter following it\./);
   await press("save");
   const save = backend.calls.filter((message) => message.action === "save").at(-1);
   assert.equal(save.save_mode, "cover");

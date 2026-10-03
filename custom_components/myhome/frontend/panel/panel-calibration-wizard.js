@@ -562,6 +562,7 @@ export class CalibrationWizard {
     if (local.thenRefine && local.review && !this._gateway?.preview) {
       const base = { ...local.review };
       this._startRefine(base);
+      local.baseSaved = true;
       local.thenRefine = false;
       this._render();
       return;
