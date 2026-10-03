@@ -332,6 +332,16 @@ test("covers run in the order they are ticked, shortcuts pick all or those to me
   tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="to_measure"]').click();
   assert.deepEqual(places(tab).map(([, place]) => place), ["1", "", "", ""]);
   assert.equal(start().disabled, false);
+  const pick = (id) => tab.querySelector(`[data-action="cal-tab-batch-pick"][data-id="${id}"]`);
+  assert.equal(pick("none").textContent, "Nessuna");
+  pick("all").click();
+  pick("none").click();
+  assert.deepEqual(places(tab).map(([, place]) => place), ["", "", "", ""], "None clears every box and every place");
+  assert.equal([...tab.querySelectorAll(".cal-batch-row input:checked")].length, 0);
+  assert.equal(tab.querySelector(".cal-batch-summary").textContent, "Nessuna tapparella selezionata");
+  assert.equal(start().disabled, true);
+  tick_(tab, "cover.kitchen_two");
+  assert.deepEqual(places(tab).map(([, place]) => place), ["", "1", "", ""], "the next tick starts again from 1");
 });
 
 test("more covers than the backend allows keep Start off and say the limit", async () => {
@@ -552,4 +562,27 @@ test("the column headers are buttons reached from the keyboard", async () => {
   assert.equal(head.getAttribute("aria-hidden"), null);
   assert.equal(head.getAttribute("aria-label"), "Sort by");
   assert.ok([...head.querySelectorAll(".cal-sort")].every((button) => button.tagName === "BUTTON" && button.type === "button"));
+});
+
+test("the sequence list sorts by its headers like the tab, and reordering never changes the place in the sequence", async () => {
+  const { tab, subscriptions } = await openBatch();
+  const names = () => [...tab.querySelectorAll(".cal-batch-row")].map((item) => item.dataset.entity.replace("cover.", ""));
+  const heads = () => [...tab.querySelectorAll(".cal-batch-head .cal-sort")].map((button) => [button.dataset.id, button.querySelector("ha-icon")?.getAttribute("icon") || null]);
+  assert.deepEqual(heads(), [["cover", "mdi:arrow-up"], ["status", null], ["profile", null]], "Roller shutter ascending by default, arrow shown");
+  tick_(tab, "cover.living_two"); tick_(tab, "cover.bedroom");
+  const sort = (key) => tab.querySelector(`.cal-batch-head [data-action="cal-tab-sort"][data-id="${key}"]`).click();
+  sort("status");
+  assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_one", "living_two"], "to measure, times measured, times and roll");
+  sort("status");
+  assert.deepEqual(names(), ["living_two", "kitchen_two", "living_one", "bedroom"]);
+  assert.deepEqual(places(tab).filter(([, place]) => place).sort(), [["bedroom", "2"], ["living_two", "1"]], "the places follow the ticks, not the rows");
+  sort("profile");
+  assert.deepEqual(names(), ["kitchen_two", "living_two", "bedroom", "living_one"], "covers without a profile last");
+  assert.deepEqual(JSON.parse(window.localStorage.getItem("myhome-panel-calibration-sort-v1")), { key: "profile", dir: "asc" }, "one choice shared with the list");
+  const select = tab.querySelector('.cal-batch .cal-sort-bar select[data-sort="key"]');
+  select.value = "cover"; select.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_one", "living_two"], "the phone's Sort by bar works here too");
+  tab.querySelector('[data-action="cal-tab-batch-start"]').click(); await tick();
+  assert.deepEqual(subscriptions.find((item) => item.request.type === "myhome/cover_calibration/batch_start").request.entity_ids,
+    ["cover.living_two", "cover.bedroom"], "the sequence runs in the order of the ticks");
 });

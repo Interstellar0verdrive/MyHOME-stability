@@ -216,15 +216,28 @@ export class CalibrationTab {
   _change(event) {
     if (this._mode.kind === "batch") {
       const input = event.target.closest?.(".cal-batch-row input[type=checkbox]");
-      if (input) this._batchToggle(input.value, input.checked);
-      else if (event.target.matches?.('select[data-batch="gateway"]')) this._loadBatch(event.target.value);
-      return;
+      if (input) { this._batchToggle(input.value, input.checked); return; }
+      if (event.target.matches?.('select[data-batch="gateway"]')) { this._loadBatch(event.target.value); return; }
     }
     const select = event.target.closest?.("select[data-sort]");
-    if (!select || this._mode.kind !== "list") return;
+    if (!select || !["list", "batch"].includes(this._mode.kind)) return;
     const field = select.dataset.sort;
     if (field === "key") this._setSort(select.value, this._sort.key === select.value ? this._sort.dir : "asc");
     else this._setSort(this._sort.key, select.value === "desc" ? "desc" : "asc");
+  }
+
+  /** The phone's "Sort by" bar: column and order, the same choices as the headers. */
+  _sortBar() {
+    const { t } = this._context;
+    return `<div class="cal-sort-bar">
+          <label>${esc(t("wiz_T379"))} <select data-sort="key">${SORT_KEYS.map((key) => `<option value="${key}" ${this._sort.key === key ? "selected" : ""}>${esc(t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]))}</option>`).join("")}</select></label>
+          <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select data-sort="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>`;
+  }
+
+  /** The header row of a list: Roller shutter, Status and Profile sort it. */
+  _sortHeads(extra = "") {
+    const { t } = this._context;
+    return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"))}${this._sortHead("status", t("calTabColStatus"))}${this._sortHead("profile", t("calTabColProfile"))}<span></span></div>`;
   }
 
   /** A column header: a button that sorts by it, with the arrow of the current order. */
@@ -289,11 +302,9 @@ export class CalibrationTab {
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
         ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
-        ${visible.length ? `<div class="cal-sort-bar">
-          <label>${esc(t("wiz_T379"))} <select data-sort="key">${SORT_KEYS.map((key) => `<option value="${key}" ${this._sort.key === key ? "selected" : ""}>${esc(t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]))}</option>`).join("")}</select></label>
-          <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select data-sort="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>
+        ${visible.length ? `${this._sortBar()}
         <div class="cal-list">
-          <div class="cal-list-head" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"))}${this._sortHead("status", t("calTabColStatus"))}${this._sortHead("profile", t("calTabColProfile"))}<span></span></div>
+          ${this._sortHeads()}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}`;
     }
     if (host.innerHTML !== html) replacePreservingFocus(host, html);
@@ -419,6 +430,7 @@ export class CalibrationTab {
       if (action === "cal-tab-batch-back") this._batchBack();
       else if (action === "cal-tab-batch-pick") this._batchPick(id);
       else if (action === "cal-tab-batch-start") this._batchStart();
+      else if (action === "cal-tab-sort") this._setSort(id);
       return;
     }
     if (this._mode.kind !== "list") return;
@@ -613,23 +625,23 @@ export class CalibrationTab {
     this._render();
   }
 
-  /** The gateway's targets with the names, rooms, addresses, status and profile the list shows; sorted by name. */
+  /** The gateway's targets with the names, rooms, addresses, status and profile the list shows, in the list's order. */
   _batchTargets() {
     const batch = this._batch, { inventory, hass } = this._context;
-    const language = hass.language || "en";
     const covers = new Map(this._covers().filter((item) => item.entry.entry_id === batch.entryId).map((item) => [item.cover.entity_id, item]));
-    const collator = new Intl.Collator(language, { sensitivity: "base", numeric: true });
-    return (batch.data?.targets || []).map((target) => {
+    return this._sorted((batch.data?.targets || []).map((target) => {
       const item = covers.get(target.entity_id);
       const entity = item?.entity || inventory.entities.find((entry) => entry.entity_id === target.entity_id && entry.entry_id === batch.entryId);
       const area = item?.area ?? (entity ? inventory.areas.find((entry) => entry.id === model.effectiveArea(entity, inventory.devices))?.name || "" : "");
-      return { ...target, item, entity, area, name: item?.name || (entity ? model.entityName(entity, hass) : target.name) };
-    }).sort((a, b) => collator.compare(a.name, b.name) || collator.compare(a.area, b.area));
+      return { ...target, item, entity, area, status: item?.status, profile: item?.profile || null,
+        name: item?.name || (entity ? model.entityName(entity, hass) : target.name) };
+    }), hass.language || "en");
   }
 
   _renderBatch() {
     const { host, t, gateways } = this._context;
     const batch = this._batch, max = batch.data?.max_batch ?? 0, count = batch.order.length;
+    // The same order as the list (shared choice); the place in the sequence stays the order of the ticks.
     const targets = this._batchTargets();
     const statusBadge = (item) => item ? `<span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span>` : "";
     const profile = (item) => item?.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>`
@@ -656,10 +668,12 @@ export class CalibrationTab {
       ${!batch.loading && !batch.error && !targets.length ? `<p class="muted">${esc(t("calBatchEmpty"))}</p>` : ""}
       ${targets.length ? `<div class="cal-batch-tools"><p class="cal-batch-shortcuts"><span class="muted">${esc(t("wiz_T383"))}</span>
           <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="all">${esc(t("calTabFilter_all"))}</button>
-          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="to_measure">${esc(t("calTabFilter_to_measure"))}</button></p>
+          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="to_measure">${esc(t("calTabFilter_to_measure"))}</button>
+          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="none">${esc(t("wiz_T391"))}</button></p>
           <p class="muted cal-batch-capacity">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
+        ${this._sortBar()}
         <div class="cal-list cal-batch-list">
-          <div class="cal-list-head cal-batch-head" aria-hidden="true"><span></span><span>${esc(t("calTabColCover"))}</span><span>${esc(t("calTabColStatus"))}</span><span>${esc(t("calTabColProfile"))}</span></div>
+          ${this._sortHeads(" cal-batch-head")}
           <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
         <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
       <span class="cal-batch-sentinel" aria-hidden="true"></span>
@@ -688,8 +702,9 @@ export class CalibrationTab {
     this._render();
   }
 
+  /** Shortcuts: all available covers or those to measure, in the list's order; None clears the sequence. */
   _batchPick(kind) {
-    this._batch.order = this._batchTargets().filter((target) => !target.reason && (kind === "all" || target.item?.status === "to_measure"))
+    this._batch.order = kind === "none" ? [] : this._batchTargets().filter((target) => !target.reason && (kind === "all" || target.item?.status === "to_measure"))
       .map((target) => target.entity_id);
     this._render();
   }

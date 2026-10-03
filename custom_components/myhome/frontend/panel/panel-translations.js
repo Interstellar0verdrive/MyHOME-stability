@@ -313,6 +313,7 @@ export const translations = {
     wiz_T388: "The sequence uses the automatic measurement: each roller shutter opens, closes and opens again by itself, and the times are read from the stop reported by the actuator. **It needs an actuator that reports the real stop**: if yours does not, use the guided measurement, one roller shutter at a time.\nCancel or a measurement error discards the whole unsaved sequence.",
     wiz_T389: "{count} timed roller shutters · at most {max} per sequence",
     wiz_T390: "Back to the list",
+    wiz_T391: "None",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1089,6 +1090,7 @@ export const translations = {
     wiz_T388: "La sequenza usa la misura automatica: ogni tapparella si apre, si chiude e si riapre da sola, e i tempi si leggono dall'arresto segnalato dall'attuatore. **Serve un attuatore che segnali l'arresto reale**: se non lo fa, usa la misurazione guidata, una tapparella per volta.\nAnnulla o un errore di misura scartano l'intera sequenza non salvata.",
     wiz_T389: "{count} tapparelle a tempo · massimo {max} per sequenza",
     wiz_T390: "Torna all'elenco",
+    wiz_T391: "Nessuna",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
