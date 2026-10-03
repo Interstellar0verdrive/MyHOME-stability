@@ -377,3 +377,19 @@ test("every explanatory note of the tab shares one style", async () => {
   tab.querySelector('[data-action="cal-tab-filter"][data-id="to_measure"]').click();
   assert.ok(tab.querySelector(".cal-tab-help.cal-note"));
 });
+
+test("a never measured cover says where its times come from", async () => {
+  const data = overview();
+  const bedroom = data.covers.find((cover) => cover.entity_id === "cover.bedroom");
+  bedroom.effective.opening = timing(25, unknown, "default"); bedroom.effective.closing = timing(25, unknown, "default");
+  const { tab } = await mount({ data, language: "it" });
+  row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-origin-note").textContent,
+    "Valori predefiniti (25 s), mai misurati su questa tapparella: la posizione stimata può essere molto imprecisa. Misurala.");
+  bedroom.effective.opening = timing(30, unknown, "yaml"); bedroom.effective.closing = timing(28, unknown, "yaml");
+  const yaml = await mount({ data });
+  row(yaml.tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
+  assert.match(row(yaml.tab, "cover.bedroom").querySelector(".cal-origin-note").textContent, /^Values from the YAML configuration \(30 \/ 28 s\), never measured/);
+  row(yaml.tab, "cover.living_one").querySelector('[data-action="cal-tab-toggle"]').click();
+  assert.equal(row(yaml.tab, "cover.living_one").querySelector(".cal-origin-note"), null, "a measured cover has no such note");
+});

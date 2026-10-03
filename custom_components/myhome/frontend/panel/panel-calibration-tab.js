@@ -295,7 +295,7 @@ export class CalibrationTab {
     const list = (items) => `<dl class="cal-facts">${items.map(([label, shown]) => `<div><dt>${esc(label)}</dt><dd>${esc(shown)}</dd></div>`).join("")}</dl>`;
     const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
     return `<div class="cal-details-grid">
-        <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}</section>
+        <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}</section>
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language) : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
           ${item.profile && scaled ? `<p class="cal-note">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}</section>
@@ -308,6 +308,15 @@ export class CalibrationTab {
         ${this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:reload" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : ""}
         <button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:pencil-outline" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>
       </div>`;
+  }
+
+  /** Where the times of a never measured cover come from: the integration's default or the YAML configuration. */
+  _originNote(item, language) {
+    const effective = item.cover.effective, origin = effective.opening?.origin;
+    if (item.status !== "to_measure" || !["default", "yaml"].includes(origin) || effective.closing?.origin !== origin) return "";
+    const [opening, closing] = [effective.opening.value, effective.closing.value].map((value) => number(value, language));
+    return `<p class="cal-note cal-origin-note">${esc(fill(this._context.t(origin === "yaml" ? "wiz_T378" : "wiz_T377"),
+      { seconds: opening === closing ? opening : `${opening} / ${closing}` }))}</p>`;
   }
 
   _item(key) {
