@@ -736,6 +736,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-back:hover { background: transparent; text-decoration: underline; }
 .cal-batch-back ha-icon { --mdc-icon-size: 18px; }
 .cal-batch-note p { margin: 0; }
+.cal-batch-note p + p { margin-top: 8px; }
 .cal-batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .cal-batch-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 12px; }
 .cal-batch-capacity { margin: 0; font-size: 12px; }

@@ -303,7 +303,11 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.equal(tab.querySelector(".cal-list-rows"), null, "the selection replaces the list");
   assert.equal(tab.querySelector(".cal-batch h3").textContent, "Misurazione in sequenza");
   assert.equal(tab.querySelector(".cal-batch-back").textContent.trim(), "Torna all'elenco");
-  assert.match(tab.querySelector(".cal-batch-note").innerHTML, /<strong>Serve un attuatore che segnali l'arresto reale<\/strong>/);
+  const note = tab.querySelector(".cal-batch-note");
+  assert.deepEqual([...note.querySelectorAll("p")].map((paragraph) => paragraph.textContent.split(" ").slice(0, 2).join(" ")),
+    ["La sequenza", "Servono attuatori", "Annulla o"], "three paragraphs");
+  assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent), ["misurazione automatica", "misurazione guidata"]);
+  assert.doesNotMatch(note.textContent, /\*\*/);
   assert.deepEqual([...tab.querySelectorAll(".cal-batch-row .cal-row-name strong")].map((item) => item.textContent),
     ["Bedroom", "Kitchen shutter 2", "Living room shutter 1", "Living room shutter 2"], "inventory names, sorted by name");
   assert.doesNotMatch(tab.textContent, /cover\.bedroom|cover_bedroom_raw|living_two_raw|gruppo/i);
