@@ -366,3 +366,14 @@ test("the row menu holds every secondary action, the same as the expanded detail
   assert.match(row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cal-tab-measure-cover"]').textContent, /Measure/);
 });
 
+
+test("every explanatory note of the tab shares one style", async () => {
+  const { tab } = await mount();
+  row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
+  const notes = [...tab.querySelectorAll(".cal-note")].map((note) => note.textContent);
+  assert.equal(notes.length, 2);
+  assert.match(notes[0], /adapted to the curtain travel/);
+  assert.match(notes[1], /If the profile is remeasured/);
+  tab.querySelector('[data-action="cal-tab-filter"][data-id="to_measure"]').click();
+  assert.ok(tab.querySelector(".cal-tab-help.cal-note"));
+});

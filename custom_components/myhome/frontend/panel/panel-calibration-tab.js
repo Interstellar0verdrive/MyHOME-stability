@@ -213,7 +213,7 @@ export class CalibrationTab {
           <p class="muted cal-tab-summary" role="status">${esc([["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
             .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "))}</p></div>
         ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabBusy"))}</span></p>` : ""}
-        ${this._filter === "to_measure" ? `<p class="notice cal-tab-help"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabToMeasureHelp"))}</span></p>` : ""}
+        ${this._filter === "to_measure" ? `<p class="cal-note cal-tab-help">${esc(t("calTabToMeasureHelp"))}</p>` : ""}
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
         ${failed.length ? `<button type="button" data-action="cal-tab-refresh">${esc(t("refresh"))}</button>` : ""}
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
@@ -298,10 +298,10 @@ export class CalibrationTab {
         <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}</section>
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language) : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
-          ${item.profile && scaled ? `<p class="muted">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}</section>
+          ${item.profile && scaled ? `<p class="cal-note">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p><span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span></p>
           <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
-          <p class="muted">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}</section>
+          <p class="cal-note">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}</section>
       </div>
       <div class="actions cal-details-actions">
         ${this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:tune-variant" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : ""}
