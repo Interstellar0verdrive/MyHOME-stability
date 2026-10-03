@@ -58,7 +58,9 @@ export function buildScreen(ctx) {
       choice: { name: "cover", kind: "select", label: t("wiz_T005"), value: local.coverKey ?? ctx.covers?.[0]?.key ?? "",
         options: (ctx.covers || []).map((item) => ({ value: item.key, label: item.label })) },
       actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length }] });
-    screen.header = { title: t("wiz_T001"), subtitle: "" };
+    // Until a cover is picked the subtitle says so; then it names the cover as the drop-down does.
+    const picked = local.coverPicked ? (ctx.covers || []).find((item) => item.key === local.coverKey) : null;
+    screen.header = { title: t("wiz_T001"), subtitle: picked ? picked.label : t("wiz_T392"), placeholder: !picked };
     return finish();
   }
   if (stage === "path") {

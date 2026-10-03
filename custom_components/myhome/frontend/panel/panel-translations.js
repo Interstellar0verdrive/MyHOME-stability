@@ -314,6 +314,7 @@ export const translations = {
     wiz_T389: "{count} timed roller shutters · at most {max} per sequence",
     wiz_T390: "Back to the list",
     wiz_T391: "None",
+    wiz_T392: "No roller shutter selected yet",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1091,6 +1092,7 @@ export const translations = {
     wiz_T389: "{count} tapparelle a tempo · massimo {max} per sequenza",
     wiz_T390: "Torna all'elenco",
     wiz_T391: "Nessuna",
+    wiz_T392: "Nessuna tapparella selezionata",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

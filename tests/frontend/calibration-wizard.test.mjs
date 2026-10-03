@@ -48,6 +48,16 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   const options = [...wiz().querySelectorAll('select[name="cover"] option')].map((option) => option.textContent);
   assert.deepEqual(options, ["Kitchen shutter 2 · Kitchen · Address: 91 · A: 9 · PL: 1", "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1",
     "Living room shutter 3 · Living room · Address: 91 · A: 9 · PL: 1"]);
+  const subtitle = () => wiz().querySelector(".wiz-head .muted");
+  assert.equal(subtitle().textContent, "No roller shutter selected yet", "a placeholder until a cover is picked");
+  assert.ok(subtitle().classList.contains("wiz-head-placeholder"));
+  const select = wiz().querySelector('select[name="cover"]');
+  select.value = select.options[1].value; select.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.equal(subtitle().textContent, "Living room shutter 1 · Living room · Address: 91 · A: 9 · PL: 1", "the picked cover, as in the drop-down");
+  assert.equal(subtitle().classList.contains("wiz-head-placeholder"), false);
+  assert.equal(wiz().querySelector('select[name="cover"]').value, select.options[1].value, "the choice survives the redraw");
+  const again = wiz().querySelector('select[name="cover"]');
+  again.value = again.options[0].value; again.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to measure "Kitchen shutter 2"?');

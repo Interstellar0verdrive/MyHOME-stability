@@ -149,7 +149,7 @@ export class CalibrationWizard {
       this._root.toggleAttribute("data-preview", screen.preview);
       this._frame.innerHTML = `
         <header class="wiz-head">
-          <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3>${screen.header.subtitle ? `<p class="muted">${esc(screen.header.subtitle)}</p>` : ""}</div>
+          <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3>${screen.header.subtitle ? `<p class="muted${screen.header.placeholder ? " wiz-head-placeholder" : ""}">${esc(screen.header.subtitle)}</p>` : ""}</div>
           ${screen.discard ? `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>` : ""}
           <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}" title="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
         </header>
@@ -339,7 +339,7 @@ export class CalibrationWizard {
     else if (name === "save_choice") { this._local.saveChoice = value; this._render(); }
     else if (name === "slats") this._local.slats = value !== "no";
     else if (name === "case") this._local.scope = value;
-    else if (name === "cover") this._local.coverKey = value;
+    else if (name === "cover") { this._local.coverKey = value; this._local.coverPicked = true; this._render(); }
     else if (name === "profile") { this._local.profileId = value; this._render(); }
   }
 
