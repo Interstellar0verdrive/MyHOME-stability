@@ -656,6 +656,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-list-head { display: none; }
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
+.cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
+.cal-row-main:hover { background: var(--panel-accent-soft); }
 .cal-row.is-running { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
 .cal-row.is-expanded { background: color-mix(in srgb, var(--panel-accent) 5%, var(--panel-surface)); }
 .cal-row-main { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; grid-template-areas: "cover cover actions" "status profile profile"; gap: 8px 8px; align-items: center; padding: 12px 14px; }

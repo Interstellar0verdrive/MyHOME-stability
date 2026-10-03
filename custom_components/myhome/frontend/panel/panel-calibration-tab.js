@@ -323,8 +323,12 @@ export class CalibrationTab {
   }
 
   _click(event) {
+    if (this._mode.kind !== "list") return;
     const target = event.target.closest("button");
-    if (!target || this._mode.kind !== "list") return;
+    // The whole row opens and closes its details, as the maintainer's device cards do; its buttons keep their own action.
+    const row = !target && !event.target.closest(".cal-menu, a, input, select") && event.target.closest(".cal-row-main");
+    if (row) { row.querySelector('[data-action="cal-tab-toggle"]')?.click(); return; }
+    if (!target) return;
     const { action, id } = target.dataset;
     if (action !== "cal-tab-menu" && this._menu !== null) { this._menu = null; if (!action?.startsWith("cal-tab-")) this._render(); }
     if (action === "cal-tab-filter") { this._filter = id; this._render(); }

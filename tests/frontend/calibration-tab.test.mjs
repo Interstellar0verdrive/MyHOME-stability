@@ -301,3 +301,13 @@ test("the summary uses singular forms for one cover", async () => {
   const { tab } = await mount({ data, language: "it" });
   assert.equal(tab.querySelector(".cal-tab-summary").textContent, "1 tapparella · 1 calibrata · 0 da misurare");
 });
+
+test("a click anywhere on a row opens and closes its details, never from its buttons", async () => {
+  const { tab } = await mount();
+  row(tab, "cover.living_one").querySelector(".cal-row-last").click();
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, false);
+  row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click();
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, false, "the menu button keeps its own action");
+  row(tab, "cover.living_one").querySelector(".cal-row-status").click();
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-details").hidden, true);
+});
