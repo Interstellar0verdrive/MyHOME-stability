@@ -4,14 +4,14 @@
  * `CalibrationGateway` (live session or local preview); it never builds a WebSocket message itself.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc }, text, screens, gateways, visual] = await Promise.all([
+const [{ escapeHtml: esc }, text, screens, gateways, illustration] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-calibration-text.js")), import(asset("panel-calibration-screens.js")),
-  import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-visual.js")),
+  import(asset("panel-calibration-gateway.js")), import(asset("panel-calibration-illustration.js")),
 ]);
 const { rich, inline, names } = text;
 const { buildScreen, slug } = screens;
 const { LiveCalibrationGateway, PreviewCalibrationGateway } = gateways;
-const { visualMarkup, renderCalibrationVisual } = visual;
+const { illustrationMarkup } = illustration;
 
 /** A tape reading with a comma or a point; anything else, empty included, is not a number. */
 export function parseReading(value) {
@@ -139,10 +139,11 @@ export class CalibrationWizard {
     const screen = this._screen();
     this._current = screen;
     const { t } = this._context;
+    const drawing = (position) => screen.illustration?.position === position ? illustrationMarkup(screen.illustration.id, t("wizIllustration"), esc) : "";
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.preview, !!screen.visual, screen.wait && screen.wait.text, screen.discard]);
+      screen.saveInfo, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       this._signature = signature;
@@ -163,9 +164,10 @@ export class CalibrationWizard {
             ${screen.preview ? `<p class="wiz-preview" role="note"><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon><span>${esc(t("wizPreview"))}</span></p>` : ""}
             <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>${screen.subline ? `<p class="muted wiz-subline">${esc(screen.subline)}</p>` : ""}
             <div class="wiz-stopwatch" hidden><span class="wiz-stopwatch-label"></span><span class="wiz-stopwatch-value"></span></div>
+            ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
-            ${screen.visual ? visualMarkup() : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
+            ${drawing("after-body")}
             ${screen.box ? `<div class="wiz-box"><span class="muted">${esc(screen.box.label)}</span><p>${esc(screen.box.text)}</p></div>` : ""}
             ${screen.choice ? this._choiceMarkup(screen.choice) : ""}
             ${screen.field ? this._fieldMarkup(screen.field) : ""}
@@ -216,7 +218,6 @@ export class CalibrationWizard {
       bar.hidden = screen.wait.progress == null;
       if (screen.wait.progress != null) bar.querySelector("span").style.width = `${Math.round(screen.wait.progress * 100)}%`;
     }
-    if (screen.visual) renderCalibrationVisual(root.querySelector(".wiz-main"), screen.visual, t, !!this._gateway?.status.lost);
     const notices = screen.notices.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${esc(notice.text)}</p>`).join("");
     const box = root.querySelector(".wiz-notices");
     if (box.innerHTML !== notices) box.innerHTML = notices;

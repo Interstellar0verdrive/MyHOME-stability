@@ -17,6 +17,7 @@ the texts it uses and the message it sends.
 | `panel-calibration-wizard.js` | The wizard: layout, events, sessions, automatic continuation, leaving |
 | `panel-calibration-screens.js` | `buildScreen()`: which board a moment is, as plain data (no DOM, no messages) |
 | `panel-calibration-gateway.js` | `LiveCalibrationGateway` (the existing session) and `PreviewCalibrationGateway` (local) |
+| `panel-calibration-illustration.js` | The wizard's drawings, one per illustration id (`window-closed`, `two-runs`, `lift-sequence`, `descent-sequence`, `ascent-sequence`, `lift-zoom`, `curtain-open-tape`, `curtain-partial-tape`, `check`); `buildScreen()` picks the id and its place (`before-body`: under the title, steps and briefings; `after-body`: between the text and the field, tape readings) from the board code. Placeholder boxes of the Figma size until the drawings are exported |
 | `panel-calibration-text.js` | `**bold**` and paragraphs from escaped text, localized numbers, dates and lists |
 | `panel-translations.js` | `calTab…` (view), `wiz_T001…` (generated from the translation sheet), `wiz…` (screen-only) |
 

@@ -327,6 +327,7 @@ export const translations = {
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
+    wizIllustration: "Step diagram",
     wizDiscard: "Discard calibration",
     wizPreview: "Preview: this part is not connected to Home Assistant yet. Nothing moves and nothing is saved.",
     wizTopReached: "It is fully open, continue",
@@ -1114,6 +1115,7 @@ export const translations = {
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
+    wizIllustration: "Schema del passaggio",
     wizDiscard: "Abbandona la calibrazione",
     wizPreview: "Anteprima: questa parte non è ancora collegata a Home Assistant. Non si muove niente e non si salva niente.",
     wizTopReached: "È aperta completamente, avanti",

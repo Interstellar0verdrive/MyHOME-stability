@@ -177,7 +177,7 @@ test("every text key the calibration screens use exists in English and Italian",
   const { readFileSync } = await import("node:fs");
   const base = new URL("../../custom_components/myhome/frontend/panel/", import.meta.url);
   const keys = new Set();
-  for (const file of ["panel-calibration-tab.js", "panel-calibration-wizard.js", "panel-calibration-screens.js"]) {
+  for (const file of ["panel-calibration-tab.js", "panel-calibration-wizard.js", "panel-calibration-screens.js", "panel-calibration-illustration.js"]) {
     const source = readFileSync(new URL(file, base), "utf8");
     for (const match of source.matchAll(/\b(?:t|tx)\("([A-Za-z0-9_]+)"/g)) keys.add(match[1]);
   }

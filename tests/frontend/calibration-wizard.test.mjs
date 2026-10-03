@@ -419,7 +419,7 @@ test("a check run is shown like an intermediate run, without elapsed time, then 
   const running = screen({});
   assert.equal(running.code, "A-30");
   assert.equal(running.stopwatch, null, "Home Assistant stops the check run: no elapsed time");
-  assert.equal(running.visual, null);
+  assert.equal(running.illustration, null, "a wait has no drawing");
   assert.deepEqual(running.actions.map((action) => action.id), ["stop"]);
   assert.deepEqual(screen({ phase: "briefing" }).actions.map((action) => action.id), ["next", "stop"]);
   assert.equal(screen({ phase: "geometry_wait_stop" }).stopwatch, null);
@@ -445,6 +445,55 @@ test("an intermediate reading names its accepted range in Italian with a decimal
     local: { ackReadings: true }, cover: { name: "Cucina 2" } });
   assert.equal(running.code, "A-19");
   assert.equal(running.stopwatch, null, "an intermediate run shows no elapsed time: Home Assistant stops it");
+});
+
+test("each mockup gets its drawing by code: readings after the text, steps and briefings before it, none elsewhere", () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 },
+    geometry: { slat_time_s: 4 }, travel_cm: 110, slats: true, owner: true, sequence: 4 };
+  const drawn = (view, local = {}, path = "A") => {
+    const screen = buildScreen({ t, stage: "session", path, scope: path === "C" ? "times_and_rolls" : null, view: { ...base, ...view }, local,
+      elapsed: 2, cover: { name: "Kitchen shutter 2" } });
+    return [screen.code, screen.illustration && `${screen.illustration.id} ${screen.illustration.position}`];
+  };
+  assert.deepEqual(drawn({ step: "home", phase: "closing" }), ["A-05", "window-closed before-body"]);
+  assert.deepEqual(drawn({ step: "lift", phase: "briefing" }), ["A-06", "two-runs before-body"]);
+  assert.deepEqual(drawn({ step: "lift", phase: "briefing" }, { ackLift: true }), ["A-07", "lift-sequence before-body"]);
+  assert.deepEqual(drawn({ step: "lift", phase: "reading", reading_kind: "lift" }), ["A-08", "lift-zoom after-body"]);
+  assert.deepEqual(drawn({ step: "reset", phase: "starting_close" }), ["A-09", "descent-sequence before-body"]);
+  assert.deepEqual(drawn({ step: "reset", phase: "closing" }), ["A-10", null]);
+  assert.deepEqual(drawn({ step: "opening", phase: "opening" }), ["A-11", "ascent-sequence before-body"]);
+  assert.deepEqual(drawn({ step: "opening", phase: "reading" }), ["A-12", null]);
+  assert.deepEqual(drawn({ step: "opening", phase: "reading" }, { ackAscent: true }), ["A-13", "curtain-open-tape after-body"]);
+  assert.deepEqual(drawn({ step: "closing", phase: "closing" }), ["A-14", "descent-sequence before-body"]);
+  assert.deepEqual(drawn({ step: "half_open", phase: "briefing" }), ["A-15", null]);
+  assert.deepEqual(drawn({ step: "half_open", phase: "briefing" }, { ackDescent: true }), ["A-16", "curtain-open-tape before-body"]);
+  assert.deepEqual(drawn({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["A-17", null]);
+  assert.deepEqual(drawn({ step: "half_open", phase: "reading" }, { ackDescent: true, ackReadings: true }), ["A-18", "curtain-partial-tape after-body"]);
+  assert.deepEqual(drawn({ step: "top", phase: "opening" }, { ackReadings: true }), ["A-19", null]);
+  assert.deepEqual(drawn({ step: "top", phase: "opening" }), ["A-09", null], "the return to the top is not the descent drawing");
+  assert.deepEqual(drawn({ step: "half_close", phase: "reading" }, { ackReadings: true }), ["A-20", "curtain-partial-tape after-body"]);
+  assert.deepEqual(drawn({ step: "closing", phase: "closing" }, {}, "C"), ["C-14", "descent-sequence before-body"], "clones follow their A screen");
+  assert.deepEqual(drawn({ phase: "review" }), ["A-21", null]);
+});
+
+test("the drawing is one figure sized as in Figma, placed by its position, and gone where the mockup has none", async () => {
+  const { ILLUSTRATIONS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
+  assert.deepEqual(Object.keys(ILLUSTRATIONS).sort(), ["ascent-sequence", "check", "curtain-open-tape", "curtain-partial-tape", "descent-sequence",
+    "lift-sequence", "lift-zoom", "two-runs", "window-closed"]);
+  assert.ok(Object.values(ILLUSTRATIONS).every((size) => size.width <= 564), "never wider than the instruction column");
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  await move(backend);
+  assert.equal(code(), "A-05");
+  const figure = wiz().querySelector(".wiz-main .wiz-illustration");
+  assert.equal(figure.dataset.illustration, "window-closed");
+  assert.equal(figure.getAttribute("role"), "img");
+  assert.equal(figure.getAttribute("aria-label"), "Step diagram");
+  assert.match(figure.getAttribute("style"), /--wiz-illustration-width: 260px/);
+  assert.equal(figure.nextElementSibling.className, "wiz-body", "a step shows its drawing above the text");
+  assert.equal(wiz().querySelector(".wiz-frame .cal-visual"), null, "the maintainer's small scene is not used by the wizard");
 });
 
 test("screens carry no placeholder or key in either language", () => {

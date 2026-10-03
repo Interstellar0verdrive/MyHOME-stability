@@ -62,7 +62,7 @@ export function buildScreen(ctx) {
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
-    title: "", subline: "", body: "", stopwatch: null, wait: null, visual: null, choice: null, field: null, box: null, table: null,
+    title: "", subline: "", body: "", stopwatch: null, wait: null, illustration: null, choice: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
   };
@@ -184,10 +184,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const slats = view.slats !== false;
   const elapsed = ctx.elapsed;
   const step = view.step, phase = view.phase;
-  const positioning = (number, text) => Object.assign(screen, { code: p(number), title: t("wiz_T027"), visual: null,
+  const positioning = (number, text) => Object.assign(screen, { code: p(number), title: t("wiz_T027"),
     wait: { text, stages: [], progress: null }, actions: [stop] });
-  // Runs and readings show the illustration; waits, briefings and the summary do not, as in the mockups.
-  screen.visual = ["opening", "closing", "reading", "starting_open", "starting_close"].includes(view.phase) ? view : null;
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
@@ -261,7 +259,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "reading") return Object.assign(screen, { code: p("18"), title: t("wiz_T081"), body: t("wiz_T082"),
       field: halfField(ctx, tx, n), actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const seconds = ((slats ? view.samples?.lift || 0 : 0) + (view.values?.opening_time || 0)) / 2;
-    return Object.assign(screen, { code: p("17"), title: t("wiz_T027"), visual: null,
+    return Object.assign(screen, { code: p("17"), title: t("wiz_T027"),
       wait: { text: tx(path === "C" ? "wiz_T205" : "wiz_T080", values), stages: [{ text: tx("wiz_T079", { seconds: n(seconds, 0) }), state: "current" }],
         progress: progress(view, elapsed, seconds) },
       // Normally started by the wizard itself; if that did not happen the run can be started here.
@@ -270,6 +268,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   if (step === "top" && !local.ackReadings) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
     positioning("09", t("wiz_T086"));
+    // A-09's drawing is the descent to the base: this run goes up, so it has none.
+    screen.illustration = false;
     screen.phase = "descent";
     if (phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, stop];
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -280,7 +280,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       field: halfField(ctx, tx, n), actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const down = Math.max(((view.values?.closing_time || 0) - (view.geometry?.slat_time_s || 0)) / 2, 0);
     const first = step === "top";
-    Object.assign(screen, { code: p("19"), title: t("wiz_T027"), visual: null,
+    Object.assign(screen, { code: p("19"), title: t("wiz_T027"),
       wait: { text: t("wiz_T086"), stages: [
         { text: tx("wiz_T084", { seconds: n(view.values?.opening_time, 0) }), state: first ? "current" : "done" },
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
@@ -310,7 +310,6 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
 function guidedScreen(screen, ctx, tx, n, values, stop) {
   const { t, view, elapsed } = ctx;
   const phase = view.phase;
-  screen.visual = phase === "review" || phase === "saving" ? null : view;
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (["confirm_closed"].includes(phase)) return Object.assign(screen, { code: "C-05", phase: "prep", title: t("wiz_T030"), body: t("calPhase_confirm_closed"),
     actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary" }, stop] });
@@ -495,6 +494,8 @@ function savedScreen(screen, ctx, tx, values) {
   screen.preview = !!saved.preview;
   // The end of a preview never says that something was saved: what was saved for real is said as such.
   if (saved.preview) {
+    // The check mark of A-34 says "saved": not drawn at the end of a preview.
+    screen.illustration = false;
     return Object.assign(screen, { code: path === "B" ? "B-09" : path === "C" ? "C-34" : "A-34", title: t("wiz_T320"),
       body: local.baseSaved ? t("wiz_T322") : tx("wiz_T321", values),
       actions: path === "B" ? [{ id: "close", label: t("wiz_T158"), kind: "primary" }]
@@ -571,9 +572,33 @@ function progress(view, elapsed, seconds) {
   return Math.min(1, Math.max(0, elapsed / seconds));
 }
 
+/**
+ * The drawing of each mockup, by the number of its code (C-05…C-34 are the clones of A): its illustration id and
+ * where it sits. Readings with the tape show it between the text and the field; steps and briefings under the title
+ * (and the motor bar), above the text; A-09 above its wait box. Every other screen has none.
+ */
+const BEFORE = "before-body", AFTER = "after-body";
+const ILLUSTRATION_OF = {
+  A: { "05": ["window-closed", BEFORE], "06": ["two-runs", BEFORE], "07": ["lift-sequence", BEFORE], "08": ["lift-zoom", AFTER],
+    "09": ["descent-sequence", BEFORE], "11": ["ascent-sequence", BEFORE], "13": ["curtain-open-tape", AFTER], "14": ["descent-sequence", BEFORE],
+    "16": ["curtain-open-tape", BEFORE], "18": ["curtain-partial-tape", AFTER], "20": ["curtain-partial-tape", AFTER],
+    "23": ["curtain-partial-tape", AFTER], "25": ["curtain-partial-tape", AFTER], "27": ["curtain-partial-tape", AFTER],
+    "29": ["curtain-partial-tape", AFTER], "31": ["curtain-partial-tape", AFTER], "34": ["check", BEFORE] },
+  B: { "02": ["curtain-open-tape", BEFORE], "06": ["curtain-partial-tape", AFTER] },
+};
+ILLUSTRATION_OF.C = ILLUSTRATION_OF.A;
+
+function illustrationFor(code) {
+  const [, letter, number] = /^([ABC])-(\d+)$/.exec(code || "") || [];
+  const entry = letter && ILLUSTRATION_OF[letter][number];
+  return entry ? { id: entry[0], position: entry[1] } : null;
+}
+
 /** Header line, stepper, read-only and connection state: the same on every screen. */
 function finalize(screen, ctx) {
   const { t, language = "en", path = "A", scope, view, status = {}, local = {} } = ctx;
+  // A screen may opt out (false) where its code is shared with a run the drawing does not show.
+  screen.illustration = screen.illustration === false ? null : screen.illustration || illustrationFor(screen.code);
   const n = (value, digits = 1) => number(value, language, digits);
   const refining = (view?.preview && view.path === "refine") || local.refining;
   if (["choose", "path"].includes(ctx.stage)) screen.caption = "";
