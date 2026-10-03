@@ -201,7 +201,8 @@ export class CalibrationTab {
       html = `<div class="empty cal-tab-empty"><h2>${esc(t("calTabEmptyTitle"))}</h2><p class="muted">${esc(t("calTabEmptyBody"))}</p>
         <details class="profile-meta"><summary>${esc(t("calTabHowItWorks"))}</summary><p class="muted">${esc(t("calTabHowItWorksBody"))}</p></details></div>`;
     } else {
-      html = `<div class="cal-tab-head"><div class="cal-tab-intro"><h3>${esc(t("calTabTitle"))}</h3><p class="muted">${esc(t("calTabIntro"))}</p></div>
+      // The buttons line up with the introduction, not with the title above it.
+      html = `<h3 class="cal-tab-title">${esc(t("calTabTitle"))}</h3><div class="cal-tab-head"><p class="muted cal-tab-intro">${esc(t("calTabIntro"))}</p>
         <div class="actions cal-tab-actions">
           <button type="button" data-action="cal-tab-batch" ${busy || loading ? "disabled" : ""}><ha-icon icon="mdi:select-group" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureGroup"))}</span></button>
           ${this._wizard ? `<button type="button" class="primary" data-action="cal-tab-measure" ${busy || loading || !counts.all ? "disabled" : ""}><ha-icon icon="mdi:window-shutter-settings" aria-hidden="true"></ha-icon><span>${esc(t("calTabMeasureOne"))}</span></button>` : ""}

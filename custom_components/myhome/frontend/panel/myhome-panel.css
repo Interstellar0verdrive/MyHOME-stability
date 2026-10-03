@@ -637,10 +637,10 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 
 /* ---------- WHO 2 · Calibration tab ---------- */
 .cal-tab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
-.cal-tab h3 { margin: 0 0 4px; font-size: 18px; }
-.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: start; justify-content: space-between; }
-.cal-tab-intro { flex: 1 1 420px; min-width: 0; }
-.cal-tab-intro p { max-width: 68ch; }
+.cal-tab h3 { margin: 0; font-size: 18px; }
+.cal-tab-title { margin-bottom: -8px !important; }
+.cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+.cal-tab-intro { flex: 1 1 420px; min-width: 0; max-width: 68ch; }
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cal-tab-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
 .cal-tab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
