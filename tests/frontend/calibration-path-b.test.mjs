@@ -61,6 +61,7 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Preview of the summary", "a preview never says it saved");
   assert.equal(wiz().querySelector(".wiz-body").textContent, "End of the preview: nothing has been saved and Living room shutter 1 keeps the values it used before.");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.textContent), ["Close"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ul li")].map((item) => item.textContent), ["Curtain travel: 196 cm", "Check: 1 cm"], "the steps keep what was read");
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.deepEqual(calibrationTraffic(backend), [], "the preview sends nothing to Home Assistant");
 });

@@ -545,7 +545,8 @@ function finalize(screen, ctx) {
       [t("wiz_T040"), seconds(values.opening_time ?? base.opening)],
       ...(path === "C" && scope === "times_only" ? [] : [[t("wiz_T041"), cm(source?.travel_cm ?? base.travel)]])],
     descent: [[t("wiz_T068"), seconds(values.closing_time ?? base.closing)]],
-    readings: path === "B" ? [[t("wiz_T041"), cm(view?.travel_cm)], [t("wiz_T119"), view?.check ? `${view.check.gap_cm} cm` : "—"]]
+    readings: path === "B" ? [[t("wiz_T041"), cm(view?.travel_cm ?? local.fineReadings?.travel)],
+      [t("wiz_T119"), (view?.check ?? local.fineReadings?.check) ? `${(view?.check ?? local.fineReadings.check).gap_cm} cm` : "—"]]
       : path === "C" && scope === "points_only" ? fineSub(t, view, cm, local.fineReadings)
         : [[t("wiz_T077"), cm(readings.half_open)], [t("wiz_T078"), cm(readings.half_close)]],
     finetune: refining ? fineSub(t, view, cm, local.fineReadings) : [],
