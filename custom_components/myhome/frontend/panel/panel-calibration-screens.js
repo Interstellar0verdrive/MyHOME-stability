@@ -637,6 +637,8 @@ function finalize(screen, ctx) {
   const seconds = (value) => value == null ? "—" : `${n(value)} s`, cm = (value) => value == null ? "—" : `${n(value)} cm`;
   const slats = source ? source.slats !== false : local.slats !== false;
   const sub = {
+    // The path chosen ("Ⓐ first of its type") is the introduction's sub-line, as the mockups' stepper shows it.
+    intro: screen.caption ? [["", screen.caption]] : [],
     ascent: [...(slats && !(path === "C" && scope === "times_only") ? [[t("wiz_T039"), (samples.lift ?? base.lift) != null
       ? `${n(samples.lift ?? base.lift)} s · ${(readings.gap ?? base.gap) != null ? cm(readings.gap ?? base.gap) : "—"}` : "—"]] : []),
       [t("wiz_T040"), seconds(values.opening_time ?? base.opening)],

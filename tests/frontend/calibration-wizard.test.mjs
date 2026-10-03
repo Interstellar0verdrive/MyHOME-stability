@@ -122,6 +122,10 @@ test("path A runs the live geometry session from the first close to Save, one me
   backend.stopped(); await tick();
   assert.equal(code(), "A-06");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Ascent · 3 of 7");
+  // "Ⓐ first of its type" is the introduction's sub-line, not a caption under the phase line.
+  const intro = wiz().querySelector(".wiz-steps ol > li");
+  assert.deepEqual([intro.querySelector(".wiz-step-label").textContent, intro.querySelector("ul > li").textContent], ["Introduction", "Ⓐ first of its type"]);
+  assert.equal(wiz().querySelector(".wiz-steps-caption"), null);
   await press("ack:lift");
   assert.equal(code(), "A-07");
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, true, "no stopwatch before the run");
@@ -755,7 +759,7 @@ test("a reopened slat and roll session of a cover that follows a profile is show
   const { backend, tab, wiz, code, actions } = await mount({ session });
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   assert.equal(code(), "C-06");
-  assert.equal(wiz().querySelector(".wiz-steps-caption").textContent, "Ⓒ remeasure all");
+  assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, "Ⓒ remeasure all");
   assert.deepEqual(actions(), [], "reopening moves nothing");
   void backend;
 });

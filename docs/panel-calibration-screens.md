@@ -59,7 +59,8 @@ sit under the first three), below they are cards. Rendering the view sends no ca
 Desktop (≥ 1024 px): header with the cover name, its address and **Discard calibration**; stepper (left), instruction
 (centre), actions (right). Phone: a full screen with the header and ✕, a one-line stepper with **Steps** (a sheet with
 the whole stepper), the instruction scrolling, the actions anchored at the bottom. The stepper shows the phases of the
-path, the current one half filled, and under each reached phase its measured values. The stopwatch appears only in
+path, the current one half filled, under the introduction the path chosen (T026 *Ⓐ first of its type*, T169, T200,
+T231, T236) and under each other reached phase its measured values. The stopwatch appears only in
 the timed runs. Every wait has a progress bar: its duration comes from the times in use (a positioning from the
 closing or opening time, a half run from the measured times, a simulated step from its stages), with the time left
 under it (T402, provisional); when the duration is unknown (a cover with only the integration's default times) the bar

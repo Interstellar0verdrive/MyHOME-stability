@@ -42,7 +42,7 @@ test("times only runs the existing guided measurement and saves on this cover on
   assert.equal(code(), "C-35");
   assert.equal(wiz().querySelector('input[name="slats"]'), null, "the guided protocol does not use the slat choice");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Preparation · 2 of 5");
-  assert.equal(wiz().querySelector(".wiz-steps-caption").textContent, "Ⓒ times only");
+  assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, "Ⓒ times only");
   await press("begin");
   const start = backend.subscriptions.find((message) => message.type === "myhome/cover_calibration/start");
   assert.equal("mode" in start, false, "a start without mode is the guided measurement");

@@ -269,9 +269,9 @@ export class CalibrationWizard {
   _guarded() { return !!this._guardMs && performance.now() < (this._guardUntil || 0); }
 
   _stepperMarkup(screen) {
-    return `<p class="wiz-steps-line">${esc(screen.stepper.line)}</p>${screen.caption ? `<p class="wiz-steps-caption muted">${esc(screen.caption)}</p>` : ""}
+    return `<p class="wiz-steps-line">${esc(screen.stepper.line)}</p>
       <ol>${screen.stepper.phases.map((phase) => `<li data-step-state="${phase.state}"${phase.state === "current" ? ' aria-current="step"' : ""}><span class="wiz-step-mark" aria-hidden="true"></span><span class="wiz-step-label">${esc(phase.label)}</span>
-        ${phase.substeps.length ? `<ul>${phase.substeps.map((item) => `<li>${esc(item.label)}: ${esc(item.value)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ol>`;
+        ${phase.substeps.length ? `<ul>${phase.substeps.map((item) => `<li>${item.label ? `${esc(item.label)}: ` : ""}${esc(item.value)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ol>`;
   }
 
   _waitMarkup(wait) {
