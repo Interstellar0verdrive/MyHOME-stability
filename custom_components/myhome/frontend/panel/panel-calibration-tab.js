@@ -244,7 +244,7 @@ export class CalibrationTab {
       <div class="cal-row-main">
         <button type="button" class="cal-row-toggle" data-action="cal-tab-toggle" data-id="${esc(key)}" aria-expanded="${expanded}" aria-controls="${esc(id)}">
           <ha-icon class="cal-row-chevron" icon="mdi:chevron-right" aria-hidden="true"></ha-icon><span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span>
-          <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}<span class="cal-row-last-inline"> · ${esc(last || t("calTabNeverMeasured"))}</span></span></span></button>
+          <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc([this._area(item), gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · "))}${this._address(item)}<span class="cal-row-last-inline"> · ${esc(last || t("calTabNeverMeasured"))}</span></span></span></button>
         <span class="cal-row-status">${badge}</span>
         <span class="cal-row-profile">${profile}</span>
         <span class="cal-row-last muted">${esc(session ? "—" : last || "—")}</span>
@@ -257,6 +257,14 @@ export class CalibrationTab {
       </div>
       <div class="cal-row-details" id="${esc(id)}" ${expanded ? "" : "hidden"}>${expanded ? this._details(item, busy, language, addressDetails) : ""}</div>
     </div>`;
+  }
+
+  /** "· Address: 86  A: 8  PL: 6" as the device cards show it: grey labels, dark values. */
+  _address(item) {
+    const address = item.entity?.address, { t } = this._context;
+    if (!address?.raw) return "";
+    const fields = [[t("address"), address.raw], ...(address.a != null && address.pl != null ? [["A", address.a], ["PL", address.pl]] : [])];
+    return `<span class="cal-row-address"> · ${fields.map(([label, value]) => `<span><span class="cal-row-address-label">${esc(label)}:</span> <span class="cal-row-address-value">${esc(value)}</span></span>`).join(" ")}</span>`;
   }
 
   _area(item) {
