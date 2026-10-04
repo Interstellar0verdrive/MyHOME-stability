@@ -65,6 +65,16 @@ only after both confirmed delivery and actuator Stop feedback. A physical endpoi
 confirmation instead ends timing on receipt by the backend; the subsequent relay
 release Stop is excluded. No browser clock is used.
 
+In the end stop runs (`home`, `reset`, the full ascent and descent, `top`, and the
+returns of a check) the actuator's own stop status (`state == 0`) does not interrupt:
+it is dated (`motor_stopped`, `stopped_elapsed`) and the run waits for `endpoint`.
+Confirmed after it, the full ascent or descent records `stopped_elapsed` and the step
+goes on without waiting for a second stop status; confirmed before it, the
+confirmation ends timing as above. Evidence says which with `ended_by` (`bus_stop` or
+`press`). During `lift`, where the motor keeps running until the operator marks the
+lift-off, and during the intermediate and check runs, which the backend stops itself,
+a stop status before that press or that Stop still interrupts with `unexpected_stop`.
+
 For normalized height `h` and roll `k`, use the runtime's winding fraction:
 
 ```
@@ -110,8 +120,8 @@ and the check reading seeds the runtime position after Save.
 
 A check never costs the measurement. Stop in its briefings or at its reading returns
 to `review` with everything, the previous verdict included. Stop while it moves, an
-early stop on the bus or a movement nobody asked for returns to `review` without a
-verdict; Stop is written, and since nobody read where the edge stopped, Save leaves
+early stop on the bus during the check run or a movement nobody asked for returns to
+`review` without a verdict; Stop is written, and since nobody read where the edge stopped, Save leaves
 the runtime position unknown instead of seeding it. Other interruptions end the
 session as at any other step. Contract: [the API](panel-websocket-api.md#guided-geometry-check-of-the-measured-model).
 

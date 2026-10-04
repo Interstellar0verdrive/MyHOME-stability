@@ -51,17 +51,33 @@ Neither mode claims automatic physical endstop detection.
 
 Stop interrupts the measurement and discards provisional times. Cancel closes the
 session; restarting requires a new session. Normal HA commands remain usable but
-interrupt measurement and request Stop. Unexpected bus reversal/movement or a stop
-before endpoint confirmation also interrupts it. A same-direction repeated bus
-status during a measured leg does not restart the timer.
+interrupt measurement and request Stop. Unexpected bus reversal/movement also
+interrupts it. A same-direction repeated bus status during a measured leg does not
+restart the timer.
+
+A standard actuator stop status (`state == 0`) during a measured leg does not
+interrupt it: the wizard tells the operator to confirm once the motor has stopped by
+itself, so on actuators that report their real stop that status usually arrives
+first. The backend dates it (`motor_stopped: true`, `stopped_elapsed` in seconds from
+the movement anchor) and keeps waiting for `endpoint`; the leg's 600-second deadline
+stays armed, so no confirmation still ends in `travel_timeout`. Confirmed after the
+status, the leg records `stopped_elapsed`, without the operator's reaction time;
+confirmed before it, the leg records the confirmation as before and the later status
+is ignored. Only the confirmation records a time and sets the endpoint. After the
+status, any further movement, in either direction, interrupts with
+`unexpected_movement`; Stop still discards the leg. On a timer actuator (F411, about
+60 seconds by default) the status reports its relay releasing: if the operator has
+not confirmed earlier, that time is what is saved, so confirm as soon as the cover
+reaches its end stop.
 
 **Stop requested is not stop confirmed.** Commands use the existing gateway queue;
 the UI reports the request, not a physical acknowledgement. If the queue is full,
 the error explicitly says Stop could not be queued and is logged. If the gateway
 is unavailable, use the physical control. Do not use other controls while measuring.
 
-The timers exclude time spent waiting in the command queue, but include operator
-reaction time, bus feedback latency and the endpoint click's trip to HA. The screen
+The timers exclude time spent waiting in the command queue. A leg confirmed before
+the actuator's stop status includes operator reaction time, bus feedback latency and
+the endpoint click's trip to HA; a leg confirmed after it ends at that status. The screen
 updates elapsed time with its five-second heartbeat; this display cadence does not
 set measurement precision. If the gateway/device does not produce movement feedback,
 the wizard times out and the ordinary manual profile editor remains usable.
@@ -133,10 +149,10 @@ Guided session phases are:
 | --- | --- |
 | `confirm_closed` | Explicit `open` confirms the closed, stopped starting endpoint |
 | `starting_open` | Await matching bus movement after guarded dispatch |
-| `opening` | `endpoint` confirms fully open, records opening seconds and queues Stop |
+| `opening` | `endpoint` confirms fully open, records opening seconds (`stopped_elapsed` if the bus already reported the stop) and queues Stop |
 | `confirm_open` | Explicit `close` confirms fully open/stopped and requests closing |
 | `starting_close` | Await matching bus movement after guarded dispatch |
-| `closing` | `endpoint` confirms fully closed, records closing seconds and queues Stop |
+| `closing` | `endpoint` confirms fully closed, records closing seconds (`stopped_elapsed` if the bus already reported the stop) and queues Stop |
 | `review` | Inspect both values, then `save` with a name |
 | `saving` | An accepted configuration write is in progress |
 | `saved` | New profile persisted and assigned; session ownership released |
@@ -166,7 +182,8 @@ not a guarantee of delivery or a substitute for the shutter's physical limits.
 An already dispatched operation cannot be recalled from the network.
 
 The operator's endpoint confirmations set the runtime position baseline to 0/100.
-A bus Stop alone is never treated as proof of an endpoint. Existing travel times
+A bus Stop alone is never treated as proof of an endpoint: it can date the end of
+a leg, but only the confirmation records it. Existing travel times
 remain unchanged until Save, which reuses the revision-checked atomic profile
 store. It sends no movement command and never overwrites a shared profile.
 Save/storage errors preserve the review while the session remains connected.
@@ -186,10 +203,10 @@ uses the complete cycle and resets the direction selector to both directions.
 For opening, first position the cover fully closed and stopped; for closing,
 start fully open and stopped. Confirm the starting endpoint to request movement,
 then record the opposite physical endpoint with the existing guided control.
-Timing starts at matching bus feedback and includes operator reaction delay at
-the endpoint. The wizard requests Stop and goes directly to review after that
-one leg. It never starts the other direction. The review labels the measured time
-and the retained time separately.
+Timing starts at matching bus feedback and ends at the endpoint confirmation, or
+at the actuator's stop status if it came first. The wizard requests Stop and goes
+directly to review after that one leg. It never starts the other direction. The
+review labels the measured time and the retained time separately.
 
 The retained value keeps its original source, date and origin, including inherited
 or unknown evidence. Only the measured direction gets new guided provenance.
@@ -273,7 +290,10 @@ Example event:
 Every state includes those fields. `mode` is `guided` or `automatic`; automatic
 states also contain zero-based `run_index` (0: positioning open, 1: close, 2: open). `values` progressively contains `opening_time`
 and `closing_time`, as finite seconds from 1 to 600. `elapsed` is the current leg's
-backend duration or null. `sequence` increases on state notifications; heartbeats
+backend duration or null. `motor_stopped` is true once the bus has reported the
+motor's stop during a guided leg that still awaits `endpoint`, and `stopped_elapsed`
+gives its time in seconds from the movement anchor; otherwise they are `false` and
+null. `sequence` increases on state notifications; heartbeats
 return the latest state without increasing it. `revision` is the profile-store
 revision captured at start and updated after successful save. Runtime events do
 not modify that configuration revision.
@@ -353,6 +373,9 @@ documented request-schema validation and local documentation links pass.
 Each confirmed endpoint records backend UTC wall-clock evidence independently of
 the monotonic clock used for elapsed travel time. Explicit profile save persists
 both directions with `source: guided` and their original confirmation dates.
+Guided evidence recorded from this release also says what ended the leg:
+`ended_by: press` (the confirmation) or `ended_by: bus_stop` (the actuator's stop
+status, confirmed afterwards). Older evidence has no `ended_by` and stays valid.
 Interrupting the session clears unsaved evidence along with measured times.
 The profile editor shows that evidence after saving; it is not an automatic
 calibration or an automatic-save feature.

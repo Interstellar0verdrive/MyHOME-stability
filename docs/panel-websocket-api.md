@@ -80,7 +80,9 @@ Save is offered as before, whatever the verdict.
   measurement and the verdict there was before the check (`null` if there was none).
   Stop is written, as Stop in `review` is.
 - Stop while the cover returns to its end stop or runs the check (from the moment the
-  movement is queued), an early stop reported by the bus (`unexpected_stop`) or a
+  movement is queued), an early stop reported by the bus during the check run
+  (`unexpected_stop`; on the return to the end stop the actuator's stop only waits for
+  `endpoint`, as in every end stop run) or a
   movement nobody asked for (`unexpected_movement`, also during a briefing) returns to
   `review` without a verdict (`check: null`). Stop is written, and the session no
   longer knows where the bottom edge is: Save then leaves the runtime position unknown,
@@ -727,6 +729,7 @@ Each profile includes `provenance.opening` and `provenance.closing`. Each contai
 | `recorded_at` | Backend UTC ISO timestamp; null for unknown evidence |
 | `origin_entity_id`, `origin_name` | Current registry identity of the original cover, or null if missing |
 | `inherited` | Whether the recorded origin differs from this read request's target cover |
+| `ended_by` | Guided evidence only, when recorded: `press` if the endpoint confirmation ended the leg, `bus_stop` if the actuator's stop status did and the confirmation followed it. Absent from older evidence |
 
 The wizard timestamps each confirmed endpoint. Manual creation or a changed
 numeric time records the backend save time for that direction. Renames,

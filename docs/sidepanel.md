@@ -366,10 +366,10 @@ uses the complete cycle and resets the direction selector to both directions.
 For opening, first position the cover fully closed and stopped; for closing,
 start fully open and stopped. Confirm the starting endpoint to request movement,
 then record the opposite physical endpoint with the existing guided control.
-Timing starts at matching bus feedback and includes operator reaction delay at
-the endpoint. The wizard requests Stop and goes directly to review after that
-one leg. It never starts the other direction. The review labels the measured time
-and the retained time separately.
+Timing starts at matching bus feedback and ends at the endpoint confirmation, or
+at the actuator's stop status if it came first. The wizard requests Stop and goes
+directly to review after that one leg. It never starts the other direction. The
+review labels the measured time and the retained time separately.
 
 The retained value keeps its original source, date and origin, including inherited
 or unknown evidence. Only the measured direction gets new guided provenance.
