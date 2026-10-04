@@ -407,7 +407,7 @@ test("Discard asks first, closes with Escape, and leaves only once Cancel reache
   assert.equal(dialog.hidden, false);
   assert.equal(dialog.querySelector("h4").textContent, "Close without saving?");
   assert.match(dialog.textContent, /A stop command is sent/);
-  assert.equal(dialog.querySelector('[data-wiz="stop"]').hidden, false, "Stop sits beside Discard while it moves");
+  assert.equal(dialog.querySelector('[data-wiz="stop"]'), null, "no Stop of its own: Exit without saving sends it, and Stop stays on the page");
   assert.equal(root.activeElement, dialog.querySelector('[data-wiz="stay"]'));
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await tick();
   assert.equal(dialog.hidden, true);
@@ -884,16 +884,15 @@ test("the keyboard reaches every step: title focus, Steps sheet, and a dialog th
   const dialog = wiz().querySelector(".wiz-dialog");
   const buttons = [...dialog.querySelectorAll("button:not([hidden])")];
   // S-08: "Exit without saving" as red text on the left, the primary on the right; focus starts on the primary.
-  assert.deepEqual(buttons.map((button) => button.dataset.wiz), ["leave", "stop", "stay"]);
+  assert.deepEqual(buttons.map((button) => button.dataset.wiz), ["leave", "stay"], "two buttons only");
   assert.equal(root.activeElement, dialog.querySelector('[data-wiz="stay"]'));
   buttons.at(-1).focus();
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   assert.equal(root.activeElement, buttons[0], "Tab wraps to the first button");
   dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
   assert.equal(root.activeElement, buttons.at(-1), "Shift+Tab wraps to the last one");
-  dialog.querySelector('[data-wiz="stop"]').click(); await tick();
-  assert.equal(dialog.hidden, true, "Stop from the dialog closes it and keeps the wizard");
-  assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1);
+  dialog.querySelector('[data-wiz="stay"]').click(); await tick();
+  assert.equal(dialog.hidden, true, "Continue the calibration closes it and keeps the wizard");
 });
 
 test("a half run that did not start by itself can be started from its screen, and fine-tuning starts over as a preview", async () => {

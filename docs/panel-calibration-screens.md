@@ -156,7 +156,7 @@ C-01 (T184–T188) shows what the cover uses (a box with a bold title and one li
 | S-06 | `expired` | T259, T260 | Start over, Close |
 | S-07 | read-only view: in the actions column T262 and T263 as plain text, then Take control (outlined while the owner is present) | T262–T265, `calConfirmTakeControl`; no reading field | Take control (two taps while the owner is present); Stop while it may move |
 | — | Leaving the tab (another tab, gateway, category, cover view, link, type or area filter) while this tab owns a live session: *Calibration in progress* asks through the shell's `setBeforeLeave` guard; the browser's `beforeunload` warning while it is open | T408, T409 ({minutes} from `recovery_seconds`, 30 by default), T410, T411, T269 | *Continue calibration* stays; *Leave and resume later* leaves it open (the list shows it first with *Open session*); *Leave without saving* sends `cancel` first |
-| S-08 | Discard during a session: *Exit without saving* as red text on the left, *Continue the calibration* (primary) on the right | T267, T269, T270, `wizExitBodyLive` (live) / T268 (preview) | `cancel`; Stop beside it while it may move |
+| S-08 | Discard during a session: *Exit without saving* as red text on the left, *Continue the calibration* (primary) on the right | T267, T269, T270, `wizExitBodyLive` (live) / T268 (preview) | `cancel` (two buttons only: Stop stays on the page) |
 
 A session reopened from the list is drawn as path C (remeasure everything) when its cover already follows a profile,
 otherwise as path A; its slat choice comes from the view.

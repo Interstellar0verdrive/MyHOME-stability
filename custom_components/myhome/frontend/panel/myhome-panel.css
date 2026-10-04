@@ -1018,8 +1018,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 @media (min-width: 1024px) { .wiz-nav-dialog .wiz-dialog-card .actions { flex-wrap: nowrap; } }
 /* S-08: "Exit without saving" as red text on the left, the primary on the right. */
 .wiz-leave { margin-inline-end: auto; color: var(--panel-error); border: 0; background: transparent; box-shadow: none; }
-.wiz-leave:hover, .wiz-dialog-stop:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
-.wiz-dialog-stop { color: var(--panel-error); border: 0; background: transparent; }
+.wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 /* Drawings of the steps: Figma size, never wider than the column. */
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
 /* The drawings' palette (Figma "v2 panel" variables): light, and dark with the Home Assistant theme. */

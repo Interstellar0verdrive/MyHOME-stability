@@ -237,7 +237,6 @@ export class CalibrationWizard {
         <div class="wiz-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-dialog-title" aria-describedby="wiz-dialog-body" hidden><div class="wiz-dialog-card">
           <h4 id="wiz-dialog-title">${esc(t("wiz_T267"))}</h4><p id="wiz-dialog-body"></p>
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="leave">${esc(t("wiz_T270"))}</button>
-            <button type="button" class="wiz-dialog-stop" data-wiz="stop" hidden>${esc(t("wiz_T028"))}</button>
             <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>
         <div class="wiz-dialog wiz-nav-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-nav-title" aria-describedby="wiz-nav-body" hidden><div class="wiz-dialog-card">
           <h4 id="wiz-nav-title">${esc(t("wiz_T408"))}</h4><p id="wiz-nav-body"></p>
@@ -858,7 +857,6 @@ export class CalibrationWizard {
     if (STAGES_BEFORE_SESSION.includes(this._local.stage) || !this._sessionOpen()) { this._finish(); return; }
     const dialog = this._frame.querySelector(".wiz-dialog"), { t } = this._context;
     dialog.querySelector("#wiz-dialog-body").textContent = t(this._gateway.preview ? "wiz_T268" : "wizExitBodyLive");
-    dialog.querySelector(".wiz-dialog-stop").hidden = !screens.MOVING(this._gateway.view);
     dialog.hidden = false;
     this._root.classList.add("has-dialog");
     dialog.querySelector('[data-wiz="stay"]').focus();
