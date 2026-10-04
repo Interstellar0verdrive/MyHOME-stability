@@ -86,11 +86,12 @@ export function buildScreen(ctx) {
     // waits for a choice. The chosen row opens and says what choosing it means.
     const picked = local.coverPicked ? (ctx.covers || []).find((item) => item.key === local.coverKey) : null;
     const notes = [];
-    // A calibrated cover: a new measurement replaces its values; fine-tuning is the way to adjust them.
+    // A calibrated cover: one warning that a new measurement replaces its values (and the profile it follows);
+    // fine-tuning is the way to adjust them. A cover that only follows a profile says which.
     if (picked?.status && picked.status !== "to_measure") {
-      notes.push(fill(t("wiz_T394"), { status: t(`calTabStatus_${picked.status}`).toLocaleLowerCase(language), date: dateText(picked.last, language) || "—" }));
-    }
-    if (picked && cover?.profile?.name) notes.push(fill(t("wiz_T395"), { profile: cover.profile.name }));
+      notes.push({ tone: "warning", text: fill(t(cover?.profile?.name ? "wiz_T413" : "wiz_T414"), { profile: cover?.profile?.name ?? "",
+        status: t(`calTabStatus_${picked.status}`).toLocaleLowerCase(language), date: dateText(picked.last, language) || "—" }) });
+    } else if (picked && cover?.profile?.name) notes.push({ tone: "info", text: fill(t("wiz_T395"), { profile: cover.profile.name }) });
     Object.assign(screen, { code: "A-01", phase: "intro", title: t("wiz_T003"), body: t("wiz_T004"),
       picker: { selected: picked ? local.coverKey : "", filter: local.pickFilter || "all", notes },
       actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length || !picked }] });

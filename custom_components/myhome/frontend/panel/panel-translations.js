@@ -335,6 +335,16 @@ export const translations = {
     wiz_T410: "Leave and resume later",
     wiz_T411: "Leave without saving",
     wiz_T412: "A measurement is in progress: finish or cancel it before assigning a profile.",
+    wiz_T413: "This roller shutter is already calibrated ({status}, {date}) and follows the profile \"{profile}\". A new measurement, if you choose it in the next step, replaces the values in use; to adjust them, choose fine-tuning.",
+    wiz_T414: "This roller shutter is already calibrated ({status}, {date}). A new measurement, if you choose it in the next step, replaces the values in use; to adjust them, choose fine-tuning.",
+    wiz_T415: "A full new measurement replaces this roller shutter's values in use. To adjust them without starting over, choose Ⓒ.",
+    wiz_T416: "Choosing a different profile replaces the values currently in use with those of the chosen profile, adapted to this roller shutter's travel.",
+    wiz_T417: "Choosing a profile replaces the values currently in use with those of the chosen profile, adapted to this roller shutter's travel.",
+    wiz_T418: "Never measured",
+    wiz_T419: "1 profile available",
+    wiz_T420: "{count} profiles available",
+    wiz_T421: "If unsure, choose {path}.",
+    wiz_T422: "Travel similar to the profile \"{profile}\" ({travel} cm vs {reference} cm)",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1134,6 +1144,16 @@ export const translations = {
     wiz_T410: "Esci e riprendi dopo",
     wiz_T411: "Esci senza salvare",
     wiz_T412: "C'è una misurazione in corso: termina o annullala prima di assegnare un profilo.",
+    wiz_T413: "Questa tapparella è già calibrata ({status}, {date}) e segue il profilo «{profile}». Una nuova misurazione, se la scegli al passo successivo, sostituisce i valori in uso; per correggerli, scegli il perfezionamento.",
+    wiz_T414: "Questa tapparella è già calibrata ({status}, {date}). Una nuova misurazione, se la scegli al passo successivo, sostituisce i valori in uso; per correggerli, scegli il perfezionamento.",
+    wiz_T415: "Una nuova misurazione completa sostituisce i valori in uso di questa tapparella. Per correggerli senza rifare tutto, scegli Ⓒ.",
+    wiz_T416: "Scegliere un profilo diverso sostituisce i valori attualmente in uso con quelli del profilo scelto, adattati alla corsa di questa tapparella.",
+    wiz_T417: "Scegliere un profilo sostituisce i valori attualmente in uso con quelli del profilo scelto, adattati alla corsa di questa tapparella.",
+    wiz_T418: "Mai misurata",
+    wiz_T419: "1 profilo disponibile",
+    wiz_T420: "{count} profili disponibili",
+    wiz_T421: "Nel dubbio, scegli {path}.",
+    wiz_T422: "Corsa simile al profilo «{profile}» ({travel} cm contro {reference} cm)",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

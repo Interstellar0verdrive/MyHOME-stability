@@ -276,7 +276,7 @@ export class CalibrationTab {
         <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc(room)}${this._address(item)}</span></span>
         <span class="cal-batch-status"><span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span></span>
         <span class="cal-batch-profile">${profile(item)}</span>
-        ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((line) => `<span class="cal-note">${esc(line)}</span>`).join("")}</span>` : ""}</label>`;
+        ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((note) => `<span class="cal-note${note.tone === "warning" ? " is-warning" : ""}">${esc(note.text)}</span>`).join("")}</span>` : ""}</label>`;
     }).join("");
     return `<div class="cal-tab-chips wiz-pick-chips" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((id) =>
         `<button type="button" class="cal-chip" data-wiz="pick-filter:${id}" aria-pressed="${filter === id}">${esc(t(`calTabFilter_${id}`))} <span class="count">${counts[id]}</span></button>`).join("")}</div>

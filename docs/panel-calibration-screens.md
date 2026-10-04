@@ -90,7 +90,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 
 | Board | Session (`phase` / `step`) | Texts | Sent |
 | --- | --- | --- | --- |
-| A-01 | before the session: the covers as the sequence view's rows (name, room, bus address, status, profile) with one radio each, the list's filter chips and shared order (drawn by `CalibrationTab._pickerMarkup`); the chosen row opens with T394 (already calibrated) and T395 (the profile it follows) | T001, T003–T006, T392, T394, T395 | nothing |
+| A-01 | before the session: the covers as the sequence view's rows (name, room, bus address, status, profile) with one radio each, the list's filter chips and shared order (drawn by `CalibrationTab._pickerMarkup`); the chosen row opens with one warning note, T413 (already calibrated, with the profile it follows) or T414 (no profile); a cover that only follows a profile shows T395 | T001, T003–T006, T392, T395, T413, T414 | nothing |
 | A-02 | before the session | T015–T019 | nothing |
 | A-03 | before the session | T021–T024, T198, T199 (no Cancel T025: the header's *Abandon the calibration* does the same) | `start` on «Understood, begin» |
 | A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |

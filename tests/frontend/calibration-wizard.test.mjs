@@ -78,9 +78,10 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_one", "cover.living_three", "cover.kitchen_two"], "sorted by status, as the list");
   await pickCover("cover.kitchen_two");
   // The chosen row opens with what choosing it means, in the row itself.
-  const notes = [...wiz().querySelectorAll(".wiz-pick-row.is-selected .wiz-pick-notes .cal-note")].map((note) => note.textContent);
-  assert.deepEqual(notes, ["This roller shutter is already calibrated (times and roll, Sep 29, 2026). A new measurement replaces the values in use; to adjust them, use fine-tuning.",
-    'Follows the profile "tall_two_leaf"']);
+  const notes = [...wiz().querySelectorAll(".wiz-pick-row.is-selected .wiz-pick-notes .cal-note")];
+  assert.deepEqual(notes.map((note) => [note.textContent, note.classList.contains("is-warning")]), [[
+    'This roller shutter is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new measurement, if you choose it in the next step, replaces the values in use; to adjust them, choose fine-tuning.', true]],
+    "one yellow note with the profile");
   wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick(); wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
   await press("choose");
   assert.equal(code(), "A-02");
@@ -1374,7 +1375,13 @@ test("A-01's list names the bus address and its notes in Italian too", async () 
   assert.equal(wiz().querySelector(".wiz-pick-row .cal-row-name .muted").textContent, "Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
   await pickCover("cover.kitchen_two");
   assert.equal(wiz().querySelector(".wiz-pick-notes .cal-note").textContent,
-    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026). Una nuova misurazione sostituisce i valori in uso; per ritoccarli usa il perfezionamento.");
+    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026) e segue il profilo «tall_two_leaf». Una nuova misurazione, se la scegli al passo successivo, sostituisce i valori in uso; per correggerli, scegli il perfezionamento.");
+  // Without a profile the clause about it falls.
+  const t = (key) => translations.it[key] || key;
+  const alone = buildScreen({ t, language: "it", stage: "choose", local: { coverKey: "k", coverPicked: true },
+    covers: [{ key: "k", label: "Cucina 2", status: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Cucina 2", profile: null } });
+  assert.deepEqual(alone.picker.notes, [{ tone: "warning",
+    text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova misurazione, se la scegli al passo successivo, sostituisce i valori in uso; per correggerli, scegli il perfezionamento." }]);
 });
 
 test("opened on a given cover, the wizard already has it chosen; from the tab's button it starts empty", async () => {
