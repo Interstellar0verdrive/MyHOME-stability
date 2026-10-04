@@ -633,7 +633,10 @@ export class CalibrationTab {
       <p class="error" role="alert" hidden></p>`
       : `<p class="muted">${esc(t("profileListEmpty"))}</p>`;
     if (!profiles.length) return;
-    // In the footer, on one row with Close, as in the other dialogs.
+    // As in the design (T-09): Cancel, outlined, then Assign on the footer's row.
+    const cancel = dialog.querySelector(".cal-dialog-close");
+    cancel.textContent = t("wiz_T025");
+    cancel.classList.add("cal-dialog-cancel");
     dialog.querySelector(".dialog-foot").insertAdjacentHTML("beforeend", `<button type="button" class="primary" data-assign disabled>${esc(t("wiz_T373"))}</button>`);
     const button = dialog.querySelector("[data-assign]");
     const chosen = () => body.querySelector('input[name="assign_profile"]:checked')?.value;

@@ -243,8 +243,8 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
     ["tall_two_leaf", "With slats · Reference travel 198 cm", "Measured on Living room shutter 1 on Sep 29, 2026 · 2 covers follow it"]]);
   const assign = dialog.querySelector("[data-assign]");
   assert.equal(assign.disabled, true);
-  assert.deepEqual([...dialog.querySelectorAll(".dialog-foot button")].map((button) => button.textContent), ["Close", "Assign"],
-    "Assign sits on the footer's row with Close");
+  assert.deepEqual([...dialog.querySelectorAll(".dialog-foot button")].map((button) => button.textContent), ["Cancel", "Assign"],
+    "as in the design: Cancel, then Assign, on the footer's row");
   const tall = dialog.querySelector('input[value="tall"]');
   tall.checked = true; tall.dispatchEvent(new Event("change", { bubbles: true }));
   assert.equal(assign.disabled, false);
