@@ -154,12 +154,9 @@ async def test_a_timer_actuator_stop_is_the_time_saved_when_not_confirmed_earlie
 async def test_a_stop_that_is_not_a_stop_status_still_interrupts(calibration):
     cal = calibration
     await opening_run(cal)
-
-    class Status:  # Neither a movement nor a stop status (state 0).
-        is_opening = is_closing = False
-        state = None
-    cal.session.on_event(Status())
-    assert cal.session.reason == "unexpected_stop"
+    cal.clock[0] += 10
+    bus(cal, "*#2*11*10*10*50*001*0##")  # Advanced "stopped at 50 %" (state 10), not a standard stop status.
+    assert (cal.session.phase, cal.session.reason) == ("interrupted", "unexpected_stop")
 
 
 def test_evidence_without_ended_by_stays_valid_and_unknown_values_are_refused():
@@ -223,7 +220,9 @@ async def test_geometry_lift_stop_before_the_press_still_interrupts(geometry):
 async def test_geometry_opposite_movement_after_the_stop_still_interrupts(geometry):
     cal = geometry
     await start(cal)
+    cal.clock[0] += 9
     bus(cal, STOP)
+    assert cal.session.motor_stopped
     bus(cal, RAISE)
     assert (cal.session.phase, cal.session.reason) == ("interrupted", "unexpected_movement")
 
@@ -258,3 +257,102 @@ async def test_geometry_check_return_to_the_end_stop_takes_the_bus_stop(hass, ge
     bus(cal, STOP)
     view = cal.session.view()
     assert (view["phase"], view["check_interrupted"], view["motor_stopped"]) == ("review", "unexpected_stop", False)
+
+
+# A press that crossed the stop's view in flight (sequence just before the stop).
+
+async def test_a_press_sent_before_the_stop_view_arrived_is_accepted(hass, calibration):
+    cal = calibration
+    await opening_run(cal)
+    before = cal.session.sequence  # What the panel holds when the operator presses.
+    cal.clock[0] += 21
+    bus(cal, STOP)
+    cal.clock[0] += .3
+    await cal.session.action({"action": "endpoint", "sequence": before})
+    assert cal.session.phase == "confirm_open" and cal.session.values == {"opening_time": 21.0}
+    assert cal.session.provenance["opening"]["ended_by"] == "bus_stop"
+
+
+async def test_a_press_with_the_old_sequence_before_the_stop_keeps_the_rule(calibration):
+    cal = calibration
+    await opening_run(cal)
+    stale = cal.session.sequence - 1
+    cal.clock[0] += 20.5
+    with pytest.raises(ProfileError, match="calibration_step"):  # No stop yet: nothing to cross.
+        await cal.session.action({"action": "endpoint", "sequence": stale})
+    await act(cal, "endpoint")  # Pressed first with the current sequence: the press time.
+    bus(cal, STOP)
+    assert cal.session.values == {"opening_time": 20.5}
+    assert cal.session.provenance["opening"]["ended_by"] == "press"
+
+
+async def test_only_endpoint_and_only_the_sequence_just_before_the_stop_cross_it(calibration):
+    cal = calibration
+    await opening_run(cal)
+    before = cal.session.sequence
+    cal.clock[0] += 21
+    bus(cal, STOP)
+    for msg in ({"action": "endpoint", "sequence": before - 1}, {"action": "save", "sequence": before}):
+        with pytest.raises(ProfileError, match="calibration_step"):
+            await cal.session.action(msg)
+    cal.session.emit()  # Any later transition (an ownership change, say) closes the allowance.
+    with pytest.raises(ProfileError, match="calibration_step"):
+        await cal.session.action({"action": "endpoint", "sequence": before})
+    assert cal.session.phase == "opening" and cal.session.motor_stopped
+    await act(cal, "endpoint")
+    assert cal.session.values == {"opening_time": 21.0}
+
+
+async def test_geometry_press_sent_before_the_stop_view_arrived_is_accepted(geometry):
+    cal = geometry
+    await start(cal)
+    before = cal.session.sequence
+    cal.clock[0] += 9
+    bus(cal, STOP)
+    await cal.session.action({"action": "endpoint", "sequence": before})
+    assert (cal.session.step, cal.session.phase) == ("lift", "briefing")
+
+
+# The gateway relaying a stop right after our own direction command.
+
+async def test_an_echo_stop_right_after_the_start_does_not_date_the_run(hass, calibration):
+    cal = calibration
+    await opening_run(cal)
+    sequence = cal.session.sequence
+    cal.clock[0] += .05
+    bus(cal, STOP)  # Relayed around our Raise: an echo, not the end of the travel.
+    assert (cal.session.phase, cal.session.motor_stopped, cal.session.sequence) == ("opening", False, sequence)
+    cal.clock[0] += 19.95
+    bus(cal, STOP)  # The real end stop dates the run.
+    assert cal.session.stopped_elapsed == 20.0
+    cal.clock[0] += 1.5
+    await act(cal, "endpoint")
+    assert cal.session.values == {"opening_time": 20.0}
+    assert cal.session.provenance["opening"]["ended_by"] == "bus_stop"
+
+
+async def test_a_stop_just_after_the_echo_window_dates_the_run(calibration):
+    from custom_components.myhome.cover_motion import ECHO_WINDOW
+
+    cal = calibration
+    await opening_run(cal)
+    cal.clock[0] += ECHO_WINDOW
+    bus(cal, STOP)
+    assert cal.session.motor_stopped and cal.session.stopped_elapsed == ECHO_WINDOW
+
+
+async def test_geometry_echo_stop_right_after_the_start_does_not_date_the_run(geometry):
+    cal = geometry
+    await lift(cal)
+    await act(cal, "reading", reading_cm=GAP)
+    await endpoint(cal, 8)
+    await start(cal)
+    cal.clock[0] += .05
+    bus(cal, STOP)
+    assert cal.session.phase == "opening" and not cal.session.motor_stopped
+    cal.clock[0] += 21.95
+    bus(cal, STOP)
+    cal.clock[0] += 2
+    await act(cal, "endpoint")
+    assert cal.session.values == {"opening_time": 22}
+

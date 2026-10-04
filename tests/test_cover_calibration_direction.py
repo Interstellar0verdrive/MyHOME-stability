@@ -170,6 +170,23 @@ async def test_quick_failure_preserves_original_configuration(quick, failure):
         assert quick.session.values == quick.session.provenance == {}
 
 
+async def test_quick_stop_status_before_the_press_records_the_stop(quick):
+    """A single-direction leg follows the same rule as a full one, then goes to review."""
+    opening = quick.session.direction == "opening"
+    await act(quick, "open" if opening else "close")
+    assert quick.queue[-1][1]()
+    quick.clock[0] += 3
+    bus(quick, "*2*1*11##" if opening else "*2*2*11##")
+    quick.clock[0] += 12.75
+    bus(quick, "*2*0*11##")
+    assert quick.session.view()["motor_stopped"] is True
+    quick.clock[0] += 1.2
+    await act(quick, "endpoint")
+    assert quick.session.phase == "review"
+    assert quick.session.values[f"{quick.session.direction}_time"] == 12.75
+    assert quick.session.provenance[quick.session.direction]["ended_by"] == "bus_stop"
+
+
 async def test_quick_requires_guided_mode_and_valid_direction(hass, plant):
     entry_id = plant.entries[0].entry_id
     msg = {
