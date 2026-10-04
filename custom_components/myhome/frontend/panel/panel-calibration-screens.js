@@ -62,13 +62,6 @@ function pathContext(t, cover, profiles, language) {
   return profiles === 0 ? t("wiz_T396") : profiles === 1 ? t("wiz_T398") : fill(t("wiz_T397"), { count: profiles });
 }
 
-/** A cover's state in the A-01 drop-down: "To measure", or "Times measured, Sep 29". */
-function coverState(t, item, language) {
-  if (!item.status) return "";
-  const text = t(`calTabStatus_${item.status}`), date = item.status === "to_measure" ? "" : shortDate(item.last, language);
-  return date ? `${text}, ${date}` : text;
-}
-
 /** The wizard's whole state as one screen. */
 export function buildScreen(ctx) {
   const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false } = ctx;
@@ -78,7 +71,7 @@ export function buildScreen(ctx) {
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
-    title: "", subline: "", body: "", stopwatch: null, wait: null, illustration: null, choice: null, field: null, box: null, table: null,
+    title: "", subline: "", body: "", stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
     // Before any session the header offers a way back to the previous choice (kept as it was).
@@ -89,19 +82,20 @@ export function buildScreen(ctx) {
 
   // ---- Before any session: choices that stay in the browser. ----
   if (stage === "choose") {
-    Object.assign(screen, { code: "A-01", phase: "intro", title: t("wiz_T003"), body: t("wiz_T004"),
-      // Empty with a placeholder entry until a cover is chosen; Continue waits for it.
-      choice: { name: "cover", kind: "select", label: t("wiz_T005"), value: local.coverKey || "",
-        options: [...(local.coverKey ? [] : [{ value: "", label: t("wiz_T393"), disabled: true }]),
-          ...(ctx.covers || []).map((item) => ({ value: item.key, label: [item.label, coverState(t, item, language)].filter(Boolean).join(" · ") }))] },
-      actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length || !local.coverKey }] });
-    // Until a cover is picked the subtitle says so; then it names the cover as the drop-down does.
+    // The covers as a list with one radio each (the sequence view's rows, the list's filters and order); Continue
+    // waits for a choice. The chosen row opens and says what choosing it means.
     const picked = local.coverPicked ? (ctx.covers || []).find((item) => item.key === local.coverKey) : null;
-    screen.header = { title: t("wiz_T001"), subtitle: picked ? picked.label : t("wiz_T392"), placeholder: !picked };
+    const notes = [];
     // A calibrated cover: a new measurement replaces its values; fine-tuning is the way to adjust them.
     if (picked?.status && picked.status !== "to_measure") {
-      screen.choice.note = fill(t("wiz_T394"), { status: t(`calTabStatus_${picked.status}`).toLocaleLowerCase(language), date: dateText(picked.last, language) || "—" });
+      notes.push(fill(t("wiz_T394"), { status: t(`calTabStatus_${picked.status}`).toLocaleLowerCase(language), date: dateText(picked.last, language) || "—" }));
     }
+    if (picked && cover?.profile?.name) notes.push(fill(t("wiz_T395"), { profile: cover.profile.name }));
+    Object.assign(screen, { code: "A-01", phase: "intro", title: t("wiz_T003"), body: t("wiz_T004"),
+      picker: { selected: picked ? local.coverKey : "", filter: local.pickFilter || "all", notes },
+      actions: [{ id: "choose", label: t("wiz_T006"), kind: "primary", disabled: !ctx.covers?.length || !picked }] });
+    // Until a cover is picked the subtitle says so; then it names the cover with its room and address.
+    screen.header = { title: t("wiz_T001"), subtitle: picked ? picked.label : t("wiz_T392"), placeholder: !picked };
     return finish();
   }
   if (stage === "path") {

@@ -62,9 +62,9 @@ export class CalibrationWizard {
     this._context = null;
   }
 
-  open({ host, hass, t, covers, data, start = "choose", item = null, session = null, onOpenCover, onClose }) {
+  open({ host, hass, t, covers, data, picker = null, start = "choose", item = null, session = null, onOpenCover, onClose }) {
     this.close();
-    this._context = { host, hass, t, covers, data, onOpenCover, onClose };
+    this._context = { host, hass, t, covers, data, picker, onOpenCover, onClose };
     // Opened on a given cover, the choice is made; from the tab's generic button it starts empty.
     this._local = { stage: "choose", path: "A", scope: null, coverKey: item ? key(item) : "", coverPicked: !!item };
     host.innerHTML = "";
@@ -165,7 +165,7 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
@@ -197,6 +197,7 @@ export class CalibrationWizard {
             ${drawing("after-body")}
             ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${screen.choice ? this._choiceMarkup(screen.choice) : ""}
+            ${screen.picker ? '<div class="wiz-picker"></div>' : ""}
             ${screen.field ? this._fieldMarkup(screen.field) : ""}
             ${screen.precision ? `<p class="wiz-precision">${inline(screen.precision)}</p>` : ""}
             ${screen.table ? this._tableMarkup(screen.table) : ""}
@@ -216,6 +217,7 @@ export class CalibrationWizard {
             <button type="button" class="wiz-dialog-stop" data-wiz="stop" hidden>${esc(t("wiz_T028"))}</button>
             <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
       this._actionsSignature = null;
+      this._pickerHtml = null;
       if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
     }
     this._patch(screen);
@@ -223,9 +225,26 @@ export class CalibrationWizard {
 
   _engineHost() { return this._engine; }
 
-  /** Whatever changes within one screen: stepper, stopwatch, progress, notices, buttons, read-only. */
+  /** Whatever changes within one screen: stepper, stopwatch, progress, notices, buttons, read-only, A-01's list. */
   _patch(screen) {
     const root = this._frame, { t } = this._context;
+    const picker = root.querySelector(".wiz-picker");
+    if (picker && screen.picker) {
+      const html = this._context.picker?.markup(screen.picker) ?? "";
+      if (html !== this._pickerHtml) {
+        // The list is redrawn in place: the control that had the focus (a radio, a chip, a header) gets it back.
+        const active = root.getRootNode().activeElement;
+        const focus = active && picker.contains(active) ? (active.dataset.wiz ? ["wiz", active.dataset.wiz] : active.name === "cover" ? ["cover", active.value]
+          : active.dataset.pickSort ? ["pickSort", active.dataset.pickSort] : null) : null;
+        this._pickerHtml = html;
+        picker.innerHTML = html;
+        if (focus) {
+          const [kind, value] = focus;
+          [...picker.querySelectorAll("button, input, select")].find((element) => (kind === "cover" ? element.name === "cover" && element.value : element.dataset[kind]) === value)
+            ?.focus({ preventScroll: true });
+        }
+      }
+    } else this._pickerHtml = null;
     const stepper = this._stepperMarkup(screen);
     for (const target of [root.querySelector(".wiz-steps"), root.querySelector(".wiz-sheet-steps")]) if (target.innerHTML !== stepper) target.innerHTML = stepper;
     root.querySelector(".wiz-compact-line").textContent = screen.stepper.line;
@@ -310,12 +329,6 @@ export class CalibrationWizard {
   }
 
   _choiceMarkup(choice) {
-    if (choice.kind === "select") {
-      return `<label class="wiz-choice">${esc(choice.label)}<select name="${esc(choice.name)}">${choice.options.map((option) =>
-        `<option value="${esc(option.value)}" ${option.value === choice.value ? "selected" : ""} ${option.disabled ? "disabled" : ""}>${esc(option.label)}</option>`).join("")}</select>
-        ${choice.hint ? `<span class="muted wiz-choice-hint">${esc(choice.hint)}</span>` : ""}</label>
-        ${choice.note ? `<p class="cal-note wiz-choice-note">${esc(choice.note)}</p>` : ""}`;
-    }
     return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.options.map((option) =>
       `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${option.plain ? esc(option.label) : inline(option.label)}${option.badge
         ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${option.note ? `<small class="muted">${esc(option.note)}</small>` : ""}</span></label>`).join("")}</fieldset>`;
@@ -383,6 +396,13 @@ export class CalibrationWizard {
     else if (name === "slats") this._local.slats = value !== "no";
     else if (name === "case") this._local.scope = value;
     else if (name === "cover") { this._local.coverKey = value; this._local.coverPicked = true; this._render(); }
+    else if (event.target.dataset?.pickSort) {
+      // The phone's "Sort by" bar of A-01: the list's shared order, as in the tab.
+      const order = this._context.picker?.order() || {};
+      if (event.target.dataset.pickSort === "key") this._context.picker?.sort(value, order.key === value ? order.dir : "asc");
+      else this._context.picker?.sort(order.key, value === "desc" ? "desc" : "asc");
+      this._render();
+    }
     else if (name === "profile") { this._local.profileId = value; this._render(); }
     else if (name === "path") { this._local.pathChoice = value; this._render(); }
   }
@@ -402,10 +422,12 @@ export class CalibrationWizard {
     if (id === "steps-close") { this._frame.querySelector(".wiz-sheet").hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
+    if (id.startsWith("pick-filter:")) { local.pickFilter = id.slice(12); return this._render(); }
+    if (id.startsWith("pick-sort:")) { this._context.picker?.sort(id.slice(10)); return this._render(); }
     if (id === "stay") { this._closeDialog(); return; }
     if (id === "leave") { this._leave(); return; }
     if (id === "close") { this._finish(); return; }
-    if (id === "choose") { local.coverKey = this._value("cover") || local.coverKey; local.pathChoice = null; local.stage = "path"; return this._render(); }
+    if (id === "choose") { if (!local.coverPicked) return; local.pathChoice = null; local.stage = "path"; return this._render(); }
     if (id === "path" || id.startsWith("path:")) {
       const path = id === "path" ? this._value("path") || local.pathChoice : id.slice(5);
       if (!["A", "B", "C"].includes(path)) return;

@@ -229,25 +229,58 @@ export class CalibrationTab {
   }
 
   /** The phone's "Sort by" bar: column and order, the same choices as the headers. */
-  _sortBar() {
+  _sortBar(attribute = "data-sort") {
     const { t } = this._context;
     return `<div class="cal-sort-bar">
-          <label>${esc(t("wiz_T379"))} <select data-sort="key">${SORT_KEYS.map((key) => `<option value="${key}" ${this._sort.key === key ? "selected" : ""}>${esc(t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]))}</option>`).join("")}</select></label>
-          <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select data-sort="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>`;
+          <label>${esc(t("wiz_T379"))} <select ${attribute}="key">${SORT_KEYS.map((key) => `<option value="${key}" ${this._sort.key === key ? "selected" : ""}>${esc(t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]))}</option>`).join("")}</select></label>
+          <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select ${attribute}="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>`;
   }
 
   /** The header row of a list: Roller shutter, Status and Profile sort it. */
-  _sortHeads(extra = "") {
+  _sortHeads(extra = "", trigger = (key) => `data-action="cal-tab-sort" data-id="${key}"`) {
     const { t } = this._context;
-    return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"))}${this._sortHead("status", t("calTabColStatus"))}${this._sortHead("profile", t("calTabColProfile"))}<span></span></div>`;
+    return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"), trigger)}${this._sortHead("status", t("calTabColStatus"), trigger)}${this._sortHead("profile", t("calTabColProfile"), trigger)}<span></span></div>`;
   }
 
   /** A column header: a button that sorts by it, with the arrow of the current order. */
-  _sortHead(key, label) {
+  _sortHead(key, label, trigger) {
     const { t } = this._context;
     const active = this._sort.key === key, dir = this._sort.dir;
-    return `<span class="cal-sort-cell"><button type="button" class="cal-sort" data-action="cal-tab-sort" data-id="${key}" aria-pressed="${active}">${esc(label)}${active
+    return `<span class="cal-sort-cell"><button type="button" class="cal-sort" ${trigger(key)} aria-pressed="${active}">${esc(label)}${active
       ? `<ha-icon icon="mdi:arrow-${dir === "asc" ? "up" : "down"}" aria-hidden="true"></ha-icon><span class="visually-hidden">, ${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</span>` : ""}</button></span>`;
+  }
+
+  /**
+   * A-01's list: the sequence view's rows (name, room, bus address, status, profile) with one radio each, the list's
+   * filter chips and its shared order. The wizard draws it and owns the choice; its controls carry `data-wiz`.
+   * The chosen row opens and shows `notes` (the "already calibrated" note, the profile it follows).
+   */
+  _pickerMarkup({ selected = "", filter = "all", notes = [] } = {}) {
+    const { t, hass, gateways } = this._context, language = hass.language || "en";
+    const all = this._covers();
+    const counts = { all: all.length, to_measure: all.filter((item) => item.status === "to_measure").length,
+      calibrated: all.filter((item) => item.status !== "to_measure").length, profile: all.filter((item) => item.profile).length };
+    const visible = this._sorted(all, language).filter((item) => filter === "all" || (filter === "to_measure" ? item.status === "to_measure"
+      : filter === "calibrated" ? item.status !== "to_measure" : !!item.profile));
+    const profile = (item) => item.profile ? `<span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span>`
+      : `<span class="muted" aria-label="${esc(t("calTabProfileNone"))}">—</span>`;
+    const rows = visible.map((item) => {
+      const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]), chosen = key === selected;
+      const room = [item.area, gateways.length > 1 ? item.entry.title : ""].filter(Boolean).join(" · ");
+      return `<label class="cal-batch-row wiz-pick-row${chosen ? " is-selected" : ""}" data-entity="${esc(item.cover.entity_id)}">
+        <span class="cal-batch-lead"><input type="radio" name="cover" value="${esc(key)}" ${chosen ? "checked" : ""}>
+          <span class="cal-row-icon" aria-hidden="true"><ha-icon icon="mdi:window-shutter"></ha-icon></span></span>
+        <span class="cal-row-name"><strong>${esc(item.name)}</strong><span class="muted">${esc(room)}${this._address(item)}</span></span>
+        <span class="cal-batch-status"><span class="badge cal-badge" data-status="${item.status}">${esc(t(`calTabStatus_${item.status}`))}</span></span>
+        <span class="cal-batch-profile">${profile(item)}</span>
+        ${chosen && notes.length ? `<span class="wiz-pick-notes">${notes.map((line) => `<span class="cal-note">${esc(line)}</span>`).join("")}</span>` : ""}</label>`;
+    }).join("");
+    return `<div class="cal-tab-chips wiz-pick-chips" role="group" aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((id) =>
+        `<button type="button" class="cal-chip" data-wiz="pick-filter:${id}" aria-pressed="${filter === id}">${esc(t(`calTabFilter_${id}`))} <span class="count">${counts[id]}</span></button>`).join("")}</div>
+      ${this._sortBar("data-pick-sort")}
+      <div class="cal-list cal-batch-list wiz-pick-list">
+        ${this._sortHeads(" cal-batch-head", (key) => `data-wiz="pick-sort:${key}"`)}
+        <div class="cal-batch-rows" role="radiogroup" aria-label="${esc(t("wiz_T005"))}">${rows || `<p class="muted wiz-pick-empty">${esc(t("noResults"))}</p>`}</div></div>`;
   }
 
   _running(item) {
@@ -499,6 +532,8 @@ export class CalibrationTab {
     const { host, hass, t, onOpenCover } = this._context;
     // The covers as they are at each step: after a save, fine-tuning (C-01) shows the values just written.
     this._wizard.open({ host, hass, t, covers: () => this._covers(), data: (entryId) => this._rows.get(entryId)?.data, ...options,
+      // A-01's list, drawn as the tab's lists are, in the list's shared order.
+      picker: { markup: (state) => this._pickerMarkup(state), sort: (key, dir) => this._setSort(key, dir), order: () => ({ ...this._sort }) },
       onOpenCover: (entityId) => onOpenCover?.(entityId),
       onClose: () => this._backToList() });
   }

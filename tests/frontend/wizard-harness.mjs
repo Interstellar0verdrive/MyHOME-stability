@@ -53,10 +53,13 @@ export async function mount(options = {}) {
   const actions = () => backend.calls.filter((message) => message.type === "myhome/cover_calibration/action" && message.action !== "heartbeat").map((message) => message.action);
   const title = () => wiz().querySelector(".wiz-title").textContent;
   /** A-01 starts empty: pick a cover by its position in the drop-down (0 = the first cover). */
-  const pickCover = async (index = 0) => {
-    const select = wiz().querySelector('select[name="cover"]');
-    select.value = [...select.options].filter((option) => !option.disabled)[index].value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+  /** A-01: tick the radio of the cover at this place in the list (or of this entity id). */
+  const pickCover = async (which = 0) => {
+    const radios = [...wiz().querySelectorAll('.wiz-picker input[name="cover"]')];
+    const radio = typeof which === "number" ? radios[which] : radios.find((input) => JSON.parse(input.value)[1] === which);
+    assert.ok(radio, `cover ${which} in the A-01 list`);
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
     await tick();
   };
   /** A-02: tick a path in the radio list, then Continue. */
@@ -70,9 +73,7 @@ export async function mount(options = {}) {
   };
   const startFor = async (entity, path = "A") => {
     tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
-    const select = wiz().querySelector('select[name="cover"]');
-    select.value = JSON.stringify(["one", entity]);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await pickCover(entity);
     await press("choose");
     await choosePath(path);
   };
