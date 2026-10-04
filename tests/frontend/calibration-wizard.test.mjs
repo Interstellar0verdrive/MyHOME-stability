@@ -728,6 +728,8 @@ test("on the phone the run's ① and ② stack, never side by side", async () =>
   assert.doesNotMatch(css, /\.wiz-actions:has\(\.wiz-action:nth-of-type\(2\)\.primary\)/, "no two-column rule for two primaries");
   assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/, "one column");
   assert.match(css, /@media \(hover: hover\) \{ \.wiz-action\.stop:hover \{/, "a tap leaves no tint on Stop");
+  assert.match(css, /\.wiz-main \{ flex: 1; min-height: 0; overflow-y: auto;[^}]*display: flex; flex-direction: column; \}/, "the phone's content scrolls between the strip and the bar");
+  assert.match(css, /\.wiz-main > \* \{ flex-shrink: 0; min-width: 0; \}/, "blocks keep their height: a drawing never covers the text");
   assert.match(css, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 48px; background: transparent; \}/, "plain red text, the bar's height");
 });
 
@@ -769,6 +771,7 @@ test("the drawing is one inline SVG at its Figma size, placed by its position, a
   assert.equal(figure.dataset.illustration, "window-closed");
   assert.equal(figure.getAttribute("aria-label"), "Step diagram");
   assert.deepEqual([figure.getAttribute("width"), figure.getAttribute("height"), figure.getAttribute("viewBox")], ["259", "250", "0 0 260 250"]);
+  assert.equal(figure.getAttribute("style"), "width: min(100%, 259px); aspect-ratio: 259 / 250", "the ratio is kept when the column is narrower");
   assert.equal(figure.nextElementSibling.className, "wiz-body", "a step shows its drawing above the text");
   assert.equal(wiz().querySelector(".wiz-frame .cal-visual"), null, "the maintainer's small scene is not used by the wizard");
 });

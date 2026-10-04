@@ -29,5 +29,7 @@ export { SVG };
 export function illustrationMarkup(id, label, escape) {
   const size = ILLUSTRATIONS[id], svg = SVG[id];
   if (!size || !svg) return "";
-  return svg.replace(/^<svg /, `<svg class="wiz-illustration" data-illustration="${escape(id)}" role="img" aria-label="${escape(label)}" width="${size.width}" height="${size.height}" focusable="false" `);
+  // The ratio is set too: with only width and height attributes some browsers (Safari) keep the full height when the
+  // column is narrower than the drawing, and it overlaps the text under it.
+  return svg.replace(/^<svg /, `<svg class="wiz-illustration" data-illustration="${escape(id)}" role="img" aria-label="${escape(label)}" width="${size.width}" height="${size.height}" style="width: min(100%, ${size.width}px); aspect-ratio: ${size.width} / ${size.height}" focusable="false" `);
 }
