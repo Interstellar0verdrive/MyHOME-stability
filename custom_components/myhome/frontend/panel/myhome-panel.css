@@ -968,8 +968,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-profile-block p { margin: 0; }
 .wiz-profile-block label { max-width: 420px; }
 .wiz-switch { display: flex !important; align-items: center; gap: 10px; font-size: 14px; color: var(--primary-text-color, #182b37); cursor: pointer; }
-.wiz-switch input { appearance: none; -webkit-appearance: none; width: 36px; height: 20px; min-height: 0; padding: 0; border-radius: 999px; background: var(--panel-border); position: relative; flex-shrink: 0; cursor: pointer; }
-.wiz-switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--panel-surface); transition: transform var(--panel-ease); }
+/* Track 36×20, thumb 16 with 2 px all round, in both states: no border from the panel's input style, which pushed the
+   thumb 1 px down and right. */
+.wiz-switch input { appearance: none; -webkit-appearance: none; box-sizing: border-box; width: 36px; height: 20px; min-height: 0; margin: 0; padding: 0; border: 0;
+  border-radius: 999px; background: var(--panel-border); position: relative; flex-shrink: 0; cursor: pointer; transition: background var(--panel-ease); }
+.wiz-switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--panel-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%); transition: transform var(--panel-ease); }
 .wiz-switch input:checked { background: var(--panel-accent); }
 .wiz-switch input:checked::after { transform: translateX(16px); }
 .wiz-name-line { font-size: 13px; }

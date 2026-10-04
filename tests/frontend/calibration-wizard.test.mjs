@@ -715,6 +715,14 @@ test("every drawing a screen can pick is a themed inline SVG, and A-09 has none"
   assert.deepEqual([a09.code, a09.illustration], ["A-09", null]);
 });
 
+test("the profile switch is a 36×20 track with a 16 px thumb 2 px from every edge, in both states", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const track = css.match(/\.wiz-switch input \{([^}]*)\}/)[1], thumb = css.match(/\.wiz-switch input::after \{([^}]*)\}/)[1];
+  for (const rule of ["box-sizing: border-box", "width: 36px", "height: 20px", "border: 0", "margin: 0", "padding: 0"]) assert.ok(track.includes(rule), rule);
+  for (const rule of ["top: 2px", "left: 2px", "width: 16px", "height: 16px"]) assert.ok(thumb.includes(rule), rule);
+  assert.match(css, /\.wiz-switch input:checked::after \{ transform: translateX\(16px\); \}/);
+});
+
 test("the wizard's side columns take the page colour, slightly shaded", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz \{ --wiz-side: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, var\(--primary-background-color, #fafafa\)\);/);
