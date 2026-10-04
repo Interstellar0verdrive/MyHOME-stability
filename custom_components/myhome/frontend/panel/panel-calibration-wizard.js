@@ -390,7 +390,7 @@ export class CalibrationWizard {
     }
     if (id === "profile") { local.profileId = this._value("profile") || local.profileId; local.stage = "before"; return this._render(); }
     if (id === "current") { local.stage = "case"; return this._render(); }
-    if (id === "case") { local.scope = this._value("case") || local.scope || "times_and_rolls"; local.stage = "before"; return this._render(); }
+    if (id === "case") { local.scope = this._value("case") || local.scope || "points_only"; local.stage = "before"; return this._render(); }
     if (id === "begin") { if (local.stage === "before") local.slats = (this._value("slats") ?? (local.slats === false ? "no" : "yes")) !== "no"; return this._begin(); }
     if (id.startsWith("ack:")) {
       local[{ lift: "ackLift", ascent: "ackAscent", descent: "ackDescent", readings: "ackReadings" }[id.slice(4)]] = true;

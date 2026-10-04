@@ -136,9 +136,9 @@ C-01 (T184–T188) shows what the cover uses (a box with a bold title and one li
 
 | Case | Runs on | Boards | Save |
 | --- | --- | --- | --- |
-| Everything (preselected) | live `geometry`, as path A | C-03…C-21 (T197, T201–T203, T205, T210, T285), fine-tuning preview C-22…C-33 (T226, T286), C-34 (T228) | new profile live; on the cover only waits for the backend |
+| Everything | live `geometry`, as path A | C-03…C-21 (T197, T201–T203, T205, T210, T285), fine-tuning preview C-22…C-33 (T226, T286), C-34 (T228) | new profile live; on the cover only waits for the backend |
 | Times only | live `guided` (both directions) | C-35 (T230, T231), C-05 · C-11 · C-12 · C-14 with `calPhase_*`, C-36 (T179, T233, T287) | `save_mode: "cover"` |
-| Tape readings only | preview `rolls` | C-37 (T235, T236), C-22…C-32, C-38 (T149, T238, T239, T288), C-34 | preview |
+| Tape readings only (preselected, as in the mockup) | preview `rolls` | C-37 (T235, T236), C-22…C-32, C-38 (T149, T238, T239, T288), C-34 | preview |
 
 ## States
 

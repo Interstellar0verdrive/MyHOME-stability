@@ -20,7 +20,7 @@ async function toCase(context, scope) {
   await press("case");
 }
 
-test("C-01 shows what the cover uses now and C-02 preselects the case that remeasures everything", async () => {
+test("C-01 shows what the cover uses now and C-02 preselects its first case, as in the mockup", async () => {
   const context = await mount();
   const { wiz, code, press, startFor, title } = context;
   await startFor("cover.kitchen_two", "C");
@@ -32,7 +32,7 @@ test("C-01 shows what the cover uses now and C-02 preselects the case that remea
     ["Profile: tall_two_leaf", "Curtain travel: 110 cm", "Opening time: 12.3 s", "Closing time: 12.1 s", "Slat time: 2.4 s"]);
   await press("current");
   const options = [...wiz().querySelectorAll('input[name="case"]')];
-  assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", false], ["times_only", false], ["times_and_rolls", true]]);
+  assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", true], ["times_only", false], ["times_and_rolls", false]]);
   assert.match(options[0].closest("label").innerHTML, /^<input[^>]*><span class="wiz-radio-text"><span class="wiz-radio-label"><strong>When sent halfway, it stops too high or too low; at the end stop it works correctly<\/strong><br>We will redo only/);
 });
 
@@ -110,7 +110,7 @@ test("tape readings only run as a preview with four readings and the check, save
 test("remeasuring everything runs the geometry session with the C texts and waits for the backend to save on the cover only", async () => {
   const context = await mount({ language: "it" });
   const { backend, wiz, code, press, type } = context;
-  await toCase(context);
+  await toCase(context, "times_and_rolls");
   assert.equal(code(), "C-03");
   assert.match(wiz().querySelector(".wiz-body").textContent, /Devi trovarti davanti a Kitchen shutter 2/);
   await press("begin");

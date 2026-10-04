@@ -131,8 +131,9 @@ export function buildScreen(ctx) {
     return finish();
   }
   if (stage === "case") {
+    // As in the mockup, the first case (tape readings only) is preselected.
     Object.assign(screen, { code: "C-02", phase: "intro", title: t("wiz_T189"), body: t("wiz_T190"),
-      choice: { name: "case", kind: "radio", label: t("wiz_T191"), value: local.scope || "times_and_rolls",
+      choice: { name: "case", kind: "radio", label: t("wiz_T191"), value: local.scope || "points_only",
         options: [{ value: "points_only", label: t("wiz_T193") }, { value: "times_only", label: t("wiz_T194") }, { value: "times_and_rolls", label: t("wiz_T196") }] },
       actions: [{ id: "case", label: t("wiz_T006"), kind: "primary" }] });
     return finish();
