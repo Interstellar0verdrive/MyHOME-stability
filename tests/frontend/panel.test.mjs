@@ -1746,3 +1746,42 @@ test("a personal value field rounds like the summary, a halfway value included",
   form.querySelector('[data-profile-action="overrides"]').click(); await tick();
   assert.deepEqual(writes.at(-1).overrides, { opening: 14.45, closing: 1.45 });
 });
+
+test("a tab's leave guard is asked before the panel moves away, and can keep it in place", async () => {
+  const { panel, root } = await mount();
+  const busTab = () => root.querySelector('[data-view="bus"]');
+  // No objection (a falsy result): the navigation happens at once, as without a guard.
+  let asked = 0;
+  panel.setBeforeLeave(() => { asked += 1; return null; });
+  busTab().click();
+  assert.equal(asked, 1);
+  assert.equal(panel._view, "bus");
+  root.querySelector('[data-view="entities"]').click();
+  assert.equal(panel._view, "entities");
+  // A promise delays the navigation; false keeps the panel where it is.
+  let answer;
+  panel.setBeforeLeave(() => new Promise((resolve) => { answer = resolve; }));
+  busTab().click();
+  assert.equal(panel._view, "entities", "nothing moves while the tab decides");
+  answer(false); await tick();
+  assert.equal(panel._view, "entities");
+  busTab().click();
+  answer(true); await tick();
+  assert.equal(panel._view, "bus", "true lets it go");
+  // A click that stays on the same view does not ask.
+  asked = 0;
+  panel.setBeforeLeave(() => { asked += 1; return null; });
+  busTab().click();
+  assert.equal(asked, 0);
+  root.querySelector('[data-view="entities"]').click();
+  // The type filter goes back when the tab objects.
+  panel.setBeforeLeave(() => Promise.resolve(false));
+  const category = root.getElementById("category");
+  const previous = category.value;
+  change(category, [...category.options].find((option) => option.value && option.value !== previous).value);
+  await tick(); await tick();
+  assert.equal(category.value, previous);
+  assert.equal(panel._filters.category, previous);
+  panel.setBeforeLeave(null);
+  assert.equal(panel._beforeLeave, null);
+});

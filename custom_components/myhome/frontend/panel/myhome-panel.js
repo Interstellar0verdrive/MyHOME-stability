@@ -42,6 +42,8 @@ class MyHomePanel extends HTMLElement {
     this._catalogueEditor = new ProfileCatalogueEditor();
     this._calibrationTab = new CalibrationTab();
     this._coverView = "devices";
+    // A tab may object to being left (an open calibration): see setBeforeLeave().
+    this._beforeLeave = null;
     this._visibilityChanged = () => this._updatePolling();
     this._locationChanged = () => this._syncGatewayFromUrl();
   }
@@ -258,8 +260,11 @@ class MyHomePanel extends HTMLElement {
       focused?.focus();
     }
     for (const [id, key] of [["search", "query"], ["category", "category"], ["area", "area"]]) {
-      this.shadowRoot.getElementById(id).addEventListener(id === "search" ? "input" : "change", (event) => {
-        this._filters[key] = event.target.value;
+      this.shadowRoot.getElementById(id).addEventListener(id === "search" ? "input" : "change", async (event) => {
+        // The type and area filters may hide the tab: it is asked first, and the filter goes back if it objects.
+        const field = event.target, pending = key !== "query" && this._beforeLeave ? this._beforeLeave() : null;
+        if (pending && !(await pending)) { field.value = this._filters[key]; return; }
+        this._filters[key] = field.value;
         this._renderContent();
       });
     }
@@ -457,7 +462,7 @@ class MyHomePanel extends HTMLElement {
     if (calibrationHost) this._calibrationTab.show({ host: calibrationHost, hass: this._hass, gateways: scope.gateways,
       inventory: this._data, filters: this._filters, t: (key) => this._t(key),
       addressDetails: (entity) => this._addressDetails(entity), onOpenCover: (entityId) => this._openCoverProfile(entityId),
-      dialogHost: root.getElementById("dialog-host") });
+      dialogHost: root.getElementById("dialog-host"), setBeforeLeave: (guard) => this.setBeforeLeave(guard) });
     else this._calibrationTab.clear();
     this._updateStates();
   }
@@ -627,9 +632,37 @@ class MyHomePanel extends HTMLElement {
     this.shadowRoot.getElementById("cover-calibration-tab")?.scrollIntoView?.({ block: "start" });
   }
 
+  /**
+   * A tab registers `guard` while leaving it would interrupt something (null to remove it). Before the panel moves
+   * away from the tab (Entities/Bus monitor, gateway, WHO category, cover view, a link, the type and area filters) it
+   * calls `guard()`: a falsy result lets the navigation happen at once; a promise delays it and cancels it if it
+   * resolves to false.
+   */
+  setBeforeLeave(guard) { this._beforeLeave = typeof guard === "function" ? guard : null; }
+
+  /** Whether a click moves the panel away from what it shows. */
+  _leaves(target, event) {
+    const action = target.dataset.action;
+    if (target.matches("a")) return !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+    if (target.dataset.view) return target.dataset.view !== this._view;
+    if (action === "select-gateway") return target.dataset.id !== this._entryId;
+    if (action === "cover-view") return target.dataset.id !== this._coverView;
+    return action === "select-who" || action === "toggle-category-view";
+  }
+
   _onClick(event) {
     const target = event.target.closest("button, a");
     if (!target) return;
+    const pending = this._beforeLeave && this._leaves(target, event) ? this._beforeLeave() : null;
+    if (pending) {
+      event.preventDefault();
+      Promise.resolve(pending).then((leave) => { if (leave) this._navigate(target, event); });
+      return;
+    }
+    this._navigate(target, event);
+  }
+
+  _navigate(target, event) {
     if (target.matches("a") && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
       event.preventDefault();
       history.pushState(null, "", target.getAttribute("href"));
