@@ -30,6 +30,8 @@ test("C-01 shows what the cover uses now and C-02 preselects its first case, as 
   assert.equal(wiz().querySelector(".wiz-box strong").textContent, "Currently in use");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-box p")].map((line) => line.textContent),
     ["Profile: tall_two_leaf", "Curtain travel: 110 cm", "Opening time: 12.3 s", "Closing time: 12.1 s", "Slat time: 2.4 s"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-box p strong")].map((value) => value.textContent), ["tall_two_leaf", "110 cm", "12.3 s", "12.1 s", "2.4 s"],
+    "the values bold, the labels regular");
   await press("current");
   const options = [...wiz().querySelectorAll('input[name="case"]')];
   assert.deepEqual(options.map((input) => [input.value, input.checked]), [["points_only", true], ["times_only", false], ["times_and_rolls", false]]);

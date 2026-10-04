@@ -13,6 +13,12 @@ const { buildScreen, slug } = screens;
 const { LiveCalibrationGateway, PreviewCalibrationGateway } = gateways;
 const { illustrationMarkup, ILLUSTRATIONS } = illustration;
 
+/** "Label: value" as the tab's blocks show facts: the label regular, the value bold. */
+function factMarkup(line) {
+  const index = line.indexOf(": ");
+  return index < 0 ? esc(line) : `${esc(line.slice(0, index))}: <strong>${esc(line.slice(index + 2))}</strong>`;
+}
+
 /** A tape reading with a comma or a point; anything else, empty included, is not a number. */
 export function parseReading(value) {
   const textValue = String(value ?? "").trim().replace(",", ".");
@@ -205,7 +211,7 @@ export class CalibrationWizard {
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${drawing("after-body")}
-            ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
+            ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${factMarkup(line)}</p>`).join("")}</div>` : ""}
             ${screen.choice ? this._choiceMarkup(screen.choice) : ""}
             ${screen.picker ? '<div class="wiz-picker"></div>' : ""}
             ${screen.field ? this._fieldMarkup(screen.field) : ""}
@@ -342,7 +348,7 @@ export class CalibrationWizard {
   _stepperMarkup(screen) {
     return `<p class="wiz-steps-line">${esc(screen.stepper.line)}</p>
       <ol>${screen.stepper.phases.map((phase) => `<li data-step-state="${phase.state}"${phase.state === "current" ? ' aria-current="step"' : ""}><span class="wiz-step-mark" aria-hidden="true"></span><span class="wiz-step-label">${esc(phase.label)}</span>
-        ${phase.substeps.length ? `<ul>${phase.substeps.map((item) => `<li>${item.label ? `${esc(item.label)}: ` : ""}${esc(item.value)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ol>`;
+        ${phase.substeps.length ? `<ul>${phase.substeps.map((item) => `<li>${item.label ? `${esc(item.label)}: <strong>${esc(item.value)}</strong>` : esc(item.value)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ol>`;
   }
 
   _waitMarkup(wait) {
