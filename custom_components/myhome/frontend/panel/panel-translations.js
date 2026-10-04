@@ -334,6 +334,7 @@ export const translations = {
     wiz_T409: "If you leave now, the calibration stays open for {minutes} minutes and you can resume it from the Calibration tab. If you cancel it, the measurements taken so far are lost.",
     wiz_T410: "Leave and resume later",
     wiz_T411: "Leave without saving",
+    wiz_T412: "A measurement is in progress: finish or cancel it before assigning a profile.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1132,6 +1133,7 @@ export const translations = {
     wiz_T409: "Se esci ora, la calibrazione resta aperta per {minutes} minuti e puoi riprenderla dalla scheda Calibration. Se la annulli, le misure fatte finora vanno perse.",
     wiz_T410: "Esci e riprendi dopo",
     wiz_T411: "Esci senza salvare",
+    wiz_T412: "C'è una misurazione in corso: termina o annullala prima di assegnare un profilo.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

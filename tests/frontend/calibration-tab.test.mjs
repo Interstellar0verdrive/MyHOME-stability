@@ -266,6 +266,33 @@ test("a cover in progress keeps yellow tints in every state of its row", async (
   }
 });
 
+test("Assign profile waits while a calibration is open on the gateway, and after a refusal", async () => {
+  const session = { entry_id: "one", entity_id: "cover.living_one", session_id: "s", mode: "geometry", phase: "briefing", step: "lift", sequence: 3,
+    values: {}, recoverable: true, attached: true, owner_present: true };
+  const busy = await mount({ session });
+  const open = (tab, id) => { row(tab, id).querySelector('[data-action="cal-tab-menu"]').click(); row(tab, id).querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); };
+  open(busy.tab, "cover.bedroom"); await tick();
+  let dialog = busy.root.querySelector("#dialog-host dialog.cal-dialog");
+  const note = dialog.querySelector(".cal-assign-busy");
+  assert.equal(note.textContent, "A measurement is in progress: finish or cancel it before assigning a profile.");
+  assert.ok(note.classList.contains("cal-note") && !note.classList.contains("error"), "an information, not an error");
+  const tall = dialog.querySelector('input[value="tall"]');
+  tall.checked = true; tall.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.equal(dialog.querySelector("[data-assign]").disabled, true, "Assign waits");
+  // Without a session, a refusal turns Assign off too.
+  const refusing = await mount({ callWS: (message) => { if (message.type === "myhome/cover_profiles/write") throw Object.assign(new Error("busy"), { code: "calibration_busy" }); } });
+  open(refusing.tab, "cover.bedroom"); await tick();
+  dialog = refusing.root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.querySelector(".cal-assign-busy"), null);
+  const choice = dialog.querySelector('input[value="tall"]');
+  choice.checked = true; choice.dispatchEvent(new Event("change", { bubbles: true }));
+  dialog.querySelector("[data-assign]").click(); await tick(4);
+  assert.equal(dialog.querySelector(".error").hidden, false);
+  assert.equal(dialog.querySelector("[data-assign]").disabled, true, "off after the refusal");
+  choice.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.equal(dialog.querySelector("[data-assign]").disabled, true, "and stays off");
+});
+
 test("Assign profile offers No profile to unlink the followed profile, never on the cover it was measured on", async () => {
   const data = overview();
   Object.assign(data.profiles[0].provenance.opening, { origin_entity_id: "cover.living_two", origin_name: "cover.living_two" });

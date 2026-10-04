@@ -637,6 +637,9 @@ export class CalibrationTab {
     }).join("")}</fieldset>
       <p class="error" role="alert" hidden></p>`
       : `<p class="muted">${esc(t("profileListEmpty"))}</p>`;
+    // A calibration open on the gateway reserves it: Home Assistant would refuse, so the dialog says so and waits.
+    const row = this._rows.get(item.entry.entry_id), reserved = !!(row?.session || row?.reserved);
+    if (reserved) body.insertAdjacentHTML("afterbegin", `<p class="cal-note cal-assign-busy" role="status">${esc(t("wiz_T412"))}</p>`);
     if (!profiles.length) return;
     // As in the design (T-09): Cancel, outlined, then Assign on the footer's row.
     const cancel = dialog.querySelector(".cal-dialog-close");
@@ -645,14 +648,16 @@ export class CalibrationTab {
     dialog.querySelector(".dialog-foot").insertAdjacentHTML("beforeend", `<button type="button" class="primary" data-assign disabled>${esc(t("wiz_T373"))}</button>`);
     const button = dialog.querySelector("[data-assign]");
     const chosen = () => body.querySelector('input[name="assign_profile"]:checked')?.value;
+    // Assign stays off while the gateway is reserved, and after Home Assistant has refused once.
+    let refused = false;
     body.onchange = () => {
-      button.disabled = !chosen() || chosen() === item.cover.profile_id;
+      button.disabled = reserved || refused || !chosen() || chosen() === item.cover.profile_id;
       // Unlinking is said as such on the button, with the broken link.
       button.innerHTML = chosen() === NO_PROFILE ? `<ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T406"))}</span>` : esc(t("wiz_T373"));
     };
     button.onclick = async () => {
       const choice = chosen();
-      if (!choice || button.disabled) return;
+      if (!choice || button.disabled || reserved || refused) return;
       const profileId = choice === NO_PROFILE ? null : choice;
       button.disabled = true;
       const box = body.querySelector(".error");
@@ -669,7 +674,7 @@ export class CalibrationTab {
         const key = `profileError_${error?.code}`;
         box.textContent = t(key) === key ? t("profileError") : t(key);
         box.hidden = false;
-        button.disabled = false;
+        refused = true;
       }
     };
   }
