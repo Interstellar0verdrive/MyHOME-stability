@@ -390,9 +390,22 @@ test("covers run in the order they are ticked, shortcuts pick all or those to me
   assert.deepEqual(places(tab).map(([, place]) => place), ["", "1", "", ""], "the next tick starts again from 1");
 });
 
-test("the Devices note is not shown in the sequence view, whose bar is fixed to the bottom", async () => {
+test("choosing covers patches the sequence view in place: the rows, the spacer and the scroll stay put", async () => {
+  const { tab } = await openBatch();
+  const view = tab.querySelector(".cal-batch"), rows = [...tab.querySelectorAll(".cal-batch-row")], spacer = tab.querySelector(".cal-batch-spacer");
+  const all = () => tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]');
+  const chip = all();
+  for (let i = 0; i < 3; i++) all().click();
+  tick_(tab, "cover.living_two");
+  assert.equal(tab.querySelector(".cal-batch"), view, "the view is not rebuilt");
+  assert.deepEqual([...tab.querySelectorAll(".cal-batch-row")], rows, "nor its rows");
+  assert.equal(tab.querySelector(".cal-batch-spacer"), spacer, "nor the spacer under the list");
+  assert.equal(all(), chip, "the pressed chip is the same button");
+  assert.deepEqual(places(tab).map(([, place]) => place), ["1", "2", "", ""]);
+  assert.equal(tab.querySelector(".cal-batch-summary").textContent, "2 tapparelle selezionate");
+  assert.equal(tab.querySelector('[data-action="cal-tab-batch-start"]').disabled, false);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /#items:has\(\.cal-batch\) ~ #discovery-help \{ display: none; \}/);
+  assert.match(css, /#items:has\(\.cal-batch\) ~ #discovery-help \{ display: none; \}/, "the Devices note is not shown over the sequence's bar");
 });
 
 test("more covers than the backend allows keep Start off and say the limit", async () => {

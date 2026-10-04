@@ -709,13 +709,32 @@ export class CalibrationTab {
           <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
         <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
       <span class="cal-batch-sentinel" aria-hidden="true"></span>
-      <span class="cal-batch-spacer" aria-hidden="true"></span>
+      <span class="cal-batch-spacer" aria-hidden="true"${this._spacer != null ? ` style="height: ${this._spacer}px"` : ""}></span>
       <div class="cal-batch-bar"><p class="cal-batch-summary" role="status">${esc(summary)}</p>
         <div class="cal-batch-actions"><button type="button" class="cal-batch-cancel" data-action="cal-tab-batch-back">${esc(t("cancel"))}</button>
         <button type="button" class="primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon>${esc(t("wiz_T365"))}</button></div></div>
     </div>`;
-    if (host.innerHTML !== html) replacePreservingFocus(host, html);
+    // A new selection only patches the rows, the summary and Start: the view is not rebuilt, so the list never moves
+    // under the pointer (rebuilding recreated the spacer and the browser shifted the scroll by a pixel or two).
+    const structure = JSON.stringify([targets.map((target) => [target.entity_id, target.name, target.area, target.status, target.profile?.name, target.reason]),
+      batch.loading, batch.error, batch.entryId, max, gateways.length, this._sort, t("wiz_T364")]);
+    if (host.querySelector(".cal-batch") && this._batchStructure === structure) this._patchBatch(summary, count, max);
+    else { this._batchStructure = structure; replacePreservingFocus(host, html); }
     this._watchBar();
+  }
+
+  _patchBatch(summary, count, max) {
+    const { host, t } = this._context, batch = this._batch;
+    for (const row of host.querySelectorAll(".cal-batch-row")) {
+      const place = batch.order.indexOf(row.dataset.entity), input = row.querySelector("input");
+      row.classList.toggle("is-selected", place >= 0);
+      if (input.checked !== place >= 0) input.checked = place >= 0;
+      row.querySelector(".cal-batch-order").textContent = place >= 0 ? String(place + 1) : "";
+    }
+    host.querySelector(".cal-batch-summary").textContent = summary;
+    const limit = host.querySelector(".cal-batch-limit");
+    if (limit) limit.textContent = count > max ? `${t("calBatchLimit")}: ${max}` : "";
+    host.querySelector('[data-action="cal-tab-batch-start"]').disabled = count === 0 || count > max || batch.loading;
   }
 
   /**
