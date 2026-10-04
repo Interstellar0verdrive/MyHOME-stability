@@ -663,11 +663,12 @@ function problemScreen(screen, ctx, reason, step = false) {
       ...(code === "S-05" && seconds != null ? [fill(t("wiz_T257"), { seconds: number(seconds, ctx.language || "en", 1) })] : [])];
     screen.actions = [{ id: "repeat_step", label: t(retry), kind: "primary" }, { id: "stop", label: t("wiz_T028"), kind: "stop" }];
   } else {
-    // Today's backend discards the session: say what it says, and offer to start over. When the stop came from "It did
-    // not do what it should" the panel knows more and says so.
+    // Today's backend discards the session: say what it says, and offer to start over. Two cases say more, from what
+    // the panel knows: the stop came from "It did not do what it should", or the lift-off run stopped before ②.
     const key = `calReason_${reason}`;
     screen.body = reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
-      : t(key) === key ? t("calPhase_interrupted") : t(key);
+      : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
+        : t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
   }
   // A step's problem keeps the session open: Abandon stays (and asks); an ended session has nothing to abandon.

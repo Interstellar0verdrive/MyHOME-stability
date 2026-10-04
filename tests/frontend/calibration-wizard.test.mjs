@@ -1449,6 +1449,14 @@ test("S-01 says what happened when the panel knows more: It did not do what it s
   assert.equal(wiz().querySelector(".wiz-body").textContent, "The cover did not do what it should. Restart the measurement.");
 });
 
+test("S-01 after the lift-off run stopped before ② says how to redo it; other steps keep the generic text", () => {
+  const t = (key) => translations.en[key] || key;
+  const body = (step) => buildScreen({ t, stage: "session", path: "A", cover: { name: "K" }, local: {},
+    view: { mode: "geometry", phase: "interrupted", reason: "unexpected_stop", step, values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } }).body;
+  assert.equal(body("lift"), "The cover stopped before you pressed ②. Restart the measurement and press ② as soon as the bottom edge lifts off the rest.");
+  assert.equal(body("half_open"), translations.en.calReason_unexpected_stop);
+});
+
 test("when the motor stops by itself on A-05 the end stop does not flicker disabled", async () => {
   const { backend, tab, wiz, code, press } = await mount({ guardMs: 700 });
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
