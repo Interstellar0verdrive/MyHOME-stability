@@ -594,6 +594,13 @@ export class CalibrationTab {
     const dialog = dialogHost.querySelector("dialog");
     dialog.querySelector(".cal-dialog-close").onclick = () => this._dialogDone();
     dialog.oncancel = (event) => { event.preventDefault(); this._dialogDone(); };
+    // A click on the backdrop (outside the dialog's box) closes it as Escape does, applying nothing.
+    dialog.addEventListener("click", (event) => {
+      if (event.target !== dialog) return;
+      const box = dialog.getBoundingClientRect();
+      const inside = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+      if (!inside || (!box.width && !box.height)) this._dialogDone();
+    });
     dialog.showModal();
     this._dialog = dialog;
     return dialog.querySelector(".cal-dialog-body");

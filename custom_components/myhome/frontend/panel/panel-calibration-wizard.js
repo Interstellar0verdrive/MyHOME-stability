@@ -450,6 +450,11 @@ export class CalibrationWizard {
   }
 
   _click(event) {
+    // A click on a confirmation's backdrop (outside its card) is "Continue the calibration".
+    if (event.target.classList?.contains("wiz-dialog")) {
+      if (event.target.classList.contains("wiz-nav-dialog")) this._navAnswer(false); else this._closeDialog();
+      return;
+    }
     const button = event.target.closest("button[data-wiz]");
     if (!button || button.disabled) return;
     event.preventDefault();

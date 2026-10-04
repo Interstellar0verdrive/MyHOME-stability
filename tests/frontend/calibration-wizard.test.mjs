@@ -1336,6 +1336,23 @@ test("the Calibration in progress dialog is 592 px wide on desktop, its three bu
   assert.match(css, /@media \(min-width: 1024px\) \{ \.wiz-nav-dialog \.wiz-dialog-card \.actions \{ flex-wrap: nowrap; \} \}/);
 });
 
+test("a click on a confirmation's backdrop is Continue the calibration", async () => {
+  const { backend, wiz, press, startFor, panel } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  wiz().querySelector(".wiz-head .wiz-discard").click(); await tick();
+  const exit = wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)");
+  assert.equal(exit.hidden, false);
+  exit.querySelector(".wiz-dialog-card").click(); await tick();
+  assert.equal(exit.hidden, false, "a click on the card keeps it");
+  exit.click(); await tick();
+  assert.equal(wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)").hidden, true, "the backdrop continues");
+  assert.equal(backend.calls.some((message) => message.action === "cancel"), false);
+  const answer = panel._beforeLeave();
+  wiz().querySelector(".wiz-nav-dialog").click();
+  assert.equal(await answer, false, "Calibration in progress: the backdrop stays");
+});
+
 test("the time it stays open comes from Home Assistant's lease: 10 minutes after a movement", async () => {
   const { backend, wiz, press, startFor, panel } = await mount();
   await startFor("cover.living_one");

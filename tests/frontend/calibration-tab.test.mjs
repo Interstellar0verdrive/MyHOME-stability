@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { translations } from "../../custom_components/myhome/frontend/panel/panel-translations.js";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/", pretendToBeVisual: true });
-for (const key of ["window", "document", "HTMLElement", "customElements", "CustomEvent", "Event", "KeyboardEvent", "history"]) {
+for (const key of ["window", "document", "HTMLElement", "customElements", "CustomEvent", "Event", "KeyboardEvent", "MouseEvent", "history"]) {
   globalThis[key] = key === "window" ? dom.window : dom.window[key];
 }
 dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -337,6 +337,20 @@ test("every radio of the Assign dialog is the same circle, No profile included",
   assert.match(css, /\.wiz-radio \{[^}]*line-height: 20px;/);
   assert.match(css, /\.wiz-radio input \{[^}]*margin: 2px 0 0;/);
   assert.match(css, /\.cal-assign-none strong \{ display: flex; align-items: center; gap: 6px; height: 20px; \}/);
+});
+
+test("a click on the backdrop closes our dialogs as Escape does, applying nothing", async () => {
+  const { root, tab, calls } = await mount();
+  row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]').click();
+  row(tab, "cover.bedroom").querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); await tick();
+  const dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  const tall = dialog.querySelector('input[value="tall"]');
+  tall.checked = true; tall.dispatchEvent(new Event("change", { bubbles: true }));
+  dialog.querySelector(".wiz-radio").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  assert.ok(root.querySelector("#dialog-host dialog"), "a click inside does not close it");
+  dialog.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 1, clientY: 1 }));
+  assert.equal(root.querySelector("#dialog-host dialog"), null, "the backdrop closes it");
+  assert.equal(calls.some((message) => message.type === "myhome/cover_profiles/write"), false, "nothing applied");
 });
 
 test("Assign profile offers No profile to unlink the followed profile, never on the cover it was measured on", async () => {
