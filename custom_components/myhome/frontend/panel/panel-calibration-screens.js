@@ -89,7 +89,7 @@ export function buildScreen(ctx) {
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
-    title: "", subline: "", body: "", stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
+    title: "", subline: "", body: "", results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
     // Before any session the header offers a way back to the previous choice (kept as it was).
@@ -247,6 +247,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return share === 0 ? ALREADY_THERE_SECONDS : full * share;
   };
   const closingTime = toRun(timeInUse(ctx.cover?.effective?.closing), true);
+  // What was just measured, as tiles above the text: a small label, a big value, its unit smaller.
+  const liftTile = () => view.samples?.lift == null ? null : { label: t("wiz_T039"), value: n(view.samples.lift), unit: "s",
+    extra: view.readings?.gap == null ? "" : `${n(view.readings.gap)} cm` };
+  const timeTile = (key, seconds) => seconds == null ? null : { label: t(key), value: n(seconds), unit: "s" };
   const topTime = toRun(view.values?.opening_time, false);
   // A run to an end stop stays a positioning until the motor stops by itself or its full time has passed; only then
   // does the screen ask to confirm the end stop.
@@ -286,6 +290,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   }
   if (step === "reset") {
     if (phase === "briefing" && view.gap_warning) return Object.assign(screen, { code: p("08"), title: t("wiz_T047"), body: t("wiz_T048"),
+      results: [liftTile()].filter(Boolean),
       notices: [{ tone: "warning", text: fill(t("calGapWarning"), view) }],
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
@@ -298,8 +303,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   }
   if (step === "opening") {
     if (phase === "reading") {
-      if (!local.ackAscent && slats) return Object.assign(screen, { code: p("12"), title: t("wiz_T058"),
-        body: tx("wiz_T059", { slat: n(view.samples?.lift), run: n(view.values?.opening_time) }),
+      if (!local.ackAscent && slats) return Object.assign(screen, { code: p("12"), title: t("wiz_T058"), body: t("wiz_T059"),
+        results: [liftTile(), timeTile("wiz_T040", view.values?.opening_time)].filter(Boolean),
         actions: [{ id: "ack:ascent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
       return Object.assign(screen, { code: p("13"), title: t("wiz_T062"), body: t("wiz_T063"),
         field: { label: t("wiz_T064"), hint: t("wiz_T066"), min: 20, max: 500, kind: "travel", value: view.saved_travel_cm ?? null },
@@ -320,8 +325,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   if (step === "half_open") {
-    if (phase === "briefing" && !local.ackDescent) return Object.assign(screen, { code: p("15"), phase: "descent", title: t("wiz_T071"),
-      body: tx("wiz_T072", { run: n(view.values?.closing_time) }),
+    if (phase === "briefing" && !local.ackDescent) return Object.assign(screen, { code: p("15"), phase: "descent", title: t("wiz_T071"), body: t("wiz_T072"),
+      results: [timeTile("wiz_T068", view.values?.closing_time), view.travel_cm == null ? null : { label: t("wiz_T041"), value: n(view.travel_cm), unit: "cm" }].filter(Boolean),
       actions: [{ id: "ack:descent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     if (phase === "briefing" && !local.ackReadings) return Object.assign(screen, { code: p("16"), title: t("wiz_T074"), body: t("wiz_T075"),
       actions: [{ id: "ack:readings", label: t("wiz_T076"), kind: "primary" }] });

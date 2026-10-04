@@ -100,10 +100,10 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-08 | `reading` · `lift`; `briefing` · `reset` with `gap_warning` | T047–T051, `calGapWarning` | `reading`; `next` or `repeat` after a wide gap |
 | A-09 / A-10 | `reset` | T027, T052; T053, T054, T032 | `next` (auto), `endpoint` |
 | A-11 | `briefing`/`opening` · `opening` | T055 (T040 without slats), T056, T045, T057 | `next`, `endpoint` |
-| A-12 | `reading` · `opening` (local) | T058–T061 | `repeat` |
+| A-12 | `reading` · `opening` (local): result tiles «Lift-off s · cm» and «Full ascent s» above the text (T039, T040) | T058–T061 | `repeat` |
 | A-13 | `reading` · `opening` | T062–T066 | `reading` (travel, 20–500 cm, saved travel offered) |
 | A-14 | `briefing`/`closing` · `closing` | T068–T070 | `next`, `endpoint` |
-| A-15 / A-16 | `briefing` · `half_open` (local) | T071, T072, T060, T061; T074–T076 | `repeat`; `next` |
+| A-15 / A-16 | `briefing` · `half_open` (local); A-15 with result tiles «Full descent s» and «Curtain travel cm» (T068, T041) | T071, T072, T060, T061; T074–T076 | `repeat`; `next` |
 | A-17 / A-18 | `opening` · `half_open`; `reading` | T027, T079, T080; T081, T082, `calReadingRange`, T051, T033 | `reading`, `repeat` |
 | A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, `wizTopReached` | `next` (auto), `endpoint`, `next` (auto) |
 | A-20 | `reading` · `half_close` | T087, T088, `calReadingRange` | `reading`, `repeat` |

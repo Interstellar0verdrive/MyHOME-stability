@@ -244,7 +244,15 @@ test("path A runs the live geometry session from the first close to Save, one me
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(code(), "A-12");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /^Slats 4(\.\d)? s, full ascent 22\.2 s\./);
+  // What was measured sits in tiles above the text: a small label, a big value; the text no longer repeats it.
+  const tiles = () => [...wiz().querySelectorAll(".wiz-results .wiz-result")].map((tile) => [tile.querySelector(".wiz-result-label").textContent,
+    tile.querySelector(".wiz-result-value").textContent.replace(/\s+/g, " ").trim()]);
+  assert.equal(tiles().length, 2);
+  assert.equal(tiles()[0][0], "Lift-off");
+  assert.match(tiles()[0][1], /^\d+(\.\d)? s · 3 cm$/, "lift-off time and gap in one tile");
+  assert.deepEqual(tiles()[1], ["Full ascent", "22.2 s"]);
+  assert.equal(wiz().querySelector(".wiz-results").nextElementSibling.className, "wiz-body", "above the text");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /^If both presses came at the right moment, continue\./);
   await press("ack:ascent");
   assert.equal(code(), "A-13");
   assert.equal(wiz().querySelector('[name="reading_cm"]').value, "195", "the saved travel is offered, not sent");
@@ -256,6 +264,8 @@ test("path A runs the live geometry session from the first close to Save, one me
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(code(), "A-15");
+  assert.deepEqual(tiles(), [["Full descent", "21.7 s"], ["Curtain travel", "198 cm"]]);
+  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /21\.7/);
   await press("repeat");
   assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
   await move(backend);

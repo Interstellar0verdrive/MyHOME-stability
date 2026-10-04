@@ -912,6 +912,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 @keyframes wiz-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 @media (prefers-reduced-motion: reduce) { .wiz-progress.is-indeterminate span { animation: none; width: 100%; opacity: .35; } }
 .wiz-wait p.wiz-wait-remaining { font-size: 12px; }
+/* What a step has just measured: tiles side by side, a small label and a big value (its unit smaller). */
+.wiz-results { display: flex; flex-wrap: wrap; gap: 12px; }
+.wiz-result { display: grid; gap: 2px; min-width: 150px; padding: 12px 16px; border-radius: 10px; background: var(--panel-accent-soft); }
+.wiz-result-label { font-size: 12px; color: var(--panel-text-2); }
+.wiz-result-value { font-size: 32px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wiz-result-value small, .wiz-result-extra { font-size: 16px; font-weight: 500; }
 .wiz-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--panel-surface-2); }
 .wiz-box p { margin: 0; }
 .wiz-choice { max-width: 420px; }
