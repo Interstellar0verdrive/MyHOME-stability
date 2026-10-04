@@ -551,6 +551,14 @@ test("a never measured cover says where its times come from", async () => {
   assert.match(row(yaml.tab, "cover.bedroom").querySelector(".cal-origin-note").textContent, /^Values from the YAML configuration \(30 \/ 28 s\), never measured/);
   row(yaml.tab, "cover.living_one").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(yaml.tab, "cover.living_one").querySelector(".cal-origin-note"), null, "a measured cover has no such note");
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-origin-note").classList.contains("is-warning"), false, "blue in a quiet row");
+  // In the row of a cover in progress the note is yellow like the row; the icon and the primary action stay accent.
+  const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "s", mode: "geometry", phase: "briefing", step: "lift", sequence: 3,
+    values: {}, recoverable: true, attached: true, owner_present: true };
+  const running = await mount({ data, session });
+  row(running.tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
+  assert.ok(row(running.tab, "cover.bedroom").classList.contains("is-running"));
+  assert.equal(row(running.tab, "cover.bedroom").querySelector(".cal-origin-note").classList.contains("is-warning"), true);
 });
 
 const order = (tab) => rows(tab).map((item) => item.dataset.entity.replace("cover.", ""));

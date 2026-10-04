@@ -418,14 +418,16 @@ export class CalibrationTab {
     const refine = this._wizard && item.rolls ? `<button type="button" class="primary" data-action="cal-tab-refine" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="mdi:target" aria-hidden="true"></ha-icon>${esc(t("calTabActionRefine"))}</button>` : "";
     const measure = this._wizard ? `<button type="button" class="${item.rolls ? "" : "primary"}" data-action="cal-tab-measure-cover" data-id="${esc(key)}" ${busy ? "disabled" : ""}><ha-icon icon="${item.status === "to_measure" ? "mdi:ruler" : "mdi:reload"}" aria-hidden="true"></ha-icon>${esc(t(item.status === "to_measure" ? "calTabActionMeasure" : "calTabActionRemeasure"))}</button>` : "";
     const assign = `<button type="button" data-action="cal-tab-assign" data-id="${esc(key)}"><ha-icon icon="mdi:link-variant" aria-hidden="true"></ha-icon>${esc(t("calTabAssign"))}</button>`;
+    // A cover in progress is yellow throughout: its notes take the warning variant (icon and primary stay accent).
+    const note = this._running(item) ? "cal-note is-warning" : "cal-note";
     return `<div class="cal-details-grid">
         <section><h4>${esc(t("calTabValues"))}</h4>${list(rows)}${this._originNote(item, language)}${action(refine)}</section>
         <section><h4>${esc(t("calTabColLast"))}</h4>${list([[t("calTabDate"), item.last ? dateText(item.last, language) : "—"],
           [t("calTabMethod"), t(`calTabMethod_${item.method || "none"}`)]])}
-          ${item.profile && scaled ? `<p class="cal-note">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
+          ${item.profile && scaled ? `<p class="${note}">${esc(fill(t("calTabInheritedNote"), { profile: item.profile.name }))}</p>` : ""}${action(measure)}</section>
         <section><h4>${esc(t("calTabColProfile"))}</h4>${item.profile ? `<p><span class="chip cal-profile-chip"><ha-icon icon="mdi:circle" aria-hidden="true"></ha-icon>${esc(item.profile.name)}</span></p>
           <p>${esc(followers.length ? fill(t("calTabFollowers"), { names: names(followers, language) }) : t("calTabFollowersNone"))}</p>
-          <p class="cal-note">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}${action(assign)}</section>
+          <p class="${note}">${esc(t("calTabProfileNote"))}</p>` : `<p class="muted">${esc(t("calTabProfileNone"))}</p>`}${action(assign)}</section>
       </div>`;
   }
 
@@ -434,7 +436,7 @@ export class CalibrationTab {
     const effective = item.cover.effective, origin = effective.opening?.origin;
     if (item.status !== "to_measure" || !["default", "yaml"].includes(origin) || effective.closing?.origin !== origin) return "";
     const [opening, closing] = [effective.opening.value, effective.closing.value].map((value) => number(value, language));
-    return `<p class="cal-note cal-origin-note">${esc(fill(this._context.t(origin === "yaml" ? "wiz_T378" : "wiz_T377"),
+    return `<p class="cal-note${this._running(item) ? " is-warning" : ""} cal-origin-note">${esc(fill(this._context.t(origin === "yaml" ? "wiz_T378" : "wiz_T377"),
       { seconds: opening === closing ? opening : `${opening} / ${closing}` }))}</p>`;
   }
 
