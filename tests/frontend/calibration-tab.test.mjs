@@ -284,6 +284,13 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
   assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
+test("notes are opaque, so they never blend with the row that hosts them, and A-01's chosen row is neutral", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /background: color-mix\(in srgb, var\(--panel-accent\) 8%, var\(--panel-surface\)\); color: var\(--panel-text-2\);/, "info");
+  assert.match(css, /background: color-mix\(in srgb, var\(--panel-warning\) 8%, var\(--panel-surface\)\);/, "warning");
+  assert.match(css, /\.wiz-pick-row\.is-selected \{ background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, transparent\); \}/);
+});
+
 test("a cover in progress keeps yellow tints in every state of its row", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   for (const selector of [".cal-row.is-running .cal-row-main:hover", ".cal-row.is-running.is-expanded .cal-row-main",
