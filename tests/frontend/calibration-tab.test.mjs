@@ -339,7 +339,10 @@ test("Assign profile offers No profile to unlink the followed profile, never on 
   dialog.querySelector(".cal-dialog-close").click(); await tick();
   open("cover.living_two"); await tick();
   dialog = root.querySelector("#dialog-host dialog.cal-dialog");
-  assert.equal(dialog.querySelector('input[value="__no_profile__"]'), null, "the profile's source cover: its values live in the profile");
+  const sourceNone = dialog.querySelector('input[value="__no_profile__"]');
+  assert.equal(sourceNone.disabled, true, "the profile's source cover: shown, but disabled");
+  assert.equal(sourceNone.closest(".wiz-radio").querySelector("small").textContent,
+    'This cover is the source of the profile "tall_two_leaf": a coming update will let it unlink the profile and keep its measured values.');
   dialog.querySelector(".cal-dialog-close").click(); await tick();
   open("cover.kitchen_two"); await tick();
   dialog = root.querySelector("#dialog-host dialog.cal-dialog");

@@ -651,12 +651,12 @@ export class CalibrationTab {
         followers(profile),
       ];
     };
-    // "No profile" unlinks the profile the cover follows; never on the cover the profile was measured on, whose values
-    // live only in the profile until Home Assistant copies them on unlinking (backend lot to plan).
+    // "No profile" unlinks the profile the cover follows. On the cover the profile was measured on it is shown disabled:
+    // its values live only in the profile until Home Assistant copies them on unlinking (backend lot to plan).
     const followed = data.profiles.find((profile) => profile.id === item.cover.profile_id);
     const source = followed?.provenance?.opening?.origin_entity_id === item.cover.entity_id;
-    const none = followed && !source ? `<label class="wiz-radio cal-assign-none"><input type="radio" name="assign_profile" value="${NO_PROFILE}">
-        <span><strong><ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon>${esc(t("wiz_T404"))}</strong><small class="muted">${esc(fill(t("wiz_T405"), { profile: followed.name }))}</small></span></label>` : "";
+    const none = followed ? `<label class="wiz-radio cal-assign-none${source ? " is-disabled" : ""}"><input type="radio" name="assign_profile" value="${NO_PROFILE}"${source ? " disabled" : ""}>
+        <span><strong><ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon>${esc(t("wiz_T404"))}</strong><small class="muted">${esc(fill(t(source ? "wiz_T430" : "wiz_T405"), { profile: followed.name }))}</small></span></label>` : "";
     body.innerHTML = profiles.length ? `<fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${none}${profiles.map((profile) => {
       const [type, measured, followers] = describe(profile);
       return `<label class="wiz-radio"><input type="radio" name="assign_profile" value="${esc(profile.id)}" ${profile.id === item.cover.profile_id ? "checked" : ""}>
