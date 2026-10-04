@@ -690,6 +690,11 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-row.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-accent) 8%, transparent); }
 .cal-row.is-expanded .cal-row-main:hover { background: var(--panel-accent-soft); }
 .cal-row.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-accent) 4%, transparent); }
+/* A cover in progress keeps its yellow in every state (pointer, expanded title, details): no blue over the yellow. */
+.cal-row.is-running .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 14%, transparent); }
+.cal-row.is-running.is-expanded .cal-row-main { background: color-mix(in srgb, var(--panel-warning) 12%, transparent); }
+.cal-row.is-running.is-expanded .cal-row-main:hover { background: color-mix(in srgb, var(--panel-warning) 16%, transparent); }
+.cal-row.is-running.is-expanded .cal-row-details { background: color-mix(in srgb, var(--panel-warning) 5%, transparent); }
 .cal-row-main { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; grid-template-areas: "cover cover actions" "status profile profile"; gap: 8px 8px; align-items: center; padding: 12px 14px; }
 .cal-row-toggle { grid-area: cover; justify-content: start; gap: var(--cal-lead-gap, 12px); min-width: 0; padding: 4px; border: 0; background: transparent; text-align: start; font-weight: 400; }
 .cal-row-toggle:hover { background: transparent; }

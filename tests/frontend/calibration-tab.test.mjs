@@ -254,6 +254,17 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
   assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
+test("a cover in progress keeps yellow tints in every state of its row", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  for (const selector of [".cal-row.is-running .cal-row-main:hover", ".cal-row.is-running.is-expanded .cal-row-main",
+    ".cal-row.is-running.is-expanded .cal-row-main:hover", ".cal-row.is-running.is-expanded .cal-row-details"]) {
+    const rule = css.split("\n").find((line) => line.startsWith(`${selector} {`));
+    assert.ok(rule, selector);
+    assert.match(rule, /var\(--panel-warning\)/, `${selector} is yellow`);
+    assert.doesNotMatch(rule, /accent/, `${selector} has no blue`);
+  }
+});
+
 test("Assign profile offers No profile to unlink the followed profile, never on the cover it was measured on", async () => {
   const data = overview();
   Object.assign(data.profiles[0].provenance.opening, { origin_entity_id: "cover.living_two", origin_name: "cover.living_two" });
