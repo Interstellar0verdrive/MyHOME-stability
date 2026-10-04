@@ -25,7 +25,7 @@ export function sampleOverview() {
     entry_id: "one", revision: 7, capabilities: { profile_management: true, profile_assignment: true },
     profiles: [{ id: "tall", name: "tall_two_leaf", opening_time: 22.4, closing_time: 21.9, reference_travel_cm: 198,
       geometry: { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 }, assigned_to: ["cover.kitchen_two", "cover.living_three"],
-      provenance: { opening: evidence("guided", "2026-09-29T10:00:00+00:00", { origin_name: "Living room shutter 1" }), closing: measured } }],
+      provenance: { opening: evidence("guided", "2026-09-29T10:00:00+00:00", { origin_entity_id: "cover.living_one", origin_name: "cover.living_one" }), closing: measured } }],
     covers: [
       { entity_id: "cover.living_one", name: "Living room shutter 1", profile_id: null, travel_cm: 195, available: true, advanced: false, overrides: {},
         effective: { opening: value(22.0, evidence("unknown"), "native_fallback"), closing: value(21.7, evidence("unknown"), "native_fallback") } },

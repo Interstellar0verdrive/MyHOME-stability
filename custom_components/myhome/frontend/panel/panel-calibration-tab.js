@@ -540,6 +540,16 @@ export class CalibrationTab {
     this._dialog = null;
   }
 
+  /**
+   * The cover a measurement was taken on, as the list names it: Home Assistant's provenance carries the registry name,
+   * which for a cover named by its device is only the entity id.
+   */
+  _originName(origin) {
+    const id = origin?.origin_entity_id, { hass } = this._context;
+    return (id && (this._covers().find((item) => item.cover.entity_id === id)?.name || hass.states?.[id]?.attributes?.friendly_name))
+      || origin?.origin_name || id || "";
+  }
+
   _dialogDone() {
     this._closeDialog();
     this.refresh();
@@ -564,7 +574,8 @@ export class CalibrationTab {
       return [
         [t(slat == null ? "wiz_T370" : slat > 0 ? "wiz_T368" : "wiz_T369"),
           profile.reference_travel_cm != null ? fill(t("wiz_T372"), { cm: number(profile.reference_travel_cm, language) }) : ""].filter(Boolean).join(" · "),
-        [origin?.origin_name && origin?.recorded_at ? fill(t("wiz_T371"), { cover: origin.origin_name, date: dateText(origin.recorded_at, language) }) : "",
+        [origin?.recorded_at && (origin.origin_entity_id || origin.origin_name)
+          ? fill(t("wiz_T371"), { cover: this._originName(origin), date: dateText(origin.recorded_at, language) }) : "",
           followers(profile.assigned_to.filter(Boolean).length)].filter(Boolean).join(" · "),
       ];
     };

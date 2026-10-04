@@ -128,7 +128,14 @@ export class CalibrationWizard {
   _profiles() {
     const data = this._gatewayData();
     return (data?.profiles || []).map((profile) => ({ id: profile.id, name: profile.name, followers: profile.assigned_to.length,
-      measuredOn: profile.provenance?.opening?.origin_name || profile.provenance?.opening?.origin_entity_id || null }));
+      measuredOn: this._originName(profile.provenance?.opening) }));
+  }
+
+  /** Where a profile was measured, by the cover's name in the list (the provenance's name may be its entity id). */
+  _originName(origin) {
+    const id = origin?.origin_entity_id, { hass } = this._context;
+    return (id && (this._covers().find((item) => item.cover.entity_id === id)?.name || hass.states?.[id]?.attributes?.friendly_name))
+      || origin?.origin_name || id || null;
   }
 
   _screen() {

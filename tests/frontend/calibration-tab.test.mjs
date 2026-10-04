@@ -225,7 +225,8 @@ test("the row menu closes with Escape back on its button", async () => {
 
 test("Assign profile lists the saved profiles as B-01 does and assigns with the existing write, never through the profile dialog", async () => {
   const data = overview();
-  data.profiles[0].provenance.opening.origin_name = "Living room shutter 1";
+  // As Home Assistant publishes it for a cover named by its device: the registry name is only the entity id.
+  Object.assign(data.profiles[0].provenance.opening, { origin_entity_id: "cover.living_one", origin_name: "cover.living_one" });
   data.profiles[0].reference_travel_cm = 198;
   data.profiles[0].geometry = { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 };
   data.profiles.push({ id: "low", name: "low_one_leaf", opening_time: 12, closing_time: 11, assigned_to: [], provenance: {} });
