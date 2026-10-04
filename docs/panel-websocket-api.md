@@ -81,12 +81,12 @@ Save is offered as before, whatever the verdict.
   Stop is written, as Stop in `review` is.
 - Stop while the cover returns to its end stop or runs the check (from the moment the
   movement is queued), an early stop reported by the bus during the check run
-  (`unexpected_stop`; on the return to the end stop the actuator's stop only waits for
-  `endpoint`, as in every end stop run) or a
-  movement nobody asked for (`unexpected_movement`, also during a briefing) returns to
-  `review` without a verdict (`check: null`). Stop is written, and the session no
+  (`unexpected_stop`) or a movement nobody asked for (`unexpected_movement`, also
+  during a briefing) returns to `review` without a verdict (`check: null`). Stop is written, and the session no
   longer knows where the bottom edge is: Save then leaves the runtime position unknown,
   as after a restart, instead of seeding it from an earlier reading.
+- On the return to the end stop the actuator's own stop does not end the check: it
+  waits for `endpoint`, as in every end stop run.
 - `check_interrupted` gives the reason (`stopped`, `unexpected_stop`,
   `unexpected_movement`) until the next check or a repeated measurement; it is `null`
   otherwise and in every terminal phase.

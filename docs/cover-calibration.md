@@ -60,7 +60,11 @@ interrupt it: the wizard tells the operator to confirm once the motor has stoppe
 itself, so on actuators that report their real stop that status usually arrives
 first. The backend dates it (`motor_stopped: true`, `stopped_elapsed` in seconds from
 the movement anchor) and keeps waiting for `endpoint`; the leg's 600-second deadline
-stays armed, so no confirmation still ends in `travel_timeout`. Confirmed after the
+stays armed, so no confirmation still ends in `travel_timeout`. A stop status within
+1.5 seconds of the movement anchor (`ECHO_WINDOW`) is taken as the gateway relaying a
+stop around our own command and dates nothing; the real end stop does. The stop
+publishes a new state, so an `endpoint` sent with the sequence just before it is
+still accepted, as long as nothing else has changed since. Confirmed after the
 status, the leg records `stopped_elapsed`, without the operator's reaction time;
 confirmed before it, the leg records the confirmation as before and the later status
 is ignored. Only the confirmation records a time and sets the endpoint. After the
@@ -68,7 +72,9 @@ status, any further movement, in either direction, interrupts with
 `unexpected_movement`; Stop still discards the leg. On a timer actuator (F411, about
 60 seconds by default) the status reports its relay releasing: if the operator has
 not confirmed earlier, that time is what is saved, so confirm as soon as the cover
-reaches its end stop.
+reaches its end stop. If the travel is longer than the timer, the motor stops before
+the end stop: do not confirm that stop, or the timer would be saved as the travel.
+Press Stop and lengthen the actuator's timer first.
 
 **Stop requested is not stop confirmed.** Commands use the existing gateway queue;
 the UI reports the request, not a physical acknowledgement. If the queue is full,
@@ -293,7 +299,8 @@ and `closing_time`, as finite seconds from 1 to 600. `elapsed` is the current le
 backend duration or null. `motor_stopped` is true once the bus has reported the
 motor's stop during a guided leg that still awaits `endpoint`, and `stopped_elapsed`
 gives its time in seconds from the movement anchor; otherwise they are `false` and
-null. `sequence` increases on state notifications; heartbeats
+null. `elapsed` keeps counting after that stop; `stopped_elapsed` is the dated value
+that `endpoint` will record. `sequence` increases on state notifications; heartbeats
 return the latest state without increasing it. `revision` is the profile-store
 revision captured at start and updated after successful save. Runtime events do
 not modify that configuration revision.
@@ -373,9 +380,17 @@ documented request-schema validation and local documentation links pass.
 Each confirmed endpoint records backend UTC wall-clock evidence independently of
 the monotonic clock used for elapsed travel time. Explicit profile save persists
 both directions with `source: guided` and their original confirmation dates.
-Guided evidence recorded from this release also says what ended the leg:
-`ended_by: press` (the confirmation) or `ended_by: bus_stop` (the actuator's stop
-status, confirmed afterwards). Older evidence has no `ended_by` and stays valid.
+Guided evidence now also says what ended the leg: `ended_by: press` (the
+confirmation) or `ended_by: bus_stop` (the actuator's stop status, confirmed
+afterwards). Evidence recorded before this change has no `ended_by` and stays valid.
+The export does not carry `ended_by`, so an imported profile loses it.
+
+**Downgrade.** The storage version does not change, but an older release does not
+know `ended_by`: it rejects the whole cover profile store of the gateway as soon as
+one saved profile or personal value carries it, and that gateway's covers do not
+load. Restore a backup taken before the upgrade, or remove every `ended_by` key from
+`.storage/myhome.cover_profiles.<entry_id>` with Home Assistant stopped; loading then
+works again.
 Interrupting the session clears unsaved evidence along with measured times.
 The profile editor shows that evidence after saving; it is not an automatic
 calibration or an automatic-save feature.

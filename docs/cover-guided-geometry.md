@@ -67,7 +67,8 @@ release Stop is excluded. No browser clock is used.
 
 In the end stop runs (`home`, `reset`, the full ascent and descent, `top`, and the
 returns of a check) the actuator's own stop status (`state == 0`) does not interrupt:
-it is dated (`motor_stopped`, `stopped_elapsed`) and the run waits for `endpoint`.
+it is dated (`motor_stopped`, `stopped_elapsed`) and the run waits for `endpoint`;
+within 1.5 seconds of the motor start it is taken as a relayed echo and dates nothing.
 Confirmed after it, the full ascent or descent records `stopped_elapsed` and the step
 goes on without waiting for a second stop status; confirmed before it, the
 confirmation ends timing as above. Evidence says which with `ended_by` (`bus_stop` or
