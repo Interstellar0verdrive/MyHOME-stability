@@ -23,8 +23,16 @@ export function phasesFor(path, scope, refining) {
 const MEASURED_RUN = (view) => view && ((view.mode === "geometry" && ["opening", "closing"].includes(view.phase) && ["lift", "opening", "closing"].includes(view.step))
   || (view.mode === "guided" && ["opening", "closing"].includes(view.phase)));
 
+/**
+ * `motor_stopped` (NOT published yet, §8.13 of the handoff): during the closing runs to the base (`home`, `reset`)
+ * the motor has stopped (a stop frame from the bus, real or the actuator's own timer) and the session waits for the
+ * user's confirmation. Until Home Assistant sends it the wizard treats these runs as moving throughout.
+ */
+const MOTOR_STOPPED = (view) => view?.motor_stopped === true;
+
 /** Movements in progress or about to start: Stop is the action that matters. */
-export const MOVING = (view) => !!view && (["opening", "closing", "geometry_wait_stop", "positioning"].includes(view.phase) || view.phase?.startsWith("starting_"));
+export const MOVING = (view) => !!view && !MOTOR_STOPPED(view)
+  && (["opening", "closing", "geometry_wait_stop", "positioning"].includes(view.phase) || view.phase?.startsWith("starting_"));
 
 const ENDED = ["interrupted", "cancelled", "expired"];
 
@@ -201,10 +209,15 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     screen.phase = "prep";
     if (phase === "briefing") return Object.assign(screen, { code: p("03"), title: t("wiz_T021"), body: path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
       actions: [{ id: "next", label: t("wiz_T024"), kind: "primary" }] });
-    // "It did not do what it should": stops the run and opens S-01 (nothing measured yet is lost). Stop stays, as
-    // everywhere a movement is in progress. Not on A-10: there a stop discards the lift-off measurement (§8.9).
-    if (phase === "closing") return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
-      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, stop] });
+    // While the motor runs only Stop (and the end stop, which the user's eye decides) can be pressed; "It did not do
+    // what it should" waits, disabled, until the motor has stopped, and then Stop is gone. It opens S-01 (nothing
+    // measured yet is lost). Not on A-10: there a stop discards the lift-off measurement (§8.9).
+    if (phase === "closing") {
+      const stopped = MOTOR_STOPPED(view);
+      return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
+        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary", disabled: !stopped },
+          ...(stopped ? [] : [stop])] });
+    }
     return positioning("04", tx("wiz_T029", values), closingTime);
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
@@ -232,8 +245,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "briefing" && view.gap_warning) return Object.assign(screen, { code: p("08"), title: t("wiz_T047"), body: t("wiz_T048"),
       notices: [{ tone: "warning", text: fill(t("calGapWarning"), view) }],
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
+    // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
     if (phase === "closing") return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
-      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, stop] });
+      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...(MOTOR_STOPPED(view) ? [] : [stop])] });
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     if (view.still_resting) screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });

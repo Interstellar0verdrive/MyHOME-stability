@@ -258,7 +258,10 @@ export class CalibrationWizard {
     const guarded = this._guarded();
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
-      if (button) button.disabled = !!action.disabled || (guarded && action.id !== "stop");
+      if (!button) continue;
+      button.disabled = !!action.disabled || (guarded && action.id !== "stop");
+      // Disabled by the step itself (not by the short hold after a change): said to assistive technology too.
+      if (action.disabled) button.setAttribute("aria-disabled", "true"); else button.removeAttribute("aria-disabled");
     }
     const take = column.querySelector('[data-wiz="take"]');
     if (take) take.disabled = !!this._gateway?.status.busy || guarded;

@@ -89,7 +89,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-02 | before the session | T015–T019 | nothing |
 | A-03 | before the session | T021–T024, T198, T199 (no Cancel T025: the header's *Abandon the calibration* does the same) | `start` on «Understood, begin» |
 | A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |
-| A-05 | `closing` · `home` | T030–T033, T028 | `endpoint`; T033 (outlined, beside the Stop link) sends `stop` and opens S-01, nothing measured yet is lost (A-10 keeps Stop only: a stop there discards the lift-off) |
+| A-05 | `closing` · `home` | T030–T033, T028 | `endpoint` (always pressable); while the motor runs T033 (outlined) is disabled and the red Stop link is shown; once the view says `motor_stopped` (not published yet by Home Assistant) T033 is active and Stop is gone; T033 sends `stop` and opens S-01, nothing measured yet is lost. A-10: the same Stop rule, never T033 (a stop there discards the lift-off) |
 | A-06 | `briefing` · `lift` (local briefing) | T035–T037 | nothing |
 | A-07 | `briefing`/`opening` · `lift` | T042–T046, T028 | `next`, then `lift` |
 | A-08 | `reading` · `lift`; `briefing` · `reset` with `gap_warning` | T047–T051, `calGapWarning` | `reading`; `next` or `repeat` after a wide gap |

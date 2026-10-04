@@ -803,27 +803,41 @@ test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibr
   assert.deepEqual([a03.code, a16.code], ["A-03", "A-16"]);
 });
 
-test("A-05 offers \"It did not do what it should\" beside Stop: it stops the run and opens S-01; A-10 keeps Stop only", async () => {
+test("A-05: while the motor runs only Stop and the end stop can be pressed; once it stopped, T033 instead of Stop; A-10 never has T033", async () => {
   const { backend, wiz, code, press, actions, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend);
   assert.equal(code(), "A-05");
   const kinds = () => [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
-  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"], ["stop", "stop"]], "outlined, with the red Stop link kept");
-  assert.equal(wiz().querySelector('[data-wiz="misbehaved"]').textContent, "It did not do what it should");
+  const misbehaved = () => wiz().querySelector('[data-wiz="misbehaved"]');
+  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"], ["stop", "stop"]], "outlined, with the red Stop link while moving");
+  assert.equal(misbehaved().textContent, "It did not do what it should");
+  assert.equal(misbehaved().disabled, true, "disabled while the motor runs");
+  assert.equal(misbehaved().getAttribute("aria-disabled"), "true");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, false, "the end stop stays pressable: the user's eye decides");
+  // Home Assistant says the motor stopped (a stop frame, real or the actuator's timer) and waits for the user.
+  backend.session.motor_stopped = true; backend.session.sequence += 1; backend.emit(); await tick();
+  assert.equal(code(), "A-05");
+  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"]], "no Stop once the motor stopped");
+  assert.equal(misbehaved().disabled, false);
+  assert.equal(misbehaved().hasAttribute("aria-disabled"), false);
   await press("misbehaved");
-  assert.equal(actions().at(-1), "stop", "today it is a stop: nothing measured yet is lost");
+  assert.equal(actions().at(-1), "stop", "today it ends the session: nothing measured yet is lost");
   await tick();
   assert.equal(code(), "S-01");
 
   const t = (key) => translations.it[key] || key;
-  const a10 = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
-    view: { mode: "geometry", step: "reset", phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5 } });
-  assert.equal(a10.code, "A-10");
-  assert.deepEqual(a10.actions.map((action) => action.id), ["endpoint", "stop"], "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
-  const c05 = buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_and_rolls", cover: { name: "Cucina 2" },
-    view: { mode: "geometry", step: "home", phase: "closing", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 2 } });
-  assert.deepEqual([c05.code, c05.actions.map((action) => action.id)], ["C-05", ["endpoint", "misbehaved", "stop"]], "the C clone too");
+  const a10 = (extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
+    view: { mode: "geometry", step: "reset", phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5, ...extra } });
+  assert.equal(a10().code, "A-10");
+  assert.deepEqual(a10().actions.map((action) => action.id), ["endpoint", "stop"], "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
+  assert.deepEqual(a10({ motor_stopped: true }).actions.map((action) => action.id), ["endpoint"], "Stop only while moving");
+  const c05 = (extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_and_rolls", cover: { name: "Cucina 2" },
+    view: { mode: "geometry", step: "home", phase: "closing", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 2, ...extra } });
+  assert.deepEqual([c05().code, c05().actions.map((action) => [action.id, !!action.disabled])], ["C-05", [["endpoint", false], ["misbehaved", true], ["stop", false]]], "the C clone too");
+  assert.deepEqual(c05({ motor_stopped: true }).actions.map((action) => [action.id, !!action.disabled]), [["endpoint", false], ["misbehaved", false]]);
+  // A reader sees Stop only while it moves.
+  assert.deepEqual(c05({ read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
 });
 
 test("a subscription replayed after a reconnection never starts a movement, even on a step that would continue by itself", async () => {
