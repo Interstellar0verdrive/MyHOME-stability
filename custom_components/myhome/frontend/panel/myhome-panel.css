@@ -665,7 +665,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-assign-busy { margin-bottom: 12px; }
 .cal-dialog-cancel { background: transparent; }
 .cal-dialog-cancel:hover { background: var(--panel-accent-soft); }
-.cal-assign-none strong { display: inline-flex; align-items: center; gap: 6px; line-height: inherit; }
+.cal-assign-none strong { display: flex; align-items: center; gap: 6px; height: 20px; }
 .cal-assign-none ha-icon { --mdc-icon-size: 16px; margin-block: -2px; color: var(--panel-text-2); }
 /* "Nota (calibrazione)": every explanatory note of the Calibration tab and of its expanded details. Accent at 8 %
    behind, a 3 px bar of accent at 20 % on the left, secondary text; it follows its block (at most 360 px in the details). */
@@ -931,9 +931,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-radios { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; max-width: none; }
 .wiz-radios legend { margin-bottom: 6px; font-size: 12px; font-weight: 500; color: var(--panel-text-2); }
 /* Plain radio rows, as in the mockups: no card, no tinted background on the chosen one. */
-.wiz-radio { display: flex; gap: 10px; align-items: start; padding: 6px 0; font-size: 14px; font-weight: 400; color: var(--primary-text-color, #182b37); cursor: pointer; }
+/* The circle sits centred on the first line: a 20 px line and a 16 px circle 2 px down, whatever follows the label. */
+.wiz-radio { display: flex; gap: 10px; align-items: start; padding: 6px 0; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--primary-text-color, #182b37); cursor: pointer; }
 /* The same circle on every row: it never shrinks beside a long description. */
-.wiz-radio input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 3px 0 0; accent-color: var(--panel-accent); }
+.wiz-radio input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 2px 0 0; accent-color: var(--panel-accent); }
+.wiz-radio small { line-height: 18px; }
+.wiz-radio .wiz-recommended { line-height: 16px; padding-block: 2px; }
 .wiz-radio small { display: block; margin-top: 2px; }
 .wiz-radio.is-disabled { cursor: not-allowed; opacity: .6; }
 .wiz-radio-text { display: grid; gap: 2px; min-width: 0; }

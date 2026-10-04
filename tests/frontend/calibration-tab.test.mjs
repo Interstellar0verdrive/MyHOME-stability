@@ -333,6 +333,10 @@ test("every radio of the Assign dialog is the same circle, No profile included",
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-radio input \{ flex: none; width: 16px; height: 16px;/, "never shrunk by a long description");
   assert.doesNotMatch(css, /\.cal-assign-none input/, "No profile has no circle of its own");
+  // Centred on the first line (checked at 1× and 2× in a browser: within half a pixel).
+  assert.match(css, /\.wiz-radio \{[^}]*line-height: 20px;/);
+  assert.match(css, /\.wiz-radio input \{[^}]*margin: 2px 0 0;/);
+  assert.match(css, /\.cal-assign-none strong \{ display: flex; align-items: center; gap: 6px; height: 20px; \}/);
 });
 
 test("Assign profile offers No profile to unlink the followed profile, never on the cover it was measured on", async () => {
