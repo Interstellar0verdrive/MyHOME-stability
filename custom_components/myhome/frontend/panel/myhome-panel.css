@@ -867,7 +867,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .wiz-pick-list .cal-batch-lead { grid-template-columns: 20px 32px; }
   .wiz-pick-notes { grid-column: 2 / -1; grid-row: 2; }
 }
-.wiz { --wiz-side: var(--panel-surface-2); position: relative; border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: hidden; }
+.wiz { --wiz-side: color-mix(in srgb, var(--primary-text-color, #182b37) 4%, var(--primary-background-color, #fafafa)); position: relative; border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: hidden; }
 .wiz-head { display: flex; align-items: start; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--panel-border); }
 .wiz-head-text { flex: 1; min-width: 0; }
 .wiz-back { flex: none; margin: -2px 0 0 -8px; }

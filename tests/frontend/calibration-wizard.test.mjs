@@ -715,6 +715,11 @@ test("every drawing a screen can pick is a themed inline SVG, and A-09 has none"
   assert.deepEqual([a09.code, a09.illustration], ["A-09", null]);
 });
 
+test("the wizard's side columns take the page colour, slightly shaded", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz \{ --wiz-side: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, var\(--primary-background-color, #fafafa\)\);/);
+});
+
 test("the drawings' palette follows Home Assistant's dark mode", async () => {
   const { backend, panel, wiz, startFor } = await mount();
   await startFor("cover.living_one");
