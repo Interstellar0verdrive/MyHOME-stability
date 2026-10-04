@@ -723,6 +723,12 @@ test("the profile switch is a 36×20 track with a 16 px thumb 2 px from every ed
   assert.match(css, /\.wiz-switch input:checked::after \{ transform: translateX\(16px\); \}/);
 });
 
+test("1 px dividers separate the side columns from the centre on the wide layout only", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const wide = css.slice(css.indexOf("@media (min-width: 1024px) {\n  .wiz-columns"));
+  assert.match(wide.slice(0, wide.indexOf("\n}")), /\.wiz-steps \{ border-inline-end: 1px solid var\(--panel-border\); \}[\s\S]*\.wiz-actions \{ border-inline-start: 1px solid var\(--panel-border\); \}/);
+});
+
 test("the wizard's side columns take the page colour, slightly shaded", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz \{ --wiz-side: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, var\(--primary-background-color, #fafafa\)\);/);

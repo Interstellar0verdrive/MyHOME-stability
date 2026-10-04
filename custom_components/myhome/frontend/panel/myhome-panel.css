@@ -1028,6 +1028,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   --wiz-ill-cover-slats: #6D6D6D; --wiz-ill-cover-last-slat: #535353; --wiz-ill-text: #E1E1E1; --wiz-ill-text-2: #9B9B9B; --wiz-ill-accent: #009AC7; }
 @media (min-width: 1024px) {
   .wiz-columns { grid-template-columns: 240px minmax(0, 1fr) 300px; min-height: 420px; }
+  /* 1 px dividers between the side columns and the centre (none on the phone, where the columns stack). */
+  .wiz-steps { border-inline-end: 1px solid var(--panel-border); }
+  .wiz-actions { border-inline-start: 1px solid var(--panel-border); }
   .wiz-sheet { display: none !important; }
 }
 @media (max-width: 1023px) {
