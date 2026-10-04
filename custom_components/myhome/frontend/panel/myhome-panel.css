@@ -1012,6 +1012,16 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-sheet { align-items: end; }
 .wiz-sheet-card { position: relative; width: 100%; max-height: 80vh; overflow: auto; padding: 18px 20px 24px; border-radius: 18px 18px 0 0; background: var(--panel-surface); }
 .wiz-sheet-close { position: absolute; top: 10px; inset-inline-end: 10px; }
+/* Sheets slide up from the bottom when shown and down when they leave (`is-leaving`, removed by the wizard after 220 ms). */
+@keyframes wiz-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes wiz-sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes wiz-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wiz-scrim-out { from { opacity: 1; } to { opacity: 0; } }
+.wiz-sheet:not([hidden]) { animation: wiz-scrim-in 220ms ease-out; }
+.wiz-sheet:not([hidden]) .wiz-sheet-card { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
+.wiz-sheet.is-leaving { animation: wiz-scrim-out 220ms ease-in forwards; }
+.wiz-sheet.is-leaving .wiz-sheet-card { animation: wiz-sheet-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
+@media (prefers-reduced-motion: reduce) { .wiz-sheet, .wiz-sheet .wiz-sheet-card { animation: none !important; } }
 .wiz-dialog { align-items: center; justify-content: center; padding: 20px; }
 .wiz-dialog-card { width: min(100%, 460px); padding: 22px; border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .wiz-dialog-card h4 { margin: 0 0 8px; font-size: 18px; }

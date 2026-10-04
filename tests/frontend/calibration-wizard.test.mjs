@@ -723,6 +723,29 @@ test("the profile switch is a 36×20 track with a 16 px thumb 2 px from every ed
   assert.match(css, /\.wiz-switch input:checked::after \{ transform: translateX\(16px\); \}/);
 });
 
+test("the Steps sheet slides down before it hides, at once with reduced motion", async () => {
+  const { wiz, tab } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  const sheet = wiz().querySelector(".wiz-sheet");
+  const original = globalThis.matchMedia;
+  try {
+    globalThis.matchMedia = () => ({ matches: false });
+    wiz().querySelector('[data-wiz="steps"]').click(); await tick();
+    assert.equal(sheet.hidden, false);
+    wiz().querySelector('[data-wiz="steps-close"]').click(); await tick();
+    assert.deepEqual([sheet.hidden, sheet.classList.contains("is-leaving")], [false, true], "sliding down");
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    assert.deepEqual([sheet.hidden, sheet.classList.contains("is-leaving")], [true, false], "then hidden");
+    globalThis.matchMedia = (query) => ({ matches: query.includes("reduce") });
+    wiz().querySelector('[data-wiz="steps"]').click(); await tick();
+    wiz().querySelector('[data-wiz="steps-close"]').click(); await tick();
+    assert.equal(sheet.hidden, true, "reduced motion: at once");
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-sheet:not\(\[hidden\]\) \.wiz-sheet-card \{ animation: wiz-sheet-in 220ms/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.wiz-sheet, \.wiz-sheet \.wiz-sheet-card \{ animation: none !important; \} \}/);
+});
+
 test("the fade over the phone's action bar shows only while content is hidden below", async () => {
   const { wiz, tab } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

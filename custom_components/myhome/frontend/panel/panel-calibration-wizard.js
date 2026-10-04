@@ -33,6 +33,8 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
  * Stop is never held back.
  */
 export const CONFIRM_GUARD_MS = 700;
+/** How long a sheet takes to slide in or out (the CSS animations use the same). */
+const SHEET_MS = 220;
 /** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
 const IDLE_LEASE_SECONDS = 1800;
 /** A return of the tape readings confirms itself this long after the measured time of its direction (~2 s + settling). */
@@ -263,6 +265,18 @@ export class CalibrationWizard {
   _engineHost() { return this._engine; }
 
   /**
+   * A sheet from the bottom slides down before it hides (it slides up when shown, by CSS). Without motion (reduced
+   * motion, or no media queries) it hides at once.
+   */
+  _slideAway(element, done) {
+    const finish = () => { element.classList.remove("is-leaving"); element.hidden = true; done?.(); };
+    const motion = typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!motion || element.hidden) { finish(); return; }
+    element.classList.add("is-leaving");
+    setTimeout(finish, SHEET_MS);
+  }
+
+  /**
    * On the phone the content scrolls above a fixed action bar: a fade over the bar says there is more below, only
    * while there really is (it goes at the end of the scroll; on the wide layout nothing scrolls, so it never shows).
    */
@@ -446,7 +460,7 @@ export class CalibrationWizard {
       event.preventDefault();
       if (open === dialog && dialog.classList.contains("wiz-nav-dialog")) this._navAnswer(false);
       else if (open === dialog) this._closeDialog();
-      else { sheet.hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); }
+      else { this._slideAway(sheet); this._frame.querySelector('[data-wiz="steps"]').focus(); }
     } else if (event.key === "Tab") {
       // A modal keeps the keyboard inside it, as the native dialog would.
       const focusable = [...open.querySelectorAll("button:not([hidden]):not(:disabled)")];
@@ -500,7 +514,7 @@ export class CalibrationWizard {
   async _act(id) {
     const local = this._local, gateway = this._gateway;
     if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; sheet.querySelector("button").focus(); return; }
-    if (id === "steps-close") { this._frame.querySelector(".wiz-sheet").hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
+    if (id === "steps-close") { this._slideAway(this._frame.querySelector(".wiz-sheet")); this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
     if (id.startsWith("pick-filter:")) { local.pickFilter = id.slice(12); return this._render(); }
