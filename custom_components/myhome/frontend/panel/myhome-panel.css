@@ -640,7 +640,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-tab h3 { margin: 0; font-size: 18px; }
 .cal-tab-title { margin-bottom: -8px !important; }
 .cal-tab-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
-.cal-tab-intro { flex: 1 1 420px; min-width: 0; max-width: 68ch; }
+.cal-tab-intro { flex: 1 1 420px; min-width: 0; }
 .cal-tab-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cal-tab-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
 .cal-tab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -766,7 +766,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cal-batch-profile { display: none; }
 .cal-batch-limit:empty { display: none; }
-.cal-batch .cal-tab-intro { flex: none; max-width: 72ch; }
+.cal-batch .cal-tab-intro { flex: none; }
 .cal-batch-sentinel { display: block; height: 1px; margin-top: -14px; }
 /* Fixed to the window's bottom (left and width from the view, set by the tab); the spacer keeps the last row clear. */
 .cal-batch-spacer { display: block; height: 72px; margin-top: -14px; }
