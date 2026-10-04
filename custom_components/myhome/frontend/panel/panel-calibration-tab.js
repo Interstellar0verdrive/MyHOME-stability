@@ -4,7 +4,7 @@ const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibrat
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
   import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
 ]);
-const { fill, rich, number, dateText, names } = text;
+const { fill, rich, number, dateText, names, followedBy } = text;
 
 const MEASURED = ["guided", "automatic"];
 export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
@@ -616,6 +616,11 @@ export class CalibrationTab {
       || origin?.origin_name || id || "";
   }
 
+  /** A cover by the name the list gives it (then its friendly name, then its entity id). */
+  _coverName(id) {
+    return this._covers().find((item) => item.cover.entity_id === id)?.name || this._context.hass.states?.[id]?.attributes?.friendly_name || id;
+  }
+
   _dialogDone() {
     this._closeDialog();
     this.refresh();
@@ -633,16 +638,17 @@ export class CalibrationTab {
     const body = this._openDialog({ title: t(item.profile ? "wiz_T427" : "calTabAssign"), subtitle: item.name, icon: "mdi:link-variant" });
     const dialog = this._dialog, generation = this._generation;
     const profiles = [...data.profiles].sort((a, b) => a.name.localeCompare(b.name));
-    const followers = (count) => fill(t(count === 0 ? "wiz_T374" : count === 1 ? "wiz_T375" : "wiz_T376"), { count });
+    // Who follows each profile, by name, to recognise a similar cover.
+    const followers = (profile) => followedBy(t, profile.assigned_to.filter(Boolean).map((id) => this._coverName(id)), language);
     const describe = (profile) => {
       const slat = profile.geometry?.slat_time_s;
       const origin = profile.provenance?.opening;
       return [
         [t(slat == null ? "wiz_T370" : slat > 0 ? "wiz_T368" : "wiz_T369"),
           profile.reference_travel_cm != null ? fill(t("wiz_T372"), { cm: number(profile.reference_travel_cm, language) }) : ""].filter(Boolean).join(" · "),
-        [origin?.recorded_at && (origin.origin_entity_id || origin.origin_name)
+        origin?.recorded_at && (origin.origin_entity_id || origin.origin_name)
           ? fill(t("wiz_T371"), { cover: this._originName(origin), date: dateText(origin.recorded_at, language) }) : "",
-          followers(profile.assigned_to.filter(Boolean).length)].filter(Boolean).join(" · "),
+        followers(profile),
       ];
     };
     // "No profile" unlinks the profile the cover follows; never on the cover the profile was measured on, whose values
@@ -652,9 +658,9 @@ export class CalibrationTab {
     const none = followed && !source ? `<label class="wiz-radio cal-assign-none"><input type="radio" name="assign_profile" value="${NO_PROFILE}">
         <span><strong><ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon>${esc(t("wiz_T404"))}</strong><small class="muted">${esc(fill(t("wiz_T405"), { profile: followed.name }))}</small></span></label>` : "";
     body.innerHTML = profiles.length ? `<fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${none}${profiles.map((profile) => {
-      const [type, measured] = describe(profile);
+      const [type, measured, followers] = describe(profile);
       return `<label class="wiz-radio"><input type="radio" name="assign_profile" value="${esc(profile.id)}" ${profile.id === item.cover.profile_id ? "checked" : ""}>
-        <span><strong>${esc(profile.name)}</strong><small class="muted">${esc(type)}</small><small class="muted">${esc(measured)}</small></span></label>`;
+        <span><strong>${esc(profile.name)}</strong><small class="muted">${esc(type)}</small>${measured ? `<small class="muted">${esc(measured)}</small>` : ""}<small class="muted cal-assign-followers">${esc(followers)}</small></span></label>`;
     }).join("")}</fieldset>
       <p class="error" role="alert" hidden></p>`
       : `<p class="muted">${esc(t("profileListEmpty"))}</p>`;

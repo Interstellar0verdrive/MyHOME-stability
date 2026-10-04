@@ -1470,10 +1470,17 @@ test("counts of zero and one use their own forms", () => {
   assert.equal(a21d([]).choice.options.find((option) => option.value === "update").description, "Nessun’altra tapparella lo segue.");
   assert.equal(a21d([]).name.line, "Questa tapparella passa a seguirlo; nessun’altra tapparella segue «alte».");
   assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
-  const b01 = (followers) => buildScreen({ t, stage: "profile", path: "B", cover: cover([]), local: {}, profiles: [{ id: "p", name: "alte", followers, measuredOn: "Sala 1" }] }).choice.options[0].label;
-  assert.equal(b01(0), "alte · misurato su Sala 1 · nessuna tapparella lo segue");
-  assert.equal(b01(1), "alte · misurato su Sala 1 · 1 tapparella lo segue");
-  assert.equal(b01(3), "alte · misurato su Sala 1 · 3 tapparelle lo seguono");
+  const b01 = (followerNames) => buildScreen({ t, language: "it", stage: "profile", path: "B", cover: cover([]), local: {},
+    profiles: [{ id: "p", name: "alte", followers: followerNames.length, followerNames, measuredOn: "Sala 1" }] }).choice.options[0];
+  assert.equal(b01([]).label, "alte · misurato su Sala 1");
+  assert.deepEqual(b01([]).note, ["Nessuna tapparella lo segue"]);
+  assert.deepEqual(b01(["Cover K_1L"]).note, ["Seguito da Cover K_1L"]);
+  assert.deepEqual(b01(["Cover K_1L", "Cover A_1L"]).note, ["Seguito da Cover K_1L e Cover A_1L"]);
+  assert.deepEqual(b01(["X", "Y", "Z"]).note, ["Seguito da X, Y e Z"]);
+  assert.deepEqual(b01(["X", "Y", "Z", "W", "V"]).note, ["Seguito da X, Y, Z e altre 2"]);
+  const en = (key) => translations.en[key] || key;
+  assert.deepEqual(buildScreen({ t: en, language: "en", stage: "profile", path: "B", cover: cover([]), local: {},
+    profiles: [{ id: "p", name: "tall", followerNames: ["X", "Y", "Z", "W"], measuredOn: "Hall" }] }).choice.options[0].note, ["Followed by X, Y, Z and 1 more"]);
 });
 
 test("a refusal is forgotten once the session moves to another phase", async () => {

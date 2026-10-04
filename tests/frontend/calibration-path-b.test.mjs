@@ -20,7 +20,8 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
   assert.equal(wiz().querySelector(".wiz-radios legend").textContent, "Profile to follow");
   const rows = [...wiz().querySelectorAll('input[name="profile"]')];
   assert.deepEqual(rows.map((input) => [input.value, input.checked, input.closest(".wiz-radio").textContent.trim()]),
-    [["tall", true, "tall_two_leaf · measured on Living room shutter 1 · 2 covers follow it"]]);
+    [["tall", true, "tall_two_leaf · measured on Living room shutter 1Followed by Kitchen shutter 2 and Living room shutter 3"]]);
+  assert.equal(wiz().querySelector('input[name="profile"]').closest(".wiz-radio").querySelector("small").textContent, "Followed by Kitchen shutter 2 and Living room shutter 3");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Introduction · 1 of 3");
   assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, 'Ⓑ like "tall_two_leaf"');
   await press("profile");

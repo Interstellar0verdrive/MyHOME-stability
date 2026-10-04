@@ -145,6 +145,8 @@ export class CalibrationWizard {
     const data = this._gatewayData();
     return (data?.profiles || []).map((profile) => ({ id: profile.id, name: profile.name, followers: profile.assigned_to.length,
       measuredOn: this._originName(profile.provenance?.opening), slat: profile.geometry ? profile.geometry.slat_time_s ?? null : null,
+      followerNames: profile.assigned_to.filter(Boolean).map((id) => this._covers().find((item) => item.cover.entity_id === id)?.name
+        || this._context.hass.states?.[id]?.attributes?.friendly_name || id),
       referenceTravel: profile.reference_travel_cm ?? null }));
   }
 

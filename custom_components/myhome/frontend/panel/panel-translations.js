@@ -350,6 +350,8 @@ export const translations = {
     wiz_T425: "Collapse all",
     wiz_T426: "Assign this profile to other covers",
     wiz_T427: "Change profile",
+    wiz_T428: "Followed by {names}",
+    wiz_T429: "{names} and {count} more",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1164,6 +1166,8 @@ export const translations = {
     wiz_T425: "Comprimi tutte",
     wiz_T426: "Assegna questo profilo ad altre tapparelle",
     wiz_T427: "Cambia profilo",
+    wiz_T428: "Seguito da {names}",
+    wiz_T429: "{names} e altre {count}",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

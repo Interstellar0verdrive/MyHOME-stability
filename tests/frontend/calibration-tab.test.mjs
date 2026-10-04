@@ -269,7 +269,8 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
   const options = [...dialog.querySelectorAll(".wiz-radio")].map((label) => [...label.querySelectorAll("strong, small")].map((item) => item.textContent));
   assert.deepEqual(options, [
     ["low_one_leaf", "Times only", "No cover follows it"],
-    ["tall_two_leaf", "With slats · Reference travel 198 cm", "Measured on Living room shutter 1 on Sep 29, 2026 · 2 covers follow it"]]);
+    ["tall_two_leaf", "With slats · Reference travel 198 cm", "Measured on Living room shutter 1 on Sep 29, 2026", "Followed by Living room shutter 2 and Kitchen shutter 2"]],
+    "who follows each profile, by name");
   const assign = dialog.querySelector("[data-assign]");
   assert.equal(assign.disabled, true);
   assert.deepEqual([...dialog.querySelectorAll(".dialog-foot button")].map((button) => button.textContent), ["Cancel", "Assign"],

@@ -67,6 +67,13 @@ export function readingRange(span, language = "en", reading = null) {
 }
 
 /** A list of names joined the way the language joins them ("A, B and C"). */
+/** "Followed by X and Y" / "… X, Y, Z and 2 more" / "No cover follows it": who follows a profile, by name. */
+export function followedBy(t, list, language = "en") {
+  if (!list.length) return t("wiz_T374");
+  const shown = list.length > 3 ? fill(t("wiz_T429"), { names: list.slice(0, 3).join(", "), count: list.length - 3 }) : names(list, language);
+  return fill(t("wiz_T428"), { names: shown });
+}
+
 export function names(list, language = "en") {
   try { return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(list); }
   catch { return list.join(", "); }

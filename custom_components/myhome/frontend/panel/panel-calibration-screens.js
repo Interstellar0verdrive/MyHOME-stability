@@ -6,7 +6,7 @@
  * shared translation sheet (`wiz_T…`); a few screen-only keys are `wiz…`.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const { fill, number, readingRange, RANGE_SLACK_CM, dateText, shortDate } = await import(asset("panel-calibration-text.js"));
+const { fill, number, readingRange, RANGE_SLACK_CM, dateText, shortDate, followedBy } = await import(asset("panel-calibration-text.js"));
 
 const PHASES = {
   intro: "wiz_T007", prep: "wiz_T008", ascent: "wiz_T009", descent: "wiz_T010", readings: "wiz_T011", summary: "wiz_T012", finetune: "wiz_T013",
@@ -153,11 +153,12 @@ export function buildScreen(ctx) {
   }
   if (stage === "profile") {
     const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || ctx.profiles?.[0];
-    // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1 · 3 covers follow it".
-    const about = (item) => counted(t, "wiz_T165", item.followers, { cover: item.measuredOn || "—" });
+    // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1", then who follows it by name.
+    const about = (item) => fill(t("wiz_T165").split(" · ")[0], { cover: item.measuredOn || "—" });
     Object.assign(screen, { code: "B-01", phase: "intro", title: t("wiz_T161"), body: t("wiz_T162"),
       choice: { name: "profile", kind: "radio", label: t("wiz_T163"), value: chosen?.id ?? "",
-        options: (ctx.profiles || []).map((item) => ({ value: item.id, label: `${item.name} · ${lowerFirst(about(item), language)}`, plain: true })) },
+        options: (ctx.profiles || []).map((item) => ({ value: item.id, label: `${item.name} · ${lowerFirst(about(item), language)}`, plain: true,
+          note: [followedBy(t, item.followerNames || [], language)] })) },
       actions: [{ id: "profile", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
     return finish();
   }
