@@ -87,6 +87,8 @@ export class CalibrationWizard {
     this._root.addEventListener("submit", (event) => { event.preventDefault(); this._reading(); });
     this._signature = null;
     if (start === "path" && item) this._local.stage = "path";
+    // Where the way back ends: A-01 from the tab's generic button, A-02 from a cover's own Measure.
+    this._local.entry = this._local.stage;
     this._render();
     if (start === "refine" && item) this._startRefine(this._baseFromCover(item));
     else if (start === "resume" && session) this._resume(session, item);
@@ -163,7 +165,7 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
@@ -175,6 +177,7 @@ export class CalibrationWizard {
       this._root.toggleAttribute("data-preview", screen.preview);
       this._frame.innerHTML = `
         <header class="wiz-head">
+          ${screen.back ? `<button type="button" class="icon-button wiz-back" data-wiz="back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>` : ""}
           <div class="wiz-head-text"><h3 id="wiz-cover" class="wiz-cover">${esc(screen.header.title)}</h3>${screen.header.subtitle ? `<p class="muted${screen.header.placeholder ? " wiz-head-placeholder" : ""}">${esc(screen.header.subtitle)}</p>` : ""}</div>
           ${screen.discard ? `<button type="button" class="wiz-discard" data-wiz="exit">${esc(t("wizDiscard"))}</button>` : ""}
           <button type="button" class="icon-button wiz-x" data-wiz="${screen.discard ? "exit" : "close"}" aria-label="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}" title="${esc(screen.discard ? t("wizDiscard") : t("wiz_T158"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
@@ -398,6 +401,7 @@ export class CalibrationWizard {
     if (id === "steps") { const sheet = this._frame.querySelector(".wiz-sheet"); sheet.hidden = false; sheet.querySelector("button").focus(); return; }
     if (id === "steps-close") { this._frame.querySelector(".wiz-sheet").hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); return; }
     if (id === "exit") { this._exit(); return; }
+    if (id === "back") { this._back(); return; }
     if (id === "stay") { this._closeDialog(); return; }
     if (id === "leave") { this._leave(); return; }
     if (id === "close") { this._finish(); return; }
@@ -443,6 +447,18 @@ export class CalibrationWizard {
       Object.assign(local, freshFlags(), { path: "C", scope: "times_and_rolls", stage: "current" });
       return this._render();
     }
+  }
+
+  /** One choice back, before any session: what was chosen stays chosen; from the first screen, back to the list. */
+  _back() {
+    const local = this._local;
+    const to = { choose: null, path: local.entry === "path" ? null : "choose", profile: "path", current: "path", case: "current",
+      before: local.path === "A" ? "path" : local.path === "B" ? "profile" : "case" }[local.stage];
+    if (to === undefined) return;
+    if (to === null) { this._finish(); return; }
+    if (to === "path") local.pathChoice = local.path;
+    local.stage = to;
+    this._render();
   }
 
   _send(action, extra = {}) {

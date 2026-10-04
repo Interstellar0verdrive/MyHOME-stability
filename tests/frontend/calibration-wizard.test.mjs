@@ -102,6 +102,56 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.ok(tab().querySelector(".cal-list"));
 });
 
+test("the header's back arrow goes one choice back before any session, keeping what was chosen", async () => {
+  const { tab, wiz, code, press, pickCover, choosePath, backend } = await mount();
+  const back = () => wiz().querySelector('.wiz-head [data-wiz="back"]');
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  assert.equal(code(), "A-01");
+  assert.equal(back().getAttribute("aria-label"), "Back");
+  assert.equal(back().nextElementSibling.className, "wiz-head-text", "left of the cover's name");
+  await pickCover(1); await press("choose");
+  await choosePath("C");
+  assert.equal(code(), "C-01");
+  await press("current");
+  const radio = wiz().querySelector('input[name="case"][value="times_only"]'); radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true }));
+  await press("case");
+  assert.equal(code(), "C-35");
+  back().click(); await tick();
+  assert.deepEqual([code(), wiz().querySelector('input[name="case"]:checked').value], ["C-02", "times_only"], "the case stays chosen");
+  back().click(); await tick();
+  assert.equal(code(), "C-01");
+  back().click(); await tick();
+  assert.deepEqual([code(), wiz().querySelector('input[name="path"]:checked').value], ["A-02", "C"], "the path stays chosen");
+  await choosePath("A");
+  const no = wiz().querySelector('input[name="slats"][value="no"]'); no.checked = true; no.dispatchEvent(new Event("change", { bubbles: true }));
+  back().click(); await tick();
+  assert.equal(code(), "A-02");
+  await press("path");
+  assert.deepEqual([code(), wiz().querySelector('input[name="slats"]:checked').value], ["A-03", "no"], "the slat choice too");
+  back().click(); await tick(); back().click(); await tick();
+  assert.equal(code(), "A-01");
+  assert.equal(wiz().querySelector('select[name="cover"]').value, JSON.stringify(["one", "cover.living_one"]), "the cover stays chosen");
+  back().click(); await tick();
+  assert.equal(wiz(), null, "from the first screen, back to the list");
+  assert.ok(tab().querySelector(".cal-list"));
+  assert.equal(backend.subscriptions.filter((message) => message.type === "myhome/cover_calibration/start").length, 0, "nothing was started");
+  // During a session there is no way back, only Abandon.
+  const second = await mount();
+  await second.startFor("cover.living_one");
+  await second.press("begin");
+  assert.equal(second.code(), "A-04");
+  assert.equal(second.wiz().querySelector('[data-wiz="back"]'), null);
+});
+
+test("from a cover's own Measure the way back from A-02 is the list", async () => {
+  const { tab, wiz, code } = await mount();
+  const row = [...tab().querySelectorAll(".cal-row")].find((item) => item.dataset.entity === "cover.living_one");
+  row.querySelector('[data-action="cal-tab-measure-cover"]').click(); await tick();
+  assert.equal(code(), "A-02");
+  wiz().querySelector('[data-wiz="back"]').click(); await tick();
+  assert.equal(wiz(), null);
+});
+
 test("path A runs the live geometry session from the first close to Save, one message per press", async () => {
   const { backend, wiz, code, press, type, actions, title, startFor } = await mount();
   await startFor("cover.living_one");

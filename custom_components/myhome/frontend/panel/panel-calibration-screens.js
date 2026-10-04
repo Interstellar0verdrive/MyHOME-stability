@@ -81,6 +81,8 @@ export function buildScreen(ctx) {
     title: "", subline: "", body: "", stopwatch: null, wait: null, illustration: null, choice: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
+    // Before any session the header offers a way back to the previous choice (kept as it was).
+    back: ["choose", "path", "profile", "current", "case", "before"].includes(stage),
   };
   const stop = { id: "stop", label: t("wiz_T028"), kind: "stop" };
   const finish = () => finalize(screen, ctx);

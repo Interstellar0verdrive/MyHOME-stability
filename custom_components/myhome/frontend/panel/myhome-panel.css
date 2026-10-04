@@ -851,6 +851,7 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .wiz { --wiz-side: var(--panel-surface-2); position: relative; border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: hidden; }
 .wiz-head { display: flex; align-items: start; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--panel-border); }
 .wiz-head-text { flex: 1; min-width: 0; }
+.wiz-back { flex: none; margin: -2px 0 0 -8px; }
 .wiz-cover { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .wiz-head .muted { margin-top: 2px; }
 .wiz-discard { border: 0; background: transparent; color: var(--panel-error); font-weight: 500; }
