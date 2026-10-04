@@ -1,7 +1,9 @@
 """Experimental, backend-owned measurement of one standard cover's travel times.
 
 The bus starts the monotonic clock; the operator confirms the physical endpoints.
-A queued Stop is never represented as an acknowledged or physically verified stop.
+A stop status reported by the bus before that confirmation dates the end of the run,
+but only the confirmation records it. A queued Stop is never represented as an
+acknowledged or physically verified stop.
 """
 from __future__ import annotations
 
@@ -109,6 +111,10 @@ class CalibrationSession:
             self.provenance[retained] = copy.deepcopy(profile["provenance"][retained])
             self.phase = "confirm_closed" if direction == "opening" else "confirm_open"
         self.started_at: float | None = None
+        # The bus reported the motor's stop during a run that the operator confirms
+        # (see `stop_awaits_endpoint`): seconds from the motor start, rounded as `endpoint`.
+        self.motor_stopped = False
+        self.stopped_elapsed: float | None = None
         self.armed = False
         self.stop_requested = False
         self.listener = True
@@ -151,6 +157,7 @@ class CalibrationSession:
                 "phase": self.phase, "mode": self.mode, "reason": self.reason, "values": dict(self.values),
                 "elapsed": round(monotonic() - self.started_at, 2) if self.started_at is not None else None,
                 "stop_requested": self.stop_requested,
+                "motor_stopped": self.motor_stopped, "stopped_elapsed": self.stopped_elapsed,
                 "travel_cm": self.store.data["covers"].get(self.cover.unique_id, {}).get("travel_cm"),
                 "reference_travel_cm": (self.store.profile(self.cover.unique_id) or {}).get("reference_travel_cm"),
                 "waiting_for_stop": self.closed and self.reservation.pending,
@@ -361,6 +368,7 @@ class CalibrationSession:
         self.values.clear()
         self.provenance.clear()
         self.started_at = None
+        self.forget_motor_stop()
         self.resume_step = self.next_step = self.paused_at = None
         if self.deadline:
             self.deadline.cancel()
@@ -416,6 +424,7 @@ class CalibrationSession:
         self.phase = f"starting_{direction}"
         self.armed = False
         self.started_at = None
+        self.forget_motor_stop()
         self.stop_requested = False
         expires = monotonic() + START_SECONDS
         self.arm_deadline(START_SECONDS, "start_timeout")
@@ -457,27 +466,76 @@ class CalibrationSession:
                 self.emit()
             elif expected or opposite:
                 self.interrupt("unexpected_movement")
+        elif opposite or (expected and self.motor_stopped):
+            # Once the motor has stopped the run expects no movement at all: a new one in
+            # either direction (a wall switch, a scenario) leaves its dated stop meaningless.
+            self.interrupt("unexpected_movement")
         elif not expected:
-            self.interrupt("unexpected_movement" if opposite else "unexpected_stop")
+            if event.state == 0 and self.stop_awaits_endpoint():
+                self.motor_stop()
+            else:
+                self.interrupt("unexpected_stop")
+
+    def stop_awaits_endpoint(self) -> bool:
+        """The run ends with a motor stop that the operator then confirms with `endpoint`.
+
+        Guided `opening`/`closing` runs: the operator is told to confirm when the motor
+        stops by itself, so the actuator's own stop status usually arrives first. Automatic
+        mode handles its stop statuses before reaching here.
+        """
+        return self.mode == "guided"
+
+    def motor_stop(self) -> None:
+        """A stop status in a confirmed run: date it and wait for `endpoint`.
+
+        It is not an endpoint by itself: nothing is recorded or confirmed, the run's
+        deadline stays armed (no confirmation still ends in its timeout) and the operator
+        can still discard the run with Stop. A repeated stop status changes nothing; one
+        after `endpoint` reaches a phase that ignores it. On a timer actuator the stop
+        status near 60 s is its relay releasing: that is still the time the operator saw
+        and is asked to confirm.
+        """
+        if self.motor_stopped:
+            return
+        self.motor_stopped = True
+        self.stopped_elapsed = round(monotonic() - cast(float, self.started_at), 2)
+        self.emit()
+
+    def forget_motor_stop(self) -> None:
+        self.motor_stopped = False
+        self.stopped_elapsed = None
+
+    def run_time(self) -> tuple[float, str]:
+        """The measured seconds of a confirmed run, and what ended them (provenance `ended_by`).
+
+        Confirmed after the bus reported the stop: the motor had certainly stopped by then,
+        so the stop is the end and the operator's reaction is left out. Confirmed earlier:
+        the confirmation is the end, and a stop status arriving afterwards is ignored.
+        """
+        if self.motor_stopped:
+            return cast(float, self.stopped_elapsed), "bus_stop"
+        return round(monotonic() - cast(float, self.started_at), 2), "press"
 
     def endpoint(self) -> None:
         if self.phase not in {"opening", "closing"}:
             raise ProfileError("calibration_step")
         direction = "opening" if self.phase == "opening" else "closing"
-        elapsed = round(monotonic() - cast(float, self.started_at), 2)
+        elapsed, ended_by = self.run_time()
         try:
             elapsed = travel_time(elapsed)
         except vol.Invalid as error:
             self.interrupt("invalid_measurement")
             raise ProfileError("invalid_profile") from error
         self.values[f"{direction}_time"] = elapsed
-        self.provenance[direction] = evidence("guided", self.cover.unique_id)
+        self.provenance[direction] = evidence("guided", self.cover.unique_id, ended_by)
         self.phase = "confirm_open" if direction == "opening" and not self.direction else "review"
         self.started_at = None
+        self.forget_motor_stop()
         cast(asyncio.TimerHandle, self.deadline).cancel()
         self.queue_stop()
         # The operator explicitly confirmed this physical endpoint. Bus Stop alone
-        # cannot establish it. Keep the existing travel settings until Save.
+        # cannot establish it, even when it dated the run. Keep the existing travel
+        # settings until Save.
         self.confirm_position(100 if direction == "opening" else 0)
         self.emit()
 

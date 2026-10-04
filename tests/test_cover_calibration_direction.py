@@ -133,6 +133,7 @@ async def test_one_leg_preserves_saved_evidence_shared_profile_and_restart(
         "source": "guided",
         "recorded_at": "2026-09-16T10:00:00+00:00",
         "origin_unique_id": quick.cover.unique_id,
+        "ended_by": "press",
     }
     assert [str(item[0]) for item in quick.queue] == [
         "*2*1*11##" if session.direction == "opening" else "*2*2*11##",
@@ -144,15 +145,16 @@ async def test_one_leg_preserves_saved_evidence_shared_profile_and_restart(
     assert profiles.get_store(hass, session.entry_id).data == persisted
 
 
-@pytest.mark.parametrize("failure", ["cancel", "unexpected_stop", "storage_error"])
+@pytest.mark.parametrize("failure", ["cancel", "unexpected_movement", "storage_error"])
 async def test_quick_failure_preserves_original_configuration(quick, failure):
     before = copy.deepcopy(quick.session.store.data)
-    if failure == "unexpected_stop":
-        await act(quick, "open" if quick.session.direction == "opening" else "close")
+    if failure == "unexpected_movement":
+        opening = quick.session.direction == "opening"
+        await act(quick, "open" if opening else "close")
         quick.queue[-1][1]()
-        bus(quick, "*2*1*11##" if quick.session.direction == "opening" else "*2*2*11##")
-        bus(quick, "*2*0*11##")
-        assert quick.session.phase == "interrupted"
+        bus(quick, "*2*1*11##" if opening else "*2*2*11##")
+        bus(quick, "*2*2*11##" if opening else "*2*1*11##")  # Reversed by a wall switch.
+        assert (quick.session.phase, quick.session.reason) == ("interrupted", "unexpected_movement")
     else:
         await measure(quick)
         if failure == "cancel":

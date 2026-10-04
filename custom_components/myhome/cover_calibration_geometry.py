@@ -37,6 +37,9 @@ LIFT_REPEAT_BELOW_TOUCHING = True
 RANGE_SLACK_CM = 1e-9
 # During a check these end it and return to review instead of ending the session.
 CHECK_RETURNS = frozenset({"stopped", "unexpected_stop", "unexpected_movement"})
+# Steps whose run ends at an end stop that the operator confirms with `endpoint`. A stop
+# status from the bus there dates the end of the run instead of interrupting it.
+ENDPOINT_STEPS = frozenset({"home", "reset", "opening", "closing", "top"})
 
 
 class GeometryCalibrationSession(guided.CalibrationSession):
@@ -118,7 +121,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             written.add_done_callback(self._bound(self._movement_delivered))
         elif action == "lift" and self.step == "lift" and self.phase == "opening":
             self._sample_stop()
-        elif action == "endpoint" and self.phase in {"opening", "closing"} and self.step in {"home", "reset", "opening", "closing", "top"}:
+        elif action == "endpoint" and self.phase in {"opening", "closing"} and self.step in ENDPOINT_STEPS:
             self._endpoint()
         elif action == "reading" and self.phase == "reading":
             try:
@@ -131,6 +134,16 @@ class GeometryCalibrationSession(guided.CalibrationSession):
             self._check(msg)
         else:
             raise ProfileError("calibration_step")
+
+    def stop_awaits_endpoint(self) -> bool:
+        """Only the end stop runs, the returns of a check included, wait for `endpoint`.
+
+        `lift` keeps the motor running while the operator marks the edge leaving its rest:
+        a stop before that press is a genuine early stop and still interrupts
+        (`unexpected_stop`). The intermediate runs and the check run are stopped by the
+        session itself, so a stop before its Stop is unexpected there too.
+        """
+        return self.step in ENDPOINT_STEPS
 
     def _rising(self) -> bool:
         """The direction of the current step's run."""
@@ -159,6 +172,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if self.deadline:
             self.deadline.cancel()
         self.started_at = None
+        self.forget_motor_stop()
         self.stop_written = self.checking = False
         self.check, self.check_before = self.check_before if keep else None, None
         self.check_interrupted = reason
@@ -253,16 +267,28 @@ class GeometryCalibrationSession(guided.CalibrationSession):
     def _endpoint(self) -> None:
         old_step = self.step
         if old_step in {"opening", "closing"}:
+            if self.motor_stopped:  # Confirmed after the bus reported the stop: the stop ends the run.
+                seconds, ended_by = cast(float, self.stopped_elapsed), "bus_stop"
+            else:
+                seconds, ended_by = guided.monotonic() - cast(float, self.started_at), "press"
             try:
-                value = travel_time(guided.monotonic() - cast(float, self.started_at))
+                value = travel_time(seconds)
             except vol.Invalid as error:
                 self.interrupt("invalid_measurement")
                 raise ProfileError("invalid_profile") from error
             self.values[f"{old_step}_time"] = value
-            self.provenance[old_step] = evidence("guided", self.cover.unique_id)
+            self.provenance[old_step] = evidence("guided", self.cover.unique_id, ended_by)
         self.edge_position = 0 if old_step in {"home", "reset", "closing"} else 100
         self.confirm_position(self.edge_position)
         self.after_stop = "reading" if old_step == "opening" else "briefing"
+        if self.motor_stopped:
+            # The bus has already reported the stop, so no second stop status is awaited. Stop
+            # is still written, as after every confirmed end stop, but the step does not
+            # depend on its delivery: the motor is known to be stationary.
+            self.forget_motor_stop()
+            self.queue_stop()
+            self._stopped()
+            return
         self.phase, self.stop_written = "geometry_wait_stop", True
         self.started_at = None
         self.arm_deadline(guided.STOP_QUEUE_SECONDS, "not_stopped")
