@@ -390,6 +390,11 @@ test("covers run in the order they are ticked, shortcuts pick all or those to me
   assert.deepEqual(places(tab).map(([, place]) => place), ["", "1", "", ""], "the next tick starts again from 1");
 });
 
+test("the Devices note is not shown in the sequence view, whose bar is fixed to the bottom", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /#items:has\(\.cal-batch\) ~ #discovery-help \{ display: none; \}/);
+});
+
 test("more covers than the backend allows keep Start off and say the limit", async () => {
   const { tab } = await openBatch({ targets: { max_batch: 2 } });
   tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();

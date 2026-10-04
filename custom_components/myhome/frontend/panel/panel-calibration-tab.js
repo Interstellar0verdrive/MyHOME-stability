@@ -735,11 +735,21 @@ export class CalibrationTab {
         if (!bar) return;
         bar.style.left = `${Math.round(box.left)}px`;
         bar.style.width = `${Math.round(box.width)}px`;
-        if (spacer) spacer.style.height = `${Math.ceil(bar.getBoundingClientRect().height)}px`;
+        if (!spacer) return;
+        // The end of the list stops just above the bar: the spacer covers the bar's height, less what the page already
+        // has under the view (the panel's bottom padding, its empty status line).
+        const end = host.closest("main") || host.parentElement;
+        const below = end ? Math.max(0, end.getBoundingClientRect().bottom - box.bottom) : 0;
+        const height = Math.max(0, Math.ceil(bar.getBoundingClientRect().height - below));
+        if (this._spacer !== height) { this._spacer = height; spacer.style.height = `${height}px`; }
       };
       this._barPlace = place;
       window.addEventListener("resize", place);
-      if (typeof ResizeObserver === "function") { this._barResize = new ResizeObserver(place); this._barResize.observe(view); }
+      if (typeof ResizeObserver === "function") {
+        this._barResize = new ResizeObserver(place);
+        this._barResize.observe(view);
+        this._barResize.observe(host.querySelector(".cal-batch-bar"));
+      }
     }
     this._barPlace();
     this._barObserver?.disconnect();

@@ -172,6 +172,8 @@ label { display: grid; gap: 6px; font-size: 12px; font-weight: 500; color: var(-
 .filters label { min-width: 0; gap: 4px; }
 .filters input, .filters select { min-height: 38px; padding-block: 8px; border-radius: 8px; }
 #discovery-help { margin-top: 16px; font-size: 12px; }
+/* The Devices tab's footer note does not belong to the sequence view, whose bar is fixed to the bottom. */
+#items:has(.cal-batch) ~ #discovery-help { display: none; }
 .notice { padding: 12px 16px; border: 1px solid var(--panel-border); border-radius: 12px; margin-bottom: 18px; font-size: 13px; background: var(--panel-surface); }
 .notice.muted { display: flex; gap: 10px; align-items: start; border-style: dashed; background: transparent; }
 .notice.muted::before { content: "i"; flex-shrink: 0; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 700; font-style: italic; font-family: Georgia, serif; background: var(--panel-accent-soft); color: var(--panel-accent); }
