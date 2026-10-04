@@ -502,7 +502,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   const sent = actions().length, saves = backend.calls.filter((message) => message.action === "save").length;
   await press("refine");
   // Straight to the quarter readings (A-22…), in the same wizard: no C-01/C-02 in between.
-  assert.equal(code(), "A-22", "fine-tuning starts at once");
+  assert.match(code(), /^A-2[23]$/, "fine-tuning starts at once (its first positioning may already be over)");
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1", "on the same cover");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Fine-tuning · 7 of 8", "the stepper goes on at Fine-tuning");
   await settle();
