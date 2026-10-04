@@ -584,11 +584,12 @@ export class CalibrationTab {
       return `<label class="wiz-radio"><input type="radio" name="assign_profile" value="${esc(profile.id)}" ${profile.id === item.cover.profile_id ? "checked" : ""}>
         <span><strong>${esc(profile.name)}</strong><small class="muted">${esc(type)}</small><small class="muted">${esc(measured)}</small></span></label>`;
     }).join("")}</fieldset>
-      <p class="error" role="alert" hidden></p>
-      <div class="actions"><button type="button" class="primary" data-assign disabled>${esc(t("wiz_T373"))}</button></div>`
+      <p class="error" role="alert" hidden></p>`
       : `<p class="muted">${esc(t("profileListEmpty"))}</p>`;
-    const button = body.querySelector("[data-assign]");
-    if (!button) return;
+    if (!profiles.length) return;
+    // In the footer, on one row with Close, as in the other dialogs.
+    dialog.querySelector(".dialog-foot").insertAdjacentHTML("beforeend", `<button type="button" class="primary" data-assign disabled>${esc(t("wiz_T373"))}</button>`);
+    const button = dialog.querySelector("[data-assign]");
     const chosen = () => body.querySelector('input[name="assign_profile"]:checked')?.value;
     body.onchange = () => { button.disabled = !chosen() || chosen() === item.cover.profile_id; };
     button.onclick = async () => {
