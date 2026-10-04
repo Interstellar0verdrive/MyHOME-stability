@@ -167,6 +167,8 @@ test("the chevron expands a row in place with the values in use, the last measur
   assert.equal(tab.querySelector(".cal-details-actions"), null, "no shared row of buttons");
   assert.ok([...tab.querySelectorAll('[data-action="cal-tab-assign"] ha-icon')].every((icon) => icon.getAttribute("icon") === "mdi:link-variant"),
     "Assign profile shows the link of the profile's covers, not a pencil");
+  const measureIcon = (id) => row(tab, id).querySelector('.cal-block-action [data-action="cal-tab-measure-cover"] ha-icon').getAttribute("icon");
+  assert.deepEqual([measureIcon("cover.bedroom"), measureIcon("cover.living_one")], ["mdi:tape-measure", "mdi:reload"], "Measure a tape, Remeasure a reload");
   const refineIcons = [...tab.querySelectorAll('[data-action="cal-tab-refine"] ha-icon')];
   assert.ok(refineIcons.length && refineIcons.every((icon) => icon.getAttribute("icon") === "mdi:target"), "Fine-tune shows a target");
   row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
