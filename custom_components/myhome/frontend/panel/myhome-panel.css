@@ -983,6 +983,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-dialog-card { width: min(100%, 460px); padding: 22px; border-radius: 18px; background: var(--panel-surface); box-shadow: var(--panel-shadow-hover); }
 .wiz-dialog-card h4 { margin: 0 0 8px; font-size: 18px; }
 .wiz-dialog-card .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; margin-top: 16px; }
+/* "Calibration in progress": wide enough on desktop for its three buttons on one row (Figma S-08b, 592 px). */
+.wiz-nav-dialog .wiz-dialog-card { width: min(100%, 592px); box-sizing: border-box; }
+@media (min-width: 1024px) { .wiz-nav-dialog .wiz-dialog-card .actions { flex-wrap: nowrap; } }
 /* S-08: "Exit without saving" as red text on the left, the primary on the right. */
 .wiz-leave { margin-inline-end: auto; color: var(--panel-error); border: 0; background: transparent; box-shadow: none; }
 .wiz-leave:hover, .wiz-dialog-stop:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }

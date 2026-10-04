@@ -1134,6 +1134,12 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
   }
 });
 
+test("the Calibration in progress dialog is 592 px wide on desktop, its three buttons on one row", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-nav-dialog \.wiz-dialog-card \{ width: min\(100%, 592px\);/);
+  assert.match(css, /@media \(min-width: 1024px\) \{ \.wiz-nav-dialog \.wiz-dialog-card \.actions \{ flex-wrap: nowrap; \} \}/);
+});
+
 test("the time it stays open comes from Home Assistant's lease: 10 minutes after a movement", async () => {
   const { backend, wiz, press, startFor, panel } = await mount();
   await startFor("cover.living_one");
