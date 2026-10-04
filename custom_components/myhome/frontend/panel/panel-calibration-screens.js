@@ -6,7 +6,7 @@
  * shared translation sheet (`wiz_T…`); a few screen-only keys are `wiz…`.
  */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const { fill, number, readingRange, RANGE_SLACK_CM, dateText, shortDate, followedBy } = await import(asset("panel-calibration-text.js"));
+const { fill, number, fixed, readingRange, RANGE_SLACK_CM, dateText, shortDate, followedBy } = await import(asset("panel-calibration-text.js"));
 
 const PHASES = {
   intro: "wiz_T007", prep: "wiz_T008", ascent: "wiz_T009", descent: "wiz_T010", readings: "wiz_T011", summary: "wiz_T012", finetune: "wiz_T013",
@@ -84,6 +84,7 @@ export function pathAdvice(cover, profiles = []) {
 export function buildScreen(ctx) {
   const { t, language = "en", path = "A", scope = null, stage, local = {}, cover, view, status = {}, preview = false } = ctx;
   const n = (value, digits = 1) => number(value, language, digits);
+  n.fixed = (value, digits = 1) => fixed(value, language, digits);
   const tx = (key, values) => fill(t(key), values);
   const name = cover?.name || "";
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
@@ -661,7 +662,8 @@ function runWatch(t, n, view, elapsed) {
   // Stopped by itself: the stopwatch stays at the time of the stop frame ("Stopwatch: stopped at 22.2 s").
   const frozen = MOTOR_STOPPED(view) && view.stopped_elapsed != null;
   if (!frozen && elapsed == null) return null;
-  const [label, value] = splitLabel(frozen ? fill(t("wiz_T257"), { seconds: n(view.stopped_elapsed) }) : fill(t("wiz_T044"), { seconds: n(elapsed) }));
+  // One decimal always: the value keeps its length while it counts (and when it freezes).
+  const [label, value] = splitLabel(frozen ? fill(t("wiz_T257"), { seconds: n.fixed(view.stopped_elapsed) }) : fill(t("wiz_T044"), { seconds: n.fixed(elapsed) }));
   return { label, value };
 }
 

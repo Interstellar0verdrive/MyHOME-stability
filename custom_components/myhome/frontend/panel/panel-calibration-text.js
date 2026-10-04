@@ -25,6 +25,16 @@ export function inline(text, values) {
 }
 
 /** A localized number: tenths of a second or centimetre unless `digits` says otherwise. */
+/** A live value with a fixed number of decimals ("12.0 s", never "12 s"), so it never changes length mid-run. */
+export function fixed(value, language = "en", digits = 1) {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  try {
+    return new Intl.NumberFormat(language, { maximumFractionDigits: digits, minimumFractionDigits: digits, useGrouping: false }).format(Number(value));
+  } catch {
+    return Number(value).toFixed(digits);
+  }
+}
+
 export function number(value, language = "en", digits = 1) {
   if (value == null || !Number.isFinite(Number(value))) return "—";
   try {

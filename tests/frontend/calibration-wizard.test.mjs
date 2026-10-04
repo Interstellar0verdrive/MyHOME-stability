@@ -974,11 +974,13 @@ test("full runs and the return to the top: once the motor stopped by itself the 
     assert.equal(running.code, code);
     assert.deepEqual(ids(running), ["next", "endpoint", "stop"], `${code} running: Stop`);
     assert.deepEqual(running.stopwatch, { label: "Motor", value: "moving for 12.3 s" });
+    assert.equal(screen({ ...view }, local, 12).stopwatch.value, "moving for 12.0 s", "one decimal always: the value keeps its length");
     const stopped = screen({ ...view, motor_stopped: true, stopped_elapsed: 21.37 }, local, 25.8);
     assert.deepEqual(ids(stopped), ["next", "endpoint"], `${code} stopped: no Stop`);
     assert.equal(stopped.actions.find((action) => action.id === "endpoint").kind, "primary");
     assert.equal(stopped.actions.find((action) => action.id === "endpoint").disabled, false, "the end stop is confirmed as before");
     assert.deepEqual(stopped.stopwatch, { label: "Stopwatch", value: "stopped at 21.4 s" }, `${code} freezes at the stop frame`);
+    assert.equal(screen({ ...view, motor_stopped: true, stopped_elapsed: 21 }, local).stopwatch.value, "stopped at 21.0 s");
   }
   // The return to the top (A-19 first leg): the bar is complete once the motor stopped, before the expected time.
   const top = screen({ step: "top", phase: "opening", motor_stopped: false, stopped_elapsed: null }, { ackReadings: true }, 5);

@@ -898,7 +898,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-stopwatch { box-sizing: border-box; width: min(100%, var(--wiz-stopwatch-width, 564px)); display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: 10px; border-inline-start: 4px solid var(--panel-accent); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
 /* Label/value pairs follow the tab's blocks: the label regular, the value bold. */
 .wiz-stopwatch-label { font-weight: 400; color: var(--panel-text-2); }
-.wiz-stopwatch-value { font-weight: 600; }
+/* Live values keep their width: tabular digits and a minimum width, so the label never moves while they count. */
+.wiz-stopwatch-value { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 14ch; text-align: end; }
 .wiz-wait { display: grid; gap: 10px; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--panel-border); background: var(--panel-surface-2); }
 .wiz-wait p { margin: 0; }
 .wiz-wait-stages { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 13px; }
@@ -913,7 +914,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-progress.is-indeterminate span { width: 30%; animation: wiz-progress-sweep 1.6s ease-in-out infinite; }
 @keyframes wiz-progress-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 @media (prefers-reduced-motion: reduce) { .wiz-progress.is-indeterminate span { animation: none; width: 100%; opacity: .35; } }
-.wiz-wait p.wiz-wait-remaining { font-size: 12px; }
+.wiz-wait p.wiz-wait-remaining { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 22ch; }
 /* What a step has just measured: tiles side by side, a small label and a big value (its unit smaller). */
 .wiz-results { display: flex; flex-wrap: wrap; gap: 12px; }
 .wiz-result { display: grid; gap: 2px; min-width: 150px; padding: 12px 16px; border-radius: 10px; background: var(--panel-accent-soft); }
