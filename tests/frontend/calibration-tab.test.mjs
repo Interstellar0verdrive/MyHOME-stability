@@ -159,11 +159,13 @@ test("the chevron expands a row in place with the values in use, the last measur
     return [...row(tab, entity).querySelectorAll(".cal-details-grid > section")]
       .map((section) => [...section.querySelectorAll(".cal-block-action button")].map((button) => [button.dataset.action, button.textContent.trim()]));
   };
-  assert.deepEqual(blockActions("cover.living_two"), [[["cal-tab-refine", "Fine-tune"]], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Assign profile"]]],
+  assert.deepEqual(blockActions("cover.living_two"), [[["cal-tab-refine", "Fine-tune"]], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Change profile"]]],
     "each block ends with its own action");
   assert.deepEqual(blockActions("cover.living_one"), [[], [["cal-tab-measure-cover", "Remeasure"]], [["cal-tab-assign", "Assign profile"]]],
     "no Fine-tune without measured rolls");
-  assert.deepEqual(blockActions("cover.bedroom"), [[], [["cal-tab-measure-cover", "Measure"]], [["cal-tab-assign", "Assign profile"]]]);
+  assert.deepEqual(blockActions("cover.bedroom"), [[], [["cal-tab-measure-cover", "Measure"]], [["cal-tab-assign", "Assign profile"]]], "a cover without a profile is assigned one");
+  const menuLabel = (id) => row(tab, id).querySelector('.cal-menu [data-action="cal-tab-assign"]').textContent.trim();
+  assert.deepEqual([menuLabel("cover.living_two"), menuLabel("cover.bedroom")], ["Change profile", "Assign profile"], "the ⋮ menu says the same");
   assert.equal(tab.querySelector(".cal-details-actions"), null, "no shared row of buttons");
   assert.ok([...tab.querySelectorAll('[data-action="cal-tab-assign"] ha-icon')].every((icon) => icon.getAttribute("icon") === "mdi:link-variant"),
     "Assign profile shows the link of the profile's covers, not a pencil");
@@ -327,6 +329,7 @@ test("Assign profile offers No profile to unlink the followed profile, never on 
   dialog.querySelector(".cal-dialog-close").click(); await tick();
   open("cover.kitchen_two"); await tick();
   dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.querySelector("h2").textContent, "Change profile", "a cover that follows a profile changes it");
   const none = dialog.querySelector('input[value="__no_profile__"]');
   assert.ok(none, "a follower can unlink");
   assert.equal(none.closest(".wiz-radio"), dialog.querySelector(".wiz-radio"), "first in the list");
