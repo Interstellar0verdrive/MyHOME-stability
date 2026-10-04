@@ -615,8 +615,11 @@ test("every wait has its bar: the time left when the duration is known, moving b
   const view = { mode: "geometry", step: "home", phase: "starting_close", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 1 };
   const wait = (cover, extra = {}, elapsed = null, local = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", view: { ...view, ...extra },
     elapsed, local, cover: { name: "Cucina 2", ...cover } }).wait;
-  const never = wait({ effective: { closing: { value: 30, origin: "default" } } });
-  assert.deepEqual(never.progress, { value: null, remaining: null }, "a default time is only a guess: indeterminate");
+  // A positioning lasts the full time in use, the integration's default too (R3-11); without any time it is indeterminate.
+  const fallback = wait({ effective: { closing: { value: 30, origin: "default" } } });
+  assert.deepEqual(fallback.progress, { value: 0, remaining: 30 }, "the default time counts for a positioning");
+  const never = wait({ effective: {} });
+  assert.deepEqual(never.progress, { value: null, remaining: null }, "no time at all: indeterminate");
   assert.equal(never.remaining, "");
   const known = wait({ effective: { closing: { value: 21.7, origin: "native_fallback" } } });
   assert.deepEqual(known.progress, { value: 0, remaining: 22 });
@@ -646,7 +649,8 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["stop:danger"], "A-04");
   assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:danger"], "A-17");
   assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["next:primary", "lift:primary", "stop:stop"], "A-07 keeps the link");
-  assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["endpoint:primary", "stop:stop"], "A-19 with its end stop button");
+  assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["stop:danger"], "A-19 while it positions: Stop alone");
+  assert.deepEqual(kinds({ step: "top", phase: "opening", elapsed: 23 }, { ackReadings: true }).length, 1);
   const { backend, wiz, code, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin");
@@ -846,7 +850,9 @@ test("full runs and the return to the top: once the motor stopped by itself the 
   }
   // The return to the top (A-19 first leg): the bar is complete once the motor stopped, before the expected time.
   const top = screen({ step: "top", phase: "opening", motor_stopped: false, stopped_elapsed: null }, { ackReadings: true }, 5);
-  assert.deepEqual([top.code, ids(top), Math.round(top.wait.progress.value * 100)], ["A-19", ["endpoint", "stop"], 23]);
+  assert.deepEqual([top.code, ids(top), Math.round(top.wait.progress.value * 100)], ["A-19", ["stop"], 23], "still positioning: Stop alone");
+  assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: false }, { ackReadings: true }, 23)), ["endpoint", "stop"],
+    "past its measured time the end stop is asked, Stop stays while the motor runs");
   const topStopped = screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 }, { ackReadings: true }, 9.5);
   assert.deepEqual([ids(topStopped), topStopped.wait.progress, topStopped.wait.remaining], [["endpoint"], { value: 1, remaining: null }, ""]);
   assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 })), ["endpoint"], "the return before a repeated descent too");
@@ -888,41 +894,52 @@ test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibr
   assert.deepEqual([a03.code, a16.code], ["A-03", "A-16"]);
 });
 
-test("A-05: while the motor runs only Stop and the end stop can be pressed; once it stopped, T033 instead of Stop; A-10 never has T033", async () => {
+test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 at once, Stop while the motor runs; A-10 never has T033", async () => {
   const { backend, wiz, code, press, actions, startFor } = await mount();
   await startFor("cover.living_one");
-  await press("begin"); await move(backend);
-  assert.equal(code(), "A-05");
+  await press("begin");
+  backend.started(); backend.tick(5); backend.emit(); await tick();
+  assert.equal(code(), "A-04", "5 s into a 21.7 s closing: still positioning");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["stop"]);
+  assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /17 s/, "the time left counts down over the closing time");
+  backend.tick(16); backend.emit(); await tick();
+  assert.equal(code(), "A-04", "21 s in: still positioning");
+  // No new view: the screen's own clock ends the positioning (the time runs on between two views).
+  const now = performance.now.bind(performance);
+  performance.now = () => now() + 2000;
+  try { await new Promise((resolve) => setTimeout(resolve, 250)); } finally { performance.now = now; }
+  assert.equal(code(), "A-05", "past the closing time, drawn whole by the clock's tick");
   const kinds = () => [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
   const misbehaved = () => wiz().querySelector('[data-wiz="misbehaved"]');
   assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"], ["stop", "stop"]], "outlined, with the red Stop link while moving");
   assert.equal(misbehaved().textContent, "It did not do what it should");
-  assert.equal(misbehaved().disabled, true, "disabled while the motor runs");
-  assert.equal(misbehaved().getAttribute("aria-disabled"), "true");
-  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, false, "the end stop stays pressable: the user's eye decides");
-  // Home Assistant says the motor stopped (a stop frame, real or the actuator's timer) and waits for the user.
-  backend.session.motor_stopped = true; backend.session.sequence += 1; backend.emit(); await tick();
+  assert.equal(misbehaved().disabled, false, "active at once");
+  assert.equal(misbehaved().hasAttribute("aria-disabled"), false);
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').disabled, false);
+  // Home Assistant says the motor stopped (a stop frame, real or the actuator's timer): Stop leaves.
+  backend.session.motor_stopped = true; backend.emit(); await tick();
   assert.equal(code(), "A-05");
   assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"]], "no Stop once the motor stopped");
-  assert.equal(misbehaved().disabled, false);
-  assert.equal(misbehaved().hasAttribute("aria-disabled"), false);
   await press("misbehaved");
   assert.equal(actions().at(-1), "stop", "today it ends the session: nothing measured yet is lost");
   await tick();
   assert.equal(code(), "S-01");
 
   const t = (key) => translations.it[key] || key;
-  const a10 = (extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
-    view: { mode: "geometry", step: "reset", phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5, ...extra } });
-  assert.equal(a10().code, "A-10");
-  assert.deepEqual(a10().actions.map((action) => action.id), ["endpoint", "stop"], "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
-  assert.deepEqual(a10({ motor_stopped: true }).actions.map((action) => action.id), ["endpoint"], "Stop only while moving");
-  const c05 = (extra = {}) => buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_and_rolls", cover: { name: "Cucina 2" },
-    view: { mode: "geometry", step: "home", phase: "closing", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 2, ...extra } });
-  assert.deepEqual([c05().code, c05().actions.map((action) => [action.id, !!action.disabled])], ["C-05", [["endpoint", false], ["misbehaved", true], ["stop", false]]], "the C clone too");
-  assert.deepEqual(c05({ motor_stopped: true }).actions.map((action) => [action.id, !!action.disabled]), [["endpoint", false], ["misbehaved", false]]);
+  const closing = { effective: { closing: { value: 21.7, origin: "native_fallback" } } };
+  const run = (step, path, extra = {}, elapsed = 25) => buildScreen({ t, language: "it", stage: "session", path, scope: path === "C" ? "times_and_rolls" : null,
+    cover: { name: "Cucina 2", ...closing }, elapsed,
+    view: { mode: "geometry", step, phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5, ...extra } });
+  // The motor stopping ends the positioning before its time.
+  assert.equal(run("home", "A", { motor_stopped: true }, 3).code, "A-05");
+  assert.deepEqual([run("reset", "A", {}, 3).code, run("reset", "A", {}, 3).actions.map((action) => action.id)], ["A-09", ["stop"]], "A-09 lasts the positioning too");
+  assert.deepEqual([run("reset", "A").code, run("reset", "A").actions.map((action) => action.id)], ["A-10", ["endpoint", "stop"]],
+    "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
+  assert.deepEqual(run("reset", "A", { motor_stopped: true }, 3).actions.map((action) => action.id), ["endpoint"], "Stop only while moving");
+  assert.deepEqual([run("home", "C").code, run("home", "C").actions.map((action) => [action.id, !!action.disabled])],
+    ["C-05", [["endpoint", false], ["misbehaved", false], ["stop", false]]], "the C clone too");
   // A reader sees Stop only while it moves.
-  assert.deepEqual(c05({ read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
+  assert.deepEqual(run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
 });
 
 test("a subscription replayed after a reconnection never starts a movement, even on a step that would continue by itself", async () => {

@@ -488,7 +488,8 @@ export class CalibrationWizard {
     const generation = this._generation;
     const onChange = (change) => {
       if (generation !== this._generation || !this._root) return;
-      if (change === "tick") { this._patch(this._screen()); return; }
+      // A tick may end a positioning (A-04 → A-05): a new screen is drawn whole, the same one only patched.
+      if (change === "tick") { const screen = this._screen(); if (screen.code !== this._renderedCode) this._render(); else this._patch(screen); return; }
       this._viewChanged();
     };
     this._gateway = kind === "live" ? new LiveCalibrationGateway({ onChange })

@@ -62,8 +62,8 @@ the whole stepper), the instruction scrolling, the actions anchored at the botto
 path, the current one half filled, under the introduction the path chosen (T026 *Ⓐ first of its type*, T169, T200,
 T231, T236) and under each other reached phase its measured values. The stopwatch appears only in
 the timed runs. Every wait has a progress bar: its duration comes from the times in use (a positioning from the
-closing or opening time, a half run from the measured times, a simulated step from its stages), with the time left
-under it (T402, provisional); when the duration is unknown (a cover with only the integration's default times) the bar
+closing or opening time in use, the integration's default included, a half run from the measured times, a simulated step from its stages), with the time left
+under it (T402, provisional); when the duration is unknown (no time at all, or a check run Home Assistant stops) the bar
 moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. In the runs the user confirms (A-05, A-10, the full ascent A-11 and descent A-14, the
 return to the top, the guided runs of C) Stop is offered only while the motor runs: once the view says `motor_stopped`
 the stopwatch stays at `stopped_elapsed` (T257), a wait's bar is shown complete and only the confirmation is left; the
@@ -92,7 +92,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-02 | before the session | T015–T019 | nothing |
 | A-03 | before the session | T021–T024, T198, T199 (no Cancel T025: the header's *Abandon the calibration* does the same) | `start` on «Understood, begin» |
 | A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |
-| A-05 | `closing` · `home` | T030–T033, T028 | `endpoint` (always pressable); while the motor runs T033 (outlined) is disabled and the red Stop link is shown; once the view says `motor_stopped` (a stop frame from the bus or the actuator's timer) T033 is active and Stop is gone; T033 sends `stop` and opens S-01, nothing measured yet is lost. A-10: the same Stop rule, never T033 (a stop there discards the lift-off) |
+| A-05 | `closing` · `home` | T030–T033, T028 | shown once the positioning is over (A-04 stays until `motor_stopped` or the closing time in use, default included, has passed); `endpoint` and T033 (outlined) are active at once, the red Stop link stays until `motor_stopped`; T033 sends `stop` and opens S-01, nothing measured yet is lost. A-09/A-10 and the return to the top follow the same rule; A-10 never has T033 (a stop there discards the lift-off) |
 | A-06 | `briefing` · `lift` (local briefing) | T035–T037 | nothing |
 | A-07 | `briefing`/`opening` · `lift` | T042–T046, T028 | `next`, then `lift` |
 | A-08 | `reading` · `lift`; `briefing` · `reset` with `gap_warning` | T047–T051, `calGapWarning` | `reading`; `next` or `repeat` after a wide gap |

@@ -80,9 +80,11 @@ export async function mount(options = {}) {
 }
 
 /** Run the backend through one movement: start echo, then the actuator stop when there is one. */
-export async function move(backend, { stop = false, auto = false, seconds = 10 } = {}) {
+export async function move(backend, { stop = false, auto = false, seconds = 30 } = {}) {
   backend.started();
   backend.tick(seconds);
+  // Home Assistant's next view carries the time run so far (a positioning ends once its full time has passed).
+  backend.emit();
   await tick();
   if (auto) { backend.autoStop(); await tick(); }
   if (stop) { backend.stopped(); await tick(); }

@@ -203,24 +203,23 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const slats = view.slats !== false;
   const elapsed = ctx.elapsed;
   const step = view.step, phase = view.phase;
-  // A positioning run lasts about the full time of its direction, when that time is known.
+  // A positioning run lasts about the full time of its direction (the time in use, the integration's default too).
   const positioning = (number, text, seconds = null) => Object.assign(screen, { code: p(number), title: t("wiz_T027"),
     wait: { text, stages: [], progress: waitBar(view, elapsed, seconds) }, actions: [stop] });
-  const closingTime = knownTime(ctx.cover?.effective?.closing);
+  const closingTime = timeInUse(ctx.cover?.effective?.closing);
+  // A run to an end stop stays a positioning until the motor stops by itself or its full time has passed; only then
+  // does the screen ask to confirm the end stop.
+  const positioningRun = (seconds) => !MOTOR_STOPPED(view) && seconds > 0 && (elapsed ?? 0) < seconds;
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
     if (phase === "briefing") return Object.assign(screen, { code: p("03"), title: t("wiz_T021"), body: path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
       actions: [{ id: "next", label: t("wiz_T024"), kind: "primary" }] });
-    // While the motor runs only Stop (and the end stop, which the user's eye decides) can be pressed; "It did not do
-    // what it should" waits, disabled, until the motor has stopped, and then Stop is gone. It opens S-01 (nothing
-    // measured yet is lost). Not on A-10: there a stop discards the lift-off measurement (§8.9).
-    if (phase === "closing") {
-      const stopped = MOTOR_STOPPED(view);
-      return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
-        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary", disabled: !stopped },
-          ...(stopped ? [] : [stop])] });
-    }
+    // A-05 once the positioning is over: the end stop and "It did not do what it should" can be pressed at once, the
+    // red Stop stays while the motor runs. T033 opens S-01 (nothing measured yet is lost). Not on A-10: there a stop
+    // discards the lift-off measurement (§8.9).
+    if (phase === "closing" && !positioningRun(closingTime)) return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
+      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...whileRunning(view, stop)] });
     return positioning("04", tx("wiz_T029", values), closingTime);
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
@@ -249,7 +248,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       notices: [{ tone: "warning", text: fill(t("calGapWarning"), view) }],
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
-    if (phase === "closing") return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
+    if (phase === "closing" && !positioningRun(closingTime)) return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
       actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...whileRunning(view, stop)] });
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
@@ -298,7 +297,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
     positioning("09", t("wiz_T086"), view.values?.opening_time);
     screen.phase = "descent";
-    if (phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
+    // The end stop is confirmed once the positioning is over (motor stopped, or its measured time passed).
+    if (phase === "opening" && !positioningRun(view.values?.opening_time)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
@@ -313,7 +313,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
       progress: waitBar(view, elapsed, first ? view.values?.opening_time : down) }, actions: [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
-    if (first && phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
+    if (first && phase === "opening" && !positioningRun(view.values?.opening_time)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
@@ -634,6 +634,11 @@ function stagesBar(view) {
 
 /** Whole seconds left, never 0 while the bar is shown (sums of tenths are not exact: 11.000000001 is 11). */
 function secondsLeft(seconds) { return Math.max(1, Math.ceil(seconds - 0.001)); }
+
+/** The full time of a positioning run: the time in use, the integration's default included. */
+function timeInUse(entry) {
+  return entry && entry.value > 0 ? entry.value : null;
+}
 
 /** A time in use counts as known once measured or configured; the integration's default is only a guess. */
 function knownTime(entry) {
