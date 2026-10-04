@@ -445,7 +445,7 @@ test("choosing covers patches the sequence view in place: the rows, the spacer a
   assert.equal(tab.querySelector(".cal-batch-summary").textContent, "2 tapparelle selezionate");
   assert.equal(tab.querySelector('[data-action="cal-tab-batch-start"]').disabled, false);
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /#items:has\(\.cal-batch\) ~ #discovery-help \{ display: none; \}/, "the Devices note is not shown over the sequence's bar");
+  assert.match(css, /#items:has\(\.cal-tab\) ~ #discovery-help \{ display: none; \}/, "the Devices note is not shown in the Calibration tab");
 });
 
 test("more covers than the backend allows keep Start off and say the limit", async () => {
