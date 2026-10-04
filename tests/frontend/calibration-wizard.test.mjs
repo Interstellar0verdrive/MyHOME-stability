@@ -723,6 +723,26 @@ test("the profile switch is a 36×20 track with a 16 px thumb 2 px from every ed
   assert.match(css, /\.wiz-switch input:checked::after \{ transform: translateX\(16px\); \}/);
 });
 
+test("on the phone the confirmations are sheets that slide down before they hide", async () => {
+  const { wiz, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin");
+  const original = globalThis.matchMedia;
+  try {
+    globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") });
+    wiz().querySelector(".wiz-head .wiz-x").click(); await tick();
+    const exit = wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)");
+    exit.querySelector('[data-wiz="stay"]').click(); await tick();
+    assert.deepEqual([exit.hidden, exit.classList.contains("is-leaving")], [false, true], "sliding down");
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    assert.equal(exit.hidden, true);
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-dialog, \.wiz-sheet \{ background: rgb\(0 0 0 \/ 55%\); -webkit-backdrop-filter: blur\(8px\); backdrop-filter: blur\(8px\); \}/);
+  assert.match(css, /\.wiz-dialog \.actions \{ flex-direction: column-reverse; align-items: stretch;/, "stacked, primary first");
+  assert.match(css, /dialog\.cal-dialog \{ width: 100%; max-width: none; max-height: 90vh; margin: auto 0 0; border-radius: 18px 18px 0 0;/, "the tab's dialogs too");
+});
+
 test("the Steps sheet slides down before it hides, at once with reduced motion", async () => {
   const { wiz, tab } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();

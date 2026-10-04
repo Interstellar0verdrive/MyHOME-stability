@@ -268,6 +268,14 @@ export class CalibrationWizard {
    * A sheet from the bottom slides down before it hides (it slides up when shown, by CSS). Without motion (reduced
    * motion, or no media queries) it hides at once.
    */
+  /** A confirmation hides at once on the wide layout; on the phone, where it is a sheet, it slides down first. */
+  _hideDialog(dialog, done) {
+    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches;
+    if (phone) { this._slideAway(dialog, done); return; }
+    dialog.hidden = true;
+    done?.();
+  }
+
   _slideAway(element, done) {
     const finish = () => { element.classList.remove("is-leaving"); element.hidden = true; done?.(); };
     const motion = typeof matchMedia === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -913,9 +921,9 @@ export class CalibrationWizard {
     this._navResolve = null;
     const dialog = this._frame?.querySelector(".wiz-nav-dialog");
     if (dialog && !dialog.hidden) {
-      dialog.hidden = true;
       this._root.classList.remove("has-dialog");
-      if (!leave) { this._render(); this._frame.querySelector(".wiz-actions .wiz-action.primary:not(:disabled)")?.focus(); }
+      if (leave) dialog.hidden = true;
+      else this._hideDialog(dialog, () => { this._render(); this._frame?.querySelector(".wiz-actions .wiz-action.primary:not(:disabled)")?.focus(); });
     }
     resolve?.(leave);
   }
@@ -958,12 +966,14 @@ export class CalibrationWizard {
 
   _closeDialog(focus = true) {
     const dialog = this._frame?.querySelector(".wiz-dialog:not([hidden])");
-    if (!dialog) return;
-    dialog.hidden = true;
+    if (!dialog || dialog.classList.contains("is-leaving")) return;
     this._root.classList.remove("has-dialog");
-    this._render();
-    // Back to something visible on every width: the screen's first enabled confirming button, or its title.
-    if (focus) (this._frame.querySelector(".wiz-actions .wiz-action.primary:not(:disabled)") || this._frame.querySelector(".wiz-title"))?.focus();
+    this._hideDialog(dialog, () => {
+      if (!this._frame) return;
+      this._render();
+      // Back to something visible on every width: the screen's first enabled confirming button, or its title.
+      if (focus) (this._frame.querySelector(".wiz-actions .wiz-action.primary:not(:disabled)") || this._frame.querySelector(".wiz-title"))?.focus();
+    });
   }
 
   /** "Exit without saving": Cancel must reach Home Assistant; the view closes only once it has. */
