@@ -669,13 +669,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-assign-none ha-icon { --mdc-icon-size: 16px; margin-block: -2px; color: var(--panel-text-2); }
 /* "Nota (calibrazione)": every explanatory note of the Calibration tab and of its expanded details. Accent at 8 %
    behind, a 3 px bar of accent at 20 % on the left, secondary text; it follows its block (at most 360 px in the details). */
-.cal-note { margin: 0; padding: 8px 12px; border: 0; border-inline-start: 3px solid color-mix(in srgb, var(--panel-accent) 20%, transparent);
+/* A note: opaque tint, a 1 px border all round in its own tint at 75 %, the left bar 3 px thick. */
+.cal-note { margin: 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--panel-accent) 75%, transparent); border-inline-start-width: 3px;
   border-radius: 4px; background: color-mix(in srgb, var(--panel-accent) 8%, var(--panel-surface)); color: var(--panel-text-2);
   font-size: 13px; line-height: 18px; font-weight: 400; }
 .cal-details-grid .cal-note { margin-top: 8px; max-width: 360px; }
 /* The warning variant (T-06): the same shape in the theme's warning colours, text in the text colour. Both variants are
    opaque (tint over the surface), so they never blend with the row that hosts them. */
-.cal-note.is-warning { border-inline-start-color: color-mix(in srgb, var(--panel-warning) 40%, transparent);
+.cal-note.is-warning { border-color: color-mix(in srgb, var(--panel-warning) 75%, transparent);
   background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface)); color: var(--primary-text-color, #182b37); }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }

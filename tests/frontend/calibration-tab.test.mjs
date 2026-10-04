@@ -288,7 +288,9 @@ test("notes are opaque, so they never blend with the row that hosts them, and A-
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /background: color-mix\(in srgb, var\(--panel-accent\) 8%, var\(--panel-surface\)\); color: var\(--panel-text-2\);/, "info");
   assert.match(css, /background: color-mix\(in srgb, var\(--panel-warning\) 8%, var\(--panel-surface\)\);/, "warning");
-  assert.match(css, /\.wiz-pick-row\.is-selected \{ background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, transparent\); \}/);
+  assert.match(css, /\.wiz-pick-row\.is-selected \{ background: color-mix\(in srgb, var\(--primary-text-color, #182b37\) 4%, transparent\); \}/, "the grey row stays");
+  assert.match(css, /\.cal-note \{[^}]*border: 1px solid color-mix\(in srgb, var\(--panel-accent\) 75%, transparent\); border-inline-start-width: 3px;/, "info: 1 px border, 3 px bar");
+  assert.match(css, /\.cal-note\.is-warning \{ border-color: color-mix\(in srgb, var\(--panel-warning\) 75%, transparent\);/, "warning: the same in yellow");
 });
 
 test("a cover in progress keeps yellow tints in every state of its row", async () => {
