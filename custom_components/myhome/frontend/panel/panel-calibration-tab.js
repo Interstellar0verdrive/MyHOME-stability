@@ -239,7 +239,7 @@ export class CalibrationTab {
           <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select ${attribute}="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>`;
   }
 
-  /** The header row of a list: Roller shutter, Status and Profile sort it. */
+  /** The header row of a list: Cover, Status and Profile sort it. */
   _sortHeads(extra = "", trigger = (key) => `data-action="cal-tab-sort" data-id="${key}"`) {
     const { t } = this._context;
     return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"), trigger)}${this._sortHead("status", t("calTabColStatus"), trigger)}${this._sortHead("profile", t("calTabColProfile"), trigger)}<span></span></div>`;

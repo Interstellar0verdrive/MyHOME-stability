@@ -153,7 +153,7 @@ export function buildScreen(ctx) {
   }
   if (stage === "profile") {
     const chosen = ctx.profiles?.find((item) => item.id === local.profileId) || ctx.profiles?.[0];
-    // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1 · 3 shutters follow it".
+    // One radio row per profile: "tall_two_leaf · measured on Living room shutter 1 · 3 covers follow it".
     const about = (item) => counted(t, "wiz_T165", item.followers, { cover: item.measuredOn || "—" });
     Object.assign(screen, { code: "B-01", phase: "intro", title: t("wiz_T161"), body: t("wiz_T162"),
       choice: { name: "profile", kind: "radio", label: t("wiz_T163"), value: chosen?.id ?? "",

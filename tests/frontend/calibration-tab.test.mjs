@@ -110,11 +110,11 @@ test("the Calibration sub-tab sits next to Devices and Profiles and lists timed 
   assert.equal(row(tab, "cover.living_two").querySelector(".cal-profile-chip").textContent, "tall_two_leaf");
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-profile").textContent.trim(), "—");
   assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.querySelector("button")?.firstChild.textContent ?? cell.textContent),
-    ["", "Roller shutter", "Status", "Profile", ""], "no column for the last measurement: its date is in the details");
+    ["", "Cover", "Status", "Profile", ""], "no column for the last measurement: its date is in the details");
   assert.equal(tab.querySelector(".cal-row-last"), null);
   assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, " · Measured on Oct 1, 2026", "phones show it under the name");
   assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, " · never measured");
-  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "4 roller shutters · 3 calibrated · 1 to measure");
+  assert.equal(tab.querySelector(".cal-tab-summary").textContent, "4 covers · 3 calibrated · 1 to measure");
   assert.equal(commands(calls).length, 0, "rendering the list never starts a measurement");
   assert.deepEqual(calls.filter((message) => message.type.startsWith("myhome/cover_profiles/")).map((message) => [message.type, message.entity_id]),
     [["myhome/cover_profiles/overview", undefined], ["myhome/cover_profiles/read", "cover.living_one"]]);
@@ -152,7 +152,7 @@ test("the chevron expands a row in place with the values in use, the last measur
   assert.deepEqual(facts, { "Opening time": "22.4 s", "Closing time": "21.9 s", Slats: "Yes · 4.4 s", "Curtain travel": "196 cm",
     "Roll on ascent": "1.83", "Roll on descent": "1.91", Date: "Sep 29, 2026", Method: "From the profile" });
   assert.match(details.textContent, /Also followed by Kitchen shutter 2\./);
-  assert.match(details.textContent, /adapted to the curtain travel of this roller shutter/);
+  assert.match(details.textContent, /adapted to the curtain travel of this cover/);
   const blockActions = (entity) => {
     const toggle = row(tab, entity).querySelector('[data-action="cal-tab-toggle"]');
     if (toggle.getAttribute("aria-expanded") !== "true") toggle.click();
@@ -169,7 +169,7 @@ test("the chevron expands a row in place with the values in use, the last measur
     "Assign profile shows the link of the profile's covers, not a pencil");
   const measureIcon = (id) => row(tab, id).querySelector('.cal-block-action [data-action="cal-tab-measure-cover"] ha-icon').getAttribute("icon");
   assert.deepEqual([measureIcon("cover.bedroom"), measureIcon("cover.living_one")], ["mdi:ruler", "mdi:reload"], "Measure a ruler, Remeasure a reload");
-  assert.equal(tab.querySelector('[data-action="cal-tab-measure"] ha-icon').getAttribute("icon"), "mdi:ruler", "the tab's Measure a roller shutter too");
+  assert.equal(tab.querySelector('[data-action="cal-tab-measure"] ha-icon').getAttribute("icon"), "mdi:ruler", "the tab's Measure a cover too");
   const refineIcons = [...tab.querySelectorAll('[data-action="cal-tab-refine"] ha-icon')];
   assert.ok(refineIcons.length && refineIcons.every((icon) => icon.getAttribute("icon") === "mdi:target"), "Fine-tune shows a target");
   row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
@@ -313,7 +313,7 @@ test("Assign profile offers No profile to unlink the followed profile, never on 
   assert.equal(none.closest(".wiz-radio"), dialog.querySelector(".wiz-radio"), "first in the list");
   assert.equal(none.closest(".wiz-radio").querySelector("ha-icon").getAttribute("icon"), "mdi:link-variant-off");
   assert.deepEqual([...none.closest(".wiz-radio").querySelectorAll("strong, small")].map((item) => item.textContent),
-    ["No profile", 'Unlinks "tall_two_leaf": the roller shutter uses its own values, if it has any, otherwise goes back to "to measure". The profile stays available for the other roller shutters.']);
+    ["No profile", 'Unlinks "tall_two_leaf": the cover uses its own values, if it has any, otherwise goes back to "to measure". The profile stays available for the other covers.']);
   const button = dialog.querySelector("[data-assign]");
   none.checked = true; none.dispatchEvent(new Event("change", { bubbles: true }));
   assert.equal(button.textContent, "Unlink profile");
@@ -592,11 +592,11 @@ const order = (tab) => rows(tab).map((item) => item.dataset.entity.replace("cove
 const sortBy = (tab, key) => tab.querySelector(`[data-action="cal-tab-sort"][data-id="${key}"]`).click();
 const arrows = (tab) => [...tab.querySelectorAll(".cal-sort")].map((button) => [button.dataset.id, button.getAttribute("aria-pressed"), button.querySelector("ha-icon")?.getAttribute("icon") || null]);
 
-test("the list opens sorted by name, ascending, with the arrow on Roller shutter", async () => {
+test("the list opens sorted by name, ascending, with the arrow on Cover", async () => {
   const { tab } = await mount();
   assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
   assert.deepEqual(arrows(tab), [["cover", "true", "mdi:arrow-up"], ["status", "false", null], ["profile", "false", null]]);
-  assert.match(tab.querySelector('[data-id="cover"].cal-sort').textContent, /Roller shutter, Ascending/, "readers hear the order");
+  assert.match(tab.querySelector('[data-id="cover"].cal-sort').textContent, /Cover, Ascending/, "readers hear the order");
   sortBy(tab, "cover");
   assert.deepEqual(order(tab), ["living_two", "living_one", "kitchen_two", "bedroom"]);
   assert.deepEqual(arrows(tab)[0], ["cover", "true", "mdi:arrow-down"]);
@@ -683,7 +683,7 @@ test("the sequence list sorts by its headers like the tab, and reordering never 
   const { tab, subscriptions } = await openBatch();
   const names = () => [...tab.querySelectorAll(".cal-batch-row")].map((item) => item.dataset.entity.replace("cover.", ""));
   const heads = () => [...tab.querySelectorAll(".cal-batch-head .cal-sort")].map((button) => [button.dataset.id, button.querySelector("ha-icon")?.getAttribute("icon") || null]);
-  assert.deepEqual(heads(), [["cover", "mdi:arrow-up"], ["status", null], ["profile", null]], "Roller shutter ascending by default, arrow shown");
+  assert.deepEqual(heads(), [["cover", "mdi:arrow-up"], ["status", null], ["profile", null]], "Cover ascending by default, arrow shown");
   tick_(tab, "cover.living_two"); tick_(tab, "cover.bedroom");
   const sort = (key) => tab.querySelector(`.cal-batch-head [data-action="cal-tab-sort"][data-id="${key}"]`).click();
   sort("status");

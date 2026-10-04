@@ -14,13 +14,13 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
   const { wiz, code, press, startFor, title } = await mount();
   await startFor("cover.living_one", "B");
   assert.equal(code(), "B-01");
-  assert.equal(title(), "Which profile does this roller shutter follow?");
+  assert.equal(title(), "Which profile does this cover follow?");
   // A radio list, one row per profile, as in the mockup (no drop-down).
   assert.equal(wiz().querySelector('select[name="profile"]'), null);
   assert.equal(wiz().querySelector(".wiz-radios legend").textContent, "Profile to follow");
   const rows = [...wiz().querySelectorAll('input[name="profile"]')];
   assert.deepEqual(rows.map((input) => [input.value, input.checked, input.closest(".wiz-radio").textContent.trim()]),
-    [["tall", true, "tall_two_leaf · measured on Living room shutter 1 · 2 shutters follow it"]]);
+    [["tall", true, "tall_two_leaf · measured on Living room shutter 1 · 2 covers follow it"]]);
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Introduction · 1 of 3");
   assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, 'Ⓑ like "tall_two_leaf"');
   await press("profile");
@@ -55,21 +55,21 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(bar().getAttribute("aria-valuenow"), "66");
   assert.equal(wiz().querySelector(".wiz-wait-remaining").textContent, "About 11 s remaining");
   await waitFor(() => code() === "B-06", "B-06");
-  assert.equal(title(), "Check the roller shutter");
+  assert.equal(title(), "Check the cover");
   assert.match(wiz().querySelector(".wiz-body").textContent, /The expected height is 98 cm, half of its 196 cm travel/);
   await type("99");
   assert.equal(code(), "B-07");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /^Gap of about 1 cm at half travel: profile "tall_two_leaf" describes this roller shutter well\./);
+  assert.match(wiz().querySelector(".wiz-body").textContent, /^Gap of about 1 cm at half travel: profile "tall_two_leaf" describes this cover well\./);
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /The edge should have stopped at 98 cm and stopped at 99 cm\./);
   await press("accept");
   assert.equal(code(), "B-08");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 3 of 3");
   const rows = [...wiz().querySelectorAll(".wiz-main > .wiz-table tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
   assert.deepEqual(rows, [["Opening time", "22 s", "22.2 s"], ["Closing time", "21.7 s", "="], ["Slat time", "—", "4.4 s"], ["Curtain travel", "—", "196 cm"]], "no travel saved before: measured now");
-  assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, "The two roll coefficients, 1.83 and 1.91, come from the profile: they were not measured on this roller shutter.");
+  assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, "The two roll coefficients, 1.83 and 1.91, come from the profile: they were not measured on this cover.");
   assert.equal(wiz().querySelector(".wiz-profile-block"), null, "B creates and updates no profile");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "B cannot continue to fine-tuning");
-  assert.match(wiz().querySelector(".wiz-main > .wiz-accordion:not(.wiz-technical)").innerHTML, /<strong>this shutter will follow profile "tall_two_leaf"<\/strong>/);
+  assert.match(wiz().querySelector(".wiz-main > .wiz-accordion:not(.wiz-technical)").innerHTML, /<strong>this cover will follow profile "tall_two_leaf"<\/strong>/);
   await press("save");
   assert.equal(code(), "B-09");
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Preview of the summary", "a preview never says it saved");
@@ -111,7 +111,7 @@ test("without a profile on the gateway, B is disabled and the screen says why", 
   assert.equal(code(), "A-02");
   const b = wiz().querySelector('input[name="path"][value="B"]');
   assert.equal(b.disabled, true);
-  assert.equal(b.closest(".wiz-radio").querySelector("small").textContent, "No saved profile: measure a roller shutter of this type first");
+  assert.equal(b.closest(".wiz-radio").querySelector("small").textContent, "No saved profile: measure a cover of this type first");
   assert.equal(wiz().querySelector(".wiz-subline").textContent, "Already calibrated (times and roll, Sep 29, 2026)");
   assert.equal(wiz().querySelector(".wiz-radio:has(.wiz-recommended) input").value, "C", "a calibrated cover is advised to C");
 });

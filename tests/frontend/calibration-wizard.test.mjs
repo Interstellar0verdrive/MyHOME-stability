@@ -42,8 +42,8 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   const { tab, wiz, code, press, title, backend, button, pickCover, choosePath } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
   assert.equal(code(), "A-01");
-  assert.equal(title(), "Which roller shutter do you want to measure?");
-  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a roller shutter");
+  assert.equal(title(), "Which cover do you want to measure?");
+  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Measure a cover");
   assert.match(wiz().querySelector(".wiz-body").innerHTML, /<strong>from travel times<\/strong>/);
   // The covers as the sequence view's rows, one radio each: name, room and address, status, profile.
   assert.equal(wiz().querySelector('select[name="cover"]'), null, "no drop-down");
@@ -53,13 +53,13 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
     ["Kitchen shutter 2", "Kitchen · Address: 91 · A: 9 · PL: 1", "Times and roll", "tall_two_leaf"],
     ["Living room shutter 1", "Living room · Address: 91 · A: 9 · PL: 1", "To measure", "—"],
     ["Living room shutter 3", "Living room · Address: 91 · A: 9 · PL: 1", "Times measured", "tall_two_leaf"]]);
-  assert.equal(wiz().querySelector(".wiz-picker [role=radiogroup]").getAttribute("aria-label"), "Roller shutter to measure");
+  assert.equal(wiz().querySelector(".wiz-picker [role=radiogroup]").getAttribute("aria-label"), "Cover to measure");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-pick-chips .cal-chip")].map((chip) => chip.textContent.replace(/\s+/g, " ").trim()),
     ["All 3", "To measure 1", "Calibrated 2", "With profile 2"], "the list's filter chips");
   assert.equal(wiz().querySelectorAll('.wiz-picker input[name="cover"]:checked').length, 0, "opened from the tab's button, nothing is chosen");
   assert.equal(wiz().querySelector(".wiz-pick-notes"), null, "no note before a choice");
   const subtitle = () => wiz().querySelector(".wiz-head .muted");
-  assert.equal(subtitle().textContent, "No roller shutter selected yet", "a placeholder until a cover is picked");
+  assert.equal(subtitle().textContent, "No cover selected yet", "a placeholder until a cover is picked");
   assert.ok(subtitle().classList.contains("wiz-head-placeholder"));
   assert.equal(button("choose").disabled, true, "Continue waits for a choice");
   await pickCover("cover.living_one");
@@ -80,7 +80,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   // The chosen row opens with what choosing it means, in the row itself.
   const notes = [...wiz().querySelectorAll(".wiz-pick-row.is-selected .wiz-pick-notes .cal-note")];
   assert.deepEqual(notes.map((note) => [note.textContent, note.classList.contains("is-warning")]), [[
-    'This roller shutter is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new measurement, if you choose it in the next step, replaces the values in use; to adjust them, choose fine-tuning.', true]],
+    'This cover is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new measurement, if you choose it in the next step, replaces the values in use; to adjust them, choose fine-tuning.', true]],
     "one yellow note with the profile");
   wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick(); wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
   await press("choose");
@@ -91,7 +91,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector(".wiz-subline").textContent, 'Follows the profile "tall_two_leaf"');
   const radios = [...wiz().querySelectorAll('.wiz-radios input[name="path"]')];
   assert.deepEqual(radios.map((input) => input.closest(".wiz-radio").querySelector(".wiz-radio-label").firstChild.textContent.trim()),
-    ["Ⓐ  First roller shutter of this type", "Ⓑ  Like one already measured", "Ⓒ  Has a profile, but stops at the wrong point"], "a radio list, not three buttons");
+    ["Ⓐ  First cover of this type", "Ⓑ  Like one already measured", "Ⓒ  Has a profile, but stops at the wrong point"], "a radio list, not three buttons");
   assert.equal(wiz().querySelectorAll('.wiz-actions [data-wiz^="path:"]').length, 0);
   assert.deepEqual([...wiz().querySelectorAll(".wiz-recommended")].map((badge) => [badge.closest(".wiz-radio").querySelector("input").value, badge.textContent]),
     [["C", "Recommended"]], "a calibrated cover: C is advised");
@@ -107,7 +107,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
   assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓒ\.$/, "the advice does not follow the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').closest(".wiz-radio").querySelector(".wiz-radio-warning.is-warning").textContent,
-    "A full new measurement replaces this roller shutter's values in use. To adjust them without starting over, choose Ⓒ.", "a warning under the chosen path");
+    "A full new measurement replaces this cover's values in use. To adjust them without starting over, choose Ⓒ.", "a warning under the chosen path");
   assert.equal(sent(), before, "choosing a path sends nothing");
   await choosePath("A");
   assert.equal(code(), "A-03");
@@ -412,7 +412,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   assert.equal(wiz().querySelector(".wiz-save-info").open, false, "closed by the user, it stays closed while the summary changes");
   assert.deepEqual([...wiz().querySelectorAll('[name="save_choice"]')].map((input) => input.value), ["update", "new"], "listed as in A-21d");
   assert.equal(wiz().querySelector('[name="save_choice"][value="new"]').checked, true);
-  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 shutter: Living room shutter 3\./);
+  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 cover: Living room shutter 3\./);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false);
   const name = wiz().querySelector('[name="profile_name"]');
   name.value = "bad name"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
@@ -451,7 +451,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(paragraphs.length, 2, "the saved text, then what fine-tuning does");
   assert.equal(wiz().querySelectorAll(".wiz-body p")[1].querySelector("strong").textContent, "Want to fine-tune the calibration?", "a bold lead-in");
   assert.equal(paragraphs[1],
-    "Want to fine-tune the calibration? Four tape readings at a quarter and three quarters of the travel, plus a final check, make the position estimate more precise along the whole travel. About 4 minutes; the roller shutter moves.");
+    "Want to fine-tune the calibration? Four tape readings at a quarter and three quarters of the travel, plus a final check, make the position estimate more precise along the whole travel. About 4 minutes; the cover moves.");
   const finetune = wiz().querySelector('.wiz-steps li[data-step-state]:last-of-type');
   assert.deepEqual([finetune.querySelector(".wiz-step-label").textContent, finetune.dataset.stepState], ["Fine-tuning (optional)", "future"], "still ahead, not ticked");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ol > li")].slice(0, -1).map((item) => item.dataset.stepState), Array(6).fill("done"));
@@ -559,7 +559,7 @@ test("a check run is shown like an intermediate run, without elapsed time, then 
   assert.equal(screen({ phase: "geometry_wait_stop" }).stopwatch, null);
   const reading = screen({ phase: "reading", reading_kind: "check" });
   assert.equal(reading.code, "A-31");
-  assert.equal(reading.title, "Check the roller shutter");
+  assert.equal(reading.title, "Check the cover");
   assert.deepEqual([reading.field.min, reading.field.max], [0.1, 110]);
   assert.match(reading.field.hint, /^About 83 cm expected/);
   assert.deepEqual(reading.actions.map((action) => action.id), ["reading", "repeat"]);
@@ -1298,7 +1298,7 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   assert.equal(none.subline, "Never measured", "the context says only that");
   assert.match(none.body, /If unsure, choose Ⓐ\.$/);
   const c = none.choice.options.find((option) => option.value === "C");
-  assert.deepEqual([c.disabled, c.note], [true, ["Measure the roller shutter first."]], "no fine-tuning on a cover never measured");
+  assert.deepEqual([c.disabled, c.note], [true, ["Measure the cover first."]], "no fine-tuning on a cover never measured");
   // Never measured, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
   const some = buildScreen({ t, stage: "path", profiles: [tall, low], cover: { name: "Kitchen 2", status: "to_measure" } });
   assert.deepEqual(advice(some), []);
