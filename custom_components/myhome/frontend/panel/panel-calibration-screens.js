@@ -536,10 +536,12 @@ function savedScreen(screen, ctx, tx, values) {
     actions: [close("B")] });
   const body = saved.target === "profile_new" ? tx("wiz_T155", { name: saved.name ?? "" })
     : path === "C" && ctx.cover?.profile ? tx("wiz_T228", values) : tx("wizSavedCover", values);
-  // A-34 only: the base calibration is saved, fine-tuning (path C on the same cover) can follow; its note under it.
-  const fineTune = path === "C" ? [] : [{ id: "refine", label: t("wiz_T103"), kind: "secondary", note: t("wiz_T319") }];
-  return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
-    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, ...fineTune, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+  // A-34: the base calibration is saved; fine-tuning (path C on the same cover) is the primary next step, its note under it.
+  if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body,
+    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary", note: t("wiz_T319") }, { id: "another", label: t("wiz_T156"), kind: "secondary" },
+      { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+  return Object.assign(screen, { code: "C-34", title: t("wiz_T154"), body,
+    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
 }
 
 /** S-01…S-06: a step that ended. Today's sessions end with their reason (repeating starts over);
@@ -689,7 +691,9 @@ function finalize(screen, ctx) {
     line: screen.phase === "done" ? t("wiz_T153") : fill(t("wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
       n: current + 1, total: phases.length }),
     phases: phases.map((key, index) => ({ key, label: key === "finetune" ? finetuneLabel : t(PHASES[key]),
-      state: index < current ? "done" : index === current ? "current" : "future",
+      // A-34 after a real save: fine-tuning (optional) is still ahead, so it is not ticked.
+      state: key === "finetune" && screen.code === "A-34" && !screen.preview && !refining ? "future"
+        : index < current ? "done" : index === current ? "current" : "future",
       substeps: index <= current ? (sub[key] || []).map(([label, value]) => ({ label, value })) : [] })),
   };
   // A reader sees the step and Stop only; another tab or device guides it.

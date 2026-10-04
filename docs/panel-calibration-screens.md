@@ -105,7 +105,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-30 / A-31 | `check`: briefing, run, `reading` (only if a session reaches a check; the wizard offers none) | T027, T086; T138, T139, T123, T051, T033 | `next`, Stop; `reading` (0.1 cm to the travel), `repeat` |
 | A-21 / A-21c / A-21d | `review` | T091, T092/T107, T093–T106, T108–T112, T280, T281/T289, `wizTable*`, `wizTechnical` | `save` (`save_mode: "new"`, `name`) |
 | A-22…A-33 | preview `refine`, opened from the tab's *Fine-tune* | T113–T152 | nothing (preview) |
-| A-34 | after `saved` | T153–T158; T103 with T319 under it (real save only) | nothing; *Continue with fine-tuning* opens path C on the same cover at C-01 |
+| A-34 | after `saved` | T153–T158; after a real save *Continue with fine-tuning* (T103) is the primary action with T319 under it, then *Calibrate another*, *Open the roller shutter page*, *Close* (red text); the stepper leaves *Fine-tuning (optional)* unticked | nothing; *Continue with fine-tuning* opens path C on the same cover at C-01 |
 
 The intermediate readings (A-18, A-20) use the session's `reading_range`: the hint gives the heights the fit
 accepts, shown inside their true ends (`calReadingRange`, the text of the profile dialog), a value outside it is
@@ -168,7 +168,7 @@ otherwise as path A; its slat choice comes from the view.
 | Problems as steps | `problem` + `repeat_step` | already drawn by `buildScreen` |
 
 The preview is announced before it starts: a line (T318) under path B on A-02, under the start of B-02 and C-37, and
-(T319) under *Continue with fine-tuning* on A-34. The end of a preview is titled
+(T319, approved text: what fine-tuning does and how long it takes) under *Continue with fine-tuning* on A-34. The end of a preview is titled
 *Preview of the summary* (T320) and says that nothing was saved (T321) or that only the calibration before the
 fine-tuning was (T322).
 
