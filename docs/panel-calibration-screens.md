@@ -64,7 +64,10 @@ T231, T236) and under each other reached phase its measured values. The stopwatc
 the timed runs. Every wait has a progress bar: its duration comes from the times in use (a positioning from the
 closing or opening time, a half run from the measured times, a simulated step from its stages), with the time left
 under it (T402, provisional); when the duration is unknown (a cover with only the integration's default times) the bar
-moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. Stop is a red filled
+moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. In the runs the user confirms (A-05, A-10, the full ascent A-11 and descent A-14, the
+return to the top, the guided runs of C) Stop is offered only while the motor runs: once the view says `motor_stopped`
+the stopwatch stays at `stopped_elapsed` (T257), a wait's bar is shown complete and only the confirmation is left; the
+lift-off run A-07 is unchanged (a stop there still ends the session). Stop is a red filled
 button when it is a wait's only action and a red text link beside a step's buttons (the timed runs); text actions
 (*Continue anyway*, A-34's *Close*) are red text; *Close* keeps each mockup's style elsewhere (B-09 red filled, C-34 and
 S-06 red outlined); radios are plain rows and the advised path's badge is accent blue. Every new step moves the focus
@@ -89,7 +92,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-02 | before the session | T015–T019 | nothing |
 | A-03 | before the session | T021–T024, T198, T199 (no Cancel T025: the header's *Abandon the calibration* does the same) | `start` on «Understood, begin» |
 | A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |
-| A-05 | `closing` · `home` | T030–T033, T028 | `endpoint` (always pressable); while the motor runs T033 (outlined) is disabled and the red Stop link is shown; once the view says `motor_stopped` (not published yet by Home Assistant) T033 is active and Stop is gone; T033 sends `stop` and opens S-01, nothing measured yet is lost. A-10: the same Stop rule, never T033 (a stop there discards the lift-off) |
+| A-05 | `closing` · `home` | T030–T033, T028 | `endpoint` (always pressable); while the motor runs T033 (outlined) is disabled and the red Stop link is shown; once the view says `motor_stopped` (a stop frame from the bus or the actuator's timer) T033 is active and Stop is gone; T033 sends `stop` and opens S-01, nothing measured yet is lost. A-10: the same Stop rule, never T033 (a stop there discards the lift-off) |
 | A-06 | `briefing` · `lift` (local briefing) | T035–T037 | nothing |
 | A-07 | `briefing`/`opening` · `lift` | T042–T046, T028 | `next`, then `lift` |
 | A-08 | `reading` · `lift`; `briefing` · `reset` with `gap_warning` | T047–T051, `calGapWarning` | `reading`; `next` or `repeat` after a wide gap |

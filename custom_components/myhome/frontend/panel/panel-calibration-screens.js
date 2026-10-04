@@ -24,11 +24,14 @@ const MEASURED_RUN = (view) => view && ((view.mode === "geometry" && ["opening",
   || (view.mode === "guided" && ["opening", "closing"].includes(view.phase)));
 
 /**
- * `motor_stopped` (NOT published yet, §8.13 of the handoff): during the closing runs to the base (`home`, `reset`)
- * the motor has stopped (a stop frame from the bus, real or the actuator's own timer) and the session waits for the
- * user's confirmation. Until Home Assistant sends it the wizard treats these runs as moving throughout.
+ * `motor_stopped` (from the backend lot v2-endpoint): in a run the user confirms (the closings to the base `home` and
+ * `reset`, the full ascent and descent, the return to the top, the guided runs) the motor has stopped (a stop frame
+ * from the bus, real or the actuator's own timer) and the session waits for the confirmation; `stopped_elapsed` is
+ * the run's time at that frame. Without the field the run counts as moving.
  */
 const MOTOR_STOPPED = (view) => view?.motor_stopped === true;
+/** Stop is offered while the motor runs; once it has stopped by itself only the confirmation is left. */
+const whileRunning = (view, stop) => MOTOR_STOPPED(view) ? [] : [stop];
 
 /** Movements in progress or about to start: Stop is the action that matters. */
 export const MOVING = (view) => !!view && !MOTOR_STOPPED(view)
@@ -247,7 +250,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
     if (phase === "closing") return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
-      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...(MOTOR_STOPPED(view) ? [] : [stop])] });
+      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...whileRunning(view, stop)] });
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     if (view.still_resting) screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });
@@ -265,14 +268,14 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     Object.assign(screen, { code: p("11"), title: slats ? t("wiz_T055") : t("wiz_T040"), body: t("wiz_T056"),
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
-        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, stop] });
+        { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
     if (phase === "geometry_wait_stop") screen.stopwatch = null;
     return screen;
   }
   if (step === "closing") {
     Object.assign(screen, { code: p("14"), title: t("wiz_T068"), body: t("wiz_T069"), stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
-        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, stop] });
+        { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
     if (phase === "geometry_wait_stop") screen.stopwatch = null;
     return screen;
   }
@@ -295,7 +298,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
     positioning("09", t("wiz_T086"), view.values?.opening_time);
     screen.phase = "descent";
-    if (phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, stop];
+    if (phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
@@ -310,7 +313,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
       progress: waitBar(view, elapsed, first ? view.values?.opening_time : down) }, actions: [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
-    if (first && phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, stop];
+    if (first && phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
@@ -340,13 +343,13 @@ function guidedScreen(screen, ctx, tx, n, values, stop) {
   if (["starting_open", "opening"].includes(phase)) return Object.assign(screen, { code: "C-11", phase: "ascent", title: t("wiz_T040"), body: t("calPhase_opening"),
     stopwatch: runWatch(t, n, view, elapsed),
     actions: [{ id: "run:open", label: t("wiz_T045"), kind: "primary", disabled: true },
-      { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, stop] });
+      { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
   if (phase === "confirm_open") return Object.assign(screen, { code: "C-12", phase: "descent", title: t("wiz_T058"), body: t("calPhase_confirm_open"),
     actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary" }, stop] });
   if (["starting_close", "closing"].includes(phase)) return Object.assign(screen, { code: "C-14", phase: "descent", title: t("wiz_T068"), body: t("calPhase_closing"),
     stopwatch: runWatch(t, n, view, elapsed),
     actions: [{ id: "run:close", label: t("wiz_T045"), kind: "primary", disabled: true },
-      { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, stop] });
+      { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
   return Object.assign(screen, { code: "unknown", title: t(`calPhase_${phase}`), actions: [stop] });
 }
 
@@ -595,8 +598,11 @@ function halfField(ctx, tx, n) {
 }
 
 function runWatch(t, n, view, elapsed) {
-  if (!MEASURED_RUN(view) || elapsed == null) return null;
-  const [label, value] = splitLabel(fill(t("wiz_T044"), { seconds: n(elapsed) }));
+  if (!MEASURED_RUN(view)) return null;
+  // Stopped by itself: the stopwatch stays at the time of the stop frame ("Stopwatch: stopped at 22.2 s").
+  const frozen = MOTOR_STOPPED(view) && view.stopped_elapsed != null;
+  if (!frozen && elapsed == null) return null;
+  const [label, value] = splitLabel(frozen ? fill(t("wiz_T257"), { seconds: n(view.stopped_elapsed) }) : fill(t("wiz_T044"), { seconds: n(elapsed) }));
   return { label, value };
 }
 
@@ -611,6 +617,8 @@ export function splitLabel(text) {
  * Without a known duration (a never measured cover) `value` and `remaining` are null: the bar is indeterminate.
  */
 function waitBar(view, elapsed, seconds) {
+  // The motor stopped before the expected time: the run is over, the bar is complete and no time is left.
+  if (MOTOR_STOPPED(view)) return { value: 1, remaining: null };
   if (!(seconds > 0)) return { value: null, remaining: null };
   const done = ["opening", "closing"].includes(view.phase) && elapsed != null ? Math.min(seconds, Math.max(0, elapsed)) : 0;
   return { value: done / seconds, remaining: secondsLeft(seconds - done) };

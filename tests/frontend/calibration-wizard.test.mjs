@@ -826,6 +826,55 @@ test("Close keeps each mockup's style: B-09 red filled, A-34 red text, C-34 and 
   assert.deepEqual(close(expired), ["S-06", "danger-outline"]);
 });
 
+test("full runs and the return to the top: once the motor stopped by itself the stopwatch freezes, Stop goes, the bar is full", async () => {
+  const t = (key) => translations.en[key] || key;
+  const base = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 },
+    geometry: { slat_time_s: 4 }, travel_cm: 110, slats: true, owner: true, sequence: 7 };
+  const screen = (view, local = {}, elapsed = 12.3, mode) => buildScreen({ t, stage: "session", path: mode === "guided" ? "C" : "A",
+    scope: mode === "guided" ? "times_only" : null, view: { ...base, ...(mode ? { mode } : {}), ...view }, local, elapsed, cover: { name: "Kitchen shutter 2" } });
+  const ids = (item) => item.actions.map((action) => action.id);
+  for (const [view, code, local] of [[{ step: "opening", phase: "opening" }, "A-11"], [{ step: "closing", phase: "closing" }, "A-14"]]) {
+    const running = screen({ ...view, motor_stopped: false, stopped_elapsed: null }, local);
+    assert.equal(running.code, code);
+    assert.deepEqual(ids(running), ["next", "endpoint", "stop"], `${code} running: Stop`);
+    assert.deepEqual(running.stopwatch, { label: "Motor", value: "moving for 12.3 s" });
+    const stopped = screen({ ...view, motor_stopped: true, stopped_elapsed: 21.37 }, local, 25.8);
+    assert.deepEqual(ids(stopped), ["next", "endpoint"], `${code} stopped: no Stop`);
+    assert.equal(stopped.actions.find((action) => action.id === "endpoint").kind, "primary");
+    assert.equal(stopped.actions.find((action) => action.id === "endpoint").disabled, false, "the end stop is confirmed as before");
+    assert.deepEqual(stopped.stopwatch, { label: "Stopwatch", value: "stopped at 21.4 s" }, `${code} freezes at the stop frame`);
+  }
+  // The return to the top (A-19 first leg): the bar is complete once the motor stopped, before the expected time.
+  const top = screen({ step: "top", phase: "opening", motor_stopped: false, stopped_elapsed: null }, { ackReadings: true }, 5);
+  assert.deepEqual([top.code, ids(top), Math.round(top.wait.progress.value * 100)], ["A-19", ["endpoint", "stop"], 23]);
+  const topStopped = screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 }, { ackReadings: true }, 9.5);
+  assert.deepEqual([ids(topStopped), topStopped.wait.progress, topStopped.wait.remaining], [["endpoint"], { value: 1, remaining: null }, ""]);
+  assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 })), ["endpoint"], "the return before a repeated descent too");
+  // The lift-off run is unchanged: a stop there still ends the session, so it keeps Stop.
+  assert.deepEqual(ids(screen({ step: "lift", phase: "opening" }, { ackLift: true })), ["next", "lift", "stop"]);
+  // The guided runs of path C (times only).
+  const guided = screen({ phase: "closing", values: { opening_time: 12.6 }, motor_stopped: true, stopped_elapsed: 12.24 }, {}, 14, "guided");
+  assert.deepEqual([guided.code, ids(guided), guided.stopwatch.value], ["C-14", ["run:close", "endpoint"], "stopped at 12.2 s"]);
+  assert.deepEqual(ids(screen({ phase: "opening", motor_stopped: false }, {}, 3, "guided")), ["run:open", "endpoint", "stop"]);
+
+  // On screen: the stopwatch stops counting and the Stop link leaves.
+  const { backend, wiz, code, press, type, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 });
+  assert.equal(code(), "A-11");
+  assert.ok(wiz().querySelector('.wiz-actions [data-wiz="stop"]'));
+  Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: 22.24 }); backend.session.sequence += 1; backend.emit(); await settle();
+  assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "stopped at 22.2 s");
+  assert.equal(wiz().querySelector(".wiz-stopwatch-label").textContent, "Stopwatch");
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), null, "no Stop once the motor stopped");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').classList.contains("primary"), true);
+  await settle();
+  assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "stopped at 22.2 s", "it does not count on");
+});
+
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
   const t = (key) => translations.it[key] || key;
   const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });
