@@ -322,6 +322,12 @@ test("Assign profile waits while a calibration is open on the gateway, and after
   assert.equal(dialog.querySelector("[data-assign]").disabled, true, "and stays off");
 });
 
+test("every radio of the Assign dialog is the same circle, No profile included", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-radio input \{ flex: none; width: 16px; height: 16px;/, "never shrunk by a long description");
+  assert.doesNotMatch(css, /\.cal-assign-none input/, "No profile has no circle of its own");
+});
+
 test("Assign profile offers No profile to unlink the followed profile, never on the cover it was measured on", async () => {
   const data = overview();
   Object.assign(data.profiles[0].provenance.opening, { origin_entity_id: "cover.living_two", origin_name: "cover.living_two" });
