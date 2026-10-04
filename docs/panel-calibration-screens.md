@@ -132,7 +132,7 @@ values again (the tab passes its covers as a function, so the values just writte
 | --- | --- | --- |
 | B-01 | before | T161–T165 (one radio row per profile: name · where it was measured · how many covers follow it) |
 | B-02 | before | T167, T168, T076 |
-| B-03 / B-04 | `positioning` · `open_full`; `reading` · `travel` | T027, T170; T062–T066 |
+| B-03 / B-04 | `positioning` · `open_full`; `reading` · `travel` (skipped when the cover's travel is already saved: B starts at B-05 with that travel) | T027, T170; T062–T066 |
 | B-05 / B-06 | `positioning` · `check`; `reading` · `check` | T171, T172, T086; T138, T173, T123 |
 | B-07 / B-07b | `check_result` | T141, T175, T060, T143; T144, T176, T177 (opens path C) |
 | B-08 / B-09 | `review`; `saved` | T179–T181, T280, T284; T154, T182, T158 |

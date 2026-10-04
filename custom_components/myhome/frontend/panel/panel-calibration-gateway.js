@@ -159,7 +159,9 @@ export class PreviewCalibrationGateway {
       values: { ...this._seed }, travel_cm: this._seed.travel_cm ?? null, readings: {}, check: null, reason: null };
     this._readings = this._plan === "profile" ? [] : READINGS;
     this._view = base;
-    if (this._plan === "profile") this._position({ step: "open_full", stages: [{ key: "open_full", seconds: this._seed.opening_time }] }, "travel");
+    // Path B with the cover's travel already saved: no travel measurement, only the check at half travel.
+    if (this._plan === "profile" && this._seed.skip_travel && this._seed.travel_cm > 0) this._position({ step: "check", stages: this._stages(CHECK) }, "check");
+    else if (this._plan === "profile") this._position({ step: "open_full", stages: [{ key: "open_full", seconds: this._seed.opening_time }] }, "travel");
     else this._next(0);
     return Promise.resolve();
   }

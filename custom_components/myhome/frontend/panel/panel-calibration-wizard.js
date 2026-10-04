@@ -571,7 +571,8 @@ export class CalibrationWizard {
     Object.assign(local, freshFlags(), { stage: "session" });
     this._arm(null, true);
     if (local.path === "B" || (local.path === "C" && local.scope === "points_only")) {
-      this._newGateway("preview", local.path === "B" ? "profile" : "rolls", this._baseValues(item)).start();
+      // Path B skips the travel measurement when the cover's travel is already saved (only the check remains).
+      this._newGateway("preview", local.path === "B" ? "profile" : "rolls", { ...this._baseValues(item), skip_travel: local.path === "B" && item.cover.travel_cm > 0 }).start();
     } else {
       this._newGateway("live").start({ ...this._liveContext(), mode: local.path === "C" && local.scope === "times_only" ? "guided" : "geometry", slats: local.slats !== false });
     }

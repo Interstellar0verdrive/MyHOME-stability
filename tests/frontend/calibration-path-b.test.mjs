@@ -30,7 +30,10 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
 });
 
 test("path B runs as a preview from the travel to the check and the summary, without any calibration message", async () => {
-  const { backend, wiz, code, press, type, startFor, title } = await mount({ stageMs: 40 });
+  // A cover without a saved travel: B measures it first.
+  const overview = sampleOverview();
+  overview.covers.find((cover) => cover.entity_id === "cover.living_one").travel_cm = null;
+  const { backend, wiz, code, press, type, startFor, title } = await mount({ stageMs: 40, overview });
   await startFor("cover.living_one", "B");
   await press("profile");
   await press("begin");
@@ -62,7 +65,7 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(code(), "B-08");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Summary · 3 of 3");
   const rows = [...wiz().querySelectorAll(".wiz-main > .wiz-table tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
-  assert.deepEqual(rows, [["Opening time", "22 s", "22.2 s"], ["Closing time", "21.7 s", "="], ["Slat time", "—", "4.4 s"], ["Curtain travel", "195 cm", "196 cm"]]);
+  assert.deepEqual(rows, [["Opening time", "22 s", "22.2 s"], ["Closing time", "21.7 s", "="], ["Slat time", "—", "4.4 s"], ["Curtain travel", "—", "196 cm"]], "no travel saved before: measured now");
   assert.equal(wiz().querySelector(".wiz-technical .muted").textContent, "The two roll coefficients, 1.83 and 1.91, come from the profile: they were not measured on this roller shutter.");
   assert.equal(wiz().querySelector(".wiz-profile-block"), null, "B creates and updates no profile");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "B cannot continue to fine-tuning");
@@ -80,9 +83,9 @@ test("path B runs as a preview from the travel to the check and the summary, wit
 test("a failed check offers to correct the cover with its own measurements, which opens path C", async () => {
   const { wiz, code, press, type, startFor, title } = await mount({ language: "it" });
   await startFor("cover.living_one", "B");
+  // The saved travel (195 cm) is used: the check comes first, expected at 97.5 cm.
   await press("profile"); await press("begin"); await settle();
-  await type("196"); await settle();
-  await type("105");
+  await type("104.5");
   assert.equal(code(), "B-07b");
   assert.equal(title(), translations.it.wiz_T144);
   assert.match(wiz().querySelector(".wiz-body").textContent, /^Scarto di circa 7 cm a metà della corsa: più di quanto atteso\./);
@@ -111,4 +114,16 @@ test("without a profile on the gateway, B is disabled and the screen says why", 
   assert.equal(b.closest(".wiz-radio").querySelector("small").textContent, "No saved profile: measure a roller shutter of this type first");
   assert.equal(wiz().querySelector(".wiz-subline").textContent, "Already calibrated (times and roll, Sep 29, 2026)");
   assert.equal(wiz().querySelector(".wiz-radio:has(.wiz-recommended) input").value, "C", "a calibrated cover is advised to C");
+});
+
+test("path B with the cover's travel already saved skips its measurement and keeps the check at half travel", async () => {
+  const { wiz, code, press, type, startFor } = await mount({ stageMs: 30 });
+  await startFor("cover.living_one", "B");
+  await press("profile");
+  await press("begin");
+  assert.equal(code(), "B-05", "straight to the run to half travel");
+  await waitFor(() => code() === "B-06", "B-06");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /half of its 195 cm travel/, "the saved travel");
+  await type("98");
+  assert.equal(code(), "B-07");
 });
