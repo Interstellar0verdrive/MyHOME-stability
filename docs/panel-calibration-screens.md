@@ -69,7 +69,8 @@ under it (T402, provisional); when the duration is unknown (no time at all, or a
 moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. In the runs the user confirms (A-05, A-10, the full ascent A-11 and descent A-14, the
 return to the top, the guided runs of C) Stop is offered only while the motor runs: once the view says `motor_stopped`
 the stopwatch stays at `stopped_elapsed` (T257), a wait's bar is shown complete and only the confirmation is left; the
-lift-off run A-07 is unchanged (a stop there still ends the session). Stop is a red filled
+lift-off run A-07 is unchanged (a stop there still ends the session). The positionings to an end stop (A-04, A-09, the returns to the top) offer the end stop as the primary from the
+start (T032, or T432 towards the top), since the estimate comes from times not yet measured. Stop is a red filled
 button when it is a wait's only action and a red text link beside a step's buttons (the timed runs); text actions
 (*Continue anyway*, A-34's *Close*) are red text; *Close* keeps each mockup's style elsewhere (B-09 red filled, C-34 and
 S-06 red outlined); radios are plain rows and the advised path's badge is accent blue. Every new step moves the focus
@@ -93,7 +94,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-01 | before the session: the covers as the sequence view's rows (name, room, bus address, status, profile) with one radio each, the list's filter chips and shared order (drawn by `CalibrationTab._pickerMarkup`); the chosen row opens with one warning note, T413 (already calibrated, with the profile it follows) or T414 (no profile); a cover that only follows a profile shows T395 | T001, T003–T006, T392, T395, T413, T414 | nothing |
 | A-02 | before the session: the cover's context as an information box (T395 profile followed, T399 calibrated, T418 never measured); advice (`pathAdvice`): calibrated → badge Ⓒ; never measured with a saved travel within ±5 % of a profile's reference → badge Ⓑ with the matches under it (T422, closest first); never measured with profiles → no badge, nothing preselected, the profiles listed under Ⓑ (name · slats · reference travel); no profile → badge Ⓐ. Under Ⓑ the count (T419/T420, T401 when none); Ⓒ disabled on a never measured cover (T423). The intro always ends with T421 naming the advised path. On a calibrated cover another choice shows its warning under it (T415 Ⓐ, T416/T417 Ⓑ) | T015–T019, T395, T399–T401, T415–T423 | nothing |
 | A-03 | before the session | T021–T024, T198, T199 (no Cancel T025: the header's *Abandon the calibration* does the same) | `start` on «Understood, begin» |
-| A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |
+| A-04 | `briefing`/`starting_close` · `home` | T027, T029, T032 (primary from the start, pressable once the motor runs), T028 (red link) | `next` (auto), `endpoint` |
 | A-05 | `closing` · `home` | T030–T033, T028 | shown once the positioning is over (A-04 stays until `motor_stopped` or the closing time in use, default included, has passed); `endpoint` and T033 (outlined) are active at once, the red Stop link stays until `motor_stopped`; T033 sends `stop` and opens S-01, nothing measured yet is lost. A-09/A-10 and the return to the top follow the same rule; A-10 never has T033 (a stop there discards the lift-off) |
 | A-06 | `briefing` · `lift` (local briefing) | T035–T037 | nothing |
 | A-07 | `briefing`/`opening` · `lift` | T042–T046, T028 | `next`, then `lift` |
@@ -105,7 +106,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-14 | `briefing`/`closing` · `closing` | T068–T070 | `next`, `endpoint` |
 | A-15 / A-16 | `briefing` · `half_open` (local); A-15 with result tiles «Full descent s» and «Curtain travel cm» (T068, T041) | T071, T072, T060, T061; T074–T076 | `repeat`; `next` |
 | A-17 / A-18 | `opening` · `half_open`; `reading` | T027, T079, T080; T081, T082, `calReadingRange`, T051, T033 | `reading`, `repeat` |
-| A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, `wizTopReached` | `next` (auto), `endpoint` (auto on `motor_stopped` or after the measured opening time + 3 s; the button is a shortcut), `next` (auto) |
+| A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, T432 (primary from the start) | `next` (auto), `endpoint` (auto on `motor_stopped` or after the measured opening time + 3 s; the button is a shortcut), `next` (auto) |
 | A-20 | `reading` · `half_close` | T087, T088, `calReadingRange` | `reading`, `repeat` |
 | A-30 / A-31 | `check`: briefing, run, `reading` (only if a session reaches a check; the wizard offers none) | T027, T086; T138, T139, T123, T051, T033 | `next`, Stop; `reading` (0.1 cm to the travel), `repeat` |
 | A-21 / A-21c / A-21d | `review` | T091, T092/T107, T093–T106, T108–T112, T280, T281/T289, `wizTable*`, `wizTechnical` | `save` (`save_mode: "new"`, `name`) |

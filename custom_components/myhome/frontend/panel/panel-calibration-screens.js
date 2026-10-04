@@ -256,6 +256,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // A run to an end stop stays a positioning until the motor stops by itself or its full time has passed; only then
   // does the screen ask to confirm the end stop.
   const positioningRun = (seconds) => !MOTOR_STOPPED(view) && seconds > 0 && (elapsed ?? 0) < seconds;
+  // While a cover positions to an end stop, the user's eye may confirm it at once (the estimate comes from times not yet
+  // measured): the end stop is the primary from the start (pressable once the motor runs), Stop the red link beside it.
+  const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
     screen.phase = "prep";
@@ -266,7 +269,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // discards the lift-off measurement (§8.9).
     if (phase === "closing" && !positioningRun(closingTime)) return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
       actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...whileRunning(view, stop)] });
-    return positioning("04", tx("wiz_T029", values), closingTime);
+    positioning("04", tx("wiz_T029", values), closingTime);
+    if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
+    return screen;
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
   if (step === "closing") screen.phase = "descent";
@@ -298,6 +303,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (phase === "closing" && !positioningRun(closingTime)) return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
       actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...whileRunning(view, stop)] });
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
+    if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
     if (view.still_resting) screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });
     return screen;
@@ -344,8 +350,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
     positioning("09", t("wiz_T086"), topTime);
     screen.phase = "descent";
-    // The end stop is confirmed once the positioning is over (motor stopped, or its measured time passed).
-    if (phase === "opening" && !positioningRun(topTime)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
+    if (["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
@@ -360,7 +365,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
       progress: waitBar(view, elapsed, first ? topTime : down) }, actions: [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
-    if (first && phase === "opening" && !positioningRun(topTime)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
+    if (first && ["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;

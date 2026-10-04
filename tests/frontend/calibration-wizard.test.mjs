@@ -269,7 +269,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   await press("repeat");
   assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
   await move(backend);
-  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').textContent, "It is fully open, continue");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').textContent, "It reached the top, continue");
   await press("endpoint"); backend.stopped(); await tick();
   assert.equal(code(), "A-14");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
@@ -294,7 +294,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(code(), "A-19");
   // Before the automatic confirmation (measured time + margin), the button is the shortcut.
   await move(backend, { seconds: 24 });
-  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').textContent, "It is fully open, continue");
+  assert.equal(wiz().querySelector('[data-wiz="endpoint"]').textContent, "It reached the top, continue");
   await press("endpoint");
   backend.stopped(); await tick();
   assert.equal(actions().at(-1), "next", "the half descent starts by itself after the top");
@@ -770,16 +770,23 @@ test("Stop alone in a wait is the red filled button; beside a step's buttons it 
   const view = { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: {}, slats: true, owner: true, sequence: 2 };
   const kinds = (extra, local = {}) => buildScreen({ t, stage: "session", path: "A", view: { ...view, ...extra }, local, elapsed: 1, cover: { name: "Kitchen shutter 2" } })
     .actions.map((action) => `${action.id}:${action.kind}`);
-  assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["stop:danger"], "A-04");
-  assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:danger"], "A-17");
+  // Positionings to an end stop offer the end stop at once: Stop is then the red link beside it (R6-6).
+  assert.deepEqual(kinds({ step: "home", phase: "starting_close" }), ["endpoint:primary", "stop:stop"], "A-04");
+  assert.deepEqual(kinds({ step: "reset", phase: "closing" }), ["endpoint:primary", "stop:stop"], "A-09 (no time known: A-10 at once)");
+  assert.deepEqual(kinds({ step: "half_open", phase: "opening" }, { ackDescent: true, ackReadings: true }), ["stop:danger"], "A-17: Home Assistant stops the half run, Stop alone");
   assert.deepEqual(kinds({ step: "lift", phase: "opening" }, { ackLift: true }), ["next:primary", "lift:primary", "stop:stop"], "A-07 keeps the link");
-  assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["stop:danger"], "A-19 while it positions: Stop alone");
-  assert.deepEqual(kinds({ step: "top", phase: "opening", elapsed: 23 }, { ackReadings: true }).length, 1);
+  assert.deepEqual(kinds({ step: "top", phase: "opening" }, { ackReadings: true }), ["endpoint:primary", "stop:stop"], "A-19 while it positions");
+  const starting = buildScreen({ t, stage: "session", path: "A", view: { ...view, step: "home", phase: "starting_close" }, elapsed: null, cover: { name: "K" } });
+  assert.equal(starting.actions[0].disabled, true, "until the motor runs Home Assistant would refuse the end stop");
   const { backend, wiz, code, press, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin");
   assert.equal(code(), "A-04");
-  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]').className, "wiz-action danger");
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]').className, "wiz-action stop");
+  backend.started(); await tick();
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="endpoint"]').textContent, "It is fully closed, continue");
+  await press("endpoint");
+  assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, 1, "the same end stop the automatic advance sends");
   await press("stop");
   assert.equal(backend.calls.filter((message) => message.action === "stop").length, 1, "the red button stops as before");
 });
@@ -975,7 +982,7 @@ test("full runs and the return to the top: once the motor stopped by itself the 
   }
   // The return to the top (A-19 first leg): the bar is complete once the motor stopped, before the expected time.
   const top = screen({ step: "top", phase: "opening", motor_stopped: false, stopped_elapsed: null }, { ackReadings: true }, 5);
-  assert.deepEqual([top.code, ids(top), Math.round(top.wait.progress.value * 100)], ["A-19", ["stop"], 23], "still positioning: Stop alone");
+  assert.deepEqual([top.code, ids(top), Math.round(top.wait.progress.value * 100)], ["A-19", ["endpoint", "stop"], 23], "still positioning: the end stop at once");
   assert.deepEqual(ids(screen({ step: "top", phase: "opening", motor_stopped: false }, { ackReadings: true }, 23)), ["endpoint", "stop"],
     "past its measured time the end stop is asked, Stop stays while the motor runs");
   const topStopped = screen({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 9.1 }, { ackReadings: true }, 9.5);
@@ -1025,7 +1032,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   await press("begin");
   backend.started(); backend.tick(5); backend.emit(); await tick();
   assert.equal(code(), "A-04", "5 s into a 21.7 s closing: still positioning");
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["stop"]);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["endpoint", "stop"]);
   assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /17 s/, "the time left counts down over the closing time");
   backend.tick(16); backend.emit(); await tick();
   assert.equal(code(), "A-04", "21 s in: still positioning");
@@ -1057,7 +1064,7 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
     view: { mode: "geometry", step, phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5, ...extra } });
   // The motor stopping ends the positioning before its time.
   assert.equal(run("home", "A", { motor_stopped: true }, 3).code, "A-05");
-  assert.deepEqual([run("reset", "A", {}, 3).code, run("reset", "A", {}, 3).actions.map((action) => action.id)], ["A-09", ["stop"]], "A-09 lasts the positioning too");
+  assert.deepEqual([run("reset", "A", {}, 3).code, run("reset", "A", {}, 3).actions.map((action) => action.id)], ["A-09", ["endpoint", "stop"]], "A-09 lasts the positioning too, with the end stop at once");
   assert.deepEqual([run("reset", "A").code, run("reset", "A").actions.map((action) => action.id)], ["A-10", ["endpoint", "stop"]],
     "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
   assert.deepEqual(run("reset", "A", { motor_stopped: true }, 3).actions.map((action) => action.id), ["endpoint"], "Stop only while moving");
