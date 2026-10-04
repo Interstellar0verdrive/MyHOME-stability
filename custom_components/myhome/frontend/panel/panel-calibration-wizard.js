@@ -273,9 +273,16 @@ export class CalibrationWizard {
     const wait = root.querySelector(".wiz-wait");
     if (wait && screen.wait) {
       // Stages done carry ✓, the current one ◐, the next ones an empty circle.
-      const stages = screen.wait.stages.map((stage) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon><span>${esc(stage.text)}</span></li>`).join("");
-      const list = wait.querySelector(".wiz-wait-stages");
-      if (list.innerHTML !== stages) list.innerHTML = stages;
+      // The bar and the time left sit under the stage in progress (after the text when there are no stages).
+      const current = screen.wait.stages.findIndex((stage) => stage.state === "current");
+      const stages = screen.wait.stages.map((stage, index) => `<li data-step-state="${stage.state}"><ha-icon icon="${STAGE_ICON[stage.state]}" aria-hidden="true"></ha-icon><span>${esc(stage.text)}</span>${index === current ? '<div class="wiz-wait-slot"></div>' : ""}</li>`).join("");
+      const list = wait.querySelector(".wiz-wait-stages"), meter = wait.querySelector(".wiz-wait-meter");
+      if (list.dataset.stages !== stages) {
+        wait.append(meter);
+        list.innerHTML = stages;
+        list.dataset.stages = stages;
+        list.querySelector(".wiz-wait-slot")?.replaceWith(meter);
+      }
       list.hidden = !screen.wait.stages.length;
       // The bar is always there: the share already run, or moving back and forth while the duration is unknown.
       const bar = wait.querySelector(".wiz-progress"), share = screen.wait.progress?.value ?? null;
@@ -340,8 +347,8 @@ export class CalibrationWizard {
 
   _waitMarkup(wait) {
     return `<div class="wiz-wait" role="status">${wait.text ? `<p>${esc(wait.text)}</p>` : ""}<ol class="wiz-wait-stages"></ol>
-      <div class="wiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(this._context.t("wiz_T027"))}"><span></span></div>
-      <p class="wiz-wait-remaining muted" aria-live="off" hidden></p></div>`;
+      <div class="wiz-wait-meter"><div class="wiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(this._context.t("wiz_T027"))}"><span></span></div>
+      <p class="wiz-wait-remaining muted" aria-live="off" hidden></p></div></div>`;
   }
 
   _choiceMarkup(choice) {
