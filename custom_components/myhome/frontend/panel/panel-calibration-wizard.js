@@ -39,7 +39,15 @@ export class CalibrationWizard {
    */
   handles(session) { return session?.mode === "geometry" && !session.batch; }
 
-  updateHass(hass) { if (this._context) this._context.hass = hass; }
+  updateHass(hass) { if (this._context) { this._context.hass = hass; this._theme(); } }
+
+  /** The drawings follow Home Assistant's dark mode; without theme data, the system's preference. */
+  _theme() {
+    if (!this._root) return;
+    const mode = this._context?.hass?.themes?.darkMode;
+    const dark = typeof mode === "boolean" ? mode : !!globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    this._root.dataset.theme = dark ? "dark" : "light";
+  }
 
   close() {
     this._generation++;
@@ -71,6 +79,7 @@ export class CalibrationWizard {
     this._engine.hidden = true;
     this._root.append(this._frame, this._engine);
     host.append(this._root);
+    this._theme();
     this._root.addEventListener("click", (event) => this._click(event));
     this._root.addEventListener("keydown", (event) => this._keydown(event));
     this._root.addEventListener("input", (event) => this._input(event));

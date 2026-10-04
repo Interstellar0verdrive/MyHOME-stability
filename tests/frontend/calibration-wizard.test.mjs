@@ -540,20 +540,36 @@ test("each mockup gets its drawing by code: readings after the text, steps and b
   assert.deepEqual(drawn({ phase: "review" }), ["A-21", null]);
 });
 
-test("every drawing a screen can pick is a WebP in the panel's illustrations folder, and A-09 has none", async () => {
-  const { readFileSync, existsSync, readdirSync } = await import("node:fs");
-  const { ILLUSTRATIONS, illustrationUrl } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
+test("every drawing a screen can pick is a themed inline SVG, and A-09 has none", async () => {
+  const { readFileSync, statSync } = await import("node:fs");
+  const { ILLUSTRATIONS, SVG, illustrationMarkup } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
   const panel = new URL("../../custom_components/myhome/frontend/panel/", import.meta.url);
   const source = readFileSync(new URL("panel-calibration-screens.js", panel), "utf8");
   const table = source.slice(source.indexOf("const ILLUSTRATION_OF = {"), source.indexOf("ILLUSTRATION_OF.C ="));
   const used = new Set([...table.matchAll(/\["([a-z-]+)", (?:BEFORE|AFTER)\]/g)].map((match) => match[1]));
   assert.ok(used.size >= 9, `${used.size} ids in the table`);
+  assert.deepEqual(Object.keys(SVG).sort(), Object.keys(ILLUSTRATIONS).sort(), "one drawing per id, no drawing without an id");
+  const ids = new Set();
   for (const id of used) {
-    assert.ok(ILLUSTRATIONS[id], `${id} has a size`);
-    assert.ok(existsSync(new URL(`illustrations/${id}.webp`, panel)), `${id}.webp exists`);
-    assert.ok(illustrationUrl(id).endsWith(`/illustrations/${id}.webp`), id);
+    assert.ok(ILLUSTRATIONS[id] && SVG[id], `${id} has a size and a drawing`);
+    const host = document.createElement("div");
+    host.innerHTML = illustrationMarkup(id, "Step diagram", (value) => value);
+    const svg = host.firstElementChild;
+    assert.equal(svg.tagName.toLowerCase(), "svg", id);
+    assert.match(svg.getAttribute("viewBox"), /^0 0 \d+ \d+$/, `${id} keeps its viewBox`);
+    assert.deepEqual([svg.getAttribute("width"), svg.getAttribute("height")], [String(ILLUSTRATIONS[id].width), String(ILLUSTRATIONS[id].height)]);
+    assert.deepEqual([svg.getAttribute("role"), svg.getAttribute("aria-label"), svg.dataset.illustration], ["img", "Step diagram", id]);
+    // Outside masks and clip paths every colour is a palette property (its light colour only as the fallback).
+    const painted = SVG[id].replace(/<(mask|clipPath)\b[\s\S]*?<\/\1>/g, "").replace(/var\(--wiz-ill-[a-z0-9-]+,#[0-9A-Fa-f]{3,6}\)/g, "");
+    assert.doesNotMatch(painted, /#[0-9A-Fa-f]{3,6}\b|"white"|"black"/, `${id} has no raw colour outside its masks`);
+    for (const match of SVG[id].matchAll(/\bid="([^"]+)"/g)) {
+      assert.ok(match[1].startsWith(`wiz-${id}-`), `${match[1]} carries its drawing's prefix`);
+      assert.equal(ids.has(match[1]), false, `${match[1]} is unique on the page`);
+      ids.add(match[1]);
+    }
   }
-  assert.deepEqual(readdirSync(new URL("illustrations/", panel)).sort(), Object.keys(ILLUSTRATIONS).map((id) => `${id}.webp`).sort(), "no file without an id");
+  const bytes = statSync(new URL("panel-calibration-illustrations-svg.js", panel)).size;
+  assert.ok(bytes <= 60 * 1024, `${bytes} bytes of drawings`);
   assert.match(table, /"05": \["window-closed"/);
   assert.doesNotMatch(table, /"09":/, "A-09 has no drawing");
   const t = (key) => translations.en[key] || key;
@@ -562,7 +578,19 @@ test("every drawing a screen can pick is a WebP in the panel's illustrations fol
   assert.deepEqual([a09.code, a09.illustration], ["A-09", null]);
 });
 
-test("the drawing is one image at its Figma size, placed by its position, and gone where the mockup has none", async () => {
+test("the drawings' palette follows Home Assistant's dark mode", async () => {
+  const { backend, panel, wiz, startFor } = await mount();
+  await startFor("cover.living_one");
+  assert.equal(wiz().dataset.theme, "light", "no theme data and no dark preference: light");
+  panel.hass = { ...backend.hass, themes: { darkMode: true } }; await tick();
+  assert.equal(wiz().dataset.theme, "dark");
+  panel.hass = { ...backend.hass, themes: { darkMode: false } }; await tick();
+  assert.equal(wiz().dataset.theme, "light");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz\[data-theme="dark"\] \{[^}]*--wiz-ill-cover-border: #606060/);
+});
+
+test("the drawing is one inline SVG at its Figma size, placed by its position, and gone where the mockup has none", async () => {
   const { ILLUSTRATIONS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
   assert.deepEqual(Object.keys(ILLUSTRATIONS).sort(), ["ascent-sequence", "check", "curtain-open-tape", "curtain-partial-tape", "descent-sequence",
     "lift-sequence", "lift-zoom", "two-runs", "window-closed"]);
@@ -573,11 +601,10 @@ test("the drawing is one image at its Figma size, placed by its position, and go
   await move(backend);
   assert.equal(code(), "A-05");
   const figure = wiz().querySelector(".wiz-main .wiz-illustration");
-  assert.equal(figure.tagName, "IMG");
+  assert.equal(figure.tagName.toLowerCase(), "svg");
   assert.equal(figure.dataset.illustration, "window-closed");
-  assert.equal(figure.getAttribute("alt"), "Step diagram");
-  assert.deepEqual([figure.getAttribute("width"), figure.getAttribute("height"), figure.getAttribute("decoding")], ["259", "250", "async"]);
-  assert.match(figure.getAttribute("src"), /\/illustrations\/window-closed\.webp(\?|$)/);
+  assert.equal(figure.getAttribute("aria-label"), "Step diagram");
+  assert.deepEqual([figure.getAttribute("width"), figure.getAttribute("height"), figure.getAttribute("viewBox")], ["259", "250", "0 0 260 250"]);
   assert.equal(figure.nextElementSibling.className, "wiz-body", "a step shows its drawing above the text");
   assert.equal(wiz().querySelector(".wiz-frame .cal-visual"), null, "the maintainer's small scene is not used by the wizard");
 });

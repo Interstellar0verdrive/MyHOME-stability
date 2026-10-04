@@ -958,6 +958,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-dialog-stop { color: var(--panel-error); border: 0; background: transparent; }
 /* Drawings of the steps: Figma size, never wider than the column; a dashed box until the drawing is exported. */
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
+/* The drawings' palette (Figma "v2 panel" variables): light, and dark with the Home Assistant theme. */
+.wiz { --wiz-ill-surface: #FFFFFF; --wiz-ill-cover-skeleton: #FFFFFF; --wiz-ill-text-on-accent: #FFFFFF; --wiz-ill-cover-border: #2E2E2E;
+  --wiz-ill-cover-slats: #BDBDBD; --wiz-ill-cover-last-slat: #939393; --wiz-ill-text: #141414; --wiz-ill-text-2: #5E5E5E; --wiz-ill-accent: #009AC7; }
+.wiz[data-theme="dark"] { --wiz-ill-surface: #1C1C1C; --wiz-ill-cover-skeleton: #242424; --wiz-ill-text-on-accent: #FFFFFF; --wiz-ill-cover-border: #606060;
+  --wiz-ill-cover-slats: #6D6D6D; --wiz-ill-cover-last-slat: #535353; --wiz-ill-text: #E1E1E1; --wiz-ill-text-2: #9B9B9B; --wiz-ill-accent: #009AC7; }
 @media (min-width: 1024px) {
   .wiz-columns { grid-template-columns: 240px minmax(0, 1fr) 300px; min-height: 420px; }
   .wiz-sheet { display: none !important; }

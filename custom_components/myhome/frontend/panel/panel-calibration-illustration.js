@@ -2,12 +2,15 @@
  * The drawings of the calibration wizard (A-05, A-06, A-07…), one per illustration id.
  *
  * The screens pick an id per mockup code (`screen.illustration`); this module is the only place that
- * knows what an id looks like: a lossless WebP in `illustrations/<id>.webp`, exported from the Figma
- * frames at twice their size and drawn at the Figma size (1×), shrinking with the column on a phone.
+ * knows what an id looks like: an inline SVG from `panel-calibration-illustrations-svg.js` (generated from
+ * the Figma exports), drawn at the Figma size (1×) and shrinking with the column on a phone. Its colours are
+ * the `--wiz-ill-*` properties of the wizard, light or dark with the Home Assistant theme.
  * Never a picture of the live position: the same drawing for every cover and every moment of the step.
  */
+const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
+const { SVG } = await import(asset("panel-calibration-illustrations-svg.js"));
 
-/** Width and height in px of each drawing in the Figma frames, rounded (the files are twice as large). */
+/** Width and height in px of each drawing in the Figma frames, rounded. */
 export const ILLUSTRATIONS = {
   "window-closed": { width: 259, height: 250 },
   "two-runs": { width: 560, height: 346 },
@@ -20,16 +23,11 @@ export const ILLUSTRATIONS = {
   check: { width: 208, height: 200 },
 };
 
-/** The file of an id, with the panel's build token like every other panel asset. */
-export function illustrationUrl(id) {
-  const url = new URL(`illustrations/${id}.webp`, import.meta.url);
-  url.search = new URL(import.meta.url).search;
-  return url.href;
-}
+export { SVG };
 
-/** The image of one illustration id, described as a whole for assistive technology. */
+/** The drawing of one illustration id, described as a whole for assistive technology. */
 export function illustrationMarkup(id, label, escape) {
-  const size = ILLUSTRATIONS[id];
-  if (!size) return "";
-  return `<img class="wiz-illustration" data-illustration="${escape(id)}" src="${escape(illustrationUrl(id))}" width="${size.width}" height="${size.height}" alt="${escape(label)}" decoding="async">`;
+  const size = ILLUSTRATIONS[id], svg = SVG[id];
+  if (!size || !svg) return "";
+  return svg.replace(/^<svg /, `<svg class="wiz-illustration" data-illustration="${escape(id)}" role="img" aria-label="${escape(label)}" width="${size.width}" height="${size.height}" focusable="false" `);
 }
