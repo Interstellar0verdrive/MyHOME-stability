@@ -38,6 +38,16 @@ test("every generated screen text is filled in English and Italian", () => {
   }
 });
 
+test("the summaries speak of leaving the calibration, never of a window", () => {
+  for (const [language, phrase, stop] of [["it", "Se abbandoni la calibrazione senza salvare, i valori attualmente in uso restano invariati.", "Se preferisci fermarti qui, abbandona la calibrazione: **niente è ancora stato salvato**."],
+    ["en", "If you leave the calibration without saving, the values currently in use stay unchanged.", "If you prefer to stop here, discard the calibration: **nothing has been saved yet**."]]) {
+    const texts = Object.entries(translations[language]).filter(([key]) => key.startsWith("wiz"));
+    assert.deepEqual(texts.filter(([, value]) => /finestra|the window/.test(value)).map(([key]) => key), [], `${language}: no window`);
+    for (const key of ["wiz_T281", "wiz_T289", "wiz_T310", "wiz_T317", "wizSaveCoverOnly"]) assert.ok(translations[language][key].endsWith(phrase), `${language} ${key}`);
+    assert.ok(translations[language].wiz_T176.endsWith(stop), `${language} T176`);
+  }
+});
+
 test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothing", async () => {
   const { tab, wiz, code, press, title, backend, button, pickCover, choosePath } = await mount();
   tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
