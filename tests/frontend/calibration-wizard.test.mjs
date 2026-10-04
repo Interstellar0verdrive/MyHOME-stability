@@ -1420,6 +1420,28 @@ test("after every change of screen the confirming buttons wait 700 ms, Stop neve
   assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, 1);
 });
 
+test("when the motor stops by itself on A-05 the end stop does not flicker disabled", async () => {
+  const { backend, tab, wiz, code, press } = await mount({ guardMs: 700 });
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  const radio = wiz().querySelector(`.wiz-picker input[value='${JSON.stringify(["one", "cover.living_one"])}']`);
+  radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await wait(720);
+  wiz().querySelector('[data-wiz="choose"]').click(); await tick();
+  const a = wiz().querySelector('input[name="path"][value="A"]'); a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await wait(720);
+  wiz().querySelector('[data-wiz="path"]').click(); await tick(); await wait(720);
+  wiz().querySelector('[data-wiz="begin"]').click(); await tick();
+  backend.started(); backend.tick(30); backend.emit(); await tick();
+  assert.equal(code(), "A-05");
+  await wait(720);
+  const endpoint = () => wiz().querySelector('[data-wiz="endpoint"]');
+  assert.equal(endpoint().disabled, false);
+  // The timer's stop frame: Stop goes away, nothing new appears under the finger.
+  backend.session.motor_stopped = true; backend.emit(); await tick();
+  assert.equal(wiz().querySelector('.wiz-actions [data-wiz="stop"]'), null);
+  assert.equal(endpoint().disabled, false, "no hold for a button that only went away");
+  void press;
+});
+
 test("a reopened slat and roll session of a cover that follows a profile is shown as path C", async () => {
   const session = { entry_id: "one", entity_id: "cover.kitchen_two", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
     phase: "briefing", step: "lift", reason: null, values: {}, samples: {}, readings: {}, geometry: {}, travel_cm: null, stop_requested: false,

@@ -245,6 +245,7 @@ export class CalibrationWizard {
             <button type="button" data-wiz="nav-later">${esc(t("wiz_T410"))}</button>
             <button type="button" class="primary" data-wiz="nav-stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
       this._actionsSignature = null;
+      this._actionIds = null;
       this._pickerHtml = null;
       if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
       if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
@@ -322,7 +323,13 @@ export class CalibrationWizard {
     const actions = JSON.stringify([screen.actions.map((action) => [action.id, action.label, action.kind, action.note]), screen.readOnly]);
     const column = root.querySelector(".wiz-actions");
     if (actions !== this._actionsSignature) {
-      this._guard();
+      // The hold protects a tap from landing on a button that just appeared or changed. A button that only goes away
+      // (Stop when the motor stops by itself) holds nothing back: the end stop never flickers disabled.
+      const ids = screen.actions.map((action) => `${action.id}|${action.label}|${action.kind}`);
+      const readOnly = JSON.stringify(screen.readOnly);
+      if (!this._actionIds || readOnly !== this._readOnlySignature || ids.some((id) => !this._actionIds.includes(id))) this._guard();
+      this._actionIds = ids;
+      this._readOnlySignature = readOnly;
       const focused = column.contains(root.getRootNode().activeElement) ? root.getRootNode().activeElement.dataset.wiz : null;
       this._actionsSignature = actions;
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="wiz-readonly-status">${esc(screen.readOnly.status)}</p><p>${esc(screen.readOnly.text)}</p>
