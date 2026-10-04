@@ -35,6 +35,8 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
 export const CONFIRM_GUARD_MS = 700;
 /** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
 const IDLE_LEASE_SECONDS = 1800;
+/** A return of the tape readings confirms itself this long after the measured time of its direction (~2 s + settling). */
+export const AUTO_ENDPOINT_MARGIN_SECONDS = 3;
 // Phases a press goes through before the cover stops again: the press that started them still counts.
 const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geometry_wait_stop"];
 
@@ -563,7 +565,10 @@ export class CalibrationWizard {
     const onChange = (change) => {
       if (generation !== this._generation || !this._root) return;
       // A tick may end a positioning (A-04 → A-05): a new screen is drawn whole, the same one only patched.
-      if (change === "tick") { const screen = this._screen(); if (screen.code !== this._renderedCode) this._render(); else this._patch(screen); return; }
+      if (change === "tick") {
+        this._autoEndpoint(this._gateway?.view);
+        const screen = this._screen(); if (screen.code !== this._renderedCode) this._render(); else this._patch(screen); return;
+      }
       this._viewChanged();
     };
     this._gateway = kind === "live" ? new LiveCalibrationGateway({ onChange })
@@ -655,6 +660,7 @@ export class CalibrationWizard {
     if (view?.preview && view.phase === "saved") { this._saved(view.saved); return; }
     if (view?.preview && view.phase === "cancelled") { this._finish(); return; }
     this._trackRun(view);
+    this._autoEndpoint(view);
     this._autoNext(view);
     this._unloadGuard(this._liveOpen());
     this._render();
@@ -671,7 +677,32 @@ export class CalibrationWizard {
     if (!run) { local.run = null; return; }
     if (local.run?.step === view.step) return;
     const position = this._context.hass.states?.[this._item()?.cover.entity_id]?.attributes?.current_position;
-    local.run = { step: view.step, position: Number.isFinite(position) ? position : null };
+    // Who owned the run when it started, and on which subscription: an automatic end stop needs both unchanged.
+    local.run = { step: view.step, position: Number.isFinite(position) ? position : null, attachment: view.attachment ?? null,
+      owned: !!view.owner && !view.read_only, sent: false };
+  }
+
+  /**
+   * The returns of the tape readings continue by themselves: the return to the top before the half-descent reading
+   * and the return to the bottom before a repeated half-ascent reading confirm their end stop when the motor stops by
+   * itself, or once the measured time of that direction plus a margin has passed. The button stays as a shortcut and
+   * Stop is always there. As `_autoNext`: only for the owner, on the subscription the run started on, never after a
+   * lost connection, an error or a claim, once per run; the press it makes arms the next automatic step as a press would.
+   */
+  _autoEndpoint(view) {
+    const local = this._local, run = local.run, status = this._gateway?.status || {};
+    if (!run || run.sent || !view || view.preview || view.mode !== "geometry" || !local.ackReadings) return;
+    const returning = (view.step === "top" && view.phase === "opening") || (["reset", "home"].includes(view.step) && view.phase === "closing");
+    if (!returning || run.step !== view.step) return;
+    if (!run.owned || !view.owner || view.read_only || status.lost || status.error || status.busy || (view.attachment ?? null) !== run.attachment) {
+      run.sent = true;
+      return;
+    }
+    const full = view.step === "top" ? view.values?.opening_time : view.values?.closing_time;
+    const elapsed = this._gateway.elapsed() ?? 0;
+    if (view.motor_stopped !== true && !(full > 0 && elapsed >= full + AUTO_ENDPOINT_MARGIN_SECONDS)) return;
+    run.sent = true;
+    queueMicrotask(() => { if (this._gateway?.view === view && !this._gateway.status.busy) this._send("endpoint"); });
   }
 
   /** A press of this tab arms one automatic `next`: it remembers the view it was made on and its subscription. */

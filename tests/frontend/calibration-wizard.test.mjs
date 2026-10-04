@@ -292,7 +292,8 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(wiz().querySelector(".wiz-notices").textContent, "");
   assert.equal(actions().at(-1), "next", "the return to the top starts by itself");
   assert.equal(code(), "A-19");
-  await move(backend);
+  // Before the automatic confirmation (measured time + margin), the button is the shortcut.
+  await move(backend, { seconds: 24 });
   assert.equal(wiz().querySelector('[data-wiz="endpoint"]').textContent, "It is fully open, continue");
   await press("endpoint");
   backend.stopped(); await tick();
@@ -473,7 +474,7 @@ async function runToSaved({ backend, press, type, startFor, code, tab, choosePat
   await press("ack:ascent"); await type("198");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
-  await type("97"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("101");
   assert.equal(code(), "A-21");
   await press("save");
@@ -490,7 +491,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   await press("ack:ascent"); await type("198");
   await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
-  await type("97"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await type("97"); await move(backend, { seconds: 24 }); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("101");
   assert.equal(code(), "A-21");
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
@@ -1074,6 +1075,81 @@ test("a positioning lasts the share of the travel still ahead, from the cover's 
   assert.equal(code(), "A-05", "a later position does not stretch the run");
 });
 
+test("the returns of the tape readings confirm themselves: on the motor's own stop, or after the measured time and a margin", async () => {
+  const toTop = async (context) => {
+    const { backend, press, type, startFor, code } = context;
+    await startFor("cover.living_one");
+    await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+    await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+    await press("ack:ascent"); await type("198");
+    await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+    await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+    await type("97");
+    assert.equal(code(), "A-19");
+    backend.started(); await tick();
+  };
+  const endpoints = (backend) => backend.calls.filter((message) => message.action === "endpoint").length;
+  // 1. The motor stops by itself: the end stop is confirmed at once, and the half descent follows by itself.
+  const first = await mount();
+  await toTop(first);
+  const before = endpoints(first.backend);
+  first.backend.tick(10); first.backend.session.motor_stopped = true; first.backend.emit(); await tick(6);
+  assert.equal(endpoints(first.backend), before + 1, "confirmed on the stop frame");
+  first.backend.stopped(); await tick(6);
+  assert.equal(first.actions().at(-1), "next", "the half descent starts as after a press");
+  // 2. No stop frame: confirmed once the measured opening time (22.2 s) and the margin (3 s) have passed.
+  const second = await mount();
+  await toTop(second);
+  const base = endpoints(second.backend);
+  second.backend.tick(24); second.backend.emit(); await tick(6);
+  assert.equal(endpoints(second.backend), base, "24 s: not yet, the button is the shortcut");
+  assert.ok(second.wiz().querySelector('[data-wiz="endpoint"]'));
+  second.backend.tick(2); second.backend.emit(); await tick(6);
+  assert.equal(endpoints(second.backend), base + 1, "26 s: confirmed by itself");
+  second.backend.emit(); await tick(6);
+  assert.equal(endpoints(second.backend), base + 1, "once per run");
+  // 3. A press first: one confirmation only.
+  const third = await mount();
+  await toTop(third);
+  const start = endpoints(third.backend);
+  third.backend.tick(23); third.backend.emit(); await tick();
+  await third.press("endpoint");
+  third.backend.tick(10); await tick(6);
+  assert.equal(endpoints(third.backend), start + 1, "the press, then nothing more");
+  // 4. A replayed subscription (Home Assistant reconnected) never confirms by itself.
+  const fourth = await mount();
+  const callbacks = [];
+  const subscribe = fourth.backend.hass.connection.subscribeMessage;
+  fourth.backend.hass.connection.subscribeMessage = async (callback, message) => { callbacks.push(callback); return subscribe(callback, message); };
+  await toTop(fourth);
+  const counted = endpoints(fourth.backend);
+  fourth.backend.tick(10);
+  callbacks.at(-1)(fourth.backend.view({ attachment: "attachment-2", motor_stopped: true }));
+  await tick(6);
+  assert.equal(endpoints(fourth.backend), counted, "no confirmation after a replay");
+});
+
+test("the return to the bottom before a repeated half-ascent reading confirms itself too", async () => {
+  const { backend, press, type, startFor, code } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:ascent"); await type("198");
+  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
+  assert.equal(code(), "A-18");
+  await press("repeat"); await tick();
+  const step = backend.session.step;
+  assert.ok(["reset", "home"].includes(step), `back to the bottom (${step})`);
+  const before = backend.calls.filter((message) => message.action === "endpoint").length;
+  backend.started(); backend.tick(8); backend.session.motor_stopped = true; backend.emit(); await tick(6);
+  assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, before + 1, "confirmed on the motor's own stop");
+});
+
 test("Abandon and the X always ask first while a session is open, on every step, preview included", async () => {
   const { backend, wiz, code, press, type, startFor } = await mount();
   const asks = async (label) => {
@@ -1232,7 +1308,7 @@ test("a subscription replayed after a reconnection never starts a movement, even
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97");
   assert.equal(code(), "A-19");
-  await move(backend);
+  await move(backend, { seconds: 24 });
   await press("endpoint");
   // The socket drops: the cover stops and the session moves on with nobody listening.
   const emit = backend.emit;

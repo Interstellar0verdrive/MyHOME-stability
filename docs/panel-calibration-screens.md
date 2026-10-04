@@ -105,7 +105,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-14 | `briefing`/`closing` · `closing` | T068–T070 | `next`, `endpoint` |
 | A-15 / A-16 | `briefing` · `half_open` (local); A-15 with result tiles «Full descent s» and «Curtain travel cm» (T068, T041) | T071, T072, T060, T061; T074–T076 | `repeat`; `next` |
 | A-17 / A-18 | `opening` · `half_open`; `reading` | T027, T079, T080; T081, T082, `calReadingRange`, T051, T033 | `reading`, `repeat` |
-| A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, `wizTopReached` | `next` (auto), `endpoint`, `next` (auto) |
+| A-19 | `top`, then `closing` · `half_close` | T086, T084, T085, `wizTopReached` | `next` (auto), `endpoint` (auto on `motor_stopped` or after the measured opening time + 3 s; the button is a shortcut), `next` (auto) |
 | A-20 | `reading` · `half_close` | T087, T088, `calReadingRange` | `reading`, `repeat` |
 | A-30 / A-31 | `check`: briefing, run, `reading` (only if a session reaches a check; the wizard offers none) | T027, T086; T138, T139, T123, T051, T033 | `next`, Stop; `reading` (0.1 cm to the travel), `repeat` |
 | A-21 / A-21c / A-21d | `review` | T091, T092/T107, T093–T106, T108–T112, T280, T281/T289, `wizTable*`, `wizTechnical` | `save` (`save_mode: "new"`, `name`) |
