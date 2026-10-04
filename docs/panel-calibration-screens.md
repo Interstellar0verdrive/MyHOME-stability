@@ -88,7 +88,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-02 | before the session | T015–T019 | nothing |
 | A-03 | before the session | T021–T025, T198, T199 | `start` on «Understood, begin» |
 | A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |
-| A-05 | `closing` · `home` | T030–T032 | `endpoint` |
+| A-05 | `closing` · `home` | T030–T033, T028 | `endpoint`; T033 (outlined, beside the Stop link) sends `stop` and opens S-01, nothing measured yet is lost (A-10 keeps Stop only: a stop there discards the lift-off) |
 | A-06 | `briefing` · `lift` (local briefing) | T035–T037 | nothing |
 | A-07 | `briefing`/`opening` · `lift` | T042–T046, T028 | `next`, then `lift` |
 | A-08 | `reading` · `lift`; `briefing` · `reset` with `gap_warning` | T047–T051, `calGapWarning` | `reading`; `next` or `repeat` after a wide gap |

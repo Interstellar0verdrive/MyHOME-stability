@@ -717,6 +717,29 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
   assert.equal(code(), "S-01");
 });
 
+test("A-05 offers \"It did not do what it should\" beside Stop: it stops the run and opens S-01; A-10 keeps Stop only", async () => {
+  const { backend, wiz, code, press, actions, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend);
+  assert.equal(code(), "A-05");
+  const kinds = () => [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
+  assert.deepEqual(kinds(), [["endpoint", "primary"], ["misbehaved", "secondary"], ["stop", "stop"]], "outlined, with the red Stop link kept");
+  assert.equal(wiz().querySelector('[data-wiz="misbehaved"]').textContent, "It did not do what it should");
+  await press("misbehaved");
+  assert.equal(actions().at(-1), "stop", "today it is a stop: nothing measured yet is lost");
+  await tick();
+  assert.equal(code(), "S-01");
+
+  const t = (key) => translations.it[key] || key;
+  const a10 = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
+    view: { mode: "geometry", step: "reset", phase: "closing", values: {}, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 5 } });
+  assert.equal(a10.code, "A-10");
+  assert.deepEqual(a10.actions.map((action) => action.id), ["endpoint", "stop"], "a stop on A-10 would discard the lift-off: no T033 until repeat_step");
+  const c05 = buildScreen({ t, language: "it", stage: "session", path: "C", scope: "times_and_rolls", cover: { name: "Cucina 2" },
+    view: { mode: "geometry", step: "home", phase: "closing", values: {}, samples: {}, readings: {}, slats: true, owner: true, sequence: 2 } });
+  assert.deepEqual([c05.code, c05.actions.map((action) => action.id)], ["C-05", ["endpoint", "misbehaved", "stop"]], "the C clone too");
+});
+
 test("a subscription replayed after a reconnection never starts a movement, even on a step that would continue by itself", async () => {
   const { backend, wiz, code, press, type, actions, startFor } = await mount();
   const callbacks = [];

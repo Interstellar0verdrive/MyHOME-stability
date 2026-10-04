@@ -401,7 +401,8 @@ export class CalibrationWizard {
     // The guided protocol's own movements ("open", "close") are named apart from closing the wizard.
     if (id.startsWith("run:")) return this._send(id.slice(4));
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
-    if (id === "stop") { this._closeDialog(false); return gateway?.stop(); }
+    // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
+    if (id === "stop" || id === "misbehaved") { this._closeDialog(false); return gateway?.stop(); }
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
     if (id === "take") { local.arm = null; return gateway?.claim(); }
     if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }

@@ -200,8 +200,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     screen.phase = "prep";
     if (phase === "briefing") return Object.assign(screen, { code: p("03"), title: t("wiz_T021"), body: path === "C" ? tx("wiz_T197", values) : t("wiz_T022"),
       actions: [{ id: "next", label: t("wiz_T024"), kind: "primary" }] });
+    // "It did not do what it should": stops the run and opens S-01 (nothing measured yet is lost). Stop stays, as
+    // everywhere a movement is in progress. Not on A-10: there a stop discards the lift-off measurement (§8.9).
     if (phase === "closing") return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
-      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, stop] });
+      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, stop] });
     return positioning("04", tx("wiz_T029", values), closingTime);
   }
   if (["lift", "reset", "opening"].includes(step)) screen.phase = "ascent";
