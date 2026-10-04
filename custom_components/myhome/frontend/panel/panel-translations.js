@@ -355,6 +355,9 @@ export const translations = {
     wiz_T430: "This cover is the source of the profile \"{profile}\": a coming update will let it unlink the profile and keep its measured values.",
     wiz_T431: "The profile \"{old}\" is no longer followed by any cover: you can delete it from the Profiles tab.",
     wiz_T432: "It reached the top, continue",
+    wiz_T433: "Up to 64 characters, different from the saved profiles.",
+    wiz_T434: "A profile with this name already exists.",
+    wiz_T435: "Enter a name for the profile.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1174,6 +1177,9 @@ export const translations = {
     wiz_T430: "Questa tapparella è la sorgente del profilo «{profile}»: potrà scollegarlo con un prossimo aggiornamento, che le lascerà i valori misurati.",
     wiz_T431: "Il profilo «{old}» non è più seguito da nessuna tapparella: puoi eliminarlo dalla scheda Profili.",
     wiz_T432: "È arrivata in alto, avanti",
+    wiz_T433: "Fino a 64 caratteri, diverso dai profili già salvati.",
+    wiz_T434: "Esiste già un profilo con questo nome.",
+    wiz_T435: "Scrivi un nome per il profilo.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

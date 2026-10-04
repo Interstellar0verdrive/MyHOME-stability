@@ -547,10 +547,13 @@ function profileBlock(ctx, tx, pathC) {
       description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }, { value: "new", label: t("wiz_T111") }] } : null;
   const creating = on && (!follows || choice.value === "new");
   const nameValue = local.profileName ?? slug(cover?.name || "");
+  // Home Assistant accepts any name of 1–64 characters; two profiles with the same name would be told apart by nothing.
+  const wanted = nameValue.trim().toLocaleLowerCase();
+  const nameError = !wanted ? t("wiz_T435") : (ctx.profiles || []).some((profile) => profile.name?.trim().toLocaleLowerCase() === wanted) ? t("wiz_T434") : "";
   const block = { switchLabel: t("wiz_T096"), on, explanation: follows ? tx("wiz_T108", { profile: cover.profile.name }) : t("wiz_T097"), choice,
-    name: creating ? { label: t("wiz_T098"), value: nameValue, hint: t("wiz_T100"),
+    name: creating ? { label: t("wiz_T098"), value: nameValue, hint: t("wiz_T433"), error: nameError,
       line: follows ? counted(t, "wiz_T112", cover.followers?.length ?? 0, { profile: cover.profile.name, names: ctx.followerNames || "—" }) : tx("wiz_T101", { name: nameValue }),
-      valid: /^[A-Za-z0-9_]{1,64}$/.test(nameValue) } : null,
+      valid: !nameError } : null,
     target: !on ? "cover_only" : creating ? "profile_new" : "profile_update" };
   return block;
 }

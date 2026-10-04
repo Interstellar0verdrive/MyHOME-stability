@@ -448,10 +448,22 @@ test("a cover that follows a profile saves only on itself by default, which wait
   assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 cover: Living room shutter 3\./);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false);
   const name = wiz().querySelector('[name="profile_name"]');
-  name.value = "bad name"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  const error = () => wiz().querySelector(".wiz-name-error");
+  assert.equal(error().hidden, true);
+  assert.equal(wiz().querySelector("#wiz-name-hint").textContent, "Up to 64 characters, different from the saved profiles.");
+  // Home Assistant accepts any name of 1–64 characters, spaces included: only an empty or an existing name is refused.
+  name.value = "test K1"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false, "a space is fine");
+  name.value = "  Tall_Two_Leaf "; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true, "an existing name");
+  assert.deepEqual([error().hidden, error().textContent, name.getAttribute("aria-invalid")], [false, "A profile with this name already exists.", "true"]);
+  assert.match(name.getAttribute("aria-describedby"), /wiz-name-error/);
+  name.value = "   "; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(error().textContent, "Enter a name for the profile.");
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true);
   assert.equal(wiz().querySelector('[name="profile_name"]'), name, "typing never redraws the field");
   name.value = "kitchen_two"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
+  assert.equal(error().hidden, true, "the error goes with the problem");
   assert.match(wiz().querySelector(".wiz-name-line").textContent, /"tall_two_leaf" stays with Living room shutter 3/);
   const update = wiz().querySelector('[name="save_choice"][value="update"]');
   update.checked = true; update.dispatchEvent(new Event("change", { bubbles: true })); await tick();

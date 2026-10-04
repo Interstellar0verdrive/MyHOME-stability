@@ -967,6 +967,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-switch input:checked { background: var(--panel-accent); }
 .wiz-switch input:checked::after { transform: translateX(16px); }
 .wiz-name-line { font-size: 13px; }
+.wiz-name-input[aria-invalid="true"] { border-color: var(--panel-error); outline-color: var(--panel-error); }
+.wiz-name-error { margin: 4px 0 0; font-size: 13px; color: var(--panel-error); }
 .wiz-notices { display: grid; gap: 8px; }
 .wiz-notices:empty { display: none; }
 .wiz-notice { margin: 0; }
