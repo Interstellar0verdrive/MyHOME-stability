@@ -287,11 +287,11 @@ export class CalibrationTab {
         <div class="cal-batch-rows" role="radiogroup" aria-label="${esc(t("wiz_T005"))}">${rows || `<p class="muted wiz-pick-empty">${esc(t("noResults"))}</p>`}</div></div>`;
   }
 
-  /** In the chevron column: open every visible row, or close them all when they are all open (the filter applies). */
+  /** In the chevron column: close every visible row when any is open, otherwise open them all (the filter applies). */
   _expandAll(visible) {
     const { t } = this._context;
     const keys = visible.map((item) => JSON.stringify([item.entry.entry_id, item.cover.entity_id]));
-    const all = keys.length > 0 && keys.every((key) => this._expanded.has(key));
+    const all = keys.some((key) => this._expanded.has(key));
     const label = t(all ? "wiz_T425" : "wiz_T424");
     return `<button type="button" class="icon-button cal-expand-all" data-action="cal-tab-expand-all" data-id="${all ? "collapse" : "expand"}" aria-label="${esc(label)}" title="${esc(label)}"><ha-icon icon="mdi:unfold-${all ? "less" : "more"}-horizontal" aria-hidden="true"></ha-icon></button>`;
   }

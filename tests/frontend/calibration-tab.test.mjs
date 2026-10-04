@@ -226,23 +226,30 @@ test("the row menu closes with Escape back on its button", async () => {
   assert.equal(root.activeElement, row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]'));
 });
 
-test("the chevron column's header opens every visible row, then closes them all, within the active filter", async () => {
+test("the chevron column's header closes the visible rows when any is open, otherwise opens them all, within the filter", async () => {
   const { tab } = await mount();
   const button = () => tab.querySelector(".cal-list-head .cal-expand-all");
   const open = () => [...tab.querySelectorAll(".cal-row")].filter((item) => item.classList.contains("is-expanded")).map((item) => item.dataset.entity);
-  assert.deepEqual([button().getAttribute("aria-label"), button().querySelector("ha-icon").getAttribute("icon")], ["Expand all", "mdi:unfold-more-horizontal"]);
+  const state = () => [button().getAttribute("aria-label"), button().querySelector("ha-icon").getAttribute("icon")];
+  assert.deepEqual(state(), ["Expand all", "mdi:unfold-more-horizontal"], "none open: expand");
   button().click();
   assert.deepEqual(open().sort(), ["cover.bedroom", "cover.kitchen_two", "cover.living_one", "cover.living_two"]);
-  assert.deepEqual([button().getAttribute("aria-label"), button().querySelector("ha-icon").getAttribute("icon")], ["Collapse all", "mdi:unfold-less-horizontal"]);
+  assert.deepEqual(state(), ["Collapse all", "mdi:unfold-less-horizontal"]);
   button().click();
   assert.deepEqual(open(), []);
-  // With a filter, only the rows it shows.
+  // One open row is enough to offer Collapse all.
+  row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
+  assert.equal(state()[0], "Collapse all", "one open: collapse");
+  button().click();
+  assert.deepEqual(open(), []);
+  // With a filter, only the rows it shows count and move.
+  row(tab, "cover.living_two").querySelector('[data-action="cal-tab-toggle"]').click();
   tab.querySelector('[data-action="cal-tab-filter"][data-id="to_measure"]').click();
+  assert.equal(state()[0], "Expand all", "the open row is not among the visible ones");
   button().click();
   assert.deepEqual(open(), ["cover.bedroom"]);
-  assert.equal(button().getAttribute("aria-label"), "Collapse all", "all the visible rows are open");
   tab.querySelector('[data-action="cal-tab-filter"][data-id="all"]').click();
-  assert.equal(button().getAttribute("aria-label"), "Expand all", "not all rows are open once the filter is gone");
+  assert.deepEqual(open().sort(), ["cover.bedroom", "cover.living_two"], "rows outside the filter were left as they were");
 });
 
 test("Assign profile lists the saved profiles as B-01 does and assigns with the existing write, never through the profile dialog", async () => {
