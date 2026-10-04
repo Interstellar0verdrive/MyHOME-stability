@@ -325,6 +325,10 @@ export const translations = {
     wiz_T400: "Recommended",
     wiz_T401: "No saved profile: measure a roller shutter of this type first",
     wiz_T402: "About {seconds} s remaining",
+    wiz_T404: "No profile",
+    wiz_T405: "Unlinks \"{profile}\": the roller shutter uses its own values, if it has any, otherwise goes back to \"to measure\". The profile stays available for the other roller shutters.",
+    wiz_T406: "Unlink profile",
+    wiz_T407: "Profile unlinked from \"{cover}\".",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1114,6 +1118,10 @@ export const translations = {
     wiz_T400: "Consigliato",
     wiz_T401: "Nessun profilo salvato: misura prima una tapparella di questo tipo",
     wiz_T402: "Tempo residuo circa {seconds} s",
+    wiz_T404: "Nessun profilo",
+    wiz_T405: "Scollega «{profile}»: la tapparella usa i suoi valori personali, se li ha, altrimenti torna da misurare. Il profilo resta disponibile per le altre tapparelle.",
+    wiz_T406: "Scollega il profilo",
+    wiz_T407: "Profilo scollegato da «{cover}».",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

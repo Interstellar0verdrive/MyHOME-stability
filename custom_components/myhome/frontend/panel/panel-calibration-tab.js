@@ -11,6 +11,8 @@ export const FILTERS = ["all", "to_measure", "calibrated", "profile"];
 // Covers read in turn to find the gateway's session when a read fails.
 const SESSION_PROBES = 3;
 export const SORT_KEYS = ["cover", "status", "profile"];
+/** The Assign profile dialog's "No profile" entry (a profile id is never this). */
+const NO_PROFILE = "__no_profile__";
 export const DEFAULT_SORT = Object.freeze({ key: "cover", dir: "asc" });
 export const SORT_STORAGE_KEY = "myhome-panel-calibration-sort-v1";
 // Status from what needs attention first; a running cover is always on top, whatever the order.
@@ -296,6 +298,7 @@ export class CalibrationTab {
           `<button type="button" class="cal-chip" data-action="cal-tab-filter" data-id="${filter}" aria-pressed="${this._filter === filter}">${esc(t(`calTabFilter_${filter}`))} <span class="count">${counts[filter]}</span></button>`).join("")}</div>
           <p class="muted cal-tab-summary" role="status">${esc([["calTabCountCovers", counts.all], ["calTabCountCalibrated", counts.calibrated], ["calTabCountToMeasure", counts.to_measure]]
             .map(([key, count]) => fill(t(count === 1 ? `${key}_one` : key), { n: count })).join(" · "))}</p></div>
+        ${this._done ? `<p class="notice cal-tab-done" role="status"><ha-icon icon="mdi:check-circle-outline" aria-hidden="true"></ha-icon><span>${esc(this._done)}</span></p>` : ""}
         ${busy ? `<p class="notice cal-tab-busy" role="status"><ha-icon icon="mdi:information-outline" aria-hidden="true"></ha-icon><span>${esc(t("calTabBusy"))}</span></p>` : ""}
         ${this._filter === "to_measure" ? `<p class="cal-note cal-tab-help">${esc(t("calTabToMeasureHelp"))}</p>` : ""}
         ${failed.map((entry) => `<p class="notice error" role="alert">${esc(gateways.length > 1 ? `${entry.title}: ` : "")}${esc(t("calTabError"))}</p>`).join("")}
@@ -491,6 +494,7 @@ export class CalibrationTab {
 
   _openWizard(options) {
     if (!this._wizard || !this._context) return;
+    this._done = "";
     this._mode = { kind: "wizard" };
     const { host, hass, t, onOpenCover } = this._context;
     // The covers as they are at each step: after a save, fine-tuning (C-01) shows the values just written.
@@ -519,6 +523,7 @@ export class CalibrationTab {
    */
   _openDialog({ title, subtitle = "", icon }) {
     this._closeDialog();
+    this._done = "";
     const { dialogHost, t } = this._context;
     dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog" aria-labelledby="cal-dialog-title">
       <header class="dialog-head"><div class="dialog-icon" aria-hidden="true"><ha-icon icon="${esc(icon)}"></ha-icon></div>
@@ -579,7 +584,13 @@ export class CalibrationTab {
           followers(profile.assigned_to.filter(Boolean).length)].filter(Boolean).join(" · "),
       ];
     };
-    body.innerHTML = profiles.length ? `<fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${profiles.map((profile) => {
+    // "No profile" unlinks the profile the cover follows; never on the cover the profile was measured on, whose values
+    // live only in the profile until Home Assistant copies them on unlinking (backend lot to plan).
+    const followed = data.profiles.find((profile) => profile.id === item.cover.profile_id);
+    const source = followed?.provenance?.opening?.origin_entity_id === item.cover.entity_id;
+    const none = followed && !source ? `<label class="wiz-radio cal-assign-none"><input type="radio" name="assign_profile" value="${NO_PROFILE}">
+        <span><strong><ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon>${esc(t("wiz_T404"))}</strong><small class="muted">${esc(fill(t("wiz_T405"), { profile: followed.name }))}</small></span></label>` : "";
+    body.innerHTML = profiles.length ? `<fieldset class="wiz-radios cal-assign-list"><legend>${esc(t("wiz_T163"))}</legend>${none}${profiles.map((profile) => {
       const [type, measured] = describe(profile);
       return `<label class="wiz-radio"><input type="radio" name="assign_profile" value="${esc(profile.id)}" ${profile.id === item.cover.profile_id ? "checked" : ""}>
         <span><strong>${esc(profile.name)}</strong><small class="muted">${esc(type)}</small><small class="muted">${esc(measured)}</small></span></label>`;
@@ -591,17 +602,25 @@ export class CalibrationTab {
     dialog.querySelector(".dialog-foot").insertAdjacentHTML("beforeend", `<button type="button" class="primary" data-assign disabled>${esc(t("wiz_T373"))}</button>`);
     const button = dialog.querySelector("[data-assign]");
     const chosen = () => body.querySelector('input[name="assign_profile"]:checked')?.value;
-    body.onchange = () => { button.disabled = !chosen() || chosen() === item.cover.profile_id; };
+    body.onchange = () => {
+      button.disabled = !chosen() || chosen() === item.cover.profile_id;
+      // Unlinking is said as such on the button, with the broken link.
+      button.innerHTML = chosen() === NO_PROFILE ? `<ha-icon icon="mdi:link-variant-off" aria-hidden="true"></ha-icon><span>${esc(t("wiz_T406"))}</span>` : esc(t("wiz_T373"));
+    };
     button.onclick = async () => {
-      const profileId = chosen();
-      if (!profileId || button.disabled) return;
+      const choice = chosen();
+      if (!choice || button.disabled) return;
+      const profileId = choice === NO_PROFILE ? null : choice;
       button.disabled = true;
       const box = body.querySelector(".error");
       box.hidden = true;
       try {
         await hass.callWS({ type: "myhome/cover_profiles/write", entry_id: item.entry.entry_id, entity_id: item.cover.entity_id,
           revision: data.revision, action: "assign", profile_id: profileId });
-        if (generation === this._generation && this._dialog === dialog) this._dialogDone();
+        if (generation === this._generation && this._dialog === dialog) {
+          if (profileId === null) this._done = fill(t("wiz_T407"), { cover: item.name });
+          this._dialogDone();
+        }
       } catch (error) {
         if (generation !== this._generation || this._dialog !== dialog) return;
         const key = `profileError_${error?.code}`;

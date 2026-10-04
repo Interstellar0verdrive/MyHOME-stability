@@ -254,6 +254,38 @@ test("Assign profile lists the saved profiles as B-01 does and assigns with the 
   assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
+test("Assign profile offers No profile to unlink the followed profile, never on the cover it was measured on", async () => {
+  const data = overview();
+  Object.assign(data.profiles[0].provenance.opening, { origin_entity_id: "cover.living_two", origin_name: "cover.living_two" });
+  const { root, tab, calls } = await mount({ data, callWS: (message) => message.type === "myhome/cover_profiles/write" ? { revision: 8 } : undefined });
+  const open = (id) => { row(tab, id).querySelector('[data-action="cal-tab-menu"]').click(); row(tab, id).querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); };
+  open("cover.bedroom"); await tick();
+  let dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.querySelector('input[value="__no_profile__"]'), null, "a cover without a profile has nothing to unlink");
+  dialog.querySelector(".cal-dialog-close").click(); await tick();
+  open("cover.living_two"); await tick();
+  dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  assert.equal(dialog.querySelector('input[value="__no_profile__"]'), null, "the profile's source cover: its values live in the profile");
+  dialog.querySelector(".cal-dialog-close").click(); await tick();
+  open("cover.kitchen_two"); await tick();
+  dialog = root.querySelector("#dialog-host dialog.cal-dialog");
+  const none = dialog.querySelector('input[value="__no_profile__"]');
+  assert.ok(none, "a follower can unlink");
+  assert.equal(none.closest(".wiz-radio"), dialog.querySelector(".wiz-radio"), "first in the list");
+  assert.equal(none.closest(".wiz-radio").querySelector("ha-icon").getAttribute("icon"), "mdi:link-variant-off");
+  assert.deepEqual([...none.closest(".wiz-radio").querySelectorAll("strong, small")].map((item) => item.textContent),
+    ["No profile", 'Unlinks "tall_two_leaf": the roller shutter uses its own values, if it has any, otherwise goes back to "to measure". The profile stays available for the other roller shutters.']);
+  const button = dialog.querySelector("[data-assign]");
+  none.checked = true; none.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.equal(button.textContent, "Unlink profile");
+  assert.equal(button.querySelector("ha-icon").getAttribute("icon"), "mdi:link-variant-off");
+  button.click(); await tick(6);
+  const write = calls.filter((message) => message.type === "myhome/cover_profiles/write").at(-1);
+  assert.deepEqual(write, { type: "myhome/cover_profiles/write", entry_id: "one", entity_id: "cover.kitchen_two", revision: 7, action: "assign", profile_id: null });
+  assert.equal(root.querySelector("#dialog-host dialog"), null);
+  assert.equal(tab.querySelector(".cal-tab-done").textContent.trim(), 'Profile unlinked from "Kitchen shutter 2".');
+});
+
 test("a session in progress marks its cover, blocks new measurements and opens a sequence in the existing view, in its own dialog", async () => {
   const session = { entry_id: "one", entity_id: "cover.bedroom", session_id: "group", mode: "automatic", batch: true, phase: "paused",
     reason: "owner_absent", sequence: 4, values: {}, recoverable: true, attached: false, owner_present: false, cover_index: 0, results: [],
