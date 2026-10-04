@@ -727,6 +727,8 @@ test("on the phone the run's ① and ② stack, never side by side", async () =>
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /\.wiz-actions:has\(\.wiz-action:nth-of-type\(2\)\.primary\)/, "no two-column rule for two primaries");
   assert.match(css, /\.wiz-actions \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/, "one column");
+  assert.match(css, /@media \(hover: hover\) \{ \.wiz-action\.stop:hover \{/, "a tap leaves no tint on Stop");
+  assert.match(css, /\.wiz-action\.stop, \.wiz-action\.link \{ min-height: 48px; background: transparent; \}/, "plain red text, the bar's height");
 });
 
 test("1 px dividers separate the side columns from the centre on the wide layout only", async () => {
