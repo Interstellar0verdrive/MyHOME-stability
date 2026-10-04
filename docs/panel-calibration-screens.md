@@ -86,7 +86,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | --- | --- | --- | --- |
 | A-01 | before the session | T001, T003–T006 | nothing |
 | A-02 | before the session | T015–T019 | nothing |
-| A-03 | before the session | T021–T025, T198, T199 | `start` on «Understood, begin» |
+| A-03 | before the session | T021–T024, T198, T199 (no Cancel T025: the header's *Abandon the calibration* does the same) | `start` on «Understood, begin» |
 | A-04 | `briefing`/`starting_close` · `home` | T027, T029, T028 | `next` (auto) |
 | A-05 | `closing` · `home` | T030–T033, T028 | `endpoint`; T033 (outlined, beside the Stop link) sends `stop` and opens S-01, nothing measured yet is lost (A-10 keeps Stop only: a stop there discards the lift-off) |
 | A-06 | `briefing` · `lift` (local briefing) | T035–T037 | nothing |

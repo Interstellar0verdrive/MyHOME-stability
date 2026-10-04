@@ -153,8 +153,8 @@ export function buildScreen(ctx) {
       choice: pointsOnly || timesOnly ? null : { name: "slats", kind: "radio", label: t("wiz_T023"), value: local.slats === false ? "no" : "yes",
         options: [{ value: "yes", label: t("wiz_T198") }, { value: "no", label: t("wiz_T199") }] },
       // Readings only run as a preview: said before it starts.
-      actions: [{ id: "begin", label: t("wiz_T024"), kind: "primary", ...(pointsOnly ? { note: t("wiz_T318") } : {}) },
-        ...(path === "A" ? [{ id: "exit", label: t("wiz_T025"), kind: "secondary" }] : [])] });
+      // No "Cancel" (T025) here or on A-16: it did what the header's "Abandon the calibration" does.
+      actions: [{ id: "begin", label: t("wiz_T024"), kind: "primary", ...(pointsOnly ? { note: t("wiz_T318") } : {}) }] });
     return finish();
   }
   if (stage === "saved") return finish(savedScreen(screen, ctx, tx, values));
@@ -266,7 +266,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       body: tx("wiz_T072", { run: n(view.values?.closing_time) }),
       actions: [{ id: "ack:descent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     if (phase === "briefing" && !local.ackReadings) return Object.assign(screen, { code: p("16"), title: t("wiz_T074"), body: t("wiz_T075"),
-      actions: [{ id: "ack:readings", label: t("wiz_T076"), kind: "primary" }, ...(path === "A" ? [{ id: "exit", label: t("wiz_T025"), kind: "secondary" }] : [])] });
+      actions: [{ id: "ack:readings", label: t("wiz_T076"), kind: "primary" }] });
     if (phase === "reading") return Object.assign(screen, { code: p("18"), title: t("wiz_T081"), body: t("wiz_T082"),
       field: halfField(ctx, tx, n), actions: [{ id: "reading", label: t("wiz_T051"), kind: "primary" }, { id: "repeat", label: t("wiz_T033"), kind: "secondary" }] });
     const seconds = ((slats ? view.samples?.lift || 0 : 0) + (view.values?.opening_time || 0)) / 2;

@@ -717,6 +717,19 @@ test("the screen behind an open Discard dialog is not rebuilt until the dialog c
   assert.equal(code(), "S-01");
 });
 
+test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
+  const t = (key) => translations.it[key] || key;
+  const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });
+  const a16 = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
+    view: { mode: "geometry", step: "half_open", phase: "briefing", values: { closing_time: 21 }, samples: {}, readings: {}, slats: true, owner: true, sequence: 9 },
+    local: { ackDescent: true } });
+  for (const screen of [a03, a16]) {
+    assert.deepEqual(screen.actions.map((action) => action.id), [screen.code === "A-03" ? "begin" : "ack:readings"], screen.code);
+    assert.equal(screen.discard, true, `${screen.code} keeps the header's Abandon`);
+  }
+  assert.deepEqual([a03.code, a16.code], ["A-03", "A-16"]);
+});
+
 test("A-05 offers \"It did not do what it should\" beside Stop: it stops the run and opens S-01; A-10 keeps Stop only", async () => {
   const { backend, wiz, code, press, actions, startFor } = await mount();
   await startFor("cover.living_one");
