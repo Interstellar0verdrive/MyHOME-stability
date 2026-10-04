@@ -342,6 +342,7 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.equal(tab.querySelector(".cal-list-rows"), null, "the selection replaces the list");
   assert.equal(tab.querySelector(".cal-batch h3").textContent, "Misurazione in sequenza");
   assert.equal(tab.querySelector(".cal-batch-back").textContent.trim(), "Torna all'elenco");
+  assert.equal(tab.querySelector(".cal-batch-back").classList.contains("link"), false, "an outlined button, not a link");
   const note = tab.querySelector(".cal-batch-note");
   assert.deepEqual([...note.querySelectorAll("p")].map((paragraph) => paragraph.textContent.split(" ").slice(0, 2).join(" ")),
     ["La sequenza", "Servono attuatori"], "two paragraphs");

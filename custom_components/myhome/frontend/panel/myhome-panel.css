@@ -746,8 +746,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
    and an action bar held at the bottom of the window, with a fade while the list continues below it. */
 .cal-batch { display: grid; gap: 14px; }
 .cal-batch > * { margin: 0; }
-.cal-batch-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 4px 0; border: 0; background: transparent; color: var(--panel-accent); font-weight: 500; }
-.cal-batch-back:hover { background: transparent; text-decoration: underline; }
+/* "Back to the list": the maintainer's outlined secondary button (no fill), in the same place. */
+.cal-batch-back { justify-self: start; background: transparent; }
+.cal-batch-back:hover { background: var(--panel-accent-soft); }
 .cal-batch-back ha-icon { --mdc-icon-size: 18px; }
 .cal-batch-note p { margin: 0; }
 .cal-batch-note p + p { margin-top: 8px; }

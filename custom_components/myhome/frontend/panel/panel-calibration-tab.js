@@ -690,7 +690,7 @@ export class CalibrationTab {
     }).join("");
     const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });
     const html = `<div class="cal-batch">
-      <button type="button" class="link cal-batch-back" data-action="cal-tab-batch-back"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon>${esc(t("wiz_T390"))}</button>
+      <button type="button" class="cal-batch-back" data-action="cal-tab-batch-back"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon>${esc(t("wiz_T390"))}</button>
       <h3 class="cal-tab-title">${esc(t("wiz_T364"))}</h3>
       <p class="muted cal-tab-intro">${esc(t("wiz_T387"))}</p>
       <div class="cal-note is-warning cal-batch-note">${rich(t("wiz_T388"))}</div>
