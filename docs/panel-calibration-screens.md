@@ -62,7 +62,9 @@ the whole stepper), the instruction scrolling, the actions anchored at the botto
 path, the current one half filled, under the introduction the path chosen (T026 *Ⓐ first of its type*, T169, T200,
 T231, T236) and under each other reached phase its measured values. The stopwatch appears only in
 the timed runs. Every wait has a progress bar: its duration comes from the times in use (a positioning from the
-closing or opening time in use, the integration's default included, a half run from the measured times, a simulated step from its stages), with the time left
+closing or opening time in use, the integration's default included, times the share of the travel still ahead from the
+cover's `current_position` when the run starts (already there: 2 s until the bus confirms; unknown position: the full
+time; the estimate is only as good as times not yet measured), a half run from the measured times, a simulated step from its stages), with the time left
 under it (T402, provisional); when the duration is unknown (no time at all, or a check run Home Assistant stops) the bar
 moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. In the runs the user confirms (A-05, A-10, the full ascent A-11 and descent A-14, the
 return to the top, the guided runs of C) Stop is offered only while the motor runs: once the view says `motor_stopped`

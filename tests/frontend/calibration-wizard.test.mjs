@@ -1008,6 +1008,34 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   assert.deepEqual(run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
 });
 
+test("a positioning lasts the share of the travel still ahead, from the cover's estimated position", async () => {
+  const t = (key) => translations.en[key] || key;
+  const cover = { name: "Kitchen shutter 2", effective: { closing: { value: 20, origin: "native_fallback" } } };
+  const wait = (view, runPosition, elapsed = 0, local = {}) => buildScreen({ t, stage: "session", path: "A", cover, runPosition, elapsed, local,
+    view: { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 3, ...view } });
+  const home = { step: "home", phase: "closing" };
+  assert.deepEqual([wait(home, 50, 1).code, wait(home, 50, 1).wait.progress.remaining], ["A-04", 9], "half open: half the closing time");
+  assert.equal(wait(home, 50, 10.5).code, "A-05", "past that half");
+  assert.deepEqual([wait(home, null, 1).wait.progress.remaining, wait(home, null, 15).code], [19, "A-04"], "position unknown: the full time");
+  assert.deepEqual([wait(home, 0, 0.5).code, wait(home, 0, 0.5).wait.progress.remaining, wait(home, 0, 2.5).code], ["A-04", 2, "A-05"],
+    "already closed: a short run until the bus confirms");
+  assert.equal(wait({ ...home, motor_stopped: true }, 100, 1).code, "A-05", "the motor's own stop still ends it early");
+  assert.deepEqual([wait({ step: "reset", phase: "closing" }, 20, 3).code, wait({ step: "reset", phase: "closing" }, 20, 5).code], ["A-09", "A-10"]);
+  const top = { step: "top", phase: "opening" };
+  assert.equal(wait(top, 30, 1, { ackReadings: true }).wait.progress.remaining, Math.ceil(22 * 0.7 - 1), "the return to the top runs 70 % of the opening time");
+  // On screen: the position is read once, when the run starts.
+  const { backend, code, press, startFor, wiz } = await mount();
+  backend.hass.states = { "cover.living_one": { state: "open", attributes: { current_position: 50 } } };
+  await startFor("cover.living_one");
+  await press("begin");
+  backend.started(); backend.tick(5); backend.emit(); await tick();
+  assert.equal(code(), "A-04");
+  assert.match(wiz().querySelector(".wiz-wait-remaining").textContent, /\b6 s/, "21.7 s × 50 % − 5 s");
+  backend.hass.states["cover.living_one"].attributes.current_position = 100;
+  backend.tick(6); backend.emit(); await tick();
+  assert.equal(code(), "A-05", "a later position does not stretch the run");
+});
+
 test("Abandon and the X always ask first while a session is open, on every step, preview included", async () => {
   const { backend, wiz, code, press, type, startFor } = await mount();
   const asks = async (label) => {

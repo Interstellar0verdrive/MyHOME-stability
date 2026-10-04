@@ -152,7 +152,7 @@ export class CalibrationWizard {
     return buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
       covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
-      view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null,
+      view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null, runPosition: local.run?.position ?? null,
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
   }
 
@@ -630,9 +630,24 @@ export class CalibrationWizard {
     }
     if (view?.preview && view.phase === "saved") { this._saved(view.saved); return; }
     if (view?.preview && view.phase === "cancelled") { this._finish(); return; }
+    this._trackRun(view);
     this._autoNext(view);
     this._unloadGuard(this._liveOpen());
     this._render();
+  }
+
+  /**
+   * A positioning run to an end stop (`home`, `reset`, `top`) lasts the share of the travel still ahead: the cover's
+   * estimated position (Home Assistant's `current_position`) is read once, when the run starts.
+   */
+  _trackRun(view) {
+    const local = this._local;
+    const run = !!view && !view.preview && ["home", "reset", "top"].includes(view.step)
+      && ["starting_close", "starting_open", "closing", "opening"].includes(view.phase);
+    if (!run) { local.run = null; return; }
+    if (local.run?.step === view.step) return;
+    const position = this._context.hass.states?.[this._item()?.cover.entity_id]?.attributes?.current_position;
+    local.run = { step: view.step, position: Number.isFinite(position) ? position : null };
   }
 
   /** A press of this tab arms one automatic `next`: it remembers the view it was made on and its subscription. */
@@ -791,7 +806,7 @@ export class CalibrationWizard {
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null,
     review: null, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
 }
 

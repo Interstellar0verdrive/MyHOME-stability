@@ -202,7 +202,18 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // A positioning run lasts about the full time of its direction (the time in use, the integration's default too).
   const positioning = (number, text, seconds = null) => Object.assign(screen, { code: p(number), title: t("wiz_T027"),
     wait: { text, stages: [], progress: waitBar(view, elapsed, seconds) }, actions: [stop] });
-  const closingTime = timeInUse(ctx.cover?.effective?.closing);
+  // A positioning only runs the part of the travel still ahead: the full time of its direction × that share, from the
+  // cover's estimated position when the run started (100 = open). Already there: a short run until the bus confirms.
+  // Unknown position: the full time. The estimate is only as good as the times in use, not yet measured here.
+  const toRun = (full, closing) => {
+    if (!(full > 0)) return null;
+    const position = ctx.runPosition;
+    if (position == null) return full;
+    const share = Math.min(100, Math.max(0, closing ? position : 100 - position)) / 100;
+    return share === 0 ? ALREADY_THERE_SECONDS : full * share;
+  };
+  const closingTime = toRun(timeInUse(ctx.cover?.effective?.closing), true);
+  const topTime = toRun(view.values?.opening_time, false);
   // A run to an end stop stays a positioning until the motor stops by itself or its full time has passed; only then
   // does the screen ask to confirm the end stop.
   const positioningRun = (seconds) => !MOTOR_STOPPED(view) && seconds > 0 && (elapsed ?? 0) < seconds;
@@ -291,10 +302,10 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   }
   if (step === "top" && !local.ackReadings) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
-    positioning("09", t("wiz_T086"), view.values?.opening_time);
+    positioning("09", t("wiz_T086"), topTime);
     screen.phase = "descent";
     // The end stop is confirmed once the positioning is over (motor stopped, or its measured time passed).
-    if (phase === "opening" && !positioningRun(view.values?.opening_time)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
+    if (phase === "opening" && !positioningRun(topTime)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
@@ -307,9 +318,9 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       wait: { text: t("wiz_T086"), stages: [
         { text: tx("wiz_T084", { seconds: n(view.values?.opening_time, 0) }), state: first ? "current" : "done" },
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
-      progress: waitBar(view, elapsed, first ? view.values?.opening_time : down) }, actions: [stop] });
+      progress: waitBar(view, elapsed, first ? topTime : down) }, actions: [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
-    if (first && phase === "opening" && !positioningRun(view.values?.opening_time)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
+    if (first && phase === "opening" && !positioningRun(topTime)) screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, ...whileRunning(view, stop)];
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     if (!first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
@@ -631,6 +642,9 @@ function stagesBar(view) {
 
 /** Whole seconds left, never 0 while the bar is shown (sums of tenths are not exact: 11.000000001 is 11). */
 function secondsLeft(seconds) { return Math.max(1, Math.ceil(seconds - 0.001)); }
+
+/** A positioning to an end stop the cover already sits at: the bar runs this long, until the bus confirms the stop. */
+const ALREADY_THERE_SECONDS = 2;
 
 /** The full time of a positioning run: the time in use, the integration's default included. */
 function timeInUse(entry) {
