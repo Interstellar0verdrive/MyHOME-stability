@@ -346,6 +346,8 @@ export const translations = {
     wiz_T421: "If unsure, choose {path}.",
     wiz_T422: "Travel similar to the profile \"{profile}\" ({travel} cm vs {reference} cm)",
     wiz_T423: "Measure the cover first.",
+    wiz_T424: "Expand all",
+    wiz_T425: "Collapse all",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1156,6 +1158,8 @@ export const translations = {
     wiz_T421: "Nel dubbio, scegli {path}.",
     wiz_T422: "Corsa simile al profilo «{profile}» ({travel} cm contro {reference} cm)",
     wiz_T423: "Prima misura la tapparella.",
+    wiz_T424: "Espandi tutte",
+    wiz_T425: "Comprimi tutte",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

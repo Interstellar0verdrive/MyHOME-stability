@@ -240,9 +240,9 @@ export class CalibrationTab {
   }
 
   /** The header row of a list: Cover, Status and Profile sort it. */
-  _sortHeads(extra = "", trigger = (key) => `data-action="cal-tab-sort" data-id="${key}"`) {
+  _sortHeads(extra = "", trigger = (key) => `data-action="cal-tab-sort" data-id="${key}"`, lead = "") {
     const { t } = this._context;
-    return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span></span>${this._sortHead("cover", t("calTabColCover"), trigger)}${this._sortHead("status", t("calTabColStatus"), trigger)}${this._sortHead("profile", t("calTabColProfile"), trigger)}<span></span></div>`;
+    return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span class="cal-head-lead">${lead}</span>${this._sortHead("cover", t("calTabColCover"), trigger)}${this._sortHead("status", t("calTabColStatus"), trigger)}${this._sortHead("profile", t("calTabColProfile"), trigger)}<span></span></div>`;
   }
 
   /** A column header: a button that sorts by it, with the arrow of the current order. */
@@ -284,6 +284,15 @@ export class CalibrationTab {
       <div class="cal-list cal-batch-list wiz-pick-list">
         ${this._sortHeads(" cal-batch-head", (key) => `data-wiz="pick-sort:${key}"`)}
         <div class="cal-batch-rows" role="radiogroup" aria-label="${esc(t("wiz_T005"))}">${rows || `<p class="muted wiz-pick-empty">${esc(t("noResults"))}</p>`}</div></div>`;
+  }
+
+  /** In the chevron column: open every visible row, or close them all when they are all open (the filter applies). */
+  _expandAll(visible) {
+    const { t } = this._context;
+    const keys = visible.map((item) => JSON.stringify([item.entry.entry_id, item.cover.entity_id]));
+    const all = keys.length > 0 && keys.every((key) => this._expanded.has(key));
+    const label = t(all ? "wiz_T425" : "wiz_T424");
+    return `<button type="button" class="icon-button cal-expand-all" data-action="cal-tab-expand-all" data-id="${all ? "collapse" : "expand"}" aria-label="${esc(label)}" title="${esc(label)}"><ha-icon icon="mdi:unfold-${all ? "less" : "more"}-horizontal" aria-hidden="true"></ha-icon></button>`;
   }
 
   _running(item) {
@@ -343,7 +352,7 @@ export class CalibrationTab {
         ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
         ${visible.length ? `${this._sortBar()}
         <div class="cal-list">
-          ${this._sortHeads()}
+          ${this._sortHeads("", undefined, this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}`;
     }
     if (host.innerHTML !== html) replacePreservingFocus(host, html);
@@ -484,7 +493,16 @@ export class CalibrationTab {
     if (action !== "cal-tab-menu" && this._menu !== null) { this._menu = null; if (!action?.startsWith("cal-tab-")) this._render(); }
     if (action === "cal-tab-filter") { this._filter = id; this._render(); }
     else if (action === "cal-tab-sort") this._setSort(id);
-    else if (action === "cal-tab-toggle") {
+    else if (action === "cal-tab-expand-all") {
+      const language = this._context.hass.language || "en";
+      const visible = this._sorted(this._covers().filter((item) => this._matches(item)), language).filter((item) => this._filter === "all"
+        || (this._filter === "to_measure" ? item.status === "to_measure" : this._filter === "calibrated" ? item.status !== "to_measure" : !!item.profile));
+      for (const item of visible) {
+        const key = JSON.stringify([item.entry.entry_id, item.cover.entity_id]);
+        if (id === "collapse") this._expanded.delete(key); else this._expanded.add(key);
+      }
+      this._render();
+    } else if (action === "cal-tab-toggle") {
       if (this._expanded.has(id)) this._expanded.delete(id); else this._expanded.add(id);
       this._render();
     } else if (action === "cal-tab-menu") {

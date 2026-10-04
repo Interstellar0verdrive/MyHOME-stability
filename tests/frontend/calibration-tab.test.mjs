@@ -224,6 +224,25 @@ test("the row menu closes with Escape back on its button", async () => {
   assert.equal(root.activeElement, row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-menu"]'));
 });
 
+test("the chevron column's header opens every visible row, then closes them all, within the active filter", async () => {
+  const { tab } = await mount();
+  const button = () => tab.querySelector(".cal-list-head .cal-expand-all");
+  const open = () => [...tab.querySelectorAll(".cal-row")].filter((item) => item.classList.contains("is-expanded")).map((item) => item.dataset.entity);
+  assert.deepEqual([button().getAttribute("aria-label"), button().querySelector("ha-icon").getAttribute("icon")], ["Expand all", "mdi:unfold-more-horizontal"]);
+  button().click();
+  assert.deepEqual(open().sort(), ["cover.bedroom", "cover.kitchen_two", "cover.living_one", "cover.living_two"]);
+  assert.deepEqual([button().getAttribute("aria-label"), button().querySelector("ha-icon").getAttribute("icon")], ["Collapse all", "mdi:unfold-less-horizontal"]);
+  button().click();
+  assert.deepEqual(open(), []);
+  // With a filter, only the rows it shows.
+  tab.querySelector('[data-action="cal-tab-filter"][data-id="to_measure"]').click();
+  button().click();
+  assert.deepEqual(open(), ["cover.bedroom"]);
+  assert.equal(button().getAttribute("aria-label"), "Collapse all", "all the visible rows are open");
+  tab.querySelector('[data-action="cal-tab-filter"][data-id="all"]').click();
+  assert.equal(button().getAttribute("aria-label"), "Expand all", "not all rows are open once the filter is gone");
+});
+
 test("Assign profile lists the saved profiles as B-01 does and assigns with the existing write, never through the profile dialog", async () => {
   const data = overview();
   // As Home Assistant publishes it for a cover named by its device: the registry name is only the entity id.
