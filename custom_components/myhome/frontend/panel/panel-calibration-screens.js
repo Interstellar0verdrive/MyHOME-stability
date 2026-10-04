@@ -539,9 +539,12 @@ function profileBlock(ctx, tx, pathC) {
   const { t, cover, local = {} } = ctx;
   const follows = !!cover?.profile;
   const on = local.saveProfile ?? (!follows && !pathC);
-  // On the cover the followed profile was measured on, updating that profile is the default; elsewhere a new one.
+  // On the cover the followed profile was measured on, updating that profile is the default, but only once the session
+  // can save into an existing profile (L5a; the same condition as the "not available yet" notice): the default never
+  // lands on a choice that cannot be saved. Elsewhere, and until then, a new profile.
   const source = follows && !!cover.entity_id && cover.profile.provenance?.opening?.origin_entity_id === cover.entity_id;
-  const choice = on && follows ? { name: "save_choice", value: local.saveChoice || (source ? "update" : "new"),
+  const canUpdate = ctx.supports ? ctx.supports("profile_update") : true;
+  const choice = on && follows ? { name: "save_choice", value: local.saveChoice || (source && canUpdate ? "update" : "new"),
     // Listed as in A-21d: update first, then a new profile (still the default choice, §9.10).
     options: [{ value: "update", label: tx("wiz_T109", { profile: cover.profile.name }),
       description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }, { value: "new", label: t("wiz_T111") }] } : null;

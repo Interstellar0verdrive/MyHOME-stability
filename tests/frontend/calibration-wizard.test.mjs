@@ -1481,9 +1481,11 @@ test("A-21d defaults to updating the profile on the cover it was measured on, an
   const t = (key) => translations.en[key] || key;
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };
   const cover = (origin) => ({ name: "Kitchen 2", entity_id: "cover.kitchen_two", profile: { name: "tall", provenance: { opening: { origin_entity_id: origin } } }, followers: [], effective: {} });
-  const choice = (origin) => buildScreen({ t, stage: "session", path: "A", cover: cover(origin), view, local: { saveProfile: true } }).profileBlock.choice.value;
-  assert.equal(choice("cover.kitchen_two"), "update", "the source cover updates its own profile by default");
-  assert.equal(choice("cover.hall"), "new", "a follower creates a new one by default");
+  const choice = (origin, supports) => buildScreen({ t, stage: "session", path: "A", cover: cover(origin), view, local: { saveProfile: true }, supports })
+    .profileBlock.choice.value;
+  assert.equal(choice("cover.kitchen_two", () => true), "update", "the source cover updates its own profile by default, once that can be saved");
+  assert.equal(choice("cover.kitchen_two", (target) => target !== "profile_update"), "new", "until then (no L5a) the default stays a new profile");
+  assert.equal(choice("cover.hall", () => true), "new", "a follower creates a new one by default");
   const saved = (orphan) => buildScreen({ t, stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "profile_new", name: "kitchen_2", orphan } } });
   assert.deepEqual(saved("tall").note, { tone: "info", text: 'The profile "tall" is no longer followed by any cover: you can delete it from the Profiles tab.' });
   assert.equal(saved(null).note, null);
