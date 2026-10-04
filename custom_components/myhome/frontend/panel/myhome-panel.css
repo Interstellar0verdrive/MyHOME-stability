@@ -1057,6 +1057,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
      text under it slid beneath the drawing. */
   .wiz-main > * { flex-shrink: 0; min-width: 0; }
   .wiz-actions { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--panel-border); background: var(--panel-surface); }
+  /* A fade above the bar while the content goes on below it (`has-more`, set from the content's scroll). */
+  .wiz-actions { position: relative; }
+  .wiz-actions::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
+    background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
+  .wiz-actions.has-more::before { opacity: 1; }
   /* The actions stack, one per line, as in every phone mockup: ① and ② are never side by side. */
   /* Stop (and the red links) as plain red text: no tint left by a tap (hover tints only with a real pointer), the bar's height. */
   .wiz-action.stop, .wiz-action.link { min-height: 48px; background: transparent; }

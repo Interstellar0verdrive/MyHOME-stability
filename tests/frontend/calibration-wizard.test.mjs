@@ -723,6 +723,20 @@ test("the profile switch is a 36×20 track with a 16 px thumb 2 px from every ed
   assert.match(css, /\.wiz-switch input:checked::after \{ transform: translateX\(16px\); \}/);
 });
 
+test("the fade over the phone's action bar shows only while content is hidden below", async () => {
+  const { wiz, tab } = await mount();
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  const main = wiz().querySelector(".wiz-main"), actions = wiz().querySelector(".wiz-actions");
+  // jsdom has no layout: give the content a scroll box by hand.
+  Object.defineProperties(main, { scrollHeight: { value: 900, configurable: true }, clientHeight: { value: 400, configurable: true } });
+  main.scrollTop = 0; main.dispatchEvent(new Event("scroll"));
+  assert.equal(actions.classList.contains("has-more"), true, "more below");
+  main.scrollTop = 500; main.dispatchEvent(new Event("scroll"));
+  assert.equal(actions.classList.contains("has-more"), false, "at the end of the scroll it goes");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.wiz-actions\.has-more::before \{ opacity: 1; \}/);
+});
+
 test("on the phone the run's ① and ② stack, never side by side", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /\.wiz-actions:has\(\.wiz-action:nth-of-type\(2\)\.primary\)/, "no two-column rule for two primaries");

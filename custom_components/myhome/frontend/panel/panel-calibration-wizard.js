@@ -64,6 +64,9 @@ export class CalibrationWizard {
   }
 
   close() {
+    this._moreObserver?.disconnect();
+    this._moreObserver = null;
+    this._moreUpdate = null;
     this._navResolve?.(true);
     this._navResolve = null;
     this._unloadGuard(false);
@@ -250,6 +253,7 @@ export class CalibrationWizard {
       this._actionsSignature = null;
       this._actionIds = null;
       this._pickerHtml = null;
+      this._watchMore();
       if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
       if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
     }
@@ -258,9 +262,29 @@ export class CalibrationWizard {
 
   _engineHost() { return this._engine; }
 
+  /**
+   * On the phone the content scrolls above a fixed action bar: a fade over the bar says there is more below, only
+   * while there really is (it goes at the end of the scroll; on the wide layout nothing scrolls, so it never shows).
+   */
+  _watchMore() {
+    const main = this._frame?.querySelector(".wiz-main"), actions = this._frame?.querySelector(".wiz-actions");
+    if (!main || !actions) return;
+    const update = () => actions.classList.toggle("has-more", main.scrollHeight - main.scrollTop - main.clientHeight > 1);
+    main.addEventListener("scroll", update, { passive: true });
+    this._moreObserver?.disconnect();
+    if (typeof ResizeObserver === "function") {
+      this._moreObserver = new ResizeObserver(update);
+      this._moreObserver.observe(main);
+      for (const child of main.children) this._moreObserver.observe(child);
+    }
+    this._moreUpdate = update;
+    queueMicrotask(update);
+  }
+
   /** Whatever changes within one screen: stepper, stopwatch, progress, notices, buttons, read-only, A-01's list. */
   _patch(screen) {
     const root = this._frame, { t } = this._context;
+    queueMicrotask(() => this._moreUpdate?.());
     const picker = root.querySelector(".wiz-picker");
     if (picker && screen.picker) {
       const html = this._context.picker?.markup(screen.picker) ?? "";
