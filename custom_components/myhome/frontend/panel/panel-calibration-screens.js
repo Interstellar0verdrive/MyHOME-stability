@@ -559,7 +559,7 @@ function profileBlock(ctx, tx, pathC) {
   // Home Assistant accepts any name of 1–64 characters; two profiles with the same name would be told apart by nothing.
   const wanted = nameValue.trim().toLocaleLowerCase();
   const nameError = !wanted ? t("wiz_T435") : (ctx.profiles || []).some((profile) => profile.name?.trim().toLocaleLowerCase() === wanted) ? t("wiz_T434") : "";
-  const block = { switchLabel: t("wiz_T096"), on, explanation: follows ? tx("wiz_T108", { profile: cover.profile.name }) : t("wiz_T097"), choice,
+  const block = { switchLabel: t(follows ? "wiz_T439" : "wiz_T096"), on, explanation: follows ? tx("wiz_T108", { profile: cover.profile.name }) : t("wiz_T097"), choice,
     name: creating ? { label: t("wiz_T098"), value: nameValue, hint: t("wiz_T433"), error: nameError,
       line: follows ? followLine(t, cover) : tx("wiz_T101", { name: nameValue }),
       valid: !nameError } : null,

@@ -361,6 +361,7 @@ export const translations = {
     wiz_T436: "This cover will follow the new profile. \"{old}\" will be left with no cover following it; you can delete it from the Profiles tab.",
     wiz_T437: "This cover will follow the new profile. \"{old}\" stays with the other {count} covers.",
     wiz_T438: "This cover will follow the new profile. \"{old}\" stays with the other cover.",
+    wiz_T439: "Also save as a reusable profile, or update the existing one",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1186,6 +1187,7 @@ export const translations = {
     wiz_T436: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà senza tapparelle: potrai eliminarlo dalla scheda Profili.",
     wiz_T437: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà alle altre {count} tapparelle.",
     wiz_T438: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà all'altra tapparella.",
+    wiz_T439: "Salva anche come profilo riusabile, o aggiorna quello esistente",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

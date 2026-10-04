@@ -1521,6 +1521,9 @@ test("counts of zero and one use their own forms", () => {
   assert.equal(a21d(["Sala 2", "Sala 3"]).name.line, "Questa tapparella seguirà il nuovo profilo. «alte» resterà alle altre 2 tapparelle.");
   const update = buildScreen({ t, language: "it", stage: "session", path: "A", cover: cover(["Sala 3"]), view, local: { saveProfile: true, saveChoice: "update" } }).profileBlock;
   assert.equal(update.name, null, "updating the profile: no name and no sentence");
+  assert.equal(update.switchLabel, "Salva anche come profilo riusabile, o aggiorna quello esistente", "the switch says it can also update");
+  assert.equal(buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2", followers: [], effective: {} }, view, local: {} }).profileBlock.switchLabel,
+    "Salva anche come profilo riusabile", "without a profile the short label");
   assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
   const b01 = (followerNames) => buildScreen({ t, language: "it", stage: "profile", path: "B", cover: cover([]), local: {},
     profiles: [{ id: "p", name: "alte", followers: followerNames.length, followerNames, measuredOn: "Sala 1" }] }).choice.options[0];
