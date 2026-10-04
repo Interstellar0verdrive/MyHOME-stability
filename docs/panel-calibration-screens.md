@@ -109,8 +109,8 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-20 | `reading` · `half_close` | T087, T088, `calReadingRange` | `reading`, `repeat` |
 | A-30 / A-31 | `check`: briefing, run, `reading` (only if a session reaches a check; the wizard offers none) | T027, T086; T138, T139, T123, T051, T033 | `next`, Stop; `reading` (0.1 cm to the travel), `repeat` |
 | A-21 / A-21c / A-21d | `review` | T091, T092/T107, T093–T106, T108–T112, T280, T281/T289, `wizTable*`, `wizTechnical` | `save` (`save_mode: "new"`, `name`) |
-| A-22…A-33 | preview `refine`, opened from the tab's *Fine-tune* | T113–T152 | nothing (preview) |
-| A-34 | after `saved` | T153–T158; after a real save the body adds T319 as its second paragraph and *Continue with fine-tuning* (T103) is the primary action, then *Calibrate another*, *Open the roller shutter page*, *Close* (red text); the stepper leaves *Fine-tuning (optional)* unticked | nothing; *Continue with fine-tuning* opens path C on the same cover at C-01 |
+| A-22…A-33 | preview `refine`, opened by A-34's *Continue with fine-tuning* on the values just saved (the tab's *Fine-tune* opens C-01, C-02 instead) | T113–T152 | nothing (preview) |
+| A-34 | after `saved` | T153–T158; after a real save the body adds T319 as its second paragraph and *Continue with fine-tuning* (T103) is the primary action, then *Calibrate another*, *Open the roller shutter page*, *Close* (red text); the stepper leaves *Fine-tuning (optional)* unticked | nothing; *Continue with fine-tuning* opens A-22 at once (same wizard, stepper at Fine-tuning) |
 
 The intermediate readings (A-18, A-20) use the session's `reading_range`: the hint gives the heights the fit
 accepts, shown inside their true ends (`calReadingRange`, the text of the profile dialog), a value outside it is
@@ -122,9 +122,8 @@ Home Assistant stops in the same way, is shown alike.
 The summary has one **Save** and the switch *Also save as reusable profile*: on for a first cover, off when the cover
 already follows a profile; on with a followed profile offers *Create a new profile* (default) or *Update «…»*. Today a
 `geometry` session saves only as a new profile, so saving on the cover only or updating a shared profile shows
-`wizSaveUnavailable` and keeps Save disabled. The summary only saves: *Continue with fine-tuning* (T103, note T319) is
-on A-34 once the base calibration is saved, and opens path C on the same cover from C-01, which reads the cover's
-values again (the tab passes its covers as a function, so the values just written are shown).
+`wizSaveUnavailable` and keeps Save disabled. The summary only saves: *Continue with fine-tuning* (T103) is
+on A-34 once the base calibration is saved, and opens the fine-tuning A-22…A-34 at once on the values just saved.
 
 ## Path B — like a cover already measured (preview)
 

@@ -95,7 +95,8 @@ export class CalibrationWizard {
     // Where the way back ends: A-01 from the tab's generic button, A-02 from a cover's own Measure.
     this._local.entry = this._local.stage;
     this._render();
-    if (start === "refine" && item) this._startRefine(this._baseFromCover(item));
+    // The tab's Fine-tune asks first what is wrong (C-01, C-02); A-34's "Continue with fine-tuning" goes straight to A-22.
+    if (start === "refine" && item) { Object.assign(this._local, { stage: "current", path: "C", entry: "current" }); this._render(); }
     else if (start === "resume" && session) this._resume(session, item);
     this._render();
   }
@@ -494,7 +495,7 @@ export class CalibrationWizard {
   /** One choice back, before any session: what was chosen stays chosen; from the first screen, back to the list. */
   _back() {
     const local = this._local;
-    const to = { choose: null, path: local.entry === "path" ? null : "choose", profile: "path", current: "path", case: "current",
+    const to = { choose: null, path: local.entry === "path" ? null : "choose", profile: "path", current: local.entry === "current" ? null : "path", case: "current",
       before: local.path === "A" ? "path" : local.path === "B" ? "profile" : "case" }[local.stage];
     if (to === undefined) return;
     if (to === null) { this._finish(); return; }
@@ -603,19 +604,20 @@ export class CalibrationWizard {
   }
 
   /**
-   * "Continue with fine-tuning" on A-34: the base calibration is already saved, so fine-tuning is path C on the
-   * same cover, from C-01 (what it uses now, read again from the tab). `baseSaved` survives the steps of that path:
-   * the end of its preview says the calibration before it was saved (T322).
+   * "Continue with fine-tuning" on A-34: the base calibration is saved, so fine-tuning (A-22…A-34, quarter readings and
+   * the check) starts at once on the values just saved, in the same wizard, the stepper at Fine-tuning. Its end says
+   * that the calibration before it was saved (T322).
    */
   _fineTune() {
-    const local = this._local;
-    if (!this._item()) return;
-    this._dropGateway();
-    Object.assign(local, freshFlags(), { stage: "current", path: "C", scope: null, saved: null, refining: false, base: null, baseSaved: true });
+    const local = this._local, base = local.base;
+    if (!base || !this._item()) return;
+    local.saved = null;
+    local.baseSaved = true;
+    this._startRefine(base);
     this._render();
   }
 
-  /** Fine-tuning from the tab's Fine-tune (A-22…A-34): simulated until the backend offers it (L5c). */
+  /** Fine-tuning A-22…A-34 on `base`: simulated until the backend offers it (L5c). */
   _startRefine(base) {
     const local = this._local;
     this._dropGateway();
