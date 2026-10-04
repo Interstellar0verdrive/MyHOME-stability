@@ -922,7 +922,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-radio-text { display: grid; gap: 2px; min-width: 0; }
 .wiz-radio-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .wiz-recommended { background: var(--panel-accent-soft); color: var(--panel-accent); font-size: 11px; padding: 1px 8px; }
-.wiz-subline { margin: 2px 0 0; font-size: 13px; }
+.wiz-subline { margin: 8px 0 0; }
+.wiz-radio-warning { display: block; margin-top: 6px; }
 .wiz-field { display: grid; gap: 6px; max-width: 320px; }
 .wiz-field input { font-size: 18px; min-height: 52px; }
 .wiz-field input[aria-invalid="true"] { border-color: var(--panel-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-error) 20%, transparent); }

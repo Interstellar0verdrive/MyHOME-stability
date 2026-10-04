@@ -52,14 +52,32 @@ function lowerFirst(text, language) {
   return text ? text[0].toLocaleLowerCase(language) + text.slice(1) : text;
 }
 
-/** A-02's line on the chosen cover: the profile it follows, its calibration, or how many profiles it could follow. */
-function pathContext(t, cover, profiles, language) {
+/** A-02's box on the chosen cover: the profile it follows, its calibration, or that it was never measured. */
+function pathContext(t, cover, language) {
   if (!cover) return "";
   if (cover.profile?.name) return fill(t("wiz_T395"), { profile: cover.profile.name });
   if (cover.status && cover.status !== "to_measure") {
     return fill(t("wiz_T399"), { status: t(`calTabStatus_${cover.status}`).toLocaleLowerCase(language), date: dateText(cover.last, language) || "—" });
   }
-  return profiles === 0 ? t("wiz_T396") : profiles === 1 ? t("wiz_T398") : fill(t("wiz_T397"), { count: profiles });
+  return t("wiz_T418");
+}
+
+/** Profiles whose reference travel is within this share of the cover's saved travel count as "the same size". */
+export const SIMILAR_TRAVEL = 0.05;
+
+/**
+ * A-02's advice. Already calibrated: Ⓒ. Never measured: Ⓑ when a profile's reference travel is within ±5 % of the
+ * cover's saved travel (the closest first), otherwise Ⓐ, with a badge only when no profile exists (with profiles the
+ * user judges the similarity from the list under Ⓑ). The "if unsure" line always names the advised path.
+ */
+export function pathAdvice(cover, profiles = []) {
+  const measured = !!cover?.status && cover.status !== "to_measure";
+  if (measured) return { badge: "C", hint: "C", similar: [] };
+  const travel = cover?.travel_cm;
+  const similar = travel > 0 ? profiles.filter((profile) => profile.referenceTravel > 0 && Math.abs(profile.referenceTravel - travel) <= travel * SIMILAR_TRAVEL)
+    .sort((a, b) => Math.abs(a.referenceTravel - travel) - Math.abs(b.referenceTravel - travel)) : [];
+  if (similar.length) return { badge: "B", hint: "B", similar };
+  return { badge: profiles.length ? null : "A", hint: "A", similar: [] };
 }
 
 /** The wizard's whole state as one screen. */
@@ -101,19 +119,34 @@ export function buildScreen(ctx) {
   }
   if (stage === "path") {
     // A radio list (A-02 Section A) with Continue in the actions; the advised path carries a badge.
-    const profiles = ctx.profiles?.length || 0, measured = cover?.status && cover.status !== "to_measure";
-    const advised = measured ? "C" : profiles ? "B" : "A";
+    const list = ctx.profiles || [], profiles = list.length, measured = !!cover?.status && cover.status !== "to_measure";
+    const advice = pathAdvice(cover, list);
+    const glyph = { A: "Ⓐ", B: "Ⓑ", C: "Ⓒ" };
+    // Under Ⓑ: how many profiles exist, then why it is advised (similar travel) or, on a never measured cover, each
+    // profile with its slats and reference travel so the user can judge the similarity.
+    const describe = (profile) => [profile.name, t(profile.slat == null ? "wiz_T370" : profile.slat > 0 ? "wiz_T368" : "wiz_T369"),
+      ...(profile.referenceTravel > 0 ? [fill(t("wiz_T372"), { cm: n(profile.referenceTravel, 0) })] : [])].join(" · ");
+    const bNote = !profiles ? [t("wiz_T401")] : [profiles === 1 ? t("wiz_T419") : fill(t("wiz_T420"), { count: profiles }),
+      ...(advice.similar.length ? advice.similar.map((profile) => fill(t("wiz_T422"), { profile: profile.name, travel: n(cover.travel_cm, 0), reference: n(profile.referenceTravel, 0) }))
+        : measured ? [] : list.map(describe))];
     const options = [
       { value: "A", label: t("wiz_T017") },
-      { value: "B", label: t("wiz_T018"), disabled: !profiles, note: profiles ? t("wiz_T318") : t("wiz_T401") },
-      { value: "C", label: t("wiz_T019") },
-    ].map((option) => ({ ...option, badge: option.value === advised && !option.disabled ? t("wiz_T400") : "" }));
-    // Preselected on the advised path, Continue is ready; another choice is a tap away.
+      { value: "B", label: t("wiz_T018"), disabled: !profiles, note: bNote },
+      // Fine-tuning corrects values a cover already has: never on a cover never measured.
+      { value: "C", label: t("wiz_T019"), ...(measured ? {} : { disabled: true, note: [t("wiz_T423")] }) },
+    ].map((option) => ({ ...option, badge: option.value === advice.badge && !option.disabled ? t("wiz_T400") : "" }));
+    // Preselected on the badge, Continue is ready; without a badge nothing is chosen and Continue waits.
     const enabled = (value) => options.some((option) => option.value === value && !option.disabled);
-    const chosen = enabled(local.pathChoice) ? local.pathChoice : enabled(advised) ? advised : "";
-    // "If unsure, choose Ⓐ" (the text's last paragraph) is dropped while the advised path is the one chosen.
-    const body = chosen && chosen === advised ? t("wiz_T016").split(/\n\s*\n/).slice(0, -1).join("\n\n") : t("wiz_T016");
-    Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), subline: pathContext(t, cover, profiles, language), body,
+    const chosen = enabled(local.pathChoice) ? local.pathChoice : advice.badge && enabled(advice.badge) ? advice.badge : "";
+    // On a calibrated cover another path than the advised one says what it replaces, under the chosen option.
+    if (measured && chosen && chosen !== advice.badge) {
+      const warning = chosen === "A" ? t("wiz_T415") : chosen === "B" ? t(cover?.profile ? "wiz_T416" : "wiz_T417") : "";
+      const option = options.find((item) => item.value === chosen);
+      if (warning) option.warning = warning;
+    }
+    // The paths' explanation, then always "If unsure, choose …" with the advised path.
+    const body = [...t("wiz_T016").split(/\n\s*\n/).slice(0, -1), fill(t("wiz_T421"), { path: glyph[advice.hint] })].join("\n\n");
+    Object.assign(screen, { code: "A-02", phase: "intro", title: tx("wiz_T015", { name }), subline: pathContext(t, cover, language), body,
       choice: { name: "path", kind: "radio", label: tx("wiz_T015", { name }), legendHidden: true, value: chosen, options },
       actions: [{ id: "path", label: t("wiz_T006"), kind: "primary", disabled: !chosen }] });
     return finish();

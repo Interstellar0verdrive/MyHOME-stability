@@ -135,7 +135,8 @@ export class CalibrationWizard {
   _profiles() {
     const data = this._gatewayData();
     return (data?.profiles || []).map((profile) => ({ id: profile.id, name: profile.name, followers: profile.assigned_to.length,
-      measuredOn: this._originName(profile.provenance?.opening) }));
+      measuredOn: this._originName(profile.provenance?.opening), slat: profile.geometry ? profile.geometry.slat_time_s ?? null : null,
+      referenceTravel: profile.reference_travel_cm ?? null }));
   }
 
   /** Where a profile was measured, by the cover's name in the list (the provenance's name may be its entity id). */
@@ -176,6 +177,9 @@ export class CalibrationWizard {
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
       const info = this._frame.querySelector(".wiz-save-info");
       this._local.saveInfoOpen = info ? info.open : true;
+      // A choice that redraws the screen (a note under the chosen option) keeps the keyboard on that choice.
+      const active = this._root.getRootNode().activeElement;
+      const radio = !codeChanged && active?.type === "radio" && this._frame.contains(active) ? active.name : null;
       this._signature = signature;
       this._renderedCode = screen.code;
       this._root.dataset.code = screen.code;
@@ -193,7 +197,7 @@ export class CalibrationWizard {
           <nav class="wiz-steps" aria-label="${esc(t("wiz_T274"))}"></nav>
           <div class="wiz-main">
             ${screen.preview ? `<p class="wiz-preview" role="note"><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon><span>${esc(t("wizPreview"))}</span></p>` : ""}
-            <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>${screen.subline ? `<p class="muted wiz-subline">${esc(screen.subline)}</p>` : ""}
+            <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>${screen.subline ? `<p class="cal-note wiz-subline">${esc(screen.subline)}</p>` : ""}
             <div class="wiz-stopwatch" hidden><span class="wiz-stopwatch-label"></span><span class="wiz-stopwatch-value"></span></div>
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
@@ -228,6 +232,7 @@ export class CalibrationWizard {
             <button type="button" class="primary" data-wiz="nav-stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
       this._actionsSignature = null;
       this._pickerHtml = null;
+      if (radio) this._frame.querySelector(`.wiz-radios input[name="${radio}"]:checked`)?.focus({ preventScroll: true });
       if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
     }
     this._patch(screen);
@@ -341,7 +346,8 @@ export class CalibrationWizard {
   _choiceMarkup(choice) {
     return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.options.map((option) =>
       `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${option.plain ? esc(option.label) : inline(option.label)}${option.badge
-        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${option.note ? `<small class="muted">${esc(option.note)}</small>` : ""}</span></label>`).join("")}</fieldset>`;
+        ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${[].concat(option.note || []).map((line) => `<small class="muted">${esc(line)}</small>`).join("")}${option.warning
+        ? `<span class="cal-note is-warning wiz-radio-warning">${esc(option.warning)}</span>` : ""}</span></label>`).join("")}</fieldset>`;
   }
 
   _fieldMarkup(field) {

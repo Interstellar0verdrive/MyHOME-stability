@@ -97,14 +97,17 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
     [["C", "Recommended"]], "a calibrated cover: C is advised");
   assert.deepEqual(radios.filter((input) => input.checked).map((input) => input.value), ["C"], "the advised path is preselected");
   assert.equal(button("path").disabled, false, "Continue is ready on the advised path");
-  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /If unsure/, "no fallback advice while the advised path is chosen");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓒ\.$/, "the last line names the advised path");
+  assert.ok(wiz().querySelector(".wiz-subline").classList.contains("cal-note"), "the cover's context is an information box");
   const sent = () => backend.calls.length + backend.subscriptions.length;
   const before = sent();
   const a = radios.find((input) => input.value === "A");
   a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(code(), "A-02", "ticking a radio only changes the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓐ/, "away from the advice, the fallback line is back");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓒ\.$/, "the advice does not follow the choice");
+  assert.equal(wiz().querySelector('input[name="path"][value="A"]').closest(".wiz-radio").querySelector(".wiz-radio-warning.is-warning").textContent,
+    "A full new measurement replaces this roller shutter's values in use. To adjust them without starting over, choose Ⓒ.", "a warning under the chosen path");
   assert.equal(sent(), before, "choosing a path sends nothing");
   await choosePath("A");
   assert.equal(code(), "A-03");
@@ -126,7 +129,7 @@ test("the header's back arrow goes one choice back before any session, keeping w
   assert.equal(code(), "A-01");
   assert.equal(back().getAttribute("aria-label"), "Back");
   assert.equal(back().nextElementSibling.className, "wiz-head-text", "left of the cover's name");
-  await pickCover("cover.living_one"); await press("choose");
+  await pickCover("cover.kitchen_two"); await press("choose");
   await choosePath("C");
   assert.equal(code(), "C-01");
   await press("current");
@@ -147,7 +150,7 @@ test("the header's back arrow goes one choice back before any session, keeping w
   assert.deepEqual([code(), wiz().querySelector('input[name="slats"]:checked').value], ["A-03", "no"], "the slat choice too");
   back().click(); await tick(); back().click(); await tick();
   assert.equal(code(), "A-01");
-  assert.equal(wiz().querySelector('.wiz-picker input[name="cover"]:checked').value, JSON.stringify(["one", "cover.living_one"]), "the cover stays chosen");
+  assert.equal(wiz().querySelector('.wiz-picker input[name="cover"]:checked').value, JSON.stringify(["one", "cover.kitchen_two"]), "the cover stays chosen");
   back().click(); await tick();
   assert.equal(wiz(), null, "from the first screen, back to the list");
   assert.ok(tab().querySelector(".cal-list"));
@@ -1251,9 +1254,7 @@ test("a reopened slat and roll session of a cover that follows a profile is show
 
 test("the preview is announced before it starts and its end never says that something was saved", async () => {
   const t = (key) => translations.it[key] || key;
-  const screen = buildScreen({ t, language: "it", stage: "path", path: "A", profiles: [{ id: "tall" }], cover: { name: "Cucina 2" } });
-  assert.equal(screen.choice.options.find((option) => option.value === "B").note,
-    "Anteprima: questo percorso non è ancora collegato al backend, nessun movimento e nessun salvataggio.");
+  // Under Ⓑ on A-02 the note now counts the profiles (R4-8); the preview is said where Ⓑ starts (B-02).
   assert.equal(buildScreen({ t, stage: "before", path: "B", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
   assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "points_only", cover: { name: "Cucina 2" } }).actions[0].note, translations.it.wiz_T318);
   assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Cucina 2" } }).actions[0].note, undefined, "times only is live");
@@ -1279,33 +1280,48 @@ test("the preview is announced before it starts and its end never says that some
   await pickCover();
   await press("choose");
   const b = wiz().querySelector('input[name="path"][value="B"]').closest(".wiz-radio");
-  assert.equal(b.querySelector("small").textContent, translations.it.wiz_T318);
+  assert.equal(b.querySelector("small").textContent, "1 profilo disponibile", "under Ⓑ, the profiles available");
 });
 
 test("A-02 advises a path from the cover and the gateway's profiles, and preselects it", () => {
   const t = (key) => translations.en[key] || key;
   const advice = (screen) => screen.choice.options.filter((option) => option.badge).map((option) => [option.value, option.badge]);
-  // Never measured, no profile on the gateway: A is advised, B cannot be chosen and says why.
+  const note = (screen) => screen.choice.options.find((option) => option.value === "B").note;
+  const tall = { id: "tall", name: "tall_two_leaf", slat: 4.4, referenceTravel: 198 }, low = { id: "low", name: "low_one_leaf", slat: 0, referenceTravel: 112 };
+  // Never measured, no profile on the gateway: Ⓐ advised and preselected, Ⓑ cannot be chosen and says why.
   const none = buildScreen({ t, stage: "path", profiles: [], cover: { name: "Kitchen 2", status: "to_measure" } });
   assert.deepEqual(advice(none), [["A", "Recommended"]]);
-  const b = none.choice.options.find((option) => option.value === "B");
-  assert.equal(b.disabled, true);
-  assert.equal(b.note, translations.en.wiz_T401);
+  assert.equal(none.choice.options.find((option) => option.value === "B").disabled, true);
+  assert.deepEqual(note(none), [translations.en.wiz_T401]);
   assert.equal(none.choice.value, "A");
-  assert.equal(none.actions[0].id, "path");
-  assert.equal(none.actions[0].label, "Continue");
   assert.equal(none.actions[0].disabled, false);
-  assert.equal(none.subline, "Never measured · no profile available");
-  assert.doesNotMatch(none.body, /If unsure/);
-  // Never measured, profiles available: B is advised; a choice of A brings the fallback line back.
-  const some = buildScreen({ t, stage: "path", profiles: [{ id: "tall" }, { id: "short" }], cover: { name: "Kitchen 2", status: "to_measure" } });
-  assert.deepEqual(advice(some), [["B", "Recommended"]]);
-  assert.equal(some.choice.value, "B");
-  assert.equal(some.subline, "Never measured · 2 profiles available");
-  const picked = buildScreen({ t, stage: "path", local: { pathChoice: "A" }, profiles: [{ id: "tall" }], cover: { name: "Kitchen 2", status: "to_measure" } });
-  assert.equal(picked.choice.value, "A");
-  assert.equal(picked.subline, "Never measured · 1 profile available");
-  assert.match(picked.body, /If unsure, choose Ⓐ\.$/);
+  assert.equal(none.subline, "Never measured", "the context says only that");
+  assert.match(none.body, /If unsure, choose Ⓐ\.$/);
+  const c = none.choice.options.find((option) => option.value === "C");
+  assert.deepEqual([c.disabled, c.note], [true, ["Measure the roller shutter first."]], "no fine-tuning on a cover never measured");
+  // Never measured, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
+  const some = buildScreen({ t, stage: "path", profiles: [tall, low], cover: { name: "Kitchen 2", status: "to_measure" } });
+  assert.deepEqual(advice(some), []);
+  assert.equal(some.choice.value, "");
+  assert.equal(some.actions[0].disabled, true, "Continue waits for a choice");
+  assert.deepEqual(note(some), ["2 profiles available", "tall_two_leaf · With slats · Reference travel 198 cm", "low_one_leaf · Without slats · Reference travel 112 cm"]);
+  assert.match(some.body, /If unsure, choose Ⓐ\.$/);
+  assert.deepEqual(note(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure" } }))[0], "1 profile available");
+  // A saved travel within 5 % of a profile's reference: Ⓑ advised, preselected and explained (closest first).
+  const close = { id: "close", name: "near", slat: 0, referenceTravel: 109 };
+  const similar = buildScreen({ t, stage: "path", profiles: [tall, low, close], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } });
+  assert.deepEqual([advice(similar), similar.choice.value], [[["B", "Recommended"]], "B"]);
+  assert.deepEqual(note(similar), ["3 profiles available", 'Travel similar to the profile "near" (110 cm vs 109 cm)', 'Travel similar to the profile "low_one_leaf" (110 cm vs 112 cm)']);
+  assert.match(similar.body, /If unsure, choose Ⓑ\.$/);
+  assert.deepEqual(advice(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } })), [], "198 cm is not similar");
+  // Already calibrated: Ⓒ; another choice gets its warning under it (Ⓑ: "a different profile" only when one is followed).
+  const calibrated = (local, profile) => buildScreen({ t, stage: "path", local, profiles: [tall], cover: { name: "Kitchen 2", status: "rolls", last: "2026-10-01T09:00:00+00:00", profile } });
+  assert.deepEqual([advice(calibrated({})), calibrated({}).choice.value, calibrated({}).subline], [[["C", "Recommended"]], "C", "Already calibrated (times and roll, Oct 1, 2026)"]);
+  assert.deepEqual(note(calibrated({})), ["1 profile available"]);
+  assert.equal(calibrated({}).choice.options.some((option) => option.warning), false);
+  assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).choice.options.find((option) => option.value === "B").warning, translations.en.wiz_T416);
+  assert.equal(calibrated({ pathChoice: "B" }).choice.options.find((option) => option.value === "B").warning, translations.en.wiz_T417);
+  assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).subline, 'Follows the profile "tall_two_leaf"');
 });
 
 test("counts of zero and one use their own forms", () => {
