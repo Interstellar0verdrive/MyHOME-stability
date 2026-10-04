@@ -379,8 +379,9 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(wiz().querySelector('[data-wiz="refine"]').hasAttribute("aria-describedby"), false);
   const paragraphs = [...wiz().querySelectorAll(".wiz-body p")].map((item) => item.textContent);
   assert.equal(paragraphs.length, 2, "the saved text, then what fine-tuning does");
+  assert.equal(wiz().querySelectorAll(".wiz-body p")[1].querySelector("strong").textContent, "Want to fine-tune the calibration?", "a bold lead-in");
   assert.equal(paragraphs[1],
-    "Four tape readings at a quarter and three quarters of the travel, plus a final check, make the position estimate more precise along the whole travel. About 4 minutes; the roller shutter moves.");
+    "Want to fine-tune the calibration? Four tape readings at a quarter and three quarters of the travel, plus a final check, make the position estimate more precise along the whole travel. About 4 minutes; the roller shutter moves.");
   const finetune = wiz().querySelector('.wiz-steps li[data-step-state]:last-of-type');
   assert.deepEqual([finetune.querySelector(".wiz-step-label").textContent, finetune.dataset.stepState], ["Fine-tuning (optional)", "future"], "still ahead, not ticked");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ol > li")].slice(0, -1).map((item) => item.dataset.stepState), Array(6).fill("done"));
@@ -957,7 +958,7 @@ test("the preview is announced before it starts and its end never says that some
   assert.deepEqual(review.actions.map((action) => action.id), ["save"], "the summary only saves");
   const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
-  assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\nQuattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, rendono la stima della posizione più precisa lungo tutta la corsa. Circa 4 minuti; la tapparella si muove.`,
+  assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, rendono la stima della posizione più precisa lungo tutta la corsa. Circa 4 minuti; la tapparella si muove.`,
     "T319 is the body's second paragraph");
   assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);
