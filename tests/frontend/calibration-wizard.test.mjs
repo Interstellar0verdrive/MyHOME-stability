@@ -1008,6 +1008,143 @@ test("A-04 lasts the whole positioning; A-05 then offers the end stop and T033 a
   assert.deepEqual(run("home", "C", { read_only: true, owner: false, owner_present: true, motor_stopped: true }).actions, []);
 });
 
+test("Abandon and the X always ask first while a session is open, on every step, preview included", async () => {
+  const { backend, wiz, code, press, type, startFor } = await mount();
+  const asks = async (label) => {
+    for (const selector of ['.wiz-head [data-wiz="exit"].wiz-discard', '.wiz-head .wiz-x']) {
+      const button = wiz().querySelector(selector);
+      assert.ok(button, `${selector} on ${label}`);
+      button.click(); await tick();
+      const dialog = wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)");
+      assert.equal(dialog.hidden, false, `${selector} asks on ${label}`);
+      dialog.querySelector('[data-wiz="stay"]').click(); await tick();
+      assert.ok(wiz(), `still open on ${label}`);
+    }
+  };
+  await startFor("cover.living_one");
+  await press("begin");
+  await asks("A-04 before the first view arrives");
+  await tick();
+  await asks(code());
+  backend.started(); backend.tick(30); backend.emit(); await tick();
+  await asks(code());
+  await press("endpoint"); await asks("the stop after A-05"); backend.stopped(); await tick();
+  await asks(code());
+  await press("ack:lift"); await asks(code());
+  await press("next"); await move(backend, { seconds: 4 }); await asks(code());
+  await press("lift"); backend.stopped(); await tick(); await asks(code());
+  await type("3"); await asks(code());
+  // A problem Home Assistant reports as a step (L2) keeps the session open: Abandon still asks.
+  backend.session.problem = { reason: "unexpected_stop" }; backend.emit(); await tick();
+  assert.equal(code(), "S-01");
+  await asks("S-01 as a step");
+  delete backend.session.problem; backend.emit(); await tick();
+  // A preview (path B) asks too.
+  const preview = await mount({ stageMs: 30 });
+  await preview.startFor("cover.living_one", "B");
+  await preview.press("profile"); await preview.press("begin"); await settle();
+  for (const selector of ['.wiz-head [data-wiz="exit"].wiz-discard', '.wiz-head .wiz-x']) {
+    preview.wiz().querySelector(selector).click(); await tick();
+    assert.equal(preview.wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)").hidden, false, `${selector} asks in the preview (${preview.code()})`);
+    preview.wiz().querySelector('[data-wiz="stay"]').click(); await tick();
+  }
+});
+
+test("a reopened session asks before leaving once this tab owns it again", async () => {
+  const session = { entry_id: "one", entity_id: "cover.living_one", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
+    phase: "briefing", step: "lift", reason: null, values: {}, samples: {}, readings: {}, geometry: {}, travel_cm: null, stop_requested: false,
+    slats: true, lift_attempts: 1, still_resting: false, gap_warning: false, touching_cm: 1, max_gap_cm: 20, gap_warn_cm: 10,
+    saved_travel_cm: 195, expected_cm: null, can_repeat: false, save_modes: ["new"], reading_kind: "lift" };
+  const { tab, wiz, code } = await mount({ session, owner: false });
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  assert.ok(wiz().querySelector(".wiz-readonly"), "a reader first");
+  wiz().querySelector(".wiz-head .wiz-x").click(); await tick();
+  assert.equal(wiz(), null, "a reader leaves nothing behind: no question");
+  tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+  wiz().querySelector('[data-wiz="take"]').click(); await tick(6);
+  if (wiz().querySelector('[data-wiz="take"]')) { wiz().querySelector('[data-wiz="take"]').click(); await tick(6); }
+  assert.equal(wiz().querySelector(".wiz-readonly"), null, `the owner again on ${code()}`);
+  wiz().querySelector(".wiz-head .wiz-x").click(); await tick();
+  assert.equal(wiz().querySelector(".wiz-dialog:not(.wiz-nav-dialog)").hidden, false, "the owner is asked");
+});
+
+test("leaving the tab with a live session open asks: continue, leave and resume later, or leave without saving", async () => {
+  const { panel, root, backend, tab, wiz, code, press, startFor } = await mount();
+  const view = (id) => root.querySelector(`[data-action="cover-view"][data-id="${id}"]`);
+  const nav = () => wiz()?.querySelector(".wiz-nav-dialog");
+  // Before any session nothing is asked.
+  tab().querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+  assert.equal(panel._beforeLeave?.(), null, "A-01: nothing to ask");
+  view("devices").click(); await tick();
+  assert.equal(panel._coverView, "devices");
+  view("calibration").click(); await tick(6);
+  await startFor("cover.living_one");
+  const unloads = [];
+  const add = window.addEventListener.bind(window), remove = window.removeEventListener.bind(window);
+  window.addEventListener = (type, handler, ...rest) => { if (type === "beforeunload") unloads.push(handler); return add(type, handler, ...rest); };
+  window.removeEventListener = (type, handler, ...rest) => { if (type === "beforeunload") unloads.splice(unloads.indexOf(handler), 1); return remove(type, handler, ...rest); };
+  try {
+    await press("begin"); await tick();
+    assert.equal(code(), "A-04");
+    assert.equal(unloads.length, 1, "the browser warns before the page closes while the session is open");
+    const event = new window.Event("beforeunload", { cancelable: true });
+    unloads[0](event);
+    assert.equal(event.defaultPrevented, true);
+    // Another cover view: asked first, and nothing moves until the answer.
+    view("devices").click(); await tick();
+    assert.equal(panel._coverView, "calibration");
+    assert.equal(nav().hidden, false);
+    assert.equal(nav().querySelector("h4").textContent, "Calibration in progress");
+    assert.equal(nav().querySelector("#wiz-nav-body").textContent,
+      "If you leave now, the calibration stays open for 30 minutes and you can resume it from the Calibration tab. If you cancel it, the measurements taken so far are lost.");
+    assert.deepEqual([...nav().querySelectorAll("button")].map((button) => [button.dataset.wiz, button.textContent, button.className]),
+      [["nav-discard", "Leave without saving", "wiz-leave"], ["nav-later", "Leave and resume later", ""], ["nav-stay", "Continue calibration", "primary"]]);
+    assert.equal(root.activeElement, nav().querySelector('[data-wiz="nav-stay"]'));
+    nav().querySelector('[data-wiz="nav-stay"]').click(); await tick();
+    assert.equal(panel._coverView, "calibration", "Continue keeps the wizard");
+    assert.equal(nav().hidden, true);
+    assert.equal(code(), "A-04");
+    // The Bus monitor tab, then Escape: stays too.
+    root.querySelector('[data-view="bus"]').click(); await tick();
+    nav().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await tick();
+    assert.equal(panel._view, "entities");
+    // Leave and resume later: the panel moves on, the session stays open in Home Assistant.
+    view("devices").click(); await tick();
+    nav().querySelector('[data-wiz="nav-later"]').click(); await tick(4);
+    assert.equal(panel._coverView, "devices");
+    assert.equal(backend.calls.some((message) => message.action === "cancel"), false, "nothing cancelled");
+    assert.equal(unloads.length, 0, "the browser's warning leaves with the wizard");
+    assert.notEqual(backend.session.phase, "cancelled");
+    // Back in the tab: the cover in progress is first, with Open session as its action.
+    view("calibration").click(); await tick(8);
+    const first = tab().querySelector(".cal-row");
+    assert.equal(first.dataset.entity, "cover.living_one", "the cover in progress sits on top");
+    assert.equal(first.querySelector(".cal-badge").dataset.status, "running");
+    assert.equal(first.querySelector('[data-action="cal-tab-session"]').textContent, "Open session");
+    // Reopened, taken back, and left without saving: Cancel reaches Home Assistant first.
+    first.querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
+    for (let i = 0; i < 2 && wiz().querySelector('[data-wiz="take"]'); i++) { wiz().querySelector('[data-wiz="take"]').click(); await tick(6); }
+    view("profiles").click(); await tick();
+    assert.equal(nav().hidden, false);
+    nav().querySelector('[data-wiz="nav-discard"]').click(); await tick(8);
+    assert.equal(backend.calls.filter((message) => message.action === "cancel").length, 1);
+    assert.equal(panel._coverView, "profiles");
+  } finally {
+    window.addEventListener = add; window.removeEventListener = remove;
+  }
+});
+
+test("the time it stays open comes from Home Assistant's lease: 10 minutes after a movement", async () => {
+  const { backend, wiz, press, startFor, panel } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await tick();
+  Object.assign(backend.session, { recovery_seconds: 600 }); backend.emit(); await tick();
+  const answer = panel._beforeLeave();
+  assert.match(wiz().querySelector("#wiz-nav-body").textContent, /stays open for 10 minutes/);
+  wiz().querySelector('[data-wiz="nav-stay"]').click();
+  assert.equal(await answer, false);
+});
+
 test("a subscription replayed after a reconnection never starts a movement, even on a step that would continue by itself", async () => {
   const { backend, wiz, code, press, type, actions, startFor } = await mount();
   const callbacks = [];

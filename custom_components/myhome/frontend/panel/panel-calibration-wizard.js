@@ -27,6 +27,8 @@ const STAGES_BEFORE_SESSION = ["choose", "path", "profile", "current", "case", "
  * Stop is never held back.
  */
 export const CONFIRM_GUARD_MS = 700;
+/** Home Assistant keeps a session open this long for its owner at rest (IDLE_LEASE_SECONDS) when the view does not say. */
+const IDLE_LEASE_SECONDS = 1800;
 // Phases a press goes through before the cover stops again: the press that started them still counts.
 const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geometry_wait_stop"];
 
@@ -50,6 +52,9 @@ export class CalibrationWizard {
   }
 
   close() {
+    this._navResolve?.(true);
+    this._navResolve = null;
+    this._unloadGuard(false);
     this._generation++;
     clearInterval(this._ticker);
     clearTimeout(this._guardTimer);
@@ -215,7 +220,12 @@ export class CalibrationWizard {
           <h4 id="wiz-dialog-title">${esc(t("wiz_T267"))}</h4><p id="wiz-dialog-body"></p>
           <div class="actions"><button type="button" class="wiz-leave" data-wiz="leave">${esc(t("wiz_T270"))}</button>
             <button type="button" class="wiz-dialog-stop" data-wiz="stop" hidden>${esc(t("wiz_T028"))}</button>
-            <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
+            <button type="button" class="primary" data-wiz="stay">${esc(t("wiz_T269"))}</button></div></div></div>
+        <div class="wiz-dialog wiz-nav-dialog" role="alertdialog" aria-modal="true" aria-labelledby="wiz-nav-title" aria-describedby="wiz-nav-body" hidden><div class="wiz-dialog-card">
+          <h4 id="wiz-nav-title">${esc(t("wiz_T408"))}</h4><p id="wiz-nav-body"></p>
+          <div class="actions"><button type="button" class="wiz-leave" data-wiz="nav-discard">${esc(t("wiz_T411"))}</button>
+            <button type="button" data-wiz="nav-later">${esc(t("wiz_T410"))}</button>
+            <button type="button" class="primary" data-wiz="nav-stay">${esc(t("wiz_T269"))}</button></div></div></div>`;
       this._actionsSignature = null;
       this._pickerHtml = null;
       if (codeChanged) queueMicrotask(() => this._frame?.querySelector(".wiz-title")?.focus({ preventScroll: false }));
@@ -364,12 +374,13 @@ export class CalibrationWizard {
   // ---------- events ----------
 
   _keydown(event) {
-    const dialog = this._frame.querySelector(".wiz-dialog"), sheet = this._frame.querySelector(".wiz-sheet");
-    const open = !dialog.hidden ? dialog : !sheet.hidden ? sheet : null;
+    const dialog = this._frame.querySelector(".wiz-dialog:not([hidden])"), sheet = this._frame.querySelector(".wiz-sheet");
+    const open = dialog || (!sheet.hidden ? sheet : null);
     if (!open) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      if (open === dialog) this._closeDialog();
+      if (open === dialog && dialog.classList.contains("wiz-nav-dialog")) this._navAnswer(false);
+      else if (open === dialog) this._closeDialog();
       else { sheet.hidden = true; this._frame.querySelector('[data-wiz="steps"]').focus(); }
     } else if (event.key === "Tab") {
       // A modal keeps the keyboard inside it, as the native dialog would.
@@ -425,6 +436,9 @@ export class CalibrationWizard {
     if (id.startsWith("pick-filter:")) { local.pickFilter = id.slice(12); return this._render(); }
     if (id.startsWith("pick-sort:")) { this._context.picker?.sort(id.slice(10)); return this._render(); }
     if (id === "stay") { this._closeDialog(); return; }
+    if (id === "nav-stay") { this._navAnswer(false); return; }
+    if (id === "nav-later") { this._navAnswer(true); return; }
+    if (id === "nav-discard") { this._navDiscard(); return; }
     if (id === "leave") { this._leave(); return; }
     if (id === "close") { this._finish(); return; }
     if (id === "choose") { if (!local.coverPicked) return; local.pathChoice = null; local.stage = "path"; return this._render(); }
@@ -617,6 +631,7 @@ export class CalibrationWizard {
     if (view?.preview && view.phase === "saved") { this._saved(view.saved); return; }
     if (view?.preview && view.phase === "cancelled") { this._finish(); return; }
     this._autoNext(view);
+    this._unloadGuard(this._liveOpen());
     this._render();
   }
 
@@ -671,8 +686,68 @@ export class CalibrationWizard {
 
   // ---------- leaving ----------
 
+  /** A live session this tab owns and that is still open: leaving the tab leaves it open in Home Assistant. */
+  _liveOpen() {
+    return !!this._gateway && !this._gateway.preview && this._sessionOpen() && !!this._gateway.view?.owner;
+  }
+
+  /**
+   * The panel asks before it moves away from the tab (another tab, gateway, category, filter): with a live session
+   * open, "Calibration in progress" offers to stay, to leave it open and resume it later, or to cancel it. Returns
+   * null when there is nothing to ask, otherwise a promise of whether the panel may leave.
+   */
+  beforeLeave() {
+    if (!this._root || !this._liveOpen()) return null;
+    if (this._navResolve) return this._navPromise;
+    const dialog = this._frame.querySelector(".wiz-nav-dialog"), { t } = this._context;
+    // How long Home Assistant keeps it open for its owner (30 minutes at rest, 10 after a movement).
+    const seconds = this._gateway.view?.recovery_seconds;
+    const minutes = Math.max(1, Math.round((Number.isFinite(seconds) ? seconds : IDLE_LEASE_SECONDS) / 60));
+    dialog.querySelector("#wiz-nav-body").textContent = text.fill(t("wiz_T409"), { minutes });
+    this._closeDialog(false);
+    dialog.hidden = false;
+    this._root.classList.add("has-dialog");
+    dialog.querySelector('[data-wiz="nav-stay"]').focus();
+    this._navPromise = new Promise((resolve) => { this._navResolve = resolve; });
+    return this._navPromise;
+  }
+
+  _navAnswer(leave) {
+    const resolve = this._navResolve;
+    this._navResolve = null;
+    const dialog = this._frame?.querySelector(".wiz-nav-dialog");
+    if (dialog && !dialog.hidden) {
+      dialog.hidden = true;
+      this._root.classList.remove("has-dialog");
+      if (!leave) { this._render(); this._frame.querySelector(".wiz-actions .wiz-action.primary:not(:disabled)")?.focus(); }
+    }
+    resolve?.(leave);
+  }
+
+  /** "Leave without saving": Cancel must reach Home Assistant before the panel moves on. */
+  async _navDiscard() {
+    const gateway = this._gateway;
+    if (!gateway) { this._navAnswer(true); return; }
+    await gateway.cancel();
+    if (this._gateway === gateway && gateway.status.cancelPending) { this._navAnswer(false); this._render(); return; }
+    this._navAnswer(true);
+  }
+
+  /** The browser's own warning before the page closes or reloads while this tab owns an open session. */
+  _unloadGuard(on) {
+    if (on && !this._unload) {
+      this._unload = (event) => { event.preventDefault(); event.returnValue = ""; };
+      window.addEventListener("beforeunload", this._unload);
+    } else if (!on && this._unload) {
+      window.removeEventListener("beforeunload", this._unload);
+      this._unload = null;
+    }
+  }
+
   _sessionOpen() {
     const view = this._gateway?.view;
+    // A live start still waiting for its first view may already have created the session: leaving it asks too.
+    if (this._gateway && !this._gateway.preview && !view && this._local.stage === "session" && !this._gateway.status.error) return true;
     return !!view && !["interrupted", "cancelled", "saved"].includes(view.phase) && !(view.read_only && !view.preview);
   }
 
@@ -687,8 +762,8 @@ export class CalibrationWizard {
   }
 
   _closeDialog(focus = true) {
-    const dialog = this._frame?.querySelector(".wiz-dialog");
-    if (!dialog || dialog.hidden) return;
+    const dialog = this._frame?.querySelector(".wiz-dialog:not([hidden])");
+    if (!dialog) return;
     dialog.hidden = true;
     this._root.classList.remove("has-dialog");
     this._render();

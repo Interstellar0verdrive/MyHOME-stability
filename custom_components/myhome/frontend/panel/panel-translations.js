@@ -330,6 +330,10 @@ export const translations = {
     wiz_T406: "Unlink profile",
     wiz_T407: "Profile unlinked from \"{cover}\".",
     wiz_T403: "Back",
+    wiz_T408: "Calibration in progress",
+    wiz_T409: "If you leave now, the calibration stays open for {minutes} minutes and you can resume it from the Calibration tab. If you cancel it, the measurements taken so far are lost.",
+    wiz_T410: "Leave and resume later",
+    wiz_T411: "Leave without saving",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1124,6 +1128,10 @@ export const translations = {
     wiz_T406: "Scollega il profilo",
     wiz_T407: "Profilo scollegato da «{cover}».",
     wiz_T403: "Indietro",
+    wiz_T408: "Calibrazione in corso",
+    wiz_T409: "Se esci ora, la calibrazione resta aperta per {minutes} minuti e puoi riprenderla dalla scheda Calibration. Se la annulli, le misure fatte finora vanno perse.",
+    wiz_T410: "Esci e riprendi dopo",
+    wiz_T411: "Esci senza salvare",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

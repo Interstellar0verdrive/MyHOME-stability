@@ -59,6 +59,7 @@ export class CalibrationTab {
   useWizard(wizard) { this._wizard?.close(); this._wizard = wizard; }
 
   clear() {
+    this._context?.setBeforeLeave?.(null);
     this._generation++;
     this._closeDialog();
     for (const unsubscribe of this._unsubs.splice(0)) Promise.resolve(unsubscribe()).catch(() => {});
@@ -85,6 +86,8 @@ export class CalibrationTab {
     }
     this._context = context;
     this._key = key;
+    // Leaving the tab with a live calibration open asks first (the wizard's "Calibration in progress").
+    context.setBeforeLeave?.(() => (this._mode.kind === "wizard" ? this._wizard?.beforeLeave?.() : null) || null);
     if (!this._hosts.has(context.host)) {
       this._hosts.add(context.host);
       context.host.addEventListener("click", (event) => this._click(event));

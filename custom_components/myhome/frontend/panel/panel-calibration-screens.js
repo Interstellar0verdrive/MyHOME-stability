@@ -577,7 +577,8 @@ function problemScreen(screen, ctx, reason, step = false) {
     screen.body = t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
   }
-  screen.discard = false;
+  // A step's problem keeps the session open: Abandon stays (and asks); an ended session has nothing to abandon.
+  screen.discard = step && code !== "S-06";
   return screen;
 }
 
