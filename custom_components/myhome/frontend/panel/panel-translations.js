@@ -358,6 +358,9 @@ export const translations = {
     wiz_T433: "Up to 64 characters, different from the saved profiles.",
     wiz_T434: "A profile with this name already exists.",
     wiz_T435: "Enter a name for the profile.",
+    wiz_T436: "This cover will follow the new profile. \"{old}\" will be left with no cover following it; you can delete it from the Profiles tab.",
+    wiz_T437: "This cover will follow the new profile. \"{old}\" stays with the other {count} covers.",
+    wiz_T438: "This cover will follow the new profile. \"{old}\" stays with the other cover.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1180,6 +1183,9 @@ export const translations = {
     wiz_T433: "Fino a 64 caratteri, diverso dai profili già salvati.",
     wiz_T434: "Esiste già un profilo con questo nome.",
     wiz_T435: "Scrivi un nome per il profilo.",
+    wiz_T436: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà senza tapparelle: potrai eliminarlo dalla scheda Profili.",
+    wiz_T437: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà alle altre {count} tapparelle.",
+    wiz_T438: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà all'altra tapparella.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

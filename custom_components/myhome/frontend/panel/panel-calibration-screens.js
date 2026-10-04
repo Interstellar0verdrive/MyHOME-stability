@@ -534,6 +534,12 @@ function summaryScreen(screen, ctx, tx, n, values) {
   return withSupport(screen, ctx, target);
 }
 
+/** Under a new profile's name, for a cover that followed another: what happens to that one (left alone, or kept by others). */
+function followLine(t, cover) {
+  const others = cover.followers?.length ?? 0, old = cover.profile.name;
+  return fill(t(others === 0 ? "wiz_T436" : others === 1 ? "wiz_T438" : "wiz_T437"), { old, count: others });
+}
+
 /** "Also save as reusable profile": on by default for a first cover, off when it already follows a profile. */
 function profileBlock(ctx, tx, pathC) {
   const { t, cover, local = {} } = ctx;
@@ -555,7 +561,7 @@ function profileBlock(ctx, tx, pathC) {
   const nameError = !wanted ? t("wiz_T435") : (ctx.profiles || []).some((profile) => profile.name?.trim().toLocaleLowerCase() === wanted) ? t("wiz_T434") : "";
   const block = { switchLabel: t("wiz_T096"), on, explanation: follows ? tx("wiz_T108", { profile: cover.profile.name }) : t("wiz_T097"), choice,
     name: creating ? { label: t("wiz_T098"), value: nameValue, hint: t("wiz_T433"), error: nameError,
-      line: follows ? counted(t, "wiz_T112", cover.followers?.length ?? 0, { profile: cover.profile.name, names: ctx.followerNames || "—" }) : tx("wiz_T101", { name: nameValue }),
+      line: follows ? followLine(t, cover) : tx("wiz_T101", { name: nameValue }),
       valid: !nameError } : null,
     target: !on ? "cover_only" : creating ? "profile_new" : "profile_update" };
   return block;

@@ -464,7 +464,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   assert.equal(wiz().querySelector('[name="profile_name"]'), name, "typing never redraws the field");
   name.value = "kitchen_two"; name.dispatchEvent(new Event("input", { bubbles: true })); await tick();
   assert.equal(error().hidden, true, "the error goes with the problem");
-  assert.match(wiz().querySelector(".wiz-name-line").textContent, /"tall_two_leaf" stays with Living room shutter 3/);
+  assert.equal(wiz().querySelector(".wiz-name-line").textContent, 'This cover will follow the new profile. "tall_two_leaf" stays with the other cover.');
   const update = wiz().querySelector('[name="save_choice"][value="update"]');
   update.checked = true; update.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, true, "updating a shared profile waits for the unified Save");
@@ -1516,7 +1516,11 @@ test("counts of zero and one use their own forms", () => {
   const a21d = (followers) => buildScreen({ t, language: "it", stage: "session", path: "A", cover: cover(followers), view, local: { saveProfile: true },
     followerNames: followers.join(" e ") }).profileBlock;
   assert.equal(a21d([]).choice.options.find((option) => option.value === "update").description, "Nessun’altra tapparella lo segue.");
-  assert.equal(a21d([]).name.line, "Questa tapparella passa a seguirlo; nessun’altra tapparella segue «alte».");
+  assert.equal(a21d([]).name.line, "Questa tapparella seguirà il nuovo profilo. «alte» resterà senza tapparelle: potrai eliminarlo dalla scheda Profili.");
+  assert.equal(a21d(["Sala 3"]).name.line, "Questa tapparella seguirà il nuovo profilo. «alte» resterà all'altra tapparella.");
+  assert.equal(a21d(["Sala 2", "Sala 3"]).name.line, "Questa tapparella seguirà il nuovo profilo. «alte» resterà alle altre 2 tapparelle.");
+  const update = buildScreen({ t, language: "it", stage: "session", path: "A", cover: cover(["Sala 3"]), view, local: { saveProfile: true, saveChoice: "update" } }).profileBlock;
+  assert.equal(update.name, null, "updating the profile: no name and no sentence");
   assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
   const b01 = (followerNames) => buildScreen({ t, language: "it", stage: "profile", path: "B", cover: cover([]), local: {},
     profiles: [{ id: "p", name: "alte", followers: followerNames.length, followerNames, measuredOn: "Sala 1" }] }).choice.options[0];
