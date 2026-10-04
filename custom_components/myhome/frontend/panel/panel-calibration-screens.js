@@ -697,7 +697,7 @@ function knownTime(entry) {
  */
 const BEFORE = "before-body", AFTER = "after-body";
 const ILLUSTRATION_OF = {
-  A: { "05": ["window-closed", BEFORE], "06": ["two-runs", BEFORE], "07": ["lift-sequence", BEFORE], "08": ["lift-zoom", AFTER],
+  A: { "05": ["window-closed", BEFORE], "10": ["window-closed", BEFORE], "06": ["two-runs", BEFORE], "07": ["lift-sequence", BEFORE], "08": ["lift-zoom", AFTER],
     "11": ["ascent-sequence", BEFORE], "13": ["curtain-open-tape", AFTER], "14": ["descent-sequence", BEFORE],
     "16": ["curtain-partial-tape", BEFORE], "18": ["curtain-partial-tape", AFTER], "20": ["curtain-partial-tape", AFTER],
     "23": ["curtain-partial-tape", AFTER], "25": ["curtain-partial-tape", AFTER], "27": ["curtain-partial-tape", AFTER],

@@ -606,7 +606,8 @@ test("each mockup gets its drawing by code: readings after the text, steps and b
   assert.deepEqual(drawn({ step: "lift", phase: "briefing" }, { ackLift: true }), ["A-07", "lift-sequence before-body"]);
   assert.deepEqual(drawn({ step: "lift", phase: "reading", reading_kind: "lift" }), ["A-08", "lift-zoom after-body"]);
   assert.deepEqual(drawn({ step: "reset", phase: "starting_close" }), ["A-09", null], "A-09's frame shows only the wait box");
-  assert.deepEqual(drawn({ step: "reset", phase: "closing" }), ["A-10", null]);
+  assert.deepEqual(drawn({ step: "reset", phase: "closing" }), ["A-10", "window-closed before-body"], "the closed window, as on A-05");
+  assert.deepEqual(drawn({ step: "reset", phase: "closing" }, {}, "C"), ["C-10", "window-closed before-body"]);
   assert.deepEqual(drawn({ step: "opening", phase: "opening" }), ["A-11", "ascent-sequence before-body"]);
   assert.deepEqual(drawn({ step: "opening", phase: "reading" }), ["A-12", null]);
   assert.deepEqual(drawn({ step: "opening", phase: "reading" }, { ackAscent: true }), ["A-13", "curtain-open-tape after-body"]);
