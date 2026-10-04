@@ -42,7 +42,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
   ["cover.kitchen_two", "Kitchen shutter 2", "kitchen"], ["cover.living_three", "Living room shutter 3", "living"]]), overview = sampleOverview(),
   session: initial = null, owner = true } = {}) {
   const calls = [], subscriptions = [];
-  let session = initial, listener = null, clock = 0;
+  let session = initial, listener = null, clock = 0, profilesListener = null;
   const backend = {
     calls, subscriptions, overview,
     get session() { return session; },
@@ -155,7 +155,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
       subscribeEvents: async () => () => {},
       subscribeMessage: async (callback, message) => {
         subscriptions.push(message);
-        if (message.type === "myhome/cover_profiles/subscribe") return () => {};
+        if (message.type === "myhome/cover_profiles/subscribe") { profilesListener = callback; return () => {}; }
         if (message.type === "myhome/cover_calibration/start") {
           // As in Home Assistant, a start without `mode` is the guided measurement.
           session = message.mode === "geometry" ? startGeometry(message) : startGuided(message);
@@ -203,5 +203,7 @@ export function createFakeBackend({ language = "en", inventory = coverInventory(
     },
   };
   backend.hass = hass;
+  /** Home Assistant wrote the profiles store: a new revision is announced and the panel reads the overview again. */
+  backend.publishOverview = () => { overview.revision += 1; profilesListener?.({ entry_id: overview.entry_id, revision: overview.revision }); };
   return backend;
 }

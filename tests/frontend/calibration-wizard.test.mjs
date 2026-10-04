@@ -356,8 +356,8 @@ test("a cover that follows a profile saves only on itself by default, which wait
   assert.equal(backend.calls.some((message) => message.action === "save"), false);
 });
 
-test("fine-tuning saves the calibration first, then runs as a preview that sends nothing", async () => {
-  const { backend, wiz, code, press, type, actions, startFor, title } = await mount();
+test("A-34 offers fine-tuning once the calibration is saved: path C on the same cover, from the values just written", async () => {
+  const { backend, wiz, code, press, type, actions, startFor } = await mount();
   await startFor("cover.living_one");
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
@@ -368,31 +368,75 @@ test("fine-tuning saves the calibration first, then runs as a preview that sends
   await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
   await type("97"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await move(backend, { auto: true, stop: true }); await type("101");
+  assert.equal(code(), "A-21");
+  assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the summary only saves");
+  await press("save");
+  assert.equal(code(), "A-34");
+  const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
+  assert.deepEqual(kinds, [["another", "primary"], ["refine", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
+  assert.equal(wiz().querySelector('[data-wiz="refine"]').textContent, "Continue with fine-tuning");
+  assert.equal(wiz().querySelector("#wiz-note-refine").textContent, translations.en.wiz_T319, "its note under it");
+  // Home Assistant announces the write: the tab reads the overview again while the wizard is open.
+  const overview = backend.overview;
+  overview.profiles.push({ id: "living", name: "living_room_shutter_1", opening_time: 22.2, closing_time: 21.7, reference_travel_cm: 198,
+    geometry: { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 }, assigned_to: ["cover.living_one"], provenance: {} });
+  const cover = overview.covers.find((item) => item.entity_id === "cover.living_one");
+  const written = (number) => ({ value: number, origin: "profile", provenance: {}, scaled: false });
+  Object.assign(cover, { profile_id: "living", travel_cm: 198, effective: { opening: written(22.2), closing: written(21.7), slat_time_s: written(4.4),
+    opening_roll: written(1.83), closing_roll: written(1.91) } });
+  backend.publishOverview(); await settle();
+  const sent = actions().length, saves = backend.calls.filter((message) => message.action === "save").length;
   await press("refine");
-  assert.equal(backend.calls.filter((message) => message.action === "save").length, 1, "the calibration is saved before fine-tuning");
-  const sent = actions().length;
+  assert.equal(code(), "C-01", "fine-tuning starts from what the cover uses now");
+  assert.equal(wiz().querySelector(".wiz-cover").textContent, "Living room shutter 1", "on the same cover");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-box p")].map((line) => line.textContent),
+    ["Profile: living_room_shutter_1", "Curtain travel: 198 cm", "Opening time: 22.2 s", "Closing time: 21.7 s", "Slat time: 4.4 s"], "the values just saved");
+  await press("current");
+  assert.equal(code(), "C-02");
+  assert.equal(wiz().querySelector('input[name="case"]:checked').value, "points_only");
+  await press("case");
+  assert.equal(code(), "C-37");
+  await press("begin"); await settle();
+  for (const reading of ["52", "146", "141", "48"]) { await type(reading); await settle(); }
+  const expected = Number(wiz().querySelector("#wiz-field-hint").textContent.match(/About (\d+) cm/)[1]);
+  await type(String(expected)); await settle();
+  await press("accept");
+  assert.equal(code(), "C-38");
+  await press("save");
+  assert.equal(code(), "C-34");
+  assert.equal(wiz().querySelector(".wiz-body").textContent, translations.en.wiz_T322, "the calibration before it was saved; the preview changed nothing");
+  assert.equal(actions().length, sent, "the fine-tuning preview sent nothing");
+  assert.equal(backend.calls.filter((message) => message.action === "save").length, saves, "and saved nothing more");
+});
+
+test("the tab's Fine-tune runs fine-tuning as a preview that sends nothing", async () => {
+  const { backend, tab, wiz, code, press, type, actions, title } = await mount();
+  [...tab().querySelectorAll('[data-action="cal-tab-refine"]')].find((button) => button.dataset.id.includes("cover.kitchen_two")).click();
   await settle();
+  const sent = actions().length;
   assert.equal(wiz().querySelector(".wiz-preview").textContent, translations.en.wizPreview);
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Fine-tuning · 7 of 8");
   assert.equal(code(), "A-23");
   assert.equal(title(), "Measure at quarter opening time");
-  for (const reading of ["52", "141", "146", "48"]) { await type(reading); await settle(); }
+  for (const reading of ["27", "82", "83", "28"]) { await type(reading); await settle(); }
   assert.equal(code(), "A-31");
   const expected = Number(wiz().querySelector("#wiz-field-hint").textContent.match(/About (\d+) cm/)[1]);
   await type(String(expected + 6));
   assert.equal(code(), "A-32b");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /Gap of about 6 cm after 8\.7 s of descent/);
+  assert.match(wiz().querySelector(".wiz-body").textContent, /Gap of about 6 cm after \d+(\.\d)? s of descent/);
   assert.equal(wiz().querySelector('[data-wiz="continue_anyway"]').classList.contains("link"), true);
   await press("repeat_check"); await settle();
   await type(String(expected + 1));
   assert.equal(code(), "A-32");
   await press("accept");
-  assert.equal(code(), "A-33");
-  assert.match(wiz().querySelector(".wiz-precision").textContent, /Verified accuracy: gap of about 1 cm after 8\.7 s of descent\./);
+  assert.equal(code(), "A-33c", "a cover that follows a profile");
+  assert.match(wiz().querySelector(".wiz-precision").textContent, /Verified accuracy: gap of about 1 cm after \d+(\.\d)? s of descent\./);
   await press("save");
   assert.equal(code(), "A-34");
   assert.ok(wiz().querySelector(".wiz-preview"), "the saved screen still says the last part was a preview");
+  assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the end of a preview offers no further fine-tuning");
   assert.equal(actions().length, sent, "the preview sent nothing to Home Assistant");
+  assert.equal(backend.calls.some((message) => message.action === "save"), false);
 });
 
 test("the profile dialog offers the new wizard next to the existing measurement", async () => {
@@ -640,25 +684,16 @@ test("a half run that did not start by itself can be started from its screen, an
   const screen = buildScreen({ t, stage: "session", path: "A", view, local: { ackDescent: true, ackReadings: true }, cover: { name: "Living room shutter 1" } });
   assert.equal(screen.code, "A-17");
   assert.deepEqual(screen.actions.map((action) => action.id), ["next", "stop"]);
-  const { wiz, code, press, startFor, backend, type } = await mount({ stageMs: 30 });
-  await startFor("cover.living_one");
-  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
-  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:ascent"); await type("198");
-  await press("next"); await move(backend, { seconds: 21.7 }); await press("endpoint"); backend.stopped(); await tick();
-  await press("ack:descent"); await press("ack:readings"); await move(backend, { auto: true, stop: true });
-  await type("97"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
-  await move(backend, { auto: true, stop: true }); await type("101");
-  await press("refine");
+  const { wiz, tab, code, press, backend } = await mount({ stageMs: 30 });
+  [...tab().querySelectorAll('[data-action="cal-tab-refine"]')].find((button) => button.dataset.id.includes("cover.kitchen_two")).click();
+  await tick();
   assert.equal(code(), "A-22");
   await press("stop");
   assert.equal(code(), "S-01");
   await press("start-over");
-  assert.equal(code(), "A-22", "fine-tuning starts over from the saved values, still as a preview");
+  assert.equal(code(), "A-22", "fine-tuning starts over from the cover's values, still as a preview");
   assert.ok(wiz().querySelector(".wiz-preview"));
-  assert.equal(backend.calls.filter((message) => message.action === "save").length, 1);
+  assert.equal(backend.calls.some((message) => message.action === "save"), false);
 });
 
 const resumed = (extra) => ({ entry_id: "one", entity_id: "cover.living_one", session_id: "session-1", sequence: 9, revision: 7, mode: "geometry",
@@ -847,8 +882,12 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Cucina 2" } }).actions[0].note, undefined, "times only is live");
   const review = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" },
     view: { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 198, owner: true, sequence: 2 } });
-  assert.equal(review.actions.find((action) => action.id === "refine").note, translations.it.wiz_T319);
-  const saved = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { preview: true }, baseSaved: true, refining: true } });
+  assert.deepEqual(review.actions.map((action) => action.id), ["save"], "the summary only saves");
+  const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
+  assert.equal(real.actions.find((action) => action.id === "refine").note, translations.it.wiz_T319, "fine-tuning and its note on A-34");
+  assert.equal(buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } })
+    .actions.some((action) => action.id === "refine"), false, "not on C-34");
+  const saved = buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Cucina 2" }, local: { saved: { preview: true }, baseSaved: true } });
   assert.equal(saved.title, "Anteprima del riepilogo");
   assert.equal(saved.body, translations.it.wiz_T322);
   assert.equal(saved.preview, true);

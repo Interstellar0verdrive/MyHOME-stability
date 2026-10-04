@@ -86,7 +86,10 @@ export class CalibrationWizard {
 
   // ---------- context for the screens ----------
 
-  _item() { return this._context.covers.find((item) => key(item) === this._local.coverKey) || null; }
+  /** The tab's covers as they are now (a function from the tab, read again after a save), or a fixed list. */
+  _covers() { const { covers } = this._context; return (typeof covers === "function" ? covers() : covers) || []; }
+
+  _item() { return this._covers().find((item) => key(item) === this._local.coverKey) || null; }
 
   _gatewayData(item = this._item()) { return item ? this._context.data?.(item.entry.entry_id) : null; }
 
@@ -95,7 +98,7 @@ export class CalibrationWizard {
     if (!item) return null;
     const data = this._gatewayData(item), { hass } = this._context;
     const followers = item.profile ? item.profile.assigned_to.filter((id) => id && id !== item.cover.entity_id)
-      .map((id) => this._context.covers.find((entry) => entry.cover.entity_id === id)?.name || hass.states?.[id]?.attributes?.friendly_name || id) : [];
+      .map((id) => this._covers().find((entry) => entry.cover.entity_id === id)?.name || hass.states?.[id]?.attributes?.friendly_name || id) : [];
     const followed = this._local.path === "B" ? data?.profiles.find((profile) => profile.id === this._local.profileId) : null;
     const address = item.entity?.address;
     return { name: item.name, entity_id: item.cover.entity_id, effective: item.cover.effective || {}, travel_cm: item.cover.travel_cm ?? null,
@@ -107,7 +110,7 @@ export class CalibrationWizard {
 
   /** A drop-down entry: "Name · Room · Address: 86 · A: 8 · PL: 6", and the gateway when there are several. */
   _coverLabel(item) {
-    const { t, covers } = this._context, address = item.entity?.address;
+    const { t } = this._context, covers = this._covers(), address = item.entity?.address;
     const bus = address?.raw ? [`${t("address")}: ${address.raw}`, ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : [])].join(" · ") : "";
     const gateway = new Set(covers.map((entry) => entry.entry.entry_id)).size > 1 ? item.entry.title : "";
     return [item.name, item.area, bus, gateway].filter(Boolean).join(" · ");
@@ -124,7 +127,7 @@ export class CalibrationWizard {
     const cover = this._cover(), language = hass.language || "en";
     const followed = local.path === "B" ? this._gatewayData()?.profiles.find((profile) => profile.id === local.profileId) : null;
     return buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
-      covers: this._context.covers.map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
+      covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
       view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null,
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
@@ -406,13 +409,14 @@ export class CalibrationWizard {
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
     if (id === "take") { local.arm = null; return gateway?.claim(); }
     if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }
-    if (id === "save" || id === "refine") return this._save(id === "refine");
+    if (id === "save") return this._save();
+    if (id === "refine") return this._fineTune();
     if (id === "start-over") {
       // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
       if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }
       this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); return this._render();
     }
-    if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", path: "A", scope: null, saved: null, refining: false, base: null, coverKey: "", coverPicked: false }); return this._render(); }
+    if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", path: "A", scope: null, saved: null, refining: false, base: null, baseSaved: false, coverKey: "", coverPicked: false }); return this._render(); }
     if (id === "open-cover") { const entityId = this._item()?.cover.entity_id; const { onOpenCover } = this._context; this._finish(); onOpenCover?.(entityId); return; }
     if (id === "correct") {
       // B → C: the cover is measured on its own; nothing of the preview was written.
@@ -448,11 +452,10 @@ export class CalibrationWizard {
     return this._send("reading", { reading_cm: value });
   }
 
-  _save(thenRefine) {
+  _save() {
     const screen = this._current, local = this._local;
-    const action = screen.actions.find((item) => item.id === (thenRefine ? "refine" : "save"));
+    const action = screen.actions.find((item) => item.id === "save");
     if (!action || action.disabled || !this._gateway) return;
-    local.thenRefine = thenRefine;
     const name = screen.profileBlock?.name?.value;
     // Path B saves no measured value: the cover follows the chosen profile (L5b).
     local.pendingSave = local.path === "B" ? { target: "follow_profile", name: null } : { target: action.target || "profile_new", name };
@@ -520,7 +523,20 @@ export class CalibrationWizard {
       opening_roll: values.opening_roll, closing_roll: values.closing_roll };
   }
 
-  /** Fine-tuning after a calibration (A-22…A-34): simulated until the backend offers it (L5c). */
+  /**
+   * "Continue with fine-tuning" on A-34: the base calibration is already saved, so fine-tuning is path C on the
+   * same cover, from C-01 (what it uses now, read again from the tab). `baseSaved` survives the steps of that path:
+   * the end of its preview says the calibration before it was saved (T322).
+   */
+  _fineTune() {
+    const local = this._local;
+    if (!this._item()) return;
+    this._dropGateway();
+    Object.assign(local, freshFlags(), { stage: "current", path: "C", scope: null, saved: null, refining: false, base: null, baseSaved: true });
+    this._render();
+  }
+
+  /** Fine-tuning from the tab's Fine-tune (A-22…A-34): simulated until the backend offers it (L5c). */
   _startRefine(base) {
     const local = this._local;
     this._dropGateway();
@@ -589,14 +605,6 @@ export class CalibrationWizard {
     local.saved = { target, name: previewSaved?.name ?? local.pendingSave?.name ?? null, travel_cm: this._gateway?.view?.travel_cm ?? local.review?.travel ?? null,
       preview: !!this._gateway?.preview };
     if (local.path === "B") local.saved.target = "follow_profile";
-    if (local.thenRefine && local.review && !this._gateway?.preview) {
-      const base = { ...local.review };
-      this._startRefine(base);
-      local.baseSaved = true;
-      local.thenRefine = false;
-      this._render();
-      return;
-    }
     local.stage = "saved";
     if (!local.refining && local.review) local.base = { ...local.review };
     this._dropGateway();
@@ -650,8 +658,8 @@ export class CalibrationWizard {
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, baseSaved: false,
-    review: null, thenRefine: false, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null,
+    review: null, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
 }
 
 export { slug };

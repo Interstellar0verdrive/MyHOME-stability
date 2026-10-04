@@ -461,7 +461,8 @@ function summaryScreen(screen, ctx, tx, n, values) {
     precision, profileBlock: block,
     saveInfo: c ? (follows ? saveInfo(refine ? "wiz_T286" : "wiz_T285") : saveInfo("wizSaveCoverOnly"))
       : saveInfo(refine ? (follows ? "wiz_T283" : "wiz_T282") : (follows ? "wiz_T281" : "wiz_T289")),
-    actions: [{ ...save, target }, ...(refine ? [] : [{ id: "refine", label: t("wiz_T103"), kind: "secondary", target, note: t("wiz_T319") }])] });
+    // Fine-tuning is offered once this is saved (A-34), not here.
+    actions: [{ ...save, target }] });
   return withSupport(screen, ctx, target);
 }
 
@@ -488,10 +489,10 @@ function withSupport(screen, ctx, target) {
   const supported = ctx.supports ? ctx.supports(target) : true;
   if (!supported) {
     screen.notices.push({ tone: "warning", text: ctx.t("wizSaveUnavailable") });
-    for (const action of screen.actions) if (["save", "refine"].includes(action.id)) action.disabled = true;
+    for (const action of screen.actions) if (action.id === "save") action.disabled = true;
   }
   if (screen.profileBlock?.name && !screen.profileBlock.name.valid) {
-    for (const action of screen.actions) if (["save", "refine"].includes(action.id)) action.disabled = true;
+    for (const action of screen.actions) if (action.id === "save") action.disabled = true;
   }
   return screen;
 }
@@ -523,8 +524,10 @@ function savedScreen(screen, ctx, tx, values) {
     actions: [close("B")] });
   const body = saved.target === "profile_new" ? tx("wiz_T155", { name: saved.name ?? "" })
     : path === "C" && ctx.cover?.profile ? tx("wiz_T228", values) : tx("wizSavedCover", values);
+  // A-34 only: the base calibration is saved, fine-tuning (path C on the same cover) can follow; its note under it.
+  const fineTune = path === "C" ? [] : [{ id: "refine", label: t("wiz_T103"), kind: "secondary", note: t("wiz_T319") }];
   return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
-    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
+    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, ...fineTune, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
 }
 
 /** S-01…S-06: a step that ended. Today's sessions end with their reason (repeating starts over);

@@ -493,7 +493,8 @@ export class CalibrationTab {
     if (!this._wizard || !this._context) return;
     this._mode = { kind: "wizard" };
     const { host, hass, t, onOpenCover } = this._context;
-    this._wizard.open({ host, hass, t, covers: this._covers(), data: (entryId) => this._rows.get(entryId)?.data, ...options,
+    // The covers as they are at each step: after a save, fine-tuning (C-01) shows the values just written.
+    this._wizard.open({ host, hass, t, covers: () => this._covers(), data: (entryId) => this._rows.get(entryId)?.data, ...options,
       onOpenCover: (entityId) => onOpenCover?.(entityId),
       onClose: () => this._backToList() });
   }
