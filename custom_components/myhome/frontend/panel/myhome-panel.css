@@ -729,6 +729,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-facts dd { margin: 0; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
 /* Each block's own action, under its content: no bottom space on the content, 20 px above the button. */
 .cal-block-action { display: grid; padding-top: 20px; }
+/* The blocks' secondary actions are the maintainer's outlined buttons: no surface fill, so they read the same on light and dark themes. */
+.cal-block-action button:not(.primary) { background: transparent; }
+.cal-block-action button:not(.primary):hover { background: var(--panel-accent-soft); }
 /* As in the design, the action spans the whole width of its block. */
 .cal-block-action > button { width: 100%; justify-content: center; }
 .cal-tab-back { justify-self: start; }
