@@ -366,6 +366,8 @@ export const translations = {
     wiz_T441: "The cover stopped earlier than expected ({seconds} s of about {estimate} s): check that it is really fully open before continuing.",
     wiz_T442: "The cover did not do what it should. Restart the measurement.",
     wiz_T443: "The cover stopped before you pressed ②. Restart the measurement and press ② as soon as the bottom edge lifts off the rest.",
+    wiz_T444: "The cover stopped before you pressed ②: the time may not be the real one. Repeat the run and press ② as soon as the motor really stops.",
+    wiz_T445: "The cover stopped when the actuator's timer ran out (about 60 s): the time is not valid. Repeat the run and press ② as soon as the motor really stops.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1196,6 +1198,8 @@ export const translations = {
     wiz_T441: "La tapparella si è fermata prima del previsto ({seconds} s su circa {estimate} s): controlla che sia davvero tutta aperta prima di continuare.",
     wiz_T442: "La tapparella non ha fatto quello che doveva. Ricomincia la misurazione.",
     wiz_T443: "La tapparella si è fermata prima che premessi ②. Ricomincia la misurazione e premi ② appena il bordo si stacca dall'appoggio.",
+    wiz_T444: "La tapparella si è fermata senza che premessi ②: il tempo potrebbe non essere quello reale. Ripeti la corsa e premi ② appena il motore si ferma davvero.",
+    wiz_T445: "La tapparella si è fermata allo scadere del timer dell'attuatore (circa 60 s): il tempo non è valido. Ripeti la corsa e premi ② appena il motore si ferma davvero.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

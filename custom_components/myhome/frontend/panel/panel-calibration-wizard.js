@@ -37,6 +37,10 @@ export const CONFIRM_GUARD_MS = 700;
 const IDLE_LEASE_SECONDS = 1800;
 /** A return of the tape readings confirms itself this long after the measured time of its direction (~2 s + settling). */
 export const AUTO_ENDPOINT_MARGIN_SECONDS = 3;
+/** A full run ended by the bus: a press of ② within this long after the stop frame confirms the frame's time. */
+export const FULL_RUN_PRESS_WINDOW_SECONDS = 2;
+/** A stop frame between these times is an actuator's timer (about 60 s), never the real end of the run. */
+export const TIMER_STOP_SECONDS = [59, 65];
 // Phases a press goes through before the cover stops again: the press that started them still counts.
 const TRANSIT = ["starting_open", "starting_close", "opening", "closing", "geometry_wait_stop"];
 
@@ -504,6 +508,12 @@ export class CalibrationWizard {
     if (id === "reading") return this._reading();
     // The guided protocol's own movements ("open", "close") are named apart from closing the wizard.
     if (id.startsWith("run:")) return this._send(id.slice(4));
+    if (id === "endpoint" && local.fullRun && !local.fullRun.decided) {
+      // ② on a full run after the motor stopped by itself: valid within 2 s of the frame (not at a timer's 60 s).
+      const verdict = this._judgeFullRun(gateway?.view, true);
+      if (verdict) { local.fullRun.decided = true; local.invalidRun = verdict === "valid" ? null : { step: local.fullRun.step, reason: verdict }; }
+    }
+    if (id === "repeat") local.invalidRun = null;
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
     if (id === "stop" || id === "misbehaved") { local.misbehaved = id === "misbehaved"; this._closeDialog(false); return gateway?.stop(); }
@@ -599,6 +609,7 @@ export class CalibrationWizard {
       // A tick may end a positioning (A-04 → A-05): a new screen is drawn whole, the same one only patched.
       if (change === "tick") {
         this._autoEndpoint(this._gateway?.view);
+        this._closeFullRun(this._gateway?.view);
         const screen = this._screen(); if (screen.code !== this._renderedCode) this._render(); else this._patch(screen); return;
       }
       this._viewChanged();
@@ -692,7 +703,9 @@ export class CalibrationWizard {
     if (view?.preview && view.phase === "saved") { this._saved(view.saved); return; }
     if (view?.preview && view.phase === "cancelled") { this._finish(); return; }
     this._trackRun(view);
+    this._trackFullRun(view);
     this._autoEndpoint(view);
+    this._closeFullRun(view);
     this._autoNext(view);
     this._unloadGuard(this._liveOpen());
     this._render();
@@ -712,6 +725,49 @@ export class CalibrationWizard {
     // Who owned the run when it started, and on which subscription: an automatic end stop needs both unchanged.
     local.run = { step: view.step, position: Number.isFinite(position) ? position : null, attachment: view.attachment ?? null,
       owned: !!view.owner && !view.read_only, sent: false };
+  }
+
+  /** The full ascent and descent (A-11, A-14 and their C clones): who owned the run when it started, on which subscription. */
+  _trackFullRun(view) {
+    const local = this._local;
+    const full = !!view && !view.preview && view.mode === "geometry"
+      && ((view.step === "opening" && ["starting_open", "opening"].includes(view.phase)) || (view.step === "closing" && ["starting_close", "closing"].includes(view.phase)));
+    if (!full) { local.fullRun = null; return; }
+    if (local.fullRun?.step === view.step) return;
+    local.fullRun = { step: view.step, attachment: view.attachment ?? null, owned: !!view.owner && !view.read_only, decided: false };
+    local.invalidRun = null;
+  }
+
+  /**
+   * How a full run ended by the bus is judged (R8-7): a press before the stop frame gives the press time; a press within
+   * 2 s after it gives the frame's time; no press within 2 s, or a frame at an actuator's timer (59-65 s) without a press
+   * before it, makes the result not valid. Time since the frame = the run's elapsed minus `stopped_elapsed`, so a
+   * replayed subscription cannot stretch the window.
+   */
+  _judgeFullRun(view, pressed) {
+    const local = this._local, run = local.fullRun;
+    if (!run || run.decided || view?.motor_stopped !== true || view.stopped_elapsed == null) return null;
+    const since = (this._gateway.elapsed() ?? view.elapsed ?? view.stopped_elapsed) - view.stopped_elapsed;
+    const timer = view.stopped_elapsed >= TIMER_STOP_SECONDS[0] && view.stopped_elapsed <= TIMER_STOP_SECONDS[1];
+    if (pressed && since <= FULL_RUN_PRESS_WINDOW_SECONDS) return timer ? "timer" : "valid";
+    if (!pressed && since <= FULL_RUN_PRESS_WINDOW_SECONDS) return null;
+    return timer ? "timer" : "late";
+  }
+
+  /**
+   * No press within 2 s of the stop frame: the run goes on by itself to its result, marked not valid. The panel confirms
+   * the end stop (Home Assistant records the frame's time) so the result screen can offer only "Repeat the measurement".
+   * As every automatic step: only for the owner, on the subscription the run started on, never after a lost
+   * connection, an error or a pending request, once per run.
+   */
+  _closeFullRun(view) {
+    const local = this._local, run = local.fullRun, status = this._gateway?.status || {};
+    const verdict = this._judgeFullRun(view, false);
+    if (!verdict) return;
+    run.decided = true;
+    if (!run.owned || !view.owner || view.read_only || status.lost || status.error || status.busy || (view.attachment ?? null) !== run.attachment) return;
+    local.invalidRun = { step: run.step, reason: verdict };
+    queueMicrotask(() => { if (this._gateway?.view === view && !this._gateway.status.busy) this._send("endpoint"); });
   }
 
   /**
@@ -892,7 +948,7 @@ export class CalibrationWizard {
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, misbehaved: false,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, misbehaved: false,
     review: null, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
 }
 

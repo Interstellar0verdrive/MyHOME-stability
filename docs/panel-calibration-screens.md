@@ -101,6 +101,7 @@ verb or a view this tab does not own. When it does not happen, the screen offers
 | A-08 | `reading` · `lift`; `briefing` · `reset` with `gap_warning` | T047–T051, `calGapWarning` | `reading`; `next` or `repeat` after a wide gap |
 | A-09 / A-10 | `reset` | T027, T052; T053, T054, T032 | `next` (auto), `endpoint` |
 | A-11 | `briefing`/`opening` · `opening` | T055 (T040 without slats), T056, T045, T057 | `next`, `endpoint` |
+| A-11 / A-14 ended by the bus | `motor_stopped` in the full ascent or descent | T444, T445 | ② within 2 s of the stop frame (time since the frame = `elapsed` − `stopped_elapsed`) gives the frame's time, valid; no ② within 2 s: the panel sends `endpoint` itself and A-12/A-15 show the result not valid (T444) with only *Repeat the measurement*; a frame at 59–65 s (actuator timer) without ② before it is not valid either (T445). A press before the frame is valid as before; the lift-off and half runs are not affected |
 | A-12 | `reading` · `opening` (local): result tiles «Lift-off s · cm» and «Full ascent s» above the text (T039, T040) | T058–T061 | `repeat` |
 | A-13 | `reading` · `opening` | T062–T066 | `reading` (travel, 20–500 cm, saved travel offered) |
 | A-14 | `briefing`/`closing` · `closing` | T068–T070 | `next`, `endpoint` |

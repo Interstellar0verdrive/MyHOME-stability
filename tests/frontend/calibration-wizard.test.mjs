@@ -1045,6 +1045,85 @@ test("full runs and the return to the top: once the motor stopped by itself the 
   assert.equal(wiz().querySelector(".wiz-stopwatch-value").textContent, "stopped at 22.2 s", "it does not count on");
 });
 
+test("a full run ended by the bus: valid with a press before or within 2 s of the frame, otherwise its result asks to repeat", async () => {
+  const toAscent = async (context) => {
+    const { backend, press, type, startFor, code } = context;
+    await startFor("cover.living_one");
+    await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
+    await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    assert.equal(code(), "A-11");
+    await press("next"); backend.started(); await tick();
+  };
+  const frame = (backend, seconds) => {
+    backend.tick(seconds);
+    Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: backend.view().elapsed });
+    backend.emit();
+  };
+  const endpoints = (backend) => backend.calls.filter((message) => message.action === "endpoint").length;
+  const notice = (wiz) => wiz().querySelector(".wiz-notices").textContent;
+  // (a) ② before the frame: the press time, valid.
+  const a = await mount();
+  await toAscent(a);
+  a.backend.tick(22); a.backend.emit(); await tick();
+  await a.press("endpoint"); a.backend.stopped(); await tick();
+  assert.deepEqual([a.code(), !!a.wiz().querySelector('[data-wiz="ack:ascent"]'), notice(a.wiz)], ["A-12", true, ""]);
+  // (b) ② within 2 s after the frame: the frame's time, valid.
+  const b = await mount();
+  await toAscent(b);
+  frame(b.backend, 22); await tick();
+  b.backend.tick(1); b.backend.emit(); await tick();
+  await b.press("endpoint"); b.backend.stopped(); await tick();
+  assert.deepEqual([b.code(), !!b.wiz().querySelector('[data-wiz="ack:ascent"]'), notice(b.wiz)], ["A-12", true, ""]);
+  // (c) no ② within 2 s: the run goes on by itself to its result, not valid, with only Repeat.
+  const c = await mount();
+  await toAscent(c);
+  frame(c.backend, 22); await tick();
+  const before = endpoints(c.backend);
+  c.backend.tick(1.5); c.backend.emit(); await tick();
+  assert.equal(endpoints(c.backend), before, "1.5 s after the frame: still waiting for ②");
+  c.backend.tick(1); c.backend.emit(); await tick(6);
+  assert.equal(endpoints(c.backend), before + 1, "2.5 s: the panel confirms the end stop itself");
+  c.backend.stopped(); await tick();
+  assert.equal(c.code(), "A-12");
+  assert.equal(notice(c.wiz), "The cover stopped before you pressed ②: the time may not be the real one. Repeat the run and press ② as soon as the motor really stops.");
+  assert.deepEqual([...c.wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]), [["repeat", "primary"]], "no OK, continue");
+  await c.press("repeat");
+  assert.ok(c.actions().slice(-2).includes("repeat"), "Repeat sends repeat (the return to the bottom then starts by itself)");
+  // (d) a frame at the actuator's timer (59-65 s), even with ② within 2 s: not valid.
+  const d = await mount();
+  await toAscent(d);
+  frame(d.backend, 60.2); await tick();
+  await d.press("endpoint"); d.backend.stopped(); await tick();
+  assert.equal(d.code(), "A-12");
+  assert.equal(notice(d.wiz), "The cover stopped when the actuator's timer ran out (about 60 s): the time is not valid. Repeat the run and press ② as soon as the motor really stops.");
+  assert.equal(d.wiz().querySelector('[data-wiz="ack:ascent"]'), null);
+});
+
+test("the full descent follows the same rule, and the lift-off run is not affected", async () => {
+  const { backend, press, type, startFor, code, wiz } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); backend.started(); await tick();
+  assert.equal(code(), "A-07");
+  // The lift-off run: a stop frame is not a full run's end (the backend interrupts it), the panel sends nothing.
+  const before = backend.calls.filter((message) => message.action === "endpoint").length;
+  backend.tick(5); Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: 2 }); backend.emit(); await tick(6);
+  assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, before, "nothing automatic on A-07");
+  delete backend.session.motor_stopped; delete backend.session.stopped_elapsed;
+  await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("next"); await move(backend, { seconds: 22.2 }); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:ascent"); await type("198");
+  assert.equal(code(), "A-14");
+  await press("next"); backend.started(); backend.tick(21); Object.assign(backend.session, { motor_stopped: true, stopped_elapsed: backend.view().elapsed }); backend.emit(); await tick();
+  backend.tick(3); backend.emit(); await tick(6);
+  backend.stopped(); await tick();
+  assert.equal(code(), "A-15");
+  assert.match(wiz().querySelector(".wiz-notices").textContent, /stopped before you pressed ②/);
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["repeat"]);
+});
+
 test("A-03 and A-16 have no Cancel of their own: the header's Abandon the calibration does the same", () => {
   const t = (key) => translations.it[key] || key;
   const a03 = buildScreen({ t, language: "it", stage: "before", path: "A", cover: { name: "Cucina 2" } });

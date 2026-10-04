@@ -324,8 +324,14 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (view.still_resting) screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });
     return screen;
   }
+  // A full run the bus ended without a timely press of ②: its result is shown but not valid; only a repeat goes on.
+  const invalid = (key) => local.invalidRun?.step === key ? { tone: "warning", text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
+  const repeatOnly = (code, title, results, note) => Object.assign(screen, { code, title, results: results.filter(Boolean), notices: [note],
+    actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }] });
   if (step === "opening") {
     if (phase === "reading") {
+      const bad = invalid("opening");
+      if (bad) return repeatOnly(p("12"), t("wiz_T058"), [slats ? liftTile() : null, timeTile("wiz_T040", view.values?.opening_time)], bad);
       if (!local.ackAscent && slats) return Object.assign(screen, { code: p("12"), title: t("wiz_T058"), body: t("wiz_T059"),
         results: [liftTile(), timeTile("wiz_T040", view.values?.opening_time)].filter(Boolean),
         actions: [{ id: "ack:ascent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
@@ -348,6 +354,12 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   if (step === "half_open") {
+    const bad = phase === "briefing" ? invalid("closing") : null;
+    if (bad) {
+      repeatOnly(p("15"), t("wiz_T071"), [timeTile("wiz_T068", view.values?.closing_time)], bad);
+      screen.phase = "descent";
+      return screen;
+    }
     if (phase === "briefing" && !local.ackDescent) return Object.assign(screen, { code: p("15"), phase: "descent", title: t("wiz_T071"), body: t("wiz_T072"),
       results: [timeTile("wiz_T068", view.values?.closing_time), view.travel_cm == null ? null : { label: t("wiz_T041"), value: n(view.travel_cm), unit: "cm" }].filter(Boolean),
       actions: [{ id: "ack:descent", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
