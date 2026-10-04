@@ -159,9 +159,11 @@ def _address_details(who: str, raw: str) -> dict[str, str | None] | None:
 def _asset_version() -> str:
     """Hash the complete panel bundle off the event loop."""
     digest = hashlib.sha256()
-    for path in sorted((Path(__file__).parent / "frontend" / "panel").iterdir()):
+    root = Path(__file__).parent / "frontend" / "panel"
+    # Subfolders too (the wizard's illustrations), named by their path inside the bundle.
+    for path in sorted(root.rglob("*")):
         if path.is_file():
-            digest.update(path.name.encode())
+            digest.update(path.relative_to(root).as_posix().encode())
             digest.update(path.read_bytes())
     return digest.hexdigest()[:12]
 

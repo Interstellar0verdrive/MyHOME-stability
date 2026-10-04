@@ -280,8 +280,6 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   if (step === "top" && !local.ackReadings) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
     positioning("09", t("wiz_T086"), view.values?.opening_time);
-    // A-09's drawing is the descent to the base: this run goes up, so it has none.
-    screen.illustration = false;
     screen.phase = "descent";
     if (phase === "opening") screen.actions = [{ id: "endpoint", label: t("wizTopReached"), kind: "primary" }, stop];
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -620,13 +618,13 @@ function knownTime(entry) {
 /**
  * The drawing of each mockup, by the number of its code (C-05…C-34 are the clones of A): its illustration id and
  * where it sits. Readings with the tape show it between the text and the field; steps and briefings under the title
- * (and the motor bar), above the text; A-09 above its wait box. Every other screen has none.
+ * (and the motor bar), above the text. Every other screen has none (A-09 too: its frame shows only the wait box).
  */
 const BEFORE = "before-body", AFTER = "after-body";
 const ILLUSTRATION_OF = {
   A: { "05": ["window-closed", BEFORE], "06": ["two-runs", BEFORE], "07": ["lift-sequence", BEFORE], "08": ["lift-zoom", AFTER],
-    "09": ["descent-sequence", BEFORE], "11": ["ascent-sequence", BEFORE], "13": ["curtain-open-tape", AFTER], "14": ["descent-sequence", BEFORE],
-    "16": ["curtain-open-tape", BEFORE], "18": ["curtain-partial-tape", AFTER], "20": ["curtain-partial-tape", AFTER],
+    "11": ["ascent-sequence", BEFORE], "13": ["curtain-open-tape", AFTER], "14": ["descent-sequence", BEFORE],
+    "16": ["curtain-partial-tape", BEFORE], "18": ["curtain-partial-tape", AFTER], "20": ["curtain-partial-tape", AFTER],
     "23": ["curtain-partial-tape", AFTER], "25": ["curtain-partial-tape", AFTER], "27": ["curtain-partial-tape", AFTER],
     "29": ["curtain-partial-tape", AFTER], "31": ["curtain-partial-tape", AFTER], "34": ["check", BEFORE] },
   B: { "02": ["curtain-open-tape", BEFORE], "06": ["curtain-partial-tape", AFTER] },
