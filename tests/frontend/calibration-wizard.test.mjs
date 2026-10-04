@@ -1456,6 +1456,18 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).subline, 'Follows the profile "tall_two_leaf"');
 });
 
+test("A-21d defaults to updating the profile on the cover it was measured on, and A-34 says when a profile is left alone", () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };
+  const cover = (origin) => ({ name: "Kitchen 2", entity_id: "cover.kitchen_two", profile: { name: "tall", provenance: { opening: { origin_entity_id: origin } } }, followers: [], effective: {} });
+  const choice = (origin) => buildScreen({ t, stage: "session", path: "A", cover: cover(origin), view, local: { saveProfile: true } }).profileBlock.choice.value;
+  assert.equal(choice("cover.kitchen_two"), "update", "the source cover updates its own profile by default");
+  assert.equal(choice("cover.hall"), "new", "a follower creates a new one by default");
+  const saved = (orphan) => buildScreen({ t, stage: "saved", path: "A", cover: { name: "Kitchen 2" }, local: { saved: { target: "profile_new", name: "kitchen_2", orphan } } });
+  assert.deepEqual(saved("tall").note, { tone: "info", text: 'The profile "tall" is no longer followed by any cover: you can delete it from the Profiles tab.' });
+  assert.equal(saved(null).note, null);
+});
+
 test("counts of zero and one use their own forms", () => {
   const t = (key) => translations.it[key] || key;
   const view = { mode: "geometry", phase: "review", values: { opening_time: 22, closing_time: 21 }, geometry: {}, travel_cm: 110, owner: true, sequence: 2 };

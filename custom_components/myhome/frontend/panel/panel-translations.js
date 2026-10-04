@@ -353,6 +353,7 @@ export const translations = {
     wiz_T428: "Followed by {names}",
     wiz_T429: "{names} and {count} more",
     wiz_T430: "This cover is the source of the profile \"{profile}\": a coming update will let it unlink the profile and keep its measured values.",
+    wiz_T431: "The profile \"{old}\" is no longer followed by any cover: you can delete it from the Profiles tab.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1170,6 +1171,7 @@ export const translations = {
     wiz_T428: "Seguito da {names}",
     wiz_T429: "{names} e altre {count}",
     wiz_T430: "Questa tapparella è la sorgente del profilo «{profile}»: potrà scollegarlo con un prossimo aggiornamento, che le lascerà i valori misurati.",
+    wiz_T431: "Il profilo «{old}» non è più seguito da nessuna tapparella: puoi eliminarlo dalla scheda Profili.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

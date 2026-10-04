@@ -89,7 +89,7 @@ export function buildScreen(ctx) {
   const values = { cover: name, profile: cover?.profile?.name ?? "" };
   const screen = {
     code: "", header: { title: name || t("wiz_T001"), subtitle: cover?.address || "" }, discard: true, preview,
-    title: "", subline: "", body: "", results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
+    title: "", subline: "", body: "", note: null, results: null, stopwatch: null, wait: null, illustration: null, choice: null, picker: null, field: null, box: null, table: null,
     technical: null, profileBlock: null, saveInfo: null, precision: null, status: [], notices: [], actions: [], readOnly: null, phase: "intro",
     caption: caption(t, path, scope, cover),
     // Before any session the header offers a way back to the previous choice (kept as it was).
@@ -533,7 +533,9 @@ function profileBlock(ctx, tx, pathC) {
   const { t, cover, local = {} } = ctx;
   const follows = !!cover?.profile;
   const on = local.saveProfile ?? (!follows && !pathC);
-  const choice = on && follows ? { name: "save_choice", value: local.saveChoice || "new",
+  // On the cover the followed profile was measured on, updating that profile is the default; elsewhere a new one.
+  const source = follows && !!cover.entity_id && cover.profile.provenance?.opening?.origin_entity_id === cover.entity_id;
+  const choice = on && follows ? { name: "save_choice", value: local.saveChoice || (source ? "update" : "new"),
     // Listed as in A-21d: update first, then a new profile (still the default choice, §9.10).
     options: [{ value: "update", label: tx("wiz_T109", { profile: cover.profile.name }),
       description: counted(t, "wiz_T110", cover.followers?.length ?? 0, { names: ctx.followerNames || "—" }) }, { value: "new", label: t("wiz_T111") }] } : null;
@@ -590,6 +592,8 @@ function savedScreen(screen, ctx, tx, values) {
   // by the body's second paragraph (T319).
   // A profile was created or updated: it can be given to similar covers at once (the maintainer's Assign dialog).
   const assign = ["profile_new", "profile_update"].includes(saved.target) ? [{ id: "assign-profile", label: t("wiz_T426"), kind: "secondary" }] : [];
+  // A new profile left the previous one without covers: it can be deleted from the Profiles tab (never by itself).
+  if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan }) };
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
     actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
       { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });

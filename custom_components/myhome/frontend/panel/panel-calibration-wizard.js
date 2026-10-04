@@ -182,7 +182,7 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
@@ -215,6 +215,7 @@ export class CalibrationWizard {
             ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => `<div class="wiz-result"><span class="wiz-result-label">${esc(tile.label)}</span>
               <span class="wiz-result-value">${esc(tile.value)}<small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
+            ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
             ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${drawing("after-body")}
             ${screen.box ? `<div class="wiz-box"><strong>${esc(screen.box.label)}</strong>${screen.box.lines.map((line) => `<p>${factMarkup(line)}</p>`).join("")}</div>` : ""}
@@ -565,6 +566,11 @@ export class CalibrationWizard {
     const name = screen.profileBlock?.name?.value;
     // Path B saves no measured value: the cover follows the chosen profile (L5b).
     local.pendingSave = local.path === "B" ? { target: "follow_profile", name: null } : { target: action.target || "profile_new", name };
+    // A new profile for a cover that followed another, which no other cover follows: that profile will be left alone.
+    const previous = this._item()?.profile;
+    if (local.pendingSave.target === "profile_new" && previous && !previous.assigned_to.some((id) => id && id !== this._item().cover.entity_id)) {
+      local.pendingSave.orphan = previous.name;
+    }
     this._arm(this._gateway.view);
     return this._gateway.save(local.pendingSave);
   }
@@ -757,7 +763,7 @@ export class CalibrationWizard {
     // The saved screen still shows what the steps measured, and whether the last part was a preview.
     if (this._gateway?.preview) local.fineReadings = { ...(this._gateway.view?.readings || {}), check: this._gateway.view?.check ?? null };
     local.saved = { target, name: previewSaved?.name ?? local.pendingSave?.name ?? null, travel_cm: this._gateway?.view?.travel_cm ?? local.review?.travel ?? null,
-      preview: !!this._gateway?.preview };
+      preview: !!this._gateway?.preview, orphan: this._gateway?.preview ? null : local.pendingSave?.orphan ?? null };
     if (local.path === "B") local.saved.target = "follow_profile";
     local.stage = "saved";
     if (!local.refining && local.review) local.base = { ...local.review };
