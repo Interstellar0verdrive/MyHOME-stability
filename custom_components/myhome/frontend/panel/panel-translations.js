@@ -362,6 +362,10 @@ export const translations = {
     wiz_T437: "This cover will follow the new profile. \"{old}\" stays with the other {count} covers.",
     wiz_T438: "This cover will follow the new profile. \"{old}\" stays with the other cover.",
     wiz_T439: "Also save as a reusable profile, or update the existing one",
+    wiz_T440: "The cover stopped earlier than expected ({seconds} s of about {estimate} s): check that it is really fully closed before continuing.",
+    wiz_T441: "The cover stopped earlier than expected ({seconds} s of about {estimate} s): check that it is really fully open before continuing.",
+    wiz_T442: "The cover did not do what it should. Restart the measurement.",
+    wiz_T443: "The cover stopped before you pressed ②. Restart the measurement and press ② as soon as the bottom edge lifts off the rest.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1188,6 +1192,10 @@ export const translations = {
     wiz_T437: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà alle altre {count} tapparelle.",
     wiz_T438: "Questa tapparella seguirà il nuovo profilo. «{old}» resterà all'altra tapparella.",
     wiz_T439: "Salva anche come profilo riusabile, o aggiorna quello esistente",
+    wiz_T440: "La tapparella si è fermata prima del previsto ({seconds} s su circa {estimate} s): controlla che sia davvero tutta chiusa prima di continuare.",
+    wiz_T441: "La tapparella si è fermata prima del previsto ({seconds} s su circa {estimate} s): controlla che sia davvero tutta aperta prima di continuare.",
+    wiz_T442: "La tapparella non ha fatto quello che doveva. Ricomincia la misurazione.",
+    wiz_T443: "La tapparella si è fermata prima che premessi ②. Ricomincia la misurazione e premi ② appena il bordo si stacca dall'appoggio.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

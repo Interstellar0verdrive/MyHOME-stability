@@ -1420,6 +1420,35 @@ test("after every change of screen the confirming buttons wait 700 ms, Stop neve
   assert.equal(backend.calls.filter((message) => message.action === "endpoint").length, 1);
 });
 
+test("a stop frame well before the estimated run asks to check the end stop; the confirmation stays active", () => {
+  const t = (key) => translations.en[key] || key;
+  const cover = { name: "Kitchen 2", effective: { closing: { value: 20, origin: "native_fallback" } } };
+  const at = (view, local = {}) => buildScreen({ t, stage: "session", path: "A", cover, elapsed: 8, local,
+    view: { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 4, ...view } });
+  const early = at({ step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 8 });
+  assert.equal(early.code, "A-05");
+  assert.deepEqual(early.notices, [{ tone: "warning", text: "The cover stopped earlier than expected (8.0 s of about 20 s): check that it is really fully closed before continuing." }]);
+  assert.equal(early.actions[0].disabled, undefined, "the end stop stays pressable");
+  assert.deepEqual(at({ step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 13 }).notices, [], "past 60 %: no warning");
+  assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }).notices.length, 1, "A-10 too");
+  assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }, { ackReadings: true }).notices.length, 0,
+    "not on a return that confirms itself on the stop frame (§9.53)");
+  assert.match(at({ step: "top", phase: "opening", motor_stopped: true, stopped_elapsed: 5 }).notices[0].text, /really fully open/, "the manual return to the top");
+});
+
+test("S-01 says what happened when the panel knows more: It did not do what it should", async () => {
+  const t = (key) => translations.en[key] || key;
+  const view = { mode: "geometry", phase: "interrupted", reason: "stopped", step: "home", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 };
+  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: { misbehaved: true }, cover: { name: "K" } }).body, "The cover did not do what it should. Restart the measurement.");
+  assert.equal(buildScreen({ t, stage: "session", path: "A", view, local: {}, cover: { name: "K" } }).body, translations.en.calReason_stopped, "a plain Stop keeps its text");
+  const { backend, wiz, code, press, startFor } = await mount();
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend);
+  await press("misbehaved"); await tick();
+  assert.equal(code(), "S-01");
+  assert.equal(wiz().querySelector(".wiz-body").textContent, "The cover did not do what it should. Restart the measurement.");
+});
+
 test("when the motor stops by itself on A-05 the end stop does not flicker disabled", async () => {
   const { backend, tab, wiz, code, press } = await mount({ guardMs: 700 });
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -259,6 +259,12 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   const positioningRun = (seconds) => !MOTOR_STOPPED(view) && seconds > 0 && (elapsed ?? 0) < seconds;
   // While a cover positions to an end stop, the user's eye may confirm it at once (the estimate comes from times not yet
   // measured): the end stop is the primary from the start (pressable once the motor runs), Stop the red link beside it.
+  // The motor stopped by itself well before the estimated run (under 60 %): a wall switch or an obstacle gives the same
+  // frame as the end stop, so the user is asked to look before confirming. The confirmation stays active.
+  const stoppedEarly = (estimate, key) => {
+    if (!MOTOR_STOPPED(view) || view.stopped_elapsed == null || !(estimate > 0) || view.stopped_elapsed >= estimate * EARLY_STOP_SHARE) return;
+    screen.notices.push({ tone: "warning", text: fill(t(key), { seconds: n.fixed(view.stopped_elapsed), estimate: n(estimate, 0) }) });
+  };
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
@@ -268,8 +274,12 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     // A-05 once the positioning is over: the end stop and "It did not do what it should" can be pressed at once, the
     // red Stop stays while the motor runs. T033 opens S-01 (nothing measured yet is lost). Not on A-10: there a stop
     // discards the lift-off measurement (§8.9).
-    if (phase === "closing" && !positioningRun(closingTime)) return Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
-      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...whileRunning(view, stop)] });
+    if (phase === "closing" && !positioningRun(closingTime)) {
+      Object.assign(screen, { code: p("05"), title: t("wiz_T030"), body: t("wiz_T031"),
+        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, { id: "misbehaved", label: t("wiz_T033"), kind: "secondary" }, ...whileRunning(view, stop)] });
+      stoppedEarly(closingTime, "wiz_T440");
+      return screen;
+    }
     positioning("04", tx("wiz_T029", values), closingTime);
     if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
     return screen;
@@ -301,8 +311,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       notices: [{ tone: "warning", text: fill(t("calGapWarning"), view) }],
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
-    if (phase === "closing" && !positioningRun(closingTime)) return Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
-      actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...whileRunning(view, stop)] });
+    if (phase === "closing" && !positioningRun(closingTime)) {
+      Object.assign(screen, { code: p("10"), title: t("wiz_T053"), body: t("wiz_T054"),
+        actions: [{ id: "endpoint", label: t("wiz_T032"), kind: "primary" }, ...whileRunning(view, stop)] });
+      // Not on a return before a repeated reading: that one confirms itself on the stop frame (§9.53).
+      if (!local.ackReadings) stoppedEarly(closingTime, "wiz_T440");
+      return screen;
+    }
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
     if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
@@ -352,6 +367,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     positioning("09", t("wiz_T086"), topTime);
     screen.phase = "descent";
     if (["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
+    if (phase === "opening") stoppedEarly(topTime, "wiz_T441");
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
     return screen;
   }
@@ -647,9 +663,11 @@ function problemScreen(screen, ctx, reason, step = false) {
       ...(code === "S-05" && seconds != null ? [fill(t("wiz_T257"), { seconds: number(seconds, ctx.language || "en", 1) })] : [])];
     screen.actions = [{ id: "repeat_step", label: t(retry), kind: "primary" }, { id: "stop", label: t("wiz_T028"), kind: "stop" }];
   } else {
-    // Today's backend discards the session: say what it says, and offer to start over.
+    // Today's backend discards the session: say what it says, and offer to start over. When the stop came from "It did
+    // not do what it should" the panel knows more and says so.
     const key = `calReason_${reason}`;
-    screen.body = t(key) === key ? t("calPhase_interrupted") : t(key);
+    screen.body = reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
+      : t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
   }
   // A step's problem keeps the session open: Abandon stays (and asks); an ended session has nothing to abandon.
@@ -707,6 +725,9 @@ function stagesBar(view) {
 
 /** Whole seconds left, never 0 while the bar is shown (sums of tenths are not exact: 11.000000001 is 11). */
 function secondsLeft(seconds) { return Math.max(1, Math.ceil(seconds - 0.001)); }
+
+/** A stop frame before this share of the estimated run is "earlier than expected" (R7-9). */
+const EARLY_STOP_SHARE = 0.6;
 
 /** A positioning to an end stop the cover already sits at: the bar runs this long, until the bus confirms the stop. */
 const ALREADY_THERE_SECONDS = 2;

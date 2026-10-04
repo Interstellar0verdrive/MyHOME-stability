@@ -507,7 +507,7 @@ export class CalibrationWizard {
     if (id.startsWith("run:")) return this._send(id.slice(4));
     if (["next", "lift", "endpoint", "repeat", "repeat_step", "accept", "repeat_check", "redo_readings", "continue_anyway", "continue"].includes(id)) return this._send(id);
     // "It did not do what it should" (A-05): today the run is stopped and S-01 offers to start over (L2 will repeat the step).
-    if (id === "stop" || id === "misbehaved") { this._closeDialog(false); return gateway?.stop(); }
+    if (id === "stop" || id === "misbehaved") { local.misbehaved = id === "misbehaved"; this._closeDialog(false); return gateway?.stop(); }
     // Ownership gained by a claim or a reconnection moves nothing until this tab presses something.
     if (id === "take") { local.arm = null; return gateway?.claim(); }
     if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }
@@ -894,7 +894,7 @@ export class CalibrationWizard {
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
 function freshFlags() {
-  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null,
+  return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, misbehaved: false,
     review: null, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
 }
 
