@@ -482,7 +482,7 @@ export class CalibrationWizard {
       if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }
       this._dropGateway(); Object.assign(local, freshFlags(), { stage: "before" }); return this._render();
     }
-    if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", path: "A", scope: null, saved: null, refining: false, base: null, baseSaved: false, coverKey: "", coverPicked: false }); return this._render(); }
+    if (id === "another") { this._dropGateway(); Object.assign(local, freshFlags(), { stage: "choose", entry: "choose", path: "A", scope: null, saved: null, refining: false, base: null, baseSaved: false, coverKey: "", coverPicked: false }); return this._render(); }
     if (id === "open-cover") { const entityId = this._item()?.cover.entity_id; const { onOpenCover } = this._context; this._finish(); onOpenCover?.(entityId); return; }
     if (id === "correct") {
       // B → C: the cover is measured on its own; nothing of the preview was written.

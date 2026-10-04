@@ -163,6 +163,17 @@ test("the header's back arrow goes one choice back before any session, keeping w
   assert.equal(second.wiz().querySelector('[data-wiz="back"]'), null);
 });
 
+test("after Calibrate another cover, the way back from A-02 is A-01 again", async () => {
+  const context = await mount();
+  const { wiz, code, press, pickCover } = context;
+  await runToSaved(context, { fromRow: true });
+  await press("another");
+  assert.equal(code(), "A-01");
+  await pickCover("cover.kitchen_two"); await press("choose");
+  wiz().querySelector('[data-wiz="back"]').click(); await tick();
+  assert.equal(code(), "A-01", "the restart begins at A-01, so back goes there");
+});
+
 test("from a cover's own Measure the way back from A-02 is the list", async () => {
   const { tab, wiz, code } = await mount();
   const row = [...tab().querySelectorAll(".cal-row")].find((item) => item.dataset.entity === "cover.living_one");
@@ -427,8 +438,13 @@ test("a cover that follows a profile saves only on itself by default, which wait
 });
 
 /** Path A on Living room shutter 1 from the first close to its saved screen (A-34). */
-async function runToSaved({ backend, press, type, startFor, code }) {
-  await startFor("cover.living_one");
+async function runToSaved({ backend, press, type, startFor, code, tab, choosePath }, { fromRow = false } = {}) {
+  if (!fromRow) await startFor("cover.living_one");
+  else {
+    // From the cover's own Measure: A-01 is skipped.
+    [...tab().querySelectorAll(".cal-row")].find((item) => item.dataset.entity === "cover.living_one").querySelector('[data-action="cal-tab-measure-cover"]').click(); await tick();
+    await choosePath("A");
+  }
   await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
   await press("ack:lift"); await press("next"); await move(backend, { seconds: 4.4 }); await press("lift"); backend.stopped(); await tick();
   await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
