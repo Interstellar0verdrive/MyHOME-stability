@@ -932,9 +932,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-action.stop:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 .wiz-action.link { color: var(--panel-error); }
 .wiz-action.link:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
-/* Stop alone in a wait: red filled, the geometry of the primary. */
+/* Stop alone in a wait, and B-09's Close: red filled, the geometry of the primary. C-34's and S-06's Close: red outlined. */
 .wiz-action.danger { border-color: var(--panel-error); background: var(--panel-error); color: #fff; }
 .wiz-action.danger:hover { background: color-mix(in srgb, var(--panel-error) 88%, #000); }
+.wiz-action.danger-outline { border-color: var(--panel-error); color: var(--panel-error); background: transparent; }
+.wiz-action.danger-outline:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 /* S-07: plain text at the top of the actions column, then Take control (outlined while the owner is present). */
 .wiz-readonly { display: grid; gap: 16px; }
 .wiz-readonly p { margin: 0; font-size: 14px; line-height: 1.5; }

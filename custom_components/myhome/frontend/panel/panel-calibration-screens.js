@@ -503,6 +503,8 @@ export function slug(text) {
 function savedScreen(screen, ctx, tx, values) {
   const { t, path, local = {} } = ctx;
   const saved = local.saved || {};
+  // "Close" keeps each mockup's own style: B-09 red filled, A-34 red text, C-34 red outlined.
+  const close = (of) => ({ id: "close", label: t("wiz_T158"), kind: of === "B" ? "danger" : of === "C" ? "danger-outline" : "link" });
   screen.discard = false;
   screen.phase = "done";
   screen.preview = !!saved.preview;
@@ -512,17 +514,16 @@ function savedScreen(screen, ctx, tx, values) {
     screen.illustration = false;
     return Object.assign(screen, { code: path === "B" ? "B-09" : path === "C" ? "C-34" : "A-34", title: t("wiz_T320"),
       body: local.baseSaved ? t("wiz_T322") : tx("wiz_T321", values),
-      actions: path === "B" ? [{ id: "close", label: t("wiz_T158"), kind: "primary" }]
-        : [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, { id: "close", label: t("wiz_T158"), kind: "link" }] });
+      actions: path === "B" ? [close("B")]
+        : [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
   }
   if (path === "B") return Object.assign(screen, { code: "B-09", title: t("wiz_T154"),
     body: tx("wiz_T182", { ...values, profile: ctx.cover?.followProfile ?? "", travel: number(saved.travel_cm, ctx.language, 0) }),
-    actions: [{ id: "close", label: t("wiz_T158"), kind: "primary" }] });
+    actions: [close("B")] });
   const body = saved.target === "profile_new" ? tx("wiz_T155", { name: saved.name ?? "" })
     : path === "C" && ctx.cover?.profile ? tx("wiz_T228", values) : tx("wizSavedCover", values);
   return Object.assign(screen, { code: path === "C" ? "C-34" : "A-34", title: t("wiz_T154"), body,
-    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" },
-      { id: "close", label: t("wiz_T158"), kind: "link" }] });
+    actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
 }
 
 /** S-01…S-06: a step that ended. Today's sessions end with their reason (repeating starts over);
@@ -541,7 +542,8 @@ function problemScreen(screen, ctx, reason, step = false) {
   screen.title = t(title);
   if (code === "S-06") {
     screen.body = t(body);
-    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
+    // As in its mockup, "Close" is outlined in red.
+    screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "danger-outline" }];
   } else if (step) {
     // The step alone is repeated: the texts of the mockups describe exactly this.
     screen.body = t(body);

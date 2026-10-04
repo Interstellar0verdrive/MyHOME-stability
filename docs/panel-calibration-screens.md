@@ -66,7 +66,8 @@ closing or opening time, a half run from the measured times, a simulated step fr
 under it (T402, provisional); when the duration is unknown (a cover with only the integration's default times) the bar
 moves back and forth and the time left is omitted. Stages carry ✓ when done and ◐ while running. Stop is a red filled
 button when it is a wait's only action and a red text link beside a step's buttons (the timed runs); text actions
-(*Continue anyway*, *Close*) are red text; radios are plain rows and the advised path's badge is accent blue. Every new step moves the focus
+(*Continue anyway*, A-34's *Close*) are red text; *Close* keeps each mockup's style elsewhere (B-09 red filled, C-34 and
+S-06 red outlined); radios are plain rows and the advised path's badge is accent blue. Every new step moves the focus
 to its title; the Steps sheet and the Discard dialog keep Tab inside and close with Escape, and closing the dialog
 returns the focus to the screen's confirming button (or its title). After every change of screen or of its buttons the
 confirming buttons stay disabled for `CONFIRM_GUARD_MS` (700 ms), so a slow double tap never confirms an end stop the
