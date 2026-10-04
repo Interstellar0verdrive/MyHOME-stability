@@ -215,6 +215,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   await move(backend, { seconds: 4 });
   assert.equal(wiz().querySelector(".wiz-stopwatch").hidden, false);
   assert.equal(wiz().querySelector(".wiz-stopwatch-label").textContent, "Motor");
+  assert.equal(wiz().querySelector(".wiz-stopwatch").getAttribute("style"), "--wiz-stopwatch-width: 560px", "as wide as the drawing under it");
   assert.match(wiz().querySelector(".wiz-stopwatch-value").textContent, /^moving for \d+(\.\d)? s$/);
   assert.equal(wiz().querySelector('[data-wiz="next"]').disabled, true);
   await press("lift");

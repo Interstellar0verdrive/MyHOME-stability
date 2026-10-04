@@ -892,7 +892,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   background: color-mix(in srgb, var(--panel-warning) 14%, var(--panel-surface)); border: 1px dashed color-mix(in srgb, var(--panel-warning) 60%, transparent); }
 .wiz-body p { margin: 0 0 10px; line-height: 1.55; }
 .wiz-body p:last-child { margin-bottom: 0; }
-.wiz-stopwatch { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: 10px; border-inline-start: 4px solid var(--panel-accent); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
+/* The motor bar is as wide as the drawing under it (at most 564 px), left-aligned; its value at the right end. */
+.wiz-stopwatch { box-sizing: border-box; width: min(100%, var(--wiz-stopwatch-width, 564px)); display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: 10px; border-inline-start: 4px solid var(--panel-accent); background: var(--panel-accent-soft); font-variant-numeric: tabular-nums; }
 .wiz-stopwatch-label { font-weight: 600; }
 .wiz-stopwatch-value { color: var(--panel-text-2); }
 .wiz-wait { display: grid; gap: 10px; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--panel-border); background: var(--panel-surface-2); }

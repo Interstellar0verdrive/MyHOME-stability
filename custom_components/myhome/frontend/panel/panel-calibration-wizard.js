@@ -11,7 +11,7 @@ const [{ escapeHtml: esc }, text, screens, gateways, illustration] = await Promi
 const { rich, inline, names } = text;
 const { buildScreen, slug } = screens;
 const { LiveCalibrationGateway, PreviewCalibrationGateway } = gateways;
-const { illustrationMarkup } = illustration;
+const { illustrationMarkup, ILLUSTRATIONS } = illustration;
 
 /** A tape reading with a comma or a point; anything else, empty included, is not a number. */
 export function parseReading(value) {
@@ -199,7 +199,7 @@ export class CalibrationWizard {
           <div class="wiz-main">
             ${screen.preview ? `<p class="wiz-preview" role="note"><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon><span>${esc(t("wizPreview"))}</span></p>` : ""}
             <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>${screen.subline ? `<p class="cal-note wiz-subline">${esc(screen.subline)}</p>` : ""}
-            <div class="wiz-stopwatch" hidden><span class="wiz-stopwatch-label"></span><span class="wiz-stopwatch-value"></span></div>
+            <div class="wiz-stopwatch" hidden${ILLUSTRATIONS[screen.illustration?.id] ? ` style="--wiz-stopwatch-width: ${ILLUSTRATIONS[screen.illustration.id].width}px"` : ""}><span class="wiz-stopwatch-label"></span><span class="wiz-stopwatch-value"></span></div>
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
