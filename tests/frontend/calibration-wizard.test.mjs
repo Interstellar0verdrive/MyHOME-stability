@@ -498,7 +498,8 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   await press("save");
   assert.equal(code(), "A-34");
   const kinds = [...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => [item.dataset.wiz, item.className.replace("wiz-action ", "")]);
-  assert.deepEqual(kinds, [["refine", "primary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]], "fine-tuning is the next step");
+  assert.deepEqual(kinds, [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]],
+    "fine-tuning is the next step; the new profile can go to other covers");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').textContent, "Continue with fine-tuning");
   assert.equal(wiz().querySelector("#wiz-note-refine"), null, "no note under the button");
   assert.equal(wiz().querySelector('[data-wiz="refine"]').hasAttribute("aria-describedby"), false);
@@ -535,6 +536,25 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(wiz().querySelector('[data-wiz="refine"]'), null, "the end of a preview offers no further fine-tuning");
   assert.equal(actions().length, sent, "the fine-tuning preview sent nothing");
   assert.equal(backend.calls.filter((message) => message.action === "save").length, saves, "and saved nothing more");
+});
+
+test("A-34's Assign this profile to other covers opens the maintainer's Assign dialog on the profile just created", async () => {
+  const context = await mount();
+  const { backend, root, wiz, code } = context;
+  await runToSaved(context);
+  const button = wiz().querySelector('[data-wiz="assign-profile"]');
+  assert.equal(button.textContent, "Assign this profile to other covers");
+  // Home Assistant has written the new profile: the tab finds it by name in the overview.
+  backend.overview.profiles.push({ id: "fresh", name: "living_room_shutter_1", opening_time: 22.2, closing_time: 21.7, reference_travel_cm: 198,
+    geometry: { slat_time_s: 4.4, opening_roll: 1.83, closing_roll: 1.91 }, assigned_to: ["cover.living_one"], provenance: {} });
+  button.click(); await settle();
+  const dialog = root.querySelector("#dialog-host dialog");
+  assert.ok(dialog?.open, "the dialog is open");
+  assert.equal(dialog.querySelector("#catalogue-title").textContent, "Assign profile to covers");
+  assert.ok(backend.calls.some((message) => message.type === "myhome/cover_profiles/overview"));
+  assert.equal(code(), "A-34", "the wizard stays under it");
+  dialog.querySelector("#catalogue-close").click(); await tick();
+  assert.equal(root.querySelector("#dialog-host dialog"), null);
 });
 
 test("the tab's Fine-tune asks first what is wrong (C-01, C-02), and the way back from C-01 is the list", async () => {
@@ -1375,7 +1395,9 @@ test("the preview is announced before it starts and its end never says that some
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
   assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, rendono la stima della posizione più precisa lungo tutta la corsa. Circa 4 minuti; la tapparella si muove.`,
     "T319 is the body's second paragraph");
-  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
+  assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
+  const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } });
+  assert.equal(coverOnly.actions.some((action) => action.id === "assign-profile"), false, "no profile written, nothing to assign");
   assert.deepEqual(real.stepper.phases.map((phase) => [phase.key, phase.state]).slice(-2), [["summary", "done"], ["finetune", "future"]]);
   assert.equal(real.stepper.phases.at(-1).label, "Perfezionamento (facoltativo)");
   assert.equal(buildScreen({ t, language: "it", stage: "saved", path: "C", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } })

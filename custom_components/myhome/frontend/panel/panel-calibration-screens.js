@@ -587,8 +587,10 @@ function savedScreen(screen, ctx, tx, values) {
     : path === "C" && ctx.cover?.profile ? tx("wiz_T228", values) : tx("wizSavedCover", values);
   // A-34: the base calibration is saved; fine-tuning (path C on the same cover) is the primary next step, explained
   // by the body's second paragraph (T319).
+  // A profile was created or updated: it can be given to similar covers at once (the maintainer's Assign dialog).
+  const assign = ["profile_new", "profile_update"].includes(saved.target) ? [{ id: "assign-profile", label: t("wiz_T426"), kind: "secondary" }] : [];
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
-    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, { id: "another", label: t("wiz_T156"), kind: "secondary" },
+    actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
       { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });
   return Object.assign(screen, { code: "C-34", title: t("wiz_T154"), body,
     actions: [{ id: "another", label: t("wiz_T156"), kind: "primary" }, { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });

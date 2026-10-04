@@ -75,9 +75,9 @@ export class CalibrationWizard {
     this._context = null;
   }
 
-  open({ host, hass, t, covers, data, picker = null, start = "choose", item = null, session = null, onOpenCover, onClose }) {
+  open({ host, hass, t, covers, data, picker = null, start = "choose", item = null, session = null, onOpenCover, onAssignProfile, onClose }) {
     this.close();
-    this._context = { host, hass, t, covers, data, picker, onOpenCover, onClose };
+    this._context = { host, hass, t, covers, data, picker, onOpenCover, onAssignProfile, onClose };
     // Opened on a given cover, the choice is made; from the tab's generic button it starts empty.
     this._local = { stage: "choose", path: "A", scope: null, coverKey: item ? key(item) : "", coverPicked: !!item };
     host.innerHTML = "";
@@ -494,6 +494,15 @@ export class CalibrationWizard {
     if (id === "reconnect") { local.arm = null; return gateway?.reconnect(); }
     if (id === "save") return this._save();
     if (id === "refine") return this._fineTune();
+    if (id === "assign-profile") {
+      // The profile just written: by its id when it was updated, by its name when it was created (the id comes with the
+      // overview Home Assistant publishes after the save).
+      const item = this._item(), saved = local.saved || {};
+      if (!item) return;
+      this._context.onAssignProfile?.({ entryId: item.entry.entry_id, profileId: saved.target === "profile_update" ? item.profile?.id ?? null : null,
+        name: saved.name ?? item.profile?.name ?? null });
+      return;
+    }
     if (id === "start-over") {
       // Fine-tuning starts again from the values just saved; everything else from "Before you begin".
       if (local.refining && local.base) { this._startRefine(local.base); return this._render(); }

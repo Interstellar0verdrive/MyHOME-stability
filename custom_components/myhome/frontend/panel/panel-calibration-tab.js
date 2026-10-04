@@ -1,8 +1,8 @@
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
-const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibration }, { CalibrationWizard }] = await Promise.all([
+const [{ escapeHtml: esc, replacePreservingFocus }, model, text, { CoverCalibration }, { CalibrationWizard }, { ProfileCatalogueEditor }] = await Promise.all([
   import(asset("panel-dom.js")), import(asset("panel-model.js")), import(asset("panel-calibration-text.js")),
-  import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")),
+  import(asset("panel-cover-calibration.js")), import(asset("panel-calibration-wizard.js")), import(asset("panel-profile-catalogue-editor.js")),
 ]);
 const { fill, rich, number, dateText, names } = text;
 
@@ -60,6 +60,7 @@ export class CalibrationTab {
 
   clear() {
     this._context?.setBeforeLeave?.(null);
+    this._catalogue?.close();
     this._generation++;
     this._closeDialog();
     for (const unsubscribe of this._unsubs.splice(0)) Promise.resolve(unsubscribe()).catch(() => {});
@@ -558,6 +559,7 @@ export class CalibrationTab {
       // A-01's list, drawn as the tab's lists are, in the list's shared order.
       picker: { markup: (state) => this._pickerMarkup(state), sort: (key, dir) => this._setSort(key, dir), order: () => ({ ...this._sort }) },
       onOpenCover: (entityId) => onOpenCover?.(entityId),
+      onAssignProfile: (profile) => this._assignToCovers(profile),
       onClose: () => this._backToList() });
   }
 
@@ -695,6 +697,23 @@ export class CalibrationTab {
         refused = true;
       }
     };
+  }
+
+  /**
+   * A-34's "Assign this profile to other covers": the maintainer's own Assign dialog (the one the Profiles tab opens,
+   * ProfileCatalogueEditor with action "assign"), on the profile just written. A profile just created is found by
+   * name once the overview carries it.
+   */
+  async _assignToCovers({ entryId, profileId, name }) {
+    if (!this._context) return;
+    const find = () => this._rows.get(entryId)?.data?.profiles.find((profile) => (profileId && profile.id === profileId) || (!profileId && profile.name === name));
+    if (!find()) await this._read(entryId, this._generation);
+    const profile = find();
+    if (!profile || !this._context) return;
+    const { hass, t, dialogHost, inventory, addressDetails } = this._context;
+    this._catalogue ??= new ProfileCatalogueEditor();
+    this._catalogue.open({ host: dialogHost, hass, entryId, profileId: profile.id, action: "assign", entities: inventory.entities,
+      addressDetails, t, onSaved: () => this.refresh() });
   }
 
   /** Several covers in sequence: the existing selection and automatic batch, in a dialog, with readable names. */

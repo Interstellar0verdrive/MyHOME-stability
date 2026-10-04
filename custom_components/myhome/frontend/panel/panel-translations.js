@@ -348,6 +348,7 @@ export const translations = {
     wiz_T423: "Measure the cover first.",
     wiz_T424: "Expand all",
     wiz_T425: "Collapse all",
+    wiz_T426: "Assign this profile to other covers",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1160,6 +1161,7 @@ export const translations = {
     wiz_T423: "Prima misura la tapparella.",
     wiz_T424: "Espandi tutte",
     wiz_T425: "Comprimi tutte",
+    wiz_T426: "Assegna questo profilo ad altre tapparelle",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
