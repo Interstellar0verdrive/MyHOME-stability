@@ -678,6 +678,8 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
    opaque (tint over the surface), so they never blend with the row that hosts them. */
 .cal-note.is-warning { border-color: color-mix(in srgb, var(--panel-warning) 75%, transparent);
   background: color-mix(in srgb, var(--panel-warning) 8%, var(--panel-surface)); color: var(--primary-text-color, #182b37); }
+/* On dark themes the warning text takes the note's own tint instead of plain white. */
+[data-theme="dark"] .cal-note.is-warning { color: color-mix(in srgb, var(--panel-warning) 70%, var(--primary-text-color, #fff)); }
 .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: visible; }
 .cal-list-head { display: none; }
 .cal-list-rows { display: contents; }
