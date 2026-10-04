@@ -34,6 +34,7 @@ from OWNd.message import OWNAutomationCommand
 
 from .const import CONF_COVER_TRAVEL_TIMES, DOMAIN
 from .cover_calibration_reservation import CalibrationReservation
+from .cover_motion import ECHO_WINDOW
 from .cover_profile_provenance import EVIDENCE, evidence, unknown_provenance
 from .cover_profiles import (
     DATA_KEY,
@@ -115,6 +116,8 @@ class CalibrationSession:
         # (see `stop_awaits_endpoint`): seconds from the motor start, rounded as `endpoint`.
         self.motor_stopped = False
         self.stopped_elapsed: float | None = None
+        # The sequence of the view that published that stop (see `press_across_stop`).
+        self.stop_sequence: int | None = None
         self.armed = False
         self.stop_requested = False
         self.listener = True
@@ -472,7 +475,14 @@ class CalibrationSession:
             self.interrupt("unexpected_movement")
         elif not expected:
             if event.state == 0 and self.stop_awaits_endpoint():
-                self.motor_stop()
+                # A stop status this close to the motor start is the gateway relaying a
+                # stop around our own direction command, not the end of the travel: it
+                # must not date the run, and the real end stop will. Calibration commands
+                # bypass the cover's own command path, so its echo window is never open
+                # for them; the same ECHO_WINDOW is measured here from the run's anchor,
+                # which follows the write. No real travel is that short.
+                if monotonic() - cast(float, self.started_at) >= ECHO_WINDOW:
+                    self.motor_stop()
             else:
                 self.interrupt("unexpected_stop")
 
@@ -500,10 +510,22 @@ class CalibrationSession:
         self.motor_stopped = True
         self.stopped_elapsed = round(monotonic() - cast(float, self.started_at), 2)
         self.emit()
+        self.stop_sequence = self.sequence
+
+    def press_across_stop(self, msg: dict[str, Any]) -> bool:
+        """An `endpoint` sent before the stop's view reached the client still confirms the run.
+
+        The stop status publishes a new view, so a press made while that frame or that
+        view was in flight carries the sequence just before it. It is accepted only for
+        `endpoint`, with exactly that sequence, and while nothing else has changed since the
+        stop (no other transition, ownership change included, has moved the sequence on).
+        """
+        return (msg["action"] == "endpoint" and self.motor_stopped and self.sequence == self.stop_sequence
+                and msg.get("sequence") == self.sequence - 1)
 
     def forget_motor_stop(self) -> None:
         self.motor_stopped = False
-        self.stopped_elapsed = None
+        self.stopped_elapsed = self.stop_sequence = None
 
     def run_time(self) -> tuple[float, str]:
         """The measured seconds of a confirmed run, and what ended them (provenance `ended_by`).
@@ -570,7 +592,7 @@ class CalibrationSession:
         if action == "detach":
             self.detach(self.attachment)
             return self.view()
-        if not self.active or msg.get("sequence") != self.sequence:
+        if not self.active or (msg.get("sequence") != self.sequence and not self.press_across_stop(msg)):
             raise ProfileError("calibration_step")
         entry, entity = target(self.hass, self.entry_id, self.cover.entity_id)
         if not snapshot(self.hass, self.store, entry, entity)["writable"]:

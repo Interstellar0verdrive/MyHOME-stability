@@ -267,6 +267,7 @@ class GeometryCalibrationSession(guided.CalibrationSession):
     def _endpoint(self) -> None:
         old_step = self.step
         if old_step in {"opening", "closing"}:
+            # As `run_time()`, except that a press time stays unrounded here, as it always has.
             if self.motor_stopped:  # Confirmed after the bus reported the stop: the stop ends the run.
                 seconds, ended_by = cast(float, self.stopped_elapsed), "bus_stop"
             else:
@@ -284,7 +285,8 @@ class GeometryCalibrationSession(guided.CalibrationSession):
         if self.motor_stopped:
             # The bus has already reported the stop, so no second stop status is awaited. Stop
             # is still written, as after every confirmed end stop, but the step does not
-            # depend on its delivery: the motor is known to be stationary.
+            # depend on its delivery: the motor is known to be stationary. As in the base
+            # `endpoint`, a full queue only leaves `stop_queue_full` as the reason.
             self.forget_motor_stop()
             self.queue_stop()
             self._stopped()
