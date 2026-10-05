@@ -1895,3 +1895,12 @@ test("A-07 carries its phone drawing beside the wide one; the stylesheet shows o
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /@media \(max-width: 1023px\) \{\s*\.wiz-illustration\.wiz-ill-wide \{ display: none; \}/);
 });
+
+test("our texts name the shell's tabs with the shell's own labels, and never call a window a dialog in Italian", async () => {
+  const fillIn = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key]);
+  assert.match(fillIn(translations.it.wiz_T409, { minutes: 30, tab: translations.it.calTabTab }), /dalla scheda Calibrazione\./);
+  assert.match(fillIn(translations.en.wiz_T409, { minutes: 30, tab: translations.en.calTabTab }), /from the Calibration tab\./);
+  assert.match(fillIn(translations.it.wiz_T431, { old: "x", tab: translations.it.profileListTitle }), /dalla scheda Profili\.$/);
+  const italian = Object.entries(translations.it).filter(([key]) => key.startsWith("wiz_") || key.startsWith("calTab"));
+  assert.deepEqual(italian.filter(([, text]) => /\bdialog|scheda (Calibration|Devices|Profiles)\b/.test(text)).map(([key]) => key), []);
+});

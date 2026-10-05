@@ -565,7 +565,7 @@ function summaryScreen(screen, ctx, tx, n, values) {
 /** Under a new profile's name, for a cover that followed another: what happens to that one (left alone, or kept by others). */
 function followLine(t, cover) {
   const others = cover.followers?.length ?? 0, old = cover.profile.name;
-  return fill(t(others === 0 ? "wiz_T436" : others === 1 ? "wiz_T438" : "wiz_T437"), { old, count: others });
+  return fill(t(others === 0 ? "wiz_T436" : others === 1 ? "wiz_T438" : "wiz_T437"), { old, count: others, tab: t("profileListTitle") });
 }
 
 /** "Also save as reusable profile": on by default for a first cover, off when it already follows a profile. */
@@ -639,7 +639,7 @@ function savedScreen(screen, ctx, tx, values) {
   // A profile was created or updated: it can be given to similar covers at once (the maintainer's Assign dialog).
   const assign = ["profile_new", "profile_update"].includes(saved.target) ? [{ id: "assign-profile", label: t("wiz_T426"), kind: "secondary" }] : [];
   // A new profile left the previous one without covers: it can be deleted from the Profiles tab (never by itself).
-  if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan }) };
+  if (saved.target === "profile_new" && saved.orphan) screen.note = { tone: "info", text: fill(t("wiz_T431"), { old: saved.orphan, tab: t("profileListTitle") }) };
   if (path !== "C") return Object.assign(screen, { code: "A-34", title: t("wiz_T154"), body: `${body}\n\n${t("wiz_T319")}`,
     actions: [{ id: "refine", label: t("wiz_T103"), kind: "primary" }, ...assign, { id: "another", label: t("wiz_T156"), kind: "secondary" },
       { id: "open-cover", label: t("wiz_T157"), kind: "secondary" }, close(path)] });

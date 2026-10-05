@@ -915,7 +915,7 @@ export class CalibrationWizard {
     // How long Home Assistant keeps it open for its owner (30 minutes at rest, 10 after a movement).
     const seconds = this._gateway.view?.recovery_seconds;
     const minutes = Math.max(1, Math.round((Number.isFinite(seconds) ? seconds : IDLE_LEASE_SECONDS) / 60));
-    dialog.querySelector("#wiz-nav-body").textContent = text.fill(t("wiz_T409"), { minutes });
+    dialog.querySelector("#wiz-nav-body").textContent = text.fill(t("wiz_T409"), { minutes, tab: t("calTabTab") });
     this._closeDialog(false);
     dialog.hidden = false;
     this._root.classList.add("has-dialog");
