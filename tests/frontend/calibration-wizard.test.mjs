@@ -823,7 +823,7 @@ test("the drawings' palette follows Home Assistant's dark mode", async () => {
 test("the drawing is one inline SVG at its Figma size, placed by its position, and gone where the mockup has none", async () => {
   const { ILLUSTRATIONS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
   assert.deepEqual(Object.keys(ILLUSTRATIONS).sort(), ["ascent-sequence", "check", "curtain-open-tape", "curtain-partial-tape", "descent-sequence",
-    "lift-sequence", "lift-zoom", "two-runs", "window-closed"]);
+    "lift-sequence", "lift-sequence-mobile", "lift-zoom", "two-runs", "window-closed"]);
   assert.ok(Object.values(ILLUSTRATIONS).every((size) => size.width <= 564), "never wider than the instruction column");
   const { backend, wiz, code, press, startFor } = await mount();
   await startFor("cover.living_one");
@@ -1874,4 +1874,24 @@ test("a missed heartbeat is a calm status, and the panel reconnects when the pag
   backend.hass.callWS = async (message) => { if (message.type === "myhome/cover_calibration/action" && message.action !== "heartbeat") throw new Error("boom"); return callWS(message); };
   await gateway._engine._perform("stop", {}); await tick();
   assert.match(notices().textContent, /Connection or command failed/);
+});
+
+test("A-07 carries its phone drawing beside the wide one; the stylesheet shows one per width", async () => {
+  const { illustrationMarkup, PHONE_VERSION, SVG } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-illustration.js");
+  assert.deepEqual(PHONE_VERSION, { "lift-sequence": "lift-sequence-mobile" });
+  const host = document.createElement("div");
+  host.innerHTML = illustrationMarkup("lift-sequence", "Step diagram", (value) => value);
+  const drawings = [...host.querySelectorAll("svg")];
+  assert.deepEqual(drawings.map((svg) => [svg.dataset.illustration, svg.getAttribute("class")]),
+    [["lift-sequence", "wiz-illustration wiz-ill-wide"], ["lift-sequence-mobile", "wiz-illustration wiz-ill-phone"]]);
+  assert.equal(drawings[1].getAttribute("viewBox"), "0 0 358 228");
+  // The "②" stays live text in the panel's font, its colour themed like the rest.
+  const label = drawings[1].querySelector("text");
+  assert.equal(label.textContent, "②");
+  assert.deepEqual([label.getAttribute("font-family"), label.getAttribute("font-weight"), label.getAttribute("fill")], ["inherit", "600", "var(--wiz-ill-surface,#fff)"]);
+  assert.doesNotMatch(SVG["lift-sequence-mobile"], /#(?:009AC7|BDBDBD|2E2E2E)"/i, "no raw paint colour left");
+  host.innerHTML = illustrationMarkup("lift-zoom", "Step diagram", (value) => value);
+  assert.equal(host.querySelectorAll("svg").length, 1, "other drawings are one SVG");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 1023px\) \{\s*\.wiz-illustration\.wiz-ill-wide \{ display: none; \}/);
 });

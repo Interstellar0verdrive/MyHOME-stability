@@ -21,15 +21,24 @@ export const ILLUSTRATIONS = {
   "curtain-open-tape": { width: 207, height: 200 },
   "curtain-partial-tape": { width: 207, height: 200 },
   check: { width: 208, height: 200 },
+  "lift-sequence-mobile": { width: 358, height: 228 },
 };
+
+/** Drawings with a version of their own for phones (under 1024 px, A-07 M): only the lift-off sequence. */
+export const PHONE_VERSION = { "lift-sequence": "lift-sequence-mobile" };
 
 export { SVG };
 
 /** The drawing of one illustration id, described as a whole for assistive technology. */
 export function illustrationMarkup(id, label, escape) {
-  const size = ILLUSTRATIONS[id], svg = SVG[id];
-  if (!size || !svg) return "";
-  // The ratio is set too: with only width and height attributes some browsers (Safari) keep the full height when the
-  // column is narrower than the drawing, and it overlaps the text under it.
-  return svg.replace(/^<svg /, `<svg class="wiz-illustration" data-illustration="${escape(id)}" role="img" aria-label="${escape(label)}" width="${size.width}" height="${size.height}" style="width: min(100%, ${size.width}px); aspect-ratio: ${size.width} / ${size.height}" focusable="false" `);
+  const one = (name, extra = "") => {
+    const size = ILLUSTRATIONS[name], svg = SVG[name];
+    if (!size || !svg) return "";
+    // The ratio is set too: with only width and height attributes some browsers (Safari) keep the full height when the
+    // column is narrower than the drawing, and it overlaps the text under it.
+    return svg.replace(/^<svg /, `<svg class="wiz-illustration${extra}" data-illustration="${escape(name)}" role="img" aria-label="${escape(label)}" width="${size.width}" height="${size.height}" style="width: min(100%, ${size.width}px); aspect-ratio: ${size.width} / ${size.height}" focusable="false" `);
+  };
+  // A drawing with a phone version: both are in the page and the stylesheet shows one per width (a resize needs no redraw).
+  const phone = PHONE_VERSION[id];
+  return phone && SVG[phone] ? one(id, " wiz-ill-wide") + one(phone, " wiz-ill-phone") : one(id);
 }

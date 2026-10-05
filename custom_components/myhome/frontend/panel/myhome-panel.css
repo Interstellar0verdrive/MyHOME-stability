@@ -1113,6 +1113,12 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 /* Drawings of the steps: Figma size, never wider than the column. */
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
+/* M2-7: A-07 has a drawing of its own on phones; only one of the two is shown. */
+.wiz-illustration.wiz-ill-phone { display: none; }
+@media (max-width: 1023px) {
+  .wiz-illustration.wiz-ill-wide { display: none; }
+  .wiz-illustration.wiz-ill-phone { display: block; }
+}
 /* The drawings' palette (Figma "v2 panel" variables): light, and dark with the Home Assistant theme. */
 .wiz { --wiz-ill-surface: #FFFFFF; --wiz-ill-cover-skeleton: #FFFFFF; --wiz-ill-text-on-accent: #FFFFFF; --wiz-ill-cover-border: #2E2E2E;
   --wiz-ill-cover-slats: #BDBDBD; --wiz-ill-cover-last-slat: #939393; --wiz-ill-text: #141414; --wiz-ill-text-2: #5E5E5E; --wiz-ill-accent: #009AC7; }
