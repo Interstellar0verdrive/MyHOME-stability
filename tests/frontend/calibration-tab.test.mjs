@@ -901,3 +901,19 @@ test("on phones the sequence view has a native «Select ⌄» menu of actions an
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-batch-lead input \{ appearance: none;[^}]*border-radius: 50%/);
 });
+
+test("focus rings are for the keyboard only; a touch choice lets the drop-down go (M4-3)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /-webkit-tap-highlight-color: transparent/);
+  assert.match(css, /\.cal-compact-sort:has\(select:focus-visible\)[^{]*\{ outline: 2px solid var\(--panel-accent\)/);
+  assert.match(css, /\.cal-compact-sort select:focus,[^{]*\{ outline: none; box-shadow: none;/);
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("hover: none") || query.includes("max-width") });
+  try {
+    const { tab, root } = await mount();
+    const select = tab.querySelector(".cal-tab-compact select[data-sort]");
+    select.focus();
+    select.value = "status:asc"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    assert.notEqual(root.activeElement, select);
+  } finally { globalThis.matchMedia = original; }
+});

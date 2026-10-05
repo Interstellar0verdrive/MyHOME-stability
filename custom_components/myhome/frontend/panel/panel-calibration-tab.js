@@ -257,6 +257,9 @@ export class CalibrationTab {
         return;
       }
     }
+    // M4-3: on a touch screen a native drop-down keeps the focus (and its ring) after the choice: let it go.
+    const touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
+    if (touch && event.target.matches?.("select[data-filter], select[data-sort]")) event.target.blur();
     if (event.target.matches?.("select[data-filter]") && this._mode.kind === "list") { this._filter = event.target.value; this._render(); return; }
     const select = event.target.closest?.("select[data-sort]");
     if (!select || !["list", "batch"].includes(this._mode.kind)) return;

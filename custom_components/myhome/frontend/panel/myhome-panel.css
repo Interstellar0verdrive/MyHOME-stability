@@ -711,6 +711,11 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-filters .cal-tab-chips { display: none; }
   .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex-basis: 100%; }
 }
+/* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
+.cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
+.cal-compact-sort select:focus, .cal-compact-sort select:focus-visible, .cal-sort-pill select:focus, .cal-sort-pill select:focus-visible { outline: none; box-shadow: none; border-color: transparent; }
+.cal-compact-sort:has(select:focus-visible), .cal-sort-pill:has(select:focus-visible) { outline: 2px solid var(--panel-accent); outline-offset: 2px; }
+.cal-tab :is(button, select, input):focus:not(:focus-visible), .wiz :is(button, select, input):focus:not(:focus-visible) { outline: none; }
 .cal-compact-filter, .cal-compact-sort { box-sizing: border-box; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; margin: 0;
   padding: 0 8px 0 12px; border: 1px solid var(--panel-border); border-radius: 10px; background: var(--panel-surface);
   color: var(--primary-text-color, #182b37); font-size: 14px; font-weight: 400; }
