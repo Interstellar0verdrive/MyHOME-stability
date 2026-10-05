@@ -796,6 +796,14 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-page-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 20px; }
 .cal-page-title h3 { margin: 0; font-size: 16px; font-weight: 600; }
 .cal-page.is-running .cal-page-head { background: color-mix(in srgb, var(--panel-warning) 7%, var(--panel-surface)); }
+/* M-11: the three blocks one under the other, each title more prominent, divided by lines that run from edge to edge
+   of the window (the negative margins equal the page's 16 px padding). */
+.cal-page .cal-details-grid { display: block; }
+.cal-page .cal-details-grid > section { max-width: none; padding-block: 20px; }
+.cal-page .cal-details-grid > section:first-child { padding-top: 0; }
+.cal-page .cal-details-grid > section + section { margin-inline: -16px; padding-inline: 16px; border-top: 1px solid var(--panel-border); }
+.cal-page .cal-details-grid h4 { margin: 0 0 12px; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--primary-text-color, #182b37); }
+.cal-page .cal-details-grid .cal-note { max-width: none; }
 @media (min-width: 1024px) { .cal-page { display: none; } }
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
