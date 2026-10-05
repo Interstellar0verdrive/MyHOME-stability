@@ -985,6 +985,27 @@ test("focus rings are for the keyboard only; a touch choice lets the drop-down g
   } finally { globalThis.matchMedia = original; }
 });
 
+test("the scripts use the stylesheet's rules: full screen, page and sheets by window, a landscape phone included (responsive map)", async () => {
+  const original = globalThis.matchMedia;
+  try {
+    // [width, height, wizard full screen (page held), details as a page, dialogs as sheets]
+    for (const [width, height, full, page, sheet] of [[1400, 900, false, false, false], [800, 900, false, false, false], [844, 390, true, false, true],
+      [667, 375, true, false, true], [390, 844, true, true, true]]) {
+      globalThis.matchMedia = viewport(width, height);
+      const { layout } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+      assert.deepEqual([layout.fullScreen(), layout.phone(), layout.sheets()], [full, page, sheet], `${width}×${height}`);
+      const { tab, panel } = await mount();
+      tab.querySelector('[data-action="cal-tab-measure"]').click(); await tick();
+      assert.equal(document.documentElement.style.overflow === "hidden", full, `${width}×${height}: the page ${full ? "held" : "free"}`);
+      panel._calibrationTab._backToList(); await tick();
+      assert.equal(document.documentElement.style.overflow, "");
+    }
+  } finally { globalThis.matchMedia = original; }
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const { SHORT, PHONE, FULL_SCREEN, SHEETS } = await import("../../custom_components/myhome/frontend/panel/panel-calibration-layout.js");
+  for (const query of [SHORT, PHONE, FULL_SCREEN, SHEETS]) assert.ok(css.includes(`@media ${query} {`), `the stylesheet spells ${query}`);
+});
+
 test("on phones the full-screen wizard holds the page under it and lets it go when it closes (M4-4)", async () => {
   const original = globalThis.matchMedia;
   // Reduced motion: the slide of M5-4 would only delay the checks.

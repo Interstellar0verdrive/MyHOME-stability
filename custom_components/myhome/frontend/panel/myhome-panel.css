@@ -1177,12 +1177,13 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 /* Sheets slide up from the bottom when shown and down when they leave (`is-leaving`, removed by the wizard after 220 ms). */
 @keyframes wiz-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes wiz-sheet-out { from { transform: none; } to { transform: translateY(100%); } }
-/* M5-4: on phones the full-screen wizard (and the sequence) and the details page slide up on open and down on close. */
-@media (max-width: 719px) {
+/* M5-4: full screen (a phone, or a landscape phone) the wizard, the sequence and the details page slide up on open and
+   down on close. */
+@media (max-width: 719px), (max-height: 499px) and (orientation: landscape) {
   .cal-tab > .wiz, .cal-page { animation: wiz-sheet-in 220ms cubic-bezier(.2, 0, 0, 1); }
   .cal-tab > .wiz.is-leaving, .cal-page.is-leaving { animation: wiz-sheet-out 220ms cubic-bezier(.3, 0, 1, 1) forwards; }
 }
-@media (max-width: 719px) and (prefers-reduced-motion: reduce) { .cal-tab > .wiz, .cal-page { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .cal-tab > .wiz, .cal-page { animation: none !important; } }
 @keyframes wiz-scrim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes wiz-scrim-out { from { opacity: 1; } to { opacity: 0; } }
 .wiz-sheet:not([hidden]) { animation: wiz-scrim-in 220ms ease-out; }

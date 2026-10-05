@@ -13,8 +13,6 @@ function holdScroll(host) {
   return () => { for (const [element, value, top] of held.reverse()) { element.style.overflow = value; if (element.scrollTop !== top) element.scrollTop = top; } };
 }
 
-/** Phones with motion: the full-screen views slide up and down (M5-4). */
-const slides = () => typeof matchMedia === "function" && matchMedia("(max-width: 719px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** WHO 2 "Calibration" view: what each timed cover uses, its measurement state and the ways to measure it. */
 const asset = (name) => { const url = new URL(name, import.meta.url); url.search = new URL(import.meta.url).search; return url.href; };
@@ -92,10 +90,9 @@ export class CalibrationTab {
       for (const [element, value] of this._overscroll) element.style.overscrollBehaviorY = value;
       this._overscroll = null;
     }
-    // M4-4: on a phone the full-screen wizard holds the page under it still; only its content area scrolls.
-    // Full screen only below 768 px (M5-1); from 768 px the wizard sits in the page.
-    const phone = typeof matchMedia === "function" && matchMedia("(max-width: 719px)").matches;
-    if (hold && phone && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
+    // M4-4: the full-screen wizard (a phone, or a landscape phone: the stylesheet's rule) holds the page under it still;
+    // only its content area scrolls. Elsewhere the wizard sits in the page.
+    if (hold && layout.fullScreen() && this._context?.host && !this._fullHold) this._fullHold = holdScroll(this._context.host);
     else if (!hold && this._fullHold) { this._fullHold(); this._fullHold = null; }
   }
 
@@ -529,7 +526,7 @@ export class CalibrationTab {
 
   _closePage() {
     const page = this._context.host.querySelector(".cal-page");
-    if (page && slides() && !page.classList.contains("is-leaving")) {
+    if (page && layout.slides() && !page.classList.contains("is-leaving")) {
       page.classList.add("is-leaving");
       setTimeout(() => { if (this._page) this._closePage(); }, 220);
       return;
@@ -699,7 +696,7 @@ export class CalibrationTab {
   _backToList() {
     // M5-4: on a phone the full-screen view slides down before the list comes back (at once with reduced motion).
     const view = this._context?.host.querySelector(":scope > .wiz");
-    if (view && slides() && !view.classList.contains("is-leaving")) {
+    if (view && layout.slides() && !view.classList.contains("is-leaving")) {
       view.classList.add("is-leaving");
       setTimeout(() => { if (view.isConnected) this._backToList(); }, 220);
       return;
