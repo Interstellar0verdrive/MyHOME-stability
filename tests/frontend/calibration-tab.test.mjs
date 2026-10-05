@@ -1004,3 +1004,14 @@ test("on phones the full-screen views slide down before the list comes back, at 
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-tab > \.wiz, \.cal-page \{ animation: wiz-sheet-in 220ms/);
 });
+
+test("the sequence's Steps sheet closes on a tap outside its card (M6-1, R7-7)", async () => {
+  const { tab } = await openBatch();
+  tab.querySelector('[data-action="cal-tab-batch-steps"]').click();
+  const sheet = tab.querySelector(".cal-batch .wiz-sheet");
+  assert.equal(sheet.hidden, false);
+  sheet.querySelector(".wiz-sheet-card").click();
+  assert.equal(sheet.hidden, false);
+  sheet.click();
+  assert.equal(sheet.hidden, true);
+});

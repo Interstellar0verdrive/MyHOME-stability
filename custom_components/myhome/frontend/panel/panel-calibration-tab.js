@@ -605,6 +605,12 @@ export class CalibrationTab {
 
   _click(event) {
     if (this._mode.kind === "batch") {
+      // M6-1 (R7-7): a tap on the Steps sheet's backdrop closes it.
+      if (event.target.classList?.contains("wiz-sheet")) {
+        this._batchStepsOpen = false;
+        event.target.hidden = true;
+        return;
+      }
       const button = event.target.closest("button[data-action]");
       if (!button) return;
       const { action, id } = button.dataset;

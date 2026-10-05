@@ -577,6 +577,8 @@ export class CalibrationWizard {
       if (event.target.classList.contains("wiz-nav-dialog")) this._navAnswer(false); else this._closeDialog();
       return;
     }
+    // M6-1 (R7-7 for every sheet): a tap on the Steps sheet's backdrop closes it, as its ✕ does.
+    if (event.target.classList?.contains("wiz-sheet")) { this._act("steps-close"); return; }
     const button = event.target.closest("button[data-wiz]");
     if (!button || button.disabled) return;
     event.preventDefault();

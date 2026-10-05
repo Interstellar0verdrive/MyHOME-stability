@@ -2208,3 +2208,15 @@ test("no «—» inside a sentence: without the datum the variant that does not 
   const all = Object.entries(translations.it).filter(([key]) => /^wiz_T(230|235|489|490|491)$/.test(key));
   assert.equal(all.length, 5);
 });
+
+test("a tap on the Steps sheet's backdrop closes it, as every sheet and dialog (M6-1, R7-7)", async () => {
+  const { wiz, startFor } = await mount();
+  await startFor("cover.living_one");
+  wiz().querySelector('[data-wiz="steps"]').click(); await tick();
+  const sheet = wiz().querySelector(".wiz-sheet");
+  assert.equal(sheet.hidden, false);
+  sheet.querySelector(".wiz-sheet-card").click(); await tick();
+  assert.equal(sheet.hidden, false, "a tap inside the card keeps it");
+  sheet.click(); await tick(); await new Promise((resolve) => setTimeout(resolve, 260));
+  assert.equal(sheet.hidden, true, "a tap on the backdrop closes it");
+});
