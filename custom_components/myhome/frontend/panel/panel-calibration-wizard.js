@@ -397,14 +397,16 @@ export class CalibrationWizard {
       column.innerHTML = `${screen.readOnly ? `<div class="wiz-readonly"><p class="wiz-readonly-status">${esc(screen.readOnly.status)}</p><p>${esc(screen.readOnly.text)}</p>
           <button type="button" class="wiz-take ${screen.readOnly.primary || screen.readOnly.consequence ? "primary" : "secondary"}" data-wiz="take">${esc(screen.readOnly.take)}</button>
           ${screen.readOnly.consequence ? `<p class="muted">${esc(screen.readOnly.consequence)}</p>` : ""}</div>` : ""}
-        ${screen.actions.map((action) => `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
+        ${screen.actions.map((action) => action.kind === "status"
+          ? `<p class="wiz-action status" data-wiz="${esc(action.id)}" role="status"><span class="wiz-spinner" aria-hidden="true"></span>${esc(action.label)}</p>`
+          : `<button type="button" class="wiz-action ${action.kind}" data-wiz="${esc(action.id)}"${action.note ? ` aria-describedby="wiz-note-${esc(action.id.replace(/\W/g, "-"))}"` : ""}>${esc(action.label)}</button>${action.note
           ? `<p class="wiz-action-note muted" id="wiz-note-${esc(action.id.replace(/\W/g, "-"))}">${esc(action.note)}</p>` : ""}`).join("")}`;
       if (focused) column.querySelector(`[data-wiz="${focused}"]`)?.focus();
     }
     const guarded = this._guarded();
     for (const action of screen.actions) {
       const button = column.querySelector(`[data-wiz="${action.id}"]`);
-      if (!button) continue;
+      if (!button || action.kind === "status") continue;
       button.disabled = !!action.disabled || (guarded && action.id !== "stop");
       // Disabled by the step itself (not by the short hold after a change): said to assistive technology too.
       if (action.disabled) button.setAttribute("aria-disabled", "true"); else button.removeAttribute("aria-disabled");

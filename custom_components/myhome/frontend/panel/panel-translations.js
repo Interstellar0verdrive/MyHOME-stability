@@ -381,6 +381,8 @@ export const translations = {
     wiz_T456: "How to tell if it has slats",
     wiz_T457: "Slats are the **horizontal strips** that make up a roller shutter. When it opens, the strips separate for the first few seconds: gaps appear while the bottom edge stays on the rest. Only then does the roller shutter start to rise. A continuous curtain (an awning, a blackout screen, or a PVC curtain without strips) has no such phase: its edge rises as soon as the motor starts.",
     wiz_T458: "You entered {n} cm: below 1 cm the edge counts as still resting, so the run is repeated.",
+    wiz_T459: "Stopping…",
+    wiz_T460: "The cover did not confirm the stop: restart the measurement.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1224,6 +1226,8 @@ export const translations = {
     wiz_T456: "Come capire se ha le lamelle",
     wiz_T457: "Le lamelle sono le **stecche orizzontali** di cui è fatta una tapparella avvolgibile. Quando si apre, nei primi secondi le stecche si scostano fra loro: si vedono le fessure che si aprono, mentre il bordo inferiore resta appoggiato; solo in seguito la tapparella comincia a salire veramente. Un telo continuo (una tenda, uno schermo oscurante, un telo di PVC senza stecche) non ha questa fase: appena il motore parte, il bordo si alza.",
     wiz_T458: "Hai indicato {n} cm: sotto 1 cm il bordo conta come ancora appoggiato, quindi la corsa viene ripetuta.",
+    wiz_T459: "Arresto in corso…",
+    wiz_T460: "La tapparella non ha confermato l'arresto: ricomincia la misurazione.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

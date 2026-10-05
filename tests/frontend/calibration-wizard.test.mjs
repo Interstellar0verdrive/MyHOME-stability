@@ -1960,3 +1960,29 @@ test("a lift-off gap under 1 cm repeats the run and the repeat says which value 
   assert.equal(code(), "A-07");
   assert.match(wiz().querySelector(".wiz-notices").textContent, /^Hai indicato 0,5 cm/);
 });
+
+test("while the backend waits for the actuator's stop the screen says «Stopping…» with the stopwatch at the press (G2-10)", async () => {
+  const { backend, code, press, startFor, wiz } = await mount({ language: "it" });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend);
+  await press("lift");
+  assert.equal(backend.session.phase, "geometry_wait_stop");
+  assert.equal(code(), "A-07");
+  const bar = wiz().querySelector(".wiz-actions");
+  assert.deepEqual([...bar.children].map((item) => [item.tagName, item.textContent.trim()]), [["P", "Arresto in corso…"]], "no disabled ①/②");
+  assert.equal(bar.querySelector('[data-wiz="stopping"]').getAttribute("role"), "status");
+  const watch = wiz().querySelector(".wiz-stopwatch");
+  assert.equal(watch.hidden, false);
+  assert.match(watch.textContent, /^Cronometro\s*fermo a \d+,\d s$/);
+  const shown = watch.textContent;
+  await new Promise((resolve) => setTimeout(resolve, 120)); backend.tick?.(1); await tick();
+  assert.equal(wiz().querySelector(".wiz-stopwatch").textContent, shown, "frozen");
+  backend.stopped(); await tick();
+  assert.equal(code(), "A-08");
+  // The actuator never confirmed: S-01, said plainly.
+  const t = (key) => translations.it[key] || key;
+  const screen = buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2" }, local: {},
+    view: { mode: "geometry", phase: "interrupted", reason: "not_stopped", step: "lift", values: {}, samples: {}, readings: {}, owner: true, sequence: 9 } });
+  assert.deepEqual([screen.code, screen.body], ["S-01", "La tapparella non ha confermato l'arresto: ricomincia la misurazione."]);
+});

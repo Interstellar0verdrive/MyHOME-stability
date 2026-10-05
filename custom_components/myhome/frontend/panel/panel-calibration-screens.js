@@ -279,6 +279,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // name it and say why; after a reload, without the value, the backend's notice stands while it lasts.
   const resting = local.lastGap != null && local.lastGap < (view.touching_cm ?? 1) && (view.lift_attempts ?? 1) > 1;
   const liftRepeated = () => resting ? { tone: "info", text: fill(t("wiz_T458"), { n: n(local.lastGap) }) } : { tone: "info", text: fill(t("calLiftRepeated"), view) };
+  // G2-10: after ② (or at the end of a half run) the backend waits for the actuator's stop: the screen says so, the
+  // stopwatch stays at the press, and ①/② give way to the status instead of sitting there disabled.
+  const stopping = (seconds) => {
+    if (seconds != null) { const [label, value] = splitLabel(fill(t("wiz_T257"), { seconds: n.fixed(seconds) })); screen.stopwatch = { label, value }; }
+    else screen.stopwatch = null;
+    screen.actions = [{ id: "stopping", label: t("wiz_T459"), kind: "status" }];
+  };
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
@@ -316,7 +323,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "lift", label: t("wiz_T046"), kind: "primary", disabled: phase !== "opening" }, stop] });
     if ((resting || view.still_resting) && phase === "briefing") screen.notices.push(liftRepeated());
-    if (phase === "geometry_wait_stop") screen.stopwatch = null;
+    if (phase === "geometry_wait_stop") stopping(view.samples?.lift);
     return screen;
   }
   if (step === "reset") {
@@ -357,14 +364,14 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "endpoint", label: t("wiz_T057"), kind: "primary", disabled: phase !== "opening" }, ...whileRunning(view, stop)] });
-    if (phase === "geometry_wait_stop") screen.stopwatch = null;
+    if (phase === "geometry_wait_stop") stopping(view.values?.opening_time);
     return screen;
   }
   if (step === "closing") {
     Object.assign(screen, { code: p("14"), title: t("wiz_T068"), body: t("wiz_T069"), stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "endpoint", label: t("wiz_T070"), kind: "primary", disabled: phase !== "closing" }, ...whileRunning(view, stop)] });
-    if (phase === "geometry_wait_stop") screen.stopwatch = null;
+    if (phase === "geometry_wait_stop") stopping(view.values?.closing_time);
     return screen;
   }
   if (step === "half_open") {
@@ -386,7 +393,8 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       wait: { text: tx(path === "C" ? "wiz_T205" : "wiz_T080", values), stages: [{ text: tx("wiz_T079", { seconds: n(seconds, 0) }), state: "current" }],
         progress: waitBar(view, elapsed, seconds) },
       // Normally started by the wizard itself; if that did not happen the run can be started here.
-      actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop] : [stop] });
+      actions: phase === "briefing" ? [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop] : phase === "geometry_wait_stop"
+        ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
   }
   if (step === "top" && !local.ackReadings) {
     // The return to the top before a repeated descent: a positioning run to confirm at the end stop.
@@ -406,7 +414,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       wait: { text: t("wiz_T086"), stages: [
         { text: tx("wiz_T084", { seconds: n(view.values?.opening_time, 0) }), state: first ? "current" : "done" },
         { text: tx("wiz_T085", { seconds: n(down, 0) }), state: first ? "future" : "current" }],
-      progress: waitBar(view, elapsed, first ? topTime : down) }, actions: [stop] });
+      progress: waitBar(view, elapsed, first ? topTime : down) }, actions: phase === "geometry_wait_stop" ? [{ id: "stopping", label: t("wiz_T459"), kind: "status" }] : [stop] });
     // The return to the top is a positioning run: Home Assistant needs its end stop confirmed.
     if (first && ["starting_open", "opening"].includes(phase)) screen.actions = toEndStop("wiz_T432", "opening");
     if (first && phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }, stop];
@@ -692,7 +700,9 @@ function problemScreen(screen, ctx, reason, step = false) {
     // Today's backend discards the session: say what it says, and offer to start over. Two cases say more, from what
     // the panel knows: the stop came from "It did not do what it should", or the lift-off run stopped before ②.
     const key = `calReason_${reason}`;
-    screen.body = reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
+    // G2-10: the actuator never confirmed the stop: S-01 says it plainly and offers to start over.
+    if (reason === "not_stopped") { screen.code = "S-01"; screen.title = t("wiz_T240"); }
+    screen.body = reason === "not_stopped" ? t("wiz_T460") : reason === "stopped" && ctx.local?.misbehaved ? t("wiz_T442")
       : reason === "unexpected_stop" && ctx.view?.step === "lift" ? t("wiz_T443")
         : t(key) === key ? t("calPhase_interrupted") : t(key);
     screen.actions = [{ id: "start-over", label: t("wiz_T261"), kind: "primary" }, { id: "close", label: t("wiz_T158"), kind: "secondary" }];
