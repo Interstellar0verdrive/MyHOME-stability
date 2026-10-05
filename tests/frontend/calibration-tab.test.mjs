@@ -395,7 +395,7 @@ test("Assign profile offers No profile to unlink the followed profile, never on 
   assert.equal(none.closest(".wiz-radio"), dialog.querySelector(".wiz-radio"), "first in the list");
   assert.equal(none.closest(".wiz-radio").querySelector("ha-icon").getAttribute("icon"), "mdi:link-variant-off");
   assert.deepEqual([...none.closest(".wiz-radio").querySelectorAll("strong, small")].map((item) => item.textContent),
-    ["No profile", 'Unlinks "tall_two_leaf": the cover uses its own values, if it has any, otherwise goes back to "to measure". The profile stays available for the other covers.']);
+    ["No profile", 'Unlinks "tall_two_leaf": the cover will use its own values, if it has any, otherwise it will go back to "to measure". The profile will stay available for the other covers.']);
   const button = dialog.querySelector("[data-assign]");
   none.checked = true; none.dispatchEvent(new Event("change", { bubbles: true }));
   assert.equal(button.textContent, "Unlink profile");
@@ -467,7 +467,7 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   const note = tab.querySelector(".cal-batch-note");
   assert.deepEqual([...note.querySelectorAll("p")].map((paragraph) => paragraph.textContent.split(" ").slice(0, 2).join(" ")),
     ["La sequenza", "Servono attuatori"], "two paragraphs");
-  assert.match(note.querySelectorAll("p")[1].textContent, /una tapparella alla volta\. Annulla o un errore di misura scartano l'intera sequenza non salvata\.$/);
+  assert.match(note.querySelectorAll("p")[1].textContent, /una tapparella alla volta\. Annulla o un errore di misura scarteranno l'intera sequenza non salvata\.$/);
   assert.deepEqual([...note.querySelectorAll("strong")].map((bold) => bold.textContent),
     ["misurazione automatica", "Servono attuatori che segnalino l'arresto reale", "misurazione guidata"]);
   assert.ok(note.classList.contains("is-warning"), "the warning variant of the note, as in T-06");

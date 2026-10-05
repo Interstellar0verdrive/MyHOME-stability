@@ -39,8 +39,8 @@ test("every generated screen text is filled in English and Italian", () => {
 });
 
 test("the summaries speak of leaving the calibration, never of a window", () => {
-  for (const [language, phrase, stop] of [["it", "Se abbandoni la calibrazione senza salvare, i valori attualmente in uso restano invariati.", "Se preferisci fermarti qui, abbandona la calibrazione: **niente è ancora stato salvato**."],
-    ["en", "If you leave the calibration without saving, the values currently in use stay unchanged.", "If you prefer to stop here, discard the calibration: **nothing has been saved yet**."]]) {
+  for (const [language, phrase, stop] of [["it", "Se abbandoni la calibrazione senza salvare, i valori attualmente in uso resteranno invariati.", "Se preferisci fermarti qui, abbandona la calibrazione: **niente è ancora stato salvato**."],
+    ["en", "If you leave the calibration without saving, the values currently in use will stay unchanged.", "If you prefer to stop here, discard the calibration: **nothing has been saved yet**."]]) {
     const texts = Object.entries(translations[language]).filter(([key]) => key.startsWith("wiz"));
     // The window of the house (the base the closed cover rests on, G2-8) is not a window of the interface.
     assert.deepEqual(texts.filter(([, value]) => /finestra|the window/.test(value.replace(/base della finestra|the window base/g, ""))).map(([key]) => key), [], `${language}: no window`);
@@ -98,7 +98,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   // The chosen row opens with what choosing it means, in the row itself.
   const notes = [...wiz().querySelectorAll(".wiz-pick-row.is-selected .wiz-pick-notes .cal-note")];
   assert.deepEqual(notes.map((note) => [note.textContent, note.classList.contains("is-warning")]), [[
-    'This cover is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new measurement, if you choose it in the next step, replaces the values in use; to adjust them, choose fine-tuning.', true]],
+    'This cover is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new measurement, if you choose it in the next step, will replace the values in use; to adjust them, choose fine-tuning.', true]],
     "one yellow note with the profile");
   wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick(); wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
   await press("choose");
@@ -125,7 +125,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
   assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose "Has a profile, but stops at the wrong point"\.$/, "the advice does not follow the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').closest(".wiz-radio").querySelector(".wiz-radio-warning.is-warning").textContent,
-    "A full new measurement replaces this cover's values in use. To adjust them without starting over, choose \"Has a profile, but stops at the wrong point\".", "a warning under the chosen path");
+    "A full new measurement will replace this cover's values in use. To adjust them without starting over, choose \"Has a profile, but stops at the wrong point\".", "a warning under the chosen path");
   assert.equal(sent(), before, "choosing a path sends nothing");
   await choosePath("A");
   assert.equal(code(), "A-03");
@@ -454,7 +454,7 @@ test("a cover that follows a profile saves only on itself by default, which wait
   assert.equal(wiz().querySelector(".wiz-save-info").open, false, "closed by the user, it stays closed while the summary changes");
   assert.deepEqual([...wiz().querySelectorAll('[name="save_choice"]')].map((input) => input.value), ["update", "new"], "listed as in A-21d");
   assert.equal(wiz().querySelector('[name="save_choice"][value="new"]').checked, true);
-  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Also changes 1 cover: Living room shutter 3\./);
+  assert.match(wiz().querySelector(".wiz-profile-block").textContent, /Will also change 1 cover: Living room shutter 3\./);
   assert.equal(wiz().querySelector('[data-wiz="save"]').disabled, false);
   const name = wiz().querySelector('[name="profile_name"]');
   const error = () => wiz().querySelector(".wiz-name-error");
@@ -528,7 +528,7 @@ test("A-34 offers fine-tuning once the calibration is saved: path C on the same 
   assert.equal(paragraphs.length, 2, "the saved text, then what fine-tuning does");
   assert.equal(wiz().querySelectorAll(".wiz-body p")[1].querySelector("strong").textContent, "Want to fine-tune the calibration?", "a bold lead-in");
   assert.equal(paragraphs[1],
-    "Want to fine-tune the calibration? Four tape readings at a quarter and three quarters of the travel, plus a final check, make the position estimate more precise along the whole travel. About 4 minutes; the cover moves.");
+    "Want to fine-tune the calibration? Four tape readings at a quarter and three quarters of the travel, plus a final check, will make the position estimate more precise along the whole travel. About 4 minutes; the cover will move.");
   const finetune = wiz().querySelector('.wiz-steps li[data-step-state]:last-of-type');
   assert.deepEqual([finetune.querySelector(".wiz-step-label").textContent, finetune.dataset.stepState], ["Fine-tuning (optional)", "future"], "still ahead, not ticked");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ol > li")].slice(0, -1).map((item) => item.dataset.stepState), Array(6).fill("done"));
@@ -1453,7 +1453,7 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
     assert.equal(nav().hidden, false);
     assert.equal(nav().querySelector("h4").textContent, "Calibration in progress");
     assert.equal(nav().querySelector("#wiz-nav-body").textContent,
-      "If you leave now, the calibration stays open for 30 minutes and you can resume it from the Calibration tab. If you cancel it, the measurements taken so far are lost.");
+      "If you leave now, the calibration will stay open for 30 minutes and you will be able to resume it from the Calibration tab. If you cancel it, the measurements taken so far will be lost.");
     assert.deepEqual([...nav().querySelectorAll("button")].map((button) => [button.dataset.wiz, button.textContent, button.className]),
       [["nav-discard", "Leave without saving", "wiz-leave"], ["nav-later", "Leave and resume later", ""], ["nav-stay", "Continue calibration", "primary"]]);
     assert.equal(root.activeElement, nav().querySelector('[data-wiz="nav-stay"]'));
@@ -1520,7 +1520,7 @@ test("the time it stays open comes from Home Assistant's lease: 10 minutes after
   await press("begin"); await tick();
   Object.assign(backend.session, { recovery_seconds: 600 }); backend.emit(); await tick();
   const answer = panel._beforeLeave();
-  assert.match(wiz().querySelector("#wiz-nav-body").textContent, /stays open for 10 minutes/);
+  assert.match(wiz().querySelector("#wiz-nav-body").textContent, /will stay open for 10 minutes/);
   wiz().querySelector('[data-wiz="nav-stay"]').click();
   assert.equal(await answer, false);
 });
@@ -1664,7 +1664,7 @@ test("the preview is announced before it starts and its end never says that some
   assert.deepEqual(review.actions.map((action) => action.id), ["save"], "the summary only saves");
   const real = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "profile_new", name: "cucina_2" } } });
   assert.equal(real.actions.find((action) => action.id === "refine").note, undefined, "no note under the button");
-  assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, rendono la stima della posizione più precisa lungo tutta la corsa. Circa 4 minuti; la tapparella si muove.`,
+  assert.equal(real.body, `${translations.it.wiz_T155.replace("{name}", "cucina_2")}\n\n**Vuoi perfezionare la calibrazione?** Quattro letture col metro a un quarto e a tre quarti della corsa, più una verifica finale, renderanno la stima della posizione più precisa lungo tutta la corsa. Circa 4 minuti; la tapparella si muoverà.`,
     "T319 is the body's second paragraph");
   assert.deepEqual(real.actions.map((action) => [action.id, action.kind]), [["refine", "primary"], ["assign-profile", "secondary"], ["another", "secondary"], ["open-cover", "secondary"], ["close", "link"]]);
   const coverOnly = buildScreen({ t, language: "it", stage: "saved", path: "A", cover: { name: "Cucina 2" }, local: { saved: { target: "cover_only" } } });
@@ -1766,7 +1766,7 @@ test("counts of zero and one use their own forms", () => {
   assert.equal(update.switchLabel, "Salva anche come profilo riusabile, o aggiorna quello esistente", "the switch says it can also update");
   assert.equal(buildScreen({ t, language: "it", stage: "session", path: "A", cover: { name: "Cucina 2", followers: [], effective: {} }, view, local: {} }).profileBlock.switchLabel,
     "Salva anche come profilo riusabile", "without a profile the short label");
-  assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambia anche l’altra tapparella che lo segue: Sala 3.");
+  assert.equal(a21d(["Sala 3"]).choice.options.find((option) => option.value === "update").description, "Cambierà anche l’altra tapparella che lo segue: Sala 3.");
   const b01 = (followerNames) => buildScreen({ t, language: "it", stage: "profile", path: "B", cover: cover([]), local: {},
     profiles: [{ id: "p", name: "alte", followers: followerNames.length, followerNames, measuredOn: "Sala 1" }] }).choice.options[0];
   assert.equal(b01([]).label, "alte · misurato su Sala 1");
@@ -1827,13 +1827,13 @@ test("A-01's list names the bus address and its notes in Italian too", async () 
   assert.equal(wiz().querySelector(".wiz-pick-row .cal-row-name .muted").textContent, "Kitchen · Indirizzo: 91 · A: 9 · PL: 1");
   await pickCover("cover.kitchen_two");
   assert.equal(wiz().querySelector(".wiz-pick-notes .cal-note").textContent,
-    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026) e segue il profilo «tall_two_leaf». Una nuova misurazione, se la scegli al passo successivo, sostituisce i valori in uso; per correggerli, scegli il perfezionamento.");
+    "Questa tapparella è già calibrata (tempi e rullo, 29 set 2026) e segue il profilo «tall_two_leaf». Una nuova misurazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento.");
   // Without a profile the clause about it falls.
   const t = (key) => translations.it[key] || key;
   const alone = buildScreen({ t, language: "it", stage: "choose", local: { coverKey: "k", coverPicked: true },
     covers: [{ key: "k", label: "Cucina 2", status: "times", last: "2026-10-01T09:00:00+00:00" }], cover: { name: "Cucina 2", profile: null } });
   assert.deepEqual(alone.picker.notes, [{ tone: "warning",
-    text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova misurazione, se la scegli al passo successivo, sostituisce i valori in uso; per correggerli, scegli il perfezionamento." }]);
+    text: "Questa tapparella è già calibrata (tempi misurati, 1 ott 2026). Una nuova misurazione, se la scegli al passo successivo, sostituirà i valori in uso; per correggerli, scegli il perfezionamento." }]);
 });
 
 test("opened on a given cover, the wizard already has it chosen; from the tab's button it starts empty", async () => {
