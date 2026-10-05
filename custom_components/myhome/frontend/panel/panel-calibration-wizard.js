@@ -681,6 +681,8 @@ export class CalibrationWizard {
       const field = this._frame.querySelector('[name="reading_cm"]');
       field.setAttribute("aria-invalid", "true");
       field.focus();
+      // The reason under the field stays in view above the phone's action bar.
+      this._frame.querySelector("#wiz-field-error:not([hidden])")?.scrollIntoView?.({ block: "nearest" });
       return;
     }
     this._local.fieldError = null;

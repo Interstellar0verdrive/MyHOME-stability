@@ -1084,7 +1084,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-field { display: grid; gap: 6px; max-width: 320px; }
 .wiz-field input { font-size: 18px; min-height: 52px; }
 /* G3-4: why a value is refused, under the field, in the error colour. */
-.wiz-field-error { margin: 0; color: var(--panel-error); font-size: 13px; font-weight: 500; }
+.wiz-field-error { margin: 0; color: var(--panel-error); font-size: 13px; font-weight: 500; scroll-margin-bottom: 36px; }
 .wiz-field input[aria-invalid="true"] { border-color: var(--panel-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--panel-error) 20%, transparent); }
 .wiz-field input[aria-invalid="true"] ~ span, .wiz-field:has(input[aria-invalid="true"]) .muted { color: var(--panel-error); }
 .input-suffix { display: flex; align-items: center; gap: 8px; }
