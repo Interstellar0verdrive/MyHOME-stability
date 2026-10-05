@@ -108,13 +108,13 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(wiz().querySelector(".wiz-subline").textContent, 'Follows the profile "tall_two_leaf"');
   const radios = [...wiz().querySelectorAll('.wiz-radios input[name="path"]')];
   assert.deepEqual(radios.map((input) => input.closest(".wiz-radio").querySelector(".wiz-radio-label").firstChild.textContent.trim()),
-    ["Ⓐ  First cover of this type", "Ⓑ  Like one already measured", "Ⓒ  Has a profile, but stops at the wrong point"], "a radio list, not three buttons");
+    ["First cover of this type", "Like one already measured", "Has a profile, but stops at the wrong point"], "a radio list, not three buttons");
   assert.equal(wiz().querySelectorAll('.wiz-actions [data-wiz^="path:"]').length, 0);
   assert.deepEqual([...wiz().querySelectorAll(".wiz-recommended")].map((badge) => [badge.closest(".wiz-radio").querySelector("input").value, badge.textContent]),
     [["C", "Recommended"]], "a calibrated cover: C is advised");
   assert.deepEqual(radios.filter((input) => input.checked).map((input) => input.value), ["C"], "the advised path is preselected");
   assert.equal(button("path").disabled, false, "Continue is ready on the advised path");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓒ\.$/, "the last line names the advised path");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose "Has a profile, but stops at the wrong point"\.$/, "the last line names the advised path");
   assert.ok(wiz().querySelector(".wiz-subline").classList.contains("cal-note"), "the cover's context is an information box");
   const sent = () => backend.calls.length + backend.subscriptions.length;
   const before = sent();
@@ -122,9 +122,9 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   a.checked = true; a.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.equal(code(), "A-02", "ticking a radio only changes the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').checked, true, "the choice survives the redraw");
-  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose Ⓒ\.$/, "the advice does not follow the choice");
+  assert.match(wiz().querySelector(".wiz-body").textContent, /If unsure, choose "Has a profile, but stops at the wrong point"\.$/, "the advice does not follow the choice");
   assert.equal(wiz().querySelector('input[name="path"][value="A"]').closest(".wiz-radio").querySelector(".wiz-radio-warning.is-warning").textContent,
-    "A full new measurement replaces this cover's values in use. To adjust them without starting over, choose Ⓒ.", "a warning under the chosen path");
+    "A full new measurement replaces this cover's values in use. To adjust them without starting over, choose \"Has a profile, but stops at the wrong point\".", "a warning under the chosen path");
   assert.equal(sent(), before, "choosing a path sends nothing");
   await choosePath("A");
   assert.equal(code(), "A-03");
@@ -222,7 +222,7 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Ascent · 3 of 7");
   // "Ⓐ first of its type" is the introduction's sub-line, not a caption under the phase line.
   const intro = wiz().querySelector(".wiz-steps ol > li");
-  assert.deepEqual([intro.querySelector(".wiz-step-label").textContent, intro.querySelector("ul > li").textContent], ["Introduction", "Ⓐ first of its type"]);
+  assert.deepEqual([intro.querySelector(".wiz-step-label").textContent, intro.querySelector("ul > li").textContent], ["Introduction", "First of its type"]);
   assert.equal(wiz().querySelector(".wiz-steps-caption"), null);
   await press("ack:lift");
   assert.equal(code(), "A-07");
@@ -1646,7 +1646,7 @@ test("a reopened slat and roll session of a cover that follows a profile is show
   const { backend, tab, wiz, code, actions } = await mount({ session });
   tab().querySelector('[data-action="cal-tab-session"]').click(); await tick(6);
   assert.equal(code(), "C-06");
-  assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, "Ⓒ remeasure all");
+  assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, "Remeasure all");
   assert.deepEqual(actions(), [], "reopening moves nothing");
   void backend;
 });
@@ -1681,7 +1681,8 @@ test("the preview is announced before it starts and its end never says that some
   await pickCover();
   await press("choose");
   const b = wiz().querySelector('input[name="path"][value="B"]').closest(".wiz-radio");
-  assert.equal(b.querySelector("small").textContent, "1 profilo disponibile", "under Ⓑ, the profiles available");
+  assert.deepEqual([...b.querySelectorAll("small")].map((line) => line.textContent), ["Basta misurare la corsa del telo.", "1 profilo disponibile"],
+    "under B, its explanation then the profiles available");
 });
 
 test("A-02 advises a path from the cover and the gateway's profiles, and preselects it", () => {
@@ -1693,32 +1694,35 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   const none = buildScreen({ t, stage: "path", profiles: [], cover: { name: "Kitchen 2", status: "to_measure" } });
   assert.deepEqual(advice(none), [["A", "Recommended"]]);
   assert.equal(none.choice.options.find((option) => option.value === "B").disabled, true);
-  assert.deepEqual(note(none), [translations.en.wiz_T401]);
+  assert.deepEqual(note(none), [translations.en.wiz_T453, translations.en.wiz_T401]);
   assert.equal(none.choice.value, "A");
   assert.equal(none.actions[0].disabled, false);
   assert.equal(none.subline, "Never measured", "the context says only that");
-  assert.match(none.body, /If unsure, choose Ⓐ\.$/);
+  assert.match(none.body, /If unsure, choose "First cover of this type"\.$/);
   const c = none.choice.options.find((option) => option.value === "C");
-  assert.deepEqual([c.disabled, c.note], [true, ["Measure the cover first."]], "no fine-tuning on a cover never measured");
+  assert.deepEqual([c.disabled, c.note], [true, ["Only what is off gets corrected: tape readings, times, or everything.", "Measure the cover first."]], "no fine-tuning on a cover never measured");
+  // G2-2: the introduction is one line and the advice; each option explains itself in its note.
+  assert.equal(none.body, 'There are three measurement paths.\n\nIf unsure, choose "First cover of this type".');
+  assert.deepEqual(none.choice.options.map((option) => option.note[0]), [translations.en.wiz_T452, translations.en.wiz_T453, translations.en.wiz_T454]);
   // Never measured, profiles available, no saved travel: no badge, nothing preselected, Ⓑ lists the profiles to compare.
   const some = buildScreen({ t, stage: "path", profiles: [tall, low], cover: { name: "Kitchen 2", status: "to_measure" } });
   assert.deepEqual(advice(some), []);
   assert.equal(some.choice.value, "");
   assert.equal(some.actions[0].disabled, true, "Continue waits for a choice");
-  assert.deepEqual(note(some), ["2 profiles available", "tall_two_leaf · With slats · Reference travel 198 cm", "low_one_leaf · Without slats · Reference travel 112 cm"]);
-  assert.match(some.body, /If unsure, choose Ⓐ\.$/);
-  assert.deepEqual(note(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure" } }))[0], "1 profile available");
+  assert.deepEqual(note(some), [translations.en.wiz_T453, "2 profiles available", "tall_two_leaf · With slats · Reference travel 198 cm", "low_one_leaf · Without slats · Reference travel 112 cm"]);
+  assert.match(some.body, /If unsure, choose "First cover of this type"\.$/);
+  assert.deepEqual(note(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure" } }))[1], "1 profile available");
   // A saved travel within 5 % of a profile's reference: Ⓑ advised, preselected and explained (closest first).
   const close = { id: "close", name: "near", slat: 0, referenceTravel: 109 };
   const similar = buildScreen({ t, stage: "path", profiles: [tall, low, close], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } });
   assert.deepEqual([advice(similar), similar.choice.value], [[["B", "Recommended"]], "B"]);
-  assert.deepEqual(note(similar), ["3 profiles available", 'Travel similar to the profile "near" (110 cm vs 109 cm)', 'Travel similar to the profile "low_one_leaf" (110 cm vs 112 cm)']);
-  assert.match(similar.body, /If unsure, choose Ⓑ\.$/);
+  assert.deepEqual(note(similar), [translations.en.wiz_T453, "3 profiles available", 'Travel similar to the profile "near" (110 cm vs 109 cm)', 'Travel similar to the profile "low_one_leaf" (110 cm vs 112 cm)']);
+  assert.match(similar.body, /If unsure, choose "Like one already measured"\.$/);
   assert.deepEqual(advice(buildScreen({ t, stage: "path", profiles: [tall], cover: { name: "Kitchen 2", status: "to_measure", travel_cm: 110 } })), [], "198 cm is not similar");
   // Already calibrated: Ⓒ; another choice gets its warning under it (Ⓑ: "a different profile" only when one is followed).
   const calibrated = (local, profile) => buildScreen({ t, stage: "path", local, profiles: [tall], cover: { name: "Kitchen 2", status: "rolls", last: "2026-10-01T09:00:00+00:00", profile } });
   assert.deepEqual([advice(calibrated({})), calibrated({}).choice.value, calibrated({}).subline], [[["C", "Recommended"]], "C", "Already calibrated (times and roll, Oct 1, 2026)"]);
-  assert.deepEqual(note(calibrated({})), ["1 profile available"]);
+  assert.deepEqual(note(calibrated({})), [translations.en.wiz_T453, "1 profile available"]);
   assert.equal(calibrated({}).choice.options.some((option) => option.warning), false);
   assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).choice.options.find((option) => option.value === "B").warning, translations.en.wiz_T416);
   assert.equal(calibrated({ pathChoice: "B" }).choice.options.find((option) => option.value === "B").warning, translations.en.wiz_T417);

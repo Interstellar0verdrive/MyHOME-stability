@@ -23,7 +23,7 @@ test("B-01 offers the gateway's profiles with where they were measured and who f
     [["tall", true, "tall_two_leaf · measured on Living room shutter 1Followed by Kitchen shutter 2 and Living room shutter 3"]]);
   assert.equal(wiz().querySelector('input[name="profile"]').closest(".wiz-radio").querySelector("small").textContent, "Followed by Kitchen shutter 2 and Living room shutter 3");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Introduction · 1 of 3");
-  assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, 'Ⓑ like "tall_two_leaf"');
+  assert.equal(wiz().querySelector(".wiz-steps li[data-step-state] > ul > li").textContent, 'Like "tall_two_leaf"');
   await press("profile");
   assert.equal(code(), "B-02");
   assert.equal(wiz().querySelector(".wiz-steps-line").textContent, "Tape measure readings · 2 of 3");
@@ -80,7 +80,7 @@ test("path B runs as a preview from the travel to the check and the summary, wit
   assert.equal(wiz().querySelector(".wiz-title").textContent, "Preview of the summary", "a preview never says it saved");
   assert.equal(wiz().querySelector(".wiz-body").textContent, "End of the preview: nothing has been saved and Living room shutter 1 keeps the values it used before.");
   assert.deepEqual([...wiz().querySelectorAll(".wiz-action")].map((button) => button.textContent), ["Close"]);
-  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ul li")].map((item) => item.textContent), ['Ⓑ like "tall_two_leaf"', "Curtain travel: 196 cm", "Check: 1 cm"], "the steps keep what was read");
+  assert.deepEqual([...wiz().querySelectorAll(".wiz-steps ul li")].map((item) => item.textContent), ['Like "tall_two_leaf"', "Curtain travel: 196 cm", "Check: 1 cm"], "the steps keep what was read");
   assert.ok(wiz().querySelector(".wiz-preview"));
   assert.deepEqual(calibrationTraffic(backend), [], "the preview sends nothing to Home Assistant");
 });
@@ -116,7 +116,8 @@ test("without a profile on the gateway, B is disabled and the screen says why", 
   assert.equal(code(), "A-02");
   const b = wiz().querySelector('input[name="path"][value="B"]');
   assert.equal(b.disabled, true);
-  assert.equal(b.closest(".wiz-radio").querySelector("small").textContent, "No saved profile: measure a cover of this type first");
+  assert.deepEqual([...b.closest(".wiz-radio").querySelectorAll("small")].map((line) => line.textContent),
+    ["Only the curtain travel is measured.", "No saved profile: measure a cover of this type first"]);
   assert.equal(wiz().querySelector(".wiz-subline").textContent, "Already calibrated (times and roll, Sep 29, 2026)");
   assert.equal(wiz().querySelector(".wiz-radio:has(.wiz-recommended) input").value, "C", "a calibrated cover is advised to C");
 });
