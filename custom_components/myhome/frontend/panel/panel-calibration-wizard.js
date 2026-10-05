@@ -644,6 +644,9 @@ export class CalibrationWizard {
       return;
     }
     this._local.fieldError = null;
+    // The lift-off gap as typed (G2-9): a value under the backend's 1 cm counts as still resting, and the screen of the
+    // repeated run names it. The backend uses the number as sent, without rounding (0.5 is under 1).
+    if (input.dataset.kind === "gap") this._local.lastGap = value;
     return this._send("reading", { reading_cm: value });
   }
 

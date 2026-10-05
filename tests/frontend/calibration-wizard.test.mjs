@@ -1941,3 +1941,22 @@ test("how to tell the slats is a closed toggle right after the question (A-03), 
   assert.deepEqual(timesOnly.help, { summary: translations.en.wiz_T456, text: translations.en.wiz_T457 });
   assert.doesNotMatch(timesOnly.body, /horizontal strips/);
 });
+
+test("a lift-off gap under 1 cm repeats the run and the repeat says which value and why (G2-9)", async () => {
+  const { backend, code, press, type, startFor, wiz } = await mount({ language: "it" });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  assert.equal(code(), "A-08");
+  assert.equal(wiz().querySelector("#wiz-field-hint").textContent, "Di solito 1–4 cm. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.");
+  // 0,5 is sent as it is (no rounding): under the backend's 1 cm the edge still rests.
+  await type("0,5");
+  assert.equal(backend.calls.filter((message) => message.action === "reading").at(-1).reading_cm, 0.5);
+  assert.equal(backend.session.lift_attempts, 2, "the backend repeats the lift-off");
+  assert.equal(wiz().querySelector(".wiz-notices").textContent,
+    "Hai indicato 0,5 cm: sotto 1 cm il bordo conta come ancora appoggiato, quindi la corsa viene ripetuta.");
+  // Back at the bottom, the lift-off screen repeats it.
+  await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  assert.equal(code(), "A-07");
+  assert.match(wiz().querySelector(".wiz-notices").textContent, /^Hai indicato 0,5 cm/);
+});

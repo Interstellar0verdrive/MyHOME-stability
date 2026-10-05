@@ -47,7 +47,7 @@ export const translations = {
     wiz_T047: "How far has the edge risen?",
     wiz_T048: "There is always a moment between pressing and stopping, and the edge keeps rising during it. Use the tape measure to measure the gap now between the rest and the bottom edge in centimetres: **this is not an error to correct; it is a needed value** — it cancels the delay in your press and makes the measurement more precise.",
     wiz_T049: "Gap between rest and edge (cm)",
-    wiz_T050: "Usually 1–4 cm. If the edge still rests on the rest, enter 0: the run will repeat automatically.",
+    wiz_T050: "Usually 1–4 cm. Below 1 cm the edge counts as still resting and the run is repeated.",
     wiz_T051: "Done, continue",
     wiz_T052: "{cover} returns to the rest: full ascent starts there.",
     wiz_T053: "Back at the rest",
@@ -380,6 +380,7 @@ export const translations = {
     wiz_T455: "Follows the profile \"{profile}\": the values are the profile's, without travel scaling, since the travel has not been measured.",
     wiz_T456: "How to tell if it has slats",
     wiz_T457: "Slats are the **horizontal strips** that make up a roller shutter. When it opens, the strips separate for the first few seconds: gaps appear while the bottom edge stays on the rest. Only then does the roller shutter start to rise. A continuous curtain (an awning, a blackout screen, or a PVC curtain without strips) has no such phase: its edge rises as soon as the motor starts.",
+    wiz_T458: "You entered {n} cm: below 1 cm the edge counts as still resting, so the run is repeated.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -889,7 +890,7 @@ export const translations = {
     wiz_T047: "Quanto si è alzato il bordo?",
     wiz_T048: "Fra la pressione e l'arresto passa sempre un istante, e il bordo continua a salire per quell'istante. Misura con il metro quanti centimetri ci sono ora fra la base e il bordo inferiore: **non è un errore da correggere, è un numero che serve** — con questo numero il ritardo della tua pressione si annulla e la misura diventa più precisa.",
     wiz_T049: "Distanza fra base e bordo (cm)",
-    wiz_T050: "Di solito 1–4 cm. Se il bordo è ancora appoggiato, scrivi 0: la corsa si ripete da sola.",
+    wiz_T050: "Di solito 1–4 cm. Sotto 1 cm il bordo conta come ancora appoggiato e la corsa si ripete.",
     wiz_T051: "Fatto, avanti",
     wiz_T052: "{cover} torna alla base: la salita completa parte da lì.",
     wiz_T053: "Ritorno alla base",
@@ -1222,6 +1223,7 @@ export const translations = {
     wiz_T455: "Segue il profilo «{profile}»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.",
     wiz_T456: "Come capire se ha le lamelle",
     wiz_T457: "Le lamelle sono le **stecche orizzontali** di cui è fatta una tapparella avvolgibile. Quando si apre, nei primi secondi le stecche si scostano fra loro: si vedono le fessure che si aprono, mentre il bordo inferiore resta appoggiato; solo in seguito la tapparella comincia a salire veramente. Un telo continuo (una tenda, uno schermo oscurante, un telo di PVC senza stecche) non ha questa fase: appena il motore parte, il bordo si alza.",
+    wiz_T458: "Hai indicato {n} cm: sotto 1 cm il bordo conta come ancora appoggiato, quindi la corsa viene ripetuta.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",

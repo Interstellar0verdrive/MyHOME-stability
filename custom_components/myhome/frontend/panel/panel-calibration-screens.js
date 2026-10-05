@@ -274,6 +274,11 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     if (!MOTOR_STOPPED(view) || view.stopped_elapsed == null || !(estimate > 0) || view.stopped_elapsed >= estimate * EARLY_STOP_SHARE) return;
     screen.notices.push({ tone: "warning", text: fill(t(key), { seconds: n.fixed(view.stopped_elapsed), estimate: n(estimate, 0) }) });
   };
+  // G2-9: a lift-off reading under 1 cm repeats the run. The backend clears `still_resting` as soon as the return to
+  // the bottom starts, so the panel keeps the value it sent: the return (A-09) and the new lift-off briefing (A-07)
+  // name it and say why; after a reload, without the value, the backend's notice stands while it lasts.
+  const resting = local.lastGap != null && local.lastGap < (view.touching_cm ?? 1) && (view.lift_attempts ?? 1) > 1;
+  const liftRepeated = () => resting ? { tone: "info", text: fill(t("wiz_T458"), { n: n(local.lastGap) }) } : { tone: "info", text: fill(t("calLiftRepeated"), view) };
   const toEndStop = (label, running) => [{ id: "endpoint", label: t(label), kind: "primary", disabled: phase !== running }, ...whileRunning(view, stop)];
   if (phase === "review" || phase === "saving") return summaryScreen(screen, ctx, tx, n, values);
   if (step === "home") {
@@ -310,7 +315,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
       stopwatch: runWatch(t, n, view, elapsed),
       actions: [{ id: "next", label: t("wiz_T045"), kind: "primary", disabled: phase !== "briefing" },
         { id: "lift", label: t("wiz_T046"), kind: "primary", disabled: phase !== "opening" }, stop] });
-    if (view.still_resting && phase === "briefing") screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });
+    if ((resting || view.still_resting) && phase === "briefing") screen.notices.push(liftRepeated());
     if (phase === "geometry_wait_stop") screen.stopwatch = null;
     return screen;
   }
@@ -330,7 +335,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     positioning("09", tx(path === "C" ? "wiz_T203" : "wiz_T052", values), closingTime);
     if (["starting_close", "closing"].includes(phase)) screen.actions = toEndStop("wiz_T032", "closing");
     if (phase === "briefing") screen.actions = [{ id: "next", label: t("wiz_T060"), kind: "primary" }];
-    if (view.still_resting) screen.notices.push({ tone: "info", text: fill(t("calLiftRepeated"), view) });
+    if (resting || view.still_resting) screen.notices.push(liftRepeated());
     return screen;
   }
   // A full run the bus ended without a timely press of ②: its result is shown but not valid; only a repeat goes on.
