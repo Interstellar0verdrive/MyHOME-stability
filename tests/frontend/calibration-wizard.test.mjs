@@ -105,7 +105,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to calibrate "Kitchen shutter 2"?');
   assert.equal(wiz().querySelector(".wiz-cover").textContent, "Kitchen shutter 2");
-  assert.match(wiz().querySelector(".wiz-head .muted").textContent, /Address: 91 · A: 9 · PL: 1 · WHO 2/);
+  assert.equal(wiz().querySelector(".wiz-head .muted").textContent, "Kitchen · Address: 91 · A: 9 · PL: 1", "room first, no WHO (G4-1)");
   assert.equal(wiz().querySelector(".wiz-subline").textContent, 'Follows the profile "tall_two_leaf"');
   const radios = [...wiz().querySelectorAll('.wiz-radios input[name="path"]')];
   assert.deepEqual(radios.map((input) => input.closest(".wiz-radio").querySelector(".wiz-radio-label").firstChild.textContent.trim()),

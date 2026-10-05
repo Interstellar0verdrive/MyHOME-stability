@@ -149,8 +149,10 @@ export class CalibrationWizard {
     return { name: item.name, entity_id: item.cover.entity_id, effective: item.cover.effective || {}, travel_cm: item.cover.travel_cm ?? null,
       status: item.status, last: item.last,
       profile: item.profile, followers, followProfile: followed?.name ?? null,
-      address: address ? [`${this._context.t("address")}: ${address.raw ?? this._context.t("addressUnknown")}`,
-        ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : []), "WHO 2"].join(" · ") : "" };
+      // G4-1: as the list rows: room first (and the gateway when there are several), then the bus address; no WHO.
+      address: [item.area, new Set(this._covers().map((entry) => entry.entry.entry_id)).size > 1 ? item.entry.title : "",
+        ...(address ? [`${this._context.t("address")}: ${address.raw ?? this._context.t("addressUnknown")}`,
+          ...(address.a != null && address.pl != null ? [`A: ${address.a}`, `PL: ${address.pl}`] : [])] : [])].filter(Boolean).join(" · ") };
   }
 
   /** A drop-down entry: "Name · Room · Address: 86 · A: 8 · PL: 6", and the gateway when there are several. */
