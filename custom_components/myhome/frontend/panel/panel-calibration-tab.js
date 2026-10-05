@@ -248,7 +248,16 @@ export class CalibrationTab {
       const input = event.target.closest?.(".cal-batch-row input[type=checkbox]");
       if (input) { this._batchToggle(input.value, input.checked); return; }
       if (event.target.matches?.('select[data-batch="gateway"]')) { this._loadBatch(event.target.value); return; }
+      // M4-2: «Select ⌄» is a native menu of actions: the choice is applied, then the placeholder comes back.
+      if (event.target.matches?.("select[data-batch-pick]")) {
+        const pick = event.target.value;
+        event.target.value = "";
+        event.target.blur();
+        if (pick) this._batchPick(pick);
+        return;
+      }
     }
+    if (event.target.matches?.("select[data-filter]") && this._mode.kind === "list") { this._filter = event.target.value; this._render(); return; }
     const select = event.target.closest?.("select[data-sort]");
     if (!select || !["list", "batch"].includes(this._mode.kind)) return;
     const [key, dir] = select.value.split(":");
@@ -274,7 +283,8 @@ export class CalibrationTab {
   _compactFilters(counts) {
     const { t } = this._context;
     return `<div class="cal-tab-compact">
-            <button type="button" class="cal-compact-filter" data-action="cal-tab-filter-sheet" aria-haspopup="dialog"><span>${esc(fill(t("wiz_T449"), { filter: t(`calTabFilter_${this._filter}`), count: counts[this._filter] }))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+            <label class="cal-compact-sort cal-compact-filter"><span>${esc(t("wiz_T474"))}</span><select data-filter aria-label="${esc(t("calTabFilterLabel"))}">${FILTERS.map((filter) =>
+              `<option value="${filter}" ${this._filter === filter ? "selected" : ""}>${esc(t(`calTabFilter_${filter}`))} (${counts[filter]})</option>`).join("")}</select></label>
             ${this._compactSort()}</div>`;
   }
 
@@ -285,73 +295,6 @@ export class CalibrationTab {
     const options = SORT_KEYS.flatMap((key) => ["asc", "desc"].map((dir) =>
       `<option value="${key}:${dir}" ${this._sort.key === key && this._sort.dir === dir ? "selected" : ""}>${esc(column(key))} ${dir === "asc" ? "↑" : "↓"}</option>`)).join("");
     return `<label class="cal-compact-sort"><span>${esc(t("wiz_T450"))}</span><select data-sort="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
-  }
-
-  /**
-   * T-06c M: «Select ⌄» is a menu of actions (all, those to calibrate, none), not a filter: a sheet whose choice ticks
-   * the rows at once and closes.
-   */
-  _openSelectSheet() {
-    const { dialogHost, t } = this._context;
-    const title = t("wiz_T383").replace(/\s*:\s*$/, "");
-    this._closeDialog();
-    dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog cal-filter-sheet cal-select-sheet" aria-labelledby="cal-select-title">
-      <header class="dialog-head"><div class="dialog-head-text"><h2 id="cal-select-title">${esc(title)}</h2></div>
-        <button type="button" class="icon-button cal-sheet-close" aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
-      <div class="cal-dialog-body cal-filter-options" role="menu" aria-labelledby="cal-select-title">${[["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]].map(([id, label]) =>
-        `<button type="button" class="cal-select-option" role="menuitem" data-pick="${id}">${esc(label)}</button>`).join("")}</div></dialog>`;
-    const dialog = dialogHost.querySelector("dialog");
-    const done = () => this._sheetDone(dialog, ".cal-compact-select");
-    dialog.querySelector(".cal-sheet-close").onclick = done;
-    dialog.oncancel = (event) => { event.preventDefault(); done(); };
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) { done(); return; }
-      const pick = event.target.closest("[data-pick]")?.dataset.pick;
-      if (pick) { this._batchPick(pick); done(); }
-    });
-    dialog.showModal();
-    this._dialog = dialog;
-    this._holdPage(dialog);
-    dialog.querySelector("[data-pick]")?.focus();
-  }
-
-  /** The phone's filter sheet (T-01c M): a choice applies at once and the sheet slides away. */
-  _openFilterSheet() {
-    const { dialogHost, t } = this._context;
-    const all = this._covers().filter((item) => this._matches(item));
-    const counts = { all: all.length, to_measure: all.filter((item) => item.status === "to_measure").length,
-      calibrated: all.filter((item) => item.status !== "to_measure").length, profile: all.filter((item) => item.profile).length };
-    this._closeDialog();
-    dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog cal-filter-sheet" aria-labelledby="cal-filter-title">
-      <header class="dialog-head"><div class="dialog-head-text"><h2 id="cal-filter-title">${esc(t("wiz_T451"))}</h2></div>
-        <button type="button" class="icon-button cal-sheet-close" aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
-      <div class="cal-dialog-body cal-filter-options" role="radiogroup" aria-labelledby="cal-filter-title">${FILTERS.map((filter) =>
-        `<label class="cal-filter-option"><input type="radio" name="cal-filter" value="${filter}" ${this._filter === filter ? "checked" : ""}><span>${esc(t(`calTabFilter_${filter}`))} (${counts[filter]})</span></label>`).join("")}</div></dialog>`;
-    const dialog = dialogHost.querySelector("dialog");
-    const done = () => this._sheetDone(dialog);
-    dialog.querySelector(".cal-sheet-close").onclick = done;
-    dialog.oncancel = (event) => { event.preventDefault(); done(); };
-    dialog.addEventListener("click", (event) => { if (event.target === dialog) done(); });
-    dialog.addEventListener("change", (event) => {
-      if (event.target.name !== "cal-filter") return;
-      this._filter = event.target.value;
-      this._render();
-      done();
-    });
-    dialog.showModal();
-    this._dialog = dialog;
-    this._holdPage(dialog);
-    dialog.querySelector("input:checked")?.focus();
-  }
-
-  /** A sheet that changes nothing on the backend: it slides away (phones with motion) and the focus goes back. */
-  _sheetDone(dialog, opener = ".cal-compact-filter") {
-    if (this._dialog !== dialog || dialog.classList.contains("is-leaving")) return;
-    const back = () => { if (this._dialog === dialog) this._closeDialog(); this._context?.host.querySelector(opener)?.focus({ preventScroll: true }); };
-    const motion = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!motion) { back(); return; }
-    dialog.classList.add("is-leaving");
-    setTimeout(back, 220);
   }
 
   /** The header row of a list: Cover, Status and Profile sort it. */
@@ -628,7 +571,6 @@ export class CalibrationTab {
       const { action, id } = button.dataset;
       if (action === "cal-tab-batch-back") this._batchBack();
       else if (action === "cal-tab-batch-pick") this._batchPick(id);
-      else if (action === "cal-tab-batch-menu") this._openSelectSheet();
       else if (action === "cal-tab-batch-start") this._batchStart();
       else if (action === "cal-tab-sort") this._setSort(id);
       return;
@@ -669,7 +611,6 @@ export class CalibrationTab {
       if (this._menu) this._context.host.querySelector('.cal-menu:not([hidden]) [role="menuitem"]')?.focus();
     } else if (action === "cal-tab-refresh") this.refresh();
     else if (action === "cal-tab-batch") this._selectBatch();
-    else if (action === "cal-tab-filter-sheet") this._openFilterSheet();
     else if (action === "cal-tab-session") this._openSession(id);
     else if (action === "cal-tab-measure") this._openWizard({ start: "choose" });
     else if (action === "cal-tab-measure-cover") { const item = this._item(id); if (item) this._openWizard({ start: "path", item }); }
@@ -1008,7 +949,9 @@ export class CalibrationTab {
           <p class="muted cal-batch-capacity">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
         ${this._sortBar()}
         <div class="cal-tab-compact cal-batch-compact">
-          <button type="button" class="cal-compact-filter cal-compact-select" data-action="cal-tab-batch-menu" aria-haspopup="dialog"><span>${esc(t("wiz_T383").replace(/\s*:\s*$/, ""))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+          <label class="cal-compact-sort cal-compact-select"><select data-batch-pick aria-label="${esc(t("wiz_T383").replace(/\s*:\s*$/, ""))}">
+            <option value="" selected>${esc(t("wiz_T383").replace(/\s*:\s*$/, ""))}</option>${[["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]].map(([id, label]) =>
+              `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>
           ${this._compactSort()}</div>
         <div class="cal-list cal-batch-list">
           ${this._sortHeads(" cal-batch-head")}

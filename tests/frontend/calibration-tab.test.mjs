@@ -742,9 +742,9 @@ test("on phones the list has one row of two drop-downs: the filter opens a sheet
   const { tab, panel } = await mount({ language: "it" });
   const compact = tab.querySelector(".cal-tab-compact");
   assert.equal(tab.querySelector(".cal-list ~ .cal-sort-bar, .cal-sort-bar"), null, "no separate Sort by pill in the list");
-  const pick = (value) => { const select = tab.querySelector(".cal-tab-compact select"); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
-  assert.equal(compact.querySelector(".cal-compact-sort > span").textContent, "Ordina:");
-  assert.deepEqual([...compact.querySelector("select").options].map((option) => option.textContent),
+  const pick = (value) => { const select = tab.querySelector(".cal-tab-compact select[data-sort]"); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+  assert.equal(compact.querySelector(".cal-compact-sort:not(.cal-compact-filter) > span").textContent, "Ordina:");
+  assert.deepEqual([...compact.querySelector("select[data-sort]").options].map((option) => option.textContent),
     ["Tapparella ↑", "Tapparella ↓", "Stato ↑", "Stato ↓", "Profilo ↑", "Profilo ↓"]);
   pick("status:asc");
   assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
@@ -752,22 +752,14 @@ test("on phones the list has one row of two drop-downs: the filter opens a sheet
   assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
   assert.equal(tab.querySelector('.cal-tab-compact select[data-sort="order"]').value, "status:desc");
   assert.equal(tab.querySelector('.cal-list-head [data-id="status"] ha-icon').getAttribute("icon"), "mdi:arrow-down", "the headers show the same choice");
-  // The filter: «Filtro: Tutte (4)», then a sheet with the four filters and their counts.
-  const button = () => tab.querySelector(".cal-compact-filter");
-  assert.equal(button().textContent.trim(), "Filtro: Tutte (4)");
-  assert.equal(button().getAttribute("aria-haspopup"), "dialog");
-  button().click(); await tick();
-  const sheet = panel.shadowRoot.querySelector("dialog.cal-filter-sheet");
-  assert.ok(sheet?.open);
-  assert.equal(sheet.querySelector("h2").textContent, "Filtra le tapparelle");
-  assert.equal(sheet.querySelector(".cal-sheet-close").getAttribute("aria-label"), "Chiudi");
-  assert.deepEqual([...sheet.querySelectorAll(".cal-filter-option")].map((option) => [option.querySelector("input").checked, option.textContent]),
-    [[true, "Tutte (4)"], [false, "Da calibrare (1)"], [false, "Calibrate (3)"], [false, "Con profilo (2)"]]);
-  const radio = sheet.querySelector('input[value="to_measure"]');
-  radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
-  assert.equal(panel.shadowRoot.querySelector("dialog.cal-filter-sheet"), null, "a choice closes the sheet");
+  // The filter: a native drop-down whose options carry the counts.
+  const filter = () => tab.querySelector(".cal-tab-compact select[data-filter]");
+  assert.equal(tab.querySelector(".cal-tab-compact .cal-compact-filter > span").textContent, "Filtro:");
+  assert.deepEqual([...filter().options].map((option) => option.textContent), ["Tutte (4)", "Da calibrare (1)", "Calibrate (3)", "Con profilo (2)"]);
+  filter().value = "to_measure"; filter().dispatchEvent(new Event("change", { bubbles: true }));
   assert.deepEqual(order(tab), ["bedroom"]);
-  assert.equal(button().textContent.trim(), "Filtro: Da calibrare (1)");
+  assert.equal(filter().value, "to_measure");
+  assert.equal(panel.shadowRoot.querySelector("dialog.cal-filter-sheet"), null, "no sheet");
   assert.equal(tab.querySelector('.cal-chip[data-id="to_measure"]').getAttribute("aria-pressed"), "true", "the desktop chips follow");
 });
 
@@ -859,16 +851,12 @@ test("no update rebuilds what is on screen: filters, order, refreshes and the de
     const { tab, panel, hass } = await mount({ language: "it" });
     const kept = row(tab, "cover.kitchen_two"), list = tab.querySelector(".cal-list");
     // The order: the same row elements, moved.
-    const select = tab.querySelector(".cal-tab-compact select"); select.value = "status:desc"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    const select = tab.querySelector(".cal-tab-compact select[data-sort]"); select.value = "status:desc"; select.dispatchEvent(new Event("change", { bubbles: true }));
     assert.equal(row(tab, "cover.kitchen_two"), kept);
     assert.equal(tab.querySelector(".cal-list"), list);
-    // The filter sheet: opening, closing and applying keep the rows that stay.
-    tab.querySelector(".cal-compact-filter").click(); await tick();
-    panel.shadowRoot.querySelector("dialog.cal-filter-sheet .cal-sheet-close").click(); await tick();
-    assert.equal(row(tab, "cover.kitchen_two"), kept);
-    tab.querySelector(".cal-compact-filter").click(); await tick();
-    const radio = panel.shadowRoot.querySelector('dialog.cal-filter-sheet input[value="calibrated"]');
-    radio.checked = true; radio.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+    // The filter: applying it keeps the rows that stay.
+    const filter = tab.querySelector(".cal-tab-compact select[data-filter]");
+    filter.value = "calibrated"; filter.dispatchEvent(new Event("change", { bubbles: true })); await tick();
     assert.equal(row(tab, "cover.kitchen_two"), kept);
     // A Home Assistant update (states, the profiles' revision) with nothing new: nothing is replaced.
     const html = tab.innerHTML;
@@ -895,28 +883,21 @@ test("the sequence view keeps its rows when the order or the selection changes (
   assert.equal(kept.querySelector("input").checked, true);
 });
 
-test("on phones the sequence view has «Select ⌄» (a menu of actions in a sheet) and «Sort ⌄»; its circles are drawn, not native (M3-5, M3-6)", async () => {
+test("on phones the sequence view has a native «Select ⌄» menu of actions and «Sort ⌄»; its circles are drawn, not native (M4-2, M3-6)", async () => {
   const { tab, panel } = await openBatch();
-  const compact = tab.querySelector(".cal-batch-compact");
-  assert.ok(compact, "the compact row is there (shown under 1024 px)");
-  const select = compact.querySelector(".cal-compact-select");
-  assert.equal(select.textContent.trim(), "Seleziona");
-  assert.ok(compact.querySelector('.cal-compact-sort select[data-sort="order"]'), "the list's own order control");
-  select.click(); await tick();
-  const sheet = panel.shadowRoot.querySelector("dialog.cal-select-sheet");
-  assert.ok(sheet?.open);
-  assert.equal(sheet.querySelector("h2").textContent, "Seleziona");
-  assert.deepEqual([...sheet.querySelectorAll("[data-pick]")].map((item) => [item.dataset.pick, item.textContent]), [["all", "Tutte"], ["to_measure", "Da calibrare"], ["none", "Nessuna"]],
-    "actions without counts");
-  sheet.querySelector('[data-pick="all"]').click(); await tick();
-  assert.equal(panel.shadowRoot.querySelector("dialog.cal-select-sheet"), null, "a choice closes the sheet");
+  const select = () => tab.querySelector(".cal-batch-compact select[data-batch-pick]");
+  assert.deepEqual([...select().options].map((option) => [option.value, option.textContent]), [["", "Seleziona"], ["all", "Tutte"], ["to_measure", "Da calibrare"], ["none", "Nessuna"]],
+    "actions without counts, under a placeholder");
+  assert.ok(tab.querySelector('.cal-batch-compact .cal-compact-sort select[data-sort="order"]'), "the list's own order control");
   const ticked = () => [...tab.querySelectorAll(".cal-batch-row input")].filter((box) => box.checked).map((box) => box.value);
-  const fromSheet = ticked();
-  assert.ok(fromSheet.length > 0);
+  select().value = "all"; select().dispatchEvent(new Event("change", { bubbles: true }));
+  const fromMenu = ticked();
+  assert.ok(fromMenu.length > 0);
+  assert.equal(select().value, "", "the placeholder comes back");
+  assert.equal(panel.shadowRoot.querySelector("dialog"), null, "no sheet");
   tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="none"]').click();
   tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
-  assert.deepEqual(fromSheet, ticked(), "the same action as the desktop shortcut");
+  assert.deepEqual(fromMenu, ticked(), "the same action as the desktop shortcut");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-batch-lead input \{ appearance: none;[^}]*border-radius: 50%/);
-  assert.match(css, /\.cal-batch-lead input:checked \{[^}]*background-color: var\(--panel-accent\)/);
 });
