@@ -197,6 +197,8 @@ export class CalibrationWizard {
     this._current = screen;
     const { t } = this._context;
     const drawing = (position) => screen.illustration?.position === position ? illustrationMarkup(screen.illustration.id, t("wizIllustration"), esc) : "";
+    // G2-11: a notice that comments a result sits right under the result box (or the stopwatch), before text and drawing.
+    const resultNotices = '<div class="wiz-result-notices" aria-live="polite"></div>';
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
@@ -231,10 +233,11 @@ export class CalibrationWizard {
             ${screen.preview ? `<p class="wiz-preview" role="note"><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon><span>${esc(t("wizPreview"))}</span></p>` : ""}
             <h4 class="wiz-title" tabindex="-1">${esc(screen.title)}</h4>${screen.subline ? `<p class="cal-note wiz-subline">${esc(screen.subline)}</p>` : ""}
             <div class="wiz-stopwatch" hidden${ILLUSTRATIONS[screen.illustration?.id] ? ` style="--wiz-stopwatch-width: ${ILLUSTRATIONS[screen.illustration.id].width}px"` : ""}><span class="wiz-stopwatch-label"></span><span class="wiz-stopwatch-value"></span></div>
+            ${screen.results?.length ? "" : resultNotices}
             ${drawing("before-body")}
             ${screen.wait ? this._waitMarkup(screen.wait) : ""}
             ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => `<div class="wiz-result"><span class="wiz-result-label">${esc(tile.label)}</span>
-              <span class="wiz-result-value">${esc(tile.value)}<small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>` : ""}
+              <span class="wiz-result-value">${esc(tile.value)}<small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>${resultNotices}` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
             ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
@@ -370,9 +373,12 @@ export class CalibrationWizard {
       remaining.textContent = screen.wait.remaining || "";
       remaining.hidden = !screen.wait.remaining;
     }
-    const notices = screen.notices.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${esc(notice.text)}</p>`).join("");
+    const markup = (list) => list.map((notice) => `<p class="notice wiz-notice" data-tone="${notice.tone}" ${notice.tone === "error" ? 'role="alert"' : ""}>${esc(notice.text)}</p>`).join("");
+    const top = root.querySelector(".wiz-result-notices");
+    const notices = markup(screen.notices.filter((notice) => !(top && notice.result)));
     const box = root.querySelector(".wiz-notices");
     if (box.innerHTML !== notices) box.innerHTML = notices;
+    if (top) { const first = markup(screen.notices.filter((notice) => notice.result)); if (top.innerHTML !== first) top.innerHTML = first; }
     const field = root.querySelector(".wiz-field input");
     if (field) field.disabled = !!screen.field?.disabled;
     const block = screen.profileBlock?.name;

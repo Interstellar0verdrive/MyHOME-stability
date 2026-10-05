@@ -1101,8 +1101,8 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-name-line { font-size: 13px; }
 .wiz-name-input[aria-invalid="true"] { border-color: var(--panel-error); outline-color: var(--panel-error); }
 .wiz-name-error { margin: 4px 0 0; font-size: 13px; color: var(--panel-error); }
-.wiz-notices { display: grid; gap: 8px; }
-.wiz-notices:empty { display: none; }
+.wiz-notices, .wiz-result-notices { display: grid; gap: 8px; }
+.wiz-notices:empty, .wiz-result-notices:empty { display: none; }
 .wiz-notice { margin: 0; }
 .wiz-notice[data-tone="warning"] { border-color: color-mix(in srgb, var(--panel-warning) 45%, transparent); background: color-mix(in srgb, var(--panel-warning) 10%, var(--panel-surface)); }
 .wiz-notice[data-tone="error"] { color: var(--panel-error); border-color: color-mix(in srgb, var(--panel-error) 40%, transparent); background: color-mix(in srgb, var(--panel-error) 8%, transparent); }

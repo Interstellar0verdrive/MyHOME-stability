@@ -272,13 +272,13 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   // frame as the end stop, so the user is asked to look before confirming. The confirmation stays active.
   const stoppedEarly = (estimate, key) => {
     if (!MOTOR_STOPPED(view) || view.stopped_elapsed == null || !(estimate > 0) || view.stopped_elapsed >= estimate * EARLY_STOP_SHARE) return;
-    screen.notices.push({ tone: "warning", text: fill(t(key), { seconds: n.fixed(view.stopped_elapsed), estimate: n(estimate, 0) }) });
+    screen.notices.push({ tone: "warning", result: true, text: fill(t(key), { seconds: n.fixed(view.stopped_elapsed), estimate: n(estimate, 0) }) });
   };
   // G2-9: a lift-off reading under 1 cm repeats the run. The backend clears `still_resting` as soon as the return to
   // the bottom starts, so the panel keeps the value it sent: the return (A-09) and the new lift-off briefing (A-07)
   // name it and say why; after a reload, without the value, the backend's notice stands while it lasts.
   const resting = local.lastGap != null && local.lastGap < (view.touching_cm ?? 1) && (view.lift_attempts ?? 1) > 1;
-  const liftRepeated = () => resting ? { tone: "info", text: fill(t("wiz_T458"), { n: n(local.lastGap) }) } : { tone: "info", text: fill(t("calLiftRepeated"), view) };
+  const liftRepeated = () => ({ tone: "info", result: true, text: resting ? fill(t("wiz_T458"), { n: n(local.lastGap) }) : fill(t("calLiftRepeated"), view) });
   // G2-10: after ② (or at the end of a half run) the backend waits for the actuator's stop: the screen says so, the
   // stopwatch stays at the press, and ①/② give way to the status instead of sitting there disabled.
   const stopping = (seconds) => {
@@ -329,7 +329,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
   if (step === "reset") {
     if (phase === "briefing" && view.gap_warning) return Object.assign(screen, { code: p("08"), title: t("wiz_T047"), body: t("wiz_T048"),
       results: [liftTile()].filter(Boolean),
-      notices: [{ tone: "warning", text: fill(t("calGapWarning"), view) }],
+      notices: [{ tone: "warning", result: true, text: fill(t("calGapWarning"), view) }],
       actions: [{ id: "next", label: t("wiz_T060"), kind: "primary" }, { id: "repeat", label: t("wiz_T061"), kind: "secondary" }] });
     // The same Stop rule as A-05 (only while the motor runs); no T033 here, a stop would discard the lift-off.
     if (phase === "closing" && !positioningRun(closingTime)) {
@@ -346,7 +346,7 @@ function geometryScreen(screen, ctx, tx, n, values, stop) {
     return screen;
   }
   // A full run the bus ended without a timely press of ②: its result is shown but not valid; only a repeat goes on.
-  const invalid = (key) => local.invalidRun?.step === key ? { tone: "warning", text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
+  const invalid = (key) => local.invalidRun?.step === key ? { tone: "warning", result: true, text: t(local.invalidRun.reason === "timer" ? "wiz_T445" : "wiz_T444") } : null;
   const repeatOnly = (code, title, results, note) => Object.assign(screen, { code, title, results: results.filter(Boolean), notices: [note],
     actions: [{ id: "repeat", label: t("wiz_T061"), kind: "primary" }] });
   if (step === "opening") {

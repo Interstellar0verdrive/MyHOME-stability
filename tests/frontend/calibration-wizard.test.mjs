@@ -258,7 +258,8 @@ test("path A runs the live geometry session from the first close to Save, one me
   assert.equal(tiles()[0][0], "Lift-off");
   assert.match(tiles()[0][1], /^\d+(\.\d)? s · 3 cm$/, "lift-off time and gap in one tile");
   assert.deepEqual(tiles()[1], ["Full ascent", "22.2 s"]);
-  assert.equal(wiz().querySelector(".wiz-results").nextElementSibling.className, "wiz-body", "above the text");
+  assert.deepEqual([wiz().querySelector(".wiz-results").nextElementSibling.className, wiz().querySelector(".wiz-results").nextElementSibling.nextElementSibling.className],
+    ["wiz-result-notices", "wiz-body"], "above the text, with the notices about the result between them (G2-11)");
   assert.match(wiz().querySelector(".wiz-body").textContent, /^If both presses came at the right moment, continue\./);
   await press("ack:ascent");
   assert.equal(code(), "A-13");
@@ -350,7 +351,7 @@ test("a wide gap asks before moving on and a reading out of range stays in the f
   assert.equal(actions().includes("reading"), false, "a gap above the limit is not sent");
   await type("12");
   assert.equal(code(), "A-08");
-  assert.match(wiz().querySelector(".wiz-notices").textContent, /10 cm or more/);
+  assert.match(wiz().querySelector(".wiz-result-notices").textContent, /10 cm or more/, "under the result, before the text (G2-11)");
   assert.equal(actions().at(-1), "reading", "no movement starts before the choice");
   await press("repeat");
   assert.equal(actions().at(-1), "next", "Repeat returns to the rest by itself");
@@ -1136,7 +1137,7 @@ test("a full run ended by the bus: valid with a press before or within 2 s of th
     backend.emit();
   };
   const endpoints = (backend) => backend.calls.filter((message) => message.action === "endpoint").length;
-  const notice = (wiz) => wiz().querySelector(".wiz-notices").textContent;
+  const notice = (wiz) => wiz().querySelector(".wiz-result-notices").textContent;
   // (a) ② before the frame: the press time, valid.
   const a = await mount();
   await toAscent(a);
@@ -1195,7 +1196,7 @@ test("the full descent follows the same rule, and the lift-off run is not affect
   backend.tick(3); backend.emit(); await tick(6);
   backend.stopped(); await tick();
   assert.equal(code(), "A-15");
-  assert.match(wiz().querySelector(".wiz-notices").textContent, /stopped before you pressed ②/);
+  assert.match(wiz().querySelector(".wiz-result-notices").textContent, /stopped before you pressed ②/);
   assert.deepEqual([...wiz().querySelectorAll(".wiz-actions .wiz-action")].map((item) => item.dataset.wiz), ["repeat"]);
 });
 
@@ -1586,7 +1587,7 @@ test("a stop frame well before the estimated run asks to check the end stop; the
     view: { mode: "geometry", values: { opening_time: 22, closing_time: 21 }, samples: { lift: 4 }, readings: { gap: 3 }, slats: true, owner: true, sequence: 4, ...view } });
   const early = at({ step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 8 });
   assert.equal(early.code, "A-05");
-  assert.deepEqual(early.notices, [{ tone: "warning", text: "The cover stopped earlier than expected (8.0 s of about 20 s): check that it is really fully closed before continuing." }]);
+  assert.deepEqual(early.notices, [{ tone: "warning", result: true, text: "The cover stopped earlier than expected (8.0 s of about 20 s): check that it is really fully closed before continuing." }]);
   assert.equal(early.actions[0].disabled, undefined, "the end stop stays pressable");
   assert.deepEqual(at({ step: "home", phase: "closing", motor_stopped: true, stopped_elapsed: 13 }).notices, [], "past 60 %: no warning");
   assert.equal(at({ step: "reset", phase: "closing", motor_stopped: true, stopped_elapsed: 5 }).notices.length, 1, "A-10 too");
@@ -1953,12 +1954,12 @@ test("a lift-off gap under 1 cm repeats the run and the repeat says which value 
   await type("0,5");
   assert.equal(backend.calls.filter((message) => message.action === "reading").at(-1).reading_cm, 0.5);
   assert.equal(backend.session.lift_attempts, 2, "the backend repeats the lift-off");
-  assert.equal(wiz().querySelector(".wiz-notices").textContent,
+  assert.equal(wiz().querySelector(".wiz-result-notices").textContent,
     "Hai indicato 0,5 cm: sotto 1 cm il bordo conta come ancora appoggiato, quindi la corsa viene ripetuta.");
   // Back at the bottom, the lift-off screen repeats it.
   await move(backend); await press("endpoint"); backend.stopped(); await tick();
   assert.equal(code(), "A-07");
-  assert.match(wiz().querySelector(".wiz-notices").textContent, /^Hai indicato 0,5 cm/);
+  assert.match(wiz().querySelector(".wiz-result-notices").textContent, /^Hai indicato 0,5 cm/);
 });
 
 test("while the backend waits for the actuator's stop the screen says «Stopping…» with the stopwatch at the press (G2-10)", async () => {
