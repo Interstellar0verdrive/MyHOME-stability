@@ -653,7 +653,7 @@ test("a never measured cover says where its times come from", async () => {
   const { tab } = await mount({ data, language: "it" });
   row(tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
   assert.equal(row(tab, "cover.bedroom").querySelector(".cal-origin-note").textContent,
-    "Valori predefiniti (25 s), mai misurati su questa tapparella: la posizione stimata può essere molto imprecisa. Misurala.");
+    "Valori predefiniti (25 s), mai misurati su questa tapparella: la posizione stimata può essere molto imprecisa. Con una calibrazione la precisione può migliorare sensibilmente.");
   bedroom.effective.opening = timing(30, unknown, "yaml"); bedroom.effective.closing = timing(28, unknown, "yaml");
   const yaml = await mount({ data });
   row(yaml.tab, "cover.bedroom").querySelector('[data-action="cal-tab-toggle"]').click();
