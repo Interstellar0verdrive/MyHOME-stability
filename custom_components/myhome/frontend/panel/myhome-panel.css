@@ -768,6 +768,20 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-block-action button:not(.primary):hover { background: var(--panel-accent-soft); }
 /* As in the design, the action spans the whole width of its block. */
 .cal-block-action > button { width: 100%; justify-content: center; }
+@media (max-width: 1023px) {
+  /* T-01 M: every cover is a card of its own, 12 px apart. First line: chevron, icon, name block and ⋮ at the top
+     right; second line: status and profile on the left, Measure/Refine on the right. */
+  .cal-list { border: 0; border-radius: 0; background: transparent; }
+  .cal-list-rows { display: grid; gap: 12px; }
+  .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
+  .cal-row.is-running { border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); }
+  .cal-row-main { grid-template-columns: max-content minmax(0, 1fr) auto; grid-template-areas: "cover cover menu" "status profile action";
+    border-radius: 11px; }
+  .cal-row-actions { display: contents; }
+  .cal-row-action { grid-area: action; justify-self: end; }
+  .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
+  .cal-row-last-inline { display: block; color: var(--panel-text-2); }
+}
 .cal-tab-back { justify-self: start; }
 .cal-dialog-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 18px 4px; }
 .cal-dialog-body > p { margin: 0; }

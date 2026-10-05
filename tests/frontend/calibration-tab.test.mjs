@@ -112,8 +112,9 @@ test("the Calibration sub-tab sits next to Devices and Profiles and lists timed 
   assert.deepEqual([...tab.querySelectorAll(".cal-list-head > span")].map((cell) => cell.querySelector("button")?.firstChild.textContent ?? cell.textContent),
     ["", "Cover", "Status", "Profile", ""], "no column for the last measurement: its date is in the details");
   assert.equal(tab.querySelector(".cal-row-last"), null);
-  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, " · Measured on Oct 1, 2026", "phones show it under the name");
-  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, " · never measured");
+  assert.equal(row(tab, "cover.living_one").querySelector(".cal-row-last-inline").textContent, "Measured on Oct 1, 2026", "phones show it on its own line under the name");
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-last-inline").textContent, "Never measured");
+  assert.equal(row(tab, "cover.bedroom").querySelector(".cal-row-name > .muted .cal-row-last-inline"), null, "not inside the address line");
   assert.equal(tab.querySelector(".cal-tab-summary").textContent, "4 covers · 3 calibrated · 1 to measure");
   assert.equal(commands(calls).length, 0, "rendering the list never starts a measurement");
   assert.deepEqual(calls.filter((message) => message.type.startsWith("myhome/cover_profiles/")).map((message) => [message.type, message.entity_id]),
