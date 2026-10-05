@@ -273,12 +273,46 @@ export class CalibrationTab {
    */
   _compactFilters(counts) {
     const { t } = this._context;
+    return `<div class="cal-tab-compact">
+            <button type="button" class="cal-compact-filter" data-action="cal-tab-filter-sheet" aria-haspopup="dialog"><span>${esc(fill(t("wiz_T449"), { filter: t(`calTabFilter_${this._filter}`), count: counts[this._filter] }))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+            ${this._compactSort()}</div>`;
+  }
+
+  /** «Sort: Cover ↑ ⌄»: the phone's order control of every list (T-01c, T-06c). */
+  _compactSort() {
+    const { t } = this._context;
     const column = (key) => t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]);
     const options = SORT_KEYS.flatMap((key) => ["asc", "desc"].map((dir) =>
       `<option value="${key}:${dir}" ${this._sort.key === key && this._sort.dir === dir ? "selected" : ""}>${esc(column(key))} ${dir === "asc" ? "↑" : "↓"}</option>`)).join("");
-    return `<div class="cal-tab-compact">
-            <button type="button" class="cal-compact-filter" data-action="cal-tab-filter-sheet" aria-haspopup="dialog"><span>${esc(fill(t("wiz_T449"), { filter: t(`calTabFilter_${this._filter}`), count: counts[this._filter] }))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
-            <label class="cal-compact-sort"><span>${esc(t("wiz_T450"))}</span><select data-sort="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label></div>`;
+    return `<label class="cal-compact-sort"><span>${esc(t("wiz_T450"))}</span><select data-sort="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
+  }
+
+  /**
+   * T-06c M: «Select ⌄» is a menu of actions (all, those to calibrate, none), not a filter: a sheet whose choice ticks
+   * the rows at once and closes.
+   */
+  _openSelectSheet() {
+    const { dialogHost, t } = this._context;
+    const title = t("wiz_T383").replace(/\s*:\s*$/, "");
+    this._closeDialog();
+    dialogHost.innerHTML = `<dialog class="cover-profile-dialog cal-dialog cal-filter-sheet cal-select-sheet" aria-labelledby="cal-select-title">
+      <header class="dialog-head"><div class="dialog-head-text"><h2 id="cal-select-title">${esc(title)}</h2></div>
+        <button type="button" class="icon-button cal-sheet-close" aria-label="${esc(t("close"))}" title="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button></header>
+      <div class="cal-dialog-body cal-filter-options" role="menu" aria-labelledby="cal-select-title">${[["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]].map(([id, label]) =>
+        `<button type="button" class="cal-select-option" role="menuitem" data-pick="${id}">${esc(label)}</button>`).join("")}</div></dialog>`;
+    const dialog = dialogHost.querySelector("dialog");
+    const done = () => this._sheetDone(dialog, ".cal-compact-select");
+    dialog.querySelector(".cal-sheet-close").onclick = done;
+    dialog.oncancel = (event) => { event.preventDefault(); done(); };
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) { done(); return; }
+      const pick = event.target.closest("[data-pick]")?.dataset.pick;
+      if (pick) { this._batchPick(pick); done(); }
+    });
+    dialog.showModal();
+    this._dialog = dialog;
+    this._holdPage(dialog);
+    dialog.querySelector("[data-pick]")?.focus();
   }
 
   /** The phone's filter sheet (T-01c M): a choice applies at once and the sheet slides away. */
@@ -311,9 +345,9 @@ export class CalibrationTab {
   }
 
   /** A sheet that changes nothing on the backend: it slides away (phones with motion) and the focus goes back. */
-  _sheetDone(dialog) {
+  _sheetDone(dialog, opener = ".cal-compact-filter") {
     if (this._dialog !== dialog || dialog.classList.contains("is-leaving")) return;
-    const back = () => { if (this._dialog === dialog) this._closeDialog(); this._context?.host.querySelector(".cal-compact-filter")?.focus({ preventScroll: true }); };
+    const back = () => { if (this._dialog === dialog) this._closeDialog(); this._context?.host.querySelector(opener)?.focus({ preventScroll: true }); };
     const motion = typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!motion) { back(); return; }
     dialog.classList.add("is-leaving");
@@ -594,6 +628,7 @@ export class CalibrationTab {
       const { action, id } = button.dataset;
       if (action === "cal-tab-batch-back") this._batchBack();
       else if (action === "cal-tab-batch-pick") this._batchPick(id);
+      else if (action === "cal-tab-batch-menu") this._openSelectSheet();
       else if (action === "cal-tab-batch-start") this._batchStart();
       else if (action === "cal-tab-sort") this._setSort(id);
       return;
@@ -972,6 +1007,9 @@ export class CalibrationTab {
           <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="none">${esc(t("wiz_T391"))}</button></p>
           <p class="muted cal-batch-capacity">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
         ${this._sortBar()}
+        <div class="cal-tab-compact cal-batch-compact">
+          <button type="button" class="cal-compact-filter cal-compact-select" data-action="cal-tab-batch-menu" aria-haspopup="dialog"><span>${esc(t("wiz_T383").replace(/\s*:\s*$/, ""))}</span><ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></button>
+          ${this._compactSort()}</div>
         <div class="cal-list cal-batch-list">
           ${this._sortHeads(" cal-batch-head")}
           <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>

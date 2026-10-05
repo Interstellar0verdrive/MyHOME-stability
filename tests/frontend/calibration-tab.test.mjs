@@ -894,3 +894,29 @@ test("the sequence view keeps its rows when the order or the selection changes (
   assert.equal(tab.querySelector(".cal-batch"), view);
   assert.equal(kept.querySelector("input").checked, true);
 });
+
+test("on phones the sequence view has «Select ⌄» (a menu of actions in a sheet) and «Sort ⌄»; its circles are drawn, not native (M3-5, M3-6)", async () => {
+  const { tab, panel } = await openBatch();
+  const compact = tab.querySelector(".cal-batch-compact");
+  assert.ok(compact, "the compact row is there (shown under 1024 px)");
+  const select = compact.querySelector(".cal-compact-select");
+  assert.equal(select.textContent.trim(), "Seleziona");
+  assert.ok(compact.querySelector('.cal-compact-sort select[data-sort="order"]'), "the list's own order control");
+  select.click(); await tick();
+  const sheet = panel.shadowRoot.querySelector("dialog.cal-select-sheet");
+  assert.ok(sheet?.open);
+  assert.equal(sheet.querySelector("h2").textContent, "Seleziona");
+  assert.deepEqual([...sheet.querySelectorAll("[data-pick]")].map((item) => [item.dataset.pick, item.textContent]), [["all", "Tutte"], ["to_measure", "Da misurare"], ["none", "Nessuna"]],
+    "actions without counts");
+  sheet.querySelector('[data-pick="all"]').click(); await tick();
+  assert.equal(panel.shadowRoot.querySelector("dialog.cal-select-sheet"), null, "a choice closes the sheet");
+  const ticked = () => [...tab.querySelectorAll(".cal-batch-row input")].filter((box) => box.checked).map((box) => box.value);
+  const fromSheet = ticked();
+  assert.ok(fromSheet.length > 0);
+  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="none"]').click();
+  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
+  assert.deepEqual(fromSheet, ticked(), "the same action as the desktop shortcut");
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  assert.match(css, /\.cal-batch-lead input \{ appearance: none;[^}]*border-radius: 50%/);
+  assert.match(css, /\.cal-batch-lead input:checked \{[^}]*background-color: var\(--panel-accent\)/);
+});
