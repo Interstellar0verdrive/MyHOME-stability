@@ -305,6 +305,7 @@ export class CalibrationTab {
     });
     dialog.showModal();
     this._dialog = dialog;
+    this._holdPage(dialog);
     dialog.querySelector("input:checked")?.focus();
   }
 
@@ -722,6 +723,7 @@ export class CalibrationTab {
     });
     dialog.showModal();
     this._dialog = dialog;
+    this._holdPage(dialog);
     return dialog.querySelector(".cal-dialog-body");
   }
 
@@ -730,6 +732,41 @@ export class CalibrationTab {
     this._dialog?.close();
     this._dialog?.remove();
     this._dialog = null;
+    this._releasePage();
+  }
+
+  /**
+   * M2-6: while a sheet is open on a phone the page under it does not scroll (iOS scrolls the page behind a modal
+   * dialog, and the sheet moves with it): every scrolling ancestor of the panel, `html` and `body` get
+   * `overflow: hidden` until the sheet closes. Only the sheet's body scrolls; its footer stays at the bottom, with the
+   * fade above it while there is more to read (as M-5).
+   */
+  _holdPage(dialog) {
+    this._releasePage();
+    const body = dialog.querySelector(".cal-dialog-body"), foot = dialog.querySelector(".dialog-foot");
+    if (body && foot) {
+      const more = () => foot.classList.toggle("has-more", body.scrollHeight - body.scrollTop - body.clientHeight > 1);
+      body.addEventListener("scroll", more, { passive: true });
+      if (typeof ResizeObserver === "function") { this._sheetObserver = new ResizeObserver(more); this._sheetObserver.observe(body); }
+      more();
+    }
+    if (!(typeof matchMedia === "function" && matchMedia("(max-width: 1023px)").matches)) return;
+    const held = [];
+    const hold = (element) => { if (element?.style) { held.push([element, element.style.overflow]); element.style.overflow = "hidden"; } };
+    hold(document.documentElement); hold(document.body);
+    for (let node = this._context.host; node; node = node.parentElement || node.getRootNode?.().host) {
+      if (node === document.documentElement || node === document.body) continue;
+      const style = node.ownerDocument.defaultView.getComputedStyle(node);
+      if (/(auto|scroll)/.test(style.overflowY)) hold(node);
+    }
+    this._held = held;
+  }
+
+  _releasePage() {
+    this._sheetObserver?.disconnect();
+    this._sheetObserver = null;
+    for (const [element, value] of this._held || []) element.style.overflow = value;
+    this._held = null;
   }
 
   /**

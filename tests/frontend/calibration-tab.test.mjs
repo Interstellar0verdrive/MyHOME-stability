@@ -832,3 +832,22 @@ test("on phones a cover's details open as a page over the list, closed by its âœ
     assert.equal(tab.querySelector(".cal-page"), null);
   } finally { globalThis.matchMedia = original; }
 });
+
+test("on phones an open sheet holds the page under it and lets it go when it closes", async () => {
+  const original = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes("max-width") || query.includes("reduced-motion") });
+  try {
+    const { tab, panel } = await mount();
+    document.documentElement.style.overflow = "clip";
+    row(tab, "cover.living_one").querySelector('[data-action="cal-tab-menu"]').click(); await tick();
+    row(tab, "cover.living_one").querySelector('.cal-menu [data-action="cal-tab-assign"]').click(); await tick();
+    const dialog = panel.shadowRoot.querySelector("dialog.cal-dialog");
+    assert.ok(dialog?.open);
+    assert.equal(document.documentElement.style.overflow, "hidden");
+    assert.equal(document.body.style.overflow, "hidden");
+    dialog.querySelector(".cal-dialog-cancel, .cal-dialog-close").click(); await tick();
+    assert.equal(panel.shadowRoot.querySelector("dialog.cal-dialog"), null);
+    assert.equal(document.documentElement.style.overflow, "clip", "the page's own value comes back");
+    assert.equal(document.body.style.overflow, "");
+  } finally { globalThis.matchMedia = original; document.documentElement.style.overflow = ""; }
+});
