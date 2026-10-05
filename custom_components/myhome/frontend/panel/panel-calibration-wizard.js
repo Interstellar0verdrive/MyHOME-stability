@@ -200,12 +200,15 @@ export class CalibrationWizard {
     const signature = JSON.stringify([screen.code, screen.title, screen.body, screen.header, screen.choice && { ...screen.choice, value: undefined },
       screen.field && { ...screen.field, disabled: undefined }, screen.box, screen.table, screen.technical, screen.precision,
       screen.profileBlock && { ...screen.profileBlock, name: screen.profileBlock.name && { label: screen.profileBlock.name.label, hint: screen.profileBlock.name.hint } },
-      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note]);
+      screen.saveInfo, screen.status, screen.preview, screen.illustration, screen.wait && screen.wait.text, screen.discard, screen.back, !!screen.picker, screen.results, screen.note, screen.help]);
     if (signature !== this._signature) {
       const codeChanged = this._renderedCode !== screen.code;
       // "What happens when I save?" opens with the summary; a reader's choice is kept while it stays on screen.
       const info = this._frame.querySelector(".wiz-save-info");
       this._local.saveInfoOpen = info ? info.open : true;
+      // The slats explanation (G2-3) starts closed on every screen and keeps the reader's choice while it stays.
+      const help = this._frame.querySelector(".wiz-help");
+      this._local.helpOpen = !codeChanged && !!help?.open;
       // A choice that redraws the screen (a note under the chosen option) keeps the keyboard on that choice.
       const active = this._root.getRootNode().activeElement;
       const radio = !codeChanged && active?.type === "radio" && this._frame.contains(active) ? active.name : null;
@@ -233,6 +236,7 @@ export class CalibrationWizard {
             ${screen.results?.length ? `<div class="wiz-results">${screen.results.map((tile) => `<div class="wiz-result"><span class="wiz-result-label">${esc(tile.label)}</span>
               <span class="wiz-result-value">${esc(tile.value)}<small> ${esc(tile.unit)}</small>${tile.extra ? `<span class="wiz-result-extra"> · ${esc(tile.extra)}</span>` : ""}</span></div>`).join("")}</div>` : ""}
             ${screen.body ? `<div class="wiz-body">${rich(screen.body)}</div>` : ""}
+            ${screen.help && !screen.choice ? this._helpMarkup(screen.help) : ""}
             ${screen.note ? `<p class="cal-note${screen.note.tone === "warning" ? " is-warning" : ""} wiz-note">${esc(screen.note.text)}</p>` : ""}
             ${screen.status.length ? `<div class="wiz-status">${screen.status.map((line) => `<p>${esc(line)}</p>`).join("")}</div>` : ""}
             ${drawing("after-body")}
@@ -432,8 +436,13 @@ export class CalibrationWizard {
       <p class="wiz-wait-remaining muted" aria-live="off" hidden></p></div></div>`;
   }
 
+  /** A closed-by-default explanation (G2-3): a native <details>, so it opens from the keyboard and reads as a toggle. */
+  _helpMarkup(help) {
+    return `<details class="wiz-accordion wiz-help"${this._local.helpOpen ? " open" : ""}><summary>${esc(help.summary)}<ha-icon icon="mdi:chevron-down" aria-hidden="true"></ha-icon></summary>${rich(help.text)}</details>`;
+  }
+
   _choiceMarkup(choice) {
-    return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.options.map((option) =>
+    return `<fieldset class="wiz-choice wiz-radios"><legend${choice.legendHidden ? ' class="visually-hidden"' : ""}>${esc(choice.label)}</legend>${choice.help ? this._helpMarkup(choice.help) : ""}${choice.options.map((option) =>
       `<label class="wiz-radio${option.disabled ? " is-disabled" : ""}"><input type="radio" name="${esc(choice.name)}" value="${esc(option.value)}" ${option.value === choice.value ? "checked" : ""} ${option.disabled ? "disabled" : ""}><span class="wiz-radio-text"><span class="wiz-radio-label">${option.plain ? esc(option.label) : inline(option.label)}${option.badge
         ? ` <span class="badge wiz-recommended">${esc(option.badge)}</span>` : ""}</span>${[].concat(option.note || []).map((line) => `<small class="muted">${esc(line)}</small>`).join("")}${option.warning
         ? `<span class="cal-note is-warning wiz-radio-warning">${esc(option.warning)}</span>` : ""}</span></label>`).join("")}</fieldset>`;

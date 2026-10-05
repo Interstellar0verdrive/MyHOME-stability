@@ -1075,6 +1075,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-accordion summary::-webkit-details-marker { display: none; }
 .wiz-accordion summary ha-icon { transition: transform var(--panel-ease); }
 .wiz-accordion[open] summary ha-icon { transform: rotate(180deg); }
+/* G2-3: the slats explanation, right after its question and before the answers. */
+.wiz-help { margin: -6px 0 6px; padding: 0; border: 0; border-radius: 0; }
+.wiz-help summary { justify-content: start; gap: 4px; min-height: 44px; color: var(--panel-accent); font-size: 14px; }
+.wiz-help summary ha-icon { --mdc-icon-size: 18px; }
+.wiz-help > p { margin: 0 0 12px; font-size: 14px; color: var(--panel-text-2); }
 .wiz-accordion > p, .wiz-accordion > table, .wiz-accordion > pre { margin: 0 0 12px; }
 .wiz-code { padding: 10px 12px; border-radius: 8px; background: var(--panel-surface-2); font-size: 12px; overflow-x: auto; }
 .wiz-profile-block { display: grid; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--panel-surface-2); border: 1px solid var(--panel-border); }

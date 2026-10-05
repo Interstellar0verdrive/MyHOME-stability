@@ -1922,3 +1922,22 @@ test("a cover that follows a profile without a measured travel says the values a
   assert.doesNotMatch(unscaled.join(" "), /cm/);
   assert.match(buildScreen({ t, language: "it", stage: "current", path: "C", cover: cover(110) }).body, /^Cucina 2 segue il profilo «alte», adattato alla sua corsa del telo di 110 cm/);
 });
+
+test("how to tell the slats is a closed toggle right after the question (A-03), and after the text where there is no question (C-35)", async () => {
+  const { wiz, code, startFor } = await mount();
+  await startFor("cover.living_one");
+  assert.equal(code(), "A-03");
+  const fieldset = wiz().querySelector("fieldset.wiz-radios");
+  const help = fieldset.querySelector("legend + details.wiz-help");
+  assert.ok(help, "the toggle follows the question");
+  assert.equal(help.open, false, "closed by default");
+  assert.equal(help.querySelector("summary").textContent, "How to tell if it has slats");
+  assert.match(help.textContent, /Slats are the horizontal strips/);
+  assert.doesNotMatch(wiz().querySelector(".wiz-body").textContent, /horizontal strips/, "no longer in the body");
+  help.open = true;
+  const t = (key) => translations.en[key] || key;
+  const timesOnly = buildScreen({ t, stage: "before", path: "C", scope: "times_only", cover: { name: "Kitchen 2", travel_cm: 110 } });
+  assert.equal(timesOnly.choice, null);
+  assert.deepEqual(timesOnly.help, { summary: translations.en.wiz_T456, text: translations.en.wiz_T457 });
+  assert.doesNotMatch(timesOnly.body, /horizontal strips/);
+});
