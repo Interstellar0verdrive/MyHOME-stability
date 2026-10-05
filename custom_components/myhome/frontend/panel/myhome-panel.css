@@ -860,14 +860,13 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 @media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
   dialog.cal-dialog, .wiz-dialog, .wiz-dialog .wiz-dialog-card { animation: none !important; }
 }
-/* Sequence selection (T-06): a view in the tab with the list's rows, a checkbox and the place of each ticked cover,
-   and an action bar held at the bottom of the window, with a fade while the list continues below it. */
-.cal-batch { display: grid; gap: 14px; }
-.cal-batch > * { margin: 0; }
-/* "Back to the list": the maintainer's outlined secondary button (no fill), in the same place. */
-.cal-batch-back { justify-self: start; background: transparent; }
-.cal-batch-back:hover { background: var(--panel-accent-soft); }
-.cal-batch-back ha-icon { --mdc-icon-size: 18px; }
+/* Sequence selection (T-06w, M4-5): a view with the wizard's chrome (the .wiz classes); its content keeps the list's
+   rows with a circle and the place of each ticked cover. */
+.cal-batch-wiz .wiz-main { display: grid; gap: 14px; align-content: start; }
+.cal-batch-wiz .wiz-main > * { margin: 0; }
+.cal-batch-wiz .wiz-actions { align-content: start; }
+.cal-batch-wiz .cal-batch-summary { margin: 0; font-size: 14px; font-weight: 500; text-align: center; }
+.cal-batch-wiz .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .cal-batch-note p { margin: 0; }
 .cal-batch-note p + p { margin-top: 8px; }
 .cal-batch-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
@@ -898,33 +897,9 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-profile { display: none; }
 .cal-batch-limit:empty { display: none; }
 .cal-batch .cal-tab-intro { flex: none; }
-.cal-batch-sentinel { display: block; height: 1px; margin-top: -14px; }
-/* Fixed to the window's bottom (left and width from the view, set by the tab); the spacer keeps the last row clear. */
-.cal-batch-spacer { display: block; height: 72px; margin-top: -14px; }
-.cal-batch-bar { position: fixed; bottom: 0; left: 0; width: 100%; box-sizing: border-box; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
-  padding: 12px; border: 1px solid var(--panel-border); border-bottom: 0; border-radius: var(--panel-radius) var(--panel-radius) 0 0;
-  background: var(--panel-surface); box-shadow: 0 -6px 18px -14px rgb(0 0 0 / 45%); }
-.cal-batch-bar::before { content: ""; position: absolute; inset-inline: 0; bottom: calc(100% + 1px); height: 28px; pointer-events: none;
-  background: linear-gradient(to top, var(--panel-surface), transparent); opacity: 0; transition: opacity var(--panel-ease); }
-.cal-batch-bar.has-more::before { opacity: 1; }
-.cal-batch-summary { margin: 0 auto 0 0; font-size: 13px; font-weight: 500; }
-.cal-batch-actions { display: flex; gap: 12px; }
 @media (max-width: 1023px) {
-  /* T-06 M: summary centred, a full-width Start and Cancel as a link under it. */
-  /* At the window's full width, square, above the safe area (the inline left/width set for wide windows give way). */
-  .cal-batch-bar { flex-direction: column; align-items: stretch; text-align: center; left: 0 !important; width: 100% !important;
-    border-inline: 0; border-radius: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
-  .cal-batch-summary { margin: 0; }
-  .cal-batch-actions { flex-direction: column-reverse; gap: 6px; }
-  .cal-batch-actions .primary { width: 100%; justify-content: center; min-height: 56px; border-radius: 999px; }
-  /* «12 tapparelle disponibili…» first, then «Seleziona:» with its shortcuts. */
-  .cal-batch-tools { flex-direction: column; align-items: start; }
-  .cal-batch-capacity { order: -1; }
-  /* T-06c M: «Select ⌄» (actions) and «Sort ⌄» in one row instead of the shortcuts and the Sort by pill. */
-  .cal-batch-shortcuts, .cal-batch .cal-sort-bar { display: none; }
   /* GM2: the reading field takes the content's width (more specific than the base rule, which comes later). */
   .wiz-main .wiz-field { max-width: none; }
-  .cal-batch-cancel { border: 0; background: transparent; color: var(--panel-accent); }
 }
 @media (min-width: 1024px) {
   /* One column grid for header, rows and expanded details: [chevron+icon] | cover | status | profile | actions. The

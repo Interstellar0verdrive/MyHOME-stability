@@ -455,15 +455,17 @@ const openBatch = async (options = {}) => {
   return mounted;
 };
 const tick_ = (tab, id) => { const box = tab.querySelector(`.cal-batch-row input[value="${id}"]`); box.checked = !box.checked; box.dispatchEvent(new Event("change", { bubbles: true })); };
+/** The sequence's «Select» menu (a native drop-down used as a menu of actions, M4-2/M4-5). */
+const batchPick = (tab, id) => { const select = tab.querySelector("select[data-batch-pick]"); select.value = id; select.dispatchEvent(new Event("change", { bubbles: true })); };
 const places = (tab) => [...tab.querySelectorAll(".cal-batch-row")].map((item) => [item.dataset.entity.replace("cover.", ""), item.querySelector(".cal-batch-order").textContent]);
 
 test("several covers in sequence are chosen in a view of the tab, not a dialog, with the list's names, rooms and status", async () => {
   const { root, tab } = await openBatch();
   assert.equal(root.querySelector("#dialog-host dialog"), null, "no dialog");
   assert.equal(tab.querySelector(".cal-list-rows"), null, "the selection replaces the list");
-  assert.equal(tab.querySelector(".cal-batch h3").textContent, "Calibrazione in sequenza");
-  assert.equal(tab.querySelector(".cal-batch-back").textContent.trim(), "Torna all'elenco");
-  assert.equal(tab.querySelector(".cal-batch-back").classList.contains("link"), false, "an outlined button, not a link");
+  assert.equal(tab.querySelector(".cal-batch .wiz-cover").textContent, "Calibrazione in sequenza");
+  assert.equal(tab.querySelector(".cal-batch .wiz-head-sub").textContent, "4 tapparelle a tempo · massimo 20 per sequenza");
+  assert.equal(tab.querySelector(".cal-batch .wiz-title").textContent, "Quali tapparelle vuoi calibrare?");
   const note = tab.querySelector(".cal-batch-note");
   assert.deepEqual([...note.querySelectorAll("p")].map((paragraph) => paragraph.textContent.split(" ").slice(0, 2).join(" ")),
     ["La sequenza", "Servono attuatori"], "two paragraphs");
@@ -479,8 +481,7 @@ test("several covers in sequence are chosen in a view of the tab, not a dialog, 
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-badge').textContent, "Calibrata (tempi e rullo)");
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.living_two"] .cal-profile-chip').textContent, "tall_two_leaf");
   assert.equal(tab.querySelector('.cal-batch-row input[value="cover.living_one"]').disabled, true);
-  assert.equal(tab.querySelector(".cal-batch-capacity").textContent, "4 tapparelle a tempo · massimo 20 per sequenza");
-  tab.querySelector(".cal-batch-back").click(); await tick();
+  tab.querySelector(".cal-batch .wiz-back").click(); await tick();
   assert.ok(tab.querySelector(".cal-list-rows"), "back to the list");
 });
 
@@ -495,15 +496,14 @@ test("covers run in the order they are ticked, shortcuts pick all or those to me
   tick_(tab, "cover.living_two");
   assert.deepEqual(places(tab).map(([, place]) => place), ["1", "", "", ""], "unticking renumbers");
   assert.equal(tab.querySelector(".cal-batch-summary").textContent, "1 tapparella selezionata");
-  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
+  batchPick(tab, "all");
   assert.deepEqual(places(tab).map(([, place]) => place), ["1", "2", "", "3"], "all, in list order, never the unavailable one");
-  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="to_measure"]').click();
+  batchPick(tab, "to_measure");
   assert.deepEqual(places(tab).map(([, place]) => place), ["1", "", "", ""]);
   assert.equal(start().disabled, false);
-  const pick = (id) => tab.querySelector(`[data-action="cal-tab-batch-pick"][data-id="${id}"]`);
-  assert.equal(pick("none").textContent, "Nessuna");
-  pick("all").click();
-  pick("none").click();
+  assert.equal(tab.querySelector('select[data-batch-pick] option[value="none"]').textContent, "Nessuna");
+  batchPick(tab, "all");
+  batchPick(tab, "none");
   assert.deepEqual(places(tab).map(([, place]) => place), ["", "", "", ""], "None clears every box and every place");
   assert.equal([...tab.querySelectorAll(".cal-batch-row input:checked")].length, 0);
   assert.equal(tab.querySelector(".cal-batch-summary").textContent, "Nessuna tapparella selezionata");
@@ -514,15 +514,12 @@ test("covers run in the order they are ticked, shortcuts pick all or those to me
 
 test("choosing covers patches the sequence view in place: the rows, the spacer and the scroll stay put", async () => {
   const { tab } = await openBatch();
-  const view = tab.querySelector(".cal-batch"), rows = [...tab.querySelectorAll(".cal-batch-row")], spacer = tab.querySelector(".cal-batch-spacer");
-  const all = () => tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]');
-  const chip = all();
-  for (let i = 0; i < 3; i++) all().click();
+  const view = tab.querySelector(".cal-batch"), rows = [...tab.querySelectorAll(".cal-batch-row")], menu = tab.querySelector("select[data-batch-pick]");
+  for (let i = 0; i < 3; i++) batchPick(tab, "all");
   tick_(tab, "cover.living_two");
   assert.equal(tab.querySelector(".cal-batch"), view, "the view is not rebuilt");
   assert.deepEqual([...tab.querySelectorAll(".cal-batch-row")], rows, "nor its rows");
-  assert.equal(tab.querySelector(".cal-batch-spacer"), spacer, "nor the spacer under the list");
-  assert.equal(all(), chip, "the pressed chip is the same button");
+  assert.equal(tab.querySelector("select[data-batch-pick]"), menu, "the menu is the same control");
   assert.deepEqual(places(tab).map(([, place]) => place), ["1", "2", "", ""]);
   assert.equal(tab.querySelector(".cal-batch-summary").textContent, "2 tapparelle selezionate");
   assert.equal(tab.querySelector('[data-action="cal-tab-batch-start"]').disabled, false);
@@ -532,22 +529,36 @@ test("choosing covers patches the sequence view in place: the rows, the spacer a
 
 test("more covers than the backend allows keep Start off and say the limit", async () => {
   const { tab } = await openBatch({ targets: { max_batch: 2 } });
-  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
+  batchPick(tab, "all");
   assert.equal(tab.querySelector('[data-action="cal-tab-batch-start"]').disabled, true);
   assert.match(tab.querySelector(".cal-batch-limit").textContent, /: 2$/);
 });
 
-test("the action bar stays at the bottom of the window, after the list", async () => {
+test("the sequence is a view with the wizard's chrome: header, steps Selection · Run · Results, Start in the actions column (M4-5)", async () => {
   const { tab } = await openBatch();
-  const bar = tab.querySelector(".cal-batch-bar");
-  assert.equal(tab.querySelector(".cal-batch").lastElementChild, bar, "the bar closes the view, so it can stick to the window's bottom");
-  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /\.cal-batch-bar \{ position: fixed; bottom: 0;/, "fixed to the window: a sticky bar follows the panel's box, which does not scroll inside Home Assistant");
-  assert.match(bar.style.left, /^-?\d+px$/, "placed over the view by the tab");
-  assert.match(bar.style.width, /^\d+px$/);
-  assert.ok(tab.querySelector(".cal-batch-spacer"), "a spacer keeps the last row clear of the bar");
-  assert.match(css, /\.cal-batch-bar\.has-more::before \{ opacity: 1; \}/);
-  assert.ok(tab.querySelector('.cal-batch-bar [data-action="cal-tab-batch-back"]'));
+  const view = tab.querySelector(".cal-batch");
+  assert.ok(view.classList.contains("wiz"), "the wizard's chrome");
+  assert.equal(view.querySelector(".cal-batch-bar"), null, "no fixed bar in the page");
+  assert.equal(view.querySelector(".wiz-discard").textContent, "Annulla la sequenza");
+  assert.equal(view.querySelector(".wiz-x").getAttribute("aria-label"), "Annulla la sequenza");
+  assert.equal(view.querySelector(".wiz-compact-line").textContent, "Selezione · 1 di 3");
+  const steps = () => [...view.querySelectorAll(".wiz-steps > ol > li")].map((item) => [item.querySelector(".wiz-step-label").textContent, item.dataset.stepState, item.querySelector("ul")?.textContent ?? ""]);
+  assert.deepEqual(steps(), [["Selezione", "current", "Nessuna selezionata"], ["Esecuzione", "future", ""], ["Risultati", "future", ""]]);
+  tick_(tab, "cover.bedroom");
+  assert.deepEqual(steps()[0], ["Selezione", "current", "1 selezionata"]);
+  tick_(tab, "cover.kitchen_two");
+  assert.deepEqual(steps()[0], ["Selezione", "current", "2 selezionate"]);
+  const actions = view.querySelector(".wiz-actions");
+  assert.deepEqual([actions.querySelector(".cal-batch-summary").textContent, actions.querySelector(".wiz-action.primary").textContent],
+    ["2 tapparelle selezionate", "Avvia la calibrazione in sequenza"]);
+  // PASSI opens the steps sheet on phones.
+  view.querySelector('[data-action="cal-tab-batch-steps"]').click();
+  assert.equal(view.querySelector(".wiz-sheet").hidden, false);
+  view.querySelector('[data-action="cal-tab-batch-steps-close"]').click();
+  assert.equal(view.querySelector(".wiz-sheet").hidden, true);
+  // ✕ and «Cancel the sequence» go back to the list.
+  view.querySelector(".wiz-x").click(); await tick();
+  assert.ok(tab.querySelector(".cal-list-rows"));
 });
 
 test("Start sends batch_start once, with the chosen order and the targets' revision", async () => {
@@ -786,7 +797,7 @@ test("the sequence list sorts by its headers like the tab, and reordering never 
   sort("profile");
   assert.deepEqual(names(), ["kitchen_two", "living_two", "bedroom", "living_one"], "covers without a profile last");
   assert.deepEqual(JSON.parse(window.localStorage.getItem("myhome-panel-calibration-sort-v1")), { key: "profile", dir: "asc" }, "one choice shared with the list");
-  const select = tab.querySelector('.cal-batch .cal-sort-bar select[data-sort="order"]');
+  const select = tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]');
   select.value = "cover:asc"; select.dispatchEvent(new Event("change", { bubbles: true }));
   assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_one", "living_two"], "the phone's Sort by bar works here too");
   tab.querySelector('[data-action="cal-tab-batch-start"]').click(); await tick();
@@ -895,8 +906,8 @@ test("on phones the sequence view has a native «Select ⌄» menu of actions an
   assert.ok(fromMenu.length > 0);
   assert.equal(select().value, "", "the placeholder comes back");
   assert.equal(panel.shadowRoot.querySelector("dialog"), null, "no sheet");
-  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="none"]').click();
-  tab.querySelector('[data-action="cal-tab-batch-pick"][data-id="all"]').click();
+  batchPick(tab, "none");
+  batchPick(tab, "all");
   assert.deepEqual(fromMenu, ticked(), "the same action as the desktop shortcut");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.cal-batch-lead input \{ appearance: none;[^}]*border-radius: 50%/);
@@ -939,4 +950,12 @@ test("phone cards: one chip centred on the action, two chips stacked beside it, 
   assert.match(css, /\.cal-row-main:has\(\.cal-row-profile \.cal-profile-chip\) \{ grid-template-areas: "cover cover menu" "status action action" "profile action action"; \}/);
   assert.match(css, /\.cal-row-main:not\(:has\(\.cal-row-profile \.cal-profile-chip\)\) \.cal-row-status \{ align-self: center; \}/);
   assert.match(css, /\.cal-row-action \{ grid-area: action; align-self: center; justify-self: end; white-space: nowrap; \}/);
+});
+
+test("the stylesheet's braces balance (a stray one silently drops every rule after it)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"/g, '""');
+  let depth = 0;
+  for (const char of css) { if (char === "{") depth += 1; else if (char === "}") { depth -= 1; assert.ok(depth >= 0, "no closing brace without its opening one"); } }
+  assert.equal(depth, 0);
 });

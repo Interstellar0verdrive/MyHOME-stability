@@ -109,7 +109,6 @@ export class CalibrationTab {
     this._rows.clear();
     this._mode = { kind: "list" };
     this._batch = null;
-    this._unwatchBar();
     this._menu = null;
     this._context = null;
     this._key = null;
@@ -592,6 +591,10 @@ export class CalibrationTab {
       if (!button) return;
       const { action, id } = button.dataset;
       if (action === "cal-tab-batch-back") this._batchBack();
+      else if (action === "cal-tab-batch-steps" || action === "cal-tab-batch-steps-close") {
+        this._batchStepsOpen = action === "cal-tab-batch-steps";
+        this._context.host.querySelector(".cal-batch .wiz-sheet")?.toggleAttribute("hidden", !this._batchStepsOpen);
+      }
       else if (action === "cal-tab-batch-pick") this._batchPick(id);
       else if (action === "cal-tab-batch-start") this._batchStart();
       else if (action === "cal-tab-sort") this._setSort(id);
@@ -946,35 +949,50 @@ export class CalibrationTab {
         <span class="cal-batch-profile">${profile(target.item)}</span></label>`;
     }).join("");
     const summary = count === 0 ? t("wiz_T386") : count === 1 ? t("wiz_T385") : fill(t("wiz_T384"), { count });
-    const html = `<div class="cal-batch">
-      <button type="button" class="cal-batch-back" data-action="cal-tab-batch-back"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon>${esc(t("wiz_T390"))}</button>
-      <h3 class="cal-tab-title">${esc(t("wiz_T364"))}</h3>
-      <p class="muted cal-tab-intro">${esc(t("wiz_T387"))}</p>
-      <div class="cal-note is-warning cal-batch-note">${rich(t("wiz_T388"))}</div>
-      ${gateways.length > 1 ? `<label class="cal-batch-gateway">${esc(t("gateway"))}<select data-batch="gateway">${gateways.map((entry) => `<option value="${esc(entry.entry_id)}" ${entry.entry_id === batch.entryId ? "selected" : ""}>${esc(entry.title)}</option>`).join("")}</select></label>` : ""}
-      ${batch.error ? `<p class="notice error" role="alert">${esc(batch.error)}</p>` : ""}
-      ${batch.loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
-      ${!batch.loading && !batch.error && !targets.length ? `<p class="muted">${esc(t("calBatchEmpty"))}</p>` : ""}
-      ${targets.length ? `<div class="cal-batch-tools"><p class="cal-batch-shortcuts"><span class="muted">${esc(t("wiz_T383"))}</span>
-          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="all">${esc(t("calTabFilter_all"))}</button>
-          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="to_measure">${esc(t("calTabFilter_to_measure"))}</button>
-          <button type="button" class="cal-chip" data-action="cal-tab-batch-pick" data-id="none">${esc(t("wiz_T391"))}</button></p>
-          <p class="muted cal-batch-capacity">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
-        ${this._sortBar()}
-        <div class="cal-tab-compact cal-batch-compact">
-          <label class="cal-compact-sort cal-compact-select"><select data-batch-pick aria-label="${esc(t("wiz_T383").replace(/\s*:\s*$/, ""))}">
-            <option value="" selected>${esc(t("wiz_T383").replace(/\s*:\s*$/, ""))}</option>${[["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]].map(([id, label]) =>
-              `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>
-          ${this._compactSort()}</div>
-        <div class="cal-list cal-batch-list">
-          ${this._sortHeads(" cal-batch-head")}
-          <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
-        <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
-      <span class="cal-batch-sentinel" aria-hidden="true"></span>
-      <span class="cal-batch-spacer" aria-hidden="true"${this._spacer != null ? ` style="height: ${this._spacer}px"` : ""}></span>
-      <div class="cal-batch-bar"><p class="cal-batch-summary" role="status">${esc(summary)}</p>
-        <div class="cal-batch-actions"><button type="button" class="cal-batch-cancel" data-action="cal-tab-batch-back">${esc(t("cancel"))}</button>
-        <button type="button" class="primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}><ha-icon icon="mdi:format-list-numbered" aria-hidden="true"></ha-icon>${esc(t("wiz_T365"))}</button></div></div>
+    const select = t("wiz_T383").replace(/\s*:\s*$/, "");
+    // M4-5 (T-06w): the selection is a view with the wizard's chrome: header (back, title, capacity, «Cancel the
+    // sequence» / ✕), the steps Selection · Run · Results (the last two still run in the maintainer's dialog), the
+    // content in the middle and the status with Start in the actions column (the bottom bar on phones).
+    const line = fill(t("wizPhaseLine"), { phase: t("wiz_T482"), n: 1, total: 3 });
+    const html = `<div class="wiz cal-batch cal-batch-wiz">
+      <div class="wiz-frame">
+        <header class="wiz-head">
+          <button type="button" class="icon-button wiz-back" data-action="cal-tab-batch-back" aria-label="${esc(t("wiz_T403"))}" title="${esc(t("wiz_T403"))}"><ha-icon icon="mdi:arrow-left" aria-hidden="true"></ha-icon></button>
+          <div class="wiz-head-text"><h3 class="wiz-cover">${esc(t("wiz_T364"))}</h3><p class="muted wiz-head-sub">${esc(fill(t("wiz_T389"), { count: targets.length, max }))}</p></div>
+          <button type="button" class="wiz-discard" data-action="cal-tab-batch-back">${esc(t("wiz_T366"))}</button>
+          <button type="button" class="icon-button wiz-x" data-action="cal-tab-batch-back" aria-label="${esc(t("wiz_T366"))}" title="${esc(t("wiz_T366"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
+        </header>
+        <div class="wiz-compact"><span class="wiz-dot" aria-hidden="true"></span><span class="wiz-compact-line">${esc(line)}</span>
+          <button type="button" class="wiz-steps-button" data-action="cal-tab-batch-steps" aria-haspopup="dialog">${esc(t("wiz_T274"))}</button></div>
+        <div class="wiz-columns">
+          <nav class="wiz-steps" aria-label="${esc(t("wiz_T274"))}">${this._batchSteps(count)}</nav>
+          <div class="wiz-main">
+            <h4 class="wiz-title">${esc(t("wiz_T481"))}</h4>
+            <div class="wiz-body"><p>${esc(t("wiz_T387"))}</p></div>
+            <div class="cal-note is-warning cal-batch-note">${rich(t("wiz_T388"))}</div>
+            ${gateways.length > 1 ? `<label class="cal-batch-gateway">${esc(t("gateway"))}<select data-batch="gateway">${gateways.map((entry) => `<option value="${esc(entry.entry_id)}" ${entry.entry_id === batch.entryId ? "selected" : ""}>${esc(entry.title)}</option>`).join("")}</select></label>` : ""}
+            ${batch.error ? `<p class="notice error" role="alert">${esc(batch.error)}</p>` : ""}
+            ${batch.loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
+            ${!batch.loading && !batch.error && !targets.length ? `<p class="muted">${esc(t("calBatchEmpty"))}</p>` : ""}
+            ${targets.length ? `<div class="cal-tab-compact cal-batch-compact">
+              <label class="cal-compact-sort cal-compact-select"><select data-batch-pick aria-label="${esc(select)}">
+                <option value="" selected>${esc(select)}</option>${[["all", t("calTabFilter_all")], ["to_measure", t("calTabFilter_to_measure")], ["none", t("wiz_T391")]].map(([id, label]) =>
+                  `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>
+              ${this._compactSort()}</div>
+            <div class="cal-list cal-batch-list">
+              ${this._sortHeads(" cal-batch-head")}
+              <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
+            <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
+          </div>
+          <div class="wiz-actions cal-batch-actions">
+            <p class="cal-batch-summary" role="status">${esc(summary)}</p>
+            <button type="button" class="wiz-action primary" data-action="cal-tab-batch-start" ${count === 0 || count > max || batch.loading ? "disabled" : ""}>${esc(t("wiz_T365"))}</button>
+          </div>
+        </div>
+        <div class="wiz-sheet" role="dialog" aria-modal="true" aria-label="${esc(t("wiz_T274"))}" ${this._batchStepsOpen ? "" : "hidden"}><div class="wiz-sheet-card">
+          <button type="button" class="icon-button wiz-sheet-close" data-action="cal-tab-batch-steps-close" aria-label="${esc(t("close"))}"><ha-icon icon="mdi:close" aria-hidden="true"></ha-icon></button>
+          <div class="wiz-sheet-steps">${this._batchSteps(count)}</div></div></div>
+      </div>
     </div>`;
     // A new selection only patches the rows, the summary and Start: the view is not rebuilt, so the list never moves
     // under the pointer (rebuilding recreated the spacer and the browser shifted the scroll by a pixel or two).
@@ -982,7 +1000,24 @@ export class CalibrationTab {
       batch.loading, batch.error, batch.entryId, max, gateways.length, this._sort, t("wiz_T364")]);
     if (host.querySelector(".cal-batch") && this._batchStructure === structure) this._patchBatch(summary, count, max);
     else { this._batchStructure = structure; morph(host, html); }
-    this._watchBar();
+    // The fade above the actions while the list goes on under them (phones, as M-5).
+    const main = host.querySelector(".cal-batch .wiz-main"), actions = host.querySelector(".cal-batch .wiz-actions");
+    if (main && actions && !main.dataset.watched) {
+      main.dataset.watched = "1";
+      const more = () => actions.classList.toggle("has-more", main.scrollHeight - main.scrollTop - main.clientHeight > 1);
+      main.addEventListener("scroll", more, { passive: true });
+      if (typeof ResizeObserver === "function") new ResizeObserver(more).observe(main);
+      more();
+    }
+  }
+
+  /** The sequence's steps, as the wizard's stepper: Selection (with how many are chosen), Run, Results. */
+  _batchSteps(count) {
+    const { t } = this._context;
+    const chosen = count === 0 ? t("wiz_T487") : count === 1 ? t("wiz_T486") : fill(t("wiz_T485"), { count });
+    const step = (label, state, sub = "") => `<li data-step-state="${state}"${state === "current" ? ' aria-current="step"' : ""}><span class="wiz-step-mark" aria-hidden="true"></span><span class="wiz-step-label">${esc(label)}</span>${sub ? `<ul><li>${esc(sub)}</li></ul>` : ""}</li>`;
+    return `<p class="wiz-steps-line">${esc(fill(t("wizPhaseLine"), { phase: t("wiz_T482"), n: 1, total: 3 }))}</p>
+      <ol>${step(t("wiz_T482"), "current", chosen)}${step(t("wiz_T483"), "future")}${step(t("wiz_T484"), "future")}</ol>`;
   }
 
   _patchBatch(summary, count, max) {
@@ -994,57 +1029,11 @@ export class CalibrationTab {
       row.querySelector(".cal-batch-order").textContent = place >= 0 ? String(place + 1) : "";
     }
     host.querySelector(".cal-batch-summary").textContent = summary;
+    const steps = this._batchSteps(count);
+    for (const target of host.querySelectorAll(".cal-batch .wiz-steps, .cal-batch .wiz-sheet-steps")) if (target.innerHTML !== steps) morph(target, steps);
     const limit = host.querySelector(".cal-batch-limit");
     if (limit) limit.textContent = count > max ? `${t("calBatchLimit")}: ${max}` : "";
     host.querySelector('[data-action="cal-tab-batch-start"]').disabled = count === 0 || count > max || batch.loading;
-  }
-
-  /**
-   * The action bar is fixed to the bottom of the window, over the width of the view: a sticky bar would follow the
-   * panel's own scroll box, which inside Home Assistant is not the box that scrolls. A spacer of its height ends the
-   * view so the last row is never hidden; the fade shows while the end of the list is below the window's edge.
-   */
-  _watchBar() {
-    const { host } = this._context;
-    const view = host.querySelector(".cal-batch"), sentinel = host.querySelector(".cal-batch-sentinel");
-    if (!view || !host.querySelector(".cal-batch-bar")) return;
-    if (this._barView !== view) {
-      this._unwatchBar();
-      this._barView = view;
-      const place = () => {
-        const box = view.getBoundingClientRect(), bar = host.querySelector(".cal-batch-bar"), spacer = host.querySelector(".cal-batch-spacer");
-        if (!bar) return;
-        bar.style.left = `${Math.round(box.left)}px`;
-        bar.style.width = `${Math.round(box.width)}px`;
-        if (!spacer) return;
-        // The end of the list stops just above the bar: the spacer covers the bar's height, less what the page already
-        // has under the view (the panel's bottom padding, its empty status line).
-        const end = host.closest("main") || host.parentElement;
-        const below = end ? Math.max(0, end.getBoundingClientRect().bottom - box.bottom) : 0;
-        const height = Math.max(0, Math.ceil(bar.getBoundingClientRect().height - below));
-        if (this._spacer !== height) { this._spacer = height; spacer.style.height = `${height}px`; }
-      };
-      this._barPlace = place;
-      window.addEventListener("resize", place);
-      if (typeof ResizeObserver === "function") {
-        this._barResize = new ResizeObserver(place);
-        this._barResize.observe(view);
-        this._barResize.observe(host.querySelector(".cal-batch-bar"));
-      }
-    }
-    this._barPlace();
-    this._barObserver?.disconnect();
-    if (!sentinel || typeof IntersectionObserver !== "function") return;
-    this._barObserver = new IntersectionObserver(([entry]) => host.querySelector(".cal-batch-bar")?.classList.toggle("has-more", !entry.isIntersecting),
-      { threshold: 0 });
-    this._barObserver.observe(sentinel);
-  }
-
-  _unwatchBar() {
-    this._barObserver?.disconnect();
-    this._barResize?.disconnect();
-    if (this._barPlace) window.removeEventListener("resize", this._barPlace);
-    this._barObserver = this._barResize = this._barPlace = this._barView = null;
   }
 
   _batchToggle(entityId, checked) {
@@ -1069,7 +1058,6 @@ export class CalibrationTab {
     const { hass, t } = this._context;
     this._mode = { kind: "list" };
     this._batch = null;
-    this._unwatchBar();
     this._context.host.innerHTML = "";
     this._render();
     const body = this._openDialog({ title: t("wiz_T364"), icon: "mdi:format-list-numbered" });
@@ -1079,7 +1067,6 @@ export class CalibrationTab {
 
   _batchBack() {
     this._batch = null;
-    this._unwatchBar();
     this._backToList();
   }
 }
