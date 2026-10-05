@@ -788,19 +788,20 @@ test("the column headers are buttons reached from the keyboard", async () => {
   assert.ok([...head.querySelectorAll(".cal-sort")].every((button) => button.tagName === "BUTTON" && button.type === "button"));
 });
 
-test("the sequence list sorts by its headers like the tab, and reordering never changes the place in the sequence", async () => {
+test("the sequence list sorts like the tab, and reordering never changes the place in the sequence", async () => {
   const { tab, subscriptions } = await openBatch();
   const names = () => [...tab.querySelectorAll(".cal-batch-row")].map((item) => item.dataset.entity.replace("cover.", ""));
-  const heads = () => [...tab.querySelectorAll(".cal-batch-head .cal-sort")].map((button) => [button.dataset.id, button.querySelector("ha-icon")?.getAttribute("icon") || null]);
-  assert.deepEqual(heads(), [["cover", "mdi:arrow-up"], ["status", null], ["profile", null]], "Cover ascending by default, arrow shown");
+  // Cards at every width (responsive map): no column headers; «Ordina» sorts it, Cover ascending by default.
+  assert.equal(tab.querySelector(".cal-batch .cal-list-head"), null);
+  assert.equal(tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]').value, "cover:asc");
   tick_(tab, "cover.living_two"); tick_(tab, "cover.bedroom");
-  const sort = (key) => tab.querySelector(`.cal-batch-head [data-action="cal-tab-sort"][data-id="${key}"]`).click();
-  sort("status");
+  const sort = (value) => { const select = tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]'); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+  sort("status:asc");
   assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_one", "living_two"], "to measure, times measured, times and roll");
-  sort("status");
+  sort("status:desc");
   assert.deepEqual(names(), ["living_two", "kitchen_two", "living_one", "bedroom"]);
   assert.deepEqual(places(tab).filter(([, place]) => place).sort(), [["bedroom", "2"], ["living_two", "1"]], "the places follow the ticks, not the rows");
-  sort("profile");
+  sort("profile:asc");
   assert.deepEqual(names(), ["kitchen_two", "living_two", "bedroom", "living_one"], "covers without a profile last");
   assert.deepEqual(JSON.parse(window.localStorage.getItem("myhome-panel-calibration-sort-v1")), { key: "profile", dir: "asc" }, "one choice shared with the list");
   const select = tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]');
@@ -922,7 +923,8 @@ test("the sequence view keeps its rows when the order or the selection changes (
   const kept = tab.querySelector('.cal-batch-row[data-entity="cover.bedroom"]'), view = tab.querySelector(".cal-batch");
   tick_(tab, "cover.bedroom");
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.bedroom"]'), kept);
-  tab.querySelector('.cal-batch-head [data-action="cal-tab-sort"][data-id="status"]').click();
+  const order = tab.querySelector('.cal-batch .cal-compact-sort select[data-sort="order"]');
+  order.value = "status:asc"; order.dispatchEvent(new Event("change", { bubbles: true }));
   assert.equal(tab.querySelector('.cal-batch-row[data-entity="cover.bedroom"]'), kept, "a new order moves the same rows");
   assert.equal(tab.querySelector(".cal-batch"), view);
   assert.equal(kept.querySelector("input").checked, true);
@@ -999,10 +1001,12 @@ test("one breakpoint for the list (880 px of the tab itself) and the wizard's th
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   const calibration = css.slice(css.indexOf("/* ---------- WHO 2 · Calibration tab ---------- */"));
   assert.match(calibration, /#cover-calibration-tab \{ container: caltab \/ inline-size; \}/, "the tab's width decides, not the window's");
-  const widths = [...calibration.matchAll(/@(media|container caltab|container wizmain) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
-    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizmain") ? "content" : "tab"} ${edge}-${px}`));
-  assert.deepEqual([...new Set(widths)].sort(), ["content max-719", "tab max-1099", "tab max-379", "tab max-599", "tab max-879", "tab max-999", "tab min-1000", "tab min-880", "window max-1023", "window max-719", "window min-1024", "window min-720"],
-    "the tab at 880 (list), 1100 (details' blocks), 600 (header buttons), 380 (drop-downs) and 1000 (wizard: three columns); the wizard's content at 720 (its lists); the window at 720 (full screen) and 1024 (dialogs)");
+  const widths = [...calibration.matchAll(/@(media|container caltab|container wizbar) ([^{]+)\{/g)].flatMap(([, kind, query]) =>
+    [...query.matchAll(/(min|max)-width: (\d+)px/g)].map(([, edge, px]) => `${kind === "media" ? "window" : kind.endsWith("wizbar") ? "bar" : "tab"} ${edge}-${px}`));
+  assert.deepEqual([...new Set(widths)].sort(), ["bar min-560", "tab max-1099", "tab max-379", "tab max-599", "tab max-699", "tab max-879", "tab max-999", "tab min-1000", "tab min-700", "tab min-880",
+    "window max-1023", "window max-719", "window min-1024", "window min-720"],
+    "the tab at 880 (list), 1100 (details' blocks), 600 (header buttons), 380 (drop-downs), 700 and 1000 (wizard); the actions bar at 560; the window at 720 (phone) and 1024 (dialogs)");
+  assert.doesNotMatch(calibration, /container: wizmain/, "the wizard's lists are cards at every width");
   const { tab } = await mount();
   const address = row(tab, "cover.kitchen_two").querySelector(".cal-row-address");
   assert.equal(address.querySelector(".cal-row-address-ap").textContent, " · A: 9 · PL: 1", "A and PL apart, hidden on the cards");

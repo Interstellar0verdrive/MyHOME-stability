@@ -87,9 +87,11 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.kitchen_two", "cover.living_three"]);
   assert.equal(button("choose").disabled, false, "a chosen cover hidden by a filter stays chosen");
   wiz().querySelector('[data-wiz="pick-filter:all"]').click(); await tick();
-  wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
+  // Cards at every width (responsive map): no column headers; one Sort by control gives the list's orders.
+  assert.equal(wiz().querySelector(".wiz-picker .cal-list-head"), null, "no table headers in the wizard");
+  const sortBy = (value) => { const select = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]'); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+  sortBy("status:asc"); await tick();
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_one", "cover.living_three", "cover.kitchen_two"], "sorted by status, as the list");
-  // The phone's single Sort by control gives the same orders.
   const phoneSort = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]');
   phoneSort.value = "status:desc"; phoneSort.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.kitchen_two", "cover.living_three", "cover.living_one"], "status, descending");
@@ -102,7 +104,7 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   assert.deepEqual(notes.map((note) => [note.textContent, note.classList.contains("is-warning")]), [[
     'This cover is already calibrated (times and roll, Sep 29, 2026) and follows the profile "tall_two_leaf". A new calibration, if you choose it in the next step, will replace the values in use; to adjust them, choose fine-tuning.', true]],
     "one yellow note with the profile");
-  wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick(); wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
+  sortBy("status:desc"); await tick(); sortBy("status:asc"); await tick();
   await press("choose");
   assert.equal(code(), "A-02");
   assert.equal(title(), 'How to calibrate "Kitchen shutter 2"?');

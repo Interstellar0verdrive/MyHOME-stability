@@ -322,10 +322,10 @@ export class CalibrationTab {
     return `<label class="cal-compact-sort"><span>${esc(t("wiz_T450"))}</span><select data-sort="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label>`;
   }
 
-  /** The header row of a list: Cover, Status and Profile sort it. */
-  _sortHeads(extra = "", trigger = (key) => `data-action="cal-tab-sort" data-id="${key}"`, lead = "") {
-    const { t } = this._context;
-    return `<div class="cal-list-head${extra}" role="group" aria-label="${esc(t("wiz_T379"))}"><span class="cal-head-lead">${lead}</span>${this._sortHead("cover", t("calTabColCover"), trigger)}${this._sortHead("status", t("calTabColStatus"), trigger)}${this._sortHead("profile", t("calTabColProfile"), trigger)}<span></span></div>`;
+  /** The header row of the Calibration table: Cover, Status and Profile sort it (the wizard's lists are cards). */
+  _sortHeads(lead = "") {
+    const { t } = this._context, trigger = (key) => `data-action="cal-tab-sort" data-id="${key}"`;
+    return `<div class="cal-list-head" role="group" aria-label="${esc(t("wiz_T379"))}"><span class="cal-head-lead">${lead}</span>${this._sortHead("cover", t("calTabColCover"), trigger)}${this._sortHead("status", t("calTabColStatus"), trigger)}${this._sortHead("profile", t("calTabColProfile"), trigger)}<span></span></div>`;
   }
 
   /** A column header: a button that sorts by it, with the arrow of the current order. */
@@ -364,7 +364,6 @@ export class CalibrationTab {
         `<button type="button" class="cal-chip" data-wiz="pick-filter:${id}" aria-pressed="${filter === id}">${esc(t(`calTabFilter_${id}`))} <span class="count">${counts[id]}</span></button>`).join("")}</div>
       ${this._sortBar("data-pick-sort")}
       <div class="cal-list cal-batch-list wiz-pick-list">
-        ${this._sortHeads(" cal-batch-head", (key) => `data-wiz="pick-sort:${key}"`)}
         <div class="cal-batch-rows" role="radiogroup" aria-label="${esc(t("wiz_T005"))}">${rows || `<p class="muted wiz-pick-empty">${esc(t("noResults"))}</p>`}</div></div>`;
   }
 
@@ -434,7 +433,7 @@ export class CalibrationTab {
         ${loading ? `<p class="muted" role="status">${esc(t("loading"))}</p>` : ""}
         ${visible.length || loading ? "" : `<p class="muted">${esc(t("noResults"))}</p>`}
         ${visible.length ? `<div class="cal-list">
-          ${this._sortHeads("", undefined, this._expandAll(visible))}
+          ${this._sortHeads(this._expandAll(visible))}
           <div class="cal-list-rows" role="list">${visible.map((item) => this._row(item, busy, language)).join("")}</div></div>` : ""}
         ${this._pageMarkup(busy, language)}`;
     }
@@ -1019,7 +1018,6 @@ export class CalibrationTab {
                   `<option value="${id}">${esc(label)}</option>`).join("")}</select></label>
               ${this._compactSort()}</div>
             <div class="cal-list cal-batch-list">
-              ${this._sortHeads(" cal-batch-head")}
               <div class="cal-batch-rows" role="group" aria-label="${esc(t("wiz_T364"))}">${rows}</div></div>
             <p class="error cal-batch-limit" role="alert">${count > max ? esc(`${t("calBatchLimit")}: ${max}`) : ""}</p>` : ""}
           </div>

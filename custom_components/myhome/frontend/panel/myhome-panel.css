@@ -725,9 +725,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex-basis: 100%; }
   /* The address keeps «Address: 86»; A and PL return with the table. */
   .cal-row-address-ap { display: none; }
-  /* A-01 and the sequence: the profile as a chip under the status, the table's Profile column being gone. */
-  .cal-batch-row:has(.cal-batch-profile .cal-profile-chip) { grid-template-areas: "lead name" "lead status" "lead profile"; }
-  .cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; grid-area: profile; }
 }
 /* M4-3: rings only for the keyboard, drawn on the wrapper of a borderless select; no grey flash on a tap. */
 .cal-tab, .wiz, dialog.cal-dialog { -webkit-tap-highlight-color: transparent; }
@@ -902,11 +899,12 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 @media (min-width: 720px) {
   .cal-batch-sticky { position: sticky; top: 76px; }
 }
-/* On cards the place in the sequence goes to the row's right edge; no gap is left between circle and icon. */
-@container caltab (max-width: 879px) {
-  .cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 44px; }
-  .cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }
-}
+/* The place in the sequence goes to the row's right edge; no gap is left between circle and icon. A long status
+   wraps inside its column rather than run under the place (D8). */
+.cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 44px; }
+.cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }
+.cal-batch-status { min-width: 0; }
+.cal-batch-status .badge { max-width: 100%; white-space: normal; }
 .cal-batch-wiz .cal-batch-summary { margin: 0; font-size: 14px; font-weight: 500; text-align: center; }
 .cal-batch-wiz .cal-tab-compact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .cal-batch-note p { margin: 0; }
@@ -937,6 +935,12 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-row .cal-row-name { grid-area: name; }
 .cal-batch-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cal-batch-profile { display: none; }
+/* Responsive map: the lists inside the wizard (A-01, the sequence) are cards at every width, in their frame (D19,
+   D21): the profile as a chip under the status, no column headers (Sort by is a drop-down above the list). */
+.cal-batch-row:has(.cal-batch-profile .cal-profile-chip) { grid-template-areas: "lead name" "lead status" "lead profile"; }
+.cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; grid-area: profile; }
+.wiz-main .cal-list { border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); }
+.wiz-main .cal-row-address-ap { display: none; }
 .cal-batch-limit:empty { display: none; }
 .cal-batch .cal-tab-intro { flex: none; }
 @media (max-width: 1023px) {
@@ -957,7 +961,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-head, .cal-row-main, .cal-row-details { display: grid; grid-template-columns: var(--cal-cols); grid-template-areas: none;
     column-gap: var(--cal-gap); padding-inline: 12px; }
   .cal-list-head, .cal-row-main { align-items: center; }
-  .cal-sort-bar { display: none; }
   .cal-list-head { padding-block: 12px; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--panel-text-2); }
   .cal-row-main { padding-block: 12px; row-gap: 0; }
   /* The phone layout names grid areas: every cell goes back to row 1 and its own column. */
@@ -986,15 +989,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-details-grid > section:nth-child(n) { grid-row: auto; grid-column: auto; }
 }
 @container caltab (min-width: 880px) {
-  /* The sequence list keeps the list's columns; its lead holds checkbox, place and a 32 px icon (12 px apart). */
-  .cal-batch-list { --cal-lead-box: calc(20px + 24px + 32px + 2 * var(--cal-lead-gap)); }
-  .cal-batch-head { grid-template-columns: var(--cal-cols); }
-  .cal-batch-row { grid-template-columns: var(--cal-cols); grid-template-areas: none; column-gap: var(--cal-gap); padding-inline: 12px; }
-  /* As in the list, the lead overflows its narrowed column into the gap, so the name starts 12 px after the icon. */
-  .cal-batch-lead { grid-area: auto; grid-column: 1; grid-row: 1; display: grid; grid-template-columns: 20px 24px 32px; column-gap: var(--cal-lead-gap); width: var(--cal-lead-box); }
-  .cal-batch-row .cal-row-name { grid-area: auto; grid-column: 2; grid-row: 1; }
-  .cal-batch-status { grid-area: auto; grid-column: 3; grid-row: 1; }
-  .cal-batch-profile { display: block; grid-column: 4; grid-row: 1; font-size: 13px; }
 }
 
 /* ---------- Calibration wizard (stepper · instruction · actions) ---------- */
@@ -1007,13 +1001,6 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .wiz-pick-notes { grid-column: 1 / -1; display: grid; gap: 6px; padding-bottom: 4px; }
 .wiz-pick-notes .cal-note { max-width: none; }
 .wiz-pick-empty { margin: 0; padding: 12px; }
-@container caltab (min-width: 880px) {
-  .wiz-pick-list { --cal-gap: 20px; --cal-lead-box: calc(20px + 32px + var(--cal-lead-gap));
-    --cal-cols: var(--cal-lead) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
-  .wiz-pick-list .cal-list-head > span:last-child { display: none; }
-  .wiz-pick-list .cal-batch-lead { grid-template-columns: 20px 32px; }
-  .wiz-pick-notes { grid-column: 2 / -1; grid-row: 2; }
-}
 .wiz { --wiz-side: color-mix(in srgb, var(--primary-text-color, #182b37) 4%, var(--primary-background-color, #fafafa)); position: relative; border: 1px solid var(--panel-border); border-radius: var(--panel-radius); background: var(--panel-surface); overflow: hidden; }
 .wiz-head { display: flex; align-items: start; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--panel-border); }
 .wiz-head-text { flex: 1; min-width: 0; }
@@ -1149,6 +1136,11 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-notice[data-tone="error"] { color: var(--panel-error); border-color: color-mix(in srgb, var(--panel-error) 40%, transparent); background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 .wiz-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding: 20px; background: var(--wiz-side); }
 .wiz-action { width: 100%; min-height: 56px; border-radius: 999px; font-size: 15px; }
+/* D7: a label too long for a narrow column takes two even lines inside the pill, never one word alone. */
+.wiz-action, .wiz-take { padding-block: 8px; line-height: 1.2; text-wrap: balance; }
+/* D18: in a wide bottom bar (phone in portrait from 560 px, the column in the page) the actions keep 480 px, centred. */
+.wiz-actions { container: wizbar / inline-size; }
+@container wizbar (min-width: 560px) { .wiz-actions > * { box-sizing: border-box; width: 100%; max-width: 480px; justify-self: center; } }
 /* G2-10: «Stopping…» in the place of ①/② while the backend waits for the actuator's stop. */
 .wiz-action.status { display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box; margin: 0; padding: 0 16px;
   border: 1px dashed var(--panel-border); color: var(--panel-text-2); font-weight: 500; }
@@ -1218,30 +1210,23 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   --wiz-ill-cover-slats: #BDBDBD; --wiz-ill-cover-last-slat: #939393; --wiz-ill-text: #141414; --wiz-ill-text-2: #5E5E5E; --wiz-ill-accent: #009AC7; }
 .wiz[data-theme="dark"] { --wiz-ill-surface: #1C1C1C; --wiz-ill-cover-skeleton: #242424; --wiz-ill-text-on-accent: #FFFFFF; --wiz-ill-cover-border: #606060;
   --wiz-ill-cover-slats: #6D6D6D; --wiz-ill-cover-last-slat: #535353; --wiz-ill-text: #E1E1E1; --wiz-ill-text-2: #9B9B9B; --wiz-ill-accent: #009AC7; }
-/* M5-1: the lists inside the wizard (A-01, the sequence) take the width of the wizard's content column, not the tab's:
-   cards until that column is 720 px wide, the table from there. */
-.wiz-main { container: wizmain / inline-size; }
-@container wizmain (max-width: 719px) {
-  .wiz-main .cal-list-head { display: none; }
-  .wiz-main .cal-sort-bar { display: flex; }
-  .wiz-main .cal-row-address-ap { display: none; }
-  .wiz-main .cal-batch-row { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "lead name" "lead status"; column-gap: 12px; padding-inline: 12px; }
-  .wiz-main .cal-batch-row:has(.cal-batch-profile .cal-profile-chip) { grid-template-areas: "lead name" "lead status" "lead profile"; }
-  .wiz-main .cal-batch-lead { grid-area: lead; display: inline-flex; width: auto; }
-  .wiz-main .cal-batch-row .cal-row-name { grid-area: name; }
-  .wiz-main .cal-batch-status { grid-area: status; }
-  .wiz-main .cal-batch-profile { display: none; }
-  .wiz-main .cal-batch-row .cal-batch-profile:has(.cal-profile-chip) { display: block; grid-area: profile; }
-  .wiz-main .wiz-pick-notes { grid-area: auto; grid-column: 1 / -1; }
-  .cal-batch-wiz .cal-batch-row { position: relative; padding-inline-end: 44px; }
-  .cal-batch-wiz .cal-batch-order { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }
+/* Responsive map, the wizard's layouts (the sequence's too), by the tab's own width: from 1000 px steps | content |
+   actions; from 700 px the steps strip on top (PASSI) and content | actions; below 700 px one column in the page, the
+   actions a bar held at the bottom of the window (sticky, D6); below 720 px of window full screen (phone). The actions
+   column is 30 % of the wizard, 240 to 320 px. */
+@media (min-width: 720px) {
+  @container caltab (min-width: 700px) and (max-width: 999px) {
+    .wiz-columns { grid-template-columns: minmax(0, 1fr) clamp(240px, 30%, 320px); min-height: 420px; }
+    .wiz-actions { border-inline-start: 1px solid var(--panel-border); }
+  }
+  @container caltab (max-width: 699px) {
+    /* Clipped rather than hidden: the wizard is then no scroll box of its own and the bar sticks to the window. */
+    .wiz, .wiz.cal-batch-wiz { overflow: clip; }
+    .wiz-actions { position: sticky; bottom: 0; z-index: 2; padding: 12px 16px; border-top: 1px solid var(--panel-border);
+      border-radius: 0 0 var(--panel-radius) var(--panel-radius); background: var(--panel-surface); }
+    .cal-batch-sticky { position: static; }
+  }
 }
-/* M5-1, the wizard's layouts: from 1000 px of tab steps | content | actions; below, the steps strip on top (PASSI)
-   and content | actions; below 720 px of window full screen with the bottom bar. */
-@media (min-width: 720px) { @container caltab (max-width: 999px) {
-  .wiz-columns { grid-template-columns: minmax(0, 1fr) 280px; min-height: 420px; }
-  .wiz-actions { border-inline-start: 1px solid var(--panel-border); }
-} }
 @container caltab (max-width: 999px) {
   .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
   .wiz-compact-line { flex: 1; }
@@ -1250,7 +1235,7 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   .wiz-steps { display: none; }
 }
 @container caltab (min-width: 1000px) {
-  .wiz-columns { grid-template-columns: 240px minmax(0, 1fr) 300px; min-height: 420px; }
+  .wiz-columns { grid-template-columns: 240px minmax(0, 1fr) clamp(240px, 30%, 320px); min-height: 420px; }
   /* 1 px dividers between the side columns and the centre (none on the phone, where the columns stack). */
   .wiz-steps { border-inline-end: 1px solid var(--panel-border); }
   .wiz-actions { border-inline-start: 1px solid var(--panel-border); }

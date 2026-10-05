@@ -605,7 +605,6 @@ export class CalibrationWizard {
     if (id === "exit") { this._exit(); return; }
     if (id === "back") { this._back(); return; }
     if (id.startsWith("pick-filter:")) { local.pickFilter = id.slice(12); return this._render(); }
-    if (id.startsWith("pick-sort:")) { this._context.picker?.sort(id.slice(10)); return this._render(); }
     if (id === "stay") { this._closeDialog(); return; }
     if (id === "nav-stay") { this._navAnswer(false); return; }
     if (id === "nav-later") { this._navAnswer(true); return; }
