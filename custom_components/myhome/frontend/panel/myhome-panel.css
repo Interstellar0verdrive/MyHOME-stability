@@ -1003,6 +1003,10 @@ li[data-step-state="done"] > .wiz-step-mark { border-color: var(--panel-accent);
 li[data-step-state="current"] > .wiz-step-mark, .wiz-dot { border: 1.5px solid var(--panel-accent); background: linear-gradient(90deg, var(--panel-accent) 50%, transparent 50%); }
 li[data-step-state="current"], li[data-step-state="done"] { color: var(--primary-text-color, #182b37); }
 li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
+/* M3-3: an ended session: the step it reached stays, greyed. */
+[data-interrupted] li[data-step-state="current"] > .wiz-step-mark, .wiz-compact[data-interrupted] .wiz-dot { border-color: var(--panel-text-2);
+  background: linear-gradient(90deg, var(--panel-text-2) 50%, transparent 50%); }
+[data-interrupted] li[data-step-state="current"], [data-interrupted] li[data-step-state="done"] { color: var(--panel-text-2); }
 .wiz-steps ul, .wiz-sheet-steps ul { grid-column: 2; list-style: none; margin: 4px 0 2px; padding: 0; font-size: 12px; color: var(--panel-text-2); display: grid; gap: 2px; }
 .wiz-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; padding: 20px; min-width: 0; }
 .wiz-title { margin: 0; font-size: 18px; font-weight: 600; outline: none; }

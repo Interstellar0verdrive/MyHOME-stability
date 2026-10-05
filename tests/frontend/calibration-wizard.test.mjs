@@ -2076,3 +2076,28 @@ test("two minutes before the idle expiry a waiting screen warns, counting the mi
   assert.equal(warning(at(-5)), undefined, "past the deadline the backend's own end decides");
   assert.equal(warning(at(60, { phase: "opening" })), undefined, "not while the cover moves");
 });
+
+test("an ended session keeps the step it reached, greyed, in the stepper and the phone's strip (M3-3)", async () => {
+  const { backend, panel, wiz, code, press, type, startFor } = await mount({ language: "it" });
+  await startFor("cover.living_one");
+  await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  await type("3"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Salita · 3 di 7");
+  const gateway = panel._calibrationTab._wizard._gateway, callWS = backend.hass.callWS;
+  backend.hass.callWS = async (message) => { if (message.action === "heartbeat") throw Object.assign(new Error("expired"), { code: "calibration_expired" }); return callWS(message); };
+  backend.session.session_id = "gone";
+  await gateway._engine._perform("heartbeat"); await settle();
+  backend.hass.callWS = callWS;
+  assert.equal(code(), "S-06");
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Interrotta · Salita 3 di 7");
+  assert.ok(wiz().querySelector(".wiz-compact").hasAttribute("data-interrupted"));
+  const steps = wiz().querySelector(".wiz-steps");
+  assert.ok(steps.hasAttribute("data-interrupted"));
+  assert.equal(steps.querySelector('li[data-step-state="current"] > .wiz-step-label').textContent, "Salita");
+  assert.match(steps.querySelector(".wiz-steps-line").textContent, /^Interrotta · Salita 3 di 7$/);
+  // Starting over clears it.
+  await press("start-over");
+  assert.equal(wiz().querySelector(".wiz-steps").hasAttribute("data-interrupted"), false);
+  assert.equal(wiz().querySelector(".wiz-compact-line").textContent, "Preparazione · 2 di 7");
+});

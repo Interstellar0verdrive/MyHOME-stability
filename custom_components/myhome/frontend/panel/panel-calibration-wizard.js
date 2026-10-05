@@ -181,11 +181,14 @@ export class CalibrationWizard {
     const { t, hass } = this._context, local = this._local, gateway = this._gateway;
     const cover = this._cover(), language = hass.language || "en";
     const followed = local.path === "B" ? this._gatewayData()?.profiles.find((profile) => profile.id === local.profileId) : null;
-    return buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
+    const screen = buildScreen({ t, language, path: local.path, scope: local.scope, stage: local.stage, local, cover,
       covers: this._covers().map((item) => ({ key: key(item), label: this._coverLabel(item), status: item.status, last: item.last })),
       profiles: this._profiles(), followed, followerNames: cover ? names(cover.followers, language) : "",
       view: gateway?.view || null, status: gateway?.status || {}, elapsed: gateway?.elapsed() ?? null, runPosition: local.run?.position ?? null, now: Date.now(),
       preview: !!gateway?.preview, supports: (target) => gateway ? gateway.supports(target) : false });
+    // M3-3: the step reached by a live session, so that its end shows where it stopped.
+    if (local.stage === "session" && gateway?.view && !screen.interrupted && !/^(S-|loading|paused|unknown)/.test(screen.code)) local.reachedPhase = screen.phase;
+    return screen;
   }
 
   // ---------- drawing ----------
@@ -345,6 +348,8 @@ export class CalibrationWizard {
     const stepper = this._stepperMarkup(screen);
     for (const target of [root.querySelector(".wiz-steps"), root.querySelector(".wiz-sheet-steps")]) if (target.innerHTML !== stepper) target.innerHTML = stepper;
     root.querySelector(".wiz-compact-line").textContent = screen.stepper.line;
+    // An ended session keeps the step it reached, greyed (M3-3).
+    for (const target of [root.querySelector(".wiz-steps"), root.querySelector(".wiz-sheet-steps"), root.querySelector(".wiz-compact")]) target.toggleAttribute("data-interrupted", !!screen.stepper.interrupted);
     const watch = root.querySelector(".wiz-stopwatch");
     watch.hidden = !screen.stopwatch;
     if (screen.stopwatch) {

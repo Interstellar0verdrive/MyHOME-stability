@@ -219,8 +219,10 @@ export function buildScreen(ctx) {
     Object.assign(screen, { code: "loading", title: t("loading"), actions: [] });
     return finish();
   }
-  if (status.expired || view.reason === "expired") return finish(problemScreen(screen, ctx, "expired"));
-  if (ENDED.includes(view.phase)) return finish(problemScreen(screen, ctx, view.reason || "stopped"));
+  // M3-3: an ended session keeps the step it reached in the stepper, marked as interrupted.
+  const ended = (reason) => { problemScreen(screen, ctx, reason); screen.interrupted = true; screen.phase = local.reachedPhase || screen.phase; return finish(); };
+  if (status.expired || view.reason === "expired") return ended("expired");
+  if (ENDED.includes(view.phase)) return ended(view.reason || "stopped");
   if (view.problem) return finish(problemScreen(screen, ctx, view.problem.reason || view.problem, true));
   if (view.phase === "paused") {
     Object.assign(screen, { code: "paused", phase: screen.phase, title: t("calPhase_paused"), body: t("calRecoveryHelp"),
@@ -838,7 +840,8 @@ function finalize(screen, ctx) {
   };
   const finetuneLabel = refining ? t("wiz_T114") : t("wiz_T013");
   screen.stepper = {
-    line: screen.phase === "done" ? t("wiz_T153") : fill(t("wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
+    interrupted: !!screen.interrupted,
+    line: screen.phase === "done" ? t("wiz_T153") : fill(t(screen.interrupted ? "wiz_T461" : "wizPhaseLine"), { phase: screen.phase === "finetune" ? t("wiz_T114") : t(PHASES[screen.phase] || "wiz_T007"),
       n: current + 1, total: phases.length }),
     phases: phases.map((key, index) => ({ key, label: key === "finetune" ? finetuneLabel : t(PHASES[key]),
       // A-34 after a real save: fine-tuning (optional) is still ahead, so it is not ticked.
