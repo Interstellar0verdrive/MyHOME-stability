@@ -248,17 +248,20 @@ export class CalibrationTab {
     }
     const select = event.target.closest?.("select[data-sort]");
     if (!select || !["list", "batch"].includes(this._mode.kind)) return;
-    const field = select.dataset.sort;
-    if (field === "key") this._setSort(select.value, this._sort.key === select.value ? this._sort.dir : "asc");
-    else this._setSort(this._sort.key, select.value === "desc" ? "desc" : "asc");
+    const [key, dir] = select.value.split(":");
+    this._setSort(key, dir === "desc" ? "desc" : "asc");
   }
 
-  /** The phone's "Sort by" bar: column and order, the same choices as the headers. */
+  /** The phone's "Sort by" control (T-01 M): one pill with the six column × order choices of the headers. */
   _sortBar(attribute = "data-sort") {
     const { t } = this._context;
+    const column = (key) => t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]);
+    const options = SORT_KEYS.flatMap((key) => ["asc", "desc"].map((dir) => {
+      const chosen = this._sort.key === key && this._sort.dir === dir;
+      return `<option value="${key}:${dir}" ${chosen ? "selected" : ""}>${esc(column(key))} ${dir === "asc" ? "↑" : "↓"}</option>`;
+    })).join("");
     return `<div class="cal-sort-bar">
-          <label>${esc(t("wiz_T379"))} <select ${attribute}="key">${SORT_KEYS.map((key) => `<option value="${key}" ${this._sort.key === key ? "selected" : ""}>${esc(t({ cover: "calTabColCover", status: "calTabColStatus", profile: "calTabColProfile" }[key]))}</option>`).join("")}</select></label>
-          <label><span class="visually-hidden">${esc(t("wiz_T380"))}</span><select ${attribute}="dir">${["asc", "desc"].map((dir) => `<option value="${dir}" ${this._sort.dir === dir ? "selected" : ""}>${esc(t(dir === "asc" ? "wiz_T381" : "wiz_T382"))}</option>`).join("")}</select></label></div>`;
+          <label class="cal-sort-pill"><span>${esc(t("wiz_T379"))}:</span><select ${attribute}="order" aria-label="${esc(t("wiz_T379"))}">${options}</select></label></div>`;
   }
 
   /** The header row of a list: Cover, Status and Profile sort it. */

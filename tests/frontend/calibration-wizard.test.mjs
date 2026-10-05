@@ -86,6 +86,13 @@ test("A-01 to A-03 stay in the browser: choosing a cover and a path sends nothin
   wiz().querySelector('[data-wiz="pick-filter:all"]').click(); await tick();
   wiz().querySelector('[data-wiz="pick-sort:status"]').click(); await tick();
   assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.living_one", "cover.living_three", "cover.kitchen_two"], "sorted by status, as the list");
+  // The phone's single Sort by control gives the same orders.
+  const phoneSort = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]');
+  phoneSort.value = "status:desc"; phoneSort.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+  assert.deepEqual(rows().map((row) => row.dataset.entity), ["cover.kitchen_two", "cover.living_three", "cover.living_one"], "status, descending");
+  assert.equal(wiz().querySelector('.wiz-picker select[data-pick-sort="order"]').value, "status:desc");
+  const again = wiz().querySelector('.wiz-picker select[data-pick-sort="order"]');
+  again.value = "status:asc"; again.dispatchEvent(new Event("change", { bubbles: true })); await tick();
   await pickCover("cover.kitchen_two");
   // The chosen row opens with what choosing it means, in the row itself.
   const notes = [...wiz().querySelectorAll(".wiz-pick-row.is-selected .wiz-pick-notes .cal-note")];

@@ -505,9 +505,8 @@ export class CalibrationWizard {
     else if (name === "cover") { this._local.coverKey = value; this._local.coverPicked = true; this._render(); }
     else if (event.target.dataset?.pickSort) {
       // The phone's "Sort by" bar of A-01: the list's shared order, as in the tab.
-      const order = this._context.picker?.order() || {};
-      if (event.target.dataset.pickSort === "key") this._context.picker?.sort(value, order.key === value ? order.dir : "asc");
-      else this._context.picker?.sort(order.key, value === "desc" ? "desc" : "asc");
+      const [key, dir] = value.split(":");
+      this._context.picker?.sort(key, dir === "desc" ? "desc" : "asc");
       this._render();
     }
     else if (name === "profile") { this._local.profileId = value; this._render(); }

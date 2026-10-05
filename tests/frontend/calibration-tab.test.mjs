@@ -737,19 +737,20 @@ test("a running cover stays on top whatever the column and the order", async () 
   }
 });
 
-test("on phones the Sort by bar offers the same columns and the order", async () => {
+test("on phones one Sort by control offers the six column and order choices", async () => {
   const { tab } = await mount({ language: "it" });
-  const [column, direction] = tab.querySelectorAll(".cal-sort-bar select");
-  assert.match(tab.querySelector(".cal-sort-bar").textContent, /Ordina per/);
-  assert.deepEqual([...column.options].map((option) => option.textContent), ["Tapparella", "Stato", "Profilo"]);
-  assert.deepEqual([...direction.options].map((option) => option.textContent), ["Crescente", "Decrescente"]);
-  column.value = "status"; column.dispatchEvent(new Event("change", { bubbles: true }));
+  const pick = (value) => { const select = tab.querySelector(".cal-sort-bar select"); select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+  assert.equal(tab.querySelectorAll(".cal-sort-bar select").length, 1);
+  assert.match(tab.querySelector(".cal-sort-bar").textContent, /Ordina per:/);
+  assert.deepEqual([...tab.querySelector(".cal-sort-bar select").options].map((option) => option.textContent),
+    ["Tapparella ↑", "Tapparella ↓", "Stato ↑", "Stato ↓", "Profilo ↑", "Profilo ↓"]);
+  pick("status:asc");
   assert.deepEqual(order(tab), ["bedroom", "kitchen_two", "living_one", "living_two"]);
-  const again = tab.querySelectorAll(".cal-sort-bar select")[1];
-  again.value = "desc"; again.dispatchEvent(new Event("change", { bubbles: true }));
+  pick("status:desc");
   assert.deepEqual(order(tab), ["living_two", "kitchen_two", "living_one", "bedroom"]);
-  assert.equal(tab.querySelector('.cal-sort-bar select[data-sort="key"]').value, "status");
-  assert.equal(tab.querySelector('.cal-sort-bar select[data-sort="dir"]').value, "desc");
+  assert.equal(tab.querySelector('.cal-sort-bar select[data-sort="order"]').value, "status:desc");
+  // The headers show the same choice.
+  assert.equal(tab.querySelector('.cal-list-head [data-id="status"] ha-icon').getAttribute("icon"), "mdi:arrow-down");
 });
 
 test("the column headers are buttons reached from the keyboard", async () => {
@@ -775,8 +776,8 @@ test("the sequence list sorts by its headers like the tab, and reordering never 
   sort("profile");
   assert.deepEqual(names(), ["kitchen_two", "living_two", "bedroom", "living_one"], "covers without a profile last");
   assert.deepEqual(JSON.parse(window.localStorage.getItem("myhome-panel-calibration-sort-v1")), { key: "profile", dir: "asc" }, "one choice shared with the list");
-  const select = tab.querySelector('.cal-batch .cal-sort-bar select[data-sort="key"]');
-  select.value = "cover"; select.dispatchEvent(new Event("change", { bubbles: true }));
+  const select = tab.querySelector('.cal-batch .cal-sort-bar select[data-sort="order"]');
+  select.value = "cover:asc"; select.dispatchEvent(new Event("change", { bubbles: true }));
   assert.deepEqual(names(), ["bedroom", "kitchen_two", "living_one", "living_two"], "the phone's Sort by bar works here too");
   tab.querySelector('[data-action="cal-tab-batch-start"]').click(); await tick();
   assert.deepEqual(subscriptions.find((item) => item.request.type === "myhome/cover_calibration/batch_start").request.entity_ids,

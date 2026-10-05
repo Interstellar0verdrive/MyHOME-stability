@@ -690,6 +690,21 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-sort-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 .cal-sort-bar label { display: flex; flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
 .cal-sort-bar select { width: auto; min-height: 36px; padding-block: 4px; padding-inline-end: 32px; font-size: 13px; }
+/* T-01 M: «Ordina per: Tapparella ↑ ⌄» as one pill; the select inside it has no box of its own. */
+.cal-sort-pill { gap: 4px !important; min-height: 36px; padding-inline-start: 14px; border: 1px solid var(--panel-border); border-radius: 999px;
+  background: var(--panel-surface); font-size: 13px; color: var(--panel-text-2); }
+.cal-sort-pill select { min-height: 34px; padding-inline-start: 0; border: 0; border-radius: 999px; background-color: transparent;
+  color: var(--primary-text-color, #182b37); font-weight: 500; }
+@media (max-width: 1023px) {
+  /* T-01 M: the two buttons at full width, «Misura una tapparella» (primary) first; the summary above the chips. */
+  .cal-tab-head { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cal-tab-intro { flex: none; }
+  .cal-tab-actions { flex-direction: column-reverse; flex-wrap: nowrap; }
+  .cal-tab-actions button { width: 100%; min-height: 48px; justify-content: center; font-size: 14px; }
+  .cal-tab-actions button:not(.primary) { background: transparent; }
+  .cal-tab-filters { justify-content: start; }
+  .cal-tab-summary { order: -1; flex-basis: 100%; margin: 0; }
+}
 .cal-row { border-top: 1px solid var(--panel-border); }
 .cal-row:first-of-type, .cal-list-head + .cal-row { border-top: 0; }
 .cal-row-main { cursor: pointer; transition: background var(--panel-ease); }
