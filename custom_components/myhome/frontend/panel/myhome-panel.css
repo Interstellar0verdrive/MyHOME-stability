@@ -803,15 +803,15 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
   .cal-list-rows { display: grid; gap: 12px; }
   .cal-row, .cal-row:first-of-type, .cal-list-head + .cal-row { border: 1px solid var(--panel-border); border-radius: 12px; background: var(--panel-surface); }
   .cal-row.is-running { border-color: color-mix(in srgb, var(--panel-warning) 60%, transparent); }
-  .cal-row-main { grid-template-columns: max-content minmax(0, 1fr) auto; grid-template-areas: "cover cover menu" "status profile action";
-    border-radius: 11px; }
+  /* A wrapping row rather than a grid: with a long status («Calibrated (times and roll)») the profile chip and the
+     action move to the next line instead of being clipped; the action always ends on the right. */
+  .cal-row-main { display: flex; flex-wrap: wrap; align-items: center; border-radius: 11px; }
+  .cal-row-toggle { order: 0; flex: 1 1 calc(100% - 56px); }
   .cal-row-actions { display: contents; }
-  .cal-row-action { grid-area: action; justify-self: end; }
-  /* A long status («Calibrated (times and roll)») leaves the profile chip the room that remains, ellipsised. */
-  .cal-row-profile { min-width: 0; }
-  .cal-row-profile .cal-profile-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
-  .cal-row-profile .cal-profile-chip ha-icon { margin-inline-end: 4px; }
-  .cal-menu-wrap { grid-area: menu; align-self: start; justify-self: end; }
+  .cal-menu-wrap { order: 1; align-self: start; margin-inline-start: auto; }
+  .cal-row-status { order: 2; }
+  .cal-row-profile { order: 3; min-width: 0; }
+  .cal-row-action { order: 4; margin-inline-start: auto; }
   .cal-row-last-inline { display: block; color: var(--panel-text-2); }
   /* M2-3: a card opens a page, it does not unfold: no chevron. */
   .cal-row-chevron { display: none; }
