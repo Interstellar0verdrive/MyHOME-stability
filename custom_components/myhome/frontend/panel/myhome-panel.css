@@ -868,10 +868,17 @@ button.danger-solid:hover { background: color-mix(in srgb, var(--panel-error) 85
 .cal-batch-actions { display: flex; gap: 12px; }
 @media (max-width: 1023px) {
   /* T-06 M: summary centred, a full-width Start and Cancel as a link under it. */
-  .cal-batch-bar { flex-direction: column; align-items: stretch; text-align: center; border-radius: var(--panel-radius) var(--panel-radius) 0 0; }
+  /* At the window's full width, square, above the safe area (the inline left/width set for wide windows give way). */
+  .cal-batch-bar { flex-direction: column; align-items: stretch; text-align: center; left: 0 !important; width: 100% !important;
+    border-inline: 0; border-radius: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   .cal-batch-summary { margin: 0; }
   .cal-batch-actions { flex-direction: column-reverse; gap: 6px; }
-  .cal-batch-actions .primary { width: 100%; justify-content: center; min-height: 48px; }
+  .cal-batch-actions .primary { width: 100%; justify-content: center; min-height: 56px; border-radius: 999px; }
+  /* «12 tapparelle disponibili…» first, then «Seleziona:» with its shortcuts. */
+  .cal-batch-tools { flex-direction: column; align-items: start; }
+  .cal-batch-capacity { order: -1; }
+  /* GM2: the reading field takes the content's width. */
+  .wiz-field { max-width: none; }
   .cal-batch-cancel { border: 0; background: transparent; color: var(--panel-accent); }
 }
 @media (min-width: 1024px) {
