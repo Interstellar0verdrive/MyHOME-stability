@@ -1726,7 +1726,8 @@ test("A-02 advises a path from the cover and the gateway's profiles, and presele
   assert.equal(calibrated({}).choice.options.some((option) => option.warning), false);
   assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).choice.options.find((option) => option.value === "B").warning, translations.en.wiz_T416);
   assert.equal(calibrated({ pathChoice: "B" }).choice.options.find((option) => option.value === "B").warning, translations.en.wiz_T417);
-  assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).subline, 'Follows the profile "tall_two_leaf"');
+  assert.equal(calibrated({ pathChoice: "B" }, { name: "tall_two_leaf" }).subline,
+    'Follows the profile "tall_two_leaf": the values are the profile\'s, without travel scaling, since the travel has not been measured.', "no measured travel (G2-1)");
 });
 
 test("A-21d defaults to updating the profile on the cover it was measured on, and A-34 says when a profile is left alone", () => {
@@ -1907,4 +1908,17 @@ test("our texts name the shell's tabs with the shell's own labels, and never cal
   assert.match(fillIn(translations.it.wiz_T431, { old: "x", tab: translations.it.profileListTitle }), /dalla scheda Profili\.$/);
   const italian = Object.entries(translations.it).filter(([key]) => key.startsWith("wiz_") || key.startsWith("calTab"));
   assert.deepEqual(italian.filter(([, text]) => /\bdialog|scheda (Calibration|Devices|Profiles)\b/.test(text)).map(([key]) => key), []);
+});
+
+test("a cover that follows a profile without a measured travel says the values are not scaled (A-02, C-01)", () => {
+  const t = (key) => translations.it[key] || key;
+  const cover = (travel_cm) => ({ name: "Cucina 2", status: "rolls", last: "2026-10-01T09:00:00+00:00", travel_cm, profile: { name: "alte" }, effective: {} });
+  assert.equal(buildScreen({ t, language: "it", stage: "path", profiles: [], cover: cover(null) }).subline,
+    "Segue il profilo «alte»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.");
+  assert.equal(buildScreen({ t, language: "it", stage: "path", profiles: [], cover: cover(110) }).subline, "Segue il profilo «alte»");
+  const unscaled = buildScreen({ t, language: "it", stage: "current", path: "C", cover: cover(null) }).body.split("\n\n");
+  assert.equal(unscaled[0], "Segue il profilo «alte»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.");
+  assert.match(unscaled[1], /^Nel passo successivo/);
+  assert.doesNotMatch(unscaled.join(" "), /cm/);
+  assert.match(buildScreen({ t, language: "it", stage: "current", path: "C", cover: cover(110) }).body, /^Cucina 2 segue il profilo «alte», adattato alla sua corsa del telo di 110 cm/);
 });

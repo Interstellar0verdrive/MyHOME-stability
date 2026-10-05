@@ -55,7 +55,8 @@ function lowerFirst(text, language) {
 /** A-02's box on the chosen cover: the profile it follows, its calibration, or that it was never measured. */
 function pathContext(t, cover, language) {
   if (!cover) return "";
-  if (cover.profile?.name) return fill(t("wiz_T395"), { profile: cover.profile.name });
+  // G2-1: without a measured travel the profile's values are not scaled, and the line says so.
+  if (cover.profile?.name) return fill(t(cover.travel_cm > 0 ? "wiz_T395" : "wiz_T455"), { profile: cover.profile.name });
   if (cover.status && cover.status !== "to_measure") {
     return fill(t("wiz_T399"), { status: t(`calTabStatus_${cover.status}`).toLocaleLowerCase(language), date: dateText(cover.last, language) || "—" });
   }
@@ -168,7 +169,9 @@ export function buildScreen(ctx) {
   if (stage === "current") {
     const effective = cover?.effective || {};
     Object.assign(screen, { code: "C-01", phase: "intro", title: t("wiz_T184"),
-      body: cover?.profile ? tx("wiz_T185", { ...values, travel: n(cover.travel_cm) }) : tx("wizNoProfileBody", values),
+      // G2-1: with no measured travel the first paragraph says the values are the profile's, not scaled.
+      body: !cover?.profile ? tx("wizNoProfileBody", values) : cover.travel_cm > 0 ? tx("wiz_T185", { ...values, travel: n(cover.travel_cm) })
+        : [tx("wiz_T455", values), ...tx("wiz_T185", { ...values, travel: "" }).split(/\n\s*\n/).slice(1)].join("\n\n"),
       // A bold title and one line per value: the sheet's single line (T188) split at its separators.
       box: { label: t("wiz_T186"), lines: tx("wiz_T188", { profile: cover?.profile?.name ?? "—", travel: n(cover?.travel_cm),
         opening: n(effective.opening?.value), closing: n(effective.closing?.value), slat: n(effective.slat_time_s?.value) }).split(" · ") },

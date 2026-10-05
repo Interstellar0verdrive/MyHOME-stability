@@ -377,6 +377,7 @@ export const translations = {
     wiz_T452: "The longest path: it creates a complete new profile that similar covers can follow.",
     wiz_T453: "Only the curtain travel is measured.",
     wiz_T454: "Only what is off gets corrected: tape readings, times, or everything.",
+    wiz_T455: "Follows the profile \"{profile}\": the values are the profile's, without travel scaling, since the travel has not been measured.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} of {total}",
@@ -1216,6 +1217,7 @@ export const translations = {
     wiz_T452: "Il percorso più lungo: crea un nuovo profilo completo, che le tapparelle simili possono seguire.",
     wiz_T453: "Basta misurare la corsa del telo.",
     wiz_T454: "Si corregge solo quello che non va: letture col metro, tempi, oppure tutto.",
+    wiz_T455: "Segue il profilo «{profile}»: i valori sono quelli del profilo, senza adattamento alla corsa, che non è stata misurata.",
     // END wizard texts
     // Calibration wizard: screen texts that are not in the shared sheet (provisional).
     wizPhaseLine: "{phase} · {n} di {total}",
