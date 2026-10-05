@@ -1495,6 +1495,18 @@ test("leaving the tab with a live session open asks: continue, leave and resume 
   }
 });
 
+test("a landscape phone has the wizard full screen in two columns, Stop at the top of the actions (responsive map §3.2, D11, D12)", async () => {
+  const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
+  const short = css.slice(css.lastIndexOf("@media (max-height: 499px) and (orientation: landscape) {"));
+  assert.match(short, /\.wiz \{ position: fixed; inset: 0;/, "full screen at any width");
+  assert.match(short, /\.wiz-head \{ box-sizing: border-box; min-height: 44px;/, "a 44 px header");
+  assert.match(short, /\.wiz-steps \{ display: none; \}/, "no stepper, the strip instead");
+  assert.match(short, /\.wiz-columns \{[^}]*grid-template-columns: minmax\(0, 1fr\) calc\(clamp\(240px, 35%, 280px\) \+ var\(--cal-safe-right\)\);/);
+  assert.match(short, /\.wiz-main \{ min-height: 0; overflow-y: auto;/, "the content scrolls");
+  assert.match(short, /\.wiz-actions \{ position: static; min-height: 0; overflow-y: auto;/, "the actions scroll by themselves");
+  assert.match(short, /\.wiz-actions > \[data-wiz="stop"\] \{ order: -1; \}/, "Stop always in view, at the top");
+});
+
 test("the Calibration in progress dialog is 592 px wide when centred, its three buttons on one row", async () => {
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
   assert.match(css, /\.wiz-nav-dialog \.wiz-dialog-card \{ width: min\(100%, 592px\);/);
@@ -1904,7 +1916,8 @@ test("A-07 carries its phone drawing beside the wide one; the stylesheet shows o
   host.innerHTML = illustrationMarkup("lift-zoom", "Step diagram", (value) => value);
   assert.equal(host.querySelectorAll("svg").length, 1, "other drawings are one SVG");
   const css = (await import("node:fs")).readFileSync(new URL("../../custom_components/myhome/frontend/panel/myhome-panel.css", import.meta.url), "utf8");
-  assert.match(css, /@media \(max-width: 719px\) \{\s*\.wiz-illustration\.wiz-ill-wide \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 719px\) and \(min-height: 500px\), \(max-width: 719px\) and \(orientation: portrait\) \{\s*\.wiz-illustration\.wiz-ill-wide \{ display: none; \}/,
+    "the phone's drawing in portrait only; a landscape phone keeps the wide one");
 });
 
 test("our texts name the shell's tabs with the shell's own labels, and never call a window a dialog in Italian", async () => {

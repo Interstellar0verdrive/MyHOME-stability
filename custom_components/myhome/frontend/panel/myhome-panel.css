@@ -1201,9 +1201,9 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
 .wiz-leave:hover { background: color-mix(in srgb, var(--panel-error) 8%, transparent); }
 /* Drawings of the steps: Figma size, never wider than the column. */
 .wiz-illustration { display: block; max-width: 100%; height: auto; margin: 0; }
-/* M2-7: A-07 has a drawing of its own on phones; only one of the two is shown. */
+/* M2-7: A-07 has a drawing of its own on phones; only one of the two is shown. A landscape phone keeps the wide one. */
 .wiz-illustration.wiz-ill-phone { display: none; }
-@media (max-width: 719px) {
+@media (max-width: 719px) and (min-height: 500px), (max-width: 719px) and (orientation: portrait) {
   .wiz-illustration.wiz-ill-wide { display: none; }
   .wiz-illustration.wiz-ill-phone { display: block; }
 }
@@ -1307,3 +1307,37 @@ li[data-step-state="current"] > .wiz-step-label { font-weight: 600; }
   dialog.cal-dialog .dialog-foot button, .wiz-dialog .actions button { flex: 1 1 0; width: auto; min-width: 0; }
 }
 .wiz-action-note { margin: -4px 8px 4px; font-size: 12px; line-height: 1.4; text-align: center; }
+/* Responsive map §3.2, a landscape phone (under 500 px high, whatever its width): the wizard and the sequence full
+   screen with the tablet's layout, so the content keeps its room (D11) and Stop stays in view (D12). A 44 px header with
+   the subtitle beside the title, the steps strip, the content scrolling on the left and the actions in a column of their
+   own on the right (240 to 280 px), scrolling by themselves, Stop at their top; no stepper. */
+@media (max-height: 499px) and (orientation: landscape) {
+  .wiz { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; height: 100vh; height: 100dvh; border: 0; border-radius: 0; overflow: hidden; }
+  .wiz-frame { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+  .wiz-head { box-sizing: border-box; min-height: 44px; align-items: center; gap: 8px;
+    padding: var(--cal-safe-top) calc(8px + var(--cal-safe-right)) 0 calc(12px + var(--cal-safe-left)); }
+  .wiz-back { margin: 0 -4px 0 -4px; }
+  .wiz-head-text { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; }
+  .wiz-cover { font-size: 16px; }
+  .wiz-head .muted { margin: 0; font-size: 12px; }
+  .wiz-discard { display: none; }
+  .wiz-x { display: inline-flex; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .wiz-x ha-icon { --mdc-icon-size: 24px; }
+  .wiz-steps { display: none; }
+  .wiz-compact { display: flex; align-items: center; gap: 10px; padding: 4px calc(12px + var(--cal-safe-right)) 4px calc(12px + var(--cal-safe-left));
+    background: var(--panel-surface-2); border-bottom: 1px solid var(--panel-border); font-size: 13px; }
+  .wiz-compact-line { flex: 1; }
+  .wiz-dot { width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; }
+  .wiz-steps-button { min-height: 32px; padding: 4px 12px; border-radius: 999px; border-color: var(--panel-accent); color: var(--panel-accent); font-weight: 600; text-transform: uppercase; font-size: 12px; }
+  .wiz-columns { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) calc(clamp(240px, 35%, 280px) + var(--cal-safe-right));
+    grid-template-rows: minmax(0, 1fr); }
+  .wiz-main { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column;
+    padding: 12px 16px calc(12px + var(--cal-safe-bottom)) calc(16px + var(--cal-safe-left)); }
+  .wiz-main > * { flex-shrink: 0; min-width: 0; }
+  .wiz-actions { position: static; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; border-top: 0; border-radius: 0;
+    border-inline-start: 1px solid var(--panel-border); background: var(--wiz-side);
+    padding: 12px calc(16px + var(--cal-safe-right)) calc(12px + var(--cal-safe-bottom)) 16px; }
+  .wiz-actions::before { display: none; }
+  .wiz-actions > [data-wiz="stop"] { order: -1; }
+  .cal-batch-sticky { position: static; }
+}
