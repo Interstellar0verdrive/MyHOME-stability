@@ -459,7 +459,7 @@ export class CalibrationWizard {
 
   _fieldMarkup(field) {
     const value = field.value == null ? "" : `${field.value}`;
-    return `<form class="wiz-field" novalidate><label>${esc(field.label)}<span class="input-suffix"><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" value="${esc(value)}" aria-describedby="wiz-field-hint" data-kind="${esc(field.kind)}" data-min="${field.min}" data-max="${field.max}"><span>cm</span></span></label>
+    return `<form class="wiz-field" novalidate autocomplete="off"><label>${esc(field.label)}<span class="input-suffix"><input name="reading_cm" type="text" inputmode="decimal" autocomplete="off" value="${esc(value)}" aria-describedby="wiz-field-hint" data-kind="${esc(field.kind)}" data-min="${field.min}" data-max="${field.max}"><span>cm</span></span></label>
       <p id="wiz-field-hint" class="muted">${esc(field.hint)}</p></form>`;
   }
 
@@ -759,7 +759,8 @@ export class CalibrationWizard {
   _startRefine(base) {
     const local = this._local;
     this._dropGateway();
-    Object.assign(local, freshFlags(), { stage: "session", refining: true, base });
+    // The readings of the calibration it refines stay for the stepper.
+    Object.assign(local, freshFlags(), { stage: "session", refining: true, base, baseReadings: local.baseReadings });
     this._newGateway("preview", "refine", { opening_time: base.opening, closing_time: base.closing, slat_time_s: base.slat ?? 0,
       opening_roll: base.opening_roll, closing_roll: base.closing_roll, travel_cm: base.travel }).start();
   }
@@ -1024,9 +1025,15 @@ export class CalibrationWizard {
 
 function key(item) { return JSON.stringify([item.entry.entry_id, item.cover.entity_id]); }
 
+/**
+ * Everything a measurement leaves behind, cleared for a new session or «Start over»: acknowledgements, runs, the
+ * lift-off value sent (G2-9), readings kept for the stepper, fine-tuning readings, the review and the step reached.
+ * Fine-tuning keeps its base on purpose (`_startRefine` passes it again).
+ */
 function freshFlags() {
   return { ackLift: false, ackAscent: false, ackDescent: false, ackReadings: false, arm: null, run: null, fullRun: null, invalidRun: null, misbehaved: false,
-    review: null, pendingSave: null, fieldError: null, saveProfile: undefined, saveChoice: undefined, profileName: undefined, refining: false };
+    review: null, pendingSave: null, fieldError: null, fieldSequence: undefined, errorPhase: undefined, saveProfile: undefined, saveChoice: undefined,
+    profileName: undefined, refining: false, lastGap: null, baseReadings: null, fineReadings: null, pathChoice: null, reachedPhase: null };
 }
 
 export { slug };

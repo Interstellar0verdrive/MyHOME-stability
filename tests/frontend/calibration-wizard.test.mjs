@@ -2032,3 +2032,32 @@ test("coming back to the page asks Home Assistant at once (M3-1)", async () => {
   document.dispatchEvent(new window.Event("visibilitychange")); await settle();
   assert.equal(beats(), count + 1);
 });
+
+test("«Start over» after an ended session carries nothing of the old measurement (M3-2)", async () => {
+  const { backend, panel, wiz, code, press, type, startFor } = await mount({ language: "it" });
+  const toLiftReading = async () => {
+    await press("begin"); await move(backend); await press("endpoint"); backend.stopped(); await tick();
+    await press("ack:lift"); await press("next"); await move(backend); await press("lift"); backend.stopped(); await tick();
+  };
+  await startFor("cover.living_one");
+  await toLiftReading();
+  await type("2");
+  assert.equal(panel._calibrationTab._wizard._local.lastGap, 2);
+  // Home Assistant ends the session.
+  const gateway = panel._calibrationTab._wizard._gateway, callWS = backend.hass.callWS;
+  backend.hass.callWS = async (message) => { if (message.action === "heartbeat") throw Object.assign(new Error("expired"), { code: "calibration_expired" }); return callWS(message); };
+  backend.session.session_id = "gone";
+  await gateway._engine._perform("heartbeat"); await settle();
+  backend.hass.callWS = callWS;
+  assert.equal(code(), "S-06");
+  await press("start-over");
+  assert.equal(code(), "A-03");
+  const local = panel._calibrationTab._wizard._local;
+  assert.deepEqual([local.lastGap, local.baseReadings, local.fineReadings, local.review, local.reachedPhase], [null, null, null, null, null]);
+  await toLiftReading();
+  assert.equal(code(), "A-08");
+  assert.equal(wiz().querySelector('[name="reading_cm"]').value, "", "the gap field starts empty");
+  assert.equal(wiz().querySelector(".wiz-field").getAttribute("autocomplete"), "off");
+  const lift = [...wiz().querySelectorAll(".wiz-steps li li")].find((item) => item.textContent.startsWith("Stacco"));
+  assert.match(lift.textContent, /s · —$/, "no gap in the stepper before this session's reading");
+});
